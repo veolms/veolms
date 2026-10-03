@@ -49,9 +49,7 @@ export function useCourseOverview(
   },
 ) {
   return useQuery<CourseOverviewResponse, ApiError>({
-    queryKey: idOrSlug
-      ? courseKeys.overview(idOrSlug)
-      : ["courses", "overview", null],
+    queryKey: idOrSlug ? courseKeys.overview(idOrSlug) : ["courses", "overview", null],
     queryFn: () => coursesService.getOverview(idOrSlug!),
     enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
     initialData: options?.initialData,
@@ -69,10 +67,7 @@ export function useMyCourses(options?: { enabled?: boolean }) {
   });
 }
 
-export function useDeletedCourses(
-  params?: DeletedCoursesQuery,
-  options?: { enabled?: boolean },
-) {
+export function useDeletedCourses(params?: DeletedCoursesQuery, options?: { enabled?: boolean }) {
   return useQuery<DeletedCoursesListResponse, ApiError>({
     queryKey: [...courseKeys.bin(), params ?? null],
     queryFn: () => coursesService.listDeletedCourses(params),
@@ -83,9 +78,7 @@ export function useDeletedCourses(
 
 export function useCourseEditor(courseId: string | null) {
   return useQuery<CourseEditorDataResponse, ApiError>({
-    queryKey: courseId
-      ? courseKeys.editor(courseId)
-      : ["courses", "editor", null],
+    queryKey: courseId ? courseKeys.editor(courseId) : ["courses", "editor", null],
     queryFn: () => coursesService.getCourseEditor(courseId!),
     enabled: Boolean(courseId),
     staleTime: 30 * 1000,
@@ -100,8 +93,7 @@ export function useCourseStaticPageRefreshStatus(courseId: string | null) {
     queryFn: () => coursesService.getStaticPageRefreshStatus(courseId!),
     enabled: Boolean(courseId),
     refetchInterval: (query) =>
-      query.state.data?.status === "queued" ||
-      query.state.data?.status === "running"
+      query.state.data?.status === "queued" || query.state.data?.status === "running"
         ? 2_000
         : 5_000,
   });
@@ -153,19 +145,12 @@ export function useInfiniteCourses(options: {
           pageParams: [undefined],
         }
       : undefined,
-    staleTime: canUseInitialData
-      ? options.initialDataNeedsRefresh
-        ? 0
-        : Infinity
-      : 5 * 60 * 1000,
+    staleTime: canUseInitialData ? (options.initialDataNeedsRefresh ? 0 : Infinity) : 5 * 60 * 1000,
     retry: false,
   });
 }
 
-export function prefetchCourseEditor(
-  queryClient: QueryClient,
-  courseId: string,
-): Promise<void> {
+export function prefetchCourseEditor(queryClient: QueryClient, courseId: string): Promise<void> {
   return queryClient.prefetchQuery<CourseEditorDataResponse, ApiError>({
     queryKey: courseKeys.editor(courseId),
     queryFn: () => coursesService.getCourseEditor(courseId),
@@ -173,28 +158,18 @@ export function prefetchCourseEditor(
   });
 }
 
-export function useCoursePreview(
-  courseId: string | null,
-  options?: { enabled?: boolean },
-) {
+export function useCoursePreview(courseId: string | null, options?: { enabled?: boolean }) {
   return useQuery<CourseEditorDataResponse, ApiError>({
-    queryKey: courseId
-      ? courseKeys.preview(courseId)
-      : ["courses", "preview", null],
+    queryKey: courseId ? courseKeys.preview(courseId) : ["courses", "preview", null],
     queryFn: () => coursesService.getPreview(courseId!),
     enabled: Boolean(courseId && (options?.enabled ?? true)),
     staleTime: 0,
   });
 }
 
-export function useCourseValidation(
-  courseId: string | null,
-  options?: { enabled?: boolean },
-) {
+export function useCourseValidation(courseId: string | null, options?: { enabled?: boolean }) {
   return useQuery<CourseValidationResponse, ApiError>({
-    queryKey: courseId
-      ? courseKeys.validation(courseId)
-      : ["courses", "validation", null],
+    queryKey: courseId ? courseKeys.validation(courseId) : ["courses", "validation", null],
     queryFn: () => coursesService.getValidation(courseId!),
     enabled: Boolean(courseId && (options?.enabled ?? true)),
     staleTime: 10 * 1000,

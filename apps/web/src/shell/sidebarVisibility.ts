@@ -8,9 +8,7 @@ export interface SidebarPresentation {
   hidden: boolean;
 }
 
-export const getSidebarPresentation = (
-  mode: SidebarMode,
-): SidebarPresentation => ({
+export const getSidebarPresentation = (mode: SidebarMode): SidebarPresentation => ({
   collapsed: mode === "collapsed",
   hidden: mode === "hidden",
 });
@@ -35,8 +33,4 @@ export const canStartSidebarTouchGesture = ({
   hidden: boolean;
   isPrimary: boolean;
   pointerType: string;
-}) =>
-  enabled &&
-  pointerType === "touch" &&
-  isPrimary &&
-  (!compactNavigation || hidden);
+}) => enabled && pointerType === "touch" && isPrimary && (!compactNavigation || hidden);

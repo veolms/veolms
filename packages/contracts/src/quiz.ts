@@ -7,17 +7,8 @@ export const quizQuestionTypeSchema = z.enum([
   "true_false",
   "short_answer",
 ]);
-export const quizAttemptStatusSchema = z.enum([
-  "in_progress",
-  "submitted",
-  "graded",
-  "expired",
-]);
-export const quizFeedbackModeSchema = z.enum([
-  "after_submit",
-  "after_attempt",
-  "never",
-]);
+export const quizAttemptStatusSchema = z.enum(["in_progress", "submitted", "graded", "expired"]);
+export const quizFeedbackModeSchema = z.enum(["after_submit", "after_attempt", "never"]);
 const uuid = z.uuid();
 const nonNegativeNumber = z.number().finite().nonnegative();
 
@@ -79,9 +70,7 @@ export const quizAssignmentSchema = z.strictObject({
 export const instructorQuizAssignmentSchema = quizAssignmentSchema.extend({
   quizTitle: z.string().min(1),
 });
-export const courseQuizAssignmentsResponseSchema = z.array(
-  instructorQuizAssignmentSchema,
-);
+export const courseQuizAssignmentsResponseSchema = z.array(instructorQuizAssignmentSchema);
 export const quizSchema = z.strictObject({
   id: uuid,
   title: z.string().min(1).max(255),
@@ -143,27 +132,18 @@ export const createQuizQuestionRequestSchema = z.strictObject({
   explanation: z.string().max(5_000).nullable().optional(),
   options: z.array(quizOptionInputSchema).min(1).max(100),
 });
-export const createQuizWithQuestionsRequestSchema =
-  createQuizRequestSchema.extend({
-    questions: z.array(createQuizQuestionRequestSchema).max(100),
-  });
-export const updateQuizQuestionRequestSchema = createQuizQuestionRequestSchema
-  .partial()
-  .extend({
-    options: z.array(quizOptionInputSchema).min(1).max(100).optional(),
-  });
+export const createQuizWithQuestionsRequestSchema = createQuizRequestSchema.extend({
+  questions: z.array(createQuizQuestionRequestSchema).max(100),
+});
+export const updateQuizQuestionRequestSchema = createQuizQuestionRequestSchema.partial().extend({
+  options: z.array(quizOptionInputSchema).min(1).max(100).optional(),
+});
 export const assignQuizRequestSchema = z.strictObject({
   quizVersionId: uuid,
   required: z.boolean().optional(),
   passPercentage: z.number().min(0).max(100).optional(),
   maxAttempts: z.number().int().positive().max(100).optional(),
-  timeLimitSeconds: z
-    .number()
-    .int()
-    .positive()
-    .max(86_400)
-    .nullable()
-    .optional(),
+  timeLimitSeconds: z.number().int().positive().max(86_400).nullable().optional(),
   shuffleQuestions: z.boolean().optional(),
   shuffleOptions: z.boolean().optional(),
   feedbackMode: quizFeedbackModeSchema.optional(),
@@ -183,13 +163,7 @@ export const setQuizCoursePricingRequestSchema = z
     price: z.number().int().nonnegative().max(MAX_QUIZ_PRICE).default(0),
     /** Optional: the server always uses the course's currency and rejects a different one. */
     currency: z.string().length(3).optional(),
-    salePrice: z
-      .number()
-      .int()
-      .positive()
-      .max(MAX_QUIZ_PRICE)
-      .nullable()
-      .optional(),
+    salePrice: z.number().int().positive().max(MAX_QUIZ_PRICE).nullable().optional(),
   })
   .superRefine((value, ctx) => {
     if (value.pricingType !== "paid") return;
@@ -237,9 +211,7 @@ export const quizPricingPreviewResponseSchema = z.strictObject({
   currency: z.string().length(3),
   isEnrolled: z.boolean(),
 });
-export type QuizPricingPreviewResponse = z.infer<
-  typeof quizPricingPreviewResponseSchema
->;
+export type QuizPricingPreviewResponse = z.infer<typeof quizPricingPreviewResponseSchema>;
 export const learnerQuizAttemptSchema = z.strictObject({
   id: uuid,
   assignmentId: uuid,
@@ -380,28 +352,16 @@ export type QuizStatus = z.infer<typeof quizStatusSchema>;
 export type QuizQuestionType = z.infer<typeof quizQuestionTypeSchema>;
 export type QuizAttemptStatus = z.infer<typeof quizAttemptStatusSchema>;
 export type QuizResponseValue = z.infer<typeof quizResponseValueSchema>;
-export type BulkQuizAnswersRequest = z.infer<
-  typeof bulkQuizAnswersRequestSchema
->;
+export type BulkQuizAnswersRequest = z.infer<typeof bulkQuizAnswersRequestSchema>;
 export type CreateQuizRequest = z.infer<typeof createQuizRequestSchema>;
-export type CreateQuizWithQuestionsRequest = z.infer<
-  typeof createQuizWithQuestionsRequestSchema
->;
+export type CreateQuizWithQuestionsRequest = z.infer<typeof createQuizWithQuestionsRequestSchema>;
 export type UpdateQuizRequest = z.infer<typeof updateQuizRequestSchema>;
-export type CreateQuizQuestionRequest = z.infer<
-  typeof createQuizQuestionRequestSchema
->;
-export type UpdateQuizQuestionRequest = z.infer<
-  typeof updateQuizQuestionRequestSchema
->;
+export type CreateQuizQuestionRequest = z.infer<typeof createQuizQuestionRequestSchema>;
+export type UpdateQuizQuestionRequest = z.infer<typeof updateQuizQuestionRequestSchema>;
 export type AssignQuizRequest = z.infer<typeof assignQuizRequestSchema>;
-export type SetQuizCoursePricingRequest = z.infer<
-  typeof setQuizCoursePricingRequestSchema
->;
+export type SetQuizCoursePricingRequest = z.infer<typeof setQuizCoursePricingRequestSchema>;
 export type QuizCoursePricing = z.infer<typeof quizCoursePricingSchema>;
-export type UpdateQuizAssignmentRequest = z.infer<
-  typeof updateQuizAssignmentRequestSchema
->;
+export type UpdateQuizAssignmentRequest = z.infer<typeof updateQuizAssignmentRequestSchema>;
 export type LearnerQuizAttempt = z.infer<typeof learnerQuizAttemptSchema>;
 export type QuizResult = z.infer<typeof quizResultSchema>;
 export type QuizHistoryEntry = z.infer<typeof quizHistoryEntrySchema>;

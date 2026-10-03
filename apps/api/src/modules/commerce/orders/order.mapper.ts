@@ -91,10 +91,7 @@ export function toOrderPaymentMethod(raw: unknown): OrderPaymentMethod | null {
 }
 
 export function toOrderPaymentSummary(
-  payment?: Pick<
-    Selectable<Database["payments"]>,
-    "gateway_provider" | "payment_method"
-  >,
+  payment?: Pick<Selectable<Database["payments"]>, "gateway_provider" | "payment_method">,
 ): OrderPaymentSummary | null {
   if (!payment) return null;
   const method = toOrderPaymentMethod(payment.payment_method);
@@ -107,10 +104,7 @@ export function toOrderPaymentSummary(
   };
 }
 
-type AdminUserRow = Pick<
-  Selectable<Database["users"]>,
-  "display_name" | "username" | "email"
->;
+type AdminUserRow = Pick<Selectable<Database["users"]>, "display_name" | "username" | "email">;
 
 /**
  * Builds the academy-only `admin` block shown on an order. Shared by the

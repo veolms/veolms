@@ -117,9 +117,7 @@ export interface NoteCreationRecord {
   readonly serverId?: string;
   readonly serverNote?: LearningNote;
   readonly serverNoteEntity?: LearningNoteEntity;
-  readonly dispatch: (
-    payload: CreateLearningNoteRequest,
-  ) => Promise<LearningNote>;
+  readonly dispatch: (payload: CreateLearningNoteRequest) => Promise<LearningNote>;
   readonly onFailure?: () => void;
   readonly localAttachments?: readonly LocalComposerAttachment[];
 }
@@ -135,38 +133,26 @@ export interface BeginNoteCreationArgs {
   onFailure?: () => void;
 }
 
-function freezeThreadPayload(
-  payload: CreateLearningThreadRequest,
-): CreateLearningThreadRequest {
+function freezeThreadPayload(payload: CreateLearningThreadRequest): CreateLearningThreadRequest {
   const frozen = {
     ...payload,
-    ...(payload.attachmentIds
-      ? { attachmentIds: Object.freeze([...payload.attachmentIds]) }
-      : {}),
+    ...(payload.attachmentIds ? { attachmentIds: Object.freeze([...payload.attachmentIds]) } : {}),
     ...(payload.tags ? { tags: Object.freeze([...payload.tags]) } : {}),
   };
   return Object.freeze(frozen) as unknown as CreateLearningThreadRequest;
 }
 
-function freezeReplyPayload(
-  payload: CreateLearningReplyRequest,
-): CreateLearningReplyRequest {
+function freezeReplyPayload(payload: CreateLearningReplyRequest): CreateLearningReplyRequest {
   return Object.freeze({
     ...payload,
-    ...(payload.attachmentIds
-      ? { attachmentIds: Object.freeze([...payload.attachmentIds]) }
-      : {}),
+    ...(payload.attachmentIds ? { attachmentIds: Object.freeze([...payload.attachmentIds]) } : {}),
   }) as unknown as CreateLearningReplyRequest;
 }
 
-function freezeNotePayload(
-  payload: CreateLearningNoteRequest,
-): CreateLearningNoteRequest {
+function freezeNotePayload(payload: CreateLearningNoteRequest): CreateLearningNoteRequest {
   return Object.freeze({
     ...payload,
-    ...(payload.attachmentIds
-      ? { attachmentIds: Object.freeze([...payload.attachmentIds]) }
-      : {}),
+    ...(payload.attachmentIds ? { attachmentIds: Object.freeze([...payload.attachmentIds]) } : {}),
     ...(payload.tags ? { tags: Object.freeze([...payload.tags]) } : {}),
   }) as unknown as CreateLearningNoteRequest;
 }
@@ -216,18 +202,11 @@ export class InteractionCreationCoordinator {
     };
 
     this.noteRecords.set(record.clientId, record);
-    insertOptimisticNoteInCaches(
-      queryClient,
-      record.context,
-      record.optimisticNote,
-    );
+    insertOptimisticNoteInCaches(queryClient, record.context, record.optimisticNote);
     return record;
   }
 
-  getActiveNoteRecords(query?: {
-    courseId?: string;
-    lessonId?: string;
-  }): NoteCreationRecord[] {
+  getActiveNoteRecords(query?: { courseId?: string; lessonId?: string }): NoteCreationRecord[] {
     return [...this.noteRecords.values()]
       .filter(
         (record) =>
@@ -276,19 +255,10 @@ export class InteractionCreationCoordinator {
       ),
     };
     this.noteRecords.set(clientId, { ...record, optimisticNote });
-    updateOptimisticNoteAttachmentInCaches(
-      queryClient,
-      clientId,
-      attachmentClientId,
-      patch,
-    );
+    updateOptimisticNoteAttachmentInCaches(queryClient, clientId, attachmentClientId, patch);
   }
 
-  confirmNote(
-    queryClient: QueryClient,
-    clientId: string,
-    serverNote: LearningNote,
-  ): boolean {
+  confirmNote(queryClient: QueryClient, clientId: string, serverNote: LearningNote): boolean {
     const record = this.noteRecords.get(clientId);
     if (!record || record.status !== "pending") return false;
     if (!this.isCurrentAuth(record)) {
@@ -366,27 +336,19 @@ export class InteractionCreationCoordinator {
     };
 
     this.threadRecords.set(record.clientId, record);
-    insertOptimisticThreadInLessonCaches(
-      queryClient,
-      record.context,
-      record.optimisticThread,
-    );
+    insertOptimisticThreadInLessonCaches(queryClient, record.context, record.optimisticThread);
     return record;
   }
 
   hasPendingClientId(clientId: string | undefined): boolean {
-    return Boolean(
-      clientId && this.threadRecords.get(clientId)?.status === "pending",
-    );
+    return Boolean(clientId && this.threadRecords.get(clientId)?.status === "pending");
   }
 
   getThreadRecord(clientId: string): ThreadCreationRecord | undefined {
     return this.threadRecords.get(clientId);
   }
 
-  getActiveThreadRecords(
-    context?: LessonThreadCacheContext,
-  ): ThreadCreationRecord[] {
+  getActiveThreadRecords(context?: LessonThreadCacheContext): ThreadCreationRecord[] {
     return [...this.threadRecords.values()]
       .filter(
         (record) =>
@@ -396,9 +358,7 @@ export class InteractionCreationCoordinator {
               record.context.lessonId === context.lessonId)),
       )
       .sort((left, right) =>
-        left.optimisticThread.createdAt.localeCompare(
-          right.optimisticThread.createdAt,
-        ),
+        left.optimisticThread.createdAt.localeCompare(right.optimisticThread.createdAt),
       );
   }
 
@@ -424,9 +384,7 @@ export class InteractionCreationCoordinator {
 
   getThreadResolution(clientId: string): ThreadResolution | undefined {
     const resolution = this.threadResolutions.get(clientId);
-    return resolution?.authGeneration === authStore.getWriteGeneration()
-      ? resolution
-      : undefined;
+    return resolution?.authGeneration === authStore.getWriteGeneration() ? resolution : undefined;
   }
 
   updateThreadAttachment(
@@ -455,11 +413,7 @@ export class InteractionCreationCoordinator {
     );
   }
 
-  confirmThread(
-    queryClient: QueryClient,
-    clientId: string,
-    serverThread: LearningThread,
-  ): boolean {
+  confirmThread(queryClient: QueryClient, clientId: string, serverThread: LearningThread): boolean {
     const record = this.threadRecords.get(clientId);
     if (!record || record.status !== "pending") return false;
 
@@ -499,14 +453,9 @@ export class InteractionCreationCoordinator {
       record.optimisticThread.attachments,
     );
     releaseLocalAttachmentPreviews(record.localAttachments);
-    migrateOptimisticRepliesToServerParent(
-      queryClient,
-      clientId,
-      serverThread.id,
-    );
+    migrateOptimisticRepliesToServerParent(queryClient, clientId, serverThread.id);
     const dependentReplies = [...this.replyRecords.values()].filter(
-      (reply) =>
-        reply.parentClientId === clientId && reply.status === "pending",
+      (reply) => reply.parentClientId === clientId && reply.status === "pending",
     );
     for (const reply of dependentReplies) {
       this.replyRecords.set(reply.clientId, {
@@ -522,11 +471,7 @@ export class InteractionCreationCoordinator {
       this.startReplyDispatch(queryClient, reply.clientId, serverThread.id);
     }
     if (dependentReplies.length > 0) {
-      updateReplyCountInThreadCaches(
-        queryClient,
-        serverThread.id,
-        dependentReplies.length,
-      );
+      updateReplyCountInThreadCaches(queryClient, serverThread.id, dependentReplies.length);
     }
     desiredStateCoordinator.resolvePendingThread(clientId, serverThread);
     return true;
@@ -545,8 +490,7 @@ export class InteractionCreationCoordinator {
       authGeneration: authStore.getWriteGeneration(),
     });
     const dependentReplies = [...this.replyRecords.values()].filter(
-      (reply) =>
-        reply.parentClientId === clientId && reply.status !== "confirmed",
+      (reply) => reply.parentClientId === clientId && reply.status !== "confirmed",
     );
     for (const reply of dependentReplies) {
       this.replyRecords.delete(reply.clientId);
@@ -558,11 +502,7 @@ export class InteractionCreationCoordinator {
         reply.clientId,
       );
     }
-    removeOptimisticThreadFromLessonCaches(
-      queryClient,
-      record.context,
-      clientId,
-    );
+    removeOptimisticThreadFromLessonCaches(queryClient, record.context, clientId);
     desiredStateCoordinator.failPendingThread(clientId);
     return true;
   }
@@ -649,11 +589,7 @@ export class InteractionCreationCoordinator {
       );
     }
     if (resolvedParentServerId) {
-      this.startReplyDispatch(
-        queryClient,
-        record.clientId,
-        resolvedParentServerId,
-      );
+      this.startReplyDispatch(queryClient, record.clientId, resolvedParentServerId);
     }
     return record;
   }
@@ -717,10 +653,7 @@ export class InteractionCreationCoordinator {
 
   getActiveReplyRecords(parentServerId: string): ReplyCreationRecord[] {
     return [...this.replyRecords.values()]
-      .filter(
-        (reply) =>
-          reply.parentServerId === parentServerId && this.isCurrentAuth(reply),
-      )
+      .filter((reply) => reply.parentServerId === parentServerId && this.isCurrentAuth(reply))
       .sort((left, right) => left.localSequence - right.localSequence);
   }
 
@@ -731,10 +664,7 @@ export class InteractionCreationCoordinator {
     patch: InteractionAttachmentPatch,
   ): void {
     const record = this.replyRecords.get(clientId);
-    if (
-      !record ||
-      (record.status !== "pending" && record.status !== "dispatching")
-    ) {
+    if (!record || (record.status !== "pending" && record.status !== "dispatching")) {
       return;
     }
     const optimisticReply = {
@@ -834,12 +764,7 @@ export class InteractionCreationCoordinator {
     parentServerId: string,
   ): Promise<void> {
     const record = this.replyRecords.get(clientId);
-    if (
-      !record ||
-      record.status !== "dispatching" ||
-      !this.isCurrentAuth(record)
-    )
-      return;
+    if (!record || record.status !== "dispatching" || !this.isCurrentAuth(record)) return;
     try {
       const serverReply = await record.dispatch(parentServerId, record.payload);
       this.confirmReply(queryClient, clientId, serverReply);
@@ -872,8 +797,7 @@ export class InteractionCreationCoordinator {
   ): boolean {
     const currentUserId = authStore.getState().user?.id;
     return (
-      record.authGeneration === authStore.getWriteGeneration() &&
-      record.userId === currentUserId
+      record.authGeneration === authStore.getWriteGeneration() && record.userId === currentUserId
     );
   }
 }
@@ -896,9 +820,7 @@ function releaseLocalAttachmentPreviews(
   attachments?.forEach(revokeLocalAttachmentPreview);
 }
 
-function getAuthorRole(
-  roles: readonly string[] | undefined,
-): "Student" | "Instructor" | "Admin" {
+function getAuthorRole(roles: readonly string[] | undefined): "Student" | "Instructor" | "Admin" {
   const normalized = roles?.map((role) => role.toLowerCase()) ?? [];
   if (normalized.includes("admin")) return "Admin";
   if (
@@ -911,5 +833,4 @@ function getAuthorRole(
   return "Student";
 }
 
-export const interactionCreationCoordinator =
-  new InteractionCreationCoordinator();
+export const interactionCreationCoordinator = new InteractionCreationCoordinator();

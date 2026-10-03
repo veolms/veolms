@@ -27,9 +27,7 @@ export function resolveCourseCharge(input: {
   }
 
   if (!Number.isInteger(customAmount)) {
-    throw CommerceErrors.PRICE_CALCULATION_FAILED(
-      "Custom amount must be a whole integer.",
-    );
+    throw CommerceErrors.PRICE_CALCULATION_FAILED("Custom amount must be a whole integer.");
   }
 
   if (isPaidCourse) {
@@ -46,10 +44,7 @@ export function resolveCourseCharge(input: {
     return { unitPrice: customAmount, couponBase: catalog };
   }
 
-  if (
-    customAmount < MIN_VOLUNTARY_AMOUNT ||
-    customAmount > MAX_VOLUNTARY_AMOUNT
-  ) {
+  if (customAmount < MIN_VOLUNTARY_AMOUNT || customAmount > MAX_VOLUNTARY_AMOUNT) {
     throw CommerceErrors.PRICE_CALCULATION_FAILED(
       `Voluntary amount must be an integer between ${MIN_VOLUNTARY_AMOUNT} and ${MAX_VOLUNTARY_AMOUNT} ${currency}.`,
     );
@@ -68,12 +63,7 @@ export function computeCouponDiscount(input: {
   maxDiscountAmount?: number | null;
   eligibleCatalogSubtotal: number;
 }): number {
-  const {
-    discountType,
-    discountValue,
-    maxDiscountAmount,
-    eligibleCatalogSubtotal,
-  } = input;
+  const { discountType, discountValue, maxDiscountAmount, eligibleCatalogSubtotal } = input;
 
   if (eligibleCatalogSubtotal <= 0) {
     return 0;
@@ -81,12 +71,8 @@ export function computeCouponDiscount(input: {
 
   let totalDiscount: number;
   if (discountType === "percentage") {
-    const calculated = Math.floor(
-      (eligibleCatalogSubtotal * discountValue) / 100,
-    );
-    totalDiscount = maxDiscountAmount
-      ? Math.min(calculated, maxDiscountAmount)
-      : calculated;
+    const calculated = Math.floor((eligibleCatalogSubtotal * discountValue) / 100);
+    totalDiscount = maxDiscountAmount ? Math.min(calculated, maxDiscountAmount) : calculated;
   } else {
     totalDiscount = Math.min(discountValue, eligibleCatalogSubtotal);
   }

@@ -58,9 +58,7 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
     if (this.timer) return;
 
     this.isStopped = false;
-    this.logger?.info(
-      "Starting Durable Postgres Payment Event Queue polling worker",
-    );
+    this.logger?.info("Starting Durable Postgres Payment Event Queue polling worker");
 
     // Trigger initial drain on startup to process any pending webhooks from previous runs
     void this.processPendingEvents();
@@ -77,9 +75,7 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
-      this.logger?.info(
-        "Stopped Durable Postgres Payment Event Queue polling worker",
-      );
+      this.logger?.info("Stopped Durable Postgres Payment Event Queue polling worker");
     }
 
     // The API destroys its shared database only after Fastify's onClose hooks
@@ -151,10 +147,7 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
           });
 
           // Mark event as processed
-          await webhookRepo.markWebhookEventProcessed(
-            this.database,
-            eventRow.id,
-          );
+          await webhookRepo.markWebhookEventProcessed(this.database, eventRow.id);
           log?.info("Durable webhook event processed successfully");
         } catch (err: unknown) {
           log?.error({ err }, "Error processing durable webhook event");
@@ -168,10 +161,7 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
         }
       }
     } catch (pollErr: unknown) {
-      this.logger?.error(
-        { err: pollErr },
-        "Failed during payment queue event polling loop",
-      );
+      this.logger?.error({ err: pollErr }, "Failed during payment queue event polling loop");
     }
   }
 }

@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type {
-  VideoNetworkRequest,
-  VideoNetworkResponse,
-  VideoSource,
-} from "../core/types";
+import type { VideoNetworkRequest, VideoNetworkResponse, VideoSource } from "../core/types";
 import { defaultStoryboardLoader } from "./PlayerMetadataBridge";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -32,10 +28,10 @@ describe("defaultStoryboardLoader", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await defaultStoryboardLoader(
-      "https://cdn.example/storyboard.vtt",
-      { signal: new AbortController().signal, source },
-    );
+    const result = await defaultStoryboardLoader("https://cdn.example/storyboard.vtt", {
+      signal: new AbortController().signal,
+      source,
+    });
 
     expect(requestFilter).toHaveBeenCalledWith(
       expect.objectContaining({ type: "thumbnail", method: "GET" }),

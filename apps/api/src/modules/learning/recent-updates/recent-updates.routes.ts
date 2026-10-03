@@ -1,7 +1,4 @@
-import {
-  recentUpdatesQuerySchema,
-  recentUpdatesResponseSchema,
-} from "@veolms/contracts";
+import { recentUpdatesQuerySchema, recentUpdatesResponseSchema } from "@veolms/contracts";
 
 import { errorResponse } from "../../../lib/errors.ts";
 import { jsonResponse } from "../../../lib/responses.ts";
@@ -29,10 +26,7 @@ const recentUpdatesRoutes: RoutePlugin = async (app, options) => {
           "Returns recently updated published lessons from the learner's active enrolled courses. Lesson updatedAt is used as the availability approximation because lesson-level publication timestamps are not stored.",
         querystring: recentUpdatesQuerySchema,
         response: {
-          200: jsonResponse(
-            "Recently updated learner course content",
-            recentUpdatesResponseSchema,
-          ),
+          200: jsonResponse("Recently updated learner course content", recentUpdatesResponseSchema),
           401: errorResponse("Authentication required"),
         },
       },

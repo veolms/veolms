@@ -8,14 +8,8 @@ import type {
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
 import { withWriteTransaction } from "../shared/discussion.mentions.ts";
-import {
-  createDiscussionAccess,
-  type DiscussionActor,
-} from "../shared/discussion.access.ts";
-import {
-  createNotesRepository,
-  type NotesRepository,
-} from "../notes/notes.repository.ts";
+import { createDiscussionAccess, type DiscussionActor } from "../shared/discussion.access.ts";
+import { createNotesRepository, type NotesRepository } from "../notes/notes.repository.ts";
 import type { RepliesRepository } from "../replies/replies.repository.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type { EngagementsRepository } from "./engagements.repository.ts";
@@ -84,25 +78,12 @@ export function createEngagementsService({
         if (targetType === "thread") {
           const thread = await threadsRepo.findThreadById(trx, targetId);
           if (!thread) {
-            throw httpError(
-              404,
-              "THREAD_NOT_FOUND",
-              "Discussion thread not found",
-            );
+            throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
           }
-          await courseAccess.assertCanParticipateInCourse(
-            trx,
-            actor,
-            thread.courseId,
-          );
+          await courseAccess.assertCanParticipateInCourse(trx, actor, thread.courseId);
           await courseAccess.assertCanAccessThread(trx, actor, thread);
           courseAccess.assertThreadIsActive(thread);
-          await courseAccess.assertNotSuspended(
-            trx,
-            actor.userId,
-            thread.courseId,
-            thread.kind,
-          );
+          await courseAccess.assertNotSuspended(trx, actor.userId, thread.courseId, thread.kind);
         } else if (targetType === "reply") {
           const reply = await repliesRepo.findReplyById(trx, targetId);
           if (!reply) {
@@ -110,43 +91,21 @@ export function createEngagementsService({
           }
           const thread = await threadsRepo.findThreadById(trx, reply.threadId);
           if (!thread) {
-            throw httpError(
-              404,
-              "THREAD_NOT_FOUND",
-              "Discussion thread not found",
-            );
+            throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
           }
-          await courseAccess.assertCanParticipateInCourse(
-            trx,
-            actor,
-            thread.courseId,
-          );
+          await courseAccess.assertCanParticipateInCourse(trx, actor, thread.courseId);
           await courseAccess.assertCanAccessThread(trx, actor, thread);
           courseAccess.assertThreadIsActive(thread);
           courseAccess.assertReplyIsActive(reply);
-          await courseAccess.assertNotSuspended(
-            trx,
-            actor.userId,
-            thread.courseId,
-            thread.kind,
-          );
+          await courseAccess.assertNotSuspended(trx, actor.userId, thread.courseId, thread.kind);
         } else if (targetType === "note") {
           const note = await notesRepo.findNoteById(trx, targetId);
           if (!note) {
             throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
           }
-          await courseAccess.assertCanParticipateInCourse(
-            trx,
-            actor,
-            note.courseId,
-          );
+          await courseAccess.assertCanParticipateInCourse(trx, actor, note.courseId);
           await courseAccess.assertCanAccessNote(trx, actor, note);
-          await courseAccess.assertNotSuspended(
-            trx,
-            actor.userId,
-            note.courseId,
-            "commenting",
-          );
+          await courseAccess.assertNotSuspended(trx, actor.userId, note.courseId, "commenting");
         }
 
         const alreadyLiked = await engagementsRepo.findLike(
@@ -157,12 +116,7 @@ export function createEngagementsService({
         );
 
         if (alreadyLiked) {
-          const removed = await engagementsRepo.removeLike(
-            trx,
-            actor.userId,
-            targetType,
-            targetId,
-          );
+          const removed = await engagementsRepo.removeLike(trx, actor.userId, targetType, targetId);
           if (removed) {
             if (targetType === "thread") {
               await threadsRepo.incrementLikesCount(trx, targetId, -1);
@@ -173,12 +127,7 @@ export function createEngagementsService({
             }
           }
         } else {
-          const added = await engagementsRepo.addLike(
-            trx,
-            actor.userId,
-            targetType,
-            targetId,
-          );
+          const added = await engagementsRepo.addLike(trx, actor.userId, targetType, targetId);
           if (added) {
             if (targetType === "thread") {
               await threadsRepo.incrementLikesCount(trx, targetId, 1);
@@ -225,25 +174,12 @@ export function createEngagementsService({
       if (!thread) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
-      await courseAccess.assertCanParticipateInCourse(
-        db,
-        actor,
-        thread.courseId,
-      );
+      await courseAccess.assertCanParticipateInCourse(db, actor, thread.courseId);
       await courseAccess.assertCanAccessThread(db, actor, thread);
       courseAccess.assertThreadIsActive(thread);
-      await courseAccess.assertNotSuspended(
-        db,
-        actor.userId,
-        thread.courseId,
-        thread.kind,
-      );
+      await courseAccess.assertNotSuspended(db, actor.userId, thread.courseId, thread.kind);
 
-      const alreadyBookmarked = await engagementsRepo.findBookmark(
-        db,
-        actor.userId,
-        threadId,
-      );
+      const alreadyBookmarked = await engagementsRepo.findBookmark(db, actor.userId, threadId);
 
       if (alreadyBookmarked) {
         await engagementsRepo.removeBookmark(db, actor.userId, threadId);
@@ -261,18 +197,9 @@ export function createEngagementsService({
       }
       await courseAccess.assertCanParticipateInCourse(db, actor, note.courseId);
       await courseAccess.assertCanAccessNote(db, actor, note);
-      await courseAccess.assertNotSuspended(
-        db,
-        actor.userId,
-        note.courseId,
-        "commenting",
-      );
+      await courseAccess.assertNotSuspended(db, actor.userId, note.courseId, "commenting");
 
-      const alreadyBookmarked = await engagementsRepo.findNoteBookmark(
-        db,
-        actor.userId,
-        noteId,
-      );
+      const alreadyBookmarked = await engagementsRepo.findNoteBookmark(db, actor.userId, noteId);
 
       if (alreadyBookmarked) {
         await engagementsRepo.removeNoteBookmark(db, actor.userId, noteId);
@@ -290,48 +217,23 @@ export function createEngagementsService({
         // public toggle API or relying on a unique-constraint error.
         const threadExists = await threadsRepo.lockThreadById(trx, threadId);
         if (!threadExists) {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
         const thread = await threadsRepo.findThreadById(trx, threadId);
         if (!thread) {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
-        await courseAccess.assertCanParticipateInCourse(
-          trx,
-          actor,
-          thread.courseId,
-        );
+        await courseAccess.assertCanParticipateInCourse(trx, actor, thread.courseId);
         await courseAccess.assertCanAccessThread(trx, actor, thread);
         courseAccess.assertThreadIsActive(thread);
 
         if (thread.kind !== "question" && thread.kind !== "comment") {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
 
-        await courseAccess.assertNotSuspended(
-          trx,
-          actor.userId,
-          thread.courseId,
-          thread.kind,
-        );
+        await courseAccess.assertNotSuspended(trx, actor.userId, thread.courseId, thread.kind);
 
-        const alreadyFollowed = await engagementsRepo.findFollow(
-          trx,
-          actor.userId,
-          threadId,
-        );
+        const alreadyFollowed = await engagementsRepo.findFollow(trx, actor.userId, threadId);
 
         if (alreadyFollowed) {
           await engagementsRepo.removeFollow(trx, actor.userId, threadId);
@@ -348,25 +250,12 @@ export function createEngagementsService({
       if (!thread) {
         throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
       }
-      await courseAccess.assertCanParticipateInCourse(
-        db,
-        actor,
-        thread.courseId,
-      );
+      await courseAccess.assertCanParticipateInCourse(db, actor, thread.courseId);
       await courseAccess.assertCanAccessThread(db, actor, thread);
       courseAccess.assertThreadIsActive(thread);
-      await courseAccess.assertNotSuspended(
-        db,
-        actor.userId,
-        thread.courseId,
-        thread.kind,
-      );
+      await courseAccess.assertNotSuspended(db, actor.userId, thread.courseId, thread.kind);
 
-      const canStaffModerate = await courseAccess.canModerateCourse(
-        db,
-        actor,
-        thread.courseId,
-      );
+      const canStaffModerate = await courseAccess.canModerateCourse(db, actor, thread.courseId);
       if (thread.userId !== actor.userId && !canStaffModerate) {
         throw httpError(
           403,
@@ -383,11 +272,7 @@ export function createEngagementsService({
       const rawQuery = (input.query ?? input.q ?? "").trim();
       const needle = rawQuery.replace(/[%_\\]/g, "").toLowerCase();
       if (!needle) {
-        throw httpError(
-          400,
-          "QUERY_REQUIRED",
-          "A non-empty mention query is required.",
-        );
+        throw httpError(400, "QUERY_REQUIRED", "A non-empty mention query is required.");
       }
 
       const course = await db
@@ -401,10 +286,7 @@ export function createEngagementsService({
 
       await courseAccess.assertCanAccessCourse(db, actor, input.courseId);
 
-      const participantIds = await courseAccess.listCourseParticipantIds(
-        db,
-        input.courseId,
-      );
+      const participantIds = await courseAccess.listCourseParticipantIds(db, input.courseId);
 
       return engagementsRepo.searchUsersForMention(db, {
         query: needle,

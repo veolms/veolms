@@ -55,8 +55,7 @@ export function resolveVideoPlaybackCdnUrl(path: string): string {
 export function getVideoPlaybackApiOrigin(): string | null {
   try {
     const url = new URL(API_BASE_URL, "http://veolms.local");
-    return /^https?:$/i.test(url.protocol) &&
-      url.origin !== "http://veolms.local"
+    return /^https?:$/i.test(url.protocol) && url.origin !== "http://veolms.local"
       ? url.origin
       : null;
   } catch {
@@ -72,8 +71,7 @@ export function getVideoPlaybackApiOrigin(): string | null {
 export function getVideoPlaybackCdnOrigin(): string | null {
   try {
     const url = new URL(CDN_URL, "http://veolms.local");
-    return /^https?:$/i.test(url.protocol) &&
-      url.origin !== "http://veolms.local"
+    return /^https?:$/i.test(url.protocol) && url.origin !== "http://veolms.local"
       ? url.origin
       : null;
   } catch {
@@ -81,11 +79,7 @@ export function getVideoPlaybackCdnOrigin(): string | null {
   }
 }
 
-function requestKey({
-  courseSlug,
-  lessonNumber,
-  mediaId,
-}: VideoPlaybackBootstrapRequest) {
+function requestKey({ courseSlug, lessonNumber, mediaId }: VideoPlaybackBootstrapRequest) {
   return `${courseSlug}\u0000${lessonNumber}\u0000${mediaId ?? ""}`;
 }
 
@@ -188,9 +182,7 @@ async function requestPlaybackToken(
     );
   }
 
-  const parsed = videoPlaybackTokenSchema.safeParse(
-    unwrapResponseData(payload),
-  );
+  const parsed = videoPlaybackTokenSchema.safeParse(unwrapResponseData(payload));
   if (!parsed.success) {
     throw new VideoPlaybackBootstrapError(
       502,

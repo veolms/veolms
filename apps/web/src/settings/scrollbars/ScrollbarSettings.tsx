@@ -28,12 +28,7 @@ import type {
   ElasticScrollIcon,
   ScrollbarStyle,
 } from "../settingsPreferences";
-import {
-  ChoiceCard,
-  RadioGroup,
-  SettingRow,
-  SettingsToggle,
-} from "../SettingsControls";
+import { ChoiceCard, RadioGroup, SettingRow, SettingsToggle } from "../SettingsControls";
 
 interface ScrollbarStyleOption {
   id: ScrollbarStyle;
@@ -122,36 +117,33 @@ const ELASTIC_SCROLL_ICONS: readonly ElasticScrollIconOption[] = [
   },
 ];
 
-const ELASTIC_SCROLL_GESTURE_SIDES: readonly ElasticScrollGestureSideOption[] =
-  [
-    { id: "left", label: "Left side" },
-    { id: "right", label: "Right side" },
-  ];
+const ELASTIC_SCROLL_GESTURE_SIDES: readonly ElasticScrollGestureSideOption[] = [
+  { id: "left", label: "Left side" },
+  { id: "right", label: "Right side" },
+];
 
-const PREVIEW_STYLES: Record<ScrollbarStyle, { track: string; thumb: string }> =
-  {
-    default: {
-      track:
-        "w-1.5 bg-[color-mix(in_srgb,var(--text)_10%,var(--canvas))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_8%,transparent)]",
-      thumb:
-        "inset-x-0 top-3 h-8 rounded-sm bg-[color-mix(in_srgb,var(--text-secondary)_58%,var(--surface))]",
-    },
-    custom: {
-      track: "w-1.5 bg-transparent",
-      thumb:
-        "inset-x-0 top-3 h-8 rounded-full bg-[color-mix(in_srgb,var(--text-secondary)_58%,transparent)]",
-    },
-    theme: {
-      track: "w-1.5 bg-[color-mix(in_srgb,var(--accent)_20%,transparent)]",
-      thumb: "inset-x-0 top-3 h-8 rounded-full bg-(--accent)",
-    },
-    thick: {
-      track:
-        "w-3 bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))]",
-      thumb:
-        "inset-x-0.5 top-3 h-8 rounded-full bg-[color-mix(in_srgb,var(--accent)_88%,var(--text))]",
-    },
-  };
+const PREVIEW_STYLES: Record<ScrollbarStyle, { track: string; thumb: string }> = {
+  default: {
+    track:
+      "w-1.5 bg-[color-mix(in_srgb,var(--text)_10%,var(--canvas))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_8%,transparent)]",
+    thumb:
+      "inset-x-0 top-3 h-8 rounded-sm bg-[color-mix(in_srgb,var(--text-secondary)_58%,var(--surface))]",
+  },
+  custom: {
+    track: "w-1.5 bg-transparent",
+    thumb:
+      "inset-x-0 top-3 h-8 rounded-full bg-[color-mix(in_srgb,var(--text-secondary)_58%,transparent)]",
+  },
+  theme: {
+    track: "w-1.5 bg-[color-mix(in_srgb,var(--accent)_20%,transparent)]",
+    thumb: "inset-x-0 top-3 h-8 rounded-full bg-(--accent)",
+  },
+  thick: {
+    track: "w-3 bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))]",
+    thumb:
+      "inset-x-0.5 top-3 h-8 rounded-full bg-[color-mix(in_srgb,var(--accent)_88%,var(--text))]",
+  },
+};
 
 function ScrollbarStylePreview({ style }: { style: ScrollbarStyle }) {
   const preview = PREVIEW_STYLES[style];
@@ -167,9 +159,7 @@ function ScrollbarStylePreview({ style }: { style: ScrollbarStyle }) {
         <span className="h-1.5 w-3/5 rounded-full bg-[color-mix(in_srgb,var(--text-secondary)_14%,transparent)]" />
         <span className="h-1.5 w-[72%] rounded-full bg-[color-mix(in_srgb,var(--text-secondary)_14%,transparent)]" />
       </span>
-      <span
-        className={`absolute inset-y-2 right-2 rounded-full ${preview.track}`}
-      >
+      <span className={`absolute inset-y-2 right-2 rounded-full ${preview.track}`}>
         <span className={`absolute ${preview.thumb}`} />
       </span>
     </span>
@@ -257,25 +247,17 @@ function ElasticScrollGesturePreview({
 }
 
 export function ScrollbarSettings() {
-  const [scrollbarsEnabled, setScrollbarsEnabled] = useState(
-    !HIDE_SCROLLBARS_DEFAULT,
-  );
-  const [scrollbarStyle, setScrollbarStyle] = useState<ScrollbarStyle>(
-    SCROLLBAR_STYLE_DEFAULT,
-  );
+  const [scrollbarsEnabled, setScrollbarsEnabled] = useState(!HIDE_SCROLLBARS_DEFAULT);
+  const [scrollbarStyle, setScrollbarStyle] = useState<ScrollbarStyle>(SCROLLBAR_STYLE_DEFAULT);
   const [elasticScrollPreferences, setElasticScrollPreferences] = useState({
     ...ELASTIC_SCROLL_PREFERENCES_DEFAULT,
   });
   const [storageReady, setStorageReady] = useState(false);
 
   useEffect(() => {
-    setScrollbarsEnabled(
-      !readStoredBoolean(HIDE_SCROLLBARS_KEY, HIDE_SCROLLBARS_DEFAULT),
-    );
+    setScrollbarsEnabled(!readStoredBoolean(HIDE_SCROLLBARS_KEY, HIDE_SCROLLBARS_DEFAULT));
     setScrollbarStyle(
-      normalizeScrollbarStyle(
-        readStored(SCROLLBAR_STYLE_KEY, SCROLLBAR_STYLE_DEFAULT),
-      ),
+      normalizeScrollbarStyle(readStored(SCROLLBAR_STYLE_KEY, SCROLLBAR_STYLE_DEFAULT)),
     );
     setElasticScrollPreferences(readElasticScrollPreferences());
     setStorageReady(true);
@@ -302,12 +284,11 @@ export function ScrollbarSettings() {
   const selectedStyleLabel =
     SCROLLBAR_STYLES.find(({ id }) => id === scrollbarStyle)?.label ?? "Theme";
   const selectedElasticAppearanceLabel =
-    ELASTIC_SCROLL_APPEARANCES.find(
-      ({ id }) => id === elasticScrollPreferences.appearance,
-    )?.label ?? "2D";
+    ELASTIC_SCROLL_APPEARANCES.find(({ id }) => id === elasticScrollPreferences.appearance)
+      ?.label ?? "2D";
   const selectedElasticIconLabel =
-    ELASTIC_SCROLL_ICONS.find(({ id }) => id === elasticScrollPreferences.icon)
-      ?.label ?? "Classic arrow";
+    ELASTIC_SCROLL_ICONS.find(({ id }) => id === elasticScrollPreferences.icon)?.label ??
+    "Classic arrow";
 
   return (
     <>
@@ -315,9 +296,7 @@ export function ScrollbarSettings() {
         <div className="settings-section__heading-row">
           <div>
             <h2>Scrollbars</h2>
-            <p>
-              Choose when scrollbars appear and how they look in content areas.
-            </p>
+            <p>Choose when scrollbars appear and how they look in content areas.</p>
           </div>
           <span className="settings-section__count" aria-live="polite">
             {scrollbarsEnabled ? selectedStyleLabel : "Hidden"}
@@ -372,10 +351,7 @@ export function ScrollbarSettings() {
         <div className="settings-section__heading-row">
           <div>
             <h2>Elastic scroller</h2>
-            <p>
-              Customize the floating drag control that appears while scrolling
-              long lists.
-            </p>
+            <p>Customize the floating drag control that appears while scrolling long lists.</p>
           </div>
           <span className="settings-section__count" aria-live="polite">
             {selectedElasticAppearanceLabel} · {selectedElasticIconLabel}
@@ -388,8 +364,7 @@ export function ScrollbarSettings() {
               Control depth
             </h3>
             <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
-              Keep the original flat design or use the raised control and
-              recessed socket.
+              Keep the original flat design or use the raised control and recessed socket.
             </p>
           </div>
           <RadioGroup
@@ -426,8 +401,7 @@ export function ScrollbarSettings() {
               Direction icon
             </h3>
             <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
-              Choose the symbol that points toward the available scroll
-              direction.
+              Choose the symbol that points toward the available scroll direction.
             </p>
           </div>
           <RadioGroup
@@ -459,26 +433,20 @@ export function ScrollbarSettings() {
               Speed lock gestures
             </h3>
             <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
-              Choose the horizontal directions for docking and releasing a
-              speed. Vertical movement always controls speed and direction.
+              Choose the horizontal directions for docking and releasing a speed. Vertical movement
+              always controls speed and direction.
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <div>
               <div className="mb-2">
-                <h4 className="m-0 text-xs font-semibold text-(--text)">
-                  Lock side
-                </h4>
+                <h4 className="m-0 text-xs font-semibold text-(--text)">Lock side</h4>
                 <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
-                  Cross this side while dragging, then release to keep
-                  scrolling.
+                  Cross this side while dragging, then release to keep scrolling.
                 </p>
               </div>
-              <RadioGroup
-                label="Elastic scroll lock side"
-                className="grid grid-cols-2 gap-3"
-              >
+              <RadioGroup label="Elastic scroll lock side" className="grid grid-cols-2 gap-3">
                 {ELASTIC_SCROLL_GESTURE_SIDES.map(({ id, label }) => (
                   <ChoiceCard
                     key={id}
@@ -491,9 +459,7 @@ export function ScrollbarSettings() {
                     }
                     label={label}
                     note={`Drag ${id} to lock`}
-                    preview={
-                      <ElasticScrollGesturePreview side={id} action="lock" />
-                    }
+                    preview={<ElasticScrollGesturePreview side={id} action="lock" />}
                     className="min-h-30"
                   />
                 ))}
@@ -502,17 +468,12 @@ export function ScrollbarSettings() {
 
             <div>
               <div className="mb-2">
-                <h4 className="m-0 text-xs font-semibold text-(--text)">
-                  Unlock side
-                </h4>
+                <h4 className="m-0 text-xs font-semibold text-(--text)">Unlock side</h4>
                 <p className="mt-1 mb-0 text-xs leading-5 text-(--muted)">
                   Cross this side while locked, then release to stop.
                 </p>
               </div>
-              <RadioGroup
-                label="Elastic scroll unlock side"
-                className="grid grid-cols-2 gap-3"
-              >
+              <RadioGroup label="Elastic scroll unlock side" className="grid grid-cols-2 gap-3">
                 {ELASTIC_SCROLL_GESTURE_SIDES.map(({ id, label }) => (
                   <ChoiceCard
                     key={id}
@@ -525,9 +486,7 @@ export function ScrollbarSettings() {
                     }
                     label={label}
                     note={`Drag ${id} to unlock`}
-                    preview={
-                      <ElasticScrollGesturePreview side={id} action="unlock" />
-                    }
+                    preview={<ElasticScrollGesturePreview side={id} action="unlock" />}
                     className="min-h-30"
                   />
                 ))}

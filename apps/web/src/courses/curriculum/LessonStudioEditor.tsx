@@ -32,10 +32,7 @@ import {
   LessonContentTypeSelector,
   type StudioLessonContentType,
 } from "./LessonContentTypeSelector";
-import {
-  LessonMediaWorkspace,
-  type AttachedMediaInfo,
-} from "./LessonMediaWorkspace";
+import { LessonMediaWorkspace, type AttachedMediaInfo } from "./LessonMediaWorkspace";
 import { LessonResourceIcon } from "../lesson-resources/LessonResourceIcon";
 import { mediaService } from "../../services/media";
 
@@ -85,9 +82,7 @@ export interface LessonStudioEditorProps {
   onDeleteLesson?: () => void;
   onPreviewLesson?: () => void;
   onUploadMedia?: (file: File) => void | Promise<void>;
-  onMediaAttached?: (
-    mediaAssetId: string,
-  ) => void | boolean | Promise<void | boolean>;
+  onMediaAttached?: (mediaAssetId: string) => void | boolean | Promise<void | boolean>;
   onProcessingComplete?: () => void | Promise<void>;
   onChangeVideoClick?: () => void;
   onUploadThumbnail?: (file: File) => void | Promise<void>;
@@ -100,585 +95,571 @@ export interface LessonStudioEditorProps {
   playbackSuspended?: boolean;
 }
 
-export const LessonStudioEditor = forwardRef<
-  LessonStudioEditorHandle,
-  LessonStudioEditorProps
->(function LessonStudioEditor(
-  {
-    sectionNumber,
-    sectionTitle,
-    lessonNumber,
-    playbackLessonNumber,
-    lessonTitle: initialTitle,
-    courseSlug,
-    courseTitle,
-    contentType: initialContentType,
-    isPublished: initialIsPublished,
-    isPreview: initialIsPreview,
-    mediaInfo,
-    resources = [],
-    isSaving = false,
-    onBack,
-    onCancel,
-    onSave,
-    onContentTypeChange,
-    onDeleteLesson,
-    onPreviewLesson,
-    onUploadMedia,
-    onMediaAttached,
-    onProcessingComplete,
-    onUploadThumbnail,
-    onAddResourceFile,
-    onDeleteResource,
-    descriptionSection,
-    quizSection,
-    resourcesSection,
-    hideHeader = false,
-    playbackSuspended = false,
-  }: LessonStudioEditorProps,
-  ref,
-) {
-  // Local editable draft state
-  const [title, setTitle] = useState(initialTitle);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [contentType, setContentType] =
-    useState<StudioLessonContentType>(initialContentType);
-  const [previewFile, setPreviewFile] = useState<File | null>(null);
-  // Bumped when processing finishes so the workspace requests playback again.
-  const [playbackRevision, setPlaybackRevision] = useState(0);
-  // Asset whose generated thumbnail is available while it is still processing.
-  const [processingThumbnailMediaId, setProcessingThumbnailMediaId] = useState<
-    string | null
-  >(null);
-  const [isPublished, setIsPublished] = useState(initialIsPublished);
-  const [isPreview, setIsPreview] = useState(initialIsPreview);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [isResourceDragOver, setIsResourceDragOver] = useState(false);
-  const [activeContentTab, setActiveContentTab] = useState<
-    "resources" | "description" | "quiz"
-  >("resources");
-
-  const resourceFileInputRef = useRef<HTMLInputElement | null>(null);
-  const titleInputRef = useRef<HTMLInputElement | null>(null);
-  const moreMenuRef = useRef<HTMLDivElement | null>(null);
-  const videoUploadRef = useRef<LessonVideoUploadHandle>(null);
-
-  // Sync state if props change from external updates
-  useEffect(() => {
-    setTitle(initialTitle);
-  }, [initialTitle]);
-
-  const attachedMediaId = mediaInfo?.id;
-  useEffect(() => {
-    setProcessingThumbnailMediaId(null);
-  }, [attachedMediaId]);
-
-  const workspaceMediaInfo = useMemo<AttachedMediaInfo | null>(() => {
-    if (!processingThumbnailMediaId) return mediaInfo ?? null;
-    const thumbnailUrl = mediaService.getVideoThumbnailUrl(
-      processingThumbnailMediaId,
+export const LessonStudioEditor = forwardRef<LessonStudioEditorHandle, LessonStudioEditorProps>(
+  function LessonStudioEditor(
+    {
+      sectionNumber,
+      sectionTitle,
+      lessonNumber,
+      playbackLessonNumber,
+      lessonTitle: initialTitle,
+      courseSlug,
+      courseTitle,
+      contentType: initialContentType,
+      isPublished: initialIsPublished,
+      isPreview: initialIsPreview,
+      mediaInfo,
+      resources = [],
+      isSaving = false,
+      onBack,
+      onCancel,
+      onSave,
+      onContentTypeChange,
+      onDeleteLesson,
+      onPreviewLesson,
+      onUploadMedia,
+      onMediaAttached,
+      onProcessingComplete,
+      onUploadThumbnail,
+      onAddResourceFile,
+      onDeleteResource,
+      descriptionSection,
+      quizSection,
+      resourcesSection,
+      hideHeader = false,
+      playbackSuspended = false,
+    }: LessonStudioEditorProps,
+    ref,
+  ) {
+    // Local editable draft state
+    const [title, setTitle] = useState(initialTitle);
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [contentType, setContentType] = useState<StudioLessonContentType>(initialContentType);
+    const [previewFile, setPreviewFile] = useState<File | null>(null);
+    // Bumped when processing finishes so the workspace requests playback again.
+    const [playbackRevision, setPlaybackRevision] = useState(0);
+    // Asset whose generated thumbnail is available while it is still processing.
+    const [processingThumbnailMediaId, setProcessingThumbnailMediaId] = useState<string | null>(
+      null,
     );
-    return mediaInfo ? { ...mediaInfo, thumbnailUrl } : { thumbnailUrl };
-  }, [mediaInfo, processingThumbnailMediaId]);
+    const [isPublished, setIsPublished] = useState(initialIsPublished);
+    const [isPreview, setIsPreview] = useState(initialIsPreview);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [isResourceDragOver, setIsResourceDragOver] = useState(false);
+    const [activeContentTab, setActiveContentTab] = useState<"resources" | "description" | "quiz">(
+      "resources",
+    );
 
-  useEffect(() => {
-    setContentType(initialContentType);
-  }, [initialContentType]);
+    const resourceFileInputRef = useRef<HTMLInputElement | null>(null);
+    const titleInputRef = useRef<HTMLInputElement | null>(null);
+    const moreMenuRef = useRef<HTMLDivElement | null>(null);
+    const videoUploadRef = useRef<LessonVideoUploadHandle>(null);
 
-  useEffect(() => {
-    setIsPublished(initialIsPublished);
-  }, [initialIsPublished]);
+    // Sync state if props change from external updates
+    useEffect(() => {
+      setTitle(initialTitle);
+    }, [initialTitle]);
 
-  useEffect(() => {
-    setIsPreview(initialIsPreview);
-  }, [initialIsPreview]);
+    const attachedMediaId = mediaInfo?.id;
+    useEffect(() => {
+      setProcessingThumbnailMediaId(null);
+    }, [attachedMediaId]);
 
-  // Click outside to close more menu
-  useEffect(() => {
-    if (!showMoreMenu) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        moreMenuRef.current &&
-        !moreMenuRef.current.contains(e.target as Node)
-      ) {
-        setShowMoreMenu(false);
+    const workspaceMediaInfo = useMemo<AttachedMediaInfo | null>(() => {
+      if (!processingThumbnailMediaId) return mediaInfo ?? null;
+      const thumbnailUrl = mediaService.getVideoThumbnailUrl(processingThumbnailMediaId);
+      return mediaInfo ? { ...mediaInfo, thumbnailUrl } : { thumbnailUrl };
+    }, [mediaInfo, processingThumbnailMediaId]);
+
+    useEffect(() => {
+      setContentType(initialContentType);
+    }, [initialContentType]);
+
+    useEffect(() => {
+      setIsPublished(initialIsPublished);
+    }, [initialIsPublished]);
+
+    useEffect(() => {
+      setIsPreview(initialIsPreview);
+    }, [initialIsPreview]);
+
+    // Click outside to close more menu
+    useEffect(() => {
+      if (!showMoreMenu) return;
+      const handleClickOutside = (e: MouseEvent) => {
+        if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+          setShowMoreMenu(false);
+        }
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [showMoreMenu]);
+
+    const handleContentTypeChange = (type: StudioLessonContentType) => {
+      setContentType(type);
+      onContentTypeChange?.(type);
+    };
+
+    const handleSave = useCallback(() => {
+      void onSave({
+        title: title.trim() || initialTitle,
+        contentType,
+        isPublished,
+        isPreview,
+      });
+    }, [contentType, initialTitle, isPreview, isPublished, onSave, title]);
+
+    const handleCancel = useCallback(() => {
+      onCancel?.({ title, contentType, isPublished, isPreview });
+      onBack();
+    }, [contentType, isPreview, isPublished, onBack, onCancel, title]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        save: handleSave,
+        cancel: handleCancel,
+      }),
+      [handleCancel, handleSave],
+    );
+
+    const handleResourceDrop = (e: DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsResourceDragOver(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file && onAddResourceFile) {
+        void onAddResourceFile(file);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showMoreMenu]);
 
-  const handleContentTypeChange = (type: StudioLessonContentType) => {
-    setContentType(type);
-    onContentTypeChange?.(type);
-  };
-
-  const handleSave = useCallback(() => {
-    void onSave({
-      title: title.trim() || initialTitle,
-      contentType,
-      isPublished,
-      isPreview,
-    });
-  }, [contentType, initialTitle, isPreview, isPublished, onSave, title]);
-
-  const handleCancel = useCallback(() => {
-    onCancel?.({ title, contentType, isPublished, isPreview });
-    onBack();
-  }, [contentType, isPreview, isPublished, onBack, onCancel, title]);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      save: handleSave,
-      cancel: handleCancel,
-    }),
-    [handleCancel, handleSave],
-  );
-
-  const handleResourceDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsResourceDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file && onAddResourceFile) {
-      void onAddResourceFile(file);
-    }
-  };
-
-  const resourcesTabContent = resourcesSection ?? (
-    <div className="flex flex-col">
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--text)">
-          <Paperclip size={18} weight="bold" className="rotate-45" />
+    const resourcesTabContent = resourcesSection ?? (
+      <div className="flex flex-col">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--text)">
+            <Paperclip size={18} weight="bold" className="rotate-45" />
+          </div>
+          <div>
+            <h4 className="m-0 text-[0.85rem] font-bold text-(--text) sm:text-[0.88rem]">
+              Resources ({resources.length})
+            </h4>
+            <p className="m-0 mt-0.5 text-[0.72rem] text-(--muted) sm:text-[0.74rem]">
+              Attach files, links, or other resources for this lesson.
+            </p>
+          </div>
         </div>
-        <div>
-          <h4 className="m-0 text-[0.85rem] sm:text-[0.88rem] font-bold text-(--text)">
-            Resources ({resources.length})
-          </h4>
-          <p className="m-0 mt-0.5 text-[0.72rem] sm:text-[0.74rem] text-(--muted)">
-            Attach files, links, or other resources for this lesson.
+
+        <input
+          ref={resourceFileInputRef}
+          type="file"
+          aria-label="Upload resource file"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file && onAddResourceFile) void onAddResourceFile(file);
+          }}
+        />
+
+        <div
+          onClick={() => resourceFileInputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsResourceDragOver(true);
+          }}
+          onDragLeave={() => setIsResourceDragOver(false)}
+          onDrop={handleResourceDrop}
+          className={`mt-3 flex cursor-pointer flex-col items-center justify-center rounded-[12px] border-2 border-dashed p-5 text-center transition-all ${
+            isResourceDragOver
+              ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] hover:border-[color-mix(in_srgb,var(--text)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_4%,var(--surface))]"
+          }`}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)">
+            <CloudArrowUp size={20} weight="bold" />
+          </div>
+          <p className="m-0 mt-2 text-[0.80rem] font-bold text-(--text) sm:text-[0.84rem]">
+            Drag and drop files here
+          </p>
+          <p className="m-0 mt-0.5 text-[0.68rem] text-(--muted) sm:text-[0.70rem]">
+            Supports PDFs, documents, images, ZIP files (max 500 MB).
           </p>
         </div>
+
+        {resources.length > 0 && (
+          <div className="mt-3 flex flex-col gap-2">
+            {resources.map((res) => (
+              <div
+                key={res.id}
+                className="flex items-center justify-between gap-2.5 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-2.5"
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--accent)">
+                    <LessonResourceIcon name={res.name} type={res.type} className="size-[15px]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="m-0 truncate text-[0.76rem] font-semibold text-(--text) sm:text-[0.78rem]">
+                      {res.name}
+                    </p>
+                    <p className="m-0 text-[0.66rem] text-(--muted)">{res.size || "1.2 MB"}</p>
+                  </div>
+                </div>
+
+                {onDeleteResource && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteResource(res.id)}
+                    aria-label="Remove resource"
+                    className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-(--muted) transition-colors hover:text-red-500"
+                  >
+                    <X size={13} weight="bold" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+    );
 
-      <input
-        ref={resourceFileInputRef}
-        type="file"
-        aria-label="Upload resource file"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file && onAddResourceFile) void onAddResourceFile(file);
-        }}
-      />
-
+    const editorPanel = (
       <div
-        onClick={() => resourceFileInputRef.current?.click()}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsResourceDragOver(true);
-        }}
-        onDragLeave={() => setIsResourceDragOver(false)}
-        onDrop={handleResourceDrop}
-        className={`mt-3 flex cursor-pointer flex-col items-center justify-center rounded-[12px] border-2 border-dashed p-5 text-center transition-all ${
-          isResourceDragOver
-            ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
-            : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] hover:border-[color-mix(in_srgb,var(--text)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_4%,var(--surface))]"
+        className={`animate-in fade-in flex w-full flex-col duration-200 select-none ${
+          hideHeader ? "gap-4" : "gap-6"
         }`}
       >
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)">
-          <CloudArrowUp size={20} weight="bold" />
-        </div>
-        <p className="m-0 mt-2 text-[0.80rem] sm:text-[0.84rem] font-bold text-(--text)">
-          Drag and drop files here
-        </p>
-        <p className="m-0 mt-0.5 text-[0.68rem] sm:text-[0.70rem] text-(--muted)">
-          Supports PDFs, documents, images, ZIP files (max 500 MB).
-        </p>
-      </div>
-
-      {resources.length > 0 && (
-        <div className="mt-3 flex flex-col gap-2">
-          {resources.map((res) => (
-            <div
-              key={res.id}
-              className="flex items-center justify-between gap-2.5 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-2.5"
-            >
-              <div className="flex min-w-0 items-center gap-2.5">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--accent)">
-                  <LessonResourceIcon
-                    name={res.name}
-                    type={res.type}
-                    className="size-[15px]"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <p className="m-0 truncate text-[0.76rem] sm:text-[0.78rem] font-semibold text-(--text)">
-                    {res.name}
-                  </p>
-                  <p className="m-0 text-[0.66rem] text-(--muted)">
-                    {res.size || "1.2 MB"}
-                  </p>
-                </div>
-              </div>
-
-              {onDeleteResource && (
+        {/* ========================================================================= */}
+        {/* 1. TOP HEADER BAR: Breadcrumbs, Title, Cancel & Save Changes             */}
+        {/* ========================================================================= */}
+        {!hideHeader && (
+          <div className="flex flex-col gap-3.5 pb-2">
+            {/* Breadcrumb Row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[0.82rem] font-medium text-(--muted) sm:text-[0.86rem]">
+                {/* Back Button */}
                 <button
                   type="button"
-                  onClick={() => onDeleteResource(res.id)}
-                  aria-label="Remove resource"
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-(--muted) hover:text-red-500 transition-colors cursor-pointer"
+                  onClick={handleCancel}
+                  title="Back to Course Content"
+                  aria-label="Back to Course Content"
+                  className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--text) transition-colors hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
                 >
-                  <X size={13} weight="bold" />
+                  <ArrowLeft size={14} weight="bold" />
                 </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
-  const editorPanel = (
-    <div
-      className={`flex w-full flex-col select-none animate-in fade-in duration-200 ${
-        hideHeader ? "gap-4" : "gap-6"
-      }`}
-    >
-      {/* ========================================================================= */}
-      {/* 1. TOP HEADER BAR: Breadcrumbs, Title, Cancel & Save Changes             */}
-      {/* ========================================================================= */}
-      {!hideHeader && (
-        <div className="flex flex-col gap-3.5 pb-2">
-          {/* Breadcrumb Row */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[0.82rem] sm:text-[0.86rem] text-(--muted) font-medium">
-              {/* Back Button */}
-              <button
-                type="button"
-                onClick={handleCancel}
-                title="Back to Course Content"
-                aria-label="Back to Course Content"
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] transition-colors cursor-pointer"
-              >
-                <ArrowLeft size={14} weight="bold" />
-              </button>
-
-              {/* Breadcrumb links */}
-              <button
-                type="button"
-                onClick={onBack}
-                className="hover:text-(--text) transition-colors cursor-pointer bg-transparent border-none p-0 text-inherit font-inherit"
-              >
-                Section {sectionNumber}
-              </button>
-              <CaretRight size={12} className="text-(--muted) opacity-60" />
-              <button
-                type="button"
-                onClick={onBack}
-                className="hover:text-(--text) transition-colors cursor-pointer bg-transparent border-none p-0 text-inherit font-inherit max-w-40 sm:max-w-64 truncate"
-              >
-                {sectionTitle || "Course Content"}
-              </button>
-              <CaretRight size={12} className="text-(--muted) opacity-60" />
-              <span className="font-semibold text-(--text)">Edit Lesson</span>
-            </div>
-
-            {/* More Menu Dropdown */}
-            <div ref={moreMenuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setShowMoreMenu((prev) => !prev)}
-                aria-label="More lesson options"
-                title="More options"
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] transition-colors cursor-pointer"
-              >
-                <DotsThree size={18} weight="bold" />
-              </button>
-
-              {showMoreMenu && (
-                <div className="absolute right-0 top-full mt-1.5 z-40 w-44 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface,var(--surface)) p-1.5 text-xs text-(--text) shadow-(--card-floating-shadow)">
-                  {onPreviewLesson && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowMoreMenu(false);
-                        onPreviewLesson();
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-medium hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] transition-colors cursor-pointer"
-                    >
-                      <Eye size={15} />
-                      <span>Preview Lesson</span>
-                    </button>
-                  )}
-                  {onDeleteLesson && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowMoreMenu(false);
-                        onDeleteLesson();
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left font-medium text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                    >
-                      <Trash size={15} />
-                      <span>Delete Lesson</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Title & Action Buttons Row */}
-          <div className="flex items-center justify-between gap-4 max-[768px]:flex-col max-[768px]:items-start">
-            {/* Lesson Index Badge + Editable Title */}
-            <div className="flex min-w-0 flex-1 items-center gap-3 w-full">
-              {/* Number badge matching image: [ 1 ] */}
-              <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-[12px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-sm sm:text-base font-bold text-(--text) shadow-sm">
-                {lessonNumber}
+                {/* Breadcrumb links */}
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="font-inherit cursor-pointer border-none bg-transparent p-0 text-inherit transition-colors hover:text-(--text)"
+                >
+                  Section {sectionNumber}
+                </button>
+                <CaretRight size={12} className="text-(--muted) opacity-60" />
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="font-inherit max-w-40 cursor-pointer truncate border-none bg-transparent p-0 text-inherit transition-colors hover:text-(--text) sm:max-w-64"
+                >
+                  {sectionTitle || "Course Content"}
+                </button>
+                <CaretRight size={12} className="text-(--muted) opacity-60" />
+                <span className="font-semibold text-(--text)">Edit Lesson</span>
               </div>
 
-              {/* Title / Inline Input */}
-              {isEditingTitle ? (
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <input
-                    ref={titleInputRef}
-                    type="text"
-                    value={title}
-                    autoFocus
-                    onChange={(e) => setTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        setIsEditingTitle(false);
-                      } else if (e.key === "Escape") {
-                        setTitle(initialTitle);
-                        setIsEditingTitle(false);
-                      }
-                    }}
-                    className="h-10 min-w-0 flex-1 rounded-[10px] border-2 border-(--accent) bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-3 text-base sm:text-lg font-bold text-(--text) outline-none shadow-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingTitle(false)}
-                    className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-(--muted) hover:text-(--text) cursor-pointer"
-                  >
-                    <X size={15} weight="bold" />
-                  </button>
-                </div>
-              ) : (
-                <div
-                  onClick={() => setIsEditingTitle(true)}
-                  className="group flex min-w-0 flex-1 items-center gap-2 cursor-pointer"
+              {/* More Menu Dropdown */}
+              <div ref={moreMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowMoreMenu((prev) => !prev)}
+                  aria-label="More lesson options"
+                  title="More options"
+                  className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--muted) transition-colors hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] hover:text-(--text)"
                 >
-                  <h1 className="m-0 truncate text-lg sm:text-xl font-bold tracking-[-0.015em] text-(--text)">
-                    {title || "Untitled Lesson"}
-                  </h1>
-                  <button
-                    type="button"
-                    aria-label="Edit lesson title"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-(--muted) opacity-60 group-hover:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) transition-all cursor-pointer"
-                  >
-                    <PencilSimple size={15} weight="bold" />
-                  </button>
-                </div>
-              )}
+                  <DotsThree size={18} weight="bold" />
+                </button>
+
+                {showMoreMenu && (
+                  <div className="absolute top-full right-0 z-40 mt-1.5 w-44 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface,var(--surface)) p-1.5 text-xs text-(--text) shadow-(--card-floating-shadow)">
+                    {onPreviewLesson && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMoreMenu(false);
+                          onPreviewLesson();
+                        }}
+                        className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left font-medium transition-colors hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)]"
+                      >
+                        <Eye size={15} />
+                        <span>Preview Lesson</span>
+                      </button>
+                    )}
+                    {onDeleteLesson && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMoreMenu(false);
+                          onDeleteLesson();
+                        }}
+                        className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left font-medium text-red-500 transition-colors hover:bg-red-500/10"
+                      >
+                        <Trash size={15} />
+                        <span>Delete Lesson</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Action Buttons: Cancel and Save Changes */}
-            <div className="flex items-center gap-2.5 shrink-0 max-[768px]:w-full max-[768px]:justify-end">
-              <button
-                type="button"
-                onClick={handleCancel}
-                disabled={isSaving}
-                className="inline-flex h-9.5 items-center justify-center rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_7%,var(--surface))] px-4 sm:px-5 text-[0.82rem] font-semibold text-(--text) shadow-sm transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,var(--surface))] active:scale-95 cursor-pointer disabled:opacity-50"
-              >
-                Cancel
-              </button>
+            {/* Title & Action Buttons Row */}
+            <div className="flex items-center justify-between gap-4 max-[768px]:flex-col max-[768px]:items-start">
+              {/* Lesson Index Badge + Editable Title */}
+              <div className="flex w-full min-w-0 flex-1 items-center gap-3">
+                {/* Number badge matching image: [ 1 ] */}
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-sm font-bold text-(--text) shadow-sm sm:h-10 sm:w-10 sm:text-base">
+                  {lessonNumber}
+                </div>
 
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={isSaving}
-                className="inline-flex h-9.5 items-center justify-center gap-1.5 rounded-[10px] border-none bg-(--accent) px-5 text-[0.82rem] font-bold text-(--on-accent,#ffffff) shadow-[0_3px_12px_var(--accent-shadow)] transition-all hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_16px_var(--accent-shadow)] active:scale-95 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isSaving ? (
-                  <>
-                    <CircleNotch size={15} className="animate-spin" />
-                    <span>Saving...</span>
-                  </>
+                {/* Title / Inline Input */}
+                {isEditingTitle ? (
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <input
+                      ref={titleInputRef}
+                      type="text"
+                      value={title}
+                      autoFocus
+                      onChange={(e) => setTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          setIsEditingTitle(false);
+                        } else if (e.key === "Escape") {
+                          setTitle(initialTitle);
+                          setIsEditingTitle(false);
+                        }
+                      }}
+                      className="h-10 min-w-0 flex-1 rounded-[10px] border-2 border-(--accent) bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-3 text-base font-bold text-(--text) shadow-sm outline-none sm:text-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingTitle(false)}
+                      className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-(--muted) hover:text-(--text)"
+                    >
+                      <X size={15} weight="bold" />
+                    </button>
+                  </div>
                 ) : (
-                  <span>Save Changes</span>
+                  <div
+                    onClick={() => setIsEditingTitle(true)}
+                    className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2"
+                  >
+                    <h1 className="m-0 truncate text-lg font-bold tracking-[-0.015em] text-(--text) sm:text-xl">
+                      {title || "Untitled Lesson"}
+                    </h1>
+                    <button
+                      type="button"
+                      aria-label="Edit lesson title"
+                      className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-(--muted) opacity-60 transition-all group-hover:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
+                    >
+                      <PencilSimple size={15} weight="bold" />
+                    </button>
+                  </div>
                 )}
-              </button>
+              </div>
+
+              {/* Action Buttons: Cancel and Save Changes */}
+              <div className="flex shrink-0 items-center gap-2.5 max-[768px]:w-full max-[768px]:justify-end">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={isSaving}
+                  className="inline-flex h-9.5 cursor-pointer items-center justify-center rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_7%,var(--surface))] px-4 text-[0.82rem] font-semibold text-(--text) shadow-sm transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,var(--surface))] active:scale-95 disabled:opacity-50 sm:px-5"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="inline-flex h-9.5 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border-none bg-(--accent) px-5 text-[0.82rem] font-bold text-(--on-accent,#ffffff) shadow-[0_3px_12px_var(--accent-shadow)] transition-all hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_16px_var(--accent-shadow)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSaving ? (
+                    <>
+                      <CircleNotch size={15} className="animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Changes</span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ========================================================================= */}
-      {/* 2. TWO-COLUMN MAIN STUDIO WORKSPACE                                       */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN: Media Workspace & Settings (7 of 12 cols on desktop) */}
-        <div className="lg:col-span-7 flex flex-col gap-4 min-w-0">
-          <LessonMediaWorkspace
-            contentType={contentType}
-            lessonNumber={playbackLessonNumber}
-            lessonTitle={title}
-            courseSlug={courseSlug}
-            courseTitle={courseTitle}
-            mediaInfo={workspaceMediaInfo}
-            playbackRevision={playbackRevision}
-            previewFile={previewFile}
-            disabled={isSaving}
-            onUploadFile={(file) => {
-              if (contentType === "video") {
-                videoUploadRef.current?.open(file);
-                return;
-              }
-              void onUploadMedia?.(file);
-            }}
-            videoUploadSection={
-              onMediaAttached ? (
-                <LessonVideoUpload
-                  ref={videoUploadRef}
-                  inline
-                  hideTrigger
-                  mediaAssetId={mediaInfo?.id}
-                  disabled={isSaving}
-                  onPreviewFile={setPreviewFile}
-                  onMediaAttached={onMediaAttached}
-                  onThumbnailAvailable={setProcessingThumbnailMediaId}
-                  onProcessingComplete={() => {
-                    setPlaybackRevision((revision) => revision + 1);
-                    void onProcessingComplete?.();
-                  }}
-                />
-              ) : null
-            }
-            onUploadThumbnail={onUploadThumbnail}
-            playbackSuspended={playbackSuspended}
-          />
-        </div>
-
-        {/* RIGHT COLUMN: Content Type, Visibility, Preview, Resources (5 of 12 cols) */}
-        <div className="lg:col-span-5 flex flex-col gap-4 min-w-0">
-          {/* Card 1: Content Type */}
-          <div className="flex flex-col rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5 shadow-(--card-shadow)">
-            <LessonContentTypeSelector
-              value={contentType}
-              onChange={handleContentTypeChange}
+        {/* ========================================================================= */}
+        {/* 2. TWO-COLUMN MAIN STUDIO WORKSPACE                                       */}
+        {/* ========================================================================= */}
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          {/* LEFT COLUMN: Media Workspace & Settings (7 of 12 cols on desktop) */}
+          <div className="flex min-w-0 flex-col gap-4 lg:col-span-7">
+            <LessonMediaWorkspace
+              contentType={contentType}
+              lessonNumber={playbackLessonNumber}
+              lessonTitle={title}
+              courseSlug={courseSlug}
+              courseTitle={courseTitle}
+              mediaInfo={workspaceMediaInfo}
+              playbackRevision={playbackRevision}
+              previewFile={previewFile}
               disabled={isSaving}
+              onUploadFile={(file) => {
+                if (contentType === "video") {
+                  videoUploadRef.current?.open(file);
+                  return;
+                }
+                void onUploadMedia?.(file);
+              }}
+              videoUploadSection={
+                onMediaAttached ? (
+                  <LessonVideoUpload
+                    ref={videoUploadRef}
+                    inline
+                    hideTrigger
+                    mediaAssetId={mediaInfo?.id}
+                    disabled={isSaving}
+                    onPreviewFile={setPreviewFile}
+                    onMediaAttached={onMediaAttached}
+                    onThumbnailAvailable={setProcessingThumbnailMediaId}
+                    onProcessingComplete={() => {
+                      setPlaybackRevision((revision) => revision + 1);
+                      void onProcessingComplete?.();
+                    }}
+                  />
+                ) : null
+              }
+              onUploadThumbnail={onUploadThumbnail}
+              playbackSuspended={playbackSuspended}
             />
           </div>
 
-          {/* Card 2: Visibility Setting */}
-          <div className="flex items-center justify-between rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5 shadow-(--card-shadow)">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--text)">
-                <Eye size={18} weight="bold" />
-              </div>
-              <span className="text-[0.85rem] sm:text-[0.88rem] font-bold text-(--text)">
-                Visibility
-              </span>
+          {/* RIGHT COLUMN: Content Type, Visibility, Preview, Resources (5 of 12 cols) */}
+          <div className="flex min-w-0 flex-col gap-4 lg:col-span-5">
+            {/* Card 1: Content Type */}
+            <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 shadow-(--card-shadow) sm:rounded-[16px] sm:p-4.5">
+              <LessonContentTypeSelector
+                value={contentType}
+                onChange={handleContentTypeChange}
+                disabled={isSaving}
+              />
             </div>
 
-            <div className="w-36 sm:w-40">
-              <ThemedSelect
-                value={isPublished ? "published" : "draft"}
-                onValueChange={(val) => setIsPublished(val === "published")}
-                options={[
-                  ["published", "Published"],
-                  ["draft", "Draft (Hidden)"],
-                ]}
-                disabled={isSaving}
-                ariaLabel="Lesson visibility"
-                triggerClassName="!h-9 !w-full !rounded-[9px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !px-3 !text-[0.80rem] !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] font-semibold"
+            {/* Card 2: Visibility Setting */}
+            <div className="flex items-center justify-between rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 shadow-(--card-shadow) sm:rounded-[16px] sm:p-4.5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--text)">
+                  <Eye size={18} weight="bold" />
+                </div>
+                <span className="text-[0.85rem] font-bold text-(--text) sm:text-[0.88rem]">
+                  Visibility
+                </span>
+              </div>
+
+              <div className="w-36 sm:w-40">
+                <ThemedSelect
+                  value={isPublished ? "published" : "draft"}
+                  onValueChange={(val) => setIsPublished(val === "published")}
+                  options={[
+                    ["published", "Published"],
+                    ["draft", "Draft (Hidden)"],
+                  ]}
+                  disabled={isSaving}
+                  ariaLabel="Lesson visibility"
+                  triggerClassName="!h-9 !w-full !rounded-[9px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !px-3 !text-[0.80rem] !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] font-semibold"
+                />
+              </div>
+            </div>
+
+            {/* Card 3: Free Preview Toggle */}
+            <div className="flex items-center justify-between rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 shadow-(--card-shadow) sm:rounded-[16px] sm:p-4.5">
+              <div className="flex items-start gap-3 pr-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--text)">
+                  <LockKey size={18} weight="bold" />
+                </div>
+                <div>
+                  <span className="block text-[0.85rem] font-bold text-(--text) sm:text-[0.88rem]">
+                    Free Preview
+                  </span>
+                  <p className="m-0 mt-0.5 text-[0.72rem] leading-relaxed text-(--muted) sm:text-[0.74rem]">
+                    Allow prospective students to view this lesson before enrolling or purchasing.
+                  </p>
+                </div>
+              </div>
+
+              <SettingsToggle
+                checked={isPreview}
+                onChange={setIsPreview}
+                label="Toggle free preview"
               />
             </div>
           </div>
+        </div>
 
-          {/* Card 3: Free Preview Toggle */}
-          <div className="flex items-center justify-between rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5 shadow-(--card-shadow)">
-            <div className="flex items-start gap-3 pr-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--text)">
-                <LockKey size={18} weight="bold" />
-              </div>
-              <div>
-                <span className="block text-[0.85rem] sm:text-[0.88rem] font-bold text-(--text)">
-                  Free Preview
-                </span>
-                <p className="m-0 mt-0.5 text-[0.72rem] sm:text-[0.74rem] text-(--muted) leading-relaxed">
-                  Allow prospective students to view this lesson before
-                  enrolling or purchasing.
-                </p>
-              </div>
-            </div>
+        {/* Full-width lesson content tabs */}
+        <div className="flex w-full flex-col overflow-hidden rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow) sm:rounded-[16px]">
+          <div className="flex items-center border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--text)_2%,transparent)] px-3">
+            <button
+              type="button"
+              onClick={() => setActiveContentTab("resources")}
+              className={`flex cursor-pointer items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] font-bold transition-colors sm:text-[0.82rem] ${
+                activeContentTab === "resources"
+                  ? "border-(--accent) text-(--accent)"
+                  : "border-transparent text-(--muted) hover:text-(--text)"
+              }`}
+            >
+              <Paperclip size={15} weight="bold" className="rotate-45" />
+              <span>Resources</span>
+            </button>
 
-            <SettingsToggle
-              checked={isPreview}
-              onChange={setIsPreview}
-              label="Toggle free preview"
-            />
+            {descriptionSection && (
+              <button
+                type="button"
+                onClick={() => setActiveContentTab("description")}
+                className={`flex cursor-pointer items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] font-bold transition-colors sm:text-[0.82rem] ${
+                  activeContentTab === "description"
+                    ? "border-(--accent) text-(--accent)"
+                    : "border-transparent text-(--muted) hover:text-(--text)"
+                }`}
+              >
+                <FileText size={15} weight="bold" />
+                <span>Description</span>
+              </button>
+            )}
+
+            {quizSection && (
+              <button
+                type="button"
+                onClick={() => setActiveContentTab("quiz")}
+                className={`flex cursor-pointer items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] font-bold transition-colors sm:text-[0.82rem] ${
+                  activeContentTab === "quiz"
+                    ? "border-(--accent) text-(--accent)"
+                    : "border-transparent text-(--muted) hover:text-(--text)"
+                }`}
+              >
+                <Brain size={15} weight="bold" />
+                <span>Quiz</span>
+              </button>
+            )}
+          </div>
+
+          <div className="w-full p-4">
+            {activeContentTab === "resources" && resourcesTabContent}
+            {activeContentTab === "description" && descriptionSection}
+            {activeContentTab === "quiz" && quizSection}
           </div>
         </div>
       </div>
+    );
 
-      {/* Full-width lesson content tabs */}
-      <div className="flex w-full flex-col overflow-hidden rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow)">
-        <div className="flex items-center border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--text)_2%,transparent)] px-3">
-          <button
-            type="button"
-            onClick={() => setActiveContentTab("resources")}
-            className={`flex items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] sm:text-[0.82rem] font-bold cursor-pointer transition-colors ${
-              activeContentTab === "resources"
-                ? "border-(--accent) text-(--accent)"
-                : "border-transparent text-(--muted) hover:text-(--text)"
-            }`}
-          >
-            <Paperclip size={15} weight="bold" className="rotate-45" />
-            <span>Resources</span>
-          </button>
-
-          {descriptionSection && (
-            <button
-              type="button"
-              onClick={() => setActiveContentTab("description")}
-              className={`flex items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] sm:text-[0.82rem] font-bold cursor-pointer transition-colors ${
-                activeContentTab === "description"
-                  ? "border-(--accent) text-(--accent)"
-                  : "border-transparent text-(--muted) hover:text-(--text)"
-              }`}
-            >
-              <FileText size={15} weight="bold" />
-              <span>Description</span>
-            </button>
-          )}
-
-          {quizSection && (
-            <button
-              type="button"
-              onClick={() => setActiveContentTab("quiz")}
-              className={`flex items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] sm:text-[0.82rem] font-bold cursor-pointer transition-colors ${
-                activeContentTab === "quiz"
-                  ? "border-(--accent) text-(--accent)"
-                  : "border-transparent text-(--muted) hover:text-(--text)"
-              }`}
-            >
-              <Brain size={15} weight="bold" />
-              <span>Quiz</span>
-            </button>
-          )}
-        </div>
-
-        <div className="w-full p-4">
-          {activeContentTab === "resources" && resourcesTabContent}
-          {activeContentTab === "description" && descriptionSection}
-          {activeContentTab === "quiz" && quizSection}
-        </div>
-      </div>
-    </div>
-  );
-
-  return editorPanel;
-});
+    return editorPanel;
+  },
+);

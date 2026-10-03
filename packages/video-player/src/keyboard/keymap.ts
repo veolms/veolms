@@ -86,27 +86,20 @@ function parseShortcutBinding(binding: ShortcutBinding): ParsedShortcutBinding {
       continue;
     }
     if (parsed.codeOrKey) {
-      throw new TypeError(
-        `Keyboard shortcut binding "${binding}" contains more than one key.`,
-      );
+      throw new TypeError(`Keyboard shortcut binding "${binding}" contains more than one key.`);
     }
     parsed.codeOrKey = part;
   }
 
   if (!parsed.codeOrKey) {
-    throw new TypeError(
-      `Keyboard shortcut binding "${binding}" does not contain a key.`,
-    );
+    throw new TypeError(`Keyboard shortcut binding "${binding}" does not contain a key.`);
   }
   return parsed;
 }
 
 function bindingMatchesEvent(
   binding: ShortcutBinding,
-  event: Pick<
-    KeyboardEvent,
-    "altKey" | "code" | "ctrlKey" | "key" | "metaKey" | "shiftKey"
-  >,
+  event: Pick<KeyboardEvent, "altKey" | "code" | "ctrlKey" | "key" | "metaKey" | "shiftKey">,
 ): boolean {
   const parsed = parseShortcutBinding(binding);
   if (
@@ -155,16 +148,11 @@ function percentageForBinding(
 }
 
 export function resolvePlayerShortcut(
-  event: Pick<
-    KeyboardEvent,
-    "altKey" | "code" | "ctrlKey" | "key" | "metaKey" | "shiftKey"
-  >,
+  event: Pick<KeyboardEvent, "altKey" | "code" | "ctrlKey" | "key" | "metaKey" | "shiftKey">,
   bindings: ResolvedPlayerShortcutBindings = DEFAULT_PLAYER_SHORTCUTS,
 ): ResolvedPlayerShortcut | null {
   for (const action of PLAYER_SHORTCUT_ACTIONS) {
-    const binding = bindings[action].find((candidate) =>
-      bindingMatchesEvent(candidate, event),
-    );
+    const binding = bindings[action].find((candidate) => bindingMatchesEvent(candidate, event));
     if (binding) {
       return {
         action,

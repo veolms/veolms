@@ -6,11 +6,7 @@ import type {
 } from "@veolms/contracts";
 import type { IncludesService } from "./includes.service.ts";
 
-export function createIncludesController({
-  service,
-}: {
-  service: IncludesService;
-}) {
+export function createIncludesController({ service }: { service: IncludesService }) {
   async function createCourseInclude(
     request: FastifyRequest<{
       Params: { id: string };
@@ -31,9 +27,7 @@ export function createIncludesController({
     return item;
   }
 
-  async function listCourseIncludes(
-    request: FastifyRequest<{ Params: { id: string } }>,
-  ) {
+  async function listCourseIncludes(request: FastifyRequest<{ Params: { id: string } }>) {
     const { id } = request.params;
     const items = await service.listCourseIncludes(id);
     return { items };
@@ -65,12 +59,7 @@ export function createIncludesController({
     const { id, includeId } = request.params;
     const creatorId = request.user!.id;
 
-    return await service.deleteCourseInclude(
-      id,
-      includeId,
-      creatorId,
-      request.user?.roles,
-    );
+    return await service.deleteCourseInclude(id, includeId, creatorId, request.user?.roles);
   }
 
   async function reorderCourseIncludes(
@@ -83,12 +72,7 @@ export function createIncludesController({
     const creatorId = request.user!.id;
     const { orderedIds } = request.body;
 
-    return await service.reorderCourseIncludes(
-      id,
-      creatorId,
-      orderedIds,
-      request.user?.roles,
-    );
+    return await service.reorderCourseIncludes(id, creatorId, orderedIds, request.user?.roles);
   }
 
   return {

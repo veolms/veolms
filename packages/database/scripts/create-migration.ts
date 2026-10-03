@@ -19,9 +19,7 @@ const safeName = name
   .replace(/^-|-$/g, "");
 
 if (!safeName) {
-  console.error(
-    `Invalid migration name "${name}". Use letters, numbers, or hyphens.`,
-  );
+  console.error(`Invalid migration name "${name}". Use letters, numbers, or hyphens.`);
   process.exit(1);
 }
 

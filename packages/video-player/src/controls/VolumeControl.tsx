@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  type CSSProperties,
-  type PointerEvent,
-} from "react";
+import { useEffect, useRef, type CSSProperties, type PointerEvent } from "react";
 import { usePlayerController } from "../react/context";
 import { useVolume } from "../react/usePlayerState";
 import { classNames } from "../utils/classNames";
@@ -28,9 +23,7 @@ export function VolumeControl({
   const setVolumeFromPointer = (event: PointerEvent<HTMLInputElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     if (bounds.width <= 0) return;
-    controller.setVolume(
-      Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
-    );
+    controller.setVolume(Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)));
   };
 
   useEffect(() => {
@@ -46,10 +39,7 @@ export function VolumeControl({
       const direction = event.deltaY < 0 ? 1 : -1;
       const nextVolume =
         Math.round(
-          Math.max(
-            0,
-            Math.min(1, displayedVolume + direction * VOLUME_WHEEL_STEP),
-          ) * 100,
+          Math.max(0, Math.min(1, displayedVolume + direction * VOLUME_WHEEL_STEP)) * 100,
         ) / 100;
       if (nextVolume !== displayedVolume) controller.setVolume(nextVolume);
     };
@@ -64,7 +54,7 @@ export function VolumeControl({
       className={classNames(
         "player-volume-group flex items-center",
         collapsible &&
-          "group/volume w-10 shrink-0 overflow-hidden transition-[width,background-color,box-shadow] duration-200 ease-out hover:w-31 focus-within:w-31",
+          "group/volume w-10 shrink-0 overflow-hidden transition-[width,background-color,box-shadow] duration-200 ease-out focus-within:w-31 hover:w-31",
         className,
       )}
       data-player-control=""
@@ -81,7 +71,7 @@ export function VolumeControl({
         className={classNames(
           "player-volume-slider h-9 cursor-pointer accent-(--video-player-control-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)",
           collapsible
-            ? "m-0 w-0 p-0 opacity-0 transition-[width,margin,opacity] duration-200 ease-out group-hover/volume:ml-1 group-hover/volume:mr-2 group-hover/volume:w-18 group-hover/volume:opacity-100 group-focus-within/volume:ml-1 group-focus-within/volume:mr-2 group-focus-within/volume:w-18 group-focus-within/volume:opacity-100"
+            ? "m-0 w-0 p-0 opacity-0 transition-[width,margin,opacity] duration-200 ease-out group-focus-within/volume:mr-2 group-focus-within/volume:ml-1 group-focus-within/volume:w-18 group-focus-within/volume:opacity-100 group-hover/volume:mr-2 group-hover/volume:ml-1 group-hover/volume:w-18 group-hover/volume:opacity-100"
             : "w-18",
         )}
         style={
@@ -89,9 +79,7 @@ export function VolumeControl({
             "--video-player-volume": `${(muted ? 0 : volume) * 100}%`,
           } as CSSProperties
         }
-        onChange={(event) =>
-          controller.setVolume(event.currentTarget.valueAsNumber)
-        }
+        onChange={(event) => controller.setVolume(event.currentTarget.valueAsNumber)}
         onPointerDown={setVolumeFromPointer}
       />
     </div>

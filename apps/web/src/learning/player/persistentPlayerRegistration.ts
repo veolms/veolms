@@ -16,8 +16,7 @@ export const shouldDemoteDetachedPersistentPlayer = ({
   restoreVersionAtRegistration,
   currentRestoreVersion,
 }: PersistentPlayerCleanupState) =>
-  presentation === "full" &&
-  currentRestoreVersion === restoreVersionAtRegistration;
+  presentation === "full" && currentRestoreVersion === restoreVersionAtRegistration;
 
 /**
  * Playing the same course that is already in the mini player should expand

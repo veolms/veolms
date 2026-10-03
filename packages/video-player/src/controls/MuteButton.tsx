@@ -35,16 +35,10 @@ export function MuteButton({ className, iconSize = 24 }: MuteButtonProps) {
       label={silent ? "Unmute" : "Mute"}
       icon={
         <>
-          <span
-            className={silent ? "hidden" : "contents"}
-            data-mute-icon="sound"
-          >
+          <span className={silent ? "hidden" : "contents"} data-mute-icon="sound">
             <SoundIcon size={iconSize} active={false} />
           </span>
-          <span
-            className={silent ? "contents" : "hidden"}
-            data-mute-icon="muted"
-          >
+          <span className={silent ? "contents" : "hidden"} data-mute-icon="muted">
             <MutedIcon size={iconSize} active />
           </span>
         </>

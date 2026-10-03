@@ -20,9 +20,7 @@ export function SocialLoginActions({
   oneTapPending = false,
   returnTo,
 }: SocialLoginActionsProps) {
-  const [loadingProvider, setLoadingProvider] = useState<
-    "google" | "github" | null
-  >(null);
+  const [loadingProvider, setLoadingProvider] = useState<"google" | "github" | null>(null);
   const oauthUrlMutation = useOauthUrl();
 
   const googleBusy = oneTapPending || loadingProvider === "google";
@@ -55,9 +53,7 @@ export function SocialLoginActions({
       clearOauthHandoff();
       setLoadingProvider(null);
       const errorObj = err as { message?: string };
-      const message =
-        errorObj?.message ||
-        "Unable to initialize social login. Please try again.";
+      const message = errorObj?.message || "Unable to initialize social login. Please try again.";
       onError?.(message);
     }
   };
@@ -103,9 +99,7 @@ export function SocialLoginActions({
           type="button"
         >
           <GitHubBrandIcon size={18} />
-          {loadingProvider === "github"
-            ? <LoadingSpinnerIcon size={18} />
-            : "Continue with GitHub"}
+          {loadingProvider === "github" ? <LoadingSpinnerIcon size={18} /> : "Continue with GitHub"}
         </button>
       </div>
     </div>

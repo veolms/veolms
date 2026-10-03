@@ -7,10 +7,7 @@ export {
   type PopoverMenuSide,
 } from "./PopoverMenu";
 export { PlayerMenuItem, type PlayerMenuItemProps } from "./PlayerMenuItem";
-export {
-  PlaybackRateMenu,
-  type PlaybackRateMenuProps,
-} from "./PlaybackRateMenu";
+export { PlaybackRateMenu, type PlaybackRateMenuProps } from "./PlaybackRateMenu";
 export { QualityMenu, type QualityMenuProps } from "./QualityMenu";
 export { AudioTrackMenu, type AudioTrackMenuProps } from "./AudioTrackMenu";
 export { CaptionsMenu, type CaptionsMenuProps } from "./CaptionsMenu";

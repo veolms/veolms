@@ -196,9 +196,7 @@
   width: 54%;
   height: 54%;
   color: color-mix(in srgb, var(--accent) 72%, var(--text));
-  filter: drop-shadow(
-    0 0 7px color-mix(in srgb, var(--accent-shadow) 45%, transparent)
-  );
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent-shadow) 45%, transparent));
 }
 
 .settings-profile__avatar--large {
@@ -242,8 +240,7 @@
     transform 150ms ease;
 }
 
-.settings-profile__photo
-  > [data-profile-control-locked].settings-profile__camera-lock {
+.settings-profile__photo > [data-profile-control-locked].settings-profile__camera-lock {
   position: absolute;
   right: -3px;
   bottom: -3px;
@@ -628,8 +625,7 @@
   min-width: 0;
 }
 
-.settings-profile__field-heading
-  > label:not(.settings-profile__visibility-checkbox) {
+.settings-profile__field-heading > label:not(.settings-profile__visibility-checkbox) {
   display: inline-flex;
   min-height: 22px;
   align-items: center;
@@ -696,9 +692,7 @@
     border-color 150ms ease;
 }
 
-.settings-profile__visibility-checkbox
-  input:checked
-  + .settings-profile__visibility-checkbox-mark {
+.settings-profile__visibility-checkbox input:checked + .settings-profile__visibility-checkbox-mark {
   border-color: var(--accent);
   color: var(--on-accent, #fff);
   background: var(--accent);
@@ -711,8 +705,7 @@
   outline-offset: 2px;
 }
 
-.settings-profile__visibility-checkbox:hover
-  .settings-profile__visibility-checkbox-mark {
+.settings-profile__visibility-checkbox:hover .settings-profile__visibility-checkbox-mark {
   border-color: color-mix(in srgb, var(--accent) 58%, var(--text-secondary));
 }
 
@@ -886,15 +879,12 @@
 }
 
 .settings-profile__input-shell--phone > .settings-profile__country-code:hover,
-.settings-profile__input-shell--phone
-  > .settings-profile__country-code[data-state="open"] {
+.settings-profile__input-shell--phone > .settings-profile__country-code[data-state="open"] {
   background: transparent;
 }
 
-.settings-profile__input-shell--phone
-  > .settings-profile__country-code:focus-visible,
-.settings-profile__input-shell--phone
-  > .settings-profile__country-code[data-state="open"] {
+.settings-profile__input-shell--phone > .settings-profile__country-code:focus-visible,
+.settings-profile__input-shell--phone > .settings-profile__country-code[data-state="open"] {
   outline: 0;
   outline-offset: 0;
   box-shadow: none;
@@ -927,8 +917,7 @@
   height: 28px;
   min-height: 28px;
   margin-left: auto;
-  border: 1px solid
-    color-mix(in srgb, var(--accent-ink, var(--accent)) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-ink, var(--accent)) 28%, transparent);
   border-radius: 999px;
   padding: 0 10px;
   color: var(--accent-ink, var(--accent));
@@ -1323,8 +1312,7 @@
     0 20px 48px rgb(0 0 0 / 50%),
     0 4px 16px rgb(0 0 0 / 30%),
     inset 0 1px 0 rgb(255 255 255 / 8%);
-  animation: settings-profile-verification-pop-in 220ms
-    cubic-bezier(0.16, 1, 0.3, 1);
+  animation: settings-profile-verification-pop-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .settings-profile__verification-dialog-top-line {
@@ -1332,17 +1320,11 @@
   inset: 0 32px auto;
   height: 2px;
   border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    transparent,
-    var(--accent),
-    transparent
-  );
+  background: linear-gradient(to right, transparent, var(--accent), transparent);
   pointer-events: none;
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-close {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-close {
   position: absolute;
   top: 16px;
   right: 16px;
@@ -1354,8 +1336,7 @@
   background: transparent;
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-close:hover {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-close:hover {
   border-color: color-mix(in srgb, var(--text) 22%, transparent);
   color: var(--text);
   background: color-mix(in srgb, var(--text) 6%, transparent);
@@ -1368,8 +1349,7 @@
   text-align: center;
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-icon {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-icon {
   width: 56px;
   height: 56px;
   margin-bottom: 16px;
@@ -1377,8 +1357,7 @@
   border-radius: 17px;
   color: var(--accent-ink, var(--accent));
   background: var(--accent-soft);
-  box-shadow: 0 8px 20px
-    color-mix(in srgb, var(--accent-shadow) 28%, transparent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent-shadow) 28%, transparent);
 }
 
 .settings-profile__verification-dialog-content h3 {
@@ -1404,14 +1383,12 @@
   font-weight: 650;
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-field {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-field {
   margin-top: 24px;
   padding: 0;
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-field-label {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-field-label {
   display: block;
   margin-bottom: 10px;
   color: var(--text-secondary);
@@ -1434,8 +1411,7 @@
   width: var(--auth-h-field);
   height: var(--auth-h-field);
   min-height: 0;
-  border: 1px solid
-    var(--auth-line, color-mix(in srgb, var(--text) 13%, transparent));
+  border: 1px solid var(--auth-line, color-mix(in srgb, var(--text) 13%, transparent));
   border-radius: 9px;
   padding: 0;
   color: var(--text);
@@ -1450,15 +1426,12 @@
   border-color: var(--accent);
 }
 
-.settings-profile__verification-dialog-card
-  .auth-otp__digit[aria-invalid="true"] {
+.settings-profile__verification-dialog-card .auth-otp__digit[aria-invalid="true"] {
   border-color: var(--danger);
   background: color-mix(in srgb, var(--danger) 9%, var(--surface));
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-field
-  small {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-field small {
   display: block;
   margin-top: 10px;
   color: var(--muted);
@@ -1467,8 +1440,7 @@
   text-align: left;
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-error {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-error {
   margin: 12px 0 0;
   font-size: 0.72rem;
   text-align: left;
@@ -1489,8 +1461,7 @@
   line-height: 1.4;
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-resend {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-resend {
   min-height: 0;
   border: 0;
   border-radius: 4px;
@@ -1506,8 +1477,7 @@
   color: var(--accent-hover, var(--accent));
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-actions {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-actions {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1517,9 +1487,7 @@
   padding: 0;
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-actions
-  button {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1536,8 +1504,7 @@
     transform 150ms ease;
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-cancel {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-cancel {
   color: var(--text-secondary);
   background: var(--surface-strong);
 }
@@ -1548,12 +1515,10 @@
   background: var(--hover);
 }
 
-.settings-profile__verification-dialog-card
-  .settings-profile__verification-dialog-submit {
+.settings-profile__verification-dialog-card .settings-profile__verification-dialog-submit {
   color: var(--on-accent);
   background: var(--accent);
-  box-shadow: 0 8px 18px
-    color-mix(in srgb, var(--accent-shadow) 38%, transparent);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent-shadow) 38%, transparent);
 }
 
 .settings-profile__verification-dialog-card
@@ -1836,17 +1801,13 @@ html:has(.settings-profile__verification-dialog-overlay) {
     border-color 150ms ease;
 }
 
-.settings-profile__privacy-consent
-  input:checked
-  + .settings-profile__privacy-consent-mark {
+.settings-profile__privacy-consent input:checked + .settings-profile__privacy-consent-mark {
   border-color: var(--accent);
   color: var(--on-accent, #fff);
   background: var(--accent);
 }
 
-.settings-profile__privacy-consent
-  input:focus-visible
-  + .settings-profile__privacy-consent-mark,
+.settings-profile__privacy-consent input:focus-visible + .settings-profile__privacy-consent-mark,
 .settings-profile__privacy-dialog button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
   outline-offset: 2px;
@@ -1883,8 +1844,7 @@ html:has(.settings-profile__verification-dialog-overlay) {
   background: var(--accent);
 }
 
-.settings-profile__privacy-dialog-actions
-  button:last-child:hover:not(:disabled) {
+.settings-profile__privacy-dialog-actions button:last-child:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 84%, var(--text));
 }
 
@@ -1969,11 +1929,7 @@ html:has(.settings-profile__verification-dialog-overlay) {
   border-radius: 16px;
   background: radial-gradient(
     circle at 50% 42%,
-    color-mix(
-      in srgb,
-      var(--surface-strong, var(--surface)) 88%,
-      var(--canvas)
-    ),
+    color-mix(in srgb, var(--surface-strong, var(--surface)) 88%, var(--canvas)),
     var(--canvas) 78%
   );
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
@@ -2259,8 +2215,7 @@ html:has(.settings-profile__verification-dialog-overlay) {
   gap: 3px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--canvas) 74%, var(--surface));
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-strong) 72%, transparent);
 }
 
 @media (min-width: 680px) {
@@ -2539,9 +2494,7 @@ html:has(.settings-profile__verification-dialog-overlay) {
     min-height: 40px;
   }
 
-  .settings-profile__input-shell--status:has(
-    .settings-profile__inline-verify-action
-  ) {
+  .settings-profile__input-shell--status:has(.settings-profile__inline-verify-action) {
     flex-wrap: wrap;
     padding-block: 6px;
   }
@@ -2550,8 +2503,7 @@ html:has(.settings-profile__verification-dialog-overlay) {
     padding-right: 0;
   }
 
-  .settings-profile__input-shell--status
-    > .settings-profile__inline-verify-action {
+  .settings-profile__input-shell--status > .settings-profile__inline-verify-action {
     flex: 1 0 100%;
     margin-left: 0;
   }
@@ -2653,16 +2605,11 @@ html:has(.settings-profile__verification-dialog-overlay) {
   .settings-profile__privacy-dialog-copy {
     padding-right: 20px;
   }
-  .settings-profile__privacy-dialog-actions:not(
-    .settings-profile__crop-dialog-actions
-  ) {
+  .settings-profile__privacy-dialog-actions:not(.settings-profile__crop-dialog-actions) {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
-  .settings-profile__privacy-dialog-actions:not(
-      .settings-profile__crop-dialog-actions
-    )
-    button {
+  .settings-profile__privacy-dialog-actions:not(.settings-profile__crop-dialog-actions) button {
     width: 100%;
   }
 }
@@ -2684,8 +2631,7 @@ html:has(.settings-profile__verification-dialog-overlay) {
     gap: 6px;
   }
 
-  .settings-profile__verification-dialog-card
-    .settings-profile__verification-dialog-actions {
+  .settings-profile__verification-dialog-card .settings-profile__verification-dialog-actions {
     flex-direction: column-reverse;
     width: 100%;
     gap: 10px;

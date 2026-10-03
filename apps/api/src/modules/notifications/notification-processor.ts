@@ -37,15 +37,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function retryAt(
-  now: Date,
-  attemptCount: number,
-  retryScheduleSeconds: readonly number[],
-): Date {
-  const index = Math.min(
-    Math.max(attemptCount - 1, 0),
-    retryScheduleSeconds.length - 1,
-  );
+function retryAt(now: Date, attemptCount: number, retryScheduleSeconds: readonly number[]): Date {
+  const index = Math.min(Math.max(attemptCount - 1, 0), retryScheduleSeconds.length - 1);
   return new Date(now.getTime() + retryScheduleSeconds[index]! * 1000);
 }
 
@@ -80,29 +73,17 @@ export function createNotificationProcessor({
     const claimed = await outboxRepository.claimBatch(database, {
       limit: config.NOTIFICATION_BATCH_SIZE,
       now,
-      leaseUntil: new Date(
-        now.getTime() + config.NOTIFICATION_LEASE_SECONDS * 1000,
-      ),
+      leaseUntil: new Date(now.getTime() + config.NOTIFICATION_LEASE_SECONDS * 1000),
     });
     const result = { processed: 0, retried: 0, failed: 0 };
 
     for (const event of claimed) {
       try {
         if (event.event_version !== 1) {
-          throw new UnknownNotificationEventError(
-            `${event.event_type}@v${event.event_version}`,
-          );
+          throw new UnknownNotificationEventError(`${event.event_type}@v${event.event_version}`);
         }
-        const intents = await createNotificationIntents(
-          event.event_type,
-          event.payload,
-          handlers,
-        );
-        const outcome = await service.processClaimedEvent(
-          event,
-          intents,
-          recipients,
-        );
+        const intents = await createNotificationIntents(event.event_type, event.payload, handlers);
+        const outcome = await service.processClaimedEvent(event, intents, recipients);
         result.processed += 1;
         log.info(
           {
@@ -117,12 +98,8 @@ export function createNotificationProcessor({
         const attemptCount = event.attempt_count + 1;
         const message = errorMessage(error);
         const permanent =
-          error instanceof z.ZodError ||
-          error instanceof UnknownNotificationEventError;
-        if (
-          permanent ||
-          attemptCount >= config.NOTIFICATION_OUTBOX_MAX_ATTEMPTS
-        ) {
+          error instanceof z.ZodError || error instanceof UnknownNotificationEventError;
+        if (permanent || attemptCount >= config.NOTIFICATION_OUTBOX_MAX_ATTEMPTS) {
           await outboxRepository.markFailed(database, {
             eventId: event.id,
             attemptCount,
@@ -138,11 +115,7 @@ export function createNotificationProcessor({
           await outboxRepository.markRetry(database, {
             eventId: event.id,
             attemptCount,
-            availableAt: retryAt(
-              failureTime,
-              attemptCount,
-              config.NOTIFICATION_RETRY_SECONDS,
-            ),
+            availableAt: retryAt(failureTime, attemptCount, config.NOTIFICATION_RETRY_SECONDS),
             error: message,
           });
           result.retried += 1;
@@ -158,16 +131,11 @@ export function createNotificationProcessor({
 
   async function processEmail() {
     const now = new Date();
-    const claimed = await notificationRepository.claimEmailDeliveries(
-      database,
-      {
-        limit: config.NOTIFICATION_BATCH_SIZE,
-        now,
-        leaseUntil: new Date(
-          now.getTime() + config.NOTIFICATION_LEASE_SECONDS * 1000,
-        ),
-      },
-    );
+    const claimed = await notificationRepository.claimEmailDeliveries(database, {
+      limit: config.NOTIFICATION_BATCH_SIZE,
+      now,
+      leaseUntil: new Date(now.getTime() + config.NOTIFICATION_LEASE_SECONDS * 1000),
+    });
     const result = { sent: 0, retried: 0, failed: 0 };
 
     for (const delivery of claimed) {
@@ -181,8 +149,7 @@ export function createNotificationProcessor({
 
         await notificationRepository.markDeliverySent(database, {
           deliveryId: delivery.id,
-          providerMessageId:
-            sendResult.status === "sent" ? sendResult.messageId : null,
+          providerMessageId: sendResult.status === "sent" ? sendResult.messageId : null,
           now: new Date(),
         });
         result.sent += 1;
@@ -191,10 +158,7 @@ export function createNotificationProcessor({
         const message = errorMessage(error);
         const permanent = error instanceof z.ZodError;
         const failureTime = new Date();
-        if (
-          permanent ||
-          attemptCount >= config.NOTIFICATION_EMAIL_MAX_ATTEMPTS
-        ) {
+        if (permanent || attemptCount >= config.NOTIFICATION_EMAIL_MAX_ATTEMPTS) {
           await notificationRepository.markDeliveryFailed(database, {
             deliveryId: delivery.id,
             attemptCount,
@@ -210,11 +174,7 @@ export function createNotificationProcessor({
           await notificationRepository.markDeliveryRetry(database, {
             deliveryId: delivery.id,
             attemptCount,
-            nextAttemptAt: retryAt(
-              failureTime,
-              attemptCount,
-              config.NOTIFICATION_RETRY_SECONDS,
-            ),
+            nextAttemptAt: retryAt(failureTime, attemptCount, config.NOTIFICATION_RETRY_SECONDS),
             error: message,
             now: failureTime,
           });
@@ -233,13 +193,9 @@ export function createNotificationProcessor({
     const outbox = await processOutbox();
     const emailResult = await processEmail();
     const olderThan = new Date(
-      Date.now() -
-        config.NOTIFICATION_OUTBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+      Date.now() - config.NOTIFICATION_OUTBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000,
     );
-    const cleanedUp = await outboxRepository.cleanupProcessed(
-      database,
-      olderThan,
-    );
+    const cleanedUp = await outboxRepository.cleanupProcessed(database, olderThan);
     return { outbox, email: emailResult, cleanedUp };
   }
 

@@ -187,11 +187,7 @@
 }
 
 .auth-two-factor__secondary-button:hover:not(:disabled) {
-  border-color: color-mix(
-    in srgb,
-    var(--accent) 50%,
-    var(--auth-line, rgba(255, 255, 255, 0.15))
-  );
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--auth-line, rgba(255, 255, 255, 0.15)));
   background: color-mix(in srgb, var(--accent) 6%, var(--surface));
   color: var(--accent);
 }
@@ -291,8 +287,7 @@
   border: 1px solid var(--auth-line, rgba(255, 255, 255, 0.13));
   border-radius: 15px;
   background: var(--main-surface, var(--surface));
-  box-shadow: 0 24px 60px
-    color-mix(in srgb, var(--card-shadow) 32%, transparent);
+  box-shadow: 0 24px 60px color-mix(in srgb, var(--card-shadow) 32%, transparent);
 }
 
 .auth-mfa-setup__modal-header {

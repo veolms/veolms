@@ -1,9 +1,6 @@
 import type { LessonDiscussionItem } from "@veolms/contracts";
 import type { Comment } from "./CommentCard";
-import {
-  compareEntriesForSort,
-  type DiscussionFeedSort,
-} from "./discussionFeed";
+import { compareEntriesForSort, type DiscussionFeedSort } from "./discussionFeed";
 import { adaptLearningNoteToComment } from "./learning-notes.adapter";
 import { adaptLearningThreadToComment } from "./learning-threads.adapter";
 import {
@@ -14,12 +11,9 @@ import {
   type LearningThreadEntity,
 } from "../services/learning-interactions/interaction-entities";
 
-export type UnifiedDiscussionShadow =
-  LearningThreadEntity | LearningNoteCacheItem;
+export type UnifiedDiscussionShadow = LearningThreadEntity | LearningNoteCacheItem;
 
-export function getUnifiedDiscussionIdentity(
-  item: LessonDiscussionItem,
-): string {
+export function getUnifiedDiscussionIdentity(item: LessonDiscussionItem): string {
   return item.identity;
 }
 

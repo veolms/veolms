@@ -34,9 +34,7 @@ export const videoPlaybackTokenSchema = z.strictObject({
   expiresAt: z.number().int().positive(),
 });
 
-export type VideoPlaybackBootstrap = z.infer<
-  typeof videoPlaybackBootstrapSchema
->;
+export type VideoPlaybackBootstrap = z.infer<typeof videoPlaybackBootstrapSchema>;
 
 export type VideoPlaybackToken = z.infer<typeof videoPlaybackTokenSchema>;
 

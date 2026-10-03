@@ -40,19 +40,12 @@ interface VirtualizedLessonListProps<T> {
   renderItem: (item: T, index: number) => ReactNode;
 }
 
-function getListScrollMargin(
-  list: HTMLDivElement | null,
-  scrollport: HTMLElement | null,
-) {
+function getListScrollMargin(list: HTMLDivElement | null, scrollport: HTMLElement | null) {
   if (!list || typeof window === "undefined") return 0;
 
   const listRect = list.getBoundingClientRect();
   if (scrollport) {
-    return (
-      listRect.top -
-      scrollport.getBoundingClientRect().top +
-      scrollport.scrollTop
-    );
+    return listRect.top - scrollport.getBoundingClientRect().top + scrollport.scrollTop;
   }
 
   return listRect.top + window.scrollY;
@@ -93,8 +86,7 @@ export function VirtualizedLessonList<T>({
     () =>
       getScrollElementOverride
         ? getScrollElementOverride()
-        : (getNearestScrollableAncestor(listRef.current) ??
-          getApplicationScrollElement()),
+        : (getNearestScrollableAncestor(listRef.current) ?? getApplicationScrollElement()),
     [getScrollElementOverride],
   );
   const [useWindowScroll, setUseWindowScroll] = useState(() => {
@@ -111,10 +103,8 @@ export function VirtualizedLessonList<T>({
     itemId: string;
     edge: "first" | "last";
   } | null>(null);
-  const virtualized =
-    items.length >= VIRTUALIZE_AFTER || (forceVirtualized && items.length > 0);
-  const effectiveOverscan =
-    overscan ?? (estimatedItemSize <= 60 ? 14 : LESSON_ROW_OVERSCAN);
+  const virtualized = items.length >= VIRTUALIZE_AFTER || (forceVirtualized && items.length > 0);
+  const effectiveOverscan = overscan ?? (estimatedItemSize <= 60 ? 14 : LESSON_ROW_OVERSCAN);
 
   useLayoutEffect(() => {
     const syncScrollMode = () => {
@@ -129,9 +119,7 @@ export function VirtualizedLessonList<T>({
   const syncScrollMargin = useCallback(() => {
     const scrollElement = useWindowScroll ? null : resolveScrollElement();
     const next = getListScrollMargin(listRef.current, scrollElement);
-    setScrollMargin((current) =>
-      Math.abs(current - next) > 1 ? next : current,
-    );
+    setScrollMargin((current) => (Math.abs(current - next) > 1 ? next : current));
   }, [resolveScrollElement, useWindowScroll]);
 
   useLayoutEffect(() => {
@@ -191,9 +179,7 @@ export function VirtualizedLessonList<T>({
   const rangeExtractor = useCallback(
     (range: VirtualRange) => {
       const indexes = new Set(defaultRangeExtractor(range));
-      const pinnedIds = pendingFocus
-        ? [...pinnedItemIds, pendingFocus.itemId]
-        : pinnedItemIds;
+      const pinnedIds = pendingFocus ? [...pinnedItemIds, pendingFocus.itemId] : pinnedItemIds;
       for (const itemId of pinnedIds) {
         const index = indexById.get(itemId);
         if (index !== undefined && index < range.count) indexes.add(index);
@@ -219,8 +205,7 @@ export function VirtualizedLessonList<T>({
         row.querySelectorAll<HTMLElement>(LESSON_FOCUSABLE_SELECTOR),
       ).filter(
         (element) =>
-          element.getClientRects().length > 0 &&
-          element.getAttribute("aria-hidden") !== "true",
+          element.getClientRects().length > 0 && element.getAttribute("aria-hidden") !== "true",
       );
       if (focusableElements.length === 0) return;
 
@@ -266,9 +251,7 @@ export function VirtualizedLessonList<T>({
     scrollMargin: useWindowScroll ? 0 : scrollMargin,
   });
 
-  const virtualizer = useWindowScroll
-    ? windowVirtualizer
-    : scrollportVirtualizer;
+  const virtualizer = useWindowScroll ? windowVirtualizer : scrollportVirtualizer;
   const virtualItems = virtualized ? virtualizer.getVirtualItems() : [];
   const totalSize = virtualizer.getTotalSize();
 
@@ -280,9 +263,7 @@ export function VirtualizedLessonList<T>({
     }
 
     const row = Array.from(
-      listRef.current?.querySelectorAll<HTMLElement>(
-        "[data-lesson-virtual-row]",
-      ) ?? [],
+      listRef.current?.querySelectorAll<HTMLElement>("[data-lesson-virtual-row]") ?? [],
     ).find((element) => element.dataset.lessonId === pendingFocus.itemId);
     if (!row) return;
 
@@ -290,8 +271,7 @@ export function VirtualizedLessonList<T>({
       row.querySelectorAll<HTMLElement>(LESSON_FOCUSABLE_SELECTOR),
     ).filter(
       (element) =>
-        element.getClientRects().length > 0 &&
-        element.getAttribute("aria-hidden") !== "true",
+        element.getClientRects().length > 0 && element.getAttribute("aria-hidden") !== "true",
     );
     const target =
       pendingFocus.edge === "first"
@@ -333,11 +313,7 @@ export function VirtualizedLessonList<T>({
             onFocusCapture={() => onItemFocusChange?.(itemId, true)}
             onKeyDownCapture={handleRowKeyDown}
             onBlurCapture={(event) => {
-              if (
-                !event.currentTarget.contains(
-                  event.relatedTarget as Node | null,
-                )
-              ) {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                 onItemFocusChange?.(itemId, false);
               }
             }}

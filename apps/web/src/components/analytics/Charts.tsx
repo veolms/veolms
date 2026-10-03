@@ -34,10 +34,7 @@ function ChartEmptyState({ message }: { message?: string }) {
     <EmptyState
       icon={<ChartLineUp size={20} weight="bold" />}
       title="Not enough data yet"
-      message={
-        message ??
-        "This will fill in once there's activity in the selected range."
-      }
+      message={message ?? "This will fill in once there's activity in the selected range."}
       compact
     />
   );
@@ -95,17 +92,8 @@ export function TrendChart({
             <stop offset="95%" stopColor="var(--accent)" stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        <CartesianGrid
-          strokeDasharray="3 3"
-          stroke={GRID_STROKE}
-          vertical={false}
-        />
-        <XAxis
-          dataKey="label"
-          tick={AXIS_TICK_STYLE}
-          tickLine={false}
-          axisLine={false}
-        />
+        <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+        <XAxis dataKey="label" tick={AXIS_TICK_STYLE} tickLine={false} axisLine={false} />
         <YAxis
           tick={AXIS_TICK_STYLE}
           tickLine={false}

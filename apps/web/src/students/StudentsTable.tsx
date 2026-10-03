@@ -60,11 +60,7 @@ function getStudentListScrollMargin(
 
   const feedRect = feed.getBoundingClientRect();
   if (scrollport) {
-    return (
-      feedRect.top -
-      scrollport.getBoundingClientRect().top +
-      scrollport.scrollTop
-    );
+    return feedRect.top - scrollport.getBoundingClientRect().top + scrollport.scrollTop;
   }
 
   return feedRect.top + window.scrollY;
@@ -99,9 +95,7 @@ function useStudentScrollMargin(
         feedRef.current,
         useWindowScroll ? null : getApplicationScrollElement(),
       );
-      setScrollMargin((current) =>
-        Math.abs(current - nextMargin) > 1 ? nextMargin : current,
-      );
+      setScrollMargin((current) => (Math.abs(current - nextMargin) > 1 ? nextMargin : current));
     };
 
     syncScrollMargin();
@@ -140,9 +134,7 @@ interface StudentAvatarProps {
   student: StudentListItem;
 }
 
-const StudentAvatar = memo(function StudentAvatar({
-  student,
-}: StudentAvatarProps) {
+const StudentAvatar = memo(function StudentAvatar({ student }: StudentAvatarProps) {
   const [imageFailed, setImageFailed] = useState(false);
   const initials = getInitials(student);
 
@@ -161,7 +153,7 @@ const StudentAvatar = memo(function StudentAvatar({
         decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setImageFailed(true)}
-        className="h-10 w-10 shrink-0 rounded-full object-cover border border-(--border) shadow-xs"
+        className="h-10 w-10 shrink-0 rounded-full border border-(--border) object-cover shadow-xs"
       />
     );
   }
@@ -215,17 +207,14 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
       aria-label={`View profile of ${student.displayName}`}
       onClick={() => onNavigateStudent(student.username)}
       onKeyDown={handleKeyDown}
-      className={`group absolute inset-x-0 top-0 w-auto flex cursor-pointer flex-col gap-3 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-4 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${studentListGridColumns} @3xl/students:grid @3xl/students:min-w-[1080px] @3xl/students:items-center @3xl/students:gap-0 @3xl/students:p-0`}
+      className={`group absolute inset-x-0 top-0 flex w-auto cursor-pointer flex-col gap-3 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-4 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${studentListGridColumns} @3xl/students:grid @3xl/students:min-w-[1080px] @3xl/students:items-center @3xl/students:gap-0 @3xl/students:p-0`}
       style={{ transform }}
     >
-      <div
-        role="cell"
-        className="min-w-0 @3xl/students:px-5 @3xl/students:py-3.5"
-      >
+      <div role="cell" className="min-w-0 @3xl/students:px-5 @3xl/students:py-3.5">
         <div className="flex items-center gap-3">
           <StudentAvatar student={student} />
           <div className="min-w-0">
-            <span className="block truncate text-sm font-bold leading-snug text-(--text) transition-colors group-hover:text-(--accent)">
+            <span className="block truncate text-sm leading-snug font-bold text-(--text) transition-colors group-hover:text-(--accent)">
               {student.displayName}
             </span>
             <span className="mt-0.5 block truncate font-mono text-xs leading-tight text-(--muted)">
@@ -250,9 +239,7 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
               size={14}
               className="shrink-0 text-(--muted) transition-colors group-hover/email:text-(--accent)"
             />
-            <span className="truncate font-mono text-[12px]">
-              {student.email}
-            </span>
+            <span className="truncate font-mono text-[12px]">{student.email}</span>
           </button>
         ) : (
           <span className="pl-2 text-xs text-(--muted)">—</span>
@@ -263,9 +250,7 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
         role="cell"
         className="flex items-center justify-between gap-2 @3xl/students:px-4 @3xl/students:py-3.5"
       >
-        <span className="text-xs text-(--muted) @3xl/students:hidden">
-          Courses
-        </span>
+        <span className="text-xs text-(--muted) @3xl/students:hidden">Courses</span>
         <div className="inline-flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-(--border) bg-(--card-surface) px-2.5 py-1 text-xs font-semibold text-(--text)">
             <BookOpen size={13} className="shrink-0 text-(--accent)" />
@@ -287,10 +272,8 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
         role="cell"
         className="flex items-center gap-2.5 @3xl/students:px-4 @3xl/students:py-3.5"
       >
-        <span className="text-xs text-(--muted) @3xl/students:hidden">
-          Progress
-        </span>
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 @3xl/students:min-w-[120px] @3xl/students:max-w-[140px]">
+        <span className="text-xs text-(--muted) @3xl/students:hidden">Progress</span>
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 @3xl/students:max-w-[140px] @3xl/students:min-w-[120px]">
           <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full border border-[color-mix(in_srgb,var(--text)_7%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_90%,transparent)]">
             <div
               className="h-full rounded-full"
@@ -318,9 +301,7 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
           }`}
         >
           <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              isActive ? "bg-emerald-400" : "bg-zinc-400"
-            }`}
+            className={`h-1.5 w-1.5 rounded-full ${isActive ? "bg-emerald-400" : "bg-zinc-400"}`}
           />
           <span>{isActive ? "Active" : "Inactive"}</span>
         </span>
@@ -328,14 +309,14 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
 
       <div
         role="cell"
-        className="hidden text-xs font-medium text-(--muted) @3xl/students:block @3xl/students:whitespace-nowrap @3xl/students:px-4 @3xl/students:py-3.5"
+        className="hidden text-xs font-medium text-(--muted) @3xl/students:block @3xl/students:px-4 @3xl/students:py-3.5 @3xl/students:whitespace-nowrap"
       >
         {formatJoinedDate(student.joinedAt)}
       </div>
 
       <div
         role="cell"
-        className="absolute right-4 top-4 @3xl/students:static @3xl/students:px-5 @3xl/students:py-3.5 @3xl/students:text-right"
+        className="absolute top-4 right-4 @3xl/students:static @3xl/students:px-5 @3xl/students:py-3.5 @3xl/students:text-right"
       >
         <button
           type="button"
@@ -358,7 +339,7 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
             if (student.email) onCopyEmail(student.email, event);
           }}
           disabled={!student.email}
-          className="min-w-0 max-w-[70%] truncate text-left font-mono text-[11.5px] disabled:cursor-default"
+          className="max-w-[70%] min-w-0 truncate text-left font-mono text-[11.5px] disabled:cursor-default"
         >
           {student.email || "No email"}
         </button>
@@ -370,9 +351,7 @@ const StudentVirtualRow = memo(function StudentVirtualRow({
           }`}
         >
           <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              isActive ? "bg-emerald-400" : "bg-zinc-400"
-            }`}
+            className={`h-1.5 w-1.5 rounded-full ${isActive ? "bg-emerald-400" : "bg-zinc-400"}`}
           />
           <span>{isActive ? "Active" : "Inactive"}</span>
         </span>
@@ -437,7 +416,7 @@ function VirtualizedStudentSurface({
       ref={feedRef}
       role="rowgroup"
       aria-busy={isLoading || isTransitioning || isFetchingNextPage}
-      className="relative min-w-0 w-full @3xl/students:min-w-[1080px]"
+      className="relative w-full min-w-0 @3xl/students:min-w-[1080px]"
       style={{ height: `${virtualizer.getTotalSize()}px` }}
     >
       {virtualItems.map((virtualItem) => {
@@ -467,11 +446,7 @@ type VirtualizedStudentListProps = Omit<
 
 function WindowVirtualizedStudentList(props: VirtualizedStudentListProps) {
   const feedRef = useRef<HTMLDivElement>(null);
-  const scrollMargin = useStudentScrollMargin(
-    feedRef,
-    true,
-    props.students.length,
-  );
+  const scrollMargin = useStudentScrollMargin(feedRef, true, props.students.length);
   const virtualizer = useWindowVirtualizer({
     count: props.students.length,
     estimateSize: () => STUDENT_ROW_ESTIMATE,
@@ -493,11 +468,7 @@ function WindowVirtualizedStudentList(props: VirtualizedStudentListProps) {
 
 function ScrollportVirtualizedStudentList(props: VirtualizedStudentListProps) {
   const feedRef = useRef<HTMLDivElement>(null);
-  const scrollMargin = useStudentScrollMargin(
-    feedRef,
-    false,
-    props.students.length,
-  );
+  const scrollMargin = useStudentScrollMargin(feedRef, false, props.students.length);
   const virtualizer = useVirtualizer({
     count: props.students.length,
     getScrollElement: getApplicationScrollElement,
@@ -572,11 +543,11 @@ export function StudentsTable({
             role="table"
             aria-label="Students list"
             aria-rowcount={totalCount}
-            className="min-w-0 w-full"
+            className="w-full min-w-0"
           >
             <div
               role="row"
-              className={`hidden min-w-[1080px] border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)] text-[11px] font-bold uppercase tracking-wider text-(--muted) select-none @3xl/students:grid ${studentListGridColumns}`}
+              className={`hidden min-w-[1080px] border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)] text-[11px] font-bold tracking-wider text-(--muted) uppercase select-none @3xl/students:grid ${studentListGridColumns}`}
             >
               <div role="columnheader" className="px-5 py-3.5">
                 Learner

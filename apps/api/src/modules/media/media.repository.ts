@@ -1,10 +1,5 @@
 import type { Kysely } from "kysely";
-import type {
-  Database,
-  DatabaseExecutor,
-  Json,
-  MediaAssetStatus,
-} from "@veolms/database";
+import type { Database, DatabaseExecutor, Json, MediaAssetStatus } from "@veolms/database";
 import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
 export async function findMediaAssetById(
@@ -12,10 +7,7 @@ export async function findMediaAssetById(
   mediaId: string,
   ownerId?: string,
 ) {
-  let query = database
-    .selectFrom("media_assets")
-    .selectAll()
-    .where("id", "=", mediaId);
+  let query = database.selectFrom("media_assets").selectAll().where("id", "=", mediaId);
 
   if (ownerId) {
     query = query.where("owner_id", "=", ownerId);
@@ -41,10 +33,7 @@ export async function isMediaAttachedToPublishedCourse(
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
     .where((eb) =>
-      eb.or([
-        eb("thumbnail_media_id", "=", mediaId),
-        eb("trailer_media_id", "=", mediaId),
-      ]),
+      eb.or([eb("thumbnail_media_id", "=", mediaId), eb("trailer_media_id", "=", mediaId)]),
     )
     .executeTakeFirst();
 
@@ -58,10 +47,7 @@ export async function findMediaAssetsByIds(
   lock = false,
 ) {
   if (mediaIds.length === 0) return [];
-  let query = database
-    .selectFrom("media_assets")
-    .selectAll()
-    .where("id", "in", mediaIds);
+  let query = database.selectFrom("media_assets").selectAll().where("id", "in", mediaIds);
 
   if (ownerId) {
     query = query.where("owner_id", "=", ownerId);
@@ -74,18 +60,12 @@ export async function findMediaAssetsByIds(
   return await query.execute();
 }
 
-export async function deleteMediaAssets(
-  database: Kysely<Database>,
-  mediaIds: string[],
-) {
+export async function deleteMediaAssets(database: Kysely<Database>, mediaIds: string[]) {
   if (mediaIds.length === 0) {
     return;
   }
 
-  await database
-    .deleteFrom("media_assets")
-    .where("id", "in", mediaIds)
-    .execute();
+  await database.deleteFrom("media_assets").where("id", "in", mediaIds).execute();
 }
 
 export async function insertMediaAsset(
@@ -144,19 +124,14 @@ export async function updateMediaAssetProbedDetails(
   const updates: Record<string, unknown> = {
     updated_at: new Date(),
   };
-  if (details.size_bytes !== undefined)
-    updates["size_bytes"] = details.size_bytes;
+  if (details.size_bytes !== undefined) updates["size_bytes"] = details.size_bytes;
   if (details.width !== undefined) updates["width"] = details.width;
   if (details.height !== undefined) updates["height"] = details.height;
   if (details.duration_seconds !== undefined)
     updates["duration_seconds"] = details.duration_seconds;
   if (details.metadata !== undefined) updates["metadata"] = details.metadata;
 
-  await database
-    .updateTable("media_assets")
-    .set(updates)
-    .where("id", "=", mediaId)
-    .execute();
+  await database.updateTable("media_assets").set(updates).where("id", "=", mediaId).execute();
 }
 
 export async function insertVideoJob(
@@ -182,9 +157,7 @@ export async function insertVideoJob(
     .values({
       status: "queued",
       ...rest,
-      video_metadata: video_metadata
-        ? JSON.stringify(video_metadata)
-        : undefined,
+      video_metadata: video_metadata ? JSON.stringify(video_metadata) : undefined,
     })
     .execute();
 }
@@ -209,10 +182,7 @@ export async function updateVideoJobStatus(
     .execute();
 }
 
-export async function findVideoJobById(
-  database: Kysely<Database>,
-  jobId: string,
-) {
+export async function findVideoJobById(database: Kysely<Database>, jobId: string) {
   return await database
     .selectFrom("video_jobs")
     .selectAll()
@@ -220,10 +190,7 @@ export async function findVideoJobById(
     .executeTakeFirst();
 }
 
-export async function findVideoJobByVideoId(
-  database: Kysely<Database>,
-  videoId: string,
-) {
+export async function findVideoJobByVideoId(database: Kysely<Database>, videoId: string) {
   return await database
     .selectFrom("video_jobs")
     .selectAll()
@@ -244,24 +211,15 @@ export async function findPlaybackLessonContext(
   lessonNumber: number,
   options?: { includeUnpublished?: boolean },
 ) {
-  const isUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      courseIdOrSlug,
-    );
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    courseIdOrSlug,
+  );
   let query = database
     .selectFrom("course_lessons")
     .innerJoin("courses", "courses.id", "course_lessons.course_id")
-    .innerJoin(
-      "course_sections",
-      "course_sections.id",
-      "course_lessons.section_id",
-    )
+    .innerJoin("course_sections", "course_sections.id", "course_lessons.section_id")
     .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
-    .leftJoin(
-      "media_assets",
-      "media_assets.id",
-      "course_lessons.content_media_id",
-    )
+    .leftJoin("media_assets", "media_assets.id", "course_lessons.content_media_id")
     .select([
       "courses.id as course_id",
       "courses.slug as course_slug",
@@ -279,9 +237,7 @@ export async function findPlaybackLessonContext(
       "media_assets.duration_seconds as duration_seconds",
     ])
     .where((eb) =>
-      isUuid
-        ? eb("courses.id", "=", courseIdOrSlug)
-        : eb("courses.slug", "=", courseIdOrSlug),
+      isUuid ? eb("courses.id", "=", courseIdOrSlug) : eb("courses.slug", "=", courseIdOrSlug),
     )
     .where("courses.deleted_at", "is", null)
     .where("course_sections.deleted_at", "is", null)
@@ -304,19 +260,12 @@ export async function findPlaybackLessonContext(
 }
 
 /** Resolves the lesson that owns a media asset for HLS request authorization. */
-export async function findPlaybackMediaContext(
-  database: Kysely<Database>,
-  mediaId: string,
-) {
+export async function findPlaybackMediaContext(database: Kysely<Database>, mediaId: string) {
   return await database
     .selectFrom("course_lessons")
     .innerJoin("courses", "courses.id", "course_lessons.course_id")
     .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
-    .leftJoin(
-      "media_assets",
-      "media_assets.id",
-      "course_lessons.content_media_id",
-    )
+    .leftJoin("media_assets", "media_assets.id", "course_lessons.content_media_id")
     .select([
       "courses.id as course_id",
       "courses.slug as course_slug",
@@ -339,10 +288,7 @@ export async function findPlaybackMediaContext(
     .executeTakeFirst();
 }
 
-export async function findVideoOutputsByVideoIds(
-  database: Kysely<Database>,
-  videoIds: string[],
-) {
+export async function findVideoOutputsByVideoIds(database: Kysely<Database>, videoIds: string[]) {
   if (videoIds.length === 0) {
     return [];
   }

@@ -60,9 +60,7 @@ export function createInitialVideoEngineSnapshot(): VideoEngineSnapshot {
   };
 }
 
-export function cloneVideoEngineSnapshot(
-  snapshot: VideoEngineSnapshot,
-): VideoEngineSnapshot {
+export function cloneVideoEngineSnapshot(snapshot: VideoEngineSnapshot): VideoEngineSnapshot {
   return {
     ...snapshot,
     buffered: snapshot.buffered.map((range) => ({ ...range })),

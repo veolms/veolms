@@ -1,14 +1,6 @@
 import type { Order } from "@veolms/contracts";
-import type {
-  OrderItem,
-  OrderStatus,
-  OrderSummaryMetrics,
-  RecentPaymentItem,
-} from "./ordersData";
-import type {
-  OrderHistoryItem,
-  OrderHistoryStatus,
-} from "../order-history/orderHistoryData";
+import type { OrderItem, OrderStatus, OrderSummaryMetrics, RecentPaymentItem } from "./ordersData";
+import type { OrderHistoryItem, OrderHistoryStatus } from "../order-history/orderHistoryData";
 
 /**
  * Adapts an API Order to the frontend OrderItem model consumed by OrdersPage.
@@ -70,13 +62,9 @@ export function adaptOrderToOrderItem(order: Order): OrderItem {
   if (order.status === "paid") {
     status = "completed";
     statusLabel = "Completed";
-  } else if (
-    order.status === "pending" ||
-    order.status === "payment_processing"
-  ) {
+  } else if (order.status === "pending" || order.status === "payment_processing") {
     status = "pending";
-    statusLabel =
-      order.status === "payment_processing" ? "Processing" : "Pending";
+    statusLabel = order.status === "payment_processing" ? "Processing" : "Pending";
   } else if (
     order.status === "payment_failed" ||
     order.status === "expired" ||
@@ -84,10 +72,7 @@ export function adaptOrderToOrderItem(order: Order): OrderItem {
   ) {
     status = "failed";
     statusLabel = "Failed";
-  } else if (
-    order.status === "refunded" ||
-    order.status === "partially_refunded"
-  ) {
+  } else if (order.status === "refunded" || order.status === "partially_refunded") {
     status = "refunded";
     statusLabel = "Refunded";
   }
@@ -103,14 +88,11 @@ export function adaptOrderToOrderItem(order: Order): OrderItem {
   const subtotal = Math.round(order.subtotalAmount / 100);
   const tax = Math.round(order.taxAmount / 100);
   const currency = order.currency || "INR";
-  const formattedPrice = new Intl.NumberFormat(
-    currency === "INR" ? "en-IN" : "en-US",
-    {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    },
-  ).format(price);
+  const formattedPrice = new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(price);
 
   const cleanOrderNumber = order.orderNumber.startsWith("#")
     ? order.orderNumber
@@ -118,8 +100,7 @@ export function adaptOrderToOrderItem(order: Order): OrderItem {
   const invoiceNumber = `INV-${
     order.orderNumber.replace(/^[#A-Za-z_-]+/, "") || order.id.slice(0, 8)
   }`;
-  const transactionId =
-    order.idempotencyKey || `TXN_${order.id.replace(/-/g, "").slice(0, 10)}`;
+  const transactionId = order.idempotencyKey || `TXN_${order.id.replace(/-/g, "").slice(0, 10)}`;
 
   return {
     id: order.id,
@@ -159,10 +140,7 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
   if (order.status === "paid") {
     status = "completed";
     statusLabel = "Completed";
-  } else if (
-    order.status === "pending" ||
-    order.status === "payment_processing"
-  ) {
+  } else if (order.status === "pending" || order.status === "payment_processing") {
     status = "processing";
     statusLabel = "Processing";
   } else if (
@@ -172,10 +150,7 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
   ) {
     status = "failed";
     statusLabel = "Failed";
-  } else if (
-    order.status === "refunded" ||
-    order.status === "partially_refunded"
-  ) {
+  } else if (order.status === "refunded" || order.status === "partially_refunded") {
     status = "refunded";
     statusLabel = "Refunded";
   }
@@ -195,14 +170,11 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
   const subtotal = order.subtotalAmount / 100;
   const tax = order.taxAmount / 100;
   const currency = order.currency || "INR";
-  const formattedAmount = new Intl.NumberFormat(
-    currency === "INR" ? "en-IN" : "en-US",
-    {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    },
-  ).format(amount);
+  const formattedAmount = new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
 
   const cleanOrderNumber = order.orderNumber.startsWith("#")
     ? order.orderNumber
@@ -210,26 +182,19 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
   const invoiceNumber = `INV-${
     order.orderNumber.replace(/^[#A-Za-z_-]+/, "") || order.id.slice(0, 8)
   }`;
-  const transactionId =
-    order.idempotencyKey || `TXN_${order.id.replace(/-/g, "").slice(0, 10)}`;
+  const transactionId = order.idempotencyKey || `TXN_${order.id.replace(/-/g, "").slice(0, 10)}`;
 
   let iconColor = "#3b82f6";
   const titleLower = courseTitle.toLowerCase();
   if (titleLower.includes("typescript")) iconColor = "#3b82f6";
-  else if (titleLower.includes("node") || titleLower.includes("backend"))
-    iconColor = "#f59e0b";
-  else if (titleLower.includes("python") || titleLower.includes("next"))
-    iconColor = "#10b981";
-  else if (titleLower.includes("react") || titleLower.includes("graphql"))
-    iconColor = "#8b5cf6";
-  else if (titleLower.includes("ui") || titleLower.includes("ux"))
-    iconColor = "#ef4444";
+  else if (titleLower.includes("node") || titleLower.includes("backend")) iconColor = "#f59e0b";
+  else if (titleLower.includes("python") || titleLower.includes("next")) iconColor = "#10b981";
+  else if (titleLower.includes("react") || titleLower.includes("graphql")) iconColor = "#8b5cf6";
+  else if (titleLower.includes("ui") || titleLower.includes("ux")) iconColor = "#ef4444";
   else if (titleLower.includes("javascript")) iconColor = "#f97316";
 
   const itemCount =
-    order.items && order.items.length > 1
-      ? `${order.items.length} Courses`
-      : "1 Course";
+    order.items && order.items.length > 1 ? `${order.items.length} Courses` : "1 Course";
 
   const paymentMethod = order.paymentSummary?.method.toLowerCase() ?? "";
   const paymentType = paymentMethod.includes("upi")
@@ -256,9 +221,8 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
       type: paymentType,
       brand: order.paymentSummary?.provider || "Payment",
       label:
-        [order.paymentSummary?.method, order.paymentSummary?.detail]
-          .filter(Boolean)
-          .join(" · ") || "Payment method unavailable",
+        [order.paymentSummary?.method, order.paymentSummary?.detail].filter(Boolean).join(" · ") ||
+        "Payment method unavailable",
     },
     amount,
     formattedAmount,
@@ -273,9 +237,7 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
 /**
  * Computes live order summary metrics from order items.
  */
-export function computeOrderSummary(
-  orders: readonly OrderItem[],
-): OrderSummaryMetrics {
+export function computeOrderSummary(orders: readonly OrderItem[]): OrderSummaryMetrics {
   let completed = 0;
   let pending = 0;
   let failed = 0;
@@ -315,9 +277,7 @@ export function computeOrderSummary(
 /**
  * Extracts recent payment entries for the widget from order items.
  */
-export function extractRecentPayments(
-  orders: readonly OrderItem[],
-): RecentPaymentItem[] {
+export function extractRecentPayments(orders: readonly OrderItem[]): RecentPaymentItem[] {
   return orders.slice(0, 4).map((o) => ({
     id: o.id,
     courseTitle: o.courseTitle,

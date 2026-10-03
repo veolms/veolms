@@ -1,10 +1,5 @@
 import { sql, type Kysely, type Selectable } from "kysely";
-import type {
-  Database,
-  DatabaseExecutor,
-  ImageJobTable,
-  Json,
-} from "./schema.ts";
+import type { Database, DatabaseExecutor, ImageJobTable, Json } from "./schema.ts";
 
 export async function enqueueImageJob(
   db: DatabaseExecutor,
@@ -105,10 +100,7 @@ export async function failImageJob(
   });
 }
 
-export async function retryImageJob(
-  db: Kysely<Database>,
-  mediaId: string,
-): Promise<void> {
+export async function retryImageJob(db: Kysely<Database>, mediaId: string): Promise<void> {
   await db
     .updateTable("image_jobs")
     .set({ status: "queued", error_message: null, updated_at: new Date() })

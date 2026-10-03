@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import type {
   AuthMessageResponse,
@@ -40,10 +36,7 @@ import {
   optimisticDeletionCoordinator,
 } from "../learning-interactions";
 
-function persistAuthenticatedSession(
-  queryClient: QueryClient,
-  data: LoginResponse,
-) {
+function persistAuthenticatedSession(queryClient: QueryClient, data: LoginResponse) {
   const currentUser: NonNullable<CurrentUserResponse> = {
     id: data.user.id,
     username: data.user.username,
@@ -90,21 +83,13 @@ export function useSendOtp() {
 }
 
 export function useSendPhoneVerificationOtp() {
-  return useMutation<
-    AuthMessageResponse,
-    ApiError,
-    PhoneVerificationSendRequest
-  >({
+  return useMutation<AuthMessageResponse, ApiError, PhoneVerificationSendRequest>({
     mutationFn: (payload) => authService.sendPhoneVerificationOtp(payload),
   });
 }
 
 export function useSendEmailVerificationOtp() {
-  return useMutation<
-    AuthMessageResponse,
-    ApiError,
-    EmailVerificationSendRequest
-  >({
+  return useMutation<AuthMessageResponse, ApiError, EmailVerificationSendRequest>({
     mutationFn: (payload) => authService.sendEmailVerificationOtp(payload),
   });
 }
@@ -112,11 +97,7 @@ export function useSendEmailVerificationOtp() {
 export function useVerifyPhoneNumber() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    AuthMessageResponse,
-    ApiError,
-    PhoneVerificationVerifyRequest
-  >({
+  return useMutation<AuthMessageResponse, ApiError, PhoneVerificationVerifyRequest>({
     mutationFn: (payload) => authService.verifyPhoneNumber(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
@@ -127,11 +108,7 @@ export function useVerifyPhoneNumber() {
 export function useVerifyEmail() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    AuthMessageResponse,
-    ApiError,
-    EmailVerificationVerifyRequest
-  >({
+  return useMutation<AuthMessageResponse, ApiError, EmailVerificationVerifyRequest>({
     mutationFn: (payload) => authService.verifyEmail(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: authKeys.me() });

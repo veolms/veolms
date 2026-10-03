@@ -1,8 +1,4 @@
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useQuery,
-} from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type {
   Order,
   OrdersListResponse,
@@ -21,10 +17,7 @@ import { ordersService } from "./orders.service";
  * Uses cursor-based keyset pagination — each page returns a `nextCursor`
  * that feeds into the next `getNextPageParam` call.
  */
-export function useOrders(
-  params?: OrdersListQueryInput,
-  options?: { enabled?: boolean },
-) {
+export function useOrders(params?: OrdersListQueryInput, options?: { enabled?: boolean }) {
   const limit = params?.limit ?? 30;
   const queryParams = { ...params, limit };
 
@@ -46,10 +39,7 @@ export function useOrders(
 /**
  * Aggregated statistics query for orders (Net Revenue, Total Orders, etc.).
  */
-export function useOrderStats(
-  params?: OrderStatsQuery,
-  options?: { enabled?: boolean },
-) {
+export function useOrderStats(params?: OrderStatsQuery, options?: { enabled?: boolean }) {
   return useQuery<OrderStatsResponse, ApiError>({
     queryKey: orderKeys.stats(params),
     queryFn: () => ordersService.getOrderStats(params),
@@ -60,9 +50,7 @@ export function useOrderStats(
 
 export function useOrder(orderId: string | null, view?: OrderView) {
   return useQuery<Order, ApiError>({
-    queryKey: orderId
-      ? orderKeys.detail(orderId, view)
-      : ["orders", "detail", null],
+    queryKey: orderId ? orderKeys.detail(orderId, view) : ["orders", "detail", null],
     queryFn: () => ordersService.getOrder(orderId!, view),
     enabled: Boolean(orderId),
     staleTime: 60 * 1000,
@@ -71,9 +59,7 @@ export function useOrder(orderId: string | null, view?: OrderView) {
 
 export function useOrderInvoice(orderId: string | null, view?: OrderView) {
   return useQuery<Invoice, ApiError>({
-    queryKey: orderId
-      ? orderKeys.invoice(orderId, view)
-      : ["orders", "invoice", null],
+    queryKey: orderId ? orderKeys.invoice(orderId, view) : ["orders", "invoice", null],
     queryFn: () => ordersService.getInvoice(orderId!, view),
     enabled: Boolean(orderId),
     staleTime: 5 * 60 * 1000,

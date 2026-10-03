@@ -61,13 +61,9 @@ export function LessonUploadDropzone({
       </p>
       <p className="m-0 mt-1 text-[0.72rem] font-medium text-(--muted) sm:text-[0.74rem]">
         <span>or </span>
-        <span className="text-(--accent) underline-offset-4 hover:underline">
-          click to browse
-        </span>
+        <span className="text-(--accent) underline-offset-4 hover:underline">click to browse</span>
       </p>
-      <p className="m-0 mt-2 text-[0.70rem] text-(--muted) sm:text-[0.74rem]">
-        {supportText}
-      </p>
+      <p className="m-0 mt-2 text-[0.70rem] text-(--muted) sm:text-[0.74rem]">{supportText}</p>
     </div>
   );
 }

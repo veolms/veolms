@@ -1,20 +1,9 @@
-import type {
-  AcademyRequest,
-  CreatorRegisterRequest,
-  SetupTokenRequest,
-} from "@veolms/contracts";
+import type { AcademyRequest, CreatorRegisterRequest, SetupTokenRequest } from "@veolms/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import {
-  SETUP_COOKIE,
-  SETUP_SESSION_TTL_MS,
-} from "../shared/auth.constants.ts";
+import { SETUP_COOKIE, SETUP_SESSION_TTL_MS } from "../shared/auth.constants.ts";
 import type { AuthContext } from "../shared/auth.context.ts";
-import {
-  clearSetupCookie,
-  setSessionCookie,
-  setSetupCookie,
-} from "../shared/auth.cookies.ts";
+import { clearSetupCookie, setSessionCookie, setSetupCookie } from "../shared/auth.cookies.ts";
 import { presentLogin } from "../shared/auth.presenters.ts";
 
 export function createSetupController(context: AuthContext) {

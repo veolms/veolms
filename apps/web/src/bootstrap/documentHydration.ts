@@ -27,8 +27,7 @@ const VOID_ELEMENT_TAGS = new Set([
   "WBR",
 ]);
 
-const isElement = (node: Node): node is Element =>
-  node.nodeType === Node.ELEMENT_NODE;
+const isElement = (node: Node): node is Element => node.nodeType === Node.ELEMENT_NODE;
 
 const isDarkModeInjected = (element: Element) =>
   element.classList.contains(DARK_MODE_CLONED_CLASS) ||
@@ -36,9 +35,7 @@ const isDarkModeInjected = (element: Element) =>
   element.id.startsWith("dark-mode-");
 
 export function prepareDocumentForHydration(
-  documentNode: Document | null = typeof document === "undefined"
-    ? null
-    : document,
+  documentNode: Document | null = typeof document === "undefined" ? null : document,
 ): () => void {
   const restorers: Array<() => void> = [];
   const html = documentNode?.documentElement ?? null;
@@ -64,9 +61,7 @@ export function prepareDocumentForHydration(
     });
   };
 
-  for (const link of Array.from(
-    documentNode.querySelectorAll('link[rel="stylesheet"]'),
-  )) {
+  for (const link of Array.from(documentNode.querySelectorAll('link[rel="stylesheet"]'))) {
     const hasOriginalClass = link.classList.contains(DARK_MODE_ORIGINAL_CLASS);
     const hasForeignChildren = Boolean(link.firstChild);
     if (!hasOriginalClass && !hasForeignChildren) continue;

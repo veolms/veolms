@@ -77,9 +77,7 @@ export function ConfirmDeleteModal({
     if (!isOpen) return undefined;
 
     const previousActiveElement =
-      typeof document !== "undefined"
-        ? (document.activeElement as HTMLElement | null)
-        : null;
+      typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -148,23 +146,23 @@ export function ConfirmDeleteModal({
         </button>
 
         {/* Header with Icon and Text */}
-        <div className="flex items-start gap-4 pr-7 mb-5.5">
+        <div className="mb-5.5 flex items-start gap-4 pr-7">
           <div
-            className="flex w-11 h-11 items-center justify-center rounded-xl text-red-400 bg-red-500/12 border border-red-500/20 shadow-[0_2px_12px_rgba(239,68,68,0.16)] shrink-0"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/12 text-red-400 shadow-[0_2px_12px_rgba(239,68,68,0.16)]"
             aria-hidden="true"
           >
             <Trash size={20} weight="duotone" />
           </div>
-          <div className="flex-1 min-w-0 pt-0.5">
+          <div className="min-w-0 flex-1 pt-0.5">
             <h3
               id="delete-modal-title"
-              className="m-0 mb-1.5 text-(--text) text-[1.1rem] font-bold tracking-[-0.015em] leading-snug break-words"
+              className="m-0 mb-1.5 text-[1.1rem] leading-snug font-bold tracking-[-0.015em] break-words text-(--text)"
             >
               {title}
             </h3>
             <p
               id="delete-modal-description"
-              className="m-0 text-(--muted) text-[0.86rem] leading-[1.5] break-words"
+              className="m-0 text-[0.86rem] leading-[1.5] break-words text-(--muted)"
             >
               {message}
             </p>
@@ -172,7 +170,7 @@ export function ConfirmDeleteModal({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 max-[480px]:flex-col-reverse max-[480px]:w-full max-[480px]:gap-2.5">
+        <div className="flex items-center justify-end gap-3 max-[480px]:w-full max-[480px]:flex-col-reverse max-[480px]:gap-2.5">
           <button
             ref={cancelBtnRef}
             type="button"
@@ -216,21 +214,17 @@ export function ConfirmDeleteModal({
             />
             <span className="relative z-10 inline-flex items-center gap-1.5 font-semibold">
               <Trash size={15} weight={isHolding ? "fill" : "bold"} />
-              <span className="grid [grid-template-areas:'stack'] items-center text-center">
+              <span className="grid items-center text-center [grid-template-areas:'stack']">
                 <span
-                  className={`[grid-area:stack] whitespace-nowrap transition-opacity duration-150 ${
-                    isHolding
-                      ? "opacity-0 invisible pointer-events-none"
-                      : "opacity-100 visible"
+                  className={`whitespace-nowrap transition-opacity duration-150 [grid-area:stack] ${
+                    isHolding ? "pointer-events-none invisible opacity-0" : "visible opacity-100"
                   }`}
                 >
                   Hold to {confirmLabel}
                 </span>
                 <span
-                  className={`[grid-area:stack] whitespace-nowrap transition-opacity duration-150 ${
-                    isHolding
-                      ? "opacity-100 visible"
-                      : "opacity-0 invisible pointer-events-none"
+                  className={`whitespace-nowrap transition-opacity duration-150 [grid-area:stack] ${
+                    isHolding ? "visible opacity-100" : "pointer-events-none invisible opacity-0"
                   }`}
                 >
                   Hold to Delete...

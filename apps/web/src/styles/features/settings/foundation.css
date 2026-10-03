@@ -52,8 +52,7 @@
   border-radius: 14px;
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 17%, var(--surface-strong));
-  box-shadow: 0 8px 20px
-    color-mix(in srgb, var(--accent-shadow) 42%, transparent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent-shadow) 42%, transparent);
 }
 
 .settings-page__icon > svg {
@@ -84,9 +83,7 @@
 
 @media (min-width: 641px) {
   :root[data-content-layout="framed"] .courses-main--settings {
-    --settings-page-sticky-top: calc(
-      -1 * var(--application-page-block-start, 22px)
-    );
+    --settings-page-sticky-top: calc(-1 * var(--application-page-block-start, 22px));
   }
 }
 
@@ -167,9 +164,7 @@
   --page-tab-tone: #b82b52;
 }
 
-:root[data-page-tab-colors="multicolor"]
-  .page-tabs
-  [role="tab"][data-page-tab-tone],
+:root[data-page-tab-colors="multicolor"] .page-tabs [role="tab"][data-page-tab-tone],
 :root[data-page-tab-colors="follow-sidebar"][data-sidebar-icon-style="multicolor"]
   .page-tabs
   [role="tab"][data-page-tab-tone] {
@@ -202,8 +197,7 @@
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
-  border-bottom: 1px solid
-    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--surface-strong) 72%, transparent);
 }
 
 .settings-tabs::-webkit-scrollbar {
@@ -264,8 +258,7 @@
   padding-inline: var(--settings-page-inline-gutter);
 }
 
-.settings-tab-content
-  :is(.settings-profile, .settings-learning, .settings-detail) {
+.settings-tab-content :is(.settings-profile, .settings-learning, .settings-detail) {
   width: auto;
   max-width: none;
   margin-top: 0;
@@ -338,11 +331,7 @@
 }
 .settings-choice-card.is-selected {
   color: var(--text);
-  background: color-mix(
-    in srgb,
-    var(--selected) 72%,
-    var(--surface-strong) 28%
-  );
+  background: color-mix(in srgb, var(--selected) 72%, var(--surface-strong) 28%);
   box-shadow: var(--card-selected-shadow);
 }
 
@@ -802,8 +791,7 @@
   padding: 0 11px;
   color: var(--text);
   background: color-mix(in srgb, var(--surface-strong) 42%, transparent);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-strong) 72%, transparent);
   font: inherit;
   font-size: 0.78rem;
   font-weight: 700;
@@ -818,8 +806,7 @@
   overflow: hidden;
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-strong) 18%, transparent);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--surface-strong) 62%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-strong) 62%, transparent);
 }
 .settings-row {
   display: grid;
@@ -837,8 +824,7 @@
   background: color-mix(in srgb, var(--accent) 4%, transparent);
 }
 .settings-row + .settings-row {
-  border-top: 1px solid
-    color-mix(in srgb, var(--surface-strong) 48%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--surface-strong) 48%, transparent);
 }
 .settings-row__icon {
   display: inline-flex;
@@ -902,11 +888,7 @@
   border-radius: 999px;
   padding: 3px;
   cursor: pointer;
-  background: color-mix(
-    in srgb,
-    var(--text-secondary) 32%,
-    var(--surface-strong)
-  );
+  background: color-mix(in srgb, var(--text-secondary) 32%, var(--surface-strong));
   transition:
     background-color 150ms ease,
     box-shadow 150ms ease;
@@ -964,8 +946,7 @@
   gap: 12px;
   margin-top: 14px;
   padding-top: 14px;
-  border-top: 1px solid
-    color-mix(in srgb, var(--surface-strong) 58%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--surface-strong) 58%, transparent);
 }
 .settings-theme-pool__heading {
   display: flex;
@@ -1030,11 +1011,7 @@
 }
 .settings-theme-pool__options > button.is-selected {
   color: var(--text);
-  background: color-mix(
-    in srgb,
-    var(--selected) 62%,
-    var(--surface-strong) 38%
-  );
+  background: color-mix(in srgb, var(--selected) 62%, var(--surface-strong) 38%);
   box-shadow: inset 0 0 0 1px var(--accent-border);
 }
 .settings-theme-pool__options > button[aria-disabled="true"] {
@@ -1081,8 +1058,7 @@
   overflow: hidden;
   border-radius: 8px;
   background: color-mix(in srgb, var(--canvas) 74%, var(--surface));
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-strong) 72%, transparent);
 }
 .settings-segmented button {
   min-height: 34px;
@@ -1164,8 +1140,7 @@
   padding: 0 13px;
   color: var(--text-secondary);
   background: color-mix(in srgb, var(--surface-strong) 74%, var(--canvas));
-  box-shadow: 0 5px 14px
-    color-mix(in srgb, var(--accent-shadow) 15%, transparent);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--accent-shadow) 15%, transparent);
   font-size: 0.72rem;
   font-weight: 650;
   transition:
@@ -1185,8 +1160,7 @@
   border-color: var(--text);
   color: var(--canvas);
   background: var(--text);
-  box-shadow: 0 7px 18px
-    color-mix(in srgb, var(--accent-shadow) 26%, transparent);
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--accent-shadow) 26%, transparent);
 }
 
 .settings-control-radius__presets button:focus-visible {
@@ -1281,8 +1255,7 @@
   gap: 16px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid
-    color-mix(in srgb, var(--surface-strong) 46%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--surface-strong) 46%, transparent);
   opacity: 0.52;
   pointer-events: none;
   transition: opacity 150ms ease;
@@ -1570,8 +1543,7 @@
   color: var(--text-secondary);
   text-align: left;
   background: color-mix(in srgb, var(--surface) 32%, transparent);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-strong) 78%, transparent);
   transition:
     color 150ms ease,
     background-color 150ms ease,
@@ -1586,8 +1558,7 @@
 .settings-icon-color-option.is-selected {
   color: var(--text);
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--accent) 38%, var(--surface-strong));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, var(--surface-strong));
 }
 
 .settings-icon-color-option:focus-visible {
@@ -1647,8 +1618,7 @@
   color: var(--text-secondary);
   text-align: left;
   background: color-mix(in srgb, var(--surface) 34%, transparent);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-strong) 78%, transparent);
   transition:
     color 150ms ease,
     background-color 150ms ease,
@@ -1663,8 +1633,7 @@
 .settings-sidebar-glow-option.is-selected {
   color: var(--text);
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--accent) 38%, var(--surface-strong));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, var(--surface-strong));
 }
 
 .settings-sidebar-glow-option:focus-visible {
@@ -1684,8 +1653,7 @@
   isolation: isolate;
   border-radius: 13px 0 0 13px;
   background: color-mix(in srgb, var(--app-shell) 18%, transparent);
-  -webkit-backdrop-filter: blur(var(--sidebar-floating-base-blur, 6px))
-    saturate(1.08);
+  -webkit-backdrop-filter: blur(var(--sidebar-floating-base-blur, 6px)) saturate(1.08);
   backdrop-filter: blur(var(--sidebar-floating-base-blur, 6px)) saturate(1.08);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
@@ -1713,11 +1681,8 @@
     ),
     transparent;
   -webkit-mask-image:
-    var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask),
-    var(--sidebar-bokeh-mask);
-  mask-image:
-    var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask),
-    var(--sidebar-bokeh-mask);
+    var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask);
+  mask-image: var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask);
   -webkit-mask-position:
     -5px 0,
     36px -1px,
@@ -1745,10 +1710,8 @@
   position: absolute;
   inset: -8px 0;
   background: color-mix(in srgb, var(--app-shell) 2%, transparent);
-  -webkit-backdrop-filter: blur(var(--settings-sidebar-preview-blur, 8px))
-    saturate(1.08);
-  backdrop-filter: blur(var(--settings-sidebar-preview-blur, 8px))
-    saturate(1.08);
+  -webkit-backdrop-filter: blur(var(--settings-sidebar-preview-blur, 8px)) saturate(1.08);
+  backdrop-filter: blur(var(--settings-sidebar-preview-blur, 8px)) saturate(1.08);
   -webkit-mask-image: linear-gradient(
     180deg,
     transparent 0,
@@ -1827,8 +1790,7 @@
   gap: 10px;
   margin-top: 20px;
   padding-top: 18px;
-  border-top: 1px solid
-    color-mix(in srgb, var(--surface-strong) 64%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--surface-strong) 64%, transparent);
 }
 
 .settings-sidebar-glow-shape h3 {
@@ -1858,8 +1820,7 @@
   color: var(--text-secondary);
   text-align: left;
   background: color-mix(in srgb, var(--surface) 34%, transparent);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-strong) 78%, transparent);
   transition:
     color 150ms ease,
     background-color 150ms ease,
@@ -1874,8 +1835,7 @@
 .settings-sidebar-glow-shape-option.is-selected {
   color: var(--text);
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--accent) 38%, var(--surface-strong));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, var(--surface-strong));
 }
 
 .settings-sidebar-glow-shape-option:focus-visible {
@@ -1887,14 +1847,8 @@
   display: block;
   width: 22px;
   height: 22px;
-  background: linear-gradient(
-    145deg,
-    var(--sidebar-glow-primary),
-    var(--sidebar-glow-secondary)
-  );
-  filter: drop-shadow(
-    0 4px 7px color-mix(in srgb, var(--sidebar-glow-primary) 32%, transparent)
-  );
+  background: linear-gradient(145deg, var(--sidebar-glow-primary), var(--sidebar-glow-secondary));
+  filter: drop-shadow(0 4px 7px color-mix(in srgb, var(--sidebar-glow-primary) 32%, transparent));
 }
 
 .settings-sidebar-glow-shape-option__preview.is-circle {
@@ -1958,8 +1912,7 @@
   gap: 14px;
   margin-top: 20px;
   padding-top: 18px;
-  border-top: 1px solid
-    color-mix(in srgb, var(--surface-strong) 64%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--surface-strong) 64%, transparent);
 }
 
 .settings-sidebar-glow-size__heading,
@@ -2004,8 +1957,7 @@
   gap: 28px;
   margin-top: 18px;
   padding-top: 12px;
-  border-top: 1px solid
-    color-mix(in srgb, var(--surface-strong) 64%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--surface-strong) 64%, transparent);
   opacity: 1;
   pointer-events: auto;
 }
@@ -2069,10 +2021,8 @@
 
 /* The color itself and its circular selection ring are the affordance. Keep the
    inherited preset-button treatment from drawing a square behind swatches. */
-.settings-preset-list
-  .settings-color-swatch:not(.settings-color-swatch--custom):hover,
-.settings-preset-list
-  .settings-color-swatch:not(.settings-color-swatch--custom).is-selected {
+.settings-preset-list .settings-color-swatch:not(.settings-color-swatch--custom):hover,
+.settings-preset-list .settings-color-swatch:not(.settings-color-swatch--custom).is-selected {
   background: transparent;
 }
 
@@ -2122,8 +2072,7 @@
   border-radius: 11px;
   padding: 0 12px;
   background: color-mix(in srgb, var(--surface-strong) 24%, transparent);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--surface-strong) 68%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-strong) 68%, transparent);
 }
 
 .settings-color-tools__value .settings-hex-input input[type="color"] {

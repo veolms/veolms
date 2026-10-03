@@ -11,11 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import "../styles/features/discussions.css";
-import type {
-  CSSProperties,
-  FormEvent,
-  MouseEvent as ReactMouseEvent,
-} from "react";
+import type { CSSProperties, FormEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
@@ -48,10 +44,7 @@ import {
   scrollKeyboardFocusedTabIntoView,
 } from "../accessibility/rovingTabFocus";
 import type { NavigateTo } from "../routing/navigation";
-import {
-  normalizeDiscussionTab,
-  rememberDiscussionTab,
-} from "../routing/tabSessionState";
+import { normalizeDiscussionTab, rememberDiscussionTab } from "../routing/tabSessionState";
 import type { DiscussionTab } from "../routing/tabSessionState";
 import { useDiscussionsWorkspace } from "../services/learning-interactions";
 import { ThemedSelect } from "../ThemedSelect";
@@ -66,10 +59,7 @@ import {
   DrawerOverlay,
   DrawerTitle,
 } from "../components/ui/drawer";
-import {
-  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
-  SearchShortcutHint,
-} from "../searchShortcut";
+import { SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS, SearchShortcutHint } from "../searchShortcut";
 import {
   adaptDiscussionWorkspaceItem,
   type DiscussionWorkspaceCard,
@@ -84,8 +74,7 @@ import {
   type ApplicationScrollPosition,
 } from "../shell/applicationScroll";
 
-const loadDiscussionMarkdown = () =>
-  import("../learning/discussion-editor/DiscussionMarkdown");
+const loadDiscussionMarkdown = () => import("../learning/discussion-editor/DiscussionMarkdown");
 const DiscussionMarkdown = lazy(() =>
   loadDiscussionMarkdown().then((module) => ({
     default: module.DiscussionMarkdown,
@@ -96,10 +85,7 @@ type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
 type DiscussionEffectiveOwnership = "all" | "mine";
 type DiscussionWorkspaceCardVariant = "default" | "compact";
 
-const normalizeDiscussionRestorationValue = (
-  value: string | undefined,
-  fallback = "all",
-) => {
+const normalizeDiscussionRestorationValue = (value: string | undefined, fallback = "all") => {
   const normalized = value?.trim();
   return normalized || fallback;
 };
@@ -110,17 +96,13 @@ const encodeDiscussionRestorationValue = (value: string) =>
 const canRestoreDiscussionScroll = ({ top }: ApplicationScrollPosition) => {
   if (top <= 0) return true;
 
-  const feed = document.querySelector<HTMLElement>(
-    "[data-discussion-workspace-virtual-feed]",
-  );
+  const feed = document.querySelector<HTMLElement>("[data-discussion-workspace-virtual-feed]");
   if (!feed) return false;
 
   const feedRect = feed.getBoundingClientRect();
   const scrollport = getApplicationScrollElement();
   const contentTop = scrollport
-    ? feedRect.top -
-      scrollport.getBoundingClientRect().top +
-      scrollport.scrollTop
+    ? feedRect.top - scrollport.getBoundingClientRect().top + scrollport.scrollTop
     : feedRect.top + window.scrollY;
 
   return contentTop + feedRect.height >= top;
@@ -142,22 +124,16 @@ function hasTextSelectionWithin(node: Node): boolean {
   return selection.getRangeAt(0).intersectsNode(node);
 }
 
-function isDiscussionCardInteractiveTarget(
-  target: EventTarget | null,
-): boolean {
+function isDiscussionCardInteractiveTarget(target: EventTarget | null): boolean {
   return (
     target instanceof Element &&
     Boolean(
-      target.closest(
-        'a, button, input, textarea, select, summary, [role="button"], [role="link"]',
-      ),
+      target.closest('a, button, input, textarea, select, summary, [role="button"], [role="link"]'),
     )
   );
 }
 
-function getVisibleCollapsedCardToggle(
-  card: HTMLElement,
-): HTMLButtonElement | null {
+function getVisibleCollapsedCardToggle(card: HTMLElement): HTMLButtonElement | null {
   const toggle = card.querySelector<HTMLButtonElement>(
     '.discussion-hub__card-content-toggle[aria-expanded="false"]',
   );
@@ -185,9 +161,7 @@ const getDiscussionRestorationKey = ({
   sort,
 }: DiscussionRestorationKeyInput) => {
   const effectiveTabOwnership =
-    tab === "q-and-a" || tab === "comments" || tab === "notes"
-      ? ownership
-      : "all";
+    tab === "q-and-a" || tab === "comments" || tab === "notes" ? ownership : "all";
   const status = tab === "q-and-a" ? qnaStatus : "all";
   const tabSort =
     tab === "q-and-a"
@@ -260,8 +234,7 @@ const tabs: readonly {
 
 const discussionTabIds = tabs.map(({ id }) => id);
 
-const DISCUSSION_SWIPE_PREVIEW_QUERY =
-  "(max-width: 780px), (hover: none), (pointer: coarse)";
+const DISCUSSION_SWIPE_PREVIEW_QUERY = "(max-width: 780px), (hover: none), (pointer: coarse)";
 
 const subscribeToDiscussionSwipePreview = (listener: () => void) => {
   const media = window.matchMedia(DISCUSSION_SWIPE_PREVIEW_QUERY);
@@ -301,11 +274,7 @@ function DiscussionComposer({
 }: {
   kind: "question" | "discussion";
   onCancel: () => void;
-  onPublish: (
-    kind: "question" | "discussion",
-    title: string,
-    content: string,
-  ) => void;
+  onPublish: (kind: "question" | "discussion", title: string, content: string) => void;
 }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -320,12 +289,8 @@ function DiscussionComposer({
     <form className="discussion-hub__composer" onSubmit={submit}>
       <div className="discussion-hub__composer-heading">
         <div>
-          <strong>
-            {kind === "question" ? "Ask a question" : "Start a discussion"}
-          </strong>
-          <span>
-            Share enough context to help classmates give a useful answer.
-          </span>
+          <strong>{kind === "question" ? "Ask a question" : "Start a discussion"}</strong>
+          <span>Share enough context to help classmates give a useful answer.</span>
         </div>
         <button type="button" onClick={onCancel}>
           Cancel
@@ -363,16 +328,12 @@ function DiscussionComposer({
   );
 }
 
-function getAttachmentLabel(
-  summary: DiscussionWorkspaceCard["attachmentSummary"],
-): string | null {
+function getAttachmentLabel(summary: DiscussionWorkspaceCard["attachmentSummary"]): string | null {
   if (summary.count === 0) return null;
   if (summary.count > 1) return `${summary.count} attachments`;
-  const classifiedTypes = [
-    summary.hasImages,
-    summary.hasVideos,
-    summary.hasFiles,
-  ].filter(Boolean).length;
+  const classifiedTypes = [summary.hasImages, summary.hasVideos, summary.hasFiles].filter(
+    Boolean,
+  ).length;
   if (classifiedTypes !== 1) return "1 attachment";
   if (summary.hasImages) return "Image attached";
   if (summary.hasVideos) return "Video attached";
@@ -380,9 +341,7 @@ function getAttachmentLabel(
   return "1 attachment";
 }
 
-function getVisibilityLabel(
-  visibility: DiscussionWorkspaceCard["visibility"],
-): string | null {
+function getVisibilityLabel(visibility: DiscussionWorkspaceCard["visibility"]): string | null {
   if (!visibility) return null;
   return visibility.charAt(0).toUpperCase() + visibility.slice(1);
 }
@@ -392,16 +351,8 @@ function getDiscussionThreadDestination(
   returnPath = "/discussions/q-and-a",
 ): string {
   const threadId =
-    thread.itemType === "reply" && thread.parentThreadId
-      ? thread.parentThreadId
-      : thread.id;
-  const basePath = getCoursePlayerPath(
-    thread.courseId,
-    "courses",
-    1,
-    returnPath,
-    { threadId },
-  );
+    thread.itemType === "reply" && thread.parentThreadId ? thread.parentThreadId : thread.id;
+  const basePath = getCoursePlayerPath(thread.courseId, "courses", 1, returnPath, { threadId });
   if (!thread.lessonId) return basePath;
 
   const [pathname, query = ""] = basePath.split("?", 2);
@@ -414,21 +365,11 @@ function getDiscussionNoteDestination(
   note: DiscussionWorkspaceCard,
   returnPath = "/discussions/notes",
 ): string | null {
-  if (
-    !note.id ||
-    note.id.startsWith("client-") ||
-    !note.courseId ||
-    !note.lessonId
-  )
-    return null;
+  if (!note.id || note.id.startsWith("client-") || !note.courseId || !note.lessonId) return null;
 
-  const basePath = getCoursePlayerPath(
-    note.courseId,
-    "courses",
-    1,
-    returnPath,
-    { noteId: note.id },
-  );
+  const basePath = getCoursePlayerPath(note.courseId, "courses", 1, returnPath, {
+    noteId: note.id,
+  });
   const [pathname, query = ""] = basePath.split("?", 2);
   const search = new URLSearchParams(query);
   search.set("lessonId", note.lessonId);
@@ -473,11 +414,7 @@ function getDiscussionWorkspaceMetadataItems(
   const visibilityLabel = getVisibilityLabel(thread.visibility);
   const hasPrimaryMobileMetadata = Boolean(thread.course && thread.lesson);
   const VisibilityIcon =
-    thread.visibility === "private"
-      ? Lock
-      : thread.visibility === "unlisted"
-        ? EyeSlash
-        : Globe;
+    thread.visibility === "private" ? Lock : thread.visibility === "unlisted" ? EyeSlash : Globe;
 
   if (thread.course) {
     items.push({ key: "course", content: <span>{thread.course}</span> });
@@ -569,9 +506,7 @@ function DiscussionWorkspaceMetadataRow({
   );
 }
 
-function normalizeWorkspacePreviewText(
-  value: string | null | undefined,
-): string {
+function normalizeWorkspacePreviewText(value: string | null | undefined): string {
   return value?.replace(/\s+/g, " ").trim() ?? "";
 }
 
@@ -606,9 +541,7 @@ function DiscussionWorkspaceCardContent({
     thread.plainText || thread.excerpt || thread.content,
   );
   const collapsedPreview =
-    normalizeWorkspacePreviewText(previewText) ||
-    normalizedTitle ||
-    normalizedBody;
+    normalizeWorkspacePreviewText(previewText) || normalizedTitle || normalizedBody;
   const hasAdditionalContent =
     (Boolean(normalizedTitle) && normalizedTitle !== collapsedPreview) ||
     (Boolean(normalizedBody) && normalizedBody !== collapsedPreview);
@@ -630,9 +563,7 @@ function DiscussionWorkspaceCardContent({
 
     const measure = () => {
       const nextIsTruncated = node.scrollWidth > node.clientWidth + 1;
-      setIsPreviewTruncated((current) =>
-        current === nextIsTruncated ? current : nextIsTruncated,
-      );
+      setIsPreviewTruncated((current) => (current === nextIsTruncated ? current : nextIsTruncated));
     };
 
     measure();
@@ -651,10 +582,7 @@ function DiscussionWorkspaceCardContent({
           </span>
         )}
         {canExpand && parentContext && (
-          <span
-            className="discussion-hub__card-content-utility-separator"
-            aria-hidden="true"
-          >
+          <span className="discussion-hub__card-content-utility-separator" aria-hidden="true">
             ·
           </span>
         )}
@@ -680,9 +608,7 @@ function DiscussionWorkspaceCardContent({
       {expanded ? (
         <div className="discussion-hub__card-content-expanded">
           {normalizedTitle && (
-            <div className="discussion-hub__card-content-title">
-              {normalizedTitle}
-            </div>
+            <div className="discussion-hub__card-content-title">{normalizedTitle}</div>
           )}
           <Suspense
             fallback={
@@ -722,15 +648,10 @@ function DiscussionWorkspaceIdentity({
 }) {
   return (
     <div className="discussion-thread__author discussion-thread__selectable-text">
-      <span className="discussion-thread__author-name">
-        {thread.isOwn ? "You" : thread.author}
-      </span>
+      <span className="discussion-thread__author-name">{thread.isOwn ? "You" : thread.author}</span>
       {thread.authorUsername && (
         <>
-          <span
-            className="discussion-thread__author-separator"
-            aria-hidden="true"
-          >
+          <span className="discussion-thread__author-separator" aria-hidden="true">
             ·
           </span>
           <span className="discussion-thread__author-username">
@@ -740,10 +661,7 @@ function DiscussionWorkspaceIdentity({
       )}
       {activity && (
         <>
-          <span
-            className="discussion-thread__author-activity-separator"
-            aria-hidden="true"
-          >
+          <span className="discussion-thread__author-activity-separator" aria-hidden="true">
             ·
           </span>
           <time className="discussion-thread__author-activity">{activity}</time>
@@ -795,10 +713,7 @@ function withDiscussionWorkspaceRailSlot(
   slot: "top" | "middle" | "bottom",
 ) {
   return cloneElement(element, {
-    className: [
-      element.props.className,
-      `discussion-thread__rail-slot--${slot}`,
-    ]
+    className: [element.props.className, `discussion-thread__rail-slot--${slot}`]
       .filter(Boolean)
       .join(" "),
   });
@@ -897,21 +812,12 @@ function DiscussionWorkspaceCardShell({
         onMobileActions
           ? "transition-transform duration-100 ease-out motion-reduce:transition-none"
           : "",
-        isLongPressPressed
-          ? "scale-[0.985]"
-          : onMobileActions
-            ? "scale-100"
-            : "",
+        isLongPressPressed ? "scale-[0.985]" : onMobileActions ? "scale-100" : "",
       ].join(" ")}
     >
       {navigation}
       {onMobileActions && (
-        <button
-          type="button"
-          className="sr-only"
-          aria-haspopup="dialog"
-          onClick={onMobileActions}
-        >
+        <button type="button" className="sr-only" aria-haspopup="dialog" onClick={onMobileActions}>
           Actions for {thread.title?.trim() || "discussion"}
         </button>
       )}
@@ -946,10 +852,7 @@ function DiscussionWorkspaceQuestionCard({
   thread: DiscussionWorkspaceCard;
   onNavigatePage?: NavigateTo;
   showActions: boolean;
-  onRequestMobileActions?: (
-    card: DiscussionWorkspaceCard,
-    destination: string | null,
-  ) => void;
+  onRequestMobileActions?: (card: DiscussionWorkspaceCard, destination: string | null) => void;
   setNotice?: (message: string) => void;
   variant?: DiscussionWorkspaceCardVariant;
   expandable?: boolean;
@@ -957,16 +860,10 @@ function DiscussionWorkspaceQuestionCard({
   const [expanded, setExpanded] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
   const lifecycleStatus: "open" | "answered" | "solved" =
-    thread.status === "answered"
-      ? "answered"
-      : thread.status === "solved"
-        ? "solved"
-        : "open";
+    thread.status === "answered" ? "answered" : thread.status === "solved" ? "solved" : "open";
   const LifecycleIcon = statusIcons[lifecycleStatus];
   const destination = getDiscussionThreadDestination(thread);
-  const destinationLabel = [thread.course, thread.lesson]
-    .filter(Boolean)
-    .join(", ");
+  const destinationLabel = [thread.course, thread.lesson].filter(Boolean).join(", ");
 
   return (
     <DiscussionWorkspaceCardShell
@@ -978,25 +875,17 @@ function DiscussionWorkspaceQuestionCard({
       navigation={
         <DiscussionWorkspaceNavigationLink
           destination={destination}
-          label={`Open question${
-            destinationLabel ? ` in ${destinationLabel}` : ""
-          }`}
+          label={`Open question${destinationLabel ? ` in ${destinationLabel}` : ""}`}
           onNavigatePage={onNavigatePage}
         />
       }
-      onNavigate={
-        onNavigatePage
-          ? () => onNavigatePage(destination, { exact: true })
-          : undefined
-      }
+      onNavigate={onNavigatePage ? () => onNavigatePage(destination, { exact: true }) : undefined}
       onMobileActions={
-        onRequestMobileActions
-          ? () => onRequestMobileActions(thread, destination)
-          : undefined
+        onRequestMobileActions ? () => onRequestMobileActions(thread, destination) : undefined
       }
       actions={
         showActions ? (
-          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+          <div className="pointer-events-auto absolute top-3 right-4 z-20">
             <DiscussionWorkspaceActionMenu
               card={thread}
               destination={destination}
@@ -1021,11 +910,7 @@ function DiscussionWorkspaceQuestionCard({
               <span>{qnaStatusLabels[lifecycleStatus]}</span>
             </span>
             {thread.isLocked && (
-              <span
-                className="discussion-thread__lock"
-                aria-label="Locked"
-                title="Locked"
-              >
+              <span className="discussion-thread__lock" aria-label="Locked" title="Locked">
                 <Lock size={12} weight="bold" aria-hidden="true" />
               </span>
             )}
@@ -1066,23 +951,15 @@ function DiscussionWorkspaceCommentCard({
   thread: DiscussionWorkspaceCard;
   onNavigatePage?: NavigateTo;
   showActions: boolean;
-  onRequestMobileActions?: (
-    card: DiscussionWorkspaceCard,
-    destination: string | null,
-  ) => void;
+  onRequestMobileActions?: (card: DiscussionWorkspaceCard, destination: string | null) => void;
   setNotice?: (message: string) => void;
   variant?: DiscussionWorkspaceCardVariant;
   expandable?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
-  const destination = getDiscussionThreadDestination(
-    thread,
-    "/discussions/comments",
-  );
-  const destinationLabel = [thread.course, thread.lesson]
-    .filter(Boolean)
-    .join(", ");
+  const destination = getDiscussionThreadDestination(thread, "/discussions/comments");
+  const destinationLabel = [thread.course, thread.lesson].filter(Boolean).join(", ");
 
   return (
     <DiscussionWorkspaceCardShell
@@ -1094,25 +971,17 @@ function DiscussionWorkspaceCommentCard({
       navigation={
         <DiscussionWorkspaceNavigationLink
           destination={destination}
-          label={`Open comment${
-            destinationLabel ? ` in ${destinationLabel}` : ""
-          }`}
+          label={`Open comment${destinationLabel ? ` in ${destinationLabel}` : ""}`}
           onNavigatePage={onNavigatePage}
         />
       }
-      onNavigate={
-        onNavigatePage
-          ? () => onNavigatePage(destination, { exact: true })
-          : undefined
-      }
+      onNavigate={onNavigatePage ? () => onNavigatePage(destination, { exact: true }) : undefined}
       onMobileActions={
-        onRequestMobileActions
-          ? () => onRequestMobileActions(thread, destination)
-          : undefined
+        onRequestMobileActions ? () => onRequestMobileActions(thread, destination) : undefined
       }
       actions={
         showActions ? (
-          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+          <div className="pointer-events-auto absolute top-3 right-4 z-20">
             <DiscussionWorkspaceActionMenu
               card={thread}
               destination={destination}
@@ -1162,22 +1031,14 @@ function DiscussionWorkspaceFollowingCard({
   thread: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
   showActions: boolean;
-  onRequestMobileActions?: (
-    card: DiscussionWorkspaceCard,
-    destination: string | null,
-  ) => void;
+  onRequestMobileActions?: (card: DiscussionWorkspaceCard, destination: string | null) => void;
   setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isQuestion = thread.kind === "question" || thread.kind === "qna";
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
-  const destination = getDiscussionThreadDestination(
-    thread,
-    "/discussions/following",
-  );
-  const destinationLabel = [thread.course, thread.lesson]
-    .filter(Boolean)
-    .join(", ");
+  const destination = getDiscussionThreadDestination(thread, "/discussions/following");
+  const destinationLabel = [thread.course, thread.lesson].filter(Boolean).join(", ");
 
   return (
     <DiscussionWorkspaceCardShell
@@ -1195,13 +1056,11 @@ function DiscussionWorkspaceFollowingCard({
       }
       onNavigate={() => onNavigatePage(destination, { exact: true })}
       onMobileActions={
-        onRequestMobileActions
-          ? () => onRequestMobileActions(thread, destination)
-          : undefined
+        onRequestMobileActions ? () => onRequestMobileActions(thread, destination) : undefined
       }
       actions={
         showActions ? (
-          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+          <div className="pointer-events-auto absolute top-3 right-4 z-20">
             <DiscussionWorkspaceActionMenu
               card={thread}
               destination={destination}
@@ -1259,33 +1118,19 @@ function DiscussionWorkspaceMentionCard({
   mention: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
   showActions: boolean;
-  onRequestMobileActions?: (
-    card: DiscussionWorkspaceCard,
-    destination: string | null,
-  ) => void;
+  onRequestMobileActions?: (card: DiscussionWorkspaceCard, destination: string | null) => void;
   setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isReply = mention.itemType === "reply";
   const isNote = mention.itemType === "note" || mention.kind === "note";
   const isRootQuestion =
-    !isReply &&
-    !isNote &&
-    (mention.kind === "question" || mention.kind === "qna");
+    !isReply && !isNote && (mention.kind === "question" || mention.kind === "qna");
   const metadataItems = getDiscussionWorkspaceMetadataItems(mention);
-  const isQuestionMention =
-    mention.kind === "question" || mention.kind === "qna";
+  const isQuestionMention = mention.kind === "question" || mention.kind === "qna";
   const parentKindLabel = isQuestionMention ? "Q&A" : "Comment";
-  const MentionSourceIcon = isNote
-    ? Note
-    : isQuestionMention
-      ? Question
-      : ChatTeardropText;
-  const mentionTypeLabel = isNote
-    ? "Note"
-    : isReply
-      ? parentKindLabel + " Reply"
-      : parentKindLabel;
+  const MentionSourceIcon = isNote ? Note : isQuestionMention ? Question : ChatTeardropText;
+  const mentionTypeLabel = isNote ? "Note" : isReply ? parentKindLabel + " Reply" : parentKindLabel;
   const parentContext = isReply
     ? mention.parentThreadTitle?.trim()
       ? `Reply in ${mention.parentThreadTitle.trim()} · ${parentKindLabel}`
@@ -1294,9 +1139,7 @@ function DiscussionWorkspaceMentionCard({
   const destination = isNote
     ? getDiscussionNoteDestination(mention, "/discussions/mentions")
     : getDiscussionThreadDestination(mention, "/discussions/mentions");
-  const destinationLabel = [mention.course, mention.lesson]
-    .filter(Boolean)
-    .join(", ");
+  const destinationLabel = [mention.course, mention.lesson].filter(Boolean).join(", ");
   const mentionActivity = mention.mentionActivity ?? "Recently";
 
   return (
@@ -1319,19 +1162,13 @@ function DiscussionWorkspaceMentionCard({
           />
         ) : undefined
       }
-      onNavigate={
-        destination
-          ? () => onNavigatePage(destination, { exact: true })
-          : undefined
-      }
+      onNavigate={destination ? () => onNavigatePage(destination, { exact: true }) : undefined}
       onMobileActions={
-        onRequestMobileActions
-          ? () => onRequestMobileActions(mention, destination)
-          : undefined
+        onRequestMobileActions ? () => onRequestMobileActions(mention, destination) : undefined
       }
       actions={
         showActions ? (
-          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+          <div className="pointer-events-auto absolute top-3 right-4 z-20">
             <DiscussionWorkspaceActionMenu
               card={mention}
               destination={destination}
@@ -1362,10 +1199,7 @@ function DiscussionWorkspaceMentionCard({
         bottom: <time dateTime={mention.mentionedAt}>{mentionActivity}</time>,
       }}
     >
-      <DiscussionWorkspaceIdentity
-        thread={mention}
-        activity={mentionActivity}
-      />
+      <DiscussionWorkspaceIdentity thread={mention} activity={mentionActivity} />
       <DiscussionWorkspaceCardContent
         thread={mention}
         label={isNote ? "Note" : "Mention"}
@@ -1391,9 +1225,10 @@ function formatNoteTimestamp(seconds: number | null): string | null {
   const remainingSeconds = totalSeconds % 60;
 
   if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(
-      remainingSeconds,
-    ).padStart(2, "0")}`;
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(
+      2,
+      "0",
+    )}`;
   }
 
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
@@ -1411,10 +1246,7 @@ function DiscussionWorkspaceNoteCard({
   note: DiscussionWorkspaceCard;
   onNavigatePage?: NavigateTo;
   showActions: boolean;
-  onRequestMobileActions?: (
-    card: DiscussionWorkspaceCard,
-    destination: string | null,
-  ) => void;
+  onRequestMobileActions?: (card: DiscussionWorkspaceCard, destination: string | null) => void;
   setNotice?: (message: string) => void;
   variant?: DiscussionWorkspaceCardVariant;
   expandable?: boolean;
@@ -1425,9 +1257,7 @@ function DiscussionWorkspaceNoteCard({
     timestampLabel,
   });
   const destination = getDiscussionNoteDestination(note);
-  const destinationLabel = [note.course, note.lesson]
-    .filter(Boolean)
-    .join(", ");
+  const destinationLabel = [note.course, note.lesson].filter(Boolean).join(", ");
 
   return (
     <DiscussionWorkspaceCardShell
@@ -1440,9 +1270,7 @@ function DiscussionWorkspaceNoteCard({
         destination ? (
           <DiscussionWorkspaceNavigationLink
             destination={destination}
-            label={`Open note${
-              destinationLabel ? ` in ${destinationLabel}` : ""
-            }`}
+            label={`Open note${destinationLabel ? ` in ${destinationLabel}` : ""}`}
             onNavigatePage={onNavigatePage}
           />
         ) : undefined
@@ -1453,13 +1281,11 @@ function DiscussionWorkspaceNoteCard({
           : undefined
       }
       onMobileActions={
-        onRequestMobileActions
-          ? () => onRequestMobileActions(note, destination)
-          : undefined
+        onRequestMobileActions ? () => onRequestMobileActions(note, destination) : undefined
       }
       actions={
         showActions ? (
-          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+          <div className="pointer-events-auto absolute top-3 right-4 z-20">
             <DiscussionWorkspaceActionMenu
               card={note}
               destination={destination}
@@ -1477,11 +1303,7 @@ function DiscussionWorkspaceNoteCard({
             </span>
           </span>
         ),
-        bottom: (
-          <time dateTime={note.updatedAt || note.createdAt}>
-            {note.activity}
-          </time>
-        ),
+        bottom: <time dateTime={note.updatedAt || note.createdAt}>{note.activity}</time>,
       }}
     >
       <DiscussionWorkspaceIdentity thread={note} activity={note.activity} />
@@ -1554,25 +1376,19 @@ function DiscussionWorkspaceBookmarkCard({
   bookmark: DiscussionWorkspaceCard;
   onNavigatePage: NavigateTo;
   showActions: boolean;
-  onRequestMobileActions?: (
-    card: DiscussionWorkspaceCard,
-    destination: string | null,
-  ) => void;
+  onRequestMobileActions?: (card: DiscussionWorkspaceCard, destination: string | null) => void;
   setNotice?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isNote = bookmark.itemType === "note" || bookmark.kind === "note";
-  const isQuestion =
-    !isNote && (bookmark.kind === "question" || bookmark.kind === "qna");
+  const isQuestion = !isNote && (bookmark.kind === "question" || bookmark.kind === "qna");
   const sourceLabel = isNote ? "Note" : isQuestion ? "Q&A" : "Comment";
   const SourceIcon = isNote ? Note : isQuestion ? Question : ChatTeardropText;
   const metadataItems = getDiscussionWorkspaceMetadataItems(bookmark);
   const destination = isNote
     ? getDiscussionNoteDestination(bookmark, "/discussions/saved")
     : getDiscussionThreadDestination(bookmark, "/discussions/saved");
-  const destinationLabel = [bookmark.course, bookmark.lesson]
-    .filter(Boolean)
-    .join(", ");
+  const destinationLabel = [bookmark.course, bookmark.lesson].filter(Boolean).join(", ");
 
   return (
     <DiscussionWorkspaceCardShell
@@ -1594,19 +1410,13 @@ function DiscussionWorkspaceBookmarkCard({
           />
         ) : undefined
       }
-      onNavigate={
-        destination
-          ? () => onNavigatePage(destination, { exact: true })
-          : undefined
-      }
+      onNavigate={destination ? () => onNavigatePage(destination, { exact: true }) : undefined}
       onMobileActions={
-        onRequestMobileActions
-          ? () => onRequestMobileActions(bookmark, destination)
-          : undefined
+        onRequestMobileActions ? () => onRequestMobileActions(bookmark, destination) : undefined
       }
       actions={
         showActions ? (
-          <div className="absolute top-3 right-4 z-20 pointer-events-auto">
+          <div className="pointer-events-auto absolute top-3 right-4 z-20">
             <DiscussionWorkspaceActionMenu
               card={bookmark}
               destination={destination}
@@ -1685,12 +1495,11 @@ export function DiscussionsWorkspace({
   const [qnaStatus, setQnaStatus] = useState("all");
   const [qnaSort, setQnaSort] = useState("activity");
   const [notesSort, setNotesSort] = useState<"activity" | "latest">("activity");
-  const [composer, setComposer] = useState<"question" | "discussion" | null>(
+  const [composer, setComposer] = useState<"question" | "discussion" | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileActionTarget, setMobileActionTarget] = useState<MobileDiscussionActionTarget | null>(
     null,
   );
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [mobileActionTarget, setMobileActionTarget] =
-    useState<MobileDiscussionActionTarget | null>(null);
   const mobileFiltersTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileFiltersScrollPositionRef = useRef<{
     element: HTMLElement;
@@ -1729,8 +1538,7 @@ export function DiscussionsWorkspace({
             : "Loading discussions";
   const workspaceStatus = isQnaTab ? qnaStatus : status;
   const workspaceSort = isQnaTab ? qnaSort : sort;
-  const effectiveOwnership: DiscussionEffectiveOwnership =
-    role === "student" ? "mine" : "all";
+  const effectiveOwnership: DiscussionEffectiveOwnership = role === "student" ? "mine" : "all";
 
   const workspaceQuery = (() => {
     const sharedQuery = {
@@ -1761,16 +1569,11 @@ export function DiscussionsWorkspace({
 
     return {
       ...sharedQuery,
-      ...(isQnaTab || isCommentsTab
-        ? effectiveOwnership === "mine"
-          ? { mine: true }
-          : {}
-        : {}),
+      ...(isQnaTab || isCommentsTab ? (effectiveOwnership === "mine" ? { mine: true } : {}) : {}),
       ...(isCommentsTab
         ? {}
         : {
-            status: workspaceStatus as
-              "all" | "answered" | "mentioned" | "solved" | "open",
+            status: workspaceStatus as "all" | "answered" | "mentioned" | "solved" | "open",
           }),
       sort: workspaceSort as "activity" | "latest" | "replies",
     };
@@ -1790,11 +1593,9 @@ export function DiscussionsWorkspace({
       tab: tabId,
       courseId: overrides.courseId ?? selectedCourseId,
       ownership: effectiveOwnership,
-      qnaStatus:
-        tabId === "q-and-a" && overrides.status ? overrides.status : qnaStatus,
+      qnaStatus: tabId === "q-and-a" && overrides.status ? overrides.status : qnaStatus,
       qnaSort: tabId === "q-and-a" && overrides.sort ? overrides.sort : qnaSort,
-      notesSort:
-        tabId === "notes" && overrides.sort ? overrides.sort : notesSort,
+      notesSort: tabId === "notes" && overrides.sort ? overrides.sort : notesSort,
       sort: tabId === "comments" && overrides.sort ? overrides.sort : sort,
     });
   const discussionRestorationKey = getRestorationKeyForTab(activeTab);
@@ -1866,24 +1667,13 @@ export function DiscussionsWorkspace({
             bookmarks: isBookmarksTab,
           }),
         ) ?? [],
-    [
-      isBookmarksTab,
-      isCommentsTab,
-      isFollowingTab,
-      isMentionsTab,
-      isNotesTab,
-      workspaceData,
-    ],
+    [isBookmarksTab, isCommentsTab, isFollowingTab, isMentionsTab, isNotesTab, workspaceData],
   );
 
-  const [knownCourseOptions, setKnownCourseOptions] = useState<
-    Record<string, string>
-  >({});
+  const [knownCourseOptions, setKnownCourseOptions] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const incomingCourses = workspaceData?.pages.flatMap(
-      (page) => page.courses,
-    );
+    const incomingCourses = workspaceData?.pages.flatMap((page) => page.courses);
     if (!incomingCourses?.length) return;
 
     setKnownCourseOptions((current) => {
@@ -1999,18 +1789,12 @@ export function DiscussionsWorkspace({
   };
 
   const captureMobileFiltersScrollPosition = () => {
-    const scrollElement = loadMoreRef.current
-      ? findScrollableAncestor(loadMoreRef.current)
-      : null;
-    const element =
-      scrollElement ?? (document.scrollingElement as HTMLElement | null);
+    const scrollElement = loadMoreRef.current ? findScrollableAncestor(loadMoreRef.current) : null;
+    const element = scrollElement ?? (document.scrollingElement as HTMLElement | null);
     if (element) {
       mobileFiltersScrollPositionRef.current = {
         element,
-        top:
-          element === document.scrollingElement
-            ? window.scrollY
-            : element.scrollTop,
+        top: element === document.scrollingElement ? window.scrollY : element.scrollTop,
       };
     }
   };
@@ -2097,27 +1881,19 @@ export function DiscussionsWorkspace({
 
   useEffect(() => {
     const sentinel = loadMoreRef.current;
-    if (
-      !sentinel ||
-      !hasNextPage ||
-      isFetchingNextPage ||
-      isFetchNextPageError
-    ) {
+    if (!sentinel || !hasNextPage || isFetchingNextPage || isFetchNextPageError) {
       return undefined;
     }
 
     const scrollRoot = findScrollableAncestor(sentinel);
-    const rootBottom = () =>
-      scrollRoot?.getBoundingClientRect().bottom ?? window.innerHeight;
+    const rootBottom = () => scrollRoot?.getBoundingClientRect().bottom ?? window.innerHeight;
 
     const checkSentinel = () => {
       if (sentinel.getBoundingClientRect().top <= rootBottom() + 600) {
         loadMore();
       }
     };
-    const scrollTargets: Array<HTMLElement | Window> = scrollRoot
-      ? [scrollRoot, window]
-      : [window];
+    const scrollTargets: Array<HTMLElement | Window> = scrollRoot ? [scrollRoot, window] : [window];
 
     scrollTargets.forEach((target) => {
       target.addEventListener("scroll", checkSentinel, { passive: true });
@@ -2161,9 +1937,7 @@ export function DiscussionsWorkspace({
     const tablist = tablistRef.current;
     if (!tablist || !tablist.contains(document.activeElement)) return undefined;
 
-    const activeTabButton = document.getElementById(
-      `discussion-tab-${activeTab}`,
-    );
+    const activeTabButton = document.getElementById(`discussion-tab-${activeTab}`);
     if (activeTabButton === document.activeElement) return undefined;
 
     const frame = window.requestAnimationFrame(() => {
@@ -2172,13 +1946,8 @@ export function DiscussionsWorkspace({
     return () => window.cancelAnimationFrame(frame);
   }, [activeTab]);
 
-  const publish = (
-    kind: "question" | "discussion",
-    title: string,
-    excerpt: string,
-  ) => {
-    const destinationTab: DiscussionTab =
-      kind === "question" ? "q-and-a" : "comments";
+  const publish = (kind: "question" | "discussion", title: string, excerpt: string) => {
+    const destinationTab: DiscussionTab = kind === "question" ? "q-and-a" : "comments";
 
     void title;
     void excerpt;
@@ -2211,9 +1980,7 @@ export function DiscussionsWorkspace({
             bookmark={thread}
             onNavigatePage={onNavigatePage}
             showActions={!showDiscussionSwipePreviews}
-            onRequestMobileActions={
-              showDiscussionSwipePreviews ? openMobileActions : undefined
-            }
+            onRequestMobileActions={showDiscussionSwipePreviews ? openMobileActions : undefined}
             setNotice={setNotice}
           />
         );
@@ -2225,9 +1992,7 @@ export function DiscussionsWorkspace({
             note={thread}
             onNavigatePage={onNavigatePage}
             showActions={!showDiscussionSwipePreviews}
-            onRequestMobileActions={
-              showDiscussionSwipePreviews ? openMobileActions : undefined
-            }
+            onRequestMobileActions={showDiscussionSwipePreviews ? openMobileActions : undefined}
             setNotice={setNotice}
           />
         );
@@ -2239,9 +2004,7 @@ export function DiscussionsWorkspace({
             mention={thread}
             onNavigatePage={onNavigatePage}
             showActions={!showDiscussionSwipePreviews}
-            onRequestMobileActions={
-              showDiscussionSwipePreviews ? openMobileActions : undefined
-            }
+            onRequestMobileActions={showDiscussionSwipePreviews ? openMobileActions : undefined}
             setNotice={setNotice}
           />
         );
@@ -2253,9 +2016,7 @@ export function DiscussionsWorkspace({
             thread={thread}
             onNavigatePage={onNavigatePage}
             showActions={!showDiscussionSwipePreviews}
-            onRequestMobileActions={
-              showDiscussionSwipePreviews ? openMobileActions : undefined
-            }
+            onRequestMobileActions={showDiscussionSwipePreviews ? openMobileActions : undefined}
             setNotice={setNotice}
           />
         );
@@ -2268,9 +2029,7 @@ export function DiscussionsWorkspace({
           thread={thread}
           onNavigatePage={onNavigatePage}
           showActions={!showDiscussionSwipePreviews}
-          onRequestMobileActions={
-            showDiscussionSwipePreviews ? openMobileActions : undefined
-          }
+          onRequestMobileActions={showDiscussionSwipePreviews ? openMobileActions : undefined}
           setNotice={setNotice}
         />
       ) : isCommentsTab ? (
@@ -2278,9 +2037,7 @@ export function DiscussionsWorkspace({
           thread={thread}
           onNavigatePage={onNavigatePage}
           showActions={!showDiscussionSwipePreviews}
-          onRequestMobileActions={
-            showDiscussionSwipePreviews ? openMobileActions : undefined
-          }
+          onRequestMobileActions={showDiscussionSwipePreviews ? openMobileActions : undefined}
           setNotice={setNotice}
         />
       ) : (
@@ -2305,19 +2062,14 @@ export function DiscussionsWorkspace({
               {(thread.course || thread.lesson) && (
                 <div className="discussion-thread__context">
                   {thread.course && <span>{thread.course}</span>}
-                  {thread.course && thread.lesson && (
-                    <span aria-hidden="true" />
-                  )}
+                  {thread.course && thread.lesson && <span aria-hidden="true" />}
                   {thread.lesson && <small>{thread.lesson}</small>}
                 </div>
               )}
             </div>
             <div className="discussion-thread__meta">
-              <span
-                className={"discussion-thread__status is-" + discussionStatus}
-              >
-                <StatusIcon size={15} weight="fill" />{" "}
-                {statusLabels[discussionStatus]}
+              <span className={"discussion-thread__status is-" + discussionStatus}>
+                <StatusIcon size={15} weight="fill" /> {statusLabels[discussionStatus]}
               </span>
               <span>
                 <ChatTeardropText size={17} /> {thread.replies}{" "}
@@ -2332,9 +2084,7 @@ export function DiscussionsWorkspace({
             aria-label={"More options for " + thread.title}
             onClick={(event) => {
               event.stopPropagation();
-              setNotice?.(
-                "Thread actions will be available with connected discussions.",
-              );
+              setNotice?.("Thread actions will be available with connected discussions.");
             }}
           >
             <DotsThreeVertical size={21} weight="bold" />
@@ -2448,9 +2198,7 @@ export function DiscussionsWorkspace({
                     }`}
                     triggerClassName="discussion-hub__select-trigger"
                     contentClassName={selectContentClassName}
-                    menuMaxWidth={
-                      inSheet ? Number.POSITIVE_INFINITY : undefined
-                    }
+                    menuMaxWidth={inSheet ? Number.POSITIVE_INFINITY : undefined}
                     matchMenuToContainer
                     options={[
                       ["activity", "Latest activity"],
@@ -2485,9 +2233,7 @@ export function DiscussionsWorkspace({
                     }
                     triggerClassName="discussion-hub__select-trigger"
                     contentClassName={selectContentClassName}
-                    menuMaxWidth={
-                      inSheet ? Number.POSITIVE_INFINITY : undefined
-                    }
+                    menuMaxWidth={inSheet ? Number.POSITIVE_INFINITY : undefined}
                     matchMenuToContainer={isQnaTab || isCommentsTab}
                     options={
                       isQnaTab
@@ -2564,9 +2310,7 @@ export function DiscussionsWorkspace({
         <Funnel size={17} aria-hidden="true" />
         <span>Filter</span>
       </button>
-      <div className="discussion-hub__filter-controls">
-        {renderDiscussionFilterControls()}
-      </div>
+      <div className="discussion-hub__filter-controls">{renderDiscussionFilterControls()}</div>
     </section>
   );
 
@@ -2736,10 +2480,7 @@ export function DiscussionsWorkspace({
 
               <div className="discussion-hub__layout">
                 <main className="discussion-hub__feed">
-                  <div
-                    className="discussion-hub__thread-list"
-                    aria-live="polite"
-                  >
+                  <div className="discussion-hub__thread-list" aria-live="polite">
                     {isWorkspacePending ? (
                       <DiscussionWorkspaceSkeletonList
                         mode="loading"
@@ -2831,19 +2572,12 @@ export function DiscussionsWorkspace({
                         </button>
                       </div>
                     )}
-                    <div
-                      ref={loadMoreRef}
-                      className="min-h-px"
-                      aria-live="polite"
-                    >
+                    <div ref={loadMoreRef} className="min-h-px" aria-live="polite">
                       {isFetchingNextPage && (
                         <div
                           className="grid min-h-12 place-items-center"
                           role="status"
-                          aria-label={activeLoadingLabel.replace(
-                            "Loading ",
-                            "Loading more ",
-                          )}
+                          aria-label={activeLoadingLabel.replace("Loading ", "Loading more ")}
                         >
                           <LoadingSpinnerIcon size={18} />
                         </div>

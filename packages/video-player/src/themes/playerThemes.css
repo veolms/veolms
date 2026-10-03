@@ -40,28 +40,19 @@
 [data-video-player-root] [data-player-control-cluster] {
   border: 1px solid var(--video-player-control-border, transparent);
   border-radius: var(--video-player-control-radius, 999px);
-  background: var(
-    --video-player-control-surface,
-    rgb(5 7 11 / 0.72)
-  ) !important;
+  background: var(--video-player-control-surface, rgb(5 7 11 / 0.72)) !important;
   color: var(--video-player-control-text, #fff) !important;
   box-shadow: var(--video-player-control-shadow, none) !important;
 }
 
 .video-shell [data-timeline-track],
 [data-video-player-root] [data-timeline-track] {
-  background: var(
-    --video-player-timeline-track,
-    rgb(255 255 255 / 0.3)
-  ) !important;
+  background: var(--video-player-timeline-track, rgb(255 255 255 / 0.3)) !important;
 }
 
 .video-shell [data-timeline-buffered-range],
 [data-video-player-root] [data-timeline-buffered-range] {
-  background: var(
-    --video-player-timeline-buffered,
-    rgb(255 255 255 / 0.46)
-  ) !important;
+  background: var(--video-player-timeline-buffered, rgb(255 255 255 / 0.46)) !important;
 }
 
 .video-shell [data-timeline-progress],
@@ -95,11 +86,7 @@
 }
 
 [data-player-theme] [data-autoplay-track] {
-  background: color-mix(
-    in srgb,
-    var(--video-player-control-text) 28%,
-    transparent
-  ) !important;
+  background: color-mix(in srgb, var(--video-player-control-text) 28%, transparent) !important;
   border: 0 !important;
 }
 
@@ -108,11 +95,7 @@
 }
 
 :root[data-player-autoplay="off"] [data-player-theme] [data-autoplay-track] {
-  background: color-mix(
-    in srgb,
-    var(--video-player-control-text) 28%,
-    transparent
-  ) !important;
+  background: color-mix(in srgb, var(--video-player-control-text) 28%, transparent) !important;
 }
 
 :root[data-player-autoplay="on"] [data-player-theme] [data-autoplay-track] {
@@ -189,8 +172,7 @@
 }
 
 [data-video-player-menu-panel] .player-menu-row,
-[data-video-player-menu-panel]
-  [role^="menuitem"]:not([data-video-player-settings-back]) {
+[data-video-player-menu-panel] [role^="menuitem"]:not([data-video-player-settings-back]) {
   border-radius: calc(var(--video-player-menu-radius, 14px) - 5px);
 }
 
@@ -218,8 +200,7 @@
   color: #f8fafc !important;
 }
 
-[data-player-theme="minimal"]
-  [data-player-control-cluster="lesson-navigation"] {
+[data-player-theme="minimal"] [data-player-control-cluster="lesson-navigation"] {
   column-gap: 0.125rem;
 }
 

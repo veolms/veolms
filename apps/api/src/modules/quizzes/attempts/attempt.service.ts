@@ -1,8 +1,5 @@
 import crypto from "node:crypto";
-import type {
-  BulkQuizAnswersRequest,
-  QuizResponseValue,
-} from "@veolms/contracts";
+import type { BulkQuizAnswersRequest, QuizResponseValue } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import * as repo from "../shared/quiz.repository.ts";
@@ -12,12 +9,7 @@ import { isAdmin, type QuizServiceOptions } from "../shared/quiz.types.ts";
 import { gradeQuizQuestion, hasQuizAnswer } from "../shared/quiz.grading.ts";
 
 function assignmentDto(row: Awaited<ReturnType<typeof repo.findAssignment>>) {
-  if (!row)
-    throw new AppError(
-      404,
-      "ASSIGNMENT_NOT_FOUND",
-      "Quiz assignment not found.",
-    );
+  if (!row) throw new AppError(404, "ASSIGNMENT_NOT_FOUND", "Quiz assignment not found.");
   return row;
 }
 
@@ -26,9 +18,7 @@ function toIso(value: Date | null | undefined) {
 }
 
 /** Read-only pricing joined from the course's shared quiz pricing row. */
-function presentPricing(
-  pricing: Awaited<ReturnType<typeof pricingRepo.findPricing>>,
-) {
+function presentPricing(pricing: Awaited<ReturnType<typeof pricingRepo.findPricing>>) {
   return {
     quizPricingId: pricing?.id ?? null,
     pricingType: pricing?.pricing_type ?? ("free" as const),
@@ -52,8 +42,7 @@ function stableHash(value: string) {
 
 function stableShuffle<T extends { id: string }>(items: T[], seed: string) {
   return [...items].sort((left, right) => {
-    const hashDifference =
-      stableHash(`${seed}:${left.id}`) - stableHash(`${seed}:${right.id}`);
+    const hashDifference = stableHash(`${seed}:${left.id}`) - stableHash(`${seed}:${right.id}`);
     return hashDifference || left.id.localeCompare(right.id);
   });
 }
@@ -76,10 +65,7 @@ function shouldRevealAnswers(
 ) {
   if (feedbackMode === "after_submit") return true;
   if (feedbackMode === "after_attempt") {
-    return (
-      attemptNumber >= maxAttempts ||
-      Boolean(availableUntil && availableUntil <= now)
-    );
+    return attemptNumber >= maxAttempts || Boolean(availableUntil && availableUntil <= now);
   }
   return false;
 }
@@ -107,11 +93,7 @@ export function createAttemptService(options: QuizServiceOptions) {
   const { database, accessService, courseService } = options;
   const outbox = createOutboxService();
 
-  async function hasCourseAccess(
-    userId: string,
-    courseId: string,
-    roles: readonly string[] = [],
-  ) {
+  async function hasCourseAccess(userId: string, courseId: string, roles: readonly string[] = []) {
     if (isAdmin({ id: userId, roles })) return true;
     const course = await courseService.findCourseById(courseId);
     if (course?.creator_id === userId) return true;
@@ -136,9 +118,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     if (isAdmin({ id: userId, roles })) return;
     const course = await courseService.findCourseById(assignment.course_id);
     if (course?.creator_id === userId) return;
-    const charge = resolveQuizCharge(
-      await pricingRepo.findPricing(database, assignment.course_id),
-    );
+    const charge = resolveQuizCharge(await pricingRepo.findPricing(database, assignment.course_id));
     if (!charge.isPaid) return;
     const grant = await pricingRepo.findActiveGrant(database, {
       userId,
@@ -161,10 +141,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     const assignment = await getAssignment(assignmentId);
     let isPreviewLesson = false;
     if (assignment.lesson_id) {
-      const lesson = await courseService.findLessonById(
-        assignment.course_id,
-        assignment.lesson_id,
-      );
+      const lesson = await courseService.findLessonById(assignment.course_id, assignment.lesson_id);
       if (lesson?.is_preview) {
         isPreviewLesson = true;
       }
@@ -179,10 +156,7 @@ export function createAttemptService(options: QuizServiceOptions) {
         );
       await assertQuizPurchased(assignment, userId, roles);
     }
-    const version = await repo.findVersion(
-      database,
-      assignment.quiz_version_id,
-    );
+    const version = await repo.findVersion(database, assignment.quiz_version_id);
     if (!version?.published_at)
       throw new AppError(
         409,
@@ -192,14 +166,9 @@ export function createAttemptService(options: QuizServiceOptions) {
     return { assignment, version };
   }
 
-  async function buildAttempt(
-    attempt: NonNullable<Awaited<ReturnType<typeof repo.findAttempt>>>,
-  ) {
+  async function buildAttempt(attempt: NonNullable<Awaited<ReturnType<typeof repo.findAttempt>>>) {
     const assignment = await getAssignment(attempt.assignment_id);
-    const questions = await repo.listQuestions(
-      database,
-      attempt.quiz_version_id,
-    );
+    const questions = await repo.listQuestions(database, attempt.quiz_version_id);
     const options = await repo.listOptions(
       database,
       questions.map((question) => question.id),
@@ -227,9 +196,7 @@ export function createAttemptService(options: QuizServiceOptions) {
             ? []
             : (assignment.shuffle_options
                 ? stableShuffle(
-                    options.filter(
-                      (option) => option.question_id === question.id,
-                    ),
+                    options.filter((option) => option.question_id === question.id),
                     attempt.id,
                   )
                 : options.filter((option) => option.question_id === question.id)
@@ -240,29 +207,14 @@ export function createAttemptService(options: QuizServiceOptions) {
               })),
       })),
       answers: Object.fromEntries(
-        answers.map((answer) => [
-          answer.question_id,
-          answer.response_value as QuizResponseValue,
-        ]),
+        answers.map((answer) => [answer.question_id, answer.response_value as QuizResponseValue]),
       ),
     };
   }
 
-  async function start(
-    userId: string,
-    assignmentId: string,
-    roles: readonly string[] = [],
-  ) {
-    const { assignment, version } = await assertCanAttempt(
-      assignmentId,
-      userId,
-      roles,
-    );
-    const existing = await repo.findActiveAttempt(
-      database,
-      assignmentId,
-      userId,
-    );
+  async function start(userId: string, assignmentId: string, roles: readonly string[] = []) {
+    const { assignment, version } = await assertCanAttempt(assignmentId, userId, roles);
+    const existing = await repo.findActiveAttempt(database, assignmentId, userId);
     if (existing) {
       if (existing.expires_at && existing.expires_at <= new Date()) {
         await repo.updateAttempt(database, existing.id, { status: "expired" });
@@ -277,25 +229,13 @@ export function createAttemptService(options: QuizServiceOptions) {
     );
     const now = new Date();
     if (assignment.available_from && assignment.available_from > now)
-      throw new AppError(
-        403,
-        "QUIZ_NOT_AVAILABLE",
-        "This Quiz is not available yet.",
-      );
+      throw new AppError(403, "QUIZ_NOT_AVAILABLE", "This Quiz is not available yet.");
     if (assignment.available_until && assignment.available_until < now)
-      throw new AppError(
-        403,
-        "QUIZ_NOT_AVAILABLE",
-        "This Quiz is no longer available.",
-      );
+      throw new AppError(403, "QUIZ_NOT_AVAILABLE", "This Quiz is no longer available.");
     const max = await repo.maxAttemptNumber(database, assignmentId, userId);
     const attemptNumber = Number(max?.max ?? 0) + 1;
     if (attemptNumber > assignment.max_attempts)
-      throw new AppError(
-        409,
-        "MAX_ATTEMPTS_REACHED",
-        "You have used all allowed Quiz attempts.",
-      );
+      throw new AppError(409, "MAX_ATTEMPTS_REACHED", "You have used all allowed Quiz attempts.");
     try {
       const attempt = await repo.insertAttempt(database, {
         id: crypto.randomUUID(),
@@ -321,11 +261,7 @@ export function createAttemptService(options: QuizServiceOptions) {
       // The partial unique index is the final concurrency guard. If another
       // request won the race to create the active attempt, resume that one.
       if (!isUniqueViolation(error)) throw error;
-      const concurrent = await repo.findActiveAttempt(
-        database,
-        assignmentId,
-        userId,
-      );
+      const concurrent = await repo.findActiveAttempt(database, assignmentId, userId);
       if (concurrent) return buildAttempt(concurrent);
       throw error;
     }
@@ -342,10 +278,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     const assignment = await getAssignment(attempt.assignment_id);
     let isPreviewLesson = false;
     if (assignment.lesson_id) {
-      const lesson = await courseService.findLessonById(
-        assignment.course_id,
-        assignment.lesson_id,
-      );
+      const lesson = await courseService.findLessonById(assignment.course_id, assignment.lesson_id);
       if (lesson?.is_preview) {
         isPreviewLesson = true;
       }
@@ -360,18 +293,10 @@ export function createAttemptService(options: QuizServiceOptions) {
       await assertQuizPurchased(assignment, userId, roles);
     }
     if (attempt.status !== "in_progress")
-      throw new AppError(
-        409,
-        "ATTEMPT_NOT_ACTIVE",
-        "This Quiz attempt is no longer active.",
-      );
+      throw new AppError(409, "ATTEMPT_NOT_ACTIVE", "This Quiz attempt is no longer active.");
     if (attempt.expires_at && attempt.expires_at <= new Date()) {
       await repo.updateAttempt(database, attemptId, { status: "expired" });
-      throw new AppError(
-        409,
-        "ATTEMPT_EXPIRED",
-        "This Quiz attempt has expired.",
-      );
+      throw new AppError(409, "ATTEMPT_EXPIRED", "This Quiz attempt has expired.");
     }
     return attempt;
   }
@@ -382,10 +307,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     validOptionIds: Set<string>,
   ) {
     if (question.question_type === "short_answer") {
-      if (
-        response.textResponse !== undefined &&
-        typeof response.textResponse !== "string"
-      )
+      if (response.textResponse !== undefined && typeof response.textResponse !== "string")
         throw new AppError(
           400,
           "INVALID_TEXT_RESPONSE",
@@ -395,11 +317,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     }
     const ids = response.selectedOptionIds ?? [];
     if (new Set(ids).size !== ids.length)
-      throw new AppError(
-        400,
-        "DUPLICATE_OPTION_ID",
-        "An answer contains a duplicate option.",
-      );
+      throw new AppError(400, "DUPLICATE_OPTION_ID", "An answer contains a duplicate option.");
     if (ids.some((id) => !validOptionIds.has(id)))
       throw new AppError(
         400,
@@ -407,15 +325,10 @@ export function createAttemptService(options: QuizServiceOptions) {
         "An answer references an option from another question.",
       );
     if (
-      (question.question_type === "single_choice" ||
-        question.question_type === "true_false") &&
+      (question.question_type === "single_choice" || question.question_type === "true_false") &&
       ids.length > 1
     )
-      throw new AppError(
-        400,
-        "TOO_MANY_OPTIONS",
-        "This question accepts only one option.",
-      );
+      throw new AppError(400, "TOO_MANY_OPTIONS", "This question accepts only one option.");
   }
 
   async function bulkSaveAnswers(
@@ -439,11 +352,7 @@ export function createAttemptService(options: QuizServiceOptions) {
         "DUPLICATE_QUESTION_ID",
         "Each question may appear only once in a bulk answer snapshot.",
       );
-    const questions = await repo.listQuestionsByIds(
-      database,
-      attempt.quiz_version_id,
-      ids,
-    );
+    const questions = await repo.listQuestionsByIds(database, attempt.quiz_version_id, ids);
     if (questions.length !== ids.length)
       throw new AppError(
         400,
@@ -464,23 +373,11 @@ export function createAttemptService(options: QuizServiceOptions) {
     const now = new Date();
     await database.transaction().execute(async (trx) => {
       const locked = await repo.findAttemptForUpdate(trx, attemptId);
-      if (
-        !locked ||
-        locked.user_id !== userId ||
-        locked.status !== "in_progress"
-      )
-        throw new AppError(
-          409,
-          "ATTEMPT_NOT_ACTIVE",
-          "This Quiz attempt is no longer active.",
-        );
+      if (!locked || locked.user_id !== userId || locked.status !== "in_progress")
+        throw new AppError(409, "ATTEMPT_NOT_ACTIVE", "This Quiz attempt is no longer active.");
       if (locked.expires_at && locked.expires_at <= now) {
         await repo.updateAttempt(trx, attemptId, { status: "expired" });
-        throw new AppError(
-          409,
-          "ATTEMPT_EXPIRED",
-          "This Quiz attempt has expired.",
-        );
+        throw new AppError(409, "ATTEMPT_EXPIRED", "This Quiz attempt has expired.");
       }
       await repo.upsertAnswers(
         trx,
@@ -522,10 +419,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     if (!attempt || attempt.user_id !== userId)
       throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
     const assignment = await getAssignment(attempt.assignment_id);
-    const questions = await repo.listQuestions(
-      database,
-      attempt.quiz_version_id,
-    );
+    const questions = await repo.listQuestions(database, attempt.quiz_version_id);
     const options = await repo.listOptions(
       database,
       questions.map((question) => question.id),
@@ -546,41 +440,29 @@ export function createAttemptService(options: QuizServiceOptions) {
       attemptNumber: attempt.attempt_number,
       score: Number(attempt.score_obtained ?? 0),
       maxScore: Number(
-        attempt.max_score ??
-          questions.reduce((sum, question) => sum + Number(question.points), 0),
+        attempt.max_score ?? questions.reduce((sum, question) => sum + Number(question.points), 0),
       ),
       percentage: Number(attempt.score_percentage ?? 0),
       passed: Boolean(attempt.is_passed),
       status: attempt.status,
-      submittedAt:
-        toIso(attempt.submitted_at) ?? attempt.updated_at.toISOString(),
+      submittedAt: toIso(attempt.submitted_at) ?? attempt.updated_at.toISOString(),
       feedbackMode: assignment.feedback_mode,
       ...(includeFeedback
         ? {
             answers: answers.map((answer) => {
-              const question = questions.find(
-                (item) => item.id === answer.question_id,
-              )!;
+              const question = questions.find((item) => item.id === answer.question_id)!;
               const responseVal = answer.response_value as QuizResponseValue;
               const selected = responseVal.selectedOptionIds ?? [];
               const textResp = responseVal.textResponse ?? null;
               const correct = options
-                .filter(
-                  (option) =>
-                    option.question_id === question.id && option.is_correct,
-                )
+                .filter((option) => option.question_id === question.id && option.is_correct)
                 .map((option) => option.id);
               const acceptedTexts = options
-                .filter(
-                  (option) =>
-                    option.question_id === question.id && option.is_correct,
-                )
+                .filter((option) => option.question_id === question.id && option.is_correct)
                 .map((option) => option.option_text);
               const selectedOptionTexts = options
                 .filter(
-                  (option) =>
-                    option.question_id === question.id &&
-                    selected.includes(option.id),
+                  (option) => option.question_id === question.id && selected.includes(option.id),
                 )
                 .map((option) => option.option_text);
               const correctOptionTexts = revealAnswers ? acceptedTexts : [];
@@ -603,9 +485,7 @@ export function createAttemptService(options: QuizServiceOptions) {
                 correctOptionTexts,
                 textResponse: textResp,
                 isCorrect: Boolean(answer.is_correct ?? graded.isCorrect),
-                pointsAwarded: Number(
-                  answer.points_awarded ?? graded.pointsAwarded,
-                ),
+                pointsAwarded: Number(answer.points_awarded ?? graded.pointsAwarded),
                 explanation: revealAnswers ? question.explanation : null,
               };
             }),
@@ -614,11 +494,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     };
   }
 
-  async function submit(
-    userId: string,
-    attemptId: string,
-    roles: readonly string[] = [],
-  ) {
+  async function submit(userId: string, attemptId: string, roles: readonly string[] = []) {
     const existing = await repo.findAttempt(database, attemptId);
     if (!existing || existing.user_id !== userId)
       throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
@@ -632,21 +508,12 @@ export function createAttemptService(options: QuizServiceOptions) {
       const locked = await repo.findAttemptForUpdate(trx, attemptId);
       if (!locked || locked.user_id !== userId)
         throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
-      if (locked.status === "graded" || locked.status === "submitted")
-        return null;
+      if (locked.status === "graded" || locked.status === "submitted") return null;
       if (locked.status !== "in_progress")
-        throw new AppError(
-          409,
-          "ATTEMPT_NOT_ACTIVE",
-          "This Quiz attempt is no longer active.",
-        );
+        throw new AppError(409, "ATTEMPT_NOT_ACTIVE", "This Quiz attempt is no longer active.");
       if (locked.expires_at && locked.expires_at <= now) {
         await repo.updateAttempt(trx, attemptId, { status: "expired" });
-        throw new AppError(
-          409,
-          "ATTEMPT_EXPIRED",
-          "This Quiz attempt has expired.",
-        );
+        throw new AppError(409, "ATTEMPT_EXPIRED", "This Quiz attempt has expired.");
       }
       const questions = await repo.listQuestions(trx, locked.quiz_version_id);
       const options = await repo.listOptions(
@@ -656,20 +523,14 @@ export function createAttemptService(options: QuizServiceOptions) {
       const answers = await repo.listAnswers(trx, attemptId);
       const graded = questions.map((question) => {
         const answer = answers.find((item) => item.question_id === question.id);
-        const responseVal = answer
-          ? (answer.response_value as QuizResponseValue)
-          : null;
+        const responseVal = answer ? (answer.response_value as QuizResponseValue) : null;
         const selected = responseVal?.selectedOptionIds ?? [];
         const textResp = responseVal?.textResponse ?? null;
         const correct = options
-          .filter(
-            (option) => option.question_id === question.id && option.is_correct,
-          )
+          .filter((option) => option.question_id === question.id && option.is_correct)
           .map((option) => option.id);
         const acceptedTexts = options
-          .filter(
-            (option) => option.question_id === question.id && option.is_correct,
-          )
+          .filter((option) => option.question_id === question.id && option.is_correct)
           .map((option) => option.option_text);
         const score = grade(
           {
@@ -694,11 +555,7 @@ export function createAttemptService(options: QuizServiceOptions) {
       if (
         graded.some(
           (item) =>
-            !hasQuizAnswer(
-              item.answer
-                ? (item.answer.response_value as QuizResponseValue)
-                : null,
-            ),
+            !hasQuizAnswer(item.answer ? (item.answer.response_value as QuizResponseValue) : null),
         )
       )
         throw new AppError(
@@ -706,10 +563,7 @@ export function createAttemptService(options: QuizServiceOptions) {
           "ALL_QUESTIONS_REQUIRED",
           "Answer every Quiz question before submitting.",
         );
-      const maxScore = graded.reduce(
-        (sum, item) => sum + Number(item.question.points),
-        0,
-      );
+      const maxScore = graded.reduce((sum, item) => sum + Number(item.question.points), 0);
       const score = graded.reduce((sum, item) => sum + item.pointsAwarded, 0);
       const percentage = maxScore === 0 ? 0 : (score / maxScore) * 100;
       const passed = percentage >= Number(assignment.pass_percentage);
@@ -739,11 +593,7 @@ export function createAttemptService(options: QuizServiceOptions) {
       });
       const updated = await repo.findAttempt(trx, attemptId);
       if (!updated)
-        throw new AppError(
-          500,
-          "ATTEMPT_NOT_FOUND",
-          "Quiz attempt disappeared during grading.",
-        );
+        throw new AppError(500, "ATTEMPT_NOT_FOUND", "Quiz attempt disappeared during grading.");
       const course = await courseService.findCourseById(assignment.course_id);
       const quiz = await repo.findQuiz(trx, assignment.quiz_id);
       if (course && quiz) {
@@ -800,8 +650,7 @@ export function createAttemptService(options: QuizServiceOptions) {
         selectedOptionTexts: options
           .filter(
             (option) =>
-              option.question_id === item.question.id &&
-              item.selected.includes(option.id),
+              option.question_id === item.question.id && item.selected.includes(option.id),
           )
           .map((option) => option.option_text),
         correctOptionTexts: revealAnswers ? item.acceptedTexts : [],
@@ -822,19 +671,13 @@ export function createAttemptService(options: QuizServiceOptions) {
         status: updated.status,
         submittedAt: now.toISOString(),
         feedbackMode: assignment.feedback_mode,
-        ...(assignment.feedback_mode === "never"
-          ? {}
-          : { answers: resultAnswers }),
+        ...(assignment.feedback_mode === "never" ? {} : { answers: resultAnswers }),
       };
     });
     return gradedResult ?? result(userId, attemptId);
   }
 
-  async function getAttempt(
-    userId: string,
-    attemptId: string,
-    roles: readonly string[] = [],
-  ) {
+  async function getAttempt(userId: string, attemptId: string, roles: readonly string[] = []) {
     const attempt = await requireOwnedActiveAttempt(userId, attemptId, roles);
     return buildAttempt(attempt);
   }
@@ -857,20 +700,13 @@ export function createAttemptService(options: QuizServiceOptions) {
     const accessibleCourseIds = grants
       .filter(
         (grant) =>
-          grant.status === "active" &&
-          (!grant.validUntil || grant.validUntil > new Date()),
+          grant.status === "active" && (!grant.validUntil || grant.validUntil > new Date()),
       )
       .map((grant) => grant.courseId);
     const courseIds = [
-      ...new Set([
-        ...accessibleCourseIds,
-        ...(await repo.listPublishedFreeCourseIds(database)),
-      ]),
+      ...new Set([...accessibleCourseIds, ...(await repo.listPublishedFreeCourseIds(database))]),
     ];
-    const assignments = await repo.listAssignmentsForCourses(
-      database,
-      courseIds,
-    );
+    const assignments = await repo.listAssignmentsForCourses(database, courseIds);
     const pricingByCourseId = new Map(
       (await pricingRepo.listPricingForCourses(database, courseIds)).map(
         (pricing) => [pricing.course_id, pricing] as const,
@@ -885,12 +721,10 @@ export function createAttemptService(options: QuizServiceOptions) {
     }
     const courseTitles = new Map<string, string>();
     await Promise.all(
-      [...new Set(assignments.map((assignment) => assignment.course_id))].map(
-        async (courseId) => {
-          const course = await courseService.findCourseById(courseId);
-          if (course) courseTitles.set(courseId, course.title);
-        },
-      ),
+      [...new Set(assignments.map((assignment) => assignment.course_id))].map(async (courseId) => {
+        const course = await courseService.findCourseById(courseId);
+        if (course) courseTitles.set(courseId, course.title);
+      }),
     );
     // Two batched lookups instead of a query per assignment.
     const [quizRows, lessonRows] = await Promise.all([
@@ -902,32 +736,20 @@ export function createAttemptService(options: QuizServiceOptions) {
       ]),
     ]);
     const quizzesById = new Map(quizRows.map((quiz) => [quiz.id, quiz]));
-    const lessonsById = new Map(
-      lessonRows.map((lesson) => [lesson.id, lesson]),
-    );
+    const lessonsById = new Map(lessonRows.map((lesson) => [lesson.id, lesson]));
     const items = [];
     for (const assignment of assignments) {
       const quiz = quizzesById.get(assignment.quiz_id);
       const lessonRow = lessonsById.get(assignment.lesson_id);
       const lesson =
-        lessonRow && lessonRow.course_id === assignment.course_id
-          ? lessonRow
-          : undefined;
+        lessonRow && lessonRow.course_id === assignment.course_id ? lessonRow : undefined;
       const attempts = attemptsByAssignment.get(assignment.id) ?? [];
       // At most one attempt per assignment is in progress (partial unique index).
-      const activeAttempt = attempts.find(
-        (attempt) => attempt.status === "in_progress",
-      );
-      const gradedAttempts = attempts.filter(
-        (attempt) => attempt.status === "graded",
-      );
+      const activeAttempt = attempts.find((attempt) => attempt.status === "in_progress");
+      const gradedAttempts = attempts.filter((attempt) => attempt.status === "graded");
       const latestAttempt = attempts[0];
       const bestScore = gradedAttempts.length
-        ? Math.max(
-            ...gradedAttempts.map((attempt) =>
-              Number(attempt.score_percentage ?? 0),
-            ),
-          )
+        ? Math.max(...gradedAttempts.map((attempt) => Number(attempt.score_percentage ?? 0)))
         : null;
       if (quiz && lesson)
         items.push({
@@ -945,8 +767,7 @@ export function createAttemptService(options: QuizServiceOptions) {
               : Number(latestAttempt.score_percentage),
           bestScore,
           latestPassed:
-            latestAttempt?.is_passed === null ||
-            latestAttempt?.is_passed === undefined
+            latestAttempt?.is_passed === null || latestAttempt?.is_passed === undefined
               ? null
               : Boolean(latestAttempt.is_passed),
         });

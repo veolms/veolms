@@ -31,26 +31,16 @@ export function createQuizController({
 }) {
   return {
     create: async (request: FastifyRequest, reply: FastifyReply) => {
-      const result = await authoring.createQuiz(
-        actor(request),
-        request.body as never,
-      );
+      const result = await authoring.createQuiz(actor(request), request.body as never);
       reply.code(201);
       return result;
     },
-    createWithQuestions: async (
-      request: FastifyRequest,
-      reply: FastifyReply,
-    ) => {
-      const result = await authoring.createQuizWithQuestions(
-        actor(request),
-        request.body as never,
-      );
+    createWithQuestions: async (request: FastifyRequest, reply: FastifyReply) => {
+      const result = await authoring.createQuizWithQuestions(actor(request), request.body as never);
       reply.code(201);
       return result;
     },
-    listMine: async (request: FastifyRequest) =>
-      authoring.listMine(actor(request)),
+    listMine: async (request: FastifyRequest) => authoring.listMine(actor(request)),
     get: async (request: FastifyRequest) =>
       authoring.getQuiz(actor(request), (request.params as { id: string }).id),
     update: async (request: FastifyRequest) =>
@@ -60,10 +50,7 @@ export function createQuizController({
         request.body as never,
       ),
     deleteQuiz: async (request: FastifyRequest) =>
-      authoring.deleteQuiz(
-        actor(request),
-        (request.params as { id: string }).id,
-      ),
+      authoring.deleteQuiz(actor(request), (request.params as { id: string }).id),
     addQuestion: async (request: FastifyRequest) =>
       authoring.addQuestion(
         actor(request),
@@ -81,11 +68,7 @@ export function createQuizController({
     },
     deleteQuestion: async (request: FastifyRequest) => {
       const params = request.params as { id: string; questionId: string };
-      return authoring.deleteQuestion(
-        actor(request),
-        params.id,
-        params.questionId,
-      );
+      return authoring.deleteQuestion(actor(request), params.id, params.questionId);
     },
     publish: async (request: FastifyRequest) =>
       authoring.publish(actor(request), (request.params as { id: string }).id),
@@ -112,10 +95,7 @@ export function createQuizController({
         (request.params as { assignmentId: string }).assignmentId,
       ),
     listCourseAssignments: async (request: FastifyRequest) =>
-      assignments.listForCourse(
-        actor(request),
-        (request.params as { courseId: string }).courseId,
-      ),
+      assignments.listForCourse(actor(request), (request.params as { courseId: string }).courseId),
     listMineAssignments: async (request: FastifyRequest) =>
       attempts.listAssignments(context(request).user.id),
     start: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -151,28 +131,18 @@ export function createQuizController({
         context(request).user.id,
         (request.params as { attemptId: string }).attemptId,
       ),
-    history: async (request: FastifyRequest) =>
-      attempts.listMine(context(request).user.id),
+    history: async (request: FastifyRequest) => attempts.listMine(context(request).user.id),
     assignmentAnalytics: async (request: FastifyRequest) =>
       analytics.assignment(
         actor(request),
         (request.params as { assignmentId: string }).assignmentId,
       ),
     courseAnalytics: async (request: FastifyRequest) =>
-      analytics.course(
-        actor(request),
-        (request.params as { courseId: string }).courseId,
-      ),
+      analytics.course(actor(request), (request.params as { courseId: string }).courseId),
     studentReport: async (request: FastifyRequest) =>
-      analytics.student(
-        actor(request),
-        (request.params as { studentId: string }).studentId,
-      ),
+      analytics.student(actor(request), (request.params as { studentId: string }).studentId),
     getCoursePricing: async (request: FastifyRequest) =>
-      assignments.getPricing(
-        actor(request),
-        (request.params as { courseId: string }).courseId,
-      ),
+      assignments.getPricing(actor(request), (request.params as { courseId: string }).courseId),
     setPricing: async (request: FastifyRequest) => {
       const params = request.params as { courseId: string };
       return assignments.setPricing(
@@ -190,9 +160,7 @@ export function createQuizController({
         userId: request.user?.id ?? null,
         quizAssignmentId: params.assignmentId,
         courseId: params.courseId,
-        isAdmin: request.user
-          ? isAdmin({ id: request.user.id, roles: request.user.roles })
-          : false,
+        isAdmin: request.user ? isAdmin({ id: request.user.id, roles: request.user.roles }) : false,
       });
     },
   };

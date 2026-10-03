@@ -32,10 +32,7 @@ import {
   type OptimisticEditKind,
 } from "./optimistic-edit-coordinator";
 import { updateOptimisticEditInCaches } from "./edit-cache-updaters";
-import {
-  toInteractionAttachment,
-  type LocalComposerAttachment,
-} from "./attachment-model";
+import { toInteractionAttachment, type LocalComposerAttachment } from "./attachment-model";
 import { uploadInteractionAttachments } from "./interaction-attachment-upload";
 import {
   applyLessonInteractionCountDelta,
@@ -61,13 +58,7 @@ function beginOptimisticEdit(
 ): OptimisticEditMutationContext {
   const record = optimisticEditCoordinator.begin({ kind, ...meta });
   if (!record) throw new Error("This entity is already being edited.");
-  updateOptimisticEditInCaches(
-    queryClient,
-    kind,
-    meta.clientId,
-    meta.serverId,
-    meta.optimistic,
-  );
+  updateOptimisticEditInCaches(queryClient, kind, meta.clientId, meta.serverId, meta.optimistic);
   return { ...meta, kind };
 }
 
@@ -77,13 +68,7 @@ function confirmOptimisticEdit(
   context: OptimisticEditMutationContext,
 ): void {
   const authoritative = getOptimisticEditFields(response, context.optimistic);
-  if (
-    optimisticEditCoordinator.confirm(
-      context.kind,
-      context.clientId,
-      authoritative,
-    )
-  ) {
+  if (optimisticEditCoordinator.confirm(context.kind, context.clientId, authoritative)) {
     updateOptimisticEditInCaches(
       queryClient,
       context.kind,
@@ -116,8 +101,7 @@ type LocalAttachmentCreateMeta = {
   __localAttachments?: readonly LocalComposerAttachment[];
 };
 
-type CreateThreadMutationInput = CreateLearningThreadRequest &
-  LocalAttachmentCreateMeta;
+type CreateThreadMutationInput = CreateLearningThreadRequest & LocalAttachmentCreateMeta;
 
 export function useCreateLessonThread(courseId: string, lessonId: string) {
   const queryClient = useQueryClient();
@@ -176,30 +160,15 @@ export function useCreateLessonThread(courseId: string, lessonId: string) {
       return { clientId: record.clientId, countsChange };
     },
     onSuccess: (serverThread, _payload, context) => {
-      interactionCreationCoordinator.confirmThread(
-        queryClient,
-        context.clientId,
-        serverThread,
-      );
+      interactionCreationCoordinator.confirmThread(queryClient, context.clientId, serverThread);
       void queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.lessonInteractionCountsRoot(
-          courseId,
-          lessonId,
-        ),
+        queryKey: learningInteractionKeys.lessonInteractionCountsRoot(courseId, lessonId),
       });
     },
     onError: (_error, _payload, context) => {
       if (context) {
-        restoreLessonInteractionCounts(
-          queryClient,
-          courseId,
-          lessonId,
-          context.countsChange,
-        );
-        interactionCreationCoordinator.failThread(
-          queryClient,
-          context.clientId,
-        );
+        restoreLessonInteractionCounts(queryClient, courseId, lessonId, context.countsChange);
+        interactionCreationCoordinator.failThread(queryClient, context.clientId);
       }
     },
   });
@@ -231,8 +200,7 @@ export function useUpdateThread(threadId?: string) {
       return learningInteractionsService.updateThread(threadId, variables);
     },
     onMutate: (variables) => {
-      if (!("payload" in variables) || !variables.__optimistic)
-        return undefined;
+      if (!("payload" in variables) || !variables.__optimistic) return undefined;
       return beginOptimisticEdit(queryClient, "thread", variables.__optimistic);
     },
     onSuccess: (data, _variables, context) => {
@@ -247,15 +215,11 @@ export function useUpdateThread(threadId?: string) {
 export function useDeleteThread(courseId?: string, lessonId?: string) {
   const queryClient = useQueryClient();
   return useMutation<any, ApiError, string>({
-    mutationFn: (threadId) =>
-      learningInteractionsService.deleteThread(threadId),
+    mutationFn: (threadId) => learningInteractionsService.deleteThread(threadId),
     onSuccess: () => {
       if (!courseId || !lessonId) return;
       void queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.lessonInteractionCountsRoot(
-          courseId,
-          lessonId,
-        ),
+        queryKey: learningInteractionKeys.lessonInteractionCountsRoot(courseId, lessonId),
       });
     },
   });
@@ -278,15 +242,9 @@ export function useCreateReply(
   const queryClient = useQueryClient();
   return useMutation<LearningReply, ApiError, CreateReplyMutationInput>({
     mutationFn: async (input) => {
-      const {
-        __serverThreadId,
-        __clientId,
-        __localAttachments = [],
-        ...payload
-      } = input;
+      const { __serverThreadId, __clientId, __localAttachments = [], ...payload } = input;
       const transportThreadId = __serverThreadId ?? threadId;
-      if (!transportThreadId)
-        throw new Error("A confirmed server thread ID is required.");
+      if (!transportThreadId) throw new Error("A confirmed server thread ID is required.");
       const uploadedAttachments = await uploadInteractionAttachments(
         __localAttachments,
         (attachmentClientId, patch) => {
@@ -325,8 +283,7 @@ export function useUpdateReply(threadId?: string) {
     },
     OptimisticEditMutationContext | undefined
   >({
-    mutationFn: ({ replyId, payload }) =>
-      learningInteractionsService.updateReply(replyId, payload),
+    mutationFn: ({ replyId, payload }) => learningInteractionsService.updateReply(replyId, payload),
     onMutate: (variables) => {
       if (!variables.__optimistic) return undefined;
       return beginOptimisticEdit(queryClient, "reply", variables.__optimistic);
@@ -354,22 +311,19 @@ export function useToggleLike() {
 
 export function useToggleBookmark() {
   return useMutation<any, ApiError, string>({
-    mutationFn: (threadId) =>
-      learningInteractionsService.toggleBookmark(threadId),
+    mutationFn: (threadId) => learningInteractionsService.toggleBookmark(threadId),
   });
 }
 
 export function useToggleNoteBookmark() {
   return useMutation<any, ApiError, string>({
-    mutationFn: (noteId) =>
-      learningInteractionsService.toggleNoteBookmark(noteId),
+    mutationFn: (noteId) => learningInteractionsService.toggleNoteBookmark(noteId),
   });
 }
 
 export function useToggleFollow() {
   return useMutation<any, ApiError, string>({
-    mutationFn: (threadId) =>
-      learningInteractionsService.toggleFollow(threadId),
+    mutationFn: (threadId) => learningInteractionsService.toggleFollow(threadId),
   });
 }
 
@@ -380,8 +334,7 @@ export function useAcceptReply(defaultThreadId?: string) {
     ApiError,
     { threadId?: string; replyId: string; payload?: AcceptReplyRequest }
   >({
-    mutationFn: ({ replyId, payload }) =>
-      learningInteractionsService.acceptReply(replyId, payload),
+    mutationFn: ({ replyId, payload }) => learningInteractionsService.acceptReply(replyId, payload),
     onSuccess: (_data, variables) => {
       const targetThreadId = variables.threadId || defaultThreadId;
       if (targetThreadId) {
@@ -405,9 +358,7 @@ export function useLockThread(defaultThreadId?: string) {
   >({
     mutationFn: (variables) => {
       const threadId =
-        "threadId" in variables && variables.threadId
-          ? variables.threadId
-          : defaultThreadId!;
+        "threadId" in variables && variables.threadId ? variables.threadId : defaultThreadId!;
       const payload =
         "payload" in variables && variables.payload
           ? variables.payload
@@ -416,9 +367,7 @@ export function useLockThread(defaultThreadId?: string) {
     },
     onSuccess: (_data, variables) => {
       const targetThreadId =
-        "threadId" in variables && variables.threadId
-          ? variables.threadId
-          : defaultThreadId;
+        "threadId" in variables && variables.threadId ? variables.threadId : defaultThreadId;
       if (targetThreadId) {
         queryClient.invalidateQueries({
           queryKey: learningInteractionKeys.threadDetails(targetThreadId),
@@ -470,12 +419,7 @@ export function useCreateNote() {
       });
     },
     onMutate: (payload) => {
-      const {
-        __attachments,
-        __clientId,
-        __localAttachments = [],
-        ...notePayload
-      } = payload;
+      const { __attachments, __clientId, __localAttachments = [], ...notePayload } = payload;
       const record = interactionCreationCoordinator.beginNoteCreation({
         queryClient,
         context: {
@@ -489,8 +433,7 @@ export function useCreateNote() {
             ? __localAttachments.map(toInteractionAttachment)
             : __attachments,
         localAttachments: __localAttachments,
-        dispatch: (notePayload) =>
-          learningInteractionsService.createNote(notePayload),
+        dispatch: (notePayload) => learningInteractionsService.createNote(notePayload),
       });
       const countsChange = applyLessonInteractionCountDelta(queryClient, {
         courseId: notePayload.courseId,
@@ -501,11 +444,7 @@ export function useCreateNote() {
       return { clientId: record.clientId, countsChange };
     },
     onSuccess: (serverNote, payload, context) => {
-      interactionCreationCoordinator.confirmNote(
-        queryClient,
-        context.clientId,
-        serverNote,
-      );
+      interactionCreationCoordinator.confirmNote(queryClient, context.clientId, serverNote);
       void queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.lessonInteractionCountsRoot(
           payload.courseId,
@@ -553,8 +492,7 @@ export function useUpdateNote(noteId?: string) {
       return learningInteractionsService.updateNote(noteId, variables);
     },
     onMutate: (variables) => {
-      if (!("payload" in variables) || !variables.__optimistic)
-        return undefined;
+      if (!("payload" in variables) || !variables.__optimistic) return undefined;
       return beginOptimisticEdit(queryClient, "note", variables.__optimistic);
     },
     onSuccess: (data, _variables, context) => {
@@ -573,10 +511,7 @@ export function useDeleteNote(courseId?: string, lessonId?: string) {
     onSuccess: () => {
       if (!courseId || !lessonId) return;
       void queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.lessonInteractionCountsRoot(
-          courseId,
-          lessonId,
-        ),
+        queryKey: learningInteractionKeys.lessonInteractionCountsRoot(courseId, lessonId),
       });
     },
   });
@@ -591,8 +526,7 @@ export function useCreateReport() {
 export function useModerateThread(threadId: string) {
   const queryClient = useQueryClient();
   return useMutation<any, ApiError, ModerateThreadRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.moderatePlatformThread(threadId, payload),
+    mutationFn: (payload) => learningInteractionsService.moderatePlatformThread(threadId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.all,
@@ -604,8 +538,7 @@ export function useModerateThread(threadId: string) {
 export function useModerateReply(replyId: string, threadId: string) {
   const queryClient = useQueryClient();
   return useMutation<any, ApiError, ModerateReplyRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.moderatePlatformReply(replyId, payload),
+    mutationFn: (payload) => learningInteractionsService.moderatePlatformReply(replyId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
@@ -624,9 +557,6 @@ export function useSuspendUser() {
 export function useUnsuspendUser() {
   return useMutation<any, ApiError, UnsuspendUserRequest>({
     mutationFn: (payload) =>
-      learningInteractionsService.unsuspendPlatformUser(
-        payload.userId,
-        payload,
-      ),
+      learningInteractionsService.unsuspendPlatformUser(payload.userId, payload),
   });
 }

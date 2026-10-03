@@ -1,16 +1,7 @@
-import {
-  AtomicCodeMirrorEditor,
-  type AtomicCodeMirrorEditorHandle,
-} from "@atomic-editor/editor";
+import { AtomicCodeMirrorEditor, type AtomicCodeMirrorEditorHandle } from "@atomic-editor/editor";
 import "@atomic-editor/editor/styles.css";
 import { autocompletion } from "@codemirror/autocomplete";
-import {
-  EditorView,
-  placeholder,
-  tooltips,
-  ViewPlugin,
-  type Rect,
-} from "@codemirror/view";
+import { EditorView, placeholder, tooltips, ViewPlugin, type Rect } from "@codemirror/view";
 import {
   useEffect,
   useMemo,
@@ -42,8 +33,7 @@ const mentionTooltipViewportExtension = ViewPlugin.fromClass(
   class {
     private readonly view: EditorView;
 
-    private readonly visualViewport =
-      typeof window === "undefined" ? null : window.visualViewport;
+    private readonly visualViewport = typeof window === "undefined" ? null : window.visualViewport;
 
     private readonly handleVisualViewportChange = () => {
       this.view.requestMeasure();
@@ -51,25 +41,13 @@ const mentionTooltipViewportExtension = ViewPlugin.fromClass(
 
     constructor(view: EditorView) {
       this.view = view;
-      this.visualViewport?.addEventListener(
-        "resize",
-        this.handleVisualViewportChange,
-      );
-      this.visualViewport?.addEventListener(
-        "scroll",
-        this.handleVisualViewportChange,
-      );
+      this.visualViewport?.addEventListener("resize", this.handleVisualViewportChange);
+      this.visualViewport?.addEventListener("scroll", this.handleVisualViewportChange);
     }
 
     destroy() {
-      this.visualViewport?.removeEventListener(
-        "resize",
-        this.handleVisualViewportChange,
-      );
-      this.visualViewport?.removeEventListener(
-        "scroll",
-        this.handleVisualViewportChange,
-      );
+      this.visualViewport?.removeEventListener("resize", this.handleVisualViewportChange);
+      this.visualViewport?.removeEventListener("scroll", this.handleVisualViewportChange);
     }
   },
 );
@@ -159,9 +137,7 @@ export function DiscussionEditorImpl({
   const onFormattingStateChangeRef = useLatest(onFormattingStateChange);
   const onAttachmentErrorRef = useLatest(onAttachmentError);
   const onAttachmentSelectedRef = useLatest(onAttachmentSelected);
-  const [commands] = useState(() =>
-    createDiscussionEditorCommands(() => viewRef.current),
-  );
+  const [commands] = useState(() => createDiscussionEditorCommands(() => viewRef.current));
   const controller = useMemo<DiscussionEditorController>(
     () => ({
       ...commands,
@@ -245,15 +221,11 @@ export function DiscussionEditorImpl({
           constructor(view: EditorView) {
             viewRef.current = view;
             onControllerChangeRef.current?.(controller);
-            onFormattingStateChangeRef.current?.(
-              controller.getFormattingState(),
-            );
+            onFormattingStateChangeRef.current?.(controller.getFormattingState());
           }
 
           update() {
-            onFormattingStateChangeRef.current?.(
-              controller.getFormattingState(),
-            );
+            onFormattingStateChangeRef.current?.(controller.getFormattingState());
           }
 
           destroy() {
@@ -322,9 +294,7 @@ export function DiscussionEditorImpl({
         editorHandleRef={atomicHandleRef}
         codeLanguages={DISCUSSION_CODE_LANGUAGES}
         extensions={extensions}
-        onMarkdownChange={(markdown) =>
-          onChangeRef.current(createDiscussionDraft(markdown))
-        }
+        onMarkdownChange={(markdown) => onChangeRef.current(createDiscussionDraft(markdown))}
       />
     </div>
   );

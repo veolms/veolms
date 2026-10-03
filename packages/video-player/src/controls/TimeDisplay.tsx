@@ -9,10 +9,7 @@ export interface TimeDisplayProps {
   interactive?: boolean;
 }
 
-export function TimeDisplay({
-  className,
-  interactive = false,
-}: TimeDisplayProps = {}) {
+export function TimeDisplay({ className, interactive = false }: TimeDisplayProps = {}) {
   const [showRemaining, setShowRemaining] = useState(false);
   const mobileInteraction = usePlayerMobileInteraction();
   const { currentTime, duration, lifecycle } = usePlayerState(
@@ -44,10 +41,7 @@ export function TimeDisplay({
 
   if (!interactive) {
     return (
-      <span
-        className={displayClassName}
-        aria-label={`${currentLabel} elapsed of ${durationLabel}`}
-      >
+      <span className={displayClassName} aria-label={`${currentLabel} elapsed of ${durationLabel}`}>
         {displayValue}
       </span>
     );

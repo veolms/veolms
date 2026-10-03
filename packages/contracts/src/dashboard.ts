@@ -30,9 +30,7 @@ export const dashboardRevenueOverviewSchema = z.strictObject({
   orders: dashboardKpiSchema,
   refunds: dashboardKpiSchema,
 });
-export type DashboardRevenueOverview = z.infer<
-  typeof dashboardRevenueOverviewSchema
->;
+export type DashboardRevenueOverview = z.infer<typeof dashboardRevenueOverviewSchema>;
 
 const dashboardLearningActivityMetricSchema = z.strictObject({
   value: z.number().nonnegative(),
@@ -60,9 +58,7 @@ export const dashboardLearningActivitySchema = z.strictObject({
   }),
 });
 
-export type DashboardLearningActivity = z.infer<
-  typeof dashboardLearningActivitySchema
->;
+export type DashboardLearningActivity = z.infer<typeof dashboardLearningActivitySchema>;
 
 export const dashboardYourCourseSchema = z.strictObject({
   id: z.uuid(),
@@ -93,6 +89,4 @@ export const dashboardSummaryResponseSchema = z.strictObject({
   yourCourses: z.array(dashboardYourCourseSchema),
 });
 
-export type DashboardSummaryResponse = z.infer<
-  typeof dashboardSummaryResponseSchema
->;
+export type DashboardSummaryResponse = z.infer<typeof dashboardSummaryResponseSchema>;

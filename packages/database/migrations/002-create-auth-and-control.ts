@@ -8,9 +8,7 @@ export async function up(database: Kysely<any>): Promise<void> {
     .addColumn("name", "text", (column) => column.notNull())
     .addColumn("logo_url", "text")
     .addColumn("custom_domain", "text")
-    .addColumn("setup_completed", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("setup_completed", "boolean", (column) => column.notNull().defaultTo(false))
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -28,9 +26,7 @@ export async function up(database: Kysely<any>): Promise<void> {
     .addColumn("username", "text", (column) => column.notNull().unique())
     .addColumn("display_name", "text", (column) => column.notNull())
     .addColumn("email_verified_at", "timestamptz")
-    .addColumn("mfa_mandatory", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("mfa_mandatory", "boolean", (column) => column.notNull().defaultTo(false))
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -96,19 +92,13 @@ export async function up(database: Kysely<any>): Promise<void> {
   await database.schema
     .createTable("menus")
     .addColumn("id", "uuid", (column) => column.primaryKey())
-    .addColumn("parent_id", "uuid", (column) =>
-      column.references("menus.id").onDelete("cascade"),
-    )
+    .addColumn("parent_id", "uuid", (column) => column.references("menus.id").onDelete("cascade"))
     .addColumn("label", "text", (column) => column.notNull())
     .addColumn("route_link", "text", (column) => column.notNull())
     .addColumn("icon", "text")
-    .addColumn("expanded", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("expanded", "boolean", (column) => column.notNull().defaultTo(false))
     .addColumn("check_list", "text")
-    .addColumn("is_both", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("is_both", "boolean", (column) => column.notNull().defaultTo(false))
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -127,28 +117,17 @@ export async function up(database: Kysely<any>): Promise<void> {
     .addColumn("menu_id", "uuid", (column) =>
       column.notNull().references("menus.id").onDelete("cascade"),
     )
-    .addColumn("can_create", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
-    .addColumn("can_read", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
-    .addColumn("can_update", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
-    .addColumn("can_delete", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("can_create", "boolean", (column) => column.notNull().defaultTo(false))
+    .addColumn("can_read", "boolean", (column) => column.notNull().defaultTo(false))
+    .addColumn("can_update", "boolean", (column) => column.notNull().defaultTo(false))
+    .addColumn("can_delete", "boolean", (column) => column.notNull().defaultTo(false))
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
     .addColumn("updated_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
-    .addUniqueConstraint("permissions_role_id_menu_id_unique", [
-      "role_id",
-      "menu_id",
-    ])
+    .addUniqueConstraint("permissions_role_id_menu_id_unique", ["role_id", "menu_id"])
     .execute();
 
   // 7. Session, OTP, MFA tables
@@ -161,9 +140,7 @@ export async function up(database: Kysely<any>): Promise<void> {
     .addColumn("token_hash", "text", (column) => column.notNull())
     .addColumn("ip_address", "text")
     .addColumn("user_agent", "text")
-    .addColumn("mfa_verified", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("mfa_verified", "boolean", (column) => column.notNull().defaultTo(false))
     .addColumn("revoked_at", "timestamptz")
     .addColumn("expires_at", "timestamptz", (column) => column.notNull())
     .addColumn("last_used_at", "timestamptz", (column) =>
@@ -234,13 +211,9 @@ export async function up(database: Kysely<any>): Promise<void> {
       column.notNull().references("users.id").onDelete("cascade"),
     )
     .addColumn("secret_encrypted", "text", (column) => column.notNull())
-    .addColumn("enabled", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("enabled", "boolean", (column) => column.notNull().defaultTo(false))
     .addColumn("last_used_step", "text")
-    .addColumn("failed_attempts", "integer", (column) =>
-      column.notNull().defaultTo(0),
-    )
+    .addColumn("failed_attempts", "integer", (column) => column.notNull().defaultTo(0))
     .addColumn("locked_until", "timestamptz")
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
@@ -266,9 +239,7 @@ export async function up(database: Kysely<any>): Promise<void> {
   await database.schema
     .createTable("webauthn_challenges")
     .addColumn("id", "uuid", (column) => column.primaryKey())
-    .addColumn("user_id", "uuid", (column) =>
-      column.references("users.id").onDelete("cascade"),
-    )
+    .addColumn("user_id", "uuid", (column) => column.references("users.id").onDelete("cascade"))
     .addColumn("challenge", "text", (column) => column.notNull())
     .addColumn("type", "text", (column) => column.notNull())
     .addColumn("expires_at", "timestamptz", (column) => column.notNull())
@@ -280,28 +251,12 @@ export async function up(database: Kysely<any>): Promise<void> {
 }
 
 export async function down(database: Kysely<any>): Promise<void> {
-  await database.schema
-    .dropTable("webauthn_challenges")
-    .ifExists()
-    .cascade()
-    .execute();
-  await database.schema
-    .dropTable("mfa_backup_codes")
-    .ifExists()
-    .cascade()
-    .execute();
-  await database.schema
-    .dropTable("user_totp_credentials")
-    .ifExists()
-    .cascade()
-    .execute();
+  await database.schema.dropTable("webauthn_challenges").ifExists().cascade().execute();
+  await database.schema.dropTable("mfa_backup_codes").ifExists().cascade().execute();
+  await database.schema.dropTable("user_totp_credentials").ifExists().cascade().execute();
   await database.schema.dropTable("passkeys").ifExists().cascade().execute();
   await database.schema.dropTable("otp_codes").ifExists().cascade().execute();
-  await database.schema
-    .dropTable("oauth_accounts")
-    .ifExists()
-    .cascade()
-    .execute();
+  await database.schema.dropTable("oauth_accounts").ifExists().cascade().execute();
   await database.schema.dropTable("sessions").ifExists().cascade().execute();
   await database.schema.dropTable("permissions").ifExists().cascade().execute();
   await database.schema.dropTable("menus").ifExists().cascade().execute();

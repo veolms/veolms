@@ -1,12 +1,7 @@
 import { z } from "zod";
 
 export const notificationChannelSchema = z.enum(["in_app", "email"]);
-export const notificationCategorySchema = z.enum([
-  "transactional",
-  "social",
-  "learning",
-  "system",
-]);
+export const notificationCategorySchema = z.enum(["transactional", "social", "learning", "system"]);
 
 export const notificationSchema = z.strictObject({
   id: z.uuid(),
@@ -19,9 +14,7 @@ export const notificationSchema = z.strictObject({
   createdAt: z.iso.datetime(),
 });
 
-const queryBooleanSchema = z
-  .enum(["true", "false"])
-  .transform((value) => value === "true");
+const queryBooleanSchema = z.enum(["true", "false"]).transform((value) => value === "true");
 
 export const notificationListQuerySchema = z.strictObject({
   type: z.string().min(1).max(100).optional(),
@@ -75,10 +68,7 @@ export const updateNotificationPreferencesSchema = z.strictObject({
     .refine(
       (preferences) =>
         new Set(
-          preferences.map(
-            (preference) =>
-              `${preference.notificationType}:${preference.channel}`,
-          ),
+          preferences.map((preference) => `${preference.notificationType}:${preference.channel}`),
         ).size === preferences.length,
       { message: "Each notification type and channel may appear only once." },
     ),
@@ -87,19 +77,9 @@ export const updateNotificationPreferencesSchema = z.strictObject({
 export type NotificationChannel = z.infer<typeof notificationChannelSchema>;
 export type NotificationCategory = z.infer<typeof notificationCategorySchema>;
 export type Notification = z.infer<typeof notificationSchema>;
-export type NotificationListQuery = z.output<
-  typeof notificationListQuerySchema
->;
-export type NotificationListResponse = z.infer<
-  typeof notificationListResponseSchema
->;
+export type NotificationListQuery = z.output<typeof notificationListQuerySchema>;
+export type NotificationListResponse = z.infer<typeof notificationListResponseSchema>;
 export type NotificationSummary = z.infer<typeof notificationSummarySchema>;
-export type NotificationPreference = z.infer<
-  typeof notificationPreferenceSchema
->;
-export type NotificationPreferencesResponse = z.infer<
-  typeof notificationPreferencesResponseSchema
->;
-export type UpdateNotificationPreferences = z.infer<
-  typeof updateNotificationPreferencesSchema
->;
+export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
+export type NotificationPreferencesResponse = z.infer<typeof notificationPreferencesResponseSchema>;
+export type UpdateNotificationPreferences = z.infer<typeof updateNotificationPreferencesSchema>;

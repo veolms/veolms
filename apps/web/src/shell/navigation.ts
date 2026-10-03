@@ -30,42 +30,23 @@ const createNavigationItem = (
   label: string,
   icon: Icon,
   routeLink: string,
-): NavigationItem => [
-  label,
-  icon,
-  { id, routeLink, parentId: null, source: "default" },
-];
+): NavigationItem => [label, icon, { id, routeLink, parentId: null, source: "default" }];
 
 // Students and signed-out visitors share the same order. Staff menus preserve
 // the relative order of shared destinations.
 const studentNavigation: readonly NavigationItem[] = [
   createNavigationItem("student-home", "Home", House, "/"),
   createNavigationItem("student-courses", "Courses", BookOpen, "/courses"),
-  createNavigationItem(
-    "student-discussions",
-    "Discussions",
-    ChatCircleDots,
-    "/discussions",
-  ),
+  createNavigationItem("student-discussions", "Discussions", ChatCircleDots, "/discussions"),
   createNavigationItem("student-settings", "Settings", GearSix, "/settings"),
 ];
 
 const creatorNavigation: readonly NavigationItem[] = [
   createNavigationItem("creator-courses", "Courses", BookOpen, "/courses"),
-  createNavigationItem(
-    "creator-discussions",
-    "Discussions",
-    ChatCircleDots,
-    "/discussions",
-  ),
+  createNavigationItem("creator-discussions", "Discussions", ChatCircleDots, "/discussions"),
   createNavigationItem("creator-dashboard", "Dashboard", SquaresFour, "/"),
   createNavigationItem("creator-students", "Students", Users, "/students"),
-  createNavigationItem(
-    "creator-analytics",
-    "Analytics",
-    ChartBar,
-    "/analytics",
-  ),
+  createNavigationItem("creator-analytics", "Analytics", ChartBar, "/analytics"),
   createNavigationItem("creator-orders", "Orders", Tote, "/orders"),
   createNavigationItem("creator-settings", "Settings", GearSix, "/settings"),
 ];
@@ -73,20 +54,10 @@ const creatorNavigation: readonly NavigationItem[] = [
 const adminNavigation: readonly NavigationItem[] = [
   createNavigationItem("admin-home", "Home", House, "/"),
   createNavigationItem("creator-courses", "Courses", BookOpen, "/courses"),
-  createNavigationItem(
-    "creator-discussions",
-    "Discussions",
-    ChatCircleDots,
-    "/discussions",
-  ),
+  createNavigationItem("creator-discussions", "Discussions", ChatCircleDots, "/discussions"),
   createNavigationItem("creator-orders", "Orders", Tote, "/orders"),
   createNavigationItem("creator-students", "Students", Users, "/students"),
-  createNavigationItem(
-    "creator-analytics",
-    "Analytics",
-    ChartBar,
-    "/analytics",
-  ),
+  createNavigationItem("creator-analytics", "Analytics", ChartBar, "/analytics"),
   createNavigationItem("admin-coupons", "Coupons", Tag, "/coupons"),
   createNavigationItem("creator-settings", "Settings", GearSix, "/settings"),
 ];
@@ -152,18 +123,14 @@ export function getInitialNavigationOrder(
 
   try {
     const parsedOrder: unknown = JSON.parse(
-      localStorage.getItem(
-        getNavigationPreferenceStorageKey("order", role, userId),
-      ) || "[]",
+      localStorage.getItem(getNavigationPreferenceStorageKey("order", role, userId)) || "[]",
     );
     if (!Array.isArray(parsedOrder)) return defaultOrder;
     const savedOrder = parsedOrder.filter(
-      (label): label is string =>
-        typeof label === "string" && defaultOrder.includes(label),
+      (label): label is string => typeof label === "string" && defaultOrder.includes(label),
     );
     const validSavedOrder = savedOrder.filter(
-      (label, index) =>
-        defaultOrder.includes(label) && savedOrder.indexOf(label) === index,
+      (label, index) => defaultOrder.includes(label) && savedOrder.indexOf(label) === index,
     );
     return [
       ...validSavedOrder,
@@ -179,12 +146,8 @@ export function getOrderedNavigation(
   navigationItems: readonly NavigationItemWithMetadata[],
 ): NavigationItemWithMetadata[] {
   const itemByLabel = new Map(navigationItems.map((item) => [item[0], item]));
-  const orderedLabels = [
-    ...(order || []),
-    ...navigationItems.map(([label]) => label),
-  ].filter(
-    (label, index, labels) =>
-      itemByLabel.has(label) && labels.indexOf(label) === index,
+  const orderedLabels = [...(order || []), ...navigationItems.map(([label]) => label)].filter(
+    (label, index, labels) => itemByLabel.has(label) && labels.indexOf(label) === index,
   );
   return orderedLabels.map((label) => itemByLabel.get(label)!);
 }
@@ -210,11 +173,7 @@ export function reorderNavigationOrder(
   const nextOrder = [...order];
   nextOrder.splice(nextOrder.indexOf(sourceLabel), 1);
   const targetIndex = nextOrder.indexOf(targetLabel);
-  nextOrder.splice(
-    targetIndex + (position === "after" ? 1 : 0),
-    0,
-    sourceLabel,
-  );
+  nextOrder.splice(targetIndex + (position === "after" ? 1 : 0), 0, sourceLabel);
   return nextOrder;
 }
 
@@ -234,9 +193,7 @@ export function getMobileOverflowNavigation(
   return navigation.filter(([label]) => !primaryLabels.has(label));
 }
 
-export function getNavigationDestination(
-  destination: string | NavigationItemWithMetadata,
-): string {
+export function getNavigationDestination(destination: string | NavigationItemWithMetadata): string {
   if (typeof destination !== "string") {
     return destination[2]?.routeLink || destination[0];
   }
@@ -247,8 +204,7 @@ export function getNavigationIconColor(
   label: string,
   sidebarPreferences?: SidebarPreferences | null,
 ): string {
-  if (sidebarPreferences?.iconStyle !== "monochrome")
-    return navigationTones[label] || "#8c9294";
+  if (sidebarPreferences?.iconStyle !== "monochrome") return navigationTones[label] || "#8c9294";
   if (sidebarPreferences?.monochromeMode === "neutral") return "var(--text)";
   if (sidebarPreferences?.monochromeMode === "custom")
     return sidebarPreferences.monochromeColor || "#6c78ff";

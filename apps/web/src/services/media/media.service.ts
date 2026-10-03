@@ -14,19 +14,13 @@ export interface UploadProgress {
 
 export type UploadProgressHandler = (progress: UploadProgress) => void;
 
-function requestPresignedMediaUpload(
-  payload: PresignMediaRequest,
-): Promise<PresignMediaResponse> {
+function requestPresignedMediaUpload(payload: PresignMediaRequest): Promise<PresignMediaResponse> {
   return api.post<PresignMediaResponse>("/media/presign", payload);
 }
 
 export const mediaService = {
-  getImageVariantManifest(
-    mediaAssetId: string,
-  ): Promise<MediaImageVariantManifest> {
-    return api.get<MediaImageVariantManifest>(
-      `/media/${mediaAssetId}/image-variants`,
-    );
+  getImageVariantManifest(mediaAssetId: string): Promise<MediaImageVariantManifest> {
+    return api.get<MediaImageVariantManifest>(`/media/${mediaAssetId}/image-variants`);
   },
 
   getImageVariantUrl(mediaAssetId: string, width: number): string {
@@ -43,16 +37,11 @@ export const mediaService = {
    * the transcode job has passed its thumbnail step.
    */
   getVideoThumbnailUrl(mediaAssetId: string): string {
-    const cdnBaseUrl = String(import.meta.env.VITE_CDN_URL || "/cdn").replace(
-      /\/+$/,
-      "",
-    );
+    const cdnBaseUrl = String(import.meta.env.VITE_CDN_URL || "/cdn").replace(/\/+$/, "");
     return `${cdnBaseUrl}/public/thumbnails/${encodeURIComponent(mediaAssetId)}/original.webp`;
   },
 
-  presignMediaUpload(
-    payload: PresignMediaRequest,
-  ): Promise<PresignMediaResponse> {
+  presignMediaUpload(payload: PresignMediaRequest): Promise<PresignMediaResponse> {
     return requestPresignedMediaUpload(payload);
   },
 
@@ -75,9 +64,7 @@ export const mediaService = {
     signal?: AbortSignal,
   ): Promise<void> {
     if (typeof XMLHttpRequest === "undefined") {
-      return Promise.reject(
-        new Error("Media uploads are only available in a browser."),
-      );
+      return Promise.reject(new Error("Media uploads are only available in a browser."));
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -108,10 +95,7 @@ export const mediaService = {
       signal?.addEventListener("abort", abortUpload, { once: true });
       xhr.open("PUT", uploadUrl, true);
       xhr.withCredentials = false;
-      xhr.setRequestHeader(
-        "Content-Type",
-        file.type || "application/octet-stream",
-      );
+      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
 
       xhr.upload.addEventListener("progress", (event) => {
         const totalBytes = event.lengthComputable ? event.total : file.size;
@@ -135,11 +119,7 @@ export const mediaService = {
         }
 
         finish(() =>
-          reject(
-            new Error(
-              `Storage upload failed with status ${xhr.status || "unknown"}.`,
-            ),
-          ),
+          reject(new Error(`Storage upload failed with status ${xhr.status || "unknown"}.`)),
         );
       });
 
@@ -158,19 +138,12 @@ export const mediaService = {
   },
 
   confirmUpload(mediaAssetId: string): Promise<MediaUploadCompleteResponse> {
-    return api.post<MediaUploadCompleteResponse>(
-      `/media/${mediaAssetId}/upload-complete`,
-    );
+    return api.post<MediaUploadCompleteResponse>(`/media/${mediaAssetId}/upload-complete`);
   },
 
   createVideoJobProgressEventSource(mediaAssetId: string): EventSource {
-    if (
-      typeof window === "undefined" ||
-      typeof window.EventSource === "undefined"
-    ) {
-      throw new Error(
-        "Live transcoding updates are not supported in this browser.",
-      );
+    if (typeof window === "undefined" || typeof window.EventSource === "undefined") {
+      throw new Error("Live transcoding updates are not supported in this browser.");
     }
 
     return new window.EventSource(
@@ -179,15 +152,11 @@ export const mediaService = {
     );
   },
 
-  retryTranscode(
-    mediaAssetId: string,
-  ): Promise<{ should202: boolean; jobId: string }> {
+  retryTranscode(mediaAssetId: string): Promise<{ should202: boolean; jobId: string }> {
     return api.post(`/media/${mediaAssetId}/transcode/retry`);
   },
 
-  cancelTranscode(
-    mediaAssetId: string,
-  ): Promise<{ cancelled: true; jobId: string }> {
+  cancelTranscode(mediaAssetId: string): Promise<{ cancelled: true; jobId: string }> {
     return api.post(`/media/${mediaAssetId}/transcode/cancel`);
   },
 };

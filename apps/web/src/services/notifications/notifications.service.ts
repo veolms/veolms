@@ -38,8 +38,5 @@ export const notificationsService = {
   updatePreferences: (
     input: UpdateNotificationPreferences,
   ): Promise<NotificationPreferencesResponse> =>
-    api.put<NotificationPreferencesResponse>(
-      "/notification-preferences",
-      input,
-    ),
+    api.put<NotificationPreferencesResponse>("/notification-preferences", input),
 };

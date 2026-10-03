@@ -11,10 +11,7 @@ import { NotificationSummaryWidget } from "./NotificationSummaryWidget";
 import { RecentMentionsWidget } from "./RecentMentionsWidget";
 import type { NotificationTabId } from "./notificationsData";
 import { useNotificationsFilter } from "./useNotificationsFilter";
-import {
-  CenteredLoadingSpinner,
-  LoadingSpinnerIcon,
-} from "../components/LoadingSpinner";
+import { CenteredLoadingSpinner, LoadingSpinnerIcon } from "../components/LoadingSpinner";
 
 export interface NotificationsPageProps {
   onNavigatePage?: NavigateTo;
@@ -91,7 +88,7 @@ export function NotificationsPage({
 
   return (
     <div
-      className="w-full min-w-0 flex flex-col font-sans"
+      className="flex w-full min-w-0 flex-col font-sans"
       aria-labelledby="notifications-page-title"
     >
       {/* Top Header Row with Title, Badge, Subtitle, and Mark All as Read Button */}
@@ -107,7 +104,7 @@ export function NotificationsPage({
         <button
           type="button"
           onClick={markAllAsRead}
-          className="inline-flex shrink-0 cursor-pointer self-start items-center gap-2 rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-xs font-semibold text-(--text) shadow-sm transition-all hover:bg-(--hover) hover:text-(--text) active:scale-[0.98] sm:self-auto md:text-sm"
+          className="inline-flex shrink-0 cursor-pointer items-center gap-2 self-start rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-xs font-semibold text-(--text) shadow-sm transition-all hover:bg-(--hover) hover:text-(--text) active:scale-[0.98] sm:self-auto md:text-sm"
           style={{ boxShadow: "var(--card-shadow)" }}
         >
           <Check size={16} weight="bold" className="text-emerald-400" />
@@ -134,16 +131,14 @@ export function NotificationsPage({
               role="tab"
               aria-selected={isActive}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative inline-flex min-h-11.5 shrink-0 cursor-pointer select-none items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs font-[650] transition-colors md:text-sm ${
-                isActive
-                  ? "text-(--text)"
-                  : "text-(--muted) hover:text-(--text)"
+              className={`relative inline-flex min-h-11.5 shrink-0 cursor-pointer items-center gap-2 px-3.5 pt-1 pb-2.5 text-xs font-[650] transition-colors select-none md:text-sm ${
+                isActive ? "text-(--text)" : "text-(--muted) hover:text-(--text)"
               }`}
             >
               <span>{tab.label}</span>
               {count > 0 && tab.id !== "all" && (
                 <span
-                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                  className={`py-0.2 rounded-full px-1.5 text-[10px] font-bold ${
                     isActive
                       ? "bg-(--accent) text-(--on-accent,#ffffff)"
                       : "bg-(--surface-strong) text-(--muted)"
@@ -154,7 +149,7 @@ export function NotificationsPage({
               )}
               {isActive && (
                 <span
-                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-(--accent)"
+                  className="absolute right-0 bottom-0 left-0 h-[2.5px] rounded-t-full bg-(--accent)"
                   aria-hidden="true"
                 />
               )}
@@ -180,7 +175,7 @@ export function NotificationsPage({
       {/* Responsive Layout: 1 column on <=150% zoom, 2 columns on >=1280px / 100% zoom */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:items-start">
         {/* Left / Main Column: Grouped Notifications Feed */}
-        <main className="flex flex-col gap-6 xl:col-span-8 min-w-0">
+        <main className="flex min-w-0 flex-col gap-6 xl:col-span-8">
           {isLoading ? (
             <CenteredLoadingSpinner
               label="Loading notifications"
@@ -189,26 +184,25 @@ export function NotificationsPage({
           ) : isError ? (
             <div
               role="alert"
-              className="flex flex-col items-center justify-center rounded-[18px] bg-(--card-surface) p-8 sm:p-12 text-center"
+              className="flex flex-col items-center justify-center rounded-[18px] bg-(--card-surface) p-8 text-center sm:p-12"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
               <div
-                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-400 mb-3.5"
+                className="mb-3.5 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-400"
                 aria-hidden="true"
               >
                 <WarningCircle size={26} weight="duotone" />
               </div>
-              <h3 className="text-base font-semibold text-(--text) tracking-tight">
+              <h3 className="text-base font-semibold tracking-tight text-(--text)">
                 Unable to load notifications
               </h3>
-              <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted) leading-relaxed">
-                Notifications could not be loaded. Please check your connection
-                and try again.
+              <p className="mt-1 max-w-sm text-xs leading-relaxed text-(--muted) md:text-sm">
+                Notifications could not be loaded. Please check your connection and try again.
               </p>
               <button
                 type="button"
                 onClick={refetch}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-(--accent) px-4 py-2 text-xs sm:text-sm font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
+                className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] sm:text-sm"
               >
                 <ArrowClockwise size={15} weight="bold" />
                 <span>Try again</span>
@@ -221,7 +215,7 @@ export function NotificationsPage({
                 <section aria-labelledby="heading-today">
                   <h2
                     id="heading-today"
-                    className="text-xs font-bold uppercase tracking-wider text-(--muted) mb-2.5 px-0.5"
+                    className="mb-2.5 px-0.5 text-xs font-bold tracking-wider text-(--muted) uppercase"
                   >
                     Today
                   </h2>
@@ -246,7 +240,7 @@ export function NotificationsPage({
                 <section aria-labelledby="heading-yesterday">
                   <h2
                     id="heading-yesterday"
-                    className="text-xs font-bold uppercase tracking-wider text-(--muted) mb-2.5 px-0.5"
+                    className="mb-2.5 px-0.5 text-xs font-bold tracking-wider text-(--muted) uppercase"
                   >
                     Yesterday
                   </h2>
@@ -271,7 +265,7 @@ export function NotificationsPage({
                 <section aria-labelledby="heading-earlier">
                   <h2
                     id="heading-earlier"
-                    className="text-xs font-bold uppercase tracking-wider text-(--muted) mb-2.5 px-0.5"
+                    className="mb-2.5 px-0.5 text-xs font-bold tracking-wider text-(--muted) uppercase"
                   >
                     Earlier
                   </h2>
@@ -295,25 +289,17 @@ export function NotificationsPage({
                   type="button"
                   onClick={loadMore}
                   aria-busy={isFetchingNextPage}
-                  aria-label={
-                    isFetchingNextPage
-                      ? "Loading more notifications"
-                      : undefined
-                  }
+                  aria-label={isFetchingNextPage ? "Loading more notifications" : undefined}
                   disabled={isFetchingNextPage}
                   className="self-center rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-sm font-semibold text-(--text) disabled:cursor-wait disabled:opacity-60"
                 >
-                  {isFetchingNextPage ? (
-                    <LoadingSpinnerIcon size={18} />
-                  ) : (
-                    "Load more"
-                  )}
+                  {isFetchingNextPage ? <LoadingSpinnerIcon size={18} /> : "Load more"}
                 </button>
               )}
             </>
           ) : (
             <div
-              className="relative flex min-h-85 sm:min-h-96 flex-col items-center justify-center overflow-hidden rounded-2xl sm:rounded-[22px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] p-8 sm:p-12 text-center shadow-(--card-shadow)"
+              className="relative flex min-h-85 flex-col items-center justify-center overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] p-8 text-center shadow-(--card-shadow) sm:min-h-96 sm:rounded-[22px] sm:p-12"
               style={{
                 background:
                   "radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, color-mix(in srgb, var(--accent) 6%, transparent) 50%, transparent 75%), linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--card-surface)) 0%, var(--card-surface) 48%, var(--card-surface) 100%)",
@@ -321,25 +307,23 @@ export function NotificationsPage({
               }}
             >
               <div
-                className="mb-4 flex size-14 sm:size-16 items-center justify-center rounded-2xl sm:rounded-[20px] border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))] text-(--accent) shadow-[0_12px_24px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)]"
+                className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))] text-(--accent) shadow-[0_12px_24px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)] sm:size-16 sm:rounded-[20px]"
                 aria-hidden="true"
               >
                 <Bell size={30} weight="duotone" />
               </div>
-              <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
+              <h2 className="text-base font-bold tracking-tight text-(--text) sm:text-lg">
                 No notifications found
               </h2>
-              <p className="mt-1.5 max-w-sm text-xs sm:text-sm text-(--muted) leading-relaxed">
-                {searchQuery ||
-                categoryFilter !== "all" ||
-                statusFilter !== "all"
+              <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-(--muted) sm:text-sm">
+                {searchQuery || categoryFilter !== "all" || statusFilter !== "all"
                   ? "Try changing your search query or reset your active filters to view all notifications."
                   : "You're all caught up! No notifications to display."}
               </p>
               <button
                 type="button"
                 onClick={resetFilters}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-(--accent) px-4 py-2 text-xs sm:text-sm font-semibold text-(--on-accent,#ffffff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] cursor-pointer"
+                className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] sm:text-sm"
               >
                 Reset filters
               </button>
@@ -348,7 +332,7 @@ export function NotificationsPage({
         </main>
 
         {/* Right Column / Subgrid: Sidebar Widgets */}
-        <aside className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-5 xl:col-span-4 min-w-0">
+        <aside className="grid min-w-0 grid-cols-1 gap-5 md:grid-cols-2 xl:col-span-4 xl:grid-cols-1">
           {/* Summary Widget */}
           <NotificationSummaryWidget
             counts={tabCounts}

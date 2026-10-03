@@ -1,27 +1,12 @@
 import { config } from "../../../config.ts";
 import type { RoutePluginOptions } from "../../../lib/route-plugin.ts";
-import {
-  createAuthMiddleware,
-  type AuthMiddleware,
-} from "../../../middlewares/auth.middleware.ts";
-import {
-  createAuthService,
-  type AuthService,
-} from "../authentication/authentication.service.ts";
+import { createAuthMiddleware, type AuthMiddleware } from "../../../middlewares/auth.middleware.ts";
+import { createAuthService, type AuthService } from "../authentication/authentication.service.ts";
 import { createMfaService, type MfaService } from "../mfa/mfa.service.ts";
-import {
-  createOauthService,
-  type OauthService,
-} from "../oauth/oauth.service.ts";
+import { createOauthService, type OauthService } from "../oauth/oauth.service.ts";
 import { createOtpService, type OtpService } from "../otp/otp.service.ts";
-import {
-  createSessionService,
-  type SessionService,
-} from "../session/session.service.ts";
-import {
-  createSetupService,
-  type SetupService,
-} from "../setup/setup.service.ts";
+import { createSessionService, type SessionService } from "../session/session.service.ts";
+import { createSetupService, type SetupService } from "../setup/setup.service.ts";
 
 export interface AuthContext {
   middleware: AuthMiddleware;
@@ -44,10 +29,7 @@ export interface AuthContext {
  * declared once. Spelling them out per route is how a step in the chain gets
  * quietly omitted on one endpoint.
  */
-export function createAuthContext({
-  database,
-  services,
-}: RoutePluginOptions): AuthContext {
+export function createAuthContext({ database, services }: RoutePluginOptions): AuthContext {
   const otpService = createOtpService({
     database,
     services,
@@ -69,10 +51,7 @@ export function createAuthContext({
     sessionService,
   });
 
-  const authenticated = [
-    middleware.authenticate,
-    middleware.requireAuthenticated,
-  ];
+  const authenticated = [middleware.authenticate, middleware.requireAuthenticated];
 
   return {
     middleware,

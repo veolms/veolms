@@ -81,10 +81,7 @@ function getGeometry(element: HTMLElement): PlayerZoomGeometry {
   );
 }
 
-function getLocalPoint(
-  element: HTMLElement,
-  point: GesturePoint,
-): GesturePoint {
+function getLocalPoint(element: HTMLElement, point: GesturePoint): GesturePoint {
   const root = getPlayerRoot(element);
   const bounds = root.getBoundingClientRect();
   return { x: point.x - bounds.left, y: point.y - bounds.top };
@@ -97,9 +94,7 @@ function getFirstTwoPoints(
   return values[0] && values[1] ? [values[0], values[1]] : null;
 }
 
-export function usePlayerZoomGestures(
-  controller: PlayerController,
-): ZoomGestureHandlers {
+export function usePlayerZoomGestures(controller: PlayerController): ZoomGestureHandlers {
   const pointerPointsRef = useRef(new Map<number, GesturePoint>());
   const suppressedPointersRef = useRef(new Set<number>());
   const pinchRef = useRef<PinchGesture | null>(null);
@@ -201,12 +196,8 @@ export function usePlayerZoomGestures(
       const center = midpoint(first, second);
       const localCenter = getLocalPoint(element, center);
       pinchRef.current = {
-        contentX:
-          (localCenter.x - geometry.containerWidth / 2 - zoom.panX) /
-          zoom.scale,
-        contentY:
-          (localCenter.y - geometry.containerHeight / 2 - zoom.panY) /
-          zoom.scale,
+        contentX: (localCenter.x - geometry.containerWidth / 2 - zoom.panX) / zoom.scale,
+        contentY: (localCenter.y - geometry.containerHeight / 2 - zoom.panY) / zoom.scale,
         fillScale: getPlayerFillZoom(geometry),
         geometry,
         maxScale: zoom.scale,
@@ -231,14 +222,8 @@ export function usePlayerZoomGestures(
       const localCenter = getLocalPoint(element, midpoint(first, second));
       const pan = clampPlayerPan(
         {
-          x:
-            localCenter.x -
-            pinch.geometry.containerWidth / 2 -
-            pinch.contentX * scale,
-          y:
-            localCenter.y -
-            pinch.geometry.containerHeight / 2 -
-            pinch.contentY * scale,
+          x: localCenter.x - pinch.geometry.containerWidth / 2 - pinch.contentX * scale,
+          y: localCenter.y - pinch.geometry.containerHeight / 2 - pinch.contentY * scale,
         },
         scale,
         pinch.geometry,
@@ -315,9 +300,7 @@ export function usePlayerZoomGestures(
     if (event.pointerType !== "touch") return false;
     if (
       event.isPrimary &&
-      (pointerPointsRef.current.size > 0 ||
-        pinchRef.current !== null ||
-        panRef.current !== null)
+      (pointerPointsRef.current.size > 0 || pinchRef.current !== null || panRef.current !== null)
     ) {
       recoverAbandonedPointerSession();
     }

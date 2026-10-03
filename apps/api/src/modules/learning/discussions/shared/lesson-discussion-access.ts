@@ -1,9 +1,6 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import { ADMIN_ROLE } from "../../../auth/index.ts";
-import {
-  createAccessService,
-  type AccessService,
-} from "../../../access/index.ts";
+import { createAccessService, type AccessService } from "../../../access/index.ts";
 import { DiscussionErrors } from "./discussion.errors.ts";
 import type { DiscussionActor } from "./discussion.access.ts";
 
@@ -34,11 +31,7 @@ export function createLessonDiscussionAccess(options?: {
         .selectFrom("course_lessons")
         .innerJoin("courses", "courses.id", "course_lessons.course_id")
         .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
-        .innerJoin(
-          "course_sections",
-          "course_sections.id",
-          "course_lessons.section_id",
-        )
+        .innerJoin("course_sections", "course_sections.id", "course_lessons.section_id")
         .select([
           "courses.status as courseStatus",
           "courses.creator_id as courseCreatorId",
@@ -53,20 +46,12 @@ export function createLessonDiscussionAccess(options?: {
         .where("courses.deleted_at", "is", null)
         .executeTakeFirst();
 
-      if (
-        !lesson ||
-        lesson.courseStatus !== "published" ||
-        lesson.isPublished === false
-      ) {
+      if (!lesson || lesson.courseStatus !== "published" || lesson.isPublished === false) {
         throw DiscussionErrors.notFound("Lesson discussion");
       }
 
-      const isAdmin = Boolean(
-        actor?.roles.some((role) => role.toLowerCase() === ADMIN_ROLE),
-      );
-      const isCourseOwner = Boolean(
-        actor && lesson.courseCreatorId === actor.userId,
-      );
+      const isAdmin = Boolean(actor?.roles.some((role) => role.toLowerCase() === ADMIN_ROLE));
+      const isCourseOwner = Boolean(actor && lesson.courseCreatorId === actor.userId);
       const hasActiveAccess = Boolean(
         actor && (await access.hasActiveAccess(db, actor.userId, courseId)),
       );

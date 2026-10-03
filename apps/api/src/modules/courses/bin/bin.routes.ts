@@ -50,10 +50,7 @@ const binRoutes: RoutePlugin = async (app, options) => {
         summary: "Restore a deleted course before permanent deletion",
         params: z.object({ id: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Course restored successfully",
-            restoreCourseResponseSchema,
-          ),
+          200: jsonResponse("Course restored successfully", restoreCourseResponseSchema),
           403: errorResponse("Administrator access required"),
           404: errorResponse("Deleted course not found"),
           409: errorResponse("Course purge is already in progress"),

@@ -9,10 +9,7 @@ const notificationRetryScheduleSchema = z
   .default("60,300,1800,7200")
   .transform((value, context) => {
     const parsed = value.split(",").map((part) => Number(part.trim()));
-    if (
-      parsed.length === 0 ||
-      parsed.some((item) => !Number.isInteger(item) || item <= 0)
-    ) {
+    if (parsed.length === 0 || parsed.some((item) => !Number.isInteger(item) || item <= 0)) {
       context.addIssue({
         code: "custom",
         message: "Expected a comma-separated list of positive integers.",
@@ -30,11 +27,7 @@ const cdnUrlSchema = z
     if (value !== "/" && /^\/(?!\/)[^\s?#]*$/u.test(value)) return true;
     try {
       const url = new URL(value);
-      return (
-        (url.protocol === "http:" || url.protocol === "https:") &&
-        !url.search &&
-        !url.hash
-      );
+      return (url.protocol === "http:" || url.protocol === "https:") && !url.search && !url.hash;
     } catch {
       return false;
     }
@@ -53,24 +46,17 @@ const folderListSchema = (defaultValue: string) =>
     );
 
 const serverConfigSchema = z.object({
-  DATABASE_URL: z
-    .string()
-    .default("postgresql://veolms:veolms@localhost:5433/veolms"),
+  DATABASE_URL: z.string().default("postgresql://veolms:veolms@localhost:5433/veolms"),
   API_HOST: z.string().min(1).default("127.0.0.1"),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development"),
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_DEV_PRETTY_LOGS: booleanEnvironmentValueSchema.default(true),
   API_DOCS_ENABLED: booleanEnvironmentValueSchema.default(true),
   API_PUBLIC_URL: z.string().optional(),
   COURSE_STATIC_REFRESH_GITHUB_TOKEN: z.string().optional(),
   COURSE_STATIC_REFRESH_REPOSITORY: z.string().optional(),
   COURSE_STATIC_REFRESH_REF: z.string().min(1).default("development"),
-  COURSE_STATIC_REFRESH_WORKFLOW: z
-    .string()
-    .min(1)
-    .default("refresh-cloudflare-course-pages.yml"),
+  COURSE_STATIC_REFRESH_WORKFLOW: z.string().min(1).default("refresh-cloudflare-course-pages.yml"),
   TRUST_PROXY: z
     .string()
     .default("false")
@@ -152,16 +138,10 @@ const serverConfigSchema = z.object({
   NOTIFICATION_OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
   NOTIFICATION_EMAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
   NOTIFICATION_RETRY_SECONDS: notificationRetryScheduleSchema,
-  NOTIFICATION_OUTBOX_RETENTION_DAYS: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .default(30),
+  NOTIFICATION_OUTBOX_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
 
   // SMS Delivery
-  SMS_PROVIDER: z
-    .enum(["auto", "msg91", "vonage", "twilio", "console"])
-    .default("auto"),
+  SMS_PROVIDER: z.enum(["auto", "msg91", "vonage", "twilio", "console"]).default("auto"),
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_TEMPLATE_ID: z.string().optional(),
   MSG91_API_URL: z.string().default("https://control.msg91.com/api/v5/flow"),
@@ -182,21 +162,9 @@ const serverConfigSchema = z.object({
     .string()
     .min(32, "CDN_SIGNING_SECRET must be at least 32 characters")
     .default("default_cdn_signing_secret_at_least_32_chars_long"),
-  CDN_TOKEN_TTL_SECONDS: z.coerce
-    .number()
-    .int()
-    .min(60)
-    .max(86_400)
-    .default(900),
-  CDN_HLS_TOKEN_TTL_SECONDS: z.coerce
-    .number()
-    .int()
-    .min(60)
-    .max(86_400)
-    .default(900),
-  CDN_PUBLIC_FOLDERS: folderListSchema(
-    "public,thumbnails,course-hls,course-videos",
-  ),
+  CDN_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
+  CDN_HLS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
+  CDN_PUBLIC_FOLDERS: folderListSchema("public,thumbnails,course-hls,course-videos"),
   CDN_PRIVATE_FOLDERS: folderListSchema("protected,media,transcoded"),
   STORAGE_REGION: z.string().default("us-east-1"),
   STORAGE_ACCESS_KEY_ID: z.string().optional(),
@@ -266,10 +234,7 @@ type ParsedServerConfig = z.output<typeof serverConfigSchema>;
 /** Config keys still holding the shipped placeholder secret. */
 function findInsecureDefaults(parsed: ParsedServerConfig): string[] {
   return Object.entries(INSECURE_DEFAULTS)
-    .filter(
-      ([key, defaultValue]) =>
-        parsed[key as keyof ParsedServerConfig] === defaultValue,
-    )
+    .filter(([key, defaultValue]) => parsed[key as keyof ParsedServerConfig] === defaultValue)
     .map(([key]) => key);
 }
 
@@ -303,9 +268,7 @@ function resolveEmailTransport(parsed: ParsedServerConfig): "smtp" | "console" {
   }
 
   const usingDefaultHost = parsed.SMTP_HOST === "localhost";
-  return parsed.NODE_ENV !== "production" && usingDefaultHost
-    ? "console"
-    : "smtp";
+  return parsed.NODE_ENV !== "production" && usingDefaultHost ? "console" : "smtp";
 }
 
 function resolveWebAuthnOrigins(parsed: ParsedServerConfig): string[] {
@@ -353,10 +316,7 @@ function resolveWebAuthnRpId(parsed: ParsedServerConfig): string {
   }
 }
 
-function resolveWebAuthnRpIds(
-  resolvedRpId: string,
-  origins: string[],
-): string[] {
+function resolveWebAuthnRpIds(resolvedRpId: string, origins: string[]): string[] {
   const rpIds = new Set<string>();
   if (resolvedRpId) {
     rpIds.add(resolvedRpId);
@@ -404,9 +364,7 @@ export type ServerConfig = Omit<
   CORS_ORIGINS: string[];
 };
 
-export function loadServerConfig(
-  environment: Record<string, string | undefined>,
-): ServerConfig {
+export function loadServerConfig(environment: Record<string, string | undefined>): ServerConfig {
   const parsed = serverConfigSchema.parse(environment);
   const offenders = findInsecureDefaults(parsed);
   const missingRequired = findMissingRequiredInProduction(parsed);

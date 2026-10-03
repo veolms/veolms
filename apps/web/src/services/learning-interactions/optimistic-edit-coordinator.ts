@@ -48,11 +48,8 @@ export function getOptimisticEditFields(
   fallback: OptimisticEditFields,
 ): OptimisticEditFields {
   const entity =
-    response && typeof response === "object"
-      ? (response as Record<string, unknown>)
-      : {};
-  const content =
-    typeof entity.content === "string" ? entity.content : fallback.content;
+    response && typeof response === "object" ? (response as Record<string, unknown>) : {};
+  const content = typeof entity.content === "string" ? entity.content : fallback.content;
   return {
     content,
     plainText:
@@ -99,10 +96,7 @@ export class OptimisticEditCoordinator {
     return record;
   }
 
-  fail(
-    kind: OptimisticEditKind,
-    clientId: string,
-  ): OptimisticEditRecord | undefined {
+  fail(kind: OptimisticEditKind, clientId: string): OptimisticEditRecord | undefined {
     const record = this.get(kind, clientId);
     if (!record || !isCurrentGeneration(record)) return undefined;
     this.records.delete(editKey(kind, clientId));
@@ -121,10 +115,7 @@ export class OptimisticEditCoordinator {
     this.records.delete(editKey(kind, clientId));
   }
 
-  get(
-    kind: OptimisticEditKind,
-    clientId: string,
-  ): OptimisticEditRecord | undefined {
+  get(kind: OptimisticEditKind, clientId: string): OptimisticEditRecord | undefined {
     const record = this.records.get(editKey(kind, clientId));
     if (!record || !isCurrentGeneration(record)) return undefined;
     return record;
@@ -135,17 +126,14 @@ export class OptimisticEditCoordinator {
     entity: { id: string | number; clientId?: string; serverId?: string },
   ): OptimisticEditRecord | undefined {
     this.pruneStaleGenerations();
-    const direct = entity.clientId
-      ? this.get(kind, entity.clientId)
-      : undefined;
+    const direct = entity.clientId ? this.get(kind, entity.clientId) : undefined;
     if (direct) return direct;
 
     for (const record of this.records.values()) {
       if (
         record.kind === kind &&
         isCurrentGeneration(record) &&
-        (record.serverId === entity.serverId ||
-          record.serverId === String(entity.id))
+        (record.serverId === entity.serverId || record.serverId === String(entity.id))
       ) {
         return record;
       }

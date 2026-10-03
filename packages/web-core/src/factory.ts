@@ -17,9 +17,7 @@ function excludeRoutes(
       continue;
     }
     result.push(
-      entry.children
-        ? { ...entry, children: excludeRoutes(entry.children, excludeIds) }
-        : entry,
+      entry.children ? { ...entry, children: excludeRoutes(entry.children, excludeIds) } : entry,
     );
   }
   return result;
@@ -32,9 +30,7 @@ function excludeRoutes(
  * `extensions` to append private routes and `excludeRouteIds` to remove
  * specific core routes — without modifying core source files.
  */
-export function createVeoLMSWeb(
-  options: CreateVeoLMSWebOptions = {},
-): RouteConfig {
+export function createVeoLMSWeb(options: CreateVeoLMSWebOptions = {}): RouteConfig {
   const { extensions = [], excludeRouteIds = [] } = options;
 
   const rawCoreRoutes = getCoreRoutes();

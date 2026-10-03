@@ -1,27 +1,17 @@
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
-import type {
-  DynamicImportLanguageRegistration,
-  HighlighterCore,
-} from "@shikijs/core";
+import type { DynamicImportLanguageRegistration, HighlighterCore } from "@shikijs/core";
 import type { DescriptionChapterDeclaration } from "@veolms/video-player";
 import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DiscussionContent } from "./types";
-import {
-  formatInlineTimestampAriaLabel,
-  tokenizeInlineTimestamps,
-} from "./inlineTimestamp";
+import { formatInlineTimestampAriaLabel, tokenizeInlineTimestamps } from "./inlineTimestamp";
 import type { DiscussionAttachmentItem } from "../discussion-attachments";
 import { LinkPreviewCard } from "../LinkPreviewCard";
-import {
-  extractFirstUrl,
-  useLinkPreview,
-} from "../../services/learning-interactions";
+import { extractFirstUrl, useLinkPreview } from "../../services/learning-interactions";
 
-const MENTION_PATTERN =
-  /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})(?=[^A-Za-z0-9_]|$)/g;
+const MENTION_PATTERN = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})(?=[^A-Za-z0-9_]|$)/g;
 
 export function renderContentWithMentions(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
@@ -64,9 +54,7 @@ export function renderContentWithMentions(text: string): React.ReactNode {
   return parts;
 }
 
-export function highlightMentionsInNode(
-  node: React.ReactNode,
-): React.ReactNode {
+export function highlightMentionsInNode(node: React.ReactNode): React.ReactNode {
   if (typeof node === "string") {
     return renderContentWithMentions(node);
   }
@@ -111,8 +99,7 @@ interface InlineTimestampRenderOptions {
 
 const INLINE_TIMESTAMP_LINK_CLASS_NAME =
   "inline cursor-pointer border-0 bg-transparent p-0 font-medium text-blue-400 no-underline transition-colors duration-150 hover:text-blue-300 active:text-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)";
-const INLINE_TIMESTAMP_TEXT_CLASS_NAME =
-  "inline font-medium text-blue-400 no-underline";
+const INLINE_TIMESTAMP_TEXT_CLASS_NAME = "inline font-medium text-blue-400 no-underline";
 
 interface InlineTimestampButtonProps {
   value: string;
@@ -131,10 +118,7 @@ function InlineTimestampButton({
 }: InlineTimestampButtonProps) {
   if (!onSeekToTimestamp) {
     return (
-      <span
-        data-inline-timestamp={value}
-        className={INLINE_TIMESTAMP_TEXT_CLASS_NAME}
-      >
+      <span data-inline-timestamp={value} className={INLINE_TIMESTAMP_TEXT_CLASS_NAME}>
         {value}
       </span>
     );
@@ -187,9 +171,7 @@ function renderInlineTimestampsInNode(
   }
 
   if (Array.isArray(node)) {
-    return React.Children.map(node, (child) =>
-      renderInlineTimestampsInNode(child, options),
-    );
+    return React.Children.map(node, (child) => renderInlineTimestampsInNode(child, options));
   }
 
   if (React.isValidElement(node)) {
@@ -310,10 +292,7 @@ function preparePlainChapterMarkdown(
   if (declarations.length === 0) return markdown;
 
   const declarationByLine = new Map(
-    declarations.map((declaration, index) => [
-      declaration.lineStart,
-      { declaration, index },
-    ]),
+    declarations.map((declaration, index) => [declaration.lineStart, { declaration, index }]),
   );
   const lines = markdown.split(/\r?\n/);
   const output: string[] = [];
@@ -360,25 +339,18 @@ export function DiscussionMarkdown({
   preserveSoftBreaks = false,
   className = "",
 }: DiscussionMarkdownProps) {
-  const isGeneratedAttachmentMarkdown = (
-    url: string | undefined,
-    label: string | undefined,
-  ) =>
+  const isGeneratedAttachmentMarkdown = (url: string | undefined, label: string | undefined) =>
     Boolean(
       url &&
       label &&
       linkedAttachments?.some(
-        (attachment) =>
-          attachment.fileUrl === url && attachment.fileName === label,
+        (attachment) => attachment.fileUrl === url && attachment.fileName === label,
       ),
     );
 
   const rawText =
-    typeof content === "string"
-      ? content
-      : content.plainText || content.markdown || "";
-  const markdown =
-    typeof content === "string" ? content : content.markdown || "";
+    typeof content === "string" ? content : content.plainText || content.markdown || "";
+  const markdown = typeof content === "string" ? content : content.markdown || "";
   const chapterMarkdown = chapterDeclarations
     ? preparePlainChapterMarkdown(markdown, chapterDeclarations)
     : markdown;
@@ -395,23 +367,18 @@ export function DiscussionMarkdown({
     <div
       role="document"
       aria-label={label}
-      className={`max-w-[72ch] wrap-anywhere text-sm leading-6 text-(--text-secondary) sm:text-[15px] ${className}`}
+      className={`max-w-[72ch] text-sm leading-6 wrap-anywhere text-(--text-secondary) sm:text-[15px] ${className}`}
     >
       <ReactMarkdown
         remarkPlugins={
-          preserveSoftBreaks
-            ? [remarkGfm, remarkLessonDescriptionSoftBreaks]
-            : [remarkGfm]
+          preserveSoftBreaks ? [remarkGfm, remarkLessonDescriptionSoftBreaks] : [remarkGfm]
         }
         skipHtml
         urlTransform={safeMarkdownUrl}
         components={{
           a: ({ href, children }) => {
             const chapterIndex = chapterMarkerIndex(href);
-            const chapter =
-              chapterIndex === null
-                ? undefined
-                : chapterDeclarations?.[chapterIndex];
+            const chapter = chapterIndex === null ? undefined : chapterDeclarations?.[chapterIndex];
             if (chapter) {
               const value = flattenMarkdownText(children) ?? "";
               return (
@@ -526,13 +493,9 @@ export function DiscussionMarkdown({
             );
           },
           li: ({ children }) => (
-            <li className="pl-1">
-              {renderInlineContent(children, inlineTimestampOptions)}
-            </li>
+            <li className="pl-1">{renderInlineContent(children, inlineTimestampOptions)}</li>
           ),
-          ol: ({ children }) => (
-            <ol className="my-2 list-decimal space-y-1 pl-6">{children}</ol>
-          ),
+          ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-6">{children}</ol>,
           p: ({ children }) => (
             <p className="my-1.5 first:mt-0 last:mb-0">
               {renderInlineContent(children, inlineTimestampOptions)}
@@ -541,39 +504,29 @@ export function DiscussionMarkdown({
           pre: ({ children }) => <>{children}</>,
           table: ({ children }) => (
             <div className="my-3 max-w-full overflow-x-auto rounded-lg shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]">
-              <table className="w-full border-collapse text-left text-sm">
-                {children}
-              </table>
+              <table className="w-full border-collapse text-left text-sm">{children}</table>
             </div>
           ),
           td: ({ children }) => (
-            <td className="border-t px-3 py-2 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)]">
+            <td className="border-t [border-color:color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-2">
               {renderInlineContent(children, inlineTimestampOptions)}
             </td>
           ),
           th: ({ children }) => (
-            <th className="border-b px-3 py-2 font-semibold text-(--text) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)]">
+            <th className="border-b [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] px-3 py-2 font-semibold text-(--text)">
               {renderInlineContent(children, inlineTimestampOptions)}
             </th>
           ),
           strong: ({ children }) => (
-            <strong>
-              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
-            </strong>
+            <strong>{renderInlineTimestampsInNode(children, inlineTimestampOptions)}</strong>
           ),
           em: ({ children }) => (
-            <em>
-              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
-            </em>
+            <em>{renderInlineTimestampsInNode(children, inlineTimestampOptions)}</em>
           ),
           del: ({ children }) => (
-            <del>
-              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
-            </del>
+            <del>{renderInlineTimestampsInNode(children, inlineTimestampOptions)}</del>
           ),
-          ul: ({ children }) => (
-            <ul className="my-2 list-disc space-y-1 pl-6">{children}</ul>
-          ),
+          ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-6">{children}</ul>,
         }}
       >
         {chapterMarkdown}
@@ -641,8 +594,8 @@ function HighlightedCodeBlock({ code, language }: HighlightedCodeBlockProps) {
 
   return (
     <div className="group/code relative my-3 overflow-hidden rounded-xl bg-[color-mix(in_srgb,var(--canvas)_82%,#111827)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)]">
-      <div className="flex h-9 items-center justify-between border-b px-3 [border-color:color-mix(in_srgb,var(--text)_8%,transparent)]">
-        <span className="font-mono text-[11px] uppercase tracking-wide text-(--muted)">
+      <div className="flex h-9 items-center justify-between border-b [border-color:color-mix(in_srgb,var(--text)_8%,transparent)] px-3">
+        <span className="font-mono text-[11px] tracking-wide text-(--muted) uppercase">
           {language || "text"}
         </span>
         <button
@@ -654,7 +607,7 @@ function HighlightedCodeBlock({ code, language }: HighlightedCodeBlockProps) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="max-w-full overflow-x-auto p-3 font-mono text-[13px] leading-6 [overflow-wrap:normal] [scrollbar-width:thin]">
+      <pre className="max-w-full [scrollbar-width:thin] overflow-x-auto p-3 font-mono text-[13px] leading-6 [overflow-wrap:normal]">
         <code>
           {(tokens ?? fallbackTokens(code)).map((line, lineIndex) => (
             <span key={lineIndex} className="block min-h-6">
@@ -756,11 +709,7 @@ const tokenCache = new Map<string, HighlightedToken[][]>();
 const languageLoads = new Map<DiscussionShikiLanguage, Promise<void>>();
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 
-async function highlightCode(
-  code: string,
-  language: DiscussionShikiLanguage,
-  theme: string,
-) {
+async function highlightCode(code: string, language: DiscussionShikiLanguage, theme: string) {
   const key = `${theme}\0${language}\0${code}`;
   const cached = tokenCache.get(key);
   if (cached) return cached;
@@ -769,8 +718,8 @@ async function highlightCode(
     if (!highlighter.getLoadedLanguages().includes(language)) {
       let load = languageLoads.get(language);
       if (!load) {
-        load = DISCUSSION_LANGUAGE_LOADERS[language]().then(
-          ({ default: lang }) => highlighter.loadLanguage(lang),
+        load = DISCUSSION_LANGUAGE_LOADERS[language]().then(({ default: lang }) =>
+          highlighter.loadLanguage(lang),
         );
         languageLoads.set(language, load);
       }
@@ -794,32 +743,23 @@ function getDiscussionHighlighter() {
     import("@shikijs/engine-javascript"),
     import("@shikijs/themes/github-dark"),
     import("@shikijs/themes/github-light"),
-  ]).then(
-    ([
-      { createHighlighterCore },
-      { createJavaScriptRegexEngine },
-      dark,
-      light,
-    ]) =>
-      createHighlighterCore({
-        engine: createJavaScriptRegexEngine(),
-        langs: [],
-        themes: [dark.default, light.default],
-      }),
+  ]).then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }, dark, light]) =>
+    createHighlighterCore({
+      engine: createJavaScriptRegexEngine(),
+      langs: [],
+      themes: [dark.default, light.default],
+    }),
   );
   return highlighterPromise;
 }
 
 function fallbackTokens(code: string): HighlightedToken[][] {
-  return code
-    .split("\n")
-    .map((line) => [{ content: line, color: "currentColor" }]);
+  return code.split("\n").map((line) => [{ content: line, color: "currentColor" }]);
 }
 
 function useResolvedCodeTheme() {
   const [theme, setTheme] = useState(() =>
-    typeof document !== "undefined" &&
-    document.documentElement.dataset.theme === "light"
+    typeof document !== "undefined" && document.documentElement.dataset.theme === "light"
       ? "github-light"
       : "github-dark",
   );

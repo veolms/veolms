@@ -99,10 +99,7 @@ export function ToastNotification({
     if (timerRef.current) {
       window.clearTimeout(timerRef.current);
       const elapsed = Date.now() - startTimeRef.current;
-      remainingTimeRef.current = Math.max(
-        800,
-        remainingTimeRef.current - elapsed,
-      );
+      remainingTimeRef.current = Math.max(800, remainingTimeRef.current - elapsed);
     }
   };
 
@@ -157,16 +154,12 @@ export function ToastNotification({
       <div className="toast-notification__icon-wrap" aria-hidden="true">
         {renderIcon()}
       </div>
-      {currentNotice.title && (
-        <div className="toast-notification__divider" aria-hidden="true" />
-      )}
+      {currentNotice.title && <div className="toast-notification__divider" aria-hidden="true" />}
       <div className="toast-notification__content">
         {currentNotice.title && (
           <div className="toast-notification__title">{currentNotice.title}</div>
         )}
-        <div className="toast-notification__message">
-          {currentNotice.message}
-        </div>
+        <div className="toast-notification__message">{currentNotice.message}</div>
       </div>
       <button
         type="button"

@@ -21,10 +21,7 @@ import {
   type DiscussionUploadStore,
 } from "../../../discussion-uploads/index.ts";
 import { DISCUSSION_CONSTANTS } from "../shared/discussion.constants.ts";
-import {
-  createDiscussionAccess,
-  type DiscussionActor,
-} from "../shared/discussion.access.ts";
+import { createDiscussionAccess, type DiscussionActor } from "../shared/discussion.access.ts";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import { fetchSafeHtml, extractLinkMetadata } from "./attachments.preview.ts";
 import type { AttachmentsRepository } from "./attachments.repository.ts";
@@ -143,11 +140,7 @@ export function createAttachmentsService(
     const lesson = await db
       .selectFrom("course_lessons")
       .innerJoin("courses", "courses.id", "course_lessons.course_id")
-      .innerJoin(
-        "course_sections",
-        "course_sections.id",
-        "course_lessons.section_id",
-      )
+      .innerJoin("course_sections", "course_sections.id", "course_lessons.section_id")
       .select("course_lessons.id")
       .where("course_lessons.id", "=", context.lessonId)
       .where("course_lessons.course_id", "=", context.courseId)
@@ -164,11 +157,7 @@ export function createAttachmentsService(
       );
     }
 
-    await discussionAccess.assertCanParticipateInCourse(
-      db,
-      actor,
-      context.courseId,
-    );
+    await discussionAccess.assertCanParticipateInCourse(db, actor, context.courseId);
   }
 
   async function resolveLinkPreview(url: string): Promise<LinkPreviewResponse> {
@@ -188,10 +177,7 @@ export function createAttachmentsService(
     return createLinkPreviewFallback(url);
   }
 
-  function getAttachmentKind(
-    mimetype: string,
-    filename: string,
-  ): AttachmentKind {
+  function getAttachmentKind(mimetype: string, filename: string): AttachmentKind {
     if (mimetype.startsWith("image/")) {
       if (filename.toLowerCase().includes("screenshot")) return "screenshot";
       return "image";
@@ -199,9 +185,7 @@ export function createAttachmentsService(
     const ext = path.extname(filename).toLowerCase();
     if (
       mimetype === "application/json" ||
-      (
-        DISCUSSION_CONSTANTS.SUPPORTED_CODE_EXTENSIONS as readonly string[]
-      ).includes(ext)
+      (DISCUSSION_CONSTANTS.SUPPORTED_CODE_EXTENSIONS as readonly string[]).includes(ext)
     ) {
       return "code";
     }
@@ -277,11 +261,7 @@ export function createAttachmentsService(
       }
 
       if (input.fileSize > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
-        throw httpError(
-          413,
-          "PAYLOAD_TOO_LARGE",
-          "The selected file is too large.",
-        );
+        throw httpError(413, "PAYLOAD_TOO_LARGE", "The selected file is too large.");
       }
 
       const dimensions = validateDimensions(input.mimeType, input);
@@ -289,8 +269,7 @@ export function createAttachmentsService(
       const id = crypto.randomUUID();
       const ext = resolveExtension(input.fileName, input.mimeType);
       const storageKey = discussionUploadStorageKey(`${id}${ext}`);
-      const kind =
-        input.kind || getAttachmentKind(input.mimeType, input.fileName);
+      const kind = input.kind || getAttachmentKind(input.mimeType, input.fileName);
 
       const uploadUrl = await storage.getPresignedPutUrl(
         storageKey,
@@ -336,37 +315,20 @@ export function createAttachmentsService(
       }
 
       if (file.data.length > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
-        throw httpError(
-          413,
-          "PAYLOAD_TOO_LARGE",
-          "The selected file is too large.",
-        );
+        throw httpError(413, "PAYLOAD_TOO_LARGE", "The selected file is too large.");
       }
 
-      const existing = await attachmentsRepo.findAttachmentById(
-        db,
-        attachmentId,
-      );
+      const existing = await attachmentsRepo.findAttachmentById(db, attachmentId);
       if (!existing) {
-        throw httpError(
-          404,
-          "ATTACHMENT_NOT_FOUND",
-          "Attachment upload slot not found",
-        );
+        throw httpError(404, "ATTACHMENT_NOT_FOUND", "Attachment upload slot not found");
       }
 
       if (existing.ownerId !== userId) {
-        throw httpError(
-          403,
-          "FORBIDDEN",
-          "You are not the owner of this attachment upload slot",
-        );
+        throw httpError(403, "FORBIDDEN", "You are not the owner of this attachment upload slot");
       }
 
       const dimensions = validateDimensions(file.mimetype, file);
-      const existingDimensions = getAttachmentDimensionFields(
-        existing.metadata,
-      );
+      const existingDimensions = getAttachmentDimensionFields(existing.metadata);
       const persistedDimensions =
         dimensions ||
         (existingDimensions.width !== null && existingDimensions.height !== null
@@ -411,16 +373,9 @@ export function createAttachmentsService(
         throw error;
       }
 
-      const updated = await attachmentsRepo.findAttachmentById(
-        db,
-        attachmentId,
-      );
+      const updated = await attachmentsRepo.findAttachmentById(db, attachmentId);
       if (!updated) {
-        throw httpError(
-          500,
-          "UPLOAD_FAILED",
-          "Failed to finalize attachment upload",
-        );
+        throw httpError(500, "UPLOAD_FAILED", "Failed to finalize attachment upload");
       }
       return {
         ...updated,
@@ -429,20 +384,13 @@ export function createAttachmentsService(
     },
 
     async completeUpload(db, attachmentId, userId) {
-      const existing = await attachmentsRepo.findAttachmentById(
-        db,
-        attachmentId,
-      );
+      const existing = await attachmentsRepo.findAttachmentById(db, attachmentId);
       if (!existing) {
         throw httpError(404, "ATTACHMENT_NOT_FOUND", "Attachment not found");
       }
 
       if (existing.ownerId !== userId) {
-        throw httpError(
-          403,
-          "FORBIDDEN",
-          "You are not the owner of this attachment",
-        );
+        throw httpError(403, "FORBIDDEN", "You are not the owner of this attachment");
       }
 
       if (existing.status === "rejected" || existing.status === "deleted") {
@@ -462,11 +410,7 @@ export function createAttachmentsService(
 
       const uploadedObject = await storage.headObject(existing.storageKey);
       if (!uploadedObject) {
-        throw httpError(
-          400,
-          "UPLOAD_INCOMPLETE",
-          "Upload has no file data yet",
-        );
+        throw httpError(400, "UPLOAD_INCOMPLETE", "Upload has no file data yet");
       }
 
       if (
@@ -497,9 +441,7 @@ export function createAttachmentsService(
         .set({
           status: "ready",
           file_url:
-            storage.getCdnObjectUrl(existing.storageKey) ||
-            existing.fileUrl ||
-            existing.storageKey,
+            storage.getCdnObjectUrl(existing.storageKey) || existing.fileUrl || existing.storageKey,
           metadata: JSON.stringify({
             ...(existing.metadata || {}),
             completedAt: new Date().toISOString(),
@@ -508,16 +450,9 @@ export function createAttachmentsService(
         .where("id", "=", attachmentId)
         .execute();
 
-      const completed = await attachmentsRepo.findAttachmentById(
-        db,
-        attachmentId,
-      );
+      const completed = await attachmentsRepo.findAttachmentById(db, attachmentId);
       if (!completed) {
-        throw httpError(
-          500,
-          "UPLOAD_FAILED",
-          "Failed to finalize attachment upload",
-        );
+        throw httpError(500, "UPLOAD_FAILED", "Failed to finalize attachment upload");
       }
       return {
         ...completed,
@@ -537,11 +472,7 @@ export function createAttachmentsService(
       }
 
       if (file.data.length > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
-        throw httpError(
-          413,
-          "PAYLOAD_TOO_LARGE",
-          "The selected file is too large.",
-        );
+        throw httpError(413, "PAYLOAD_TOO_LARGE", "The selected file is too large.");
       }
 
       const dimensions = validateDimensions(file.mimetype, file);

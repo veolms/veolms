@@ -4,10 +4,8 @@ import { courseKeys } from "../courses/courses.keys";
 import { quizKeys } from "../quizzes/quizzes.keys";
 import { paymentService } from "./payment.service";
 
-export const useCheckoutPreview = () =>
-  useMutation({ mutationFn: paymentService.preview });
-export const useCreateCheckoutOrder = () =>
-  useMutation({ mutationFn: paymentService.createOrder });
+export const useCheckoutPreview = () => useMutation({ mutationFn: paymentService.preview });
+export const useCreateCheckoutOrder = () => useMutation({ mutationFn: paymentService.createOrder });
 export function useVerifyPayment() {
   const queryClient = useQueryClient();
   return useMutation<

@@ -49,8 +49,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
   const pricingService = createPricingService({ database: options.database });
   const shared = {
     database: options.database,
-    getAcademyId: async () =>
-      (await auth.setupService.getAcademy())?.id ?? null,
+    getAcademyId: async () => (await auth.setupService.getAcademy())?.id ?? null,
     authService: auth.authService,
     courseService,
     accessService: createAccessService(),
@@ -62,10 +61,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
     analytics: createAnalyticsService(shared),
     pricingService,
   });
-  const author = [
-    ...auth.mfaVerified,
-    auth.middleware.requireRoles([ADMIN_ROLE, INSTRUCTOR_ROLE]),
-  ];
+  const author = [...auth.mfaVerified, auth.middleware.requireRoles([ADMIN_ROLE, INSTRUCTOR_ROLE])];
   const learner = auth.mfaVerified;
   const errors = {
     400: errorResponse("Invalid request"),
@@ -253,10 +249,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
         tags: ["Quizzes"],
         params: idParam("courseId"),
         response: {
-          200: jsonResponse(
-            "Quiz assignments",
-            courseQuizAssignmentsResponseSchema,
-          ),
+          200: jsonResponse("Quiz assignments", courseQuizAssignmentsResponseSchema),
           ...errors,
         },
       },
@@ -272,10 +265,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
         tags: ["Quizzes"],
         params: z.object({ courseId: z.uuid(), assignmentId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Quiz pricing preview",
-            quizPricingPreviewResponseSchema,
-          ),
+          200: jsonResponse("Quiz pricing preview", quizPricingPreviewResponseSchema),
           ...errors,
         },
       },
@@ -341,10 +331,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
         tags: ["Quizzes"],
         params: idParam("assignmentId"),
         response: {
-          200: jsonResponse(
-            "Quiz assignment deleted",
-            quizDeleteResponseSchema,
-          ),
+          200: jsonResponse("Quiz assignment deleted", quizDeleteResponseSchema),
           ...errors,
         },
       },
@@ -359,10 +346,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
         operationId: "listMyQuizAssignments",
         tags: ["Quizzes"],
         response: {
-          200: jsonResponse(
-            "Assigned Quizzes",
-            myQuizAssignmentsResponseSchema,
-          ),
+          200: jsonResponse("Assigned Quizzes", myQuizAssignmentsResponseSchema),
           ...errors,
         },
       },

@@ -13,17 +13,13 @@ import { ADMIN_ROLE } from "../auth/index.ts";
 import { createAccessService, type AccessService } from "../access/index.ts";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
-import {
-  createCurriculumService,
-  type CurriculumService,
-} from "../courses/index.ts";
+import { createCurriculumService, type CurriculumService } from "../courses/index.ts";
 import * as courseRepository from "../courses/course/course.repository.ts";
 import * as learningProgressRepository from "./learning-progress.repository.ts";
 
 type UserContext = { id: string; roles: readonly string[] };
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isUuid(value: string): boolean {
   return UUID_PATTERN.test(value);
@@ -97,9 +93,7 @@ function normalizeProgressPercent(value: number): number {
 
 function progressUpdatedAt(row: ResumeProgressRow): number {
   const timestamp =
-    row.updated_at instanceof Date
-      ? row.updated_at.getTime()
-      : new Date(row.updated_at).getTime();
+    row.updated_at instanceof Date ? row.updated_at.getTime() : new Date(row.updated_at).getTime();
   return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
 }
 
@@ -118,10 +112,7 @@ function resolveResumeContext(
   const updatedRowsByLessonId = new Map<string, ResumeProgressRow>();
 
   for (const row of rows) {
-    progressByLessonId.set(
-      row.lesson_id,
-      normalizeProgressPercent(row.progress_percent),
-    );
+    progressByLessonId.set(row.lesson_id, normalizeProgressPercent(row.progress_percent));
     updatedRowsByLessonId.set(row.lesson_id, row);
   }
 
@@ -160,8 +151,7 @@ function resolveResumeContext(
       const candidateLesson = lessons[candidateIndex]!;
       const selectedRow = updatedRowsByLessonId.get(selectedLesson.id);
       const candidateRow = updatedRowsByLessonId.get(candidateLesson.id);
-      const timestampDelta =
-        progressUpdatedAt(candidateRow!) - progressUpdatedAt(selectedRow!);
+      const timestampDelta = progressUpdatedAt(candidateRow!) - progressUpdatedAt(selectedRow!);
 
       if (timestampDelta !== 0) {
         return timestampDelta > 0 ? candidateIndex : selectedIndex;
@@ -176,9 +166,7 @@ function resolveResumeContext(
         : selectedIndex;
     });
   } else {
-    resumeIndex = lessons.findIndex(
-      (lesson) => (progressByLessonId.get(lesson.id) ?? 0) < 100,
-    );
+    resumeIndex = lessons.findIndex((lesson) => (progressByLessonId.get(lesson.id) ?? 0) < 100);
     if (resumeIndex === -1) return emptyResponse();
   }
 
@@ -187,9 +175,7 @@ function resolveResumeContext(
     courseSlug,
     resumeLesson: toResponseLesson(lessons[resumeIndex]!, resumeIndex),
     previousLesson:
-      resumeIndex > 0
-        ? toResponseLesson(lessons[resumeIndex - 1]!, resumeIndex - 1)
-        : null,
+      resumeIndex > 0 ? toResponseLesson(lessons[resumeIndex - 1]!, resumeIndex - 1) : null,
     nextLesson:
       resumeIndex < lessons.length - 1
         ? toResponseLesson(lessons[resumeIndex + 1]!, resumeIndex + 1)
@@ -198,10 +184,7 @@ function resolveResumeContext(
 }
 
 export interface LearningProgressService {
-  getProgress(
-    user: UserContext,
-    courseKey: string,
-  ): Promise<LearningProgressResponse>;
+  getProgress(user: UserContext, courseKey: string): Promise<LearningProgressResponse>;
   getResumeContext(
     user: UserContext,
     courseKey: string,
@@ -275,17 +258,9 @@ export function createLearningProgressService({
     ]);
 
     const requiresGrant =
-      accessRule?.access_type === "restricted" ||
-      pricing?.pricing_type === "paid";
-    if (
-      requiresGrant &&
-      !(await accessService.hasActiveAccess(database, user.id, course.id))
-    ) {
-      throw new AppError(
-        403,
-        "COURSE_ACCESS_REQUIRED",
-        "You do not have access to this course.",
-      );
+      accessRule?.access_type === "restricted" || pricing?.pricing_type === "paid";
+    if (requiresGrant && !(await accessService.hasActiveAccess(database, user.id, course.id))) {
+      throw new AppError(403, "COURSE_ACCESS_REQUIRED", "You do not have access to this course.");
     }
 
     return course;
@@ -299,9 +274,7 @@ export function createLearningProgressService({
       curriculumService.findSectionsByCourseId(courseId),
       curriculumService.findLessonsByCourseId(courseId),
     ]);
-    const sectionPosition = new Map(
-      sections.map((section) => [section.id, section.position]),
-    );
+    const sectionPosition = new Map(sections.map((section) => [section.id, section.position]));
     return lessons
       .filter((lesson) => canManageCourse || lesson.is_published)
       .sort((left, right) => {
@@ -310,9 +283,7 @@ export function createLearningProgressService({
           (sectionPosition.get(right.section_id) ?? 0);
         if (sectionDelta !== 0) return sectionDelta;
         const lessonDelta = left.position - right.position;
-        return lessonDelta !== 0
-          ? lessonDelta
-          : left.id.localeCompare(right.id);
+        return lessonDelta !== 0 ? lessonDelta : left.id.localeCompare(right.id);
       })
       .map((lesson) => ({
         id: lesson.id,
@@ -343,11 +314,7 @@ export function createLearningProgressService({
         course.id,
         course.creator_id === user.id || user.roles.includes(ADMIN_ROLE),
       ),
-      learningProgressRepository.listUserCourseProgress(
-        database,
-        user.id,
-        course.id,
-      ),
+      learningProgressRepository.listUserCourseProgress(database, user.id, course.id),
     ]);
     return presentSnapshot(course.id, course.slug, lessons, rows);
   }
@@ -358,9 +325,7 @@ export function createLearningProgressService({
     lessons: OrderedLesson[],
     rows: learningProgressRepository.LearningProgressRow[],
   ): LearningProgressResponse {
-    const progressByLessonId = new Map(
-      rows.map((row) => [row.lesson_id, row.progress_percent]),
-    );
+    const progressByLessonId = new Map(rows.map((row) => [row.lesson_id, row.progress_percent]));
     const progressTotal = lessons.reduce(
       (total, lesson) => total + (progressByLessonId.get(lesson.id) ?? 0),
       0,
@@ -382,11 +347,9 @@ export function createLearningProgressService({
       courseId,
       courseSlug,
       totalLessons: lessons.length,
-      completedLessons: lessons.filter(
-        (lesson) => (progressByLessonId.get(lesson.id) ?? 0) >= 100,
-      ).length,
-      progressPercent:
-        lessons.length > 0 ? Math.round(progressTotal / lessons.length) : 0,
+      completedLessons: lessons.filter((lesson) => (progressByLessonId.get(lesson.id) ?? 0) >= 100)
+        .length,
+      progressPercent: lessons.length > 0 ? Math.round(progressTotal / lessons.length) : 0,
       lessons: progressLessons,
     };
   }
@@ -404,15 +367,10 @@ export function createLearningProgressService({
     courseKey: string,
   ): Promise<LearningProgressResumeContextResponse> {
     const course = await requireCourse(user, courseKey);
-    const canManageCourse =
-      course.creator_id === user.id || user.roles.includes(ADMIN_ROLE);
+    const canManageCourse = course.creator_id === user.id || user.roles.includes(ADMIN_ROLE);
     const [lessons, rows] = await Promise.all([
       listAvailableResumeLessons(course.id, canManageCourse),
-      learningProgressRepository.listUserCourseProgress(
-        database,
-        user.id,
-        course.id,
-      ),
+      learningProgressRepository.listUserCourseProgress(database, user.id, course.id),
     ]);
 
     return resolveResumeContext(course.id, course.slug, lessons, rows);
@@ -424,23 +382,17 @@ export function createLearningProgressService({
     input: LearningProgressBatchRequest,
   ): Promise<LearningProgressSyncResponse> {
     const course = await requireCourse(user, courseKey);
-    const canManageCourse =
-      course.creator_id === user.id || user.roles.includes(ADMIN_ROLE);
+    const canManageCourse = course.creator_id === user.id || user.roles.includes(ADMIN_ROLE);
     const lessons = await curriculumService.findLessonsByCourseId(course.id);
     const availableLessonIds = new Set(
-      lessons
-        .filter((lesson) => canManageCourse || lesson.is_published)
-        .map((lesson) => lesson.id),
+      lessons.filter((lesson) => canManageCourse || lesson.is_published).map((lesson) => lesson.id),
     );
     const progressByLessonId = new Map<string, number>();
 
     for (const item of input.items) {
       if (!availableLessonIds.has(item.lessonId)) continue;
       const current = progressByLessonId.get(item.lessonId) ?? 0;
-      progressByLessonId.set(
-        item.lessonId,
-        Math.max(current, item.progressPercent),
-      );
+      progressByLessonId.set(item.lessonId, Math.max(current, item.progressPercent));
     }
 
     const now = new Date();
@@ -464,10 +416,7 @@ export function createLearningProgressService({
   async function getAverageProgressAndCompletionRate(
     filters: { courseId?: string | string[]; asOf?: Date } = {},
   ) {
-    return await learningProgressRepository.getAverageProgressAndCompletionRate(
-      database,
-      filters,
-    );
+    return await learningProgressRepository.getAverageProgressAndCompletionRate(database, filters);
   }
 
   async function getAverageProgressByCourse(
@@ -475,10 +424,7 @@ export function createLearningProgressService({
       courseId?: string | string[];
     } = {},
   ) {
-    return await learningProgressRepository.getAverageProgressByCourse(
-      database,
-      filters,
-    );
+    return await learningProgressRepository.getAverageProgressByCourse(database, filters);
   }
 
   async function getStartedAndCompletedCounts(filters: {
@@ -486,10 +432,7 @@ export function createLearningProgressService({
     from?: Date;
     to?: Date;
   }) {
-    return await learningProgressRepository.getStartedAndCompletedCounts(
-      database,
-      filters,
-    );
+    return await learningProgressRepository.getStartedAndCompletedCounts(database, filters);
   }
 
   async function getEstimatedWatchHours(filters: {
@@ -497,10 +440,7 @@ export function createLearningProgressService({
     from?: Date;
     to?: Date;
   }) {
-    return await learningProgressRepository.getEstimatedWatchHours(
-      database,
-      filters,
-    );
+    return await learningProgressRepository.getEstimatedWatchHours(database, filters);
   }
 
   return {

@@ -17,14 +17,8 @@ import type {
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
 import { DiscussionErrors } from "../shared/discussion.errors.ts";
-import {
-  createDiscussionAccess,
-  type DiscussionActor,
-} from "../shared/discussion.access.ts";
-import {
-  createDiscussionOutbox,
-  withWriteTransaction,
-} from "../shared/discussion.mentions.ts";
+import { createDiscussionAccess, type DiscussionActor } from "../shared/discussion.access.ts";
+import { createDiscussionOutbox, withWriteTransaction } from "../shared/discussion.mentions.ts";
 import {
   decodeDiscussionCursor,
   encodeDiscussionCursor,
@@ -33,10 +27,7 @@ import {
   takePage,
   toDate,
 } from "../shared/discussion.utils.ts";
-import {
-  createNotesRepository,
-  type NotesRepository,
-} from "../notes/notes.repository.ts";
+import { createNotesRepository, type NotesRepository } from "../notes/notes.repository.ts";
 import type { RepliesRepository } from "../replies/replies.repository.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type {
@@ -149,9 +140,7 @@ export function createModerationService({
   return {
     async createReport(db, reporter, input) {
       const actor: DiscussionActor =
-        typeof reporter === "string"
-          ? { userId: reporter, roles: [] }
-          : reporter;
+        typeof reporter === "string" ? { userId: reporter, roles: [] } : reporter;
       const reporterId = actor.userId;
 
       // 1. Verify target item exists and derive its actual course
@@ -159,11 +148,7 @@ export function createModerationService({
       if (input.targetType === "thread") {
         const thread = await threadsRepo.findThreadById(db, input.targetId);
         if (!thread) {
-          throw httpError(
-            404,
-            "TARGET_NOT_FOUND",
-            "Reported discussion thread not found",
-          );
+          throw httpError(404, "TARGET_NOT_FOUND", "Reported discussion thread not found");
         }
         courseId = thread.courseId;
       } else if (input.targetType === "reply") {
@@ -225,11 +210,7 @@ export function createModerationService({
     },
 
     async listReports(db, actor, query, scope) {
-      await assertModerationScope(
-        db,
-        actor,
-        scope === "course" ? query.courseId : null,
-      );
+      await assertModerationScope(db, actor, scope === "course" ? query.courseId : null);
       const pageCursor = decodeDiscussionCursor(query.cursor);
       const [rows, totalCount] = await Promise.all([
         moderationRepo.listReports(db, { ...query, pageCursor }),
@@ -242,9 +223,7 @@ export function createModerationService({
         reporter: {
           id: r.reporterId,
           displayName: r.reporterName || "Learner",
-          username:
-            (r.reporterUsername || r.reporterEmail || "user").split("@")[0] ||
-            "user",
+          username: (r.reporterUsername || r.reporterEmail || "user").split("@")[0] || "user",
           avatarUrl: null,
           role: mapAuthorRole(r.authorRole),
         },
@@ -256,14 +235,8 @@ export function createModerationService({
         status: r.status,
         reviewedByUserId: r.reviewedByUserId ?? null,
         actionTaken: r.actionTaken ?? null,
-        createdAt:
-          r.createdAt instanceof Date
-            ? r.createdAt.toISOString()
-            : String(r.createdAt),
-        updatedAt:
-          r.updatedAt instanceof Date
-            ? r.updatedAt.toISOString()
-            : String(r.updatedAt),
+        createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+        updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : String(r.updatedAt),
       }));
 
       const last = page.at(-1);
@@ -293,11 +266,7 @@ export function createModerationService({
         }
 
         if (courseId && report.course_id !== courseId) {
-          throw httpError(
-            403,
-            "FORBIDDEN",
-            "Report does not belong to this course",
-          );
+          throw httpError(403, "FORBIDDEN", "Report does not belong to this course");
         }
 
         await moderationRepo.updateReportStatus(
@@ -349,19 +318,11 @@ export function createModerationService({
       return withWriteTransaction(db, async (trx) => {
         const thread = await threadsRepo.findThreadById(trx, threadId);
         if (!thread) {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
 
         if (courseId && thread.courseId !== courseId) {
-          throw httpError(
-            403,
-            "FORBIDDEN",
-            "Discussion thread does not belong to this course",
-          );
+          throw httpError(403, "FORBIDDEN", "Discussion thread does not belong to this course");
         }
 
         if (input.action === "hide") {
@@ -387,9 +348,7 @@ export function createModerationService({
 
         // Transition pending reports on this thread to actioned or reviewed
         const targetReportStatus =
-          input.action === "hide" ||
-          input.action === "lock" ||
-          input.action === "delete"
+          input.action === "hide" || input.action === "lock" || input.action === "delete"
             ? "actioned"
             : "reviewed";
         await trx
@@ -421,9 +380,7 @@ export function createModerationService({
         // Notify thread author of moderation action
         if (
           thread.userId !== actor.userId &&
-          (input.action === "hide" ||
-            input.action === "delete" ||
-            input.action === "lock")
+          (input.action === "hide" || input.action === "delete" || input.action === "lock")
         ) {
           await outbox.publish(trx, {
             type: "moderation.content_moderated",
@@ -469,11 +426,7 @@ export function createModerationService({
 
         const thread = await threadsRepo.findThreadById(trx, reply.threadId);
         if (courseId && thread && thread.courseId !== courseId) {
-          throw httpError(
-            403,
-            "FORBIDDEN",
-            "Reply does not belong to this course",
-          );
+          throw httpError(403, "FORBIDDEN", "Reply does not belong to this course");
         }
 
         if (input.action === "hide") {
@@ -508,9 +461,7 @@ export function createModerationService({
 
         // Transition pending reports on this reply to actioned or reviewed
         const targetReportStatus =
-          input.action === "hide" || input.action === "delete"
-            ? "actioned"
-            : "reviewed";
+          input.action === "hide" || input.action === "delete" ? "actioned" : "reviewed";
         await trx
           .updateTable("learning_reports")
           .set({
@@ -691,11 +642,7 @@ export function createModerationService({
     },
 
     async listAuditLogs(db, actor, query, scope) {
-      await assertModerationScope(
-        db,
-        actor,
-        scope === "course" ? query.courseId : null,
-      );
+      await assertModerationScope(db, actor, scope === "course" ? query.courseId : null);
       const academyId = await resolveAcademyId(db);
       const pageCursor = decodeDiscussionCursor(query.cursor);
       const rows = await moderationRepo.listAuditLogs(db, academyId, {
@@ -712,9 +659,7 @@ export function createModerationService({
           ? {
               id: r.actorUserId,
               displayName: r.actorName || "Staff Member",
-              username:
-                (r.actorUsername || r.actorEmail || "staff").split("@")[0] ||
-                "staff",
+              username: (r.actorUsername || r.actorEmail || "staff").split("@")[0] || "staff",
               avatarUrl: null,
               role: mapAuthorRole(r.authorRole),
             }
@@ -727,10 +672,7 @@ export function createModerationService({
             ? parseAuditLogDetails(r.details)
             : (r.details as Record<string, unknown> | null),
         ipAddress: r.ipAddress ?? null,
-        createdAt:
-          r.createdAt instanceof Date
-            ? r.createdAt.toISOString()
-            : String(r.createdAt),
+        createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
       }));
 
       const last = page.at(-1);

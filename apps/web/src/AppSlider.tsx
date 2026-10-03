@@ -2,10 +2,7 @@ import type { CSSProperties, InputHTMLAttributes } from "react";
 
 export type AppSliderVariant = "accent" | "temperature" | "player" | "volume";
 
-export interface AppSliderProps extends Omit<
-  InputHTMLAttributes<HTMLInputElement>,
-  "type"
-> {
+export interface AppSliderProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
   variant?: AppSliderVariant;
 }
 
@@ -25,8 +22,7 @@ const getTemperatureThumbColor = (progress: number): string => {
     progress <= 50
       ? [TEMPERATURE_COLOR_STOPS[0], TEMPERATURE_COLOR_STOPS[1]]
       : [TEMPERATURE_COLOR_STOPS[1], TEMPERATURE_COLOR_STOPS[2]];
-  const stopProgress =
-    (progress - lowerStop.at) / (upperStop.at - lowerStop.at);
+  const stopProgress = (progress - lowerStop.at) / (upperStop.at - lowerStop.at);
   const [lowerRed, lowerGreen, lowerBlue] = lowerStop.color;
   const [upperRed, upperGreen, upperBlue] = upperStop.color;
   const interpolateChannel = (lower: number, upper: number) =>
@@ -64,10 +60,7 @@ export function AppSlider({
   const progress =
     maximum <= minimum
       ? 0
-      : Math.min(
-          100,
-          Math.max(0, ((currentValue - minimum) / (maximum - minimum)) * 100),
-        );
+      : Math.min(100, Math.max(0, ((currentValue - minimum) / (maximum - minimum)) * 100));
   const sliderStyle = {
     ...style,
     "--app-slider-progress": `${progress}%`,

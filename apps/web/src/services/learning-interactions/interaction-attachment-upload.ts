@@ -1,8 +1,5 @@
 import type { LearningUploadResponse } from "@veolms/contracts";
-import {
-  type InteractionAttachmentPatch,
-  type LocalComposerAttachment,
-} from "./attachment-model";
+import { type InteractionAttachmentPatch, type LocalComposerAttachment } from "./attachment-model";
 import {
   learningInteractionsService,
   type DiscussionAttachmentUploadContext,
@@ -10,10 +7,7 @@ import {
 
 export async function uploadInteractionAttachments(
   attachments: readonly LocalComposerAttachment[],
-  onAttachmentChange: (
-    attachmentId: string,
-    patch: InteractionAttachmentPatch,
-  ) => void,
+  onAttachmentChange: (attachmentId: string, patch: InteractionAttachmentPatch) => void,
   context?: DiscussionAttachmentUploadContext,
 ): Promise<LearningUploadResponse[]> {
   if (attachments.length > 0 && !context) {

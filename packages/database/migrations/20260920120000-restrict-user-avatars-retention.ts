@@ -50,10 +50,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(database: Kysely<unknown>): Promise<void> {
-  await database.schema
-    .dropIndex("idx_user_avatars_user_source_last_used")
-    .ifExists()
-    .execute();
+  await database.schema.dropIndex("idx_user_avatars_user_source_last_used").ifExists().execute();
 
   await sql`
     ALTER TABLE user_avatars

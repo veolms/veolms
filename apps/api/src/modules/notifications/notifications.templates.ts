@@ -1,10 +1,7 @@
 import { escapeHtml } from "../../services/email/email.templates.ts";
 import type { EmailContent } from "../../services/email/email.templates.ts";
 import { config } from "../../config.ts";
-import type {
-  NotificationTemplateData,
-  NotificationTemplateKey,
-} from "./notifications.types.ts";
+import type { NotificationTemplateData, NotificationTemplateKey } from "./notifications.types.ts";
 
 export interface RenderedNotificationTemplate {
   inApp: { title: string; body: string };
@@ -27,15 +24,10 @@ function numberValue(data: NotificationTemplateData, key: string): number {
   return value;
 }
 
-function stringListValue(
-  data: NotificationTemplateData,
-  key: string,
-): readonly string[] {
+function stringListValue(data: NotificationTemplateData, key: string): readonly string[] {
   const value = data[key];
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-    throw new Error(
-      `Notification template data is missing string list "${key}".`,
-    );
+    throw new Error(`Notification template data is missing string list "${key}".`);
   }
   return value;
 }
@@ -47,14 +39,8 @@ function formatMoney(amount: number, currency: string): string {
   }).format(amount / 100);
 }
 
-function emailContent(
-  subject: string,
-  body: string,
-  deepLink: string | null,
-): EmailContent {
-  const actionUrl = deepLink
-    ? new URL(deepLink, config.WEB_URL).toString()
-    : null;
+function emailContent(subject: string, body: string, deepLink: string | null): EmailContent {
+  const actionUrl = deepLink ? new URL(deepLink, config.WEB_URL).toString() : null;
   const action = actionUrl ? `\n\nOpen VeoLMS: ${actionUrl}` : "";
   const actionHtml = actionUrl
     ? `<p style="margin-top: 20px;"><a href="${escapeHtml(actionUrl)}">Open VeoLMS</a></p>`
@@ -84,10 +70,7 @@ export function renderNotificationTemplate(
     }
     case "purchase.completed": {
       const orderNumber = stringValue(data, "orderNumber");
-      const total = formatMoney(
-        numberValue(data, "totalAmount"),
-        stringValue(data, "currency"),
-      );
+      const total = formatMoney(numberValue(data, "totalAmount"), stringValue(data, "currency"));
       const itemTitles = stringListValue(data, "itemTitles");
       inApp = {
         title: "Purchase completed",

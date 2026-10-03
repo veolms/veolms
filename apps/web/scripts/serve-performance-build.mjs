@@ -5,18 +5,14 @@ import { request as httpsRequest } from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createBrotliCompress, createGzip, constants } from "node:zlib";
-import {
-  FIRST_SECTION_FLAG,
-  runPerformanceBuild,
-} from "./build-performance.mjs";
+import { FIRST_SECTION_FLAG, runPerformanceBuild } from "./build-performance.mjs";
 
 const buildExitCode = await runPerformanceBuild(
   process.argv.includes(FIRST_SECTION_FLAG) ? [FIRST_SECTION_FLAG] : [],
   {
     // A local preview must build its SSG catalogue from the local API too;
     // never inherit a production STATIC_BUILD_API_URL from .env.production.
-    STATIC_BUILD_API_URL:
-      process.env.VEO_PREVIEW_API_TARGET || "http://127.0.0.1:4000/v1",
+    STATIC_BUILD_API_URL: process.env.VEO_PREVIEW_API_TARGET || "http://127.0.0.1:4000/v1",
     // Keep browser requests on the preview origin so proxied auth cookies work.
     VITE_API_BASE_URL: "/v1",
   },
@@ -34,11 +30,8 @@ try {
 
 const root = path.resolve(scriptDirectory, "../build/client");
 const portArgumentIndex = process.argv.indexOf("--port");
-const commandLinePort =
-  portArgumentIndex >= 0 ? Number(process.argv[portArgumentIndex + 1]) : NaN;
-const port = Number.isFinite(commandLinePort)
-  ? commandLinePort
-  : Number(process.env.PORT || 4173);
+const commandLinePort = portArgumentIndex >= 0 ? Number(process.argv[portArgumentIndex + 1]) : NaN;
+const port = Number.isFinite(commandLinePort) ? commandLinePort : Number(process.env.PORT || 4173);
 const hostArgumentIndex = process.argv.indexOf("--host");
 const host =
   hostArgumentIndex >= 0 && process.argv[hostArgumentIndex + 1]
@@ -95,19 +88,9 @@ const resolveRequestPath = async (pathname) => {
   return path.join(root, "index.html");
 };
 
-const proxyRequestToOrigin = (
-  request,
-  response,
-  requestUrl,
-  targetOrigin,
-  unavailableError,
-) => {
-  const targetUrl = new URL(
-    `${requestUrl.pathname}${requestUrl.search}`,
-    targetOrigin,
-  );
-  const sendRequest =
-    targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
+const proxyRequestToOrigin = (request, response, requestUrl, targetOrigin, unavailableError) => {
+  const targetUrl = new URL(`${requestUrl.pathname}${requestUrl.search}`, targetOrigin);
+  const sendRequest = targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
   const proxyRequest = sendRequest(
     targetUrl,
     {
@@ -115,10 +98,7 @@ const proxyRequestToOrigin = (
       headers: { ...request.headers, host: targetUrl.host },
     },
     (proxyResponse) => {
-      response.writeHead(
-        proxyResponse.statusCode || 502,
-        proxyResponse.headers,
-      );
+      response.writeHead(proxyResponse.statusCode || 502, proxyResponse.headers);
       proxyResponse.pipe(response);
     },
   );
@@ -170,9 +150,7 @@ createServer(async (request, response) => {
     /[-_.][A-Za-z0-9_-]{8,}(?=\.[^.]+$)/.test(path.basename(filePath));
   const headers = {
     "Content-Type": mimeTypes.get(extension) || "application/octet-stream",
-    "Cache-Control": isHashedBuildAsset
-      ? "public, max-age=31536000, immutable"
-      : "no-cache",
+    "Cache-Control": isHashedBuildAsset ? "public, max-age=31536000, immutable" : "no-cache",
     Vary: "Accept-Encoding",
   };
   const acceptedEncoding = request.headers["accept-encoding"] || "";

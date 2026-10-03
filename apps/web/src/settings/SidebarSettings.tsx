@@ -14,12 +14,7 @@ import { AppSlider } from "../AppSlider";
 import { academyThemes } from "../themes";
 import type { AcademyTheme } from "../themes";
 import { useShortcutPlatform } from "../useShortcutPlatform";
-import {
-  ChoiceCard,
-  RadioGroup,
-  SettingRow,
-  SettingsToggle,
-} from "./SettingsControls";
+import { ChoiceCard, RadioGroup, SettingRow, SettingsToggle } from "./SettingsControls";
 import { MiniSurface, SidebarIconPreview } from "./SettingsPreviews";
 import {
   normalizeSidebarMaxWidth,
@@ -145,18 +140,12 @@ export function SidebarSettings({
   const customColor = HEX_COLOR_PATTERN.test(preferences.monochromeColor || "")
     ? (preferences.monochromeColor ?? "#6366f1")
     : "#6366f1";
-  const themeColor =
-    COLOR_THEMES.find((item) => item.id === academyTheme)?.preview || "#6366f1";
+  const themeColor = COLOR_THEMES.find((item) => item.id === academyTheme)?.preview || "#6366f1";
   const displayColor =
-    colorMode === "theme"
-      ? themeColor
-      : colorMode === "neutral"
-        ? "#9eacc0"
-        : customColor;
+    colorMode === "theme" ? themeColor : colorMode === "neutral" ? "#9eacc0" : customColor;
   const layout = preferences.contentLayout || "framed";
   const sidebarMaxWidth = normalizeSidebarMaxWidth(preferences.sidebarMaxWidth);
-  const headerLayout =
-    preferences.headerLayout === "fixed" ? "fixed" : "inline";
+  const headerLayout = preferences.headerLayout === "fixed" ? "fixed" : "inline";
   const showKeyboardShortcuts = preferences.showKeyboardShortcuts !== false;
   const showLabels = preferences.showCollapsedLabels !== false;
   const showCollapsedLogo = preferences.showCollapsedLogo !== false;
@@ -165,13 +154,9 @@ export function SidebarSettings({
   const elevateMenus = preferences.elevateMenus !== false;
   const glowPalette = normalizeSidebarGlow(preferences.glowPalette);
   const glowShape = normalizeSidebarGlowShape(preferences.glowShape);
-  const glowShapeSize = normalizeSidebarGlowShapeSize(
-    preferences.glowShapeSize,
-  );
+  const glowShapeSize = normalizeSidebarGlowShapeSize(preferences.glowShapeSize);
   const glowBlur = normalizeSidebarGlowBlur(preferences.glowBlur);
-  const glowIntensity = normalizeSidebarGlowIntensity(
-    preferences.glowIntensity,
-  );
+  const glowIntensity = normalizeSidebarGlowIntensity(preferences.glowIntensity);
   const glowIsDefault =
     glowPalette === SIDEBAR_GLOW_DEFAULT &&
     glowShape === SIDEBAR_GLOW_SHAPE_DEFAULT &&
@@ -181,13 +166,10 @@ export function SidebarSettings({
   const shortcutPlatform = useShortcutPlatform();
   const sidebarHidden = sidebarMode === "hidden";
   const [colorDraft, setColorDraft] = useState(displayColor);
-  const [sidebarWidthDraft, setSidebarWidthDraft] = useState(
-    String(sidebarMaxWidth),
-  );
+  const [sidebarWidthDraft, setSidebarWidthDraft] = useState(String(sidebarMaxWidth));
   const selectedPreset =
-    SIDEBAR_ICON_COLORS.find(
-      (item) => item.color.toLowerCase() === displayColor.toLowerCase(),
-    )?.id || (colorMode === "theme" ? "indigo" : "custom");
+    SIDEBAR_ICON_COLORS.find((item) => item.color.toLowerCase() === displayColor.toLowerCase())
+      ?.id || (colorMode === "theme" ? "indigo" : "custom");
   const update = (next: SidebarPreferences) =>
     onSidebarPreferencesChange?.({ ...preferences, ...next });
 
@@ -219,9 +201,7 @@ export function SidebarSettings({
         <div className="settings-section__heading-row">
           <div>
             <h2>Header behavior</h2>
-            <p>
-              Choose which header item stays anchored while the sidebar resizes.
-            </p>
+            <p>Choose which header item stays anchored while the sidebar resizes.</p>
           </div>
         </div>
         <div className="settings-row-list settings-sidebar-header-options__rows">
@@ -232,9 +212,7 @@ export function SidebarSettings({
           >
             <SettingsToggle
               checked={headerLayout === "fixed"}
-              onChange={(value) =>
-                update({ headerLayout: value ? "fixed" : "inline" })
-              }
+              onChange={(value) => update({ headerLayout: value ? "fixed" : "inline" })}
               label="Fixed collapse control"
             />
           </SettingRow>
@@ -258,9 +236,7 @@ export function SidebarSettings({
         </span>
         <div>
           <h2>Sidebar menus</h2>
-          <p>
-            Menu items follow your workspace role and stay in a fixed order.
-          </p>
+          <p>Menu items follow your workspace role and stay in a fixed order.</p>
         </div>
       </div>
 
@@ -290,9 +266,7 @@ export function SidebarSettings({
               label="Monochrome"
               note="All icons use a single color"
               className="settings-choice-card--horizontal settings-choice-card--sidebar-style"
-              preview={
-                <SidebarIconPreview monochrome monoColor={displayColor} />
-              }
+              preview={<SidebarIconPreview monochrome monoColor={displayColor} />}
             />
           </RadioGroup>
         </section>
@@ -301,20 +275,13 @@ export function SidebarSettings({
           <div className="settings-section__heading-row">
             <div>
               <h2>Icon color</h2>
-              <p>
-                Choose the color used for sidebar icons when Monochrome style is
-                selected.
-              </p>
+              <p>Choose the color used for sidebar icons when Monochrome style is selected.</p>
             </div>
             <span className="settings-section__hint">
-              <Info size={16} weight="bold" /> This setting won&apos;t affect
-              Multicolor style
+              <Info size={16} weight="bold" /> This setting won&apos;t affect Multicolor style
             </span>
           </div>
-          <RadioGroup
-            label="Sidebar icon color mode"
-            className="settings-icon-color-options"
-          >
+          <RadioGroup label="Sidebar icon color mode" className="settings-icon-color-options">
             {(
               [
                 ["theme", "Follow color theme"],
@@ -350,10 +317,7 @@ export function SidebarSettings({
           <div className="settings-color-tools settings-color-tools--redesign">
             <div className="settings-color-tools__quick">
               <span className="settings-color-tools__label">Quick colors</span>
-              <div
-                className="settings-preset-list"
-                aria-label="Monochrome color presets"
-              >
+              <div className="settings-preset-list" aria-label="Monochrome color presets">
                 {SIDEBAR_ICON_COLORS.map((item) => (
                   <button
                     type="button"
@@ -371,10 +335,7 @@ export function SidebarSettings({
                     <i style={{ background: item.color }} />
                   </button>
                 ))}
-                <span
-                  className="settings-color-swatch-divider"
-                  aria-hidden="true"
-                />
+                <span className="settings-color-swatch-divider" aria-hidden="true" />
                 <button
                   type="button"
                   className={`settings-color-swatch settings-color-swatch--custom ${selectedPreset === "custom" ? "is-selected" : ""}`}
@@ -424,9 +385,7 @@ export function SidebarSettings({
           <div className="settings-section__heading-row">
             <div>
               <h2>Sidebar glow</h2>
-              <p>
-                Follow the active theme or choose a separate color atmosphere.
-              </p>
+              <p>Follow the active theme or choose a separate color atmosphere.</p>
             </div>
             <button
               type="button"
@@ -447,10 +406,7 @@ export function SidebarSettings({
               Reset
             </button>
           </div>
-          <RadioGroup
-            label="Sidebar glow colors"
-            className="settings-sidebar-glow-options"
-          >
+          <RadioGroup label="Sidebar glow colors" className="settings-sidebar-glow-options">
             {SIDEBAR_GLOW_OPTIONS.map((option) => {
               const selected = glowPalette === option.id;
               return (
@@ -460,20 +416,18 @@ export function SidebarSettings({
                   role="radio"
                   aria-checked={selected}
                   tabIndex={selected ? 0 : -1}
-                  className={`settings-sidebar-glow-option${selected ? " is-selected" : ""}`}
+                  className={`settings-sidebar-glow-option${selected ? "is-selected" : ""}`}
                   onClick={() => update({ glowPalette: option.id })}
                 >
                   <span
-                    className={`settings-sidebar-glow-option__preview${option.colors ? "" : " is-off"}${glowBlur === 0 ? " is-clear" : ""}`}
+                    className={`settings-sidebar-glow-option__preview${option.colors ? "" : "is-off"}${glowBlur === 0 ? "is-clear" : ""}`}
                     style={
                       option.colors
                         ? ({
                             "--settings-sidebar-glow-a": option.colors[0],
                             "--settings-sidebar-glow-b": option.colors[1],
                             "--settings-sidebar-preview-blur": `${glowBlur}px`,
-                            "--settings-sidebar-preview-intensity": String(
-                              glowIntensity / 100,
-                            ),
+                            "--settings-sidebar-preview-intensity": String(glowIntensity / 100),
                           } as React.CSSProperties)
                         : undefined
                     }
@@ -491,10 +445,7 @@ export function SidebarSettings({
           </RadioGroup>
           <div className="settings-sidebar-glow-shape">
             <h3>Bokeh shape</h3>
-            <RadioGroup
-              label="Bokeh shape"
-              className="settings-sidebar-glow-shape-options"
-            >
+            <RadioGroup label="Bokeh shape" className="settings-sidebar-glow-shape-options">
               {SIDEBAR_GLOW_SHAPE_OPTIONS.map((option) => {
                 const selected = glowShape === option.id;
                 return (
@@ -504,7 +455,7 @@ export function SidebarSettings({
                     role="radio"
                     aria-checked={selected}
                     tabIndex={selected ? 0 : -1}
-                    className={`settings-sidebar-glow-shape-option${selected ? " is-selected" : ""}`}
+                    className={`settings-sidebar-glow-shape-option${selected ? "is-selected" : ""}`}
                     onClick={() => update({ glowShape: option.id })}
                   >
                     <span
@@ -545,18 +496,13 @@ export function SidebarSettings({
                 value={glowShapeSize}
                 onChange={(event) =>
                   update({
-                    glowShapeSize: normalizeSidebarGlowShapeSize(
-                      event.target.value,
-                    ),
+                    glowShapeSize: normalizeSidebarGlowShapeSize(event.target.value),
                   })
                 }
                 aria-label="Sidebar glow shape size"
                 aria-valuetext={`${glowShapeSize} percent`}
               />
-              <span
-                className="settings-sidebar-glow-size__labels"
-                aria-hidden="true"
-              >
+              <span className="settings-sidebar-glow-size__labels" aria-hidden="true">
                 <span>Smaller</span>
                 <span>Default</span>
                 <span>Larger</span>
@@ -567,10 +513,7 @@ export function SidebarSettings({
             <div className="settings-sidebar-glow-blur__heading">
               <div>
                 <h3>Bokeh blur</h3>
-                <p>
-                  Add blur above the shapes. The floating sidebar always keeps a
-                  6px base blur.
-                </p>
+                <p>Add blur above the shapes. The floating sidebar always keeps a 6px base blur.</p>
               </div>
               <output
                 className="settings-sidebar-glow-blur__value"
@@ -597,10 +540,7 @@ export function SidebarSettings({
                 aria-label="Additional sidebar bokeh blur"
                 aria-valuetext={`${glowBlur} pixels`}
               />
-              <span
-                className="settings-sidebar-glow-blur__labels"
-                aria-hidden="true"
-              >
+              <span className="settings-sidebar-glow-blur__labels" aria-hidden="true">
                 <span>{SIDEBAR_GLOW_BLUR_MIN}px</span>
                 <span>{SIDEBAR_GLOW_BLUR_MAX}px</span>
               </span>
@@ -631,18 +571,13 @@ export function SidebarSettings({
                 value={glowIntensity}
                 onChange={(event) =>
                   update({
-                    glowIntensity: normalizeSidebarGlowIntensity(
-                      event.target.value,
-                    ),
+                    glowIntensity: normalizeSidebarGlowIntensity(event.target.value),
                   })
                 }
                 aria-label="Sidebar glow intensity"
                 aria-valuetext={`${glowIntensity} percent`}
               />
-              <span
-                className="settings-sidebar-glow-intensity__labels"
-                aria-hidden="true"
-              >
+              <span className="settings-sidebar-glow-intensity__labels" aria-hidden="true">
                 <span>{SIDEBAR_GLOW_INTENSITY_MIN}%</span>
                 <span>{SIDEBAR_GLOW_INTENSITY_MAX}%</span>
               </span>
@@ -681,18 +616,12 @@ export function SidebarSettings({
               <h2>Sidebar max width</h2>
               <p>Set the widest size available when the sidebar is expanded.</p>
             </div>
-            <output
-              className="settings-sidebar-width__value"
-              htmlFor="sidebar-max-width-range"
-            >
+            <output className="settings-sidebar-width__value" htmlFor="sidebar-max-width-range">
               {sidebarMaxWidth}px
             </output>
           </div>
           <div className="settings-sidebar-width__controls">
-            <label
-              className="settings-sidebar-width__range"
-              htmlFor="sidebar-max-width-range"
-            >
+            <label className="settings-sidebar-width__range" htmlFor="sidebar-max-width-range">
               <span>Drag to adjust the maximum width</span>
               <AppSlider
                 id="sidebar-max-width-range"
@@ -702,18 +631,13 @@ export function SidebarSettings({
                 value={sidebarMaxWidth}
                 onChange={(event) =>
                   update({
-                    sidebarMaxWidth: normalizeSidebarMaxWidth(
-                      event.target.value,
-                    ),
+                    sidebarMaxWidth: normalizeSidebarMaxWidth(event.target.value),
                   })
                 }
                 aria-label="Sidebar max width"
                 aria-valuetext={`${sidebarMaxWidth} pixels`}
               />
-              <span
-                className="settings-sidebar-width__range-labels"
-                aria-hidden="true"
-              >
+              <span className="settings-sidebar-width__range-labels" aria-hidden="true">
                 <span>{SIDEBAR_MAX_WIDTH_MIN}px</span>
                 <span>{SIDEBAR_MAX_WIDTH_LIMIT}px</span>
               </span>
@@ -802,19 +726,15 @@ export function SidebarSettings({
               label="Hide sidebar"
               note={
                 <>
-                  Bring it back with{" "}
-                  <kbd>{shortcutPlatform === "mac" ? "⌘+B" : "Ctrl+B"}</kbd>, or
-                  use the left screen edge. On touch screens, swipe right from
-                  the left side to preview it, then use the expand control to
-                  pin it.
+                  Bring it back with <kbd>{shortcutPlatform === "mac" ? "⌘+B" : "Ctrl+B"}</kbd>, or
+                  use the left screen edge. On touch screens, swipe right from the left side to
+                  preview it, then use the expand control to pin it.
                 </>
               }
             >
               <SettingsToggle
                 checked={sidebarHidden}
-                onChange={(value) =>
-                  onSidebarModeChange?.(value ? "hidden" : "expanded")
-                }
+                onChange={(value) => onSidebarModeChange?.(value ? "hidden" : "expanded")}
                 label="Hide sidebar"
               />
             </SettingRow>

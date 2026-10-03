@@ -60,8 +60,7 @@ export interface CourseReviewMeta {
   lastUpdated: string;
 }
 
-export type ReviewTabId =
-  "all" | "with-comments" | "highest-rated" | "lowest-rated" | "my-review";
+export type ReviewTabId = "all" | "with-comments" | "highest-rated" | "lowest-rated" | "my-review";
 
 export const initialCourseMeta: CourseReviewMeta = {
   courseId: "typescript-course",
@@ -165,8 +164,7 @@ export const initialReviewsList: readonly ReviewItem[] = [
       authorRole: "Instructor",
       avatarUrl: "/static/ethan-avatar-160.webp",
       timestamp: "4 days ago",
-      content:
-        "Thanks for the feedback! We'll keep this in mind while creating future content.",
+      content: "Thanks for the feedback! We'll keep this in mind while creating future content.",
     },
   },
   {

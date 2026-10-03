@@ -22,9 +22,7 @@ export function canPlayCourseLesson(input: {
  * first two published lessons are a safe fallback for older courses without
  * preview flags.
  */
-export function getPublicPreviewLessonNumbers(
-  overview?: CourseOverviewResponse,
-): number[] {
+export function getPublicPreviewLessonNumbers(overview?: CourseOverviewResponse): number[] {
   if (!overview) {
     return [1, 2];
   }
@@ -38,9 +36,7 @@ export function getPublicPreviewLessonNumbers(
       ) ?? [];
 
   const previewLessonNumbers = lessons
-    .map((lesson, index) =>
-      lesson.isPublished && lesson.isPreview ? index + 1 : null,
-    )
+    .map((lesson, index) => (lesson.isPublished && lesson.isPreview ? index + 1 : null))
     .filter((number): number is number => number !== null)
     .slice(0, PUBLIC_PREVIEW_LESSON_LIMIT);
 

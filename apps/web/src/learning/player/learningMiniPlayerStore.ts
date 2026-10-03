@@ -36,9 +36,7 @@ export const getLearningMiniPlayerSnapshot = () => {
 
 export const getLearningMiniPlayerServerSnapshot = () => null;
 
-export function openLearningMiniPlayerSession(
-  session: LearningMiniPlayerSession,
-): void {
+export function openLearningMiniPlayerSession(session: LearningMiniPlayerSession): void {
   currentSession = session;
   writeLearningMiniPlayerSession(session);
   emitChange();
@@ -51,9 +49,7 @@ export function closeLearningMiniPlayerSession(): void {
   emitChange();
 }
 
-export function registerLearningMiniPlayerRuntime(
-  runtime: LearningMiniPlayerRuntime,
-): () => void {
+export function registerLearningMiniPlayerRuntime(runtime: LearningMiniPlayerRuntime): () => void {
   currentRuntime = runtime;
   return () => {
     if (currentRuntime === runtime) currentRuntime = null;
@@ -67,9 +63,7 @@ export function getLearningMiniPlayerRuntimeSnapshot(
   return currentRuntime.getPlaybackSnapshot();
 }
 
-export function prepareLearningMiniPlayerPlaybackHandoff(
-  mediaKey: string,
-): void {
+export function prepareLearningMiniPlayerPlaybackHandoff(mediaKey: string): void {
   if (!currentRuntime || currentRuntime.mediaKey !== mediaKey) return;
   currentRuntime.preparePlaybackHandoff();
 }

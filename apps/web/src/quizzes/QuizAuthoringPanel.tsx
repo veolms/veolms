@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AssignQuizRequest, QuizQuestionType } from "@veolms/contracts";
 import { Button } from "../components/Button";
-import {
-  CenteredLoadingSpinner,
-  LoadingSpinnerIcon,
-} from "../components/LoadingSpinner";
+import { CenteredLoadingSpinner, LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
@@ -150,14 +147,9 @@ const FEEDBACK_MODE_OPTIONS: readonly ThemedSelectOption<
   ["never", "Never show answer review"],
 ];
 
-function AutoSaveIndicator({
-  status,
-}: {
-  status: "saving" | "saved" | "failed" | null;
-}) {
+function AutoSaveIndicator({ status }: { status: "saving" | "saved" | "failed" | null }) {
   if (!status) return null;
-  const syncStatus =
-    status === "saving" ? "syncing" : status === "saved" ? "saved" : "error";
+  const syncStatus = status === "saving" ? "syncing" : status === "saved" ? "saved" : "error";
   return <AutosaveStatus status={syncStatus} />;
 }
 
@@ -183,19 +175,15 @@ function quizErrorMessage(error: unknown) {
     const firstIssue = issues[0]?.message;
     if (firstIssue) return firstIssue;
   }
-  const detailsMessage =
-    apiError.details?.error?.message ?? apiError.details?.message;
+  const detailsMessage = apiError.details?.error?.message ?? apiError.details?.message;
   if (
     typeof detailsMessage === "string" &&
     detailsMessage.trim() &&
-    detailsMessage !==
-      "Something went wrong on our end. Please try again later."
+    detailsMessage !== "Something went wrong on our end. Please try again later."
   ) {
     return detailsMessage;
   }
-  return typeof apiError.message === "string"
-    ? apiError.message
-    : "Please try again.";
+  return typeof apiError.message === "string" ? apiError.message : "Please try again.";
 }
 
 function toDateTimeLocal(value: string | null) {
@@ -241,23 +229,18 @@ export function QuizAuthoringPanel({
   const [quizTitle, setQuizTitle] = useState(lessonTitle ?? "");
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [draftQuestions, setDraftQuestions] = useState<
-    QuizBuilderQuestionDraft[]
-  >([]);
+  const [draftQuestions, setDraftQuestions] = useState<QuizBuilderQuestionDraft[]>([]);
   const draftStorageKey = useMemo(
     () => browserDraftStorageKey({ courseId, lessonId }),
     [courseId, lessonId],
   );
   const browserDraftHydratedRef = useRef(Boolean(initialQuizId));
   const [prompt, setPrompt] = useState("");
-  const [questionType, setQuestionType] =
-    useState<QuizQuestionType>("single_choice");
+  const [questionType, setQuestionType] = useState<QuizQuestionType>("single_choice");
   const [points, setPoints] = useState(1);
   const [pointsInput, setPointsInput] = useState("1");
   const [options, setOptions] = useState<OptionDraft[]>(initialOptions);
-  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(
-    null,
-  );
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [explanation, setExplanation] = useState("");
   const [passPercentage, setPassPercentage] = useState(70);
   const [maxAttempts, setMaxAttempts] = useState(1);
@@ -266,18 +249,16 @@ export function QuizAuthoringPanel({
   const [shuffleOptions, setShuffleOptions] = useState(false);
   const [availableFrom, setAvailableFrom] = useState("");
   const [availableUntil, setAvailableUntil] = useState("");
-  const [assignmentVersionId, setAssignmentVersionId] = useState<string | null>(
-    null,
+  const [assignmentVersionId, setAssignmentVersionId] = useState<string | null>(null);
+  const [feedbackMode, setFeedbackMode] = useState<"after_submit" | "after_attempt" | "never">(
+    "after_submit",
   );
-  const [feedbackMode, setFeedbackMode] = useState<
-    "after_submit" | "after_attempt" | "never"
-  >("after_submit");
   const [required, setRequired] = useState(true);
 
   // Auto-save states
-  const [detailsSaveStatus, setDetailsSaveStatus] = useState<
-    "saving" | "saved" | "failed" | null
-  >(null);
+  const [detailsSaveStatus, setDetailsSaveStatus] = useState<"saving" | "saved" | "failed" | null>(
+    null,
+  );
   const detailsTimerRef = useRef<number | null>(null);
   const lastSavedDetailsRef = useRef<{
     title: string;
@@ -290,9 +271,9 @@ export function QuizAuthoringPanel({
   >(null);
   const assignmentTimerRef = useRef<number | null>(null);
 
-  const [createSaveStatus, setCreateSaveStatus] = useState<
-    "saving" | "saved" | "failed" | null
-  >(null);
+  const [createSaveStatus, setCreateSaveStatus] = useState<"saving" | "saved" | "failed" | null>(
+    null,
+  );
 
   const [questionSaveStatus, setQuestionSaveStatus] = useState<
     "saving" | "saved" | "failed" | null
@@ -317,16 +298,12 @@ export function QuizAuthoringPanel({
   const quiz = useQuiz(quizId);
   const assignment = useMemo(() => {
     return selectQuizAssignment({
-      assignments: [
-        ...(assignments.data ?? []),
-        ...(quiz.data?.assignments ?? []),
-      ],
+      assignments: [...(assignments.data ?? []), ...(quiz.data?.assignments ?? [])],
       activeQuizId: quizId,
       targetCourseId: effectiveCourseId,
       targetLessonId: effectiveLessonId,
       allowEmbeddedInitialResolution:
-        Boolean(courseId && lessonId) &&
-        !hasExplicitlyDeletedOrDetachedRef.current,
+        Boolean(courseId && lessonId) && !hasExplicitlyDeletedOrDetachedRef.current,
     });
   }, [
     assignments.data,
@@ -338,9 +315,7 @@ export function QuizAuthoringPanel({
     lessonId,
   ]);
   const version = useMemo(
-    () =>
-      quiz.data?.versions.find((item) => !item.publishedAt) ??
-      quiz.data?.versions.at(-1),
+    () => quiz.data?.versions.find((item) => !item.publishedAt) ?? quiz.data?.versions.at(-1),
     [quiz.data],
   );
 
@@ -350,9 +325,7 @@ export function QuizAuthoringPanel({
     browserDraftHydratedRef.current = true;
     let savedDraft: QuizBuilderBrowserDraft | null = null;
     try {
-      savedDraft = parseQuizBuilderBrowserDraft(
-        window.localStorage.getItem(draftStorageKey),
-      );
+      savedDraft = parseQuizBuilderBrowserDraft(window.localStorage.getItem(draftStorageKey));
     } catch {
       // The in-memory editor remains usable when browser storage is unavailable.
     }
@@ -439,9 +412,7 @@ export function QuizAuthoringPanel({
     setRequired(assignment.required);
     setPassPercentage(assignment.passPercentage);
     setMaxAttempts(assignment.maxAttempts);
-    setTimeLimitMinutes(
-      assignment.timeLimitSeconds ? assignment.timeLimitSeconds / 60 : 0,
-    );
+    setTimeLimitMinutes(assignment.timeLimitSeconds ? assignment.timeLimitSeconds / 60 : 0);
     setShuffleQuestions(assignment.shuffleQuestions);
     setShuffleOptions(assignment.shuffleOptions);
     setAvailableFrom(toDateTimeLocal(assignment.availableFrom));
@@ -457,8 +428,7 @@ export function QuizAuthoringPanel({
       setQuizTitle(quiz.data.title);
       setDescription(quiz.data.description ?? "");
       const currentVersion =
-        quiz.data.versions.find((item) => !item.publishedAt) ??
-        quiz.data.versions.at(-1);
+        quiz.data.versions.find((item) => !item.publishedAt) ?? quiz.data.versions.at(-1);
       const instr = currentVersion?.instructions ?? "";
       setInstructions(instr);
       lastSavedDetailsRef.current = {
@@ -467,11 +437,7 @@ export function QuizAuthoringPanel({
         instructions: instr,
       };
 
-      if (
-        !courseId &&
-        quiz.data.assignments &&
-        quiz.data.assignments.length > 0
-      ) {
+      if (!courseId && quiz.data.assignments && quiz.data.assignments.length > 0) {
         const primaryAssignment = quiz.data.assignments[0];
         if (primaryAssignment) {
           setSelectedCourseId((prev) => prev || primaryAssignment.courseId);
@@ -527,9 +493,7 @@ export function QuizAuthoringPanel({
       qc.setQueryData(quizKeys.courseAssignments(courseId), (old: unknown) => {
         if (!old) return old;
         if (Array.isArray(old)) {
-          return old.filter(
-            (a: { lessonId?: string }) => a.lessonId !== lessonId,
-          );
+          return old.filter((a: { lessonId?: string }) => a.lessonId !== lessonId);
         }
         if (
           typeof old === "object" &&
@@ -539,9 +503,9 @@ export function QuizAuthoringPanel({
         ) {
           return {
             ...(old as object),
-            assignments: (
-              old as { assignments: { lessonId?: string }[] }
-            ).assignments.filter((a) => a.lessonId !== lessonId),
+            assignments: (old as { assignments: { lessonId?: string }[] }).assignments.filter(
+              (a) => a.lessonId !== lessonId,
+            ),
           };
         }
         return old;
@@ -549,15 +513,7 @@ export function QuizAuthoringPanel({
     }
     onQuizDeleted?.();
     onBack?.();
-  }, [
-    draftStorageKey,
-    lessonTitle,
-    onBack,
-    onQuizDeleted,
-    courseId,
-    lessonId,
-    qc,
-  ]);
+  }, [draftStorageKey, lessonTitle, onBack, onQuizDeleted, courseId, lessonId, qc]);
 
   const handleDeleteQuiz = () => {
     if (!quizId || deleteQuizMutation.isPending) return;
@@ -585,8 +541,7 @@ export function QuizAuthoringPanel({
       required,
       passPercentage,
       maxAttempts,
-      timeLimitSeconds:
-        timeLimitMinutes > 0 ? Math.round(timeLimitMinutes * 60) : null,
+      timeLimitSeconds: timeLimitMinutes > 0 ? Math.round(timeLimitMinutes * 60) : null,
       shuffleQuestions,
       shuffleOptions,
       feedbackMode,
@@ -688,23 +643,13 @@ export function QuizAuthoringPanel({
   const flushDetailsPersistence = useCallback(
     (overrideTitle?: string, overrideDesc?: string, overrideInstr?: string) => {
       if (!quizId) return;
-      const t = (
-        overrideTitle !== undefined ? overrideTitle : quizTitle
-      ).trim();
-      const d = (
-        overrideDesc !== undefined ? overrideDesc : description
-      ).trim();
-      const i = (
-        overrideInstr !== undefined ? overrideInstr : instructions
-      ).trim();
+      const t = (overrideTitle !== undefined ? overrideTitle : quizTitle).trim();
+      const d = (overrideDesc !== undefined ? overrideDesc : description).trim();
+      const i = (overrideInstr !== undefined ? overrideInstr : instructions).trim();
 
       if (!t) return;
       const last = lastSavedDetailsRef.current;
-      if (
-        t === last.title &&
-        d === last.description &&
-        i === last.instructions
-      ) {
+      if (t === last.title && d === last.description && i === last.instructions) {
         return;
       }
 
@@ -773,14 +718,11 @@ export function QuizAuthoringPanel({
       if (!targetQuestionId) return;
       const qType = overrideType ?? questionType;
       const qOptions = overrideOptions ?? options;
-      const qPromptValue =
-        overridePrompt !== undefined ? overridePrompt : prompt;
+      const qPromptValue = overridePrompt !== undefined ? overridePrompt : prompt;
       const qPrompt = qPromptValue.trim();
       const rawPoints = overridePoints !== undefined ? overridePoints : points;
-      const qPoints =
-        Number.isFinite(rawPoints) && rawPoints > 0 ? rawPoints : 1;
-      const qExplValue =
-        overrideExpl !== undefined ? overrideExpl : explanation;
+      const qPoints = Number.isFinite(rawPoints) && rawPoints > 0 ? rawPoints : 1;
+      const qExplValue = overrideExpl !== undefined ? overrideExpl : explanation;
       const qExpl = qExplValue.trim();
 
       if (targetQuestionId.startsWith("temp-q-")) {
@@ -846,16 +788,7 @@ export function QuizAuthoringPanel({
         },
       );
     },
-    [
-      quizId,
-      editingQuestionId,
-      prompt,
-      options,
-      questionType,
-      points,
-      explanation,
-      updateQuestion,
-    ],
+    [quizId, editingQuestionId, prompt, options, questionType, points, explanation, updateQuestion],
   );
 
   const scheduleAutoSaveQuestion = useCallback(
@@ -908,9 +841,7 @@ export function QuizAuthoringPanel({
         /^Option\s*\d+$/i.test(existingText) ||
         existingText.toLowerCase() === "true" ||
         existingText.toLowerCase() === "false";
-      nextOptions = [
-        { text: isPlaceholder ? "" : existingText, isCorrect: true },
-      ];
+      nextOptions = [{ text: isPlaceholder ? "" : existingText, isCorrect: true }];
       setOptions(nextOptions);
     } else if (
       options.length < 2 ||
@@ -1051,8 +982,7 @@ export function QuizAuthoringPanel({
         onSuccess: (updatedQuiz) => {
           qc.setQueryData(quizKeys.detail(quizId), updatedQuiz);
           const latestVersion =
-            updatedQuiz.versions.find((item) => !item.publishedAt) ??
-            updatedQuiz.versions.at(-1);
+            updatedQuiz.versions.find((item) => !item.publishedAt) ?? updatedQuiz.versions.at(-1);
           const realQ = latestVersion?.questions.at(-1);
           if (realQ) {
             setEditingQuestionId((currentId) =>
@@ -1060,14 +990,7 @@ export function QuizAuthoringPanel({
             );
             if (pendingSaveAfterCreateRef.current) {
               pendingSaveAfterCreateRef.current = false;
-              flushQuestionSave(
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                realQ.id,
-              );
+              flushQuestionSave(undefined, undefined, undefined, undefined, undefined, realQ.id);
             }
           }
         },
@@ -1080,16 +1003,12 @@ export function QuizAuthoringPanel({
                 if (v.id !== version?.id) return v;
                 return {
                   ...v,
-                  questions: v.questions.filter(
-                    (q: any) => q.id !== tempQuestionId,
-                  ),
+                  questions: v.questions.filter((q: any) => q.id !== tempQuestionId),
                 };
               }),
             };
           });
-          setEditingQuestionId((currentId) =>
-            currentId === tempQuestionId ? null : currentId,
-          );
+          setEditingQuestionId((currentId) => (currentId === tempQuestionId ? null : currentId));
         },
       },
     );
@@ -1107,9 +1026,7 @@ export function QuizAuthoringPanel({
         id: assignment.id,
         payload: {
           ...assignmentPayload(),
-          ...(assignmentVersionId
-            ? { quizVersionId: assignmentVersionId }
-            : {}),
+          ...(assignmentVersionId ? { quizVersionId: assignmentVersionId } : {}),
         },
       },
       {
@@ -1136,13 +1053,9 @@ export function QuizAuthoringPanel({
     }, 750);
   }, [assignment, flushAssignmentPersistence]);
 
-  const assignPublishedVersion = (
-    publishedQuiz: NonNullable<typeof quiz.data>,
-  ) => {
+  const assignPublishedVersion = (publishedQuiz: NonNullable<typeof quiz.data>) => {
     if (!effectiveCourseId || !effectiveLessonId) return;
-    const published = publishedQuiz.versions
-      .filter((item) => item.publishedAt)
-      .at(-1);
+    const published = publishedQuiz.versions.filter((item) => item.publishedAt).at(-1);
     if (!published) return;
     assign.mutate(
       {
@@ -1174,19 +1087,12 @@ export function QuizAuthoringPanel({
       return;
     }
     if (!version) return;
-    if (
-      version.publishedAt &&
-      quiz.data &&
-      effectiveCourseId &&
-      effectiveLessonId
-    ) {
+    if (version.publishedAt && quiz.data && effectiveCourseId && effectiveLessonId) {
       assignPublishedVersion(quiz.data);
     } else {
       publish.mutate(
         quizId,
-        effectiveCourseId && effectiveLessonId
-          ? { onSuccess: assignPublishedVersion }
-          : undefined,
+        effectiveCourseId && effectiveLessonId ? { onSuccess: assignPublishedVersion } : undefined,
       );
     }
   };
@@ -1214,21 +1120,17 @@ export function QuizAuthoringPanel({
       (course) =>
         [
           course.id,
-          titleCounts.get(course.title)! > 1
-            ? `${course.title} · ${course.slug}`
-            : course.title,
+          titleCounts.get(course.title)! > 1 ? `${course.title} · ${course.slug}` : course.title,
         ] as const,
     );
     return [["", "Select a course..."] as const, ...list];
   }, [myCourses.data?.courses]);
 
-  const courseSections =
-    courseEditor.data?.sections ?? courseOverview.data?.sections;
+  const courseSections = courseEditor.data?.sections ?? courseOverview.data?.sections;
   const isLessonsLoading = Boolean(
     effectiveCourseId &&
     !courseSections &&
-    (courseEditor.isLoading ||
-      (courseOverview.isLoading && !courseEditor.isError)),
+    (courseEditor.isLoading || (courseOverview.isLoading && !courseEditor.isError)),
   );
   const isLessonsError = Boolean(
     effectiveCourseId &&
@@ -1256,36 +1158,21 @@ export function QuizAuthoringPanel({
     if (!courseSections || courseSections.length === 0) {
       return [["", "No sections in this course"] as const];
     }
-    const options: ThemedSelectOption<string>[] = [
-      ["", "Select a lesson..."] as const,
-    ];
+    const options: ThemedSelectOption<string>[] = [["", "Select a lesson..."] as const];
     let totalLessons = 0;
     courseSections.forEach((sec, secIdx) => {
       (sec.lessons ?? []).forEach((les, lesIdx) => {
         totalLessons++;
         const typeBadge =
-          les.contentType === "quiz"
-            ? "Quiz"
-            : les.contentType === "video"
-              ? "Video"
-              : "Doc";
-        options.push([
-          les.id,
-          `S${secIdx + 1}:L${lesIdx + 1} - ${les.title} (${typeBadge})`,
-        ]);
+          les.contentType === "quiz" ? "Quiz" : les.contentType === "video" ? "Video" : "Doc";
+        options.push([les.id, `S${secIdx + 1}:L${lesIdx + 1} - ${les.title} (${typeBadge})`]);
       });
     });
     if (totalLessons === 0) {
       return [["", "No lessons in this course"] as const];
     }
     return options;
-  }, [
-    courseSections,
-    effectiveCourseId,
-    isLessonsError,
-    isLessonsLoading,
-    selectedLessonId,
-  ]);
+  }, [courseSections, effectiveCourseId, isLessonsError, isLessonsLoading, selectedLessonId]);
 
   const quizOptions: readonly ThemedSelectOption[] = useMemo(() => {
     const list: ThemedSelectOption[] = [];
@@ -1320,52 +1207,49 @@ export function QuizAuthoringPanel({
   const editableQuestions: readonly EditableQuestion[] = quizId
     ? (version?.questions ?? [])
     : draftQuestions;
-  const canPersistBrowserDraft = Boolean(
-    quizTitle.trim() || lessonTitle?.trim(),
-  );
+  const canPersistBrowserDraft = Boolean(quizTitle.trim() || lessonTitle?.trim());
 
   // Render: Unified Quiz Authoring Panel
   return (
-    <div data-quiz-surface="" className="space-y-3 sm:space-y-5 text-(--text)">
+    <div data-quiz-surface="" className="space-y-3 text-(--text) sm:space-y-5">
       {/* Top Header Card with Quiz Selector and Back Action */}
       <div
-        className="rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) px-2.5 py-2 sm:p-5"
+        className="rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) px-2.5 py-2 sm:rounded-[20px] sm:p-5"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
         <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {onBack ? (
               <button
                 type="button"
                 onClick={onBack}
                 aria-label="Back to quizzes"
-                className="rounded-lg p-1.5 sm:p-2 text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer shrink-0"
+                className="shrink-0 cursor-pointer rounded-lg p-1.5 text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) sm:p-2"
               >
                 <ArrowLeft size={18} weight="bold" />
               </button>
             ) : null}
             <div className="min-w-0">
-              <p className="text-[0.65rem] sm:text-[0.68rem] font-bold uppercase tracking-[0.18em] text-(--accent)">
+              <p className="text-[0.65rem] font-bold tracking-[0.18em] text-(--accent) uppercase sm:text-[0.68rem]">
                 Quiz builder
               </p>
-              <h2 className="mt-0.5 text-base sm:text-2xl font-bold tracking-tight text-(--text) truncate">
+              <h2 className="mt-0.5 truncate text-base font-bold tracking-tight text-(--text) sm:text-2xl">
                 {quizTitle || lessonTitle || "Untitled quiz"}
               </h2>
-              <p className="mt-0.5 text-xs text-(--muted) hidden sm:block">
-                Build questions, set scoring, and publish versions for course
-                delivery.
+              <p className="mt-0.5 hidden text-xs text-(--muted) sm:block">
+                Build questions, set scoring, and publish versions for course delivery.
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-2.5">
             {quizzes.isLoading ? (
               <span role="status" aria-label="Loading quizzes">
                 <LoadingSpinnerIcon size={18} />
               </span>
             ) : quizOptions.length > 0 ? (
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-xs font-semibold text-(--muted) hidden md:inline">
+                <span className="hidden text-xs font-semibold text-(--muted) md:inline">
                   Active quiz:
                 </span>
                 <div className="w-36 sm:w-52">
@@ -1397,18 +1281,11 @@ export function QuizAuthoringPanel({
               <button
                 type="button"
                 onClick={() => setShowDetachConfirm(true)}
-                disabled={
-                  deleteAssignmentMutation.isPending ||
-                  deleteQuizMutation.isPending
-                }
-                className="h-8.5 sm:h-9 px-3 sm:px-3.5 inline-flex items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-[color-mix(in_srgb,var(--text)_20%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_85%,var(--canvas))] text-xs sm:text-sm font-semibold text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)_100%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_35%,transparent)] shadow-[var(--card-compact-shadow)] transition-all cursor-pointer disabled:pointer-events-none disabled:opacity-40"
+                disabled={deleteAssignmentMutation.isPending || deleteQuizMutation.isPending}
+                className="inline-flex h-8.5 cursor-pointer items-center justify-center gap-1.5 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_20%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_85%,var(--canvas))] px-3 text-xs font-semibold text-(--text) shadow-[var(--card-compact-shadow)] transition-all hover:border-[color-mix(in_srgb,var(--text)_35%,transparent)] hover:bg-[color-mix(in_srgb,var(--surface)_100%,transparent)] disabled:pointer-events-none disabled:opacity-40 sm:h-9 sm:rounded-[9px] sm:px-3.5 sm:text-sm"
                 title="Detach quiz from this lesson"
               >
-                <X
-                  size={14}
-                  weight="bold"
-                  className="shrink-0 text-(--muted)"
-                />
+                <X size={14} weight="bold" className="shrink-0 text-(--muted)" />
                 <span>Detach</span>
               </button>
             )}
@@ -1417,16 +1294,10 @@ export function QuizAuthoringPanel({
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
               disabled={
-                !quizId ||
-                deleteQuizMutation.isPending ||
-                deleteAssignmentMutation.isPending
+                !quizId || deleteQuizMutation.isPending || deleteAssignmentMutation.isPending
               }
-              className="h-8.5 sm:h-9 px-3 sm:px-3.5 inline-flex items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-red-500/60 bg-red-600/20 text-xs sm:text-sm font-semibold text-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-[var(--card-compact-shadow)] transition-all cursor-pointer disabled:pointer-events-none disabled:opacity-40"
-              title={
-                quizId
-                  ? "Permanently delete this quiz"
-                  : "No quiz loaded to delete"
-              }
+              className="inline-flex h-8.5 cursor-pointer items-center justify-center gap-1.5 rounded-[8px] border border-red-500/60 bg-red-600/20 px-3 text-xs font-semibold text-red-200 shadow-[var(--card-compact-shadow)] transition-all hover:border-red-600 hover:bg-red-600 hover:text-white disabled:pointer-events-none disabled:opacity-40 sm:h-9 sm:rounded-[9px] sm:px-3.5 sm:text-sm"
+              title={quizId ? "Permanently delete this quiz" : "No quiz loaded to delete"}
             >
               <Trash
                 size={14}
@@ -1449,12 +1320,12 @@ export function QuizAuthoringPanel({
         <div className="space-y-3 sm:space-y-5">
           {/* Card 1: Quiz Details */}
           <div
-            className="rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:p-6"
+            className="rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:rounded-[20px] sm:p-6"
             style={{ boxShadow: "var(--card-shadow)" }}
           >
-            <div className="flex items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
+            <div className="mb-3 flex items-center justify-between gap-2 sm:mb-4 sm:gap-3">
               <div>
-                <h3 className="text-sm sm:text-base font-bold text-(--text) tracking-tight">
+                <h3 className="text-sm font-bold tracking-tight text-(--text) sm:text-base">
                   Assessment details
                 </h3>
                 <p className="mt-0.5 text-xs text-(--muted)">
@@ -1476,7 +1347,7 @@ export function QuizAuthoringPanel({
 
             <div className="space-y-3 sm:space-y-4">
               <label className="block">
-                <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                   Quiz title <span className="text-(--accent)">*</span>
                 </span>
                 <input
@@ -1504,9 +1375,8 @@ export function QuizAuthoringPanel({
               </label>
 
               <label className="block">
-                <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                  Description{" "}
-                  <span className="text-(--muted) font-normal">(optional)</span>
+                <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
+                  Description <span className="font-normal text-(--muted)">(optional)</span>
                 </span>
                 <textarea
                   value={description}
@@ -1528,9 +1398,8 @@ export function QuizAuthoringPanel({
               </label>
 
               <div>
-                <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                  Instructions{" "}
-                  <span className="text-(--muted) font-normal">(optional)</span>
+                <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
+                  Instructions <span className="font-normal text-(--muted)">(optional)</span>
                 </span>
                 <QuizRichTextField
                   label="Quiz instructions"
@@ -1551,25 +1420,23 @@ export function QuizAuthoringPanel({
 
           {/* Card 2: Questions with In-Place Curriculum-Style Accordion Authoring */}
           <div
-            className="rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:p-6"
+            className="rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:rounded-[20px] sm:p-6"
             style={{ boxShadow: "var(--card-shadow)" }}
           >
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4">
               <div>
-                <h3 className="text-sm sm:text-base font-bold text-(--text) tracking-tight">
+                <h3 className="text-sm font-bold tracking-tight text-(--text) sm:text-base">
                   Questions ({editableQuestions.length})
                 </h3>
                 <p className="mt-0.5 text-xs text-(--muted)">
-                  Each question can be edited in place. Click any question to
-                  expand or collapse.
+                  Each question can be edited in place. Click any question to expand or collapse.
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-2.5 py-0.5 sm:py-1 text-[0.7rem] sm:text-[0.72rem] font-semibold text-(--text-secondary)">
-                  {editableQuestions.reduce((sum, q) => sum + q.points, 0)}{" "}
-                  total points
+                <span className="rounded-full bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-2.5 py-0.5 text-[0.7rem] font-semibold text-(--text-secondary) sm:py-1 sm:text-[0.72rem]">
+                  {editableQuestions.reduce((sum, q) => sum + q.points, 0)} total points
                 </span>
-                <span className="rounded-full bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-2.5 py-0.5 sm:py-1 text-[0.7rem] sm:text-[0.72rem] font-semibold text-(--text-secondary)">
+                <span className="rounded-full bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-2.5 py-0.5 text-[0.7rem] font-semibold text-(--text-secondary) sm:py-1 sm:text-[0.72rem]">
                   {version?.publishedAt ? "Published version" : "Draft version"}
                 </span>
               </div>
@@ -1579,15 +1446,13 @@ export function QuizAuthoringPanel({
               {editableQuestions.map((question, index) => {
                 const isCurrentlyEditing = editingQuestionId === question.id;
                 const typeMeta = getQuestionTypeMeta(question.questionType);
-                const correctCount = question.options.filter(
-                  (option) => option.isCorrect,
-                ).length;
+                const correctCount = question.options.filter((option) => option.isCorrect).length;
                 const promptSummary = stripHtml(question.prompt);
 
                 return (
                   <div
                     key={question.id}
-                    className={`rounded-[10px] sm:rounded-[12px] border transition-all overflow-hidden shadow-[var(--card-compact-shadow)] ${
+                    className={`overflow-hidden rounded-[10px] border shadow-[var(--card-compact-shadow)] transition-all sm:rounded-[12px] ${
                       isCurrentlyEditing
                         ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_4%,var(--surface))]"
                         : "border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] hover:border-[color-mix(in_srgb,var(--text)_20%,transparent)]"
@@ -1595,35 +1460,34 @@ export function QuizAuthoringPanel({
                   >
                     {/* Collapsed Header: Click to expand / collapse */}
                     <div
-                      className="flex items-center justify-between gap-2.5 px-3 py-2.5 sm:px-4 sm:py-3 cursor-pointer select-none"
+                      className="flex cursor-pointer items-center justify-between gap-2.5 px-3 py-2.5 select-none sm:px-4 sm:py-3"
                       onClick={() => handleToggleExpandQuestion(question)}
                     >
-                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-                        <span className="flex size-5.5 sm:size-6 shrink-0 items-center justify-center rounded-md text-(--muted) opacity-60">
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
+                        <span className="flex size-5.5 shrink-0 items-center justify-center rounded-md text-(--muted) opacity-60 sm:size-6">
                           <DotsSixVertical size={16} />
                         </span>
-                        <span className="flex size-5.5 sm:size-6 shrink-0 items-center justify-center rounded-full bg-(--accent)/15 text-[0.7rem] sm:text-xs font-bold text-(--accent)">
+                        <span className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-(--accent)/15 text-[0.7rem] font-bold text-(--accent) sm:size-6 sm:text-xs">
                           {index + 1}
                         </span>
-                        <p className="text-xs sm:text-sm font-semibold text-(--text) truncate">
+                        <p className="truncate text-xs font-semibold text-(--text) sm:text-sm">
                           {promptSummary || "Untitled question"}
                         </p>
                         {isCurrentlyEditing && (
-                          <span className="rounded-full bg-(--accent)/15 px-2 py-0.5 text-[0.65rem] sm:text-[0.68rem] font-bold text-(--accent) shrink-0">
+                          <span className="shrink-0 rounded-full bg-(--accent)/15 px-2 py-0.5 text-[0.65rem] font-bold text-(--accent) sm:text-[0.68rem]">
                             Editing
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                        <span className="rounded-md bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-1.5 sm:px-2 py-0.5 text-[0.7rem] font-medium text-(--text-secondary) capitalize">
+                      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                        <span className="rounded-md bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-1.5 py-0.5 text-[0.7rem] font-medium text-(--text-secondary) capitalize sm:px-2">
                           {typeMeta.label}
                         </span>
-                        <span className="rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] px-1.5 sm:px-2 py-0.5 text-[0.7rem] font-semibold text-(--accent)">
-                          {question.points}{" "}
-                          {question.points === 1 ? "pt" : "pts"}
+                        <span className="rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] px-1.5 py-0.5 text-[0.7rem] font-semibold text-(--accent) sm:px-2">
+                          {question.points} {question.points === 1 ? "pt" : "pts"}
                         </span>
-                        <span className="hidden md:inline-block text-[0.72rem] text-(--muted)">
+                        <span className="hidden text-[0.72rem] text-(--muted) md:inline-block">
                           {question.questionType === "short_answer"
                             ? "Text input answer"
                             : `${correctCount} correct choice${correctCount === 1 ? "" : "s"}`}
@@ -1642,21 +1506,18 @@ export function QuizAuthoringPanel({
                                   current.filter((q) => q.id !== question.id),
                                 );
                               } else {
-                                qc.setQueryData(
-                                  quizKeys.detail(quizId),
-                                  (prev: any) => {
-                                    if (!prev) return prev;
-                                    return {
-                                      ...prev,
-                                      versions: prev.versions.map((v: any) => ({
-                                        ...v,
-                                        questions: v.questions.filter(
-                                          (q: any) => q.id !== question.id,
-                                        ),
-                                      })),
-                                    };
-                                  },
-                                );
+                                qc.setQueryData(quizKeys.detail(quizId), (prev: any) => {
+                                  if (!prev) return prev;
+                                  return {
+                                    ...prev,
+                                    versions: prev.versions.map((v: any) => ({
+                                      ...v,
+                                      questions: v.questions.filter(
+                                        (q: any) => q.id !== question.id,
+                                      ),
+                                    })),
+                                  };
+                                });
                               }
                               return;
                             }
@@ -1668,21 +1529,17 @@ export function QuizAuthoringPanel({
                             }
                           }}
                           aria-label={`Delete question ${index + 1}`}
-                          className="flex size-7 items-center justify-center rounded-lg text-(--muted) hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer disabled:opacity-40"
+                          className="flex size-7 cursor-pointer items-center justify-center rounded-lg text-(--muted) transition-colors hover:bg-rose-500/10 hover:text-rose-500 disabled:opacity-40"
                           title="Delete question"
                         >
                           <Trash size={14} />
                         </button>
                         <button
                           type="button"
-                          className={`flex size-7 items-center justify-center rounded-lg text-(--muted) hover:text-(--text) transition-transform duration-200 cursor-pointer ${
+                          className={`flex size-7 cursor-pointer items-center justify-center rounded-lg text-(--muted) transition-transform duration-200 hover:text-(--text) ${
                             isCurrentlyEditing ? "rotate-180 text-(--text)" : ""
                           }`}
-                          aria-label={
-                            isCurrentlyEditing
-                              ? "Collapse question"
-                              : "Expand question"
-                          }
+                          aria-label={isCurrentlyEditing ? "Collapse question" : "Expand question"}
                         >
                           <CaretDown size={15} weight="bold" />
                         </button>
@@ -1691,23 +1548,18 @@ export function QuizAuthoringPanel({
 
                     {/* In-Place Expanded Editor for this question */}
                     {isCurrentlyEditing && (
-                      <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] p-3 sm:p-5 space-y-3.5 sm:space-y-4">
+                      <div className="space-y-3.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] p-3 sm:space-y-4 sm:p-5">
                         {/* Question prompt */}
                         <div>
-                          <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                            Question prompt{" "}
-                            <span className="text-(--accent)">*</span>
+                          <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
+                            Question prompt <span className="text-(--accent)">*</span>
                           </span>
                           <QuizRichTextField
                             label="Question prompt"
                             value={prompt}
                             onChange={(val) => {
                               setPrompt(val);
-                              scheduleAutoSaveQuestion(
-                                undefined,
-                                undefined,
-                                val,
-                              );
+                              scheduleAutoSaveQuestion(undefined, undefined, val);
                             }}
                             documentId={`quiz-${quizId}-question-${question.id}`}
                             placeholder="Write a clear, unambiguous question..."
@@ -1716,17 +1568,17 @@ export function QuizAuthoringPanel({
 
                         {/* Question Type Visual Cards (Course Curriculum Style) */}
                         <div>
-                          <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                          <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                             Question type
                           </span>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
                             {QUESTION_TYPES.map((qt) => {
                               const isSelected = questionType === qt.type;
                               const IconComp = qt.icon;
                               return (
                                 <div
                                   key={qt.type}
-                                  className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out cursor-pointer ${
+                                  className={`relative flex cursor-pointer items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
                                     isSelected
                                       ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
                                       : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
@@ -1735,26 +1587,21 @@ export function QuizAuthoringPanel({
                                 >
                                   <div
                                     className={`flex size-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${
-                                      isSelected
-                                        ? "border-(--accent)"
-                                        : "border-(--muted)"
+                                      isSelected ? "border-(--accent)" : "border-(--muted)"
                                     }`}
                                   >
                                     {isSelected && (
                                       <div className="size-1.5 rounded-full bg-(--accent)" />
                                     )}
                                   </div>
-                                  <div className="flex items-center justify-center text-(--accent) shrink-0">
-                                    <IconComp
-                                      size={16}
-                                      weight={isSelected ? "fill" : "regular"}
-                                    />
+                                  <div className="flex shrink-0 items-center justify-center text-(--accent)">
+                                    <IconComp size={16} weight={isSelected ? "fill" : "regular"} />
                                   </div>
-                                  <div className="flex flex-col min-w-0">
-                                    <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
+                                  <div className="flex min-w-0 flex-col">
+                                    <span className="truncate text-[0.82rem] leading-tight font-bold text-(--text)">
                                       {qt.label}
                                     </span>
-                                    <span className="text-(--muted) text-[0.70rem] truncate">
+                                    <span className="truncate text-[0.70rem] text-(--muted)">
                                       {qt.description}
                                     </span>
                                   </div>
@@ -1767,7 +1614,7 @@ export function QuizAuthoringPanel({
                         {/* Points */}
                         <div className="w-full sm:w-44">
                           <label className="block">
-                            <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                            <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                               Points <span className="text-(--accent)">*</span>
                             </span>
                             <input
@@ -1790,12 +1637,7 @@ export function QuizAuthoringPanel({
                                 const parsed = parseFloat(raw);
                                 if (!Number.isNaN(parsed) && parsed > 0) {
                                   setPoints(parsed);
-                                  scheduleAutoSaveQuestion(
-                                    undefined,
-                                    undefined,
-                                    undefined,
-                                    parsed,
-                                  );
+                                  scheduleAutoSaveQuestion(undefined, undefined, undefined, parsed);
                                 }
                               }}
                               onBlur={() => {
@@ -1804,36 +1646,24 @@ export function QuizAuthoringPanel({
                                   const fallback = points > 0 ? points : 1;
                                   setPoints(fallback);
                                   setPointsInput(String(fallback));
-                                  flushQuestionSave(
-                                    undefined,
-                                    undefined,
-                                    undefined,
-                                    fallback,
-                                  );
+                                  flushQuestionSave(undefined, undefined, undefined, fallback);
                                 } else {
                                   setPoints(parsed);
                                   setPointsInput(String(parsed));
-                                  flushQuestionSave(
-                                    undefined,
-                                    undefined,
-                                    undefined,
-                                    parsed,
-                                  );
+                                  flushQuestionSave(undefined, undefined, undefined, parsed);
                                 }
                               }}
                               placeholder="1"
-                              className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                              className={`${inputClass} !h-9.5 w-full sm:!h-10`}
                             />
                           </label>
                         </div>
 
                         {/* Explanation */}
                         <div>
-                          <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                          <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                             Explanation shown in feedback{" "}
-                            <span className="text-(--muted) font-normal">
-                              (optional)
-                            </span>
+                            <span className="font-normal text-(--muted)">(optional)</span>
                           </span>
                           <QuizRichTextField
                             label="Answer explanation"
@@ -1856,15 +1686,14 @@ export function QuizAuthoringPanel({
 
                         {/* Short Answer (Input Box Question) vs Multiple Choice Options */}
                         {questionType === "short_answer" ? (
-                          <div className="rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-[inset_0_1px_3px_color-mix(in_srgb,black_10%,transparent)] space-y-3">
+                          <div className="space-y-3 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 shadow-[inset_0_1px_3px_color-mix(in_srgb,black_10%,transparent)] sm:rounded-[12px] sm:p-4">
                             <div>
-                              <span className="text-xs font-bold text-(--text) tracking-tight">
+                              <span className="text-xs font-bold tracking-tight text-(--text)">
                                 Correct Answer (Learner Input Box)
                               </span>
                               <p className="mt-0.5 text-[0.72rem] text-(--muted)">
-                                Learners will see a text input box to type their
-                                response. Enter the correct answer below (graded
-                                case-insensitively).
+                                Learners will see a text input box to type their response. Enter the
+                                correct answer below (graded case-insensitively).
                               </p>
                             </div>
 
@@ -1887,13 +1716,10 @@ export function QuizAuthoringPanel({
                                       })),
                                     ];
                                     setOptions(nextOpts);
-                                    scheduleAutoSaveQuestion(
-                                      undefined,
-                                      nextOpts,
-                                    );
+                                    scheduleAutoSaveQuestion(undefined, nextOpts);
                                   }}
                                   onBlur={() => flushQuestionSave()}
-                                  className={`${inputClass} w-full !h-9.5 sm:!h-10 text-sm`}
+                                  className={`${inputClass} !h-9.5 w-full text-sm sm:!h-10`}
                                   aria-label="Expected correct answer"
                                   placeholder="Type the expected answer (e.g. Photosynthesis)..."
                                 />
@@ -1901,10 +1727,9 @@ export function QuizAuthoringPanel({
 
                               {/* Alternative accepted answers (if any) */}
                               {options.length > 1 && (
-                                <div className="pt-1.5 space-y-2">
+                                <div className="space-y-2 pt-1.5">
                                   <span className="block text-[0.72rem] font-semibold text-(--text-secondary)">
-                                    Alternative accepted answers (optional
-                                    variations):
+                                    Alternative accepted answers (optional variations):
                                   </span>
                                   {options.slice(1).map((option, altIndex) => {
                                     const realIndex = altIndex + 1;
@@ -1916,24 +1741,20 @@ export function QuizAuthoringPanel({
                                         <input
                                           value={option.text}
                                           onChange={(event) => {
-                                            const nextOpts = options.map(
-                                              (item, idx) =>
-                                                idx === realIndex
-                                                  ? {
-                                                      ...item,
-                                                      text: event.target.value,
-                                                      isCorrect: true,
-                                                    }
-                                                  : item,
+                                            const nextOpts = options.map((item, idx) =>
+                                              idx === realIndex
+                                                ? {
+                                                    ...item,
+                                                    text: event.target.value,
+                                                    isCorrect: true,
+                                                  }
+                                                : item,
                                             );
                                             setOptions(nextOpts);
-                                            scheduleAutoSaveQuestion(
-                                              undefined,
-                                              nextOpts,
-                                            );
+                                            scheduleAutoSaveQuestion(undefined, nextOpts);
                                           }}
                                           onBlur={() => flushQuestionSave()}
-                                          className={`${inputClass} flex-1 min-w-0 !h-9 text-xs sm:text-sm`}
+                                          className={`${inputClass} !h-9 min-w-0 flex-1 text-xs sm:text-sm`}
                                           aria-label={`Alternative accepted answer ${realIndex}`}
                                           placeholder={`Alternative answer variation ${realIndex} (e.g. abbreviation)...`}
                                         />
@@ -1944,14 +1765,11 @@ export function QuizAuthoringPanel({
                                               (_, idx) => idx !== realIndex,
                                             );
                                             setOptions(nextOpts);
-                                            scheduleAutoSaveQuestion(
-                                              undefined,
-                                              nextOpts,
-                                            );
+                                            scheduleAutoSaveQuestion(undefined, nextOpts);
                                           }}
                                           title={`Remove alternative answer ${realIndex}`}
                                           aria-label={`Remove alternative answer ${realIndex}`}
-                                          className="flex size-8 shrink-0 items-center justify-center rounded-lg text-(--muted) hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
+                                          className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-(--muted) transition-colors hover:bg-rose-500/10 hover:text-rose-500"
                                         >
                                           <Trash size={14} />
                                         </button>
@@ -1965,33 +1783,24 @@ export function QuizAuthoringPanel({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const nextOptions = [
-                                      ...options,
-                                      { text: "", isCorrect: true },
-                                    ];
+                                    const nextOptions = [...options, { text: "", isCorrect: true }];
                                     setOptions(nextOptions);
-                                    scheduleAutoSaveQuestion(
-                                      undefined,
-                                      nextOptions,
-                                    );
+                                    scheduleAutoSaveQuestion(undefined, nextOptions);
                                   }}
-                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-(--accent) hover:underline cursor-pointer"
+                                  className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-(--accent) hover:underline"
                                 >
                                   <Plus size={13} weight="bold" />
-                                  <span>
-                                    + Add another acceptable variation
-                                    (optional)
-                                  </span>
+                                  <span>+ Add another acceptable variation (optional)</span>
                                 </button>
                               </div>
                             </div>
                           </div>
                         ) : (
                           /* Options & Answer Key Inset Container for Choice Questions */
-                          <div className="rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-2.5 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-[inset_0_1px_3px_color-mix(in_srgb,black_10%,transparent)]">
-                            <div className="flex items-center justify-between gap-2 mb-2.5 sm:mb-3">
+                          <div className="rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-2.5 shadow-[inset_0_1px_3px_color-mix(in_srgb,black_10%,transparent)] sm:rounded-[12px] sm:p-4">
+                            <div className="mb-2.5 flex items-center justify-between gap-2 sm:mb-3">
                               <div>
-                                <span className="text-xs font-bold text-(--text) tracking-tight">
+                                <span className="text-xs font-bold tracking-tight text-(--text)">
                                   Options & Answer Key
                                 </span>
                               </div>
@@ -2007,12 +1816,9 @@ export function QuizAuthoringPanel({
                                       },
                                     ];
                                     setOptions(nextOptions);
-                                    scheduleAutoSaveQuestion(
-                                      undefined,
-                                      nextOptions,
-                                    );
+                                    scheduleAutoSaveQuestion(undefined, nextOptions);
                                   }}
-                                  className="inline-flex items-center gap-1 text-xs font-semibold text-(--accent) hover:underline cursor-pointer"
+                                  className="inline-flex cursor-pointer items-center gap-1 text-xs font-semibold text-(--accent) hover:underline"
                                 >
                                   <Plus size={13} weight="bold" />
                                   <span>Add option</span>
@@ -2024,70 +1830,54 @@ export function QuizAuthoringPanel({
                               {options.map((option, optIndex) => (
                                 <div
                                   key={option.id ?? optIndex}
-                                  className="flex items-center gap-1.5 sm:gap-2.5 min-w-0"
+                                  className="flex min-w-0 items-center gap-1.5 sm:gap-2.5"
                                 >
-                                  <label className="flex items-center cursor-pointer p-0.5 sm:p-1">
+                                  <label className="flex cursor-pointer items-center p-0.5 sm:p-1">
                                     <input
                                       type={
-                                        questionType === "multiple_choice"
-                                          ? "checkbox"
-                                          : "radio"
+                                        questionType === "multiple_choice" ? "checkbox" : "radio"
                                       }
                                       name={`correct-${quizId}-${question.id}`}
                                       checked={option.isCorrect}
                                       onChange={(event) =>
-                                        setCorrect(
-                                          optIndex,
-                                          event.target.checked,
-                                        )
+                                        setCorrect(optIndex, event.target.checked)
                                       }
                                       aria-label={`Mark option ${optIndex + 1} as correct`}
-                                      className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
+                                      className="size-4 cursor-pointer accent-(--accent) sm:size-4.5"
                                     />
                                   </label>
                                   <input
                                     value={option.text}
                                     onChange={(event) => {
-                                      const nextOpts = options.map(
-                                        (item, itemIndex) =>
-                                          itemIndex === optIndex
-                                            ? {
-                                                ...item,
-                                                text: event.target.value,
-                                              }
-                                            : item,
+                                      const nextOpts = options.map((item, itemIndex) =>
+                                        itemIndex === optIndex
+                                          ? {
+                                              ...item,
+                                              text: event.target.value,
+                                            }
+                                          : item,
                                       );
                                       setOptions(nextOpts);
-                                      scheduleAutoSaveQuestion(
-                                        undefined,
-                                        nextOpts,
-                                      );
+                                      scheduleAutoSaveQuestion(undefined, nextOpts);
                                     }}
                                     onBlur={() => flushQuestionSave()}
-                                    className={`${inputClass} flex-1 min-w-0 !h-9 sm:!h-10`}
+                                    className={`${inputClass} !h-9 min-w-0 flex-1 sm:!h-10`}
                                     aria-label={`Option ${optIndex + 1}`}
                                     placeholder={`Option ${optIndex + 1}`}
                                   />
                                   <button
                                     type="button"
-                                    disabled={
-                                      options.length <= 2 ||
-                                      questionType === "true_false"
-                                    }
+                                    disabled={options.length <= 2 || questionType === "true_false"}
                                     onClick={() => {
                                       const nextOpts = options.filter(
-                                        (_, itemIndex) =>
-                                          itemIndex !== optIndex,
+                                        (_, itemIndex) => itemIndex !== optIndex,
                                       );
                                       setOptions(nextOpts);
-                                      scheduleAutoSaveQuestion(
-                                        undefined,
-                                        nextOpts,
-                                      );
+                                      scheduleAutoSaveQuestion(undefined, nextOpts);
                                     }}
                                     title={`Remove option ${optIndex + 1}`}
                                     aria-label={`Remove option ${optIndex + 1}`}
-                                    className="flex size-8 sm:size-9 shrink-0 items-center justify-center rounded-lg text-(--muted) hover:bg-rose-500/10 hover:text-rose-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-(--muted) transition-colors hover:bg-rose-500/10 hover:text-rose-500 disabled:cursor-not-allowed disabled:opacity-30 sm:size-9"
                                   >
                                     <Trash size={15} />
                                   </button>
@@ -2098,7 +1888,7 @@ export function QuizAuthoringPanel({
                         )}
 
                         {/* Footer / Done editing / Auto-save indicator */}
-                        <div className="pt-2 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-2 sm:gap-3">
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
@@ -2106,7 +1896,7 @@ export function QuizAuthoringPanel({
                                 flushQuestionSave();
                                 setEditingQuestionId(null);
                               }}
-                              className="inline-flex items-center gap-1.5 h-8 sm:h-8.5 px-3 sm:px-3.5 rounded-lg border border-[color-mix(in_srgb,var(--accent)_32%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] text-xs font-semibold text-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] hover:border-(--accent) transition-all duration-150 cursor-pointer"
+                              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--accent)_32%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] px-3 text-xs font-semibold text-(--accent) transition-all duration-150 hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] sm:h-8.5 sm:px-3.5"
                               title="Finish editing and collapse this question"
                               aria-label="Done editing question"
                             >
@@ -2123,25 +1913,22 @@ export function QuizAuthoringPanel({
               })}
 
               {!editableQuestions.length && (
-                <div className="py-7 sm:py-9 text-center text-xs sm:text-sm text-(--muted) border border-dashed border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                  <p className="font-semibold text-(--text-secondary)">
-                    No questions added yet.
-                  </p>
+                <div className="rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] py-7 text-center text-xs text-(--muted) sm:py-9 sm:text-sm">
+                  <p className="font-semibold text-(--text-secondary)">No questions added yet.</p>
                   <p className="mt-1 text-xs text-(--muted)">
-                    Click &quot;Add question&quot; below to add your first
-                    assessment question.
+                    Click &quot;Add question&quot; below to add your first assessment question.
                   </p>
                 </div>
               )}
             </div>
 
             {/* Add Question Button (Course Curriculum Style) */}
-            <div className="mt-3 pt-2.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+            <div className="mt-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-2.5">
               <button
                 type="button"
                 onClick={handleAddNewQuestion}
                 disabled={create.isPending}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] px-3 py-1.5 text-xs font-semibold text-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] hover:border-(--accent) transition-all cursor-pointer disabled:opacity-50"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] px-3 py-1.5 text-xs font-semibold text-(--accent) transition-all hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] disabled:opacity-50"
               >
                 <Plus size={13} weight="bold" />
                 <span>Add question</span>
@@ -2151,17 +1938,16 @@ export function QuizAuthoringPanel({
 
           {/* Card 4: Course Assignment & Delivery Rules */}
           <div
-            className="rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:p-6"
+            className="rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-2.5 sm:rounded-[20px] sm:p-6"
             style={{ boxShadow: "var(--card-shadow)" }}
           >
-            <div className="flex items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
+            <div className="mb-3 flex items-center justify-between gap-2 sm:mb-4 sm:gap-3">
               <div>
-                <h3 className="text-sm sm:text-base font-bold text-(--text) tracking-tight">
+                <h3 className="text-sm font-bold tracking-tight text-(--text) sm:text-base">
                   Course assignment & delivery rules
                 </h3>
                 <p className="mt-0.5 text-xs text-(--muted)">
-                  Attach this quiz to a course lesson and configure assessment
-                  delivery rules.{" "}
+                  Attach this quiz to a course lesson and configure assessment delivery rules.{" "}
                   {quizId
                     ? "Changes auto-save as you type."
                     : "Changes are kept in this browser until you save the quiz."}
@@ -2179,12 +1965,12 @@ export function QuizAuthoringPanel({
             {/* Target Course & Lesson Pickers (when in standalone mode) */}
             {!courseId || !lessonId ? (
               <div className="mb-4 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-3 sm:p-4">
-                <span className="block text-xs font-bold text-(--text) mb-2.5 uppercase tracking-wider">
+                <span className="mb-2.5 block text-xs font-bold tracking-wider text-(--text) uppercase">
                   Attach to Course & Lesson
                 </span>
-                <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-2">
+                <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
                   <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                    <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                       Target course
                     </span>
                     <ThemedSelect
@@ -2202,7 +1988,7 @@ export function QuizAuthoringPanel({
                     />
                   </label>
                   <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                    <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                       Target lesson
                     </span>
                     {isLessonsLoading ? (
@@ -2230,9 +2016,7 @@ export function QuizAuthoringPanel({
                           !effectiveCourseId ||
                           (!isLessonsError &&
                             Boolean(courseSections) &&
-                            courseSections!.every(
-                              (s) => (s.lessons ?? []).length === 0,
-                            ))
+                            courseSections!.every((s) => (s.lessons ?? []).length === 0))
                         }
                         ariaLabel="Target lesson"
                         triggerClassName="!h-9.5 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-3 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)"
@@ -2245,7 +2029,7 @@ export function QuizAuthoringPanel({
                           courseEditor.refetch();
                           courseOverview.refetch();
                         }}
-                        className="mt-1.5 text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline cursor-pointer inline-flex items-center gap-1"
+                        className="mt-1.5 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
                       >
                         Failed to load lessons. Click to retry.
                       </button>
@@ -2254,8 +2038,8 @@ export function QuizAuthoringPanel({
                 </div>
               </div>
             ) : (
-              <div className="mb-4 flex items-center gap-2 rounded-lg bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 py-2 text-xs font-medium text-(--text)">
-                <BookOpen size={15} className="text-(--accent) shrink-0" />
+              <div className="mb-4 flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-3 py-2 text-xs font-medium text-(--text)">
+                <BookOpen size={15} className="shrink-0 text-(--accent)" />
                 <span>
                   Attached to lesson:{" "}
                   <strong className="font-semibold text-(--text)">
@@ -2269,23 +2053,19 @@ export function QuizAuthoringPanel({
               <div className="space-y-3 sm:space-y-4">
                 {assignment ? (
                   assignment.quizId === quizId ? (
-                    <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs font-medium text-emerald-500">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <CheckCircle
-                          size={15}
-                          weight="bold"
-                          className="shrink-0"
-                        />
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-500">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <CheckCircle size={15} weight="bold" className="shrink-0" />
                         <span className="truncate">
-                          This quiz is currently assigned to this lesson.
-                          Delivery rules are active and auto-saving.
+                          This quiz is currently assigned to this lesson. Delivery rules are active
+                          and auto-saving.
                         </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setShowDetachConfirm(true)}
                         disabled={deleteAssignmentMutation.isPending}
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold text-rose-500 hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
+                        className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold text-rose-500 transition-colors hover:bg-rose-500/10"
                         title="Detach quiz from this lesson"
                       >
                         <Trash size={12} weight="bold" />
@@ -2293,16 +2073,11 @@ export function QuizAuthoringPanel({
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs font-medium text-amber-500">
-                      <WarningCircle
-                        size={15}
-                        weight="fill"
-                        className="shrink-0"
-                      />
+                    <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-500">
+                      <WarningCircle size={15} weight="fill" className="shrink-0" />
                       <span>
                         This lesson currently has &quot;
-                        {"quizTitle" in assignment &&
-                        typeof assignment.quizTitle === "string"
+                        {"quizTitle" in assignment && typeof assignment.quizTitle === "string"
                           ? assignment.quizTitle
                           : "another quiz"}
                         &quot; assigned. Assigning this quiz will replace it.
@@ -2311,9 +2086,9 @@ export function QuizAuthoringPanel({
                   )
                 ) : null}
 
-                <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-3">
+                <div className="grid gap-2.5 sm:grid-cols-3 sm:gap-3">
                   <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                    <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                       Pass percentage
                     </span>
                     <input
@@ -2326,11 +2101,11 @@ export function QuizAuthoringPanel({
                         scheduleAutoSaveAssignment();
                       }}
                       onBlur={flushAssignmentPersistence}
-                      className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      className={`${inputClass} !h-9.5 w-full sm:!h-10`}
                     />
                   </label>
                   <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                    <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                       Maximum attempts
                     </span>
                     <input
@@ -2343,11 +2118,11 @@ export function QuizAuthoringPanel({
                         scheduleAutoSaveAssignment();
                       }}
                       onBlur={flushAssignmentPersistence}
-                      className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      className={`${inputClass} !h-9.5 w-full sm:!h-10`}
                     />
                   </label>
                   <label className="block">
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                    <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                       Time limit (minutes)
                     </span>
                     <input
@@ -2360,12 +2135,12 @@ export function QuizAuthoringPanel({
                         scheduleAutoSaveAssignment();
                       }}
                       onBlur={flushAssignmentPersistence}
-                      className={`${inputClass} w-full !h-9.5 sm:!h-10`}
+                      className={`${inputClass} !h-9.5 w-full sm:!h-10`}
                     />
                   </label>
                 </div>
 
-                <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
+                <label className="flex cursor-pointer items-center gap-2.5 text-xs font-medium text-(--text) sm:text-sm">
                   <input
                     type="checkbox"
                     checked={required}
@@ -2373,31 +2148,31 @@ export function QuizAuthoringPanel({
                       setRequired(event.target.checked);
                       scheduleAutoSaveAssignment();
                     }}
-                    className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
+                    className="size-4 cursor-pointer accent-(--accent) sm:size-4.5"
                   />
                   <span>Required course assessment to complete lesson</span>
                 </label>
 
                 {/* Free Preview Toggle & Standalone Pricing Note */}
-                <div className="rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] space-y-3">
+                <div className="space-y-3 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:rounded-[12px] sm:p-4">
                   <div>
-                    <span className="block text-xs font-bold text-(--text) tracking-tight mb-1">
+                    <span className="mb-1 block text-xs font-bold tracking-tight text-(--text)">
                       Free Preview & Access
                     </span>
-                    <p className="text-[0.7rem] sm:text-xs text-(--muted) m-0">
-                      Configure whether prospective learners can preview and
-                      take this quiz before purchasing.
+                    <p className="m-0 text-[0.7rem] text-(--muted) sm:text-xs">
+                      Configure whether prospective learners can preview and take this quiz before
+                      purchasing.
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                  <div className="flex items-center justify-between rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-3 py-2">
                     <div className="pr-3">
-                      <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
+                      <strong className="mb-0.5 block text-[0.88rem] font-[650] text-(--text)">
                         Free Preview
                       </strong>
-                      <p className="m-0 text-(--muted) text-[0.78rem]">
-                        Allow prospective students to view and attempt this quiz
-                        before enrolling or purchasing.
+                      <p className="m-0 text-[0.78rem] text-(--muted)">
+                        Allow prospective students to view and attempt this quiz before enrolling or
+                        purchasing.
                       </p>
                     </div>
                     <SettingsToggle
@@ -2415,22 +2190,18 @@ export function QuizAuthoringPanel({
                     />
                   </div>
 
-                  <div className="flex items-center gap-2 rounded-[8px] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] p-2.5 border border-[color-mix(in_srgb,var(--accent)_20%,transparent)] text-xs text-(--text-secondary)">
-                    <Info
-                      size={16}
-                      weight="bold"
-                      className="text-(--accent) shrink-0"
-                    />
+                  <div className="flex items-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_20%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] p-2.5 text-xs text-(--text-secondary)">
+                    <Info size={16} weight="bold" className="shrink-0 text-(--accent)" />
                     <span>
-                      Standalone pricing for this quiz is configured in the
-                      course <strong>Pricing</strong> tab.
+                      Standalone pricing for this quiz is configured in the course{" "}
+                      <strong>Pricing</strong> tab.
                     </span>
                   </div>
                 </div>
 
                 {assignment && versionOptions.length > 0 ? (
                   <div>
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                    <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                       Assigned published version
                     </span>
                     <ThemedSelect
@@ -2447,7 +2218,7 @@ export function QuizAuthoringPanel({
                 ) : null}
 
                 <div>
-                  <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                  <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                     Result feedback mode
                   </span>
                   <ThemedSelect
@@ -2462,13 +2233,10 @@ export function QuizAuthoringPanel({
                   />
                 </div>
 
-                <div className="grid gap-2.5 sm:gap-3 sm:grid-cols-2">
+                <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
                   <div>
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Available from{" "}
-                      <span className="text-(--muted) font-normal">
-                        (optional)
-                      </span>
+                    <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
+                      Available from <span className="font-normal text-(--muted)">(optional)</span>
                     </span>
                     <ThemedDateTimePicker
                       value={availableFrom}
@@ -2481,11 +2249,8 @@ export function QuizAuthoringPanel({
                     />
                   </div>
                   <div>
-                    <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
-                      Available until{" "}
-                      <span className="text-(--muted) font-normal">
-                        (optional)
-                      </span>
+                    <span className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
+                      Available until <span className="font-normal text-(--muted)">(optional)</span>
                     </span>
                     <ThemedDateTimePicker
                       value={availableUntil}
@@ -2500,7 +2265,7 @@ export function QuizAuthoringPanel({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
+                  <label className="flex cursor-pointer items-center gap-2.5 text-xs font-medium text-(--text) sm:text-sm">
                     <input
                       type="checkbox"
                       checked={shuffleQuestions}
@@ -2508,12 +2273,12 @@ export function QuizAuthoringPanel({
                         setShuffleQuestions(event.target.checked);
                         scheduleAutoSaveAssignment();
                       }}
-                      className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
+                      className="size-4 cursor-pointer accent-(--accent) sm:size-4.5"
                     />
                     <span>Shuffle questions for each student attempt</span>
                   </label>
 
-                  <label className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-(--text) cursor-pointer">
+                  <label className="flex cursor-pointer items-center gap-2.5 text-xs font-medium text-(--text) sm:text-sm">
                     <input
                       type="checkbox"
                       checked={shuffleOptions}
@@ -2521,25 +2286,25 @@ export function QuizAuthoringPanel({
                         setShuffleOptions(event.target.checked);
                         scheduleAutoSaveAssignment();
                       }}
-                      className="size-4 sm:size-4.5 accent-(--accent) cursor-pointer"
+                      className="size-4 cursor-pointer accent-(--accent) sm:size-4.5"
                     />
                     <span>Shuffle answer options for each student attempt</span>
                   </label>
                 </div>
 
-                <div className="pt-2 sm:pt-3 flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 pt-2 sm:pt-3">
                   {!quizId ? (
                     <Button
                       onClick={() => persistBrowserDraft()}
                       disabled={!canPersistBrowserDraft || create.isPending}
                       motion="static"
-                      className="h-9.5 sm:h-10 border border-(--accent)/35 bg-(--accent)/10 px-4 sm:px-5 text-xs sm:text-sm text-(--accent) shadow-none hover:bg-(--accent)/20"
+                      className="h-9.5 border border-(--accent)/35 bg-(--accent)/10 px-4 text-xs text-(--accent) shadow-none hover:bg-(--accent)/20 sm:h-10 sm:px-5 sm:text-sm"
                     >
                       {create.isPending ? "Saving quiz..." : "Save draft"}
                     </Button>
                   ) : null}
                   {assignment && assignment.quizId === quizId ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-3.5 py-2 text-xs sm:text-sm font-semibold text-emerald-500">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-500 sm:text-sm">
                       <CheckCircle size={16} weight="bold" />
                       <span>Assigned to lesson</span>
                     </span>
@@ -2552,16 +2317,11 @@ export function QuizAuthoringPanel({
                         publish.isPending ||
                         assign.isPending
                       }
-                      className="h-9.5 sm:h-10 px-4 sm:px-5 font-semibold text-xs sm:text-sm"
+                      className="h-9.5 px-4 text-xs font-semibold sm:h-10 sm:px-5 sm:text-sm"
                     >
-                      {create.isPending ||
-                      publish.isPending ||
-                      assign.isPending ? (
+                      {create.isPending || publish.isPending || assign.isPending ? (
                         <>
-                          <CircleNotch
-                            size={15}
-                            className="animate-spin mr-2"
-                          />
+                          <CircleNotch size={15} className="mr-2 animate-spin" />
                           {create.isPending ? "Saving quiz..." : "Assigning..."}
                         </>
                       ) : version?.publishedAt ? (
@@ -2574,11 +2334,10 @@ export function QuizAuthoringPanel({
                 </div>
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-4 sm:p-5 text-center">
-                <p className="text-xs sm:text-sm text-(--muted)">
-                  Select a course and lesson above to attach this quiz and
-                  configure delivery rules (passing score, attempts, timer,
-                  etc.).
+              <div className="rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-4 text-center sm:p-5">
+                <p className="text-xs text-(--muted) sm:text-sm">
+                  Select a course and lesson above to attach this quiz and configure delivery rules
+                  (passing score, attempts, timer, etc.).
                 </p>
                 {!version?.publishedAt && (
                   <div className="mt-3 flex flex-wrap justify-center gap-2">
@@ -2594,22 +2353,13 @@ export function QuizAuthoringPanel({
                     ) : null}
                     <Button
                       onClick={publishAndAssign}
-                      disabled={
-                        !editableQuestions.length ||
-                        create.isPending ||
-                        publish.isPending
-                      }
+                      disabled={!editableQuestions.length || create.isPending || publish.isPending}
                       className="h-9 px-4 text-xs font-semibold"
                     >
                       {create.isPending || publish.isPending ? (
                         <>
-                          <CircleNotch
-                            size={14}
-                            className="animate-spin mr-1.5"
-                          />
-                          {create.isPending
-                            ? "Saving quiz..."
-                            : "Publishing..."}
+                          <CircleNotch size={14} className="mr-1.5 animate-spin" />
+                          {create.isPending ? "Saving quiz..." : "Publishing..."}
                         </>
                       ) : quizId ? (
                         "Publish version without attaching"
@@ -2628,7 +2378,7 @@ export function QuizAuthoringPanel({
       {errorMessage ? (
         <div
           role="alert"
-          className="flex items-center justify-between gap-3 p-3 sm:p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-xs sm:text-sm text-rose-500 font-medium"
+          className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-xs font-medium text-rose-500 sm:p-3.5 sm:text-sm"
         >
           <div className="flex items-center gap-2">
             <WarningCircle size={16} className="shrink-0" />
@@ -2648,7 +2398,7 @@ export function QuizAuthoringPanel({
               updateAssignment.reset();
               updateQuiz.reset();
             }}
-            className="flex size-6 shrink-0 items-center justify-center rounded-lg hover:bg-rose-500/20 text-rose-500 transition-colors cursor-pointer"
+            className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg text-rose-500 transition-colors hover:bg-rose-500/20"
             aria-label="Dismiss error"
             title="Dismiss error"
           >
@@ -2666,7 +2416,7 @@ export function QuizAuthoringPanel({
         icon={Trash}
         title="Delete this Quiz?"
         description={
-          <div className="space-y-2 text-xs sm:text-sm text-(--muted)">
+          <div className="space-y-2 text-xs text-(--muted) sm:text-sm">
             <p>
               Are you sure you want to permanently delete{" "}
               <strong className="font-semibold text-(--text)">
@@ -2674,14 +2424,13 @@ export function QuizAuthoringPanel({
               </strong>
               ?
             </p>
-            <p className="text-rose-500 font-medium">
-              This will remove all questions and unassign this quiz from any
-              attached lessons. This action cannot be undone.
+            <p className="font-medium text-rose-500">
+              This will remove all questions and unassign this quiz from any attached lessons. This
+              action cannot be undone.
             </p>
             {deleteQuizMutation.isError && (
-              <p className="text-red-400 font-medium pt-1">
-                Failed to delete:{" "}
-                {deleteQuizMutation.error?.message || "Something went wrong."}
+              <p className="pt-1 font-medium text-red-400">
+                Failed to delete: {deleteQuizMutation.error?.message || "Something went wrong."}
               </p>
             )}
           </div>
@@ -2701,7 +2450,7 @@ export function QuizAuthoringPanel({
         icon={Trash}
         title="Detach Quiz from this Lesson?"
         description={
-          <div className="space-y-2 text-xs sm:text-sm text-(--muted)">
+          <div className="space-y-2 text-xs text-(--muted) sm:text-sm">
             <p>
               Are you sure you want to detach{" "}
               <strong className="font-semibold text-(--text)">
@@ -2710,14 +2459,13 @@ export function QuizAuthoringPanel({
               from this lesson?
             </p>
             <p>
-              The quiz will remain safely in your quiz library and can be
-              re-assigned to any lesson later.
+              The quiz will remain safely in your quiz library and can be re-assigned to any lesson
+              later.
             </p>
             {deleteAssignmentMutation.isError && (
-              <p className="text-red-400 font-medium pt-1">
+              <p className="pt-1 font-medium text-red-400">
                 Failed to detach:{" "}
-                {deleteAssignmentMutation.error?.message ||
-                  "Something went wrong."}
+                {deleteAssignmentMutation.error?.message || "Something went wrong."}
               </p>
             )}
           </div>

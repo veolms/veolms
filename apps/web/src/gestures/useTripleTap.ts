@@ -45,10 +45,8 @@ export function useTripleTap(onTripleTap: () => void) {
     const onPointerMove = (event: PointerEvent) => {
       if (activeTap?.pointerId !== event.pointerId) return;
       if (
-        Math.hypot(
-          event.clientX - activeTap.startX,
-          event.clientY - activeTap.startY,
-        ) > MAX_TAP_MOVEMENT_PX
+        Math.hypot(event.clientX - activeTap.startX, event.clientY - activeTap.startY) >
+        MAX_TAP_MOVEMENT_PX
       ) {
         activeTap = null;
         recentTaps = [];
@@ -62,10 +60,7 @@ export function useTripleTap(onTripleTap: () => void) {
 
       const now = performance.now();
       const duration = now - tap.startedAt;
-      const movement = Math.hypot(
-        event.clientX - tap.startX,
-        event.clientY - tap.startY,
-      );
+      const movement = Math.hypot(event.clientX - tap.startX, event.clientY - tap.startY);
       if (duration > MAX_TAP_DURATION_MS || movement > MAX_TAP_MOVEMENT_PX) {
         recentTaps = [];
         return;
@@ -84,8 +79,7 @@ export function useTripleTap(onTripleTap: () => void) {
 
       recentTaps = [];
       onTripleTapRef.current();
-      suppressedClickTarget =
-        event.target instanceof Node ? event.target : null;
+      suppressedClickTarget = event.target instanceof Node ? event.target : null;
       suppressedClickTimer = window.setTimeout(clearSuppressedClick, 350);
     };
 

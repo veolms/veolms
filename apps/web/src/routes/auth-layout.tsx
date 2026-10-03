@@ -43,9 +43,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     });
 
     if (access.isSessionReady) {
-      return redirect(
-        resolveAuthenticatedDestination(url.searchParams.get("returnTo")),
-      );
+      return redirect(resolveAuthenticatedDestination(url.searchParams.get("returnTo")));
     }
   }
 

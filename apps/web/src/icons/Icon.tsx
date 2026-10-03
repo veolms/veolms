@@ -27,12 +27,7 @@ export function Icon({
   const Glyph = iconRegistry[name][pack];
 
   return pack === "phosphor" ? (
-    <Glyph
-      aria-hidden={ariaHidden}
-      className={className}
-      size={size}
-      weight={emphasis}
-    />
+    <Glyph aria-hidden={ariaHidden} className={className} size={size} weight={emphasis} />
   ) : (
     <Glyph
       aria-hidden={ariaHidden}

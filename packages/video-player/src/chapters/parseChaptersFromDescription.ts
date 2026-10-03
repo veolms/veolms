@@ -18,8 +18,7 @@ interface MarkdownNode {
   value?: string;
 }
 
-const SEMANTIC_CHAPTER_PATTERN =
-  /^\s*(\d+:\d{2}(?::\d{2})?)\s+([\s\S]*?\S)\s*$/;
+const SEMANTIC_CHAPTER_PATTERN = /^\s*(\d+:\d{2}(?::\d{2})?)\s+([\s\S]*?\S)\s*$/;
 
 const markdownParser = unified().use(remarkParse).use(remarkGfm);
 
@@ -72,9 +71,7 @@ function isEligibleBlock(node: MarkdownNode | undefined): boolean {
   return node?.type === "paragraph" || node?.type === "heading";
 }
 
-function leadingEligibleBlock(
-  node: MarkdownNode | undefined,
-): MarkdownNode | null {
+function leadingEligibleBlock(node: MarkdownNode | undefined): MarkdownNode | null {
   if (!node) return null;
   if (isEligibleBlock(node)) return node;
 
@@ -122,11 +119,7 @@ function firstSemanticInline(node: MarkdownNode): MarkdownNode | null {
       continue;
     }
 
-    if (
-      child.type === "strong" ||
-      child.type === "emphasis" ||
-      child.type === "delete"
-    ) {
+    if (child.type === "strong" || child.type === "emphasis" || child.type === "delete") {
       const nested = firstSemanticInline(child);
       if (nested) return nested;
       continue;
@@ -168,10 +161,7 @@ function extractChapterCandidate(semanticText: string): ChapterInput | null {
   return { title, startTime };
 }
 
-function extractChapterCandidates(
-  block: MarkdownNode,
-  description: string,
-): ChapterInput[] {
+function extractChapterCandidates(block: MarkdownNode, description: string): ChapterInput[] {
   const startOffset = block.position?.start?.offset;
   const endOffset = block.position?.end?.offset;
   const sourceText =
@@ -198,18 +188,13 @@ function extractChapterCandidates(
         return null;
       }
 
-      const semanticText = mdastToString(
-        lineBlock as Parameters<typeof mdastToString>[0],
-      ).trim();
+      const semanticText = mdastToString(lineBlock as Parameters<typeof mdastToString>[0]).trim();
       return extractChapterCandidate(semanticText);
     })
     .filter((candidate): candidate is ChapterInput => candidate !== null);
 }
 
-function isPlainTextChapterLine(
-  root: MarkdownNode,
-  block: MarkdownNode,
-): boolean {
+function isPlainTextChapterLine(root: MarkdownNode, block: MarkdownNode): boolean {
   return (
     root.children?.length === 1 &&
     root.children[0] === block &&
@@ -262,15 +247,11 @@ function extractChapterDeclarations(
       continue;
     }
 
-    const semanticText = mdastToString(
-      lineBlock as Parameters<typeof mdastToString>[0],
-    ).trim();
+    const semanticText = mdastToString(lineBlock as Parameters<typeof mdastToString>[0]).trim();
     const candidate = extractChapterCandidate(semanticText);
     const firstInline = firstSemanticInline(lineBlock);
     const timestamp = SEMANTIC_CHAPTER_PATTERN.exec(semanticText)?.[1];
-    const timestampOffset = timestamp
-      ? (firstInline?.value ?? "").indexOf(timestamp)
-      : -1;
+    const timestampOffset = timestamp ? (firstInline?.value ?? "").indexOf(timestamp) : -1;
     const lineStart = (startOffset ?? 0) + lineOffset;
     const inlineStart = firstInline?.position?.start?.offset ?? 0;
 
@@ -316,9 +297,7 @@ export function parseChapterDeclarationsFromDescription(
     return [];
   }
 
-  return eligibleBlocks(root).flatMap((block) =>
-    extractChapterDeclarations(block, description),
-  );
+  return eligibleBlocks(root).flatMap((block) => extractChapterDeclarations(block, description));
 }
 
 /**
@@ -340,7 +319,5 @@ export function parseChaptersFromDescription(
     return [];
   }
 
-  return eligibleBlocks(root).flatMap((block) =>
-    extractChapterCandidates(block, description),
-  );
+  return eligibleBlocks(root).flatMap((block) => extractChapterCandidates(block, description));
 }

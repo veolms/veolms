@@ -40,10 +40,7 @@ export function ResponsiveAvatar({
   decoding = "async",
   ...props
 }: ResponsiveAvatarProps) {
-  const match = useMemo(
-    () => (src ? AVATAR_PREFIX_PATTERN.exec(src) : null),
-    [src],
-  );
+  const match = useMemo(() => (src ? AVATAR_PREFIX_PATTERN.exec(src) : null), [src]);
   const avatarPrefix = match ? match[1] : null;
   const querySuffix = match && match[2] ? match[2] : "";
 
@@ -84,9 +81,7 @@ export function ResponsiveAvatar({
     activeSrcSet = undefined;
   }
 
-  const handleError: ImgHTMLAttributes<HTMLImageElement>["onError"] = (
-    event,
-  ) => {
+  const handleError: ImgHTMLAttributes<HTMLImageElement>["onError"] = (event) => {
     if (avatarPrefix) {
       const nextIndex = candidateIndex + 1;
       if (nextIndex < candidates.length) {

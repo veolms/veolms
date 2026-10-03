@@ -27,9 +27,7 @@ export function ChaptersMenu({
   const controller = usePlayerController();
   const ChaptersIcon = usePlayerTheme().icons.chapters;
   const { activeChapterId, chapters } = useChapters();
-  const activeChapter = chapters.find(
-    (chapter) => chapter.id === activeChapterId,
-  );
+  const activeChapter = chapters.find((chapter) => chapter.id === activeChapterId);
   const currentLabel = activeChapter?.title ?? "Chapters";
 
   return (
@@ -38,10 +36,7 @@ export function ChaptersMenu({
       menuLabel="Chapters"
       trigger={
         trigger ?? (
-          <MenuTriggerContent
-            icon={<ChaptersIcon className="size-4" />}
-            value={currentLabel}
-          />
+          <MenuTriggerContent icon={<ChaptersIcon className="size-4" />} value={currentLabel} />
         )
       }
       className={className}

@@ -31,12 +31,7 @@ export class AppError extends Error {
     };
   }
 
-  constructor(
-    statusCode: number,
-    code: string,
-    message: string,
-    issues?: ValidationIssue[],
-  ) {
+  constructor(statusCode: number, code: string, message: string, issues?: ValidationIssue[]) {
     super(message);
     this.name = "AppError";
     this.statusCode = statusCode;
@@ -85,10 +80,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
   app.setErrorHandler<FastifyError>((error, request, reply) => {
     if (reply.sent || reply.raw.headersSent) {
-      request.log.error(
-        { err: error },
-        "Error occurred after response was already sent",
-      );
+      request.log.error({ err: error }, "Error occurred after response was already sent");
       return;
     }
 
@@ -146,8 +138,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
                   "An unexpected error occurred.",
               ),
               (error as { issues?: ValidationIssue[] }).issues ||
-                (error as { error?: { issues?: ValidationIssue[] } }).error
-                  ?.issues,
+                (error as { error?: { issues?: ValidationIssue[] } }).error?.issues,
             )
           : null;
 
@@ -160,9 +151,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
           .send(
             httpError(
               appError.statusCode,
-              error instanceof AppError
-                ? appError.code
-                : "INTERNAL_SERVER_ERROR",
+              error instanceof AppError ? appError.code : "INTERNAL_SERVER_ERROR",
               "An unexpected error occurred.",
             ).toJSON(),
           );
@@ -171,12 +160,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return reply
         .code(appError.statusCode)
         .send(
-          httpError(
-            appError.statusCode,
-            appError.code,
-            appError.message,
-            appError.issues,
-          ).toJSON(),
+          httpError(appError.statusCode, appError.code, appError.message, appError.issues).toJSON(),
         );
     }
 
@@ -184,12 +168,6 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
     return reply
       .code(500)
-      .send(
-        httpError(
-          500,
-          "INTERNAL_SERVER_ERROR",
-          "An unexpected error occurred.",
-        ).toJSON(),
-      );
+      .send(httpError(500, "INTERNAL_SERVER_ERROR", "An unexpected error occurred.").toJSON());
   });
 }

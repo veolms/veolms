@@ -4,10 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createInitialVideoEngineSnapshot } from "../core/snapshot";
 import { PlayerControllerContext } from "../react/context";
 import type { PlayerController } from "../react/PlayerController";
-import {
-  createInitialPlayerUiState,
-  type PlayerSnapshot,
-} from "../react/playerState";
+import { createInitialPlayerUiState, type PlayerSnapshot } from "../react/playerState";
 import { Timeline } from "./Timeline";
 
 afterEach(cleanup);
@@ -26,9 +23,7 @@ describe("Timeline", () => {
     fireEvent.click(marker);
     expect(actions.seekTo).toHaveBeenCalledWith(90);
 
-    expect(container.querySelectorAll("span[aria-hidden='true']")).toHaveLength(
-      2,
-    );
+    expect(container.querySelectorAll("span[aria-hidden='true']")).toHaveLength(2);
     expect(container.querySelector("span[style*='width: 25%']")).toBeTruthy();
     expect(container.querySelector("[data-timeline-track]")).toBeTruthy();
     expect(container.querySelector("[data-timeline-visual]")).toHaveClass(
@@ -36,9 +31,7 @@ describe("Timeline", () => {
       "absolute",
       "inset-0",
     );
-    expect(
-      container.querySelector("[data-timeline-buffered-range]"),
-    ).toBeTruthy();
+    expect(container.querySelector("[data-timeline-buffered-range]")).toBeTruthy();
     expect(container.querySelector("[data-timeline-progress]")).toHaveClass(
       "bg-[var(--video-player-accent,#ff7a1a)]",
     );
@@ -67,9 +60,7 @@ describe("Timeline", () => {
     "keeps the timeline thumb inside the track at %i seconds",
     (currentTime, left, translate, transformOrigin) => {
       const { container } = renderTimeline({ currentTime });
-      const thumb = container.querySelector<HTMLElement>(
-        "[data-timeline-thumb]",
-      );
+      const thumb = container.querySelector<HTMLElement>("[data-timeline-thumb]");
 
       expect(thumb).toHaveStyle({ left, transformOrigin, translate });
     },
@@ -136,15 +127,8 @@ describe("Timeline", () => {
       showPreview: true,
     });
 
-    const preview = container.querySelector<HTMLElement>(
-      '[data-video-player-preview-mode="time"]',
-    );
-    expect(preview).toHaveClass(
-      "w-max",
-      "max-w-[calc(100vw-1rem)]",
-      "rounded-full",
-      "mb-2.5",
-    );
+    const preview = container.querySelector<HTMLElement>('[data-video-player-preview-mode="time"]');
+    expect(preview).toHaveClass("w-max", "max-w-[calc(100vw-1rem)]", "rounded-full", "mb-2.5");
     expect(preview?.className).toContain(
       "bg-[color-mix(in_srgb,#05070b_64%,var(--video-player-accent,#ff7a1a)_4%)]",
     );

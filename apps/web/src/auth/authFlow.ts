@@ -1,9 +1,5 @@
 import { otpVerifyRequestSchema } from "@veolms/contracts";
-import {
-  DEFAULT_COUNTRY_ID,
-  findCountry,
-  toNationalDigits,
-} from "./identifier.ts";
+import { DEFAULT_COUNTRY_ID, findCountry, toNationalDigits } from "./identifier.ts";
 import type { CountryOption } from "./identifier.ts";
 
 export type AuthIdentifier =
@@ -67,17 +63,12 @@ export type AuthFlowState =
   | { readonly status: "authenticated" }
   | { readonly status: "error"; readonly message: string };
 
-export type OtpFailureReason =
-  "incorrect" | "expired" | "attemptsExceeded" | "verifyFailed";
+export type OtpFailureReason = "incorrect" | "expired" | "attemptsExceeded" | "verifyFailed";
 
 export type TwoFactorMethod = "passkey" | "authenticator";
 
 export type OtpVerifiedOutcome =
-  | "newUserName"
-  | "twoFactorPasskey"
-  | "twoFactorAuthenticator"
-  | "adminMfaSetup"
-  | "authenticated";
+  "newUserName" | "twoFactorPasskey" | "twoFactorAuthenticator" | "adminMfaSetup" | "authenticated";
 
 export type OtpMessageKey = OtpFailureReason | "sendFailed" | "unexpected";
 
@@ -167,9 +158,7 @@ function groupMobile(masked: string): string {
 }
 
 function maskMobile(phoneNo: string): string {
-  const digits = toNationalDigits(phoneNo).slice(
-    -DEFAULT_COUNTRY.nationalDigits,
-  );
+  const digits = toNationalDigits(phoneNo).slice(-DEFAULT_COUNTRY.nationalDigits);
   const hidden = Math.max(0, digits.length - VISIBLE_MOBILE_DIGITS);
 
   return `${DEFAULT_COUNTRY.dialCode} ${groupMobile(MASK_CHARACTER.repeat(hidden) + digits.slice(hidden))}`;
@@ -238,10 +227,7 @@ type TwoFactorState = Extract<
 >;
 
 function isTwoFactorState(state: AuthFlowState): state is TwoFactorState {
-  return (
-    state.status === "twoFactorPasskey" ||
-    state.status === "twoFactorAuthenticator"
-  );
+  return state.status === "twoFactorPasskey" || state.status === "twoFactorAuthenticator";
 }
 
 export const initialAuthFlowState: AuthFlowState = {
@@ -249,10 +235,7 @@ export const initialAuthFlowState: AuthFlowState = {
   message: null,
 };
 
-export function authFlowReducer(
-  state: AuthFlowState,
-  action: AuthFlowAction,
-): AuthFlowState {
+export function authFlowReducer(state: AuthFlowState, action: AuthFlowAction): AuthFlowState {
   if (action.type === "UNEXPECTED_FAILURE") {
     return { status: "error", message: OTP_MESSAGES.unexpected.body };
   }
@@ -369,10 +352,7 @@ export function authFlowReducer(
     return { status: "authenticated" };
   }
 
-  if (
-    state.status === "creatingAccount" &&
-    action.type === "ACCOUNT_CREATED_REQUIRES_MFA"
-  ) {
+  if (state.status === "creatingAccount" && action.type === "ACCOUNT_CREATED_REQUIRES_MFA") {
     return {
       status: "adminMfaSetup",
       identifier: state.identifier,
@@ -380,10 +360,7 @@ export function authFlowReducer(
     };
   }
 
-  if (
-    state.status === "creatingAccount" &&
-    action.type === "ACCOUNT_CREATION_FAILED"
-  ) {
+  if (state.status === "creatingAccount" && action.type === "ACCOUNT_CREATION_FAILED") {
     return { ...state, status: "newUserName", message: action.message };
   }
 
@@ -411,10 +388,7 @@ export function authFlowReducer(
     return { status: "authenticated" };
   }
 
-  if (
-    state.status === "verifyingTwoFactor" &&
-    action.type === "TWO_FACTOR_REJECTED"
-  ) {
+  if (state.status === "verifyingTwoFactor" && action.type === "TWO_FACTOR_REJECTED") {
     return {
       status: TWO_FACTOR_STATUS[state.method],
       identifier: state.identifier,
@@ -423,24 +397,15 @@ export function authFlowReducer(
     };
   }
 
-  if (
-    state.status === "adminMfaSetup" &&
-    action.type === "ADMIN_MFA_SETUP_DONE"
-  ) {
+  if (state.status === "adminMfaSetup" && action.type === "ADMIN_MFA_SETUP_DONE") {
     return { status: "authenticated" };
   }
 
-  if (
-    state.status === "adminMfaSetup" &&
-    action.type === "ADMIN_MFA_SETUP_FAILED"
-  ) {
+  if (state.status === "adminMfaSetup" && action.type === "ADMIN_MFA_SETUP_FAILED") {
     return { ...state, message: action.message };
   }
 
-  if (
-    state.status === "adminMfaSetup" &&
-    action.type === "ADMIN_MFA_SETUP_ERROR_CLEARED"
-  ) {
+  if (state.status === "adminMfaSetup" && action.type === "ADMIN_MFA_SETUP_ERROR_CLEARED") {
     return { ...state, message: null };
   }
 

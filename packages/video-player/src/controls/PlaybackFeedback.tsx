@@ -48,9 +48,7 @@ export function PlaybackFeedback({
       setFeedback(nextFeedback);
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        setFeedback((current) =>
-          current?.id === nextFeedback.id ? null : current,
-        );
+        setFeedback((current) => (current?.id === nextFeedback.id ? null : current));
       }, durationMs);
     });
 

@@ -58,9 +58,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         body: registerRequestSchema,
         response: {
           201: jsonResponse("Registration successful.", loginResponseSchema),
-          400: errorResponse(
-            "Invalid code, username taken, or user already exists.",
-          ),
+          400: errorResponse("Invalid code, username taken, or user already exists."),
         },
       },
     },
@@ -76,10 +74,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         summary: "Get public auth configs",
         description: "Returns public OAuth Client IDs.",
         response: {
-          200: jsonResponse(
-            "OAuth Client IDs context.",
-            authConfigResponseSchema,
-          ),
+          200: jsonResponse("OAuth Client IDs context.", authConfigResponseSchema),
         },
       },
     },
@@ -97,10 +92,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
           "Returns a user's public profile fields and only contact details they chose to share.",
         params: publicProfileUsernameParamsSchema,
         response: {
-          200: jsonResponse(
-            "Public profile details.",
-            publicProfileResponseSchema,
-          ),
+          200: jsonResponse("Public profile details.", publicProfileResponseSchema),
           404: errorResponse("This profile isn't available."),
         },
       },
@@ -135,10 +127,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         description:
           "Inspects and returns the active authenticated user profile details, including whether the current session has completed MFA. This endpoint does not require MFA step-up so the client can choose verify vs enroll.",
         response: {
-          200: jsonResponse(
-            "User context, when a session is present.",
-            currentUserResponseSchema,
-          ),
+          200: jsonResponse("User context, when a session is present.", currentUserResponseSchema),
         },
       },
       preHandler: [middleware.authenticate],
@@ -153,8 +142,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         operationId: "updateCurrentUserProfile",
         tags: ["Auth"],
         summary: "Update current user profile",
-        description:
-          "Updates editable public profile fields for the authenticated account.",
+        description: "Updates editable public profile fields for the authenticated account.",
         body: profileUpdateRequestSchema,
         response: {
           200: jsonResponse("User profile updated.", userProfileResponseSchema),
@@ -200,8 +188,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         operationId: "completeCurrentUserAvatarUpload",
         tags: ["Auth"],
         summary: "Complete a profile photo upload",
-        description:
-          "Verifies the direct upload and persists the canonical 160px CDN avatar URL.",
+        description: "Verifies the direct upload and persists the canonical 160px CDN avatar URL.",
         body: avatarUploadCompleteRequestSchema,
         response: {
           200: jsonResponse("Avatar updated.", userProfileResponseSchema),
@@ -224,8 +211,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         operationId: "listCurrentUserAvatars",
         tags: ["Auth"],
         summary: "List the current user's stored avatars",
-        description:
-          "Returns up to five uploaded avatars and protected provider avatars.",
+        description: "Returns up to five uploaded avatars and protected provider avatars.",
         response: {
           200: jsonResponse("Stored avatars.", userAvatarListResponseSchema),
           401: errorResponse("Authentication required."),
@@ -244,8 +230,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         operationId: "selectCurrentUserAvatar",
         tags: ["Auth"],
         summary: "Select a stored avatar",
-        description:
-          "Makes one of the current user's uploaded or provider avatars active.",
+        description: "Makes one of the current user's uploaded or provider avatars active.",
         body: selectAvatarRequestSchema,
         response: {
           200: jsonResponse("Avatar selected.", userProfileResponseSchema),
@@ -268,10 +253,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         description:
           "Deletes the user's uploaded avatar history while preserving provider avatars.",
         response: {
-          200: jsonResponse(
-            "Uploaded avatars deleted.",
-            userProfileResponseSchema,
-          ),
+          200: jsonResponse("Uploaded avatars deleted.", userProfileResponseSchema),
           401: errorResponse("Authentication required."),
           404: errorResponse("User account was not found."),
         },

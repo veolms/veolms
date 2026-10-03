@@ -53,10 +53,7 @@ export function createRefundRequestService({
       );
     }
 
-    const existing = await refundRequestRepo.findRefundRequestByOrderId(
-      database,
-      orderId,
-    );
+    const existing = await refundRequestRepo.findRefundRequestByOrderId(database, orderId);
     if (existing) {
       throw new AppError(
         409,
@@ -89,13 +86,8 @@ export function createRefundRequestService({
     };
   }
 
-  async function listStudentRefundRequests(
-    userId: string,
-  ): Promise<RefundRequest[]> {
-    const rows = await refundRequestRepo.listRefundRequestsByUser(
-      database,
-      userId,
-    );
+  async function listStudentRefundRequests(userId: string): Promise<RefundRequest[]> {
+    const rows = await refundRequestRepo.listRefundRequestsByUser(database, userId);
     return rows.map((r) => ({
       id: r.id,
       orderId: r.order_id,
@@ -109,13 +101,8 @@ export function createRefundRequestService({
     }));
   }
 
-  async function listAllRefundRequests(
-    status?: RefundRequestStatus,
-  ): Promise<RefundRequest[]> {
-    const rows = await refundRequestRepo.listAllRefundRequests(
-      database,
-      status,
-    );
+  async function listAllRefundRequests(status?: RefundRequestStatus): Promise<RefundRequest[]> {
+    const rows = await refundRequestRepo.listAllRefundRequests(database, status);
     return rows.map((r) => ({
       id: r.id,
       orderId: r.order_id,
@@ -134,16 +121,9 @@ export function createRefundRequestService({
     requestId: string,
     request: ReviewRefundRequest,
   ): Promise<{ refundRequest: RefundRequest; refund?: Refund }> {
-    const refundReq = await refundRequestRepo.findRefundRequestById(
-      database,
-      requestId,
-    );
+    const refundReq = await refundRequestRepo.findRefundRequestById(database, requestId);
     if (!refundReq) {
-      throw new AppError(
-        404,
-        "REFUND_REQUEST_NOT_FOUND",
-        "Refund request not found.",
-      );
+      throw new AppError(404, "REFUND_REQUEST_NOT_FOUND", "Refund request not found.");
     }
 
     if (refundReq.status !== "pending") {
@@ -165,15 +145,11 @@ export function createRefundRequestService({
         preserveAccess: request.preserveAccess ?? false,
       });
 
-      const updated = await refundRequestRepo.updateRefundRequestStatus(
-        database,
-        requestId,
-        {
-          status: "approved",
-          admin_notes: request.adminNotes ?? null,
-          resolved_at: now,
-        },
-      );
+      const updated = await refundRequestRepo.updateRefundRequestStatus(database, requestId, {
+        status: "approved",
+        admin_notes: request.adminNotes ?? null,
+        resolved_at: now,
+      });
 
       return {
         refundRequest: {
@@ -190,15 +166,11 @@ export function createRefundRequestService({
         refund,
       };
     } else {
-      const updated = await refundRequestRepo.updateRefundRequestStatus(
-        database,
-        requestId,
-        {
-          status: "rejected",
-          admin_notes: request.adminNotes ?? null,
-          resolved_at: now,
-        },
-      );
+      const updated = await refundRequestRepo.updateRefundRequestStatus(database, requestId, {
+        status: "rejected",
+        admin_notes: request.adminNotes ?? null,
+        resolved_at: now,
+      });
 
       return {
         refundRequest: {

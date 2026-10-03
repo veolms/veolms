@@ -6,8 +6,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios";
 
-export const GENERIC_API_ERROR_MESSAGE =
-  "Something went wrong on our end. Please try again later.";
+export const GENERIC_API_ERROR_MESSAGE = "Something went wrong on our end. Please try again later.";
 
 export interface ApiEnvelope<T = unknown> {
   success: boolean;
@@ -24,8 +23,7 @@ export interface ApiError {
 
 const CONFIGURED_BACKEND_URL =
   (typeof import.meta !== "undefined" &&
-    (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env
-      ?.VITE_API_BASE_URL) ||
+    (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL) ||
   "/v1";
 
 function isPrivateIpv4Address(hostname: string): boolean {
@@ -48,21 +46,14 @@ function isPrivateIpv4Address(hostname: string): boolean {
 
 /** Replace loopback with the host serving the app when opened over LAN. */
 export function getApiBaseUrl(): string {
-  if (
-    typeof window === "undefined" ||
-    !isPrivateIpv4Address(window.location.hostname)
-  ) {
+  if (typeof window === "undefined" || !isPrivateIpv4Address(window.location.hostname)) {
     return CONFIGURED_BACKEND_URL;
   }
 
   try {
-    const configuredUrl = new URL(
-      CONFIGURED_BACKEND_URL,
-      window.location.origin,
-    );
+    const configuredUrl = new URL(CONFIGURED_BACKEND_URL, window.location.origin);
     if (
-      (configuredUrl.hostname === "localhost" ||
-        configuredUrl.hostname === "127.0.0.1") &&
+      (configuredUrl.hostname === "localhost" || configuredUrl.hostname === "127.0.0.1") &&
       configuredUrl.protocol === "http:"
     ) {
       configuredUrl.hostname = window.location.hostname;
@@ -75,11 +66,7 @@ export function getApiBaseUrl(): string {
   return CONFIGURED_BACKEND_URL;
 }
 
-function isTechnicalApiError(
-  status: number,
-  code: string,
-  message: string,
-): boolean {
+function isTechnicalApiError(status: number, code: string, message: string): boolean {
   return (
     status >= 500 ||
     code.trim().toUpperCase() === "INTERNAL_SERVER_ERROR" ||
@@ -88,11 +75,7 @@ function isTechnicalApiError(
   );
 }
 
-function getSafeApiMessage(
-  status: number,
-  code: string,
-  message: string,
-): string {
+function getSafeApiMessage(status: number, code: string, message: string): string {
   return isTechnicalApiError(status, code, message)
     ? GENERIC_API_ERROR_MESSAGE
     : message || GENERIC_API_ERROR_MESSAGE;
@@ -107,10 +90,8 @@ export function getApiError(error: unknown): ApiError {
     }>;
     const status = axiosError.response?.status ?? 500;
     const data = axiosError.response?.data;
-    const code =
-      data?.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "API_ERROR");
-    const rawMessage =
-      data?.message || axiosError.message || GENERIC_API_ERROR_MESSAGE;
+    const code = data?.code || (status >= 500 ? "INTERNAL_SERVER_ERROR" : "API_ERROR");
+    const rawMessage = data?.message || axiosError.message || GENERIC_API_ERROR_MESSAGE;
     const message = getSafeApiMessage(status, code, rawMessage);
     return {
       status,
@@ -159,8 +140,7 @@ export function createApiClient(baseUrl = getApiBaseUrl()): AxiosInstance {
   });
 
   instance.interceptors.response.use(
-    (response: AxiosResponse) =>
-      unwrapApiResponseData(response.data) as AxiosResponse["data"],
+    (response: AxiosResponse) => unwrapApiResponseData(response.data) as AxiosResponse["data"],
     (error: unknown) => Promise.reject(getApiError(error)),
   );
 
@@ -194,11 +174,7 @@ export const api = {
     return activeAxiosInstance.get(url, config) as unknown as Promise<T>;
   },
 
-  post<T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: AxiosRequestConfig,
-  ): Promise<T> {
+  post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return activeAxiosInstance.post(
       url,
       data === undefined ? {} : data,
@@ -206,19 +182,11 @@ export const api = {
     ) as unknown as Promise<T>;
   },
 
-  put<T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: AxiosRequestConfig,
-  ): Promise<T> {
+  put<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return activeAxiosInstance.put(url, data, config) as unknown as Promise<T>;
   },
 
-  patch<T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: AxiosRequestConfig,
-  ): Promise<T> {
+  patch<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return activeAxiosInstance.patch(
       url,
       data === undefined ? {} : data,

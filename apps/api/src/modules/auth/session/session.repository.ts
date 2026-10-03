@@ -26,10 +26,7 @@ export async function insertSession(
     .execute();
 }
 
-export async function markSessionMfaVerified(
-  database: Executor,
-  sessionId: string,
-): Promise<void> {
+export async function markSessionMfaVerified(database: Executor, sessionId: string): Promise<void> {
   await database
     .updateTable("sessions")
     .set({ mfa_verified: true })
@@ -50,10 +47,7 @@ export async function revokeSession(
     .execute();
 }
 
-export async function deleteAllUserSessions(
-  database: Executor,
-  userId: string,
-): Promise<void> {
+export async function deleteAllUserSessions(database: Executor, userId: string): Promise<void> {
   await database.deleteFrom("sessions").where("user_id", "=", userId).execute();
 }
 
@@ -89,21 +83,10 @@ export async function revokeOtherUserSessions(
     .execute();
 }
 
-export function listUserSessions(
-  database: Executor,
-  userId: string,
-  now: Date = new Date(),
-) {
+export function listUserSessions(database: Executor, userId: string, now: Date = new Date()) {
   return database
     .selectFrom("sessions")
-    .select([
-      "id",
-      "ip_address",
-      "user_agent",
-      "created_at",
-      "last_used_at",
-      "expires_at",
-    ])
+    .select(["id", "ip_address", "user_agent", "created_at", "last_used_at", "expires_at"])
     .where("user_id", "=", userId)
     .where("revoked_at", "is", null)
     .where("expires_at", ">", now)
@@ -111,11 +94,7 @@ export function listUserSessions(
     .execute();
 }
 
-export function findActiveSession(
-  database: Executor,
-  tokenHash: string,
-  now: Date = new Date(),
-) {
+export function findActiveSession(database: Executor, tokenHash: string, now: Date = new Date()) {
   return database
     .selectFrom("sessions")
     .select([
@@ -166,10 +145,7 @@ export async function rotateSession(
   return Number(result.numUpdatedRows) > 0;
 }
 
-export async function purgeOldSessions(
-  database: Executor,
-  cutoffDate: Date,
-): Promise<number> {
+export async function purgeOldSessions(database: Executor, cutoffDate: Date): Promise<number> {
   const result = await database
     .deleteFrom("sessions")
     .where((eb) =>

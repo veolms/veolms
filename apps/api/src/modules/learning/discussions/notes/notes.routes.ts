@@ -35,10 +35,7 @@ const notesRoutes: RoutePlugin = async (app, options) => {
         summary: "List private and lecture-linked notes with search",
         querystring: listLearningNotesQuerySchema,
         response: {
-          200: jsonResponse(
-            "List of user notes",
-            learningNotesListResponseSchema,
-          ),
+          200: jsonResponse("List of user notes", learningNotesListResponseSchema),
           401: errorResponse("Unauthorized"),
         },
       },
@@ -54,8 +51,7 @@ const notesRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "getCourseNotesOverview",
         tags: ["Learning Notes"],
-        summary:
-          "Get hierarchical course notes organized by section and lesson",
+        summary: "Get hierarchical course notes organized by section and lesson",
         params: z.object({
           courseId: z.uuid(),
         }),

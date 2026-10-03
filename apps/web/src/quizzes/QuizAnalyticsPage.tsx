@@ -69,11 +69,7 @@ function formatDate(value: string | null | undefined) {
 }
 
 function statusLabel(status: QuizStatus) {
-  return status === "published"
-    ? "Published"
-    : status === "archived"
-      ? "Archived"
-      : "Draft";
+  return status === "published" ? "Published" : status === "archived" ? "Archived" : "Draft";
 }
 
 function useInfiniteList<T>(items: readonly T[], initialLimit = 20, step = 20) {
@@ -176,18 +172,14 @@ function QuizPageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <header className="pt-2 sm:pt-0 flex flex-col gap-3.5 sm:gap-5 border-b border-(--border) pb-4.5 sm:pb-7 lg:flex-row lg:items-end lg:justify-between">
+    <header className="flex flex-col gap-3.5 border-b border-(--border) pt-2 pb-4.5 sm:gap-5 sm:pt-0 sm:pb-7 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
+        <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] leading-tight font-bold tracking-[-0.035em] text-(--text)">
           {title}
         </h1>
-        <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">
-          {description}
-        </p>
+        <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">{description}</p>
       </div>
-      {action ? (
-        <div className="shrink-0 pt-2 pb-0.5 sm:py-0">{action}</div>
-      ) : null}
+      {action ? <div className="shrink-0 pt-2 pb-0.5 sm:py-0">{action}</div> : null}
     </header>
   );
 }
@@ -201,7 +193,7 @@ function HubTabs({
 }) {
   return (
     <nav
-      className="flex flex-wrap gap-1 sm:gap-1.5 rounded-[12px] sm:rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_80%,var(--surface))] p-1 sm:p-1.5 shadow-[inset_0_1px_2px_color-mix(in_srgb,black_10%,transparent)]"
+      className="flex flex-wrap gap-1 rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_80%,var(--surface))] p-1 shadow-[inset_0_1px_2px_color-mix(in_srgb,black_10%,transparent)] sm:gap-1.5 sm:rounded-[14px] sm:p-1.5"
       aria-label="Quiz workspace"
     >
       {(
@@ -215,10 +207,10 @@ function HubTabs({
           key={key}
           type="button"
           onClick={() => onChange(key)}
-          className={`rounded-[8px] sm:rounded-[10px] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+          className={`cursor-pointer rounded-[8px] px-3 py-1.5 text-xs font-semibold transition-all sm:rounded-[10px] sm:px-4 sm:py-2 sm:text-sm ${
             value === key
               ? "bg-(--card-surface,var(--surface)) text-(--text) shadow-[var(--card-compact-shadow)]"
-              : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+              : "text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] hover:text-(--text)"
           }`}
           aria-current={value === key ? "page" : undefined}
         >
@@ -246,10 +238,7 @@ function InstructorQuizHub({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
         title="Quiz command centre"
         description="Build assessments, configure course delivery, and understand exactly where learners are succeeding or getting stuck."
         action={
-          <Button
-            onClick={handleOpenCreateQuiz}
-            className="inline-flex items-center gap-2"
-          >
+          <Button onClick={handleOpenCreateQuiz} className="inline-flex items-center gap-2">
             <Plus size={18} weight="bold" aria-hidden="true" />
             <span>Create quiz</span>
           </Button>
@@ -300,10 +289,7 @@ function InstructorOverview({
   const assignments = useCourseQuizAssignments(courseId);
   const studentsQuery = useStudents({ limit: 1 });
 
-  const courseList = useMemo(
-    () => courses.data?.courses ?? [],
-    [courses.data?.courses],
-  );
+  const courseList = useMemo(() => courses.data?.courses ?? [], [courses.data?.courses]);
 
   const allCourseAnalyticsQueries = useQueries({
     queries: courseList.map((course) => ({
@@ -323,9 +309,7 @@ function InstructorOverview({
   }, [courseId, courses.data?.courses]);
 
   const analytics = courseAnalytics.data;
-  const published = quizzes.filter(
-    (quiz) => quiz.status === "published",
-  ).length;
+  const published = quizzes.filter((quiz) => quiz.status === "published").length;
   const drafts = quizzes.filter((quiz) => quiz.status === "draft").length;
 
   const totalAssignedAssessmentsAcrossAll = useMemo(() => {
@@ -355,9 +339,7 @@ function InstructorOverview({
           data &&
           data.totalQuizzes > 0 &&
           (data.quizCompletionRate > 0 ||
-            data.quizzes.some(
-              (q) => q.completionRate > 0 || q.averageScore > 0,
-            )),
+            data.quizzes.some((q) => q.completionRate > 0 || q.averageScore > 0)),
         ),
       );
   }, [allCourseAnalyticsQueries]);
@@ -366,29 +348,20 @@ function InstructorOverview({
     if (coursesWithAttempts.length === 0) {
       return { averageScore: null, passRate: null };
     }
-    const avgScoreSum = coursesWithAttempts.reduce(
-      (sum, c) => sum + c.averageQuizScore,
-      0,
-    );
-    const passRateSum = coursesWithAttempts.reduce(
-      (sum, c) => sum + c.passRate,
-      0,
-    );
+    const avgScoreSum = coursesWithAttempts.reduce((sum, c) => sum + c.averageQuizScore, 0);
+    const passRateSum = coursesWithAttempts.reduce((sum, c) => sum + c.passRate, 0);
     return {
       averageScore: Math.round(avgScoreSum / coursesWithAttempts.length),
       passRate: Math.round(passRateSum / coursesWithAttempts.length),
     };
   }, [coursesWithAttempts]);
 
-  const assignedCount =
-    assignments.data?.length ?? analytics?.totalQuizzes ?? 0;
+  const assignedCount = assignments.data?.length ?? analytics?.totalQuizzes ?? 0;
   const hasCourseAttempts = Boolean(
     analytics &&
     assignedCount > 0 &&
     (analytics.quizCompletionRate > 0 ||
-      analytics.quizzes.some(
-        (q) => q.completionRate > 0 || q.averageScore > 0,
-      )),
+      analytics.quizzes.some((q) => q.completionRate > 0 || q.averageScore > 0)),
   );
 
   const courseOptions: readonly ThemedSelectOption[] = useMemo(() => {
@@ -428,9 +401,7 @@ function InstructorOverview({
     }
     if (courseId) {
       const match = courses.data?.courses.find((c) => c.id === courseId);
-      onNavigatePage?.(
-        `/learn/${encodeURIComponent(match?.slug || courseId)}?view=quiz`,
-      );
+      onNavigatePage?.(`/learn/${encodeURIComponent(match?.slug || courseId)}?view=quiz`);
       return;
     }
     const firstCourse = courses.data?.courses?.[0];
@@ -446,7 +417,7 @@ function InstructorOverview({
   return (
     <div className="grid gap-3.5 sm:gap-6">
       <section
-        className="relative overflow-hidden rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[linear-gradient(120deg,color-mix(in_srgb,var(--accent)_18%,var(--surface)),var(--surface)_55%,color-mix(in_srgb,var(--canvas)_80%,var(--surface)))] p-3 sm:p-8"
+        className="relative overflow-hidden rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[linear-gradient(120deg,color-mix(in_srgb,var(--accent)_18%,var(--surface)),var(--surface)_55%,color-mix(in_srgb,var(--canvas)_80%,var(--surface)))] p-3 sm:rounded-[24px] sm:p-8"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
         <div
@@ -455,33 +426,23 @@ function InstructorOverview({
         />
         <div className="relative grid gap-4 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-center">
           <div>
-            <div className="flex size-9 sm:size-11 items-center justify-center rounded-xl bg-(--accent) text-(--on-accent) shadow-lg shadow-(--accent-shadow)/30">
-              <ChartBar
-                size={20}
-                className="sm:hidden"
-                weight="bold"
-                aria-hidden="true"
-              />
-              <ChartBar
-                size={24}
-                className="hidden sm:block"
-                weight="bold"
-                aria-hidden="true"
-              />
+            <div className="flex size-9 items-center justify-center rounded-xl bg-(--accent) text-(--on-accent) shadow-(--accent-shadow)/30 shadow-lg sm:size-11">
+              <ChartBar size={20} className="sm:hidden" weight="bold" aria-hidden="true" />
+              <ChartBar size={24} className="hidden sm:block" weight="bold" aria-hidden="true" />
             </div>
-            <h2 className="mt-3 sm:mt-5 max-w-2xl text-xl font-bold tracking-tight text-(--text) sm:text-3xl">
+            <h2 className="mt-3 max-w-2xl text-xl font-bold tracking-tight text-(--text) sm:mt-5 sm:text-3xl">
               A clearer view of assessment health.
             </h2>
-            <p className="mt-2 sm:mt-3 max-w-xl text-xs sm:text-sm leading-relaxed text-(--muted)">
-              See the signal behind every quiz: participation, completion, pass
-              rate, and the learners who need a little more support.
+            <p className="mt-2 max-w-xl text-xs leading-relaxed text-(--muted) sm:mt-3 sm:text-sm">
+              See the signal behind every quiz: participation, completion, pass rate, and the
+              learners who need a little more support.
             </p>
           </div>
           <div
-            className="grid gap-2 rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-2.5 sm:p-4.5"
+            className="grid gap-2 rounded-[12px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-2.5 sm:rounded-[16px] sm:p-4.5"
             style={{ boxShadow: "var(--card-compact-shadow)" }}
           >
-            <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-(--muted)">
+            <p className="text-[0.68rem] font-bold tracking-[0.16em] text-(--muted) uppercase">
               Course lens
             </p>
             <ThemedSelect
@@ -502,7 +463,7 @@ function InstructorOverview({
           </div>
         </div>
       </section>
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
         <StatCard
           icon={<ChartBar size={20} weight="bold" />}
           label="Total quizzes"
@@ -591,11 +552,9 @@ function InstructorOverview({
               <button
                 type="button"
                 onClick={() =>
-                  onSelectView
-                    ? onSelectView("library")
-                    : onNavigatePage?.("/quizzes")
+                  onSelectView ? onSelectView("library") : onNavigatePage?.("/quizzes")
                 }
-                className="text-sm font-semibold text-(--accent) hover:underline cursor-pointer"
+                className="cursor-pointer text-sm font-semibold text-(--accent) hover:underline"
               >
                 View library
               </button>
@@ -621,9 +580,7 @@ function InstructorOverview({
                 action={
                   <Button
                     onClick={() =>
-                      onOpenCreateQuiz
-                        ? onOpenCreateQuiz()
-                        : onNavigatePage?.("/quizzes/create")
+                      onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create")
                     }
                   >
                     <Plus size={17} weight="bold" />
@@ -634,10 +591,7 @@ function InstructorOverview({
             ) : null}
           </div>
         </section>
-        <section
-          className={`${surfaceClass} p-2.5 sm:p-6`}
-          aria-labelledby="quiz-actions-title"
-        >
+        <section className={`${surfaceClass} p-2.5 sm:p-6`} aria-labelledby="quiz-actions-title">
           <SectionHeading
             title="Quick actions"
             description="Keep your assessment workflow moving."
@@ -648,9 +602,7 @@ function InstructorOverview({
               title="Create a quiz"
               detail="Start a new draft"
               onClick={() =>
-                onOpenCreateQuiz
-                  ? onOpenCreateQuiz()
-                  : onNavigatePage?.("/quizzes/create")
+                onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create")
               }
             />
             <QuickAction
@@ -658,9 +610,7 @@ function InstructorOverview({
               title="Review analytics"
               detail="Find learner friction"
               onClick={() =>
-                onSelectView
-                  ? onSelectView("analytics")
-                  : onNavigatePage?.("/analytics")
+                onSelectView ? onSelectView("analytics") : onNavigatePage?.("/analytics")
               }
             />
             <QuickAction
@@ -702,43 +652,35 @@ function QuizLibrary({
   } = useInfiniteList(visible, 20);
 
   return (
-    <section
-      className={`${surfaceClass} overflow-hidden`}
-      aria-labelledby="quiz-library-title"
-    >
+    <section className={`${surfaceClass} overflow-hidden`} aria-labelledby="quiz-library-title">
       <div className="border-b border-(--border) p-3 sm:p-7">
         <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-(--muted)">
+            <p className="text-xs font-semibold tracking-[0.16em] text-(--muted) uppercase">
               Content library
             </p>
-            <h2
-              id="quiz-library-title"
-              className="mt-1 text-lg sm:text-xl font-semibold"
-            >
+            <h2 id="quiz-library-title" className="mt-1 text-lg font-semibold sm:text-xl">
               All quizzes
             </h2>
-            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-(--muted)">
+            <p className="mt-0.5 text-xs text-(--muted) sm:mt-1 sm:text-sm">
               Draft, publish, and maintain versioned assessment content.
             </p>
           </div>
           <Button
             onClick={() =>
-              onOpenCreateQuiz
-                ? onOpenCreateQuiz()
-                : onNavigatePage?.("/quizzes/create")
+              onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create")
             }
-            className="h-9 sm:h-10 text-xs sm:text-sm"
+            className="h-9 text-xs sm:h-10 sm:text-sm"
           >
             <Plus size={16} weight="bold" />
             <span>New quiz</span>
           </Button>
         </div>
-        <div className="mt-4 sm:mt-6 grid gap-2.5 sm:gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+        <div className="mt-4 grid gap-2.5 sm:mt-6 sm:grid-cols-[minmax(0,1fr)_12rem] sm:gap-3">
           <label className="relative flex items-center">
             <span className="sr-only">Search quizzes</span>
             <MagnifyingGlass
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-(--muted)"
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-(--muted)"
               size={16}
             />
             <input
@@ -791,9 +733,7 @@ function QuizLibrary({
               !quizzes.length ? (
                 <Button
                   onClick={() =>
-                    onOpenCreateQuiz
-                      ? onOpenCreateQuiz()
-                      : onNavigatePage?.("/quizzes/create")
+                    onOpenCreateQuiz ? onOpenCreateQuiz() : onNavigatePage?.("/quizzes/create")
                   }
                 >
                   <Plus size={17} weight="bold" />
@@ -826,10 +766,7 @@ function InstructorAnalytics() {
   }, [courseId, courses.data?.courses]);
   useEffect(() => {
     const first = assignments.data?.[0];
-    if (
-      !assignmentId ||
-      !assignments.data?.some((item) => item.id === assignmentId)
-    ) {
+    if (!assignmentId || !assignments.data?.some((item) => item.id === assignmentId)) {
       setAssignmentId(first?.id ?? null);
     }
   }, [assignmentId, assignments.data]);
@@ -878,17 +815,15 @@ function InstructorAnalytics() {
       <section className={`${surfaceClass} p-3 sm:p-7`}>
         <div className="flex flex-col gap-3.5 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-(--muted)">
+            <p className="text-xs font-semibold tracking-[0.16em] text-(--muted) uppercase">
               Instructor reporting
             </p>
-            <h2 className="mt-1 text-lg sm:text-xl font-semibold">
-              Performance overview
-            </h2>
-            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-(--muted)">
+            <h2 className="mt-1 text-lg font-semibold sm:text-xl">Performance overview</h2>
+            <p className="mt-0.5 text-xs text-(--muted) sm:mt-1 sm:text-sm">
               Compare outcomes at course, assessment, and student level.
             </p>
           </div>
-          <div className="flex flex-col gap-1.5 min-w-56 sm:min-w-64">
+          <div className="flex min-w-56 flex-col gap-1.5 sm:min-w-64">
             <span className="text-xs font-semibold text-(--muted)">Course</span>
             <ThemedSelect
               value={courseId ?? ""}
@@ -907,17 +842,13 @@ function InstructorAnalytics() {
           </div>
         </div>
       </section>
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4 xl:grid-cols-8">
         <StatCard
           label="Assigned"
           value={assignmentAnalytics.data?.assignedStudents ?? "—"}
           compact
         />
-        <StatCard
-          label="Attempted"
-          value={assignmentAnalytics.data?.attempted ?? "—"}
-          compact
-        />
+        <StatCard label="Attempted" value={assignmentAnalytics.data?.attempted ?? "—"} compact />
         <StatCard
           label="Passed"
           value={assignmentAnalytics.data?.passed ?? "—"}
@@ -970,15 +901,12 @@ function InstructorAnalytics() {
           className={`${surfaceClass} overflow-hidden`}
           aria-labelledby="assessment-breakdown-title"
         >
-          <div className="flex flex-col gap-3 sm:gap-4 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] p-3 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+          <div className="flex flex-col gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-7">
             <div>
-              <h2
-                id="assessment-breakdown-title"
-                className="text-base sm:text-lg font-semibold"
-              >
+              <h2 id="assessment-breakdown-title" className="text-base font-semibold sm:text-lg">
                 Assessment breakdown
               </h2>
-              <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-(--muted)">
+              <p className="mt-0.5 text-xs text-(--muted) sm:mt-1 sm:text-sm">
                 Select an assessment to inspect its learner outcomes.
               </p>
             </div>
@@ -1000,34 +928,25 @@ function InstructorAnalytics() {
           </div>
           {analytics ? (
             <div className="grid grid-cols-2 gap-2.5 border-b border-(--border) p-3 sm:grid-cols-4 sm:p-7">
-              <MetricTile
-                label="Course quizzes"
-                value={analytics.totalQuizzes}
-              />
+              <MetricTile label="Course quizzes" value={analytics.totalQuizzes} />
               <MetricTile label="Required" value={analytics.requiredQuizzes} />
               <MetricTile
                 label="Completion"
-                value={
-                  analytics.totalQuizzes > 0
-                    ? percent(analytics.quizCompletionRate)
-                    : "—"
-                }
+                value={analytics.totalQuizzes > 0 ? percent(analytics.quizCompletionRate) : "—"}
               />
               <MetricTile
                 label="Pass rate"
                 value={
                   analytics.totalQuizzes > 0 &&
                   (analytics.quizCompletionRate > 0 ||
-                    analytics.quizzes.some(
-                      (q) => q.completionRate > 0 || q.averageScore > 0,
-                    ))
+                    analytics.quizzes.some((q) => q.completionRate > 0 || q.averageScore > 0))
                     ? percent(analytics.passRate)
                     : "—"
                 }
               />
             </div>
           ) : null}
-          <div className="hidden grid-cols-[minmax(0,1fr)_7rem_7rem_7rem] gap-4 border-b border-(--border) px-3 py-2 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-(--muted) sm:grid sm:px-7 sm:py-3">
+          <div className="hidden grid-cols-[minmax(0,1fr)_7rem_7rem_7rem] gap-4 border-b border-(--border) px-3 py-2 text-[0.68rem] font-bold tracking-[0.14em] text-(--muted) uppercase sm:grid sm:px-7 sm:py-3">
             <span>Assessment</span>
             <span>Average</span>
             <span>Completion</span>
@@ -1048,8 +967,7 @@ function InstructorAnalytics() {
               >
                 {quiz.quizTitle}
                 <span className="mt-1 block text-xs font-normal text-(--muted) sm:hidden">
-                  {percent(quiz.averageScore)} average ·{" "}
-                  {percent(quiz.completionRate)} complete ·{" "}
+                  {percent(quiz.averageScore)} average · {percent(quiz.completionRate)} complete ·{" "}
                   {percent(quiz.passRate)} passed
                 </span>
               </button>
@@ -1064,10 +982,7 @@ function InstructorAnalytics() {
               </span>
             </div>
           ))}
-          <InfiniteScrollSentinel
-            hasMore={hasMoreQuizzes}
-            onLoadMore={loadMoreQuizzes}
-          />
+          <InfiniteScrollSentinel hasMore={hasMoreQuizzes} onLoadMore={loadMoreQuizzes} />
           {!analytics?.quizzes.length ? (
             <EmptyState
               icon={<ChartBar size={22} />}
@@ -1086,14 +1001,14 @@ function InstructorAnalytics() {
           />
           <div
             ref={studentsContainerRef}
-            className="divide-y divide-(--border) max-h-[580px] overflow-y-auto"
+            className="max-h-[580px] divide-y divide-(--border) overflow-y-auto"
           >
             {displayedStudents.map((student) => (
               <button
                 key={student.studentId}
                 type="button"
                 onClick={() => setStudentId(student.studentId)}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 sm:px-5 sm:py-4 text-left transition-colors hover:bg-(--hover) ${studentId === student.studentId ? "bg-(--accent)/5" : ""}`}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-(--hover) sm:px-5 sm:py-4 ${studentId === student.studentId ? "bg-(--accent)/5" : ""}`}
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">
@@ -1102,20 +1017,16 @@ function InstructorAnalytics() {
                   <span className="mt-1 block text-xs text-(--muted)">
                     {student.attemptCount} attempt
                     {student.attemptCount === 1 ? "" : "s"} ·{" "}
-                    {student.lastAttempt
-                      ? formatDate(student.lastAttempt)
-                      : "Never attempted"}
+                    {student.lastAttempt ? formatDate(student.lastAttempt) : "Never attempted"}
                   </span>
                 </span>
                 <span className="shrink-0 text-right">
                   <span
                     className={`block text-sm font-semibold ${student.status === "passed" ? "text-emerald-500" : student.status === "failed" ? "text-red-400" : "text-(--text)"}`}
                   >
-                    {student.latestScore === null
-                      ? "—"
-                      : percent(student.latestScore)}
+                    {student.latestScore === null ? "—" : percent(student.latestScore)}
                   </span>
-                  <span className="mt-1 block text-[0.68rem] capitalize text-(--muted)">
+                  <span className="mt-1 block text-[0.68rem] text-(--muted) capitalize">
                     {student.status.replaceAll("_", " ")}
                   </span>
                 </span>
@@ -1138,10 +1049,7 @@ function InstructorAnalytics() {
         </section>
       </div>
       {studentReport.data ? (
-        <StudentReportPanel
-          report={studentReport.data}
-          onClose={() => setStudentId(null)}
-        />
+        <StudentReportPanel report={studentReport.data} onClose={() => setStudentId(null)} />
       ) : null}
     </div>
   );
@@ -1155,19 +1063,13 @@ function StudentReportPanel({
   onClose: () => void;
 }) {
   return (
-    <section
-      className={`${surfaceClass} overflow-hidden`}
-      aria-labelledby="student-report-title"
-    >
+    <section className={`${surfaceClass} overflow-hidden`} aria-labelledby="student-report-title">
       <div className="flex items-start justify-between gap-3 border-b border-(--border) p-3 sm:p-7">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-(--muted)">
+          <p className="text-xs font-semibold tracking-[0.16em] text-(--muted) uppercase">
             Learner report
           </p>
-          <h2
-            id="student-report-title"
-            className="mt-1 text-lg sm:text-xl font-semibold"
-          >
+          <h2 id="student-report-title" className="mt-1 text-lg font-semibold sm:text-xl">
             Quiz history and outcomes
           </h2>
         </div>
@@ -1175,7 +1077,7 @@ function StudentReportPanel({
           type="button"
           onClick={onClose}
           aria-label="Close student report"
-          className="rounded-lg p-1.5 sm:p-2 text-(--muted) hover:bg-(--hover) hover:text-(--text) cursor-pointer"
+          className="cursor-pointer rounded-lg p-1.5 text-(--muted) hover:bg-(--hover) hover:text-(--text) sm:p-2"
         >
           <X size={18} />
         </button>
@@ -1183,10 +1085,7 @@ function StudentReportPanel({
       <div className="grid grid-cols-2 gap-2.5 border-b border-(--border) p-3 sm:grid-cols-4 sm:p-7">
         <MetricTile label="Completed" value={report.completedQuizzes} />
         <MetricTile label="Passed" value={report.passed} />
-        <MetricTile
-          label="Average score"
-          value={percent(report.averageScore)}
-        />
+        <MetricTile label="Average score" value={percent(report.averageScore)} />
         <MetricTile label="Best score" value={percent(report.bestScore)} />
       </div>
       <div className="divide-y divide-(--border)">
@@ -1197,16 +1096,14 @@ function StudentReportPanel({
           >
             <div>
               <p className="font-semibold">{quiz.quizTitle}</p>
-              <p className="mt-1 text-xs capitalize text-(--muted)">
+              <p className="mt-1 text-xs text-(--muted) capitalize">
                 {quiz.attempts} attempt{quiz.attempts === 1 ? "" : "s"} ·{" "}
                 {quiz.status.replaceAll("_", " ")}
               </p>
             </div>
             <div className="text-right text-sm">
               <p className="font-semibold">Best {percent(quiz.bestScore)}</p>
-              <p className="mt-1 text-xs text-(--muted)">
-                Latest {percent(quiz.latestScore)}
-              </p>
+              <p className="mt-1 text-xs text-(--muted)">Latest {percent(quiz.latestScore)}</p>
             </div>
           </div>
         ))}
@@ -1215,9 +1112,7 @@ function StudentReportPanel({
   );
 }
 
-function LearnerQuizDashboard({
-  onNavigatePage,
-}: Pick<Props, "onNavigatePage">) {
+function LearnerQuizDashboard({ onNavigatePage }: Pick<Props, "onNavigatePage">) {
   const assignments = useMyQuizAssignments();
   const history = useQuizHistory();
   const [filter, setFilter] = useState<LearnerFilter>("all");
@@ -1228,9 +1123,7 @@ function LearnerQuizDashboard({
   const average = completed.length
     ? completed.reduce((sum, item) => sum + item.score, 0) / completed.length
     : 0;
-  const best = completed.length
-    ? Math.max(...completed.map((item) => item.score))
-    : 0;
+  const best = completed.length ? Math.max(...completed.map((item) => item.score)) : 0;
   const filtered = available.filter(
     (assignment) =>
       filter === "all" ||
@@ -1251,7 +1144,7 @@ function LearnerQuizDashboard({
         title="Quizzes and results"
         description="Keep your momentum, pick up unfinished assessments, and review the progress you have already earned."
       />
-      <div className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
         <StatCard
           icon={<ChartBar size={20} weight="bold" />}
           label="Assigned"
@@ -1292,13 +1185,10 @@ function LearnerQuizDashboard({
       >
         <div className="flex flex-col gap-3 border-b border-(--border) p-3 sm:p-7 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2
-              id="assigned-quizzes-title"
-              className="text-lg sm:text-xl font-semibold"
-            >
+            <h2 id="assigned-quizzes-title" className="text-lg font-semibold sm:text-xl">
               Your assessments
             </h2>
-            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-(--muted)">
+            <p className="mt-0.5 text-xs text-(--muted) sm:mt-1 sm:text-sm">
               Required work and optional practice in one place.
             </p>
           </div>
@@ -1321,14 +1211,14 @@ function LearnerQuizDashboard({
                 role="tab"
                 aria-selected={filter === key}
                 onClick={() => setFilter(key)}
-                className={`rounded-md px-2.5 py-1 sm:px-3 sm:py-1.5 text-xs font-semibold ${filter === key ? "bg-(--surface) text-(--text) shadow-sm" : "text-(--muted) hover:text-(--text)"}`}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold sm:px-3 sm:py-1.5 ${filter === key ? "bg-(--surface) text-(--text) shadow-sm" : "text-(--muted) hover:text-(--text)"}`}
               >
                 {label}
               </button>
             ))}
           </div>
         </div>
-        <div className="grid gap-2.5 sm:gap-3 p-3 sm:grid-cols-2 sm:p-7 xl:grid-cols-3">
+        <div className="grid gap-2.5 p-3 sm:grid-cols-2 sm:gap-3 sm:p-7 xl:grid-cols-3">
           {assignments.isLoading ? (
             <LoadingCards />
           ) : (
@@ -1348,11 +1238,7 @@ function LearnerQuizDashboard({
             <div className="sm:col-span-2 xl:col-span-3">
               <EmptyState
                 icon={<ChartBar size={22} />}
-                title={
-                  available.length
-                    ? "Nothing in this view"
-                    : "No quizzes assigned yet"
-                }
+                title={available.length ? "Nothing in this view" : "No quizzes assigned yet"}
                 message={
                   available.length
                     ? "Try another filter to see your assessment activity."
@@ -1363,14 +1249,8 @@ function LearnerQuizDashboard({
           ) : null}
         </div>
       </section>
-      <section
-        className={`${surfaceClass} overflow-hidden`}
-        aria-labelledby="quiz-history-title"
-      >
-        <SectionHeading
-          title="Recent history"
-          description="Your latest submitted attempts."
-        />
+      <section className={`${surfaceClass} overflow-hidden`} aria-labelledby="quiz-history-title">
+        <SectionHeading title="Recent history" description="Your latest submitted attempts." />
         <div className="divide-y divide-(--border)">
           {attempts.slice(0, 6).map((attempt) => (
             <div
@@ -1378,13 +1258,9 @@ function LearnerQuizDashboard({
               className="flex flex-wrap items-center justify-between gap-2.5 px-3 py-2.5 sm:px-7 sm:py-4"
             >
               <div>
-                <p className="text-sm font-semibold">
-                  Attempt {attempt.attemptNumber}
-                </p>
+                <p className="text-sm font-semibold">Attempt {attempt.attemptNumber}</p>
                 <p className="mt-1 text-xs text-(--muted)">
-                  {attempt.submittedAt
-                    ? formatDate(attempt.submittedAt)
-                    : "In progress"}
+                  {attempt.submittedAt ? formatDate(attempt.submittedAt) : "In progress"}
                 </p>
               </div>
               <span
@@ -1420,10 +1296,8 @@ function LearnerQuizCard({
   onOpen: () => void;
 }) {
   const unavailable = Boolean(
-    (assignment.availableFrom &&
-      Date.parse(assignment.availableFrom) > Date.now()) ||
-    (assignment.availableUntil &&
-      Date.parse(assignment.availableUntil) < Date.now()),
+    (assignment.availableFrom && Date.parse(assignment.availableFrom) > Date.now()) ||
+    (assignment.availableUntil && Date.parse(assignment.availableUntil) < Date.now()),
   );
   const complete =
     assignment.latestAttemptStatus === "graded" ||
@@ -1440,7 +1314,7 @@ function LearnerQuizCard({
           : "Start quiz";
   return (
     <article
-      className="flex min-h-56 flex-col rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--accent)_35%,transparent)] hover:shadow-(--card-hover-shadow)"
+      className="flex min-h-56 flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--accent)_35%,transparent)] hover:shadow-(--card-hover-shadow) sm:rounded-[16px] sm:p-5"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -1448,14 +1322,14 @@ function LearnerQuizCard({
           <ChartBar size={20} weight="bold" />
         </div>
         <span
-          className={`rounded-full px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-[0.08em] ${
+          className={`rounded-full px-2.5 py-1 text-[0.68rem] font-bold tracking-[0.08em] uppercase ${
             assignment.activeAttemptId
-              ? "bg-amber-500/12 text-amber-500 border border-amber-500/20"
+              ? "border border-amber-500/20 bg-amber-500/12 text-amber-500"
               : complete
                 ? assignment.latestPassed
-                  ? "bg-emerald-500/12 text-emerald-500 border border-emerald-500/20"
-                  : "bg-red-500/12 text-red-400 border border-red-500/20"
-                : "bg-(--canvas) text-(--muted) border border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+                  ? "border border-emerald-500/20 bg-emerald-500/12 text-emerald-500"
+                  : "border border-red-500/20 bg-red-500/12 text-red-400"
+                : "border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--canvas) text-(--muted)"
           }`}
         >
           {assignment.activeAttemptId
@@ -1468,7 +1342,7 @@ function LearnerQuizCard({
         </span>
       </div>
       <div className="mt-5">
-        <h3 className="line-clamp-2 text-base font-bold text-(--text) tracking-tight">
+        <h3 className="line-clamp-2 text-base font-bold tracking-tight text-(--text)">
           {assignment.quizTitle}
         </h3>
         <p className="mt-1 line-clamp-1 text-xs text-(--muted)">
@@ -1477,15 +1351,13 @@ function LearnerQuizCard({
       </div>
       <div className="mt-auto grid grid-cols-2 gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-4">
         <div>
-          <p className="text-[0.68rem] uppercase tracking-[0.12em] text-(--muted) font-semibold">
+          <p className="text-[0.68rem] font-semibold tracking-[0.12em] text-(--muted) uppercase">
             Best score
           </p>
-          <p className="mt-1 font-bold text-(--text)">
-            {percent(assignment.bestScore)}
-          </p>
+          <p className="mt-1 font-bold text-(--text)">{percent(assignment.bestScore)}</p>
         </div>
         <div>
-          <p className="text-[0.68rem] uppercase tracking-[0.12em] text-(--muted) font-semibold">
+          <p className="text-[0.68rem] font-semibold tracking-[0.12em] text-(--muted) uppercase">
             Attempts
           </p>
           <p className="mt-1 font-bold text-(--text)">
@@ -1497,10 +1369,9 @@ function LearnerQuizCard({
         onClick={onOpen}
         disabled={
           unavailable ||
-          (!assignment.activeAttemptId &&
-            assignment.attemptCount >= assignment.maxAttempts)
+          (!assignment.activeAttemptId && assignment.attemptCount >= assignment.maxAttempts)
         }
-        className="mt-4 w-full h-10 font-semibold"
+        className="mt-4 h-10 w-full font-semibold"
       >
         {action}
         <ArrowRight size={17} weight="bold" />
@@ -1519,37 +1390,32 @@ function QuizLibraryRow({
   expanded?: boolean;
 }) {
   const latest = quiz.versions.at(-1);
-  const published = quiz.versions.filter(
-    (version) => version.publishedAt,
-  ).length;
+  const published = quiz.versions.filter((version) => version.publishedAt).length;
   return (
     <div
-      className={`flex flex-col gap-3 sm:gap-4 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-4 ${expanded ? "hover:bg-(--hover)" : ""}`}
+      className={`flex flex-col gap-3 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-7 sm:py-4 ${expanded ? "hover:bg-(--hover)" : ""}`}
     >
       <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-        <div className="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent) sm:size-10">
           <ChartBar size={18} className="sm:hidden" weight="bold" />
           <ChartBar size={20} className="hidden sm:block" weight="bold" />
         </div>
         <div className="min-w-0">
-          <p className="truncate font-semibold text-sm sm:text-base">
-            {quiz.title}
-          </p>
-          <p className="mt-0.5 sm:mt-1 text-[0.72rem] sm:text-xs text-(--muted)">
-            {latest?.questions.length ?? 0} questions · {published} published
-            version{published === 1 ? "" : "s"} · Updated{" "}
-            {formatDate(quiz.updatedAt)}
+          <p className="truncate text-sm font-semibold sm:text-base">{quiz.title}</p>
+          <p className="mt-0.5 text-[0.72rem] text-(--muted) sm:mt-1 sm:text-xs">
+            {latest?.questions.length ?? 0} questions · {published} published version
+            {published === 1 ? "" : "s"} · Updated {formatDate(quiz.updatedAt)}
           </p>
         </div>
       </div>
-      <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 sm:shrink-0">
+      <div className="flex items-center justify-between gap-2 sm:shrink-0 sm:justify-end sm:gap-3">
         <span
-          className={`rounded-full px-2.5 py-0.5 sm:py-1 text-[0.65rem] sm:text-[0.68rem] font-bold uppercase tracking-[0.08em] ${
+          className={`rounded-full px-2.5 py-0.5 text-[0.65rem] font-bold tracking-[0.08em] uppercase sm:py-1 sm:text-[0.68rem] ${
             quiz.status === "published"
-              ? "bg-emerald-500/12 text-emerald-500 border border-emerald-500/20"
+              ? "border border-emerald-500/20 bg-emerald-500/12 text-emerald-500"
               : quiz.status === "archived"
-                ? "bg-(--canvas) text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
-                : "bg-amber-500/12 text-amber-500 border border-amber-500/20"
+                ? "border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--canvas) text-(--muted)"
+                : "border border-amber-500/20 bg-amber-500/12 text-amber-500"
           }`}
         >
           {statusLabel(quiz.status)}
@@ -1557,7 +1423,7 @@ function QuizLibraryRow({
         <button
           type="button"
           onClick={onEdit}
-          className="inline-flex h-8 sm:h-9 items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] px-2.5 sm:px-3.5 text-xs font-semibold text-(--text) shadow-[var(--card-compact-shadow)] hover:border-[color-mix(in_srgb,var(--text)_25%,transparent)] hover:bg-(--hover) transition-all cursor-pointer"
+          className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] px-2.5 text-xs font-semibold text-(--text) shadow-[var(--card-compact-shadow)] transition-all hover:border-[color-mix(in_srgb,var(--text)_25%,transparent)] hover:bg-(--hover) sm:h-9 sm:rounded-[9px] sm:px-3.5"
         >
           <span>Open</span>
           <ArrowRight size={14} weight="bold" />
@@ -1582,21 +1448,17 @@ function QuickAction({
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-2.5 sm:gap-3.5 rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] p-2.5 sm:p-3.5 text-left shadow-[var(--card-compact-shadow)] transition-all hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,var(--surface))] cursor-pointer group"
+      className="group flex cursor-pointer items-center gap-2.5 rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] p-2.5 text-left shadow-[var(--card-compact-shadow)] transition-all hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,var(--surface))] sm:gap-3.5 sm:p-3.5"
     >
-      <span className="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-xl bg-(--accent)/12 text-(--accent) group-hover:scale-105 transition-transform">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-(--accent)/12 text-(--accent) transition-transform group-hover:scale-105 sm:size-10">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-xs sm:text-sm font-bold text-(--text)">
-          {title}
-        </span>
-        <span className="mt-0.5 block text-[0.72rem] sm:text-xs text-(--muted)">
-          {detail}
-        </span>
+        <span className="block text-xs font-bold text-(--text) sm:text-sm">{title}</span>
+        <span className="mt-0.5 block text-[0.72rem] text-(--muted) sm:text-xs">{detail}</span>
       </span>
       <ArrowRight
-        className="ml-auto text-(--muted) group-hover:text-(--accent) transition-colors"
+        className="ml-auto text-(--muted) transition-colors group-hover:text-(--accent)"
         size={16}
         weight="bold"
       />

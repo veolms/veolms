@@ -3,11 +3,7 @@ import {
   useRetryCourseStaticPageRefresh,
 } from "../services/courses";
 
-export function CourseStaticPageRefreshNotice({
-  courseId,
-}: {
-  courseId: string | null;
-}) {
+export function CourseStaticPageRefreshNotice({ courseId }: { courseId: string | null }) {
   const statusQuery = useCourseStaticPageRefreshStatus(courseId);
   const retryMutation = useRetryCourseStaticPageRefresh();
   const status = statusQuery.data;

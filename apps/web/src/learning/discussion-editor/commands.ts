@@ -63,18 +63,14 @@ export function createDiscussionEditorCommands(
     },
     toggleBold: () => withView((view) => toggleInlineMarkup(view, "**")),
     toggleItalic: () => withView((view) => toggleInlineMarkup(view, "*")),
-    toggleStrikethrough: () =>
-      withView((view) => toggleInlineMarkup(view, "~~")),
+    toggleStrikethrough: () => withView((view) => toggleInlineMarkup(view, "~~")),
     toggleHighlight: () => withView((view) => toggleInlineMarkup(view, "==")),
     toggleInlineCode: () => withView((view) => toggleInlineMarkup(view, "`")),
     toggleCodeBlock: () => withView(toggleFencedCodeBlock),
-    toggleBulletList: () =>
-      withView((view) => toggleLinePrefix(view, "- ", BULLET_PREFIX)),
+    toggleBulletList: () => withView((view) => toggleLinePrefix(view, "- ", BULLET_PREFIX)),
     toggleOrderedList: () => withView((view) => toggleOrderedList(view)),
-    toggleTaskList: () =>
-      withView((view) => toggleLinePrefix(view, "- [ ] ", TASK_PREFIX)),
-    toggleBlockquote: () =>
-      withView((view) => toggleLinePrefix(view, "> ", BLOCKQUOTE_PREFIX)),
+    toggleTaskList: () => withView((view) => toggleLinePrefix(view, "- [ ] ", TASK_PREFIX)),
+    toggleBlockquote: () => withView((view) => toggleLinePrefix(view, "> ", BLOCKQUOTE_PREFIX)),
     applyLink: (href) => withView((view) => applyLink(view, href)),
     removeLink: () => withView(removeLink),
     insertMarkdown: (markdown) =>
@@ -186,10 +182,7 @@ function applyLink(view: EditorView, href: string) {
   const replacement = `[${label}](${normalizedHref})`;
   view.dispatch({
     changes: { from, to, insert: replacement },
-    selection:
-      label.length > 0
-        ? { anchor: from + replacement.length }
-        : { anchor: from + 1 },
+    selection: label.length > 0 ? { anchor: from + replacement.length } : { anchor: from + 1 },
   });
 }
 
@@ -221,9 +214,7 @@ function findLinkAtSelection(view: EditorView): LocatedLink | null {
   return null;
 }
 
-function getFormattingState(
-  view: EditorView | null,
-): DiscussionFormattingState {
+function getFormattingState(view: EditorView | null): DiscussionFormattingState {
   if (!view) return EMPTY_FORMATTING_STATE;
   const selection = view.state.selection.main;
   const document = view.state.doc.toString();
@@ -288,11 +279,7 @@ const ORDERED_PREFIX = /^\s*\d+[.)]\s+/;
 const TASK_PREFIX = /^\s*[-+*]\s+\[[ xX]\]\s+/;
 const BLOCKQUOTE_PREFIX = /^\s*>\s?/;
 
-function hasInlineMarkup(
-  document: string,
-  selection: SelectionRange,
-  marker: string,
-) {
+function hasInlineMarkup(document: string, selection: SelectionRange, marker: string) {
   const length = marker.length;
   if (
     selection.from >= length &&
@@ -303,21 +290,14 @@ function hasInlineMarkup(
   }
   const lineStart = document.lastIndexOf("\n", selection.head - 1) + 1;
   const lineEnd = document.indexOf("\n", selection.head);
-  const line = document.slice(
-    lineStart,
-    lineEnd === -1 ? document.length : lineEnd,
-  );
+  const line = document.slice(lineStart, lineEnd === -1 ? document.length : lineEnd);
   const offset = selection.head - lineStart;
   const before = findCompleteMarkerBefore(line, marker, offset);
   const after = findCompleteMarkerAfter(line, marker, offset);
   return before !== -1 && after !== -1 && before < after;
 }
 
-function findCompleteMarkerBefore(
-  source: string,
-  marker: string,
-  offset: number,
-) {
+function findCompleteMarkerBefore(source: string, marker: string, offset: number) {
   let index = source.lastIndexOf(marker, offset);
   while (index !== -1) {
     if (isCompleteInlineMarkerAt(source, index, marker)) return index;
@@ -327,11 +307,7 @@ function findCompleteMarkerBefore(
   return -1;
 }
 
-function findCompleteMarkerAfter(
-  source: string,
-  marker: string,
-  offset: number,
-) {
+function findCompleteMarkerAfter(source: string, marker: string, offset: number) {
   for (
     let index = source.indexOf(marker, offset);
     index !== -1;
@@ -342,11 +318,7 @@ function findCompleteMarkerAfter(
   return -1;
 }
 
-function isCompleteInlineMarkerAt(
-  source: string,
-  index: number,
-  marker: string,
-) {
+function isCompleteInlineMarkerAt(source: string, index: number, marker: string) {
   if (index < 0 || source.slice(index, index + marker.length) !== marker) {
     return false;
   }

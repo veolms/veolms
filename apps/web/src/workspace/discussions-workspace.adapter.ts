@@ -1,7 +1,6 @@
 import type { WorkspaceDiscussionItem } from "@veolms/contracts";
 
-export type DiscussionWorkspaceStatus =
-  "answered" | "mentioned" | "solved" | "open";
+export type DiscussionWorkspaceStatus = "answered" | "mentioned" | "solved" | "open";
 
 export interface DiscussionWorkspaceCard {
   workspaceItem: WorkspaceDiscussionItem;
@@ -48,10 +47,7 @@ function formatRelativeTime(dateValue: string): string {
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return "Recently";
 
-  const diffSeconds = Math.max(
-    0,
-    Math.floor((Date.now() - date.getTime()) / 1000),
-  );
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
   if (diffSeconds < 60) return "Just now";
   const diffMinutes = Math.floor(diffSeconds / 60);
   if (diffMinutes < 60) {
@@ -91,11 +87,7 @@ export function adaptDiscussionWorkspaceItem(
   const isBookmark = options?.bookmarks === true;
   const isQuestion = item.kind === "question" || item.kind === "qna";
   const status =
-    options?.comments ||
-    isMention ||
-    isNote ||
-    isFollowing ||
-    (isBookmark && !isQuestion)
+    options?.comments || isMention || isNote || isFollowing || (isBookmark && !isQuestion)
       ? undefined
       : isBookmark
         ? item.status && item.status !== "all"
@@ -111,10 +103,7 @@ export function adaptDiscussionWorkspaceItem(
     title: item.title?.trim() || undefined,
     excerpt,
     content: item.content,
-    plainText:
-      isNote || isMention || isFollowing || isBookmark
-        ? item.plainText
-        : excerpt,
+    plainText: isNote || isMention || isFollowing || isBookmark ? item.plainText : excerpt,
     courseId: item.courseId,
     course: item.courseTitle?.trim() || "",
     courseTitle: item.courseTitle ?? null,
@@ -137,17 +126,11 @@ export function adaptDiscussionWorkspaceItem(
     isBookmarked: item.isBookmarked,
     isFollowing: item.isFollowing,
     isMentioned: item.isMentioned,
-    activity: formatRelativeTime(
-      isFollowing ? item.updatedAt : item.updatedAt || item.createdAt,
-    ),
+    activity: formatRelativeTime(isFollowing ? item.updatedAt : item.updatedAt || item.createdAt),
     mentionedAt: item.mentionedAt,
-    mentionActivity: item.mentionedAt
-      ? formatRelativeTime(item.mentionedAt)
-      : undefined,
+    mentionActivity: item.mentionedAt ? formatRelativeTime(item.mentionedAt) : undefined,
     bookmarkedAt: item.bookmarkedAt,
-    bookmarkActivity: item.bookmarkedAt
-      ? formatRelativeTime(item.bookmarkedAt)
-      : undefined,
+    bookmarkActivity: item.bookmarkedAt ? formatRelativeTime(item.bookmarkedAt) : undefined,
     attachmentSummary: item.attachmentSummary,
     itemType: item.itemType,
     kind: item.kind,

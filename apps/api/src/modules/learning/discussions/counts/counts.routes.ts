@@ -28,10 +28,7 @@ const countsRoutes: RoutePlugin = async (app, options) => {
           lessonId: z.uuid(),
         }),
         response: {
-          200: jsonResponse(
-            "Lesson discussion counts",
-            lessonDiscussionCountsResponseSchema,
-          ),
+          200: jsonResponse("Lesson discussion counts", lessonDiscussionCountsResponseSchema),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - No course access"),
         },

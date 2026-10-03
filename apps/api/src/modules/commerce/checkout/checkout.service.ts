@@ -13,14 +13,8 @@ import type { Kysely } from "kysely";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
-import {
-  createPricingService,
-  type PricingService,
-} from "../pricing/pricing.service.ts";
-import {
-  createPaymentService,
-  type PaymentService,
-} from "../payments/payment.service.ts";
+import { createPricingService, type PricingService } from "../pricing/pricing.service.ts";
+import { createPaymentService, type PaymentService } from "../payments/payment.service.ts";
 import {
   createPaymentReconciliationService,
   type PaymentReconciliationService,
@@ -66,13 +60,11 @@ export function createCheckoutService({
     userId: string | undefined,
     request: CheckoutPreviewRequest,
   ): Promise<CheckoutPreviewResponse> {
-    const { pricing, couponValidation } = await pricingService.calculatePricing(
-      {
-        userId,
-        items: request.items,
-        couponCode: request.couponCode,
-      },
-    );
+    const { pricing, couponValidation } = await pricingService.calculatePricing({
+      userId,
+      items: request.items,
+      couponCode: request.couponCode,
+    });
 
     return {
       pricing,
@@ -105,33 +97,22 @@ export function createCheckoutService({
 
     // 1. Idempotency Check: return existing order if same idempotency key was submitted
     if (idempotencyKey) {
-      const existingOrder = await orderRepo.findOrderByIdempotencyKey(
-        database,
-        idempotencyKey,
-      );
+      const existingOrder = await orderRepo.findOrderByIdempotencyKey(database, idempotencyKey);
       if (existingOrder) {
         if (existingOrder.user_id !== user.id) {
           throw CommerceErrors.IDEMPOTENCY_KEY_CONFLICT();
         }
 
-        const payment = await paymentRepo.findPaymentByOrderId(
-          database,
-          existingOrder.id,
-        );
-        const orderItems = await orderRepo.listOrderItems(
-          database,
-          existingOrder.id,
-        );
+        const payment = await paymentRepo.findPaymentByOrderId(database, existingOrder.id);
+        const orderItems = await orderRepo.listOrderItems(database, existingOrder.id);
 
         if (payment) {
-          const isFreeOrder =
-            payment.gateway_provider === "free" || payment.amount === 0;
+          const isFreeOrder = payment.gateway_provider === "free" || payment.amount === 0;
 
           if (isFreeOrder && payment.status !== "captured") {
             await reconciliationService.finalizeSuccessfulPayment({
               paymentId: payment.id,
-              gatewayPaymentId:
-                payment.gateway_payment_id ?? `free_pay_${existingOrder.id}`,
+              gatewayPaymentId: payment.gateway_payment_id ?? `free_pay_${existingOrder.id}`,
               paymentMethod: { method: "free" },
             });
             return {

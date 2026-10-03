@@ -61,10 +61,7 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
         }
 
         // 3. Explicit deny policy override
-        if (
-          userId === USER_DENIED_CURRICULUM &&
-          permission === "course.curriculum.update"
-        ) {
+        if (userId === USER_DENIED_CURRICULUM && permission === "course.curriculum.update") {
           return {
             allowed: false,
             code: "PERMISSION_DENIED" as const,
@@ -155,10 +152,7 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
         };
       },
 
-      async getCapabilities(params: {
-        userId: string;
-        courseId?: string | null;
-      }) {
+      async getCapabilities(params: { userId: string; courseId?: string | null }) {
         const { userId, courseId } = params;
         const featuresObj: Record<string, boolean> = {};
 
@@ -187,10 +181,7 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
             "course.publish",
             "quiz.create",
           ];
-        } else if (
-          userId === USER_THUMBNAIL_EDITOR_1 &&
-          courseId === COURSE_1
-        ) {
+        } else if (userId === USER_THUMBNAIL_EDITOR_1 && courseId === COURSE_1) {
           perms = [
             "course.read",
             "course.thumbnail.update",
@@ -508,11 +499,7 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
     });
 
     it("blocks request with 403 FEATURE_DISABLED when feature is disabled on the platform", async () => {
-      const handler = guard.authorize(
-        "certificate.issue",
-        "course",
-        "certificates",
-      );
+      const handler = guard.authorize("certificate.issue", "course", "certificates");
       let statusCode = 200;
       let sentBody: any = null;
 

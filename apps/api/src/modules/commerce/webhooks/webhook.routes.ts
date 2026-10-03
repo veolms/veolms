@@ -18,29 +18,23 @@ const webhookRoutes: RoutePlugin = async (app, options) => {
   // this only affects requests to routes registered below — every other
   // route in the API keeps the default JSON parser instead of holding both
   // the raw buffer and the parsed body in memory on every request.
-  app.addContentTypeParser(
-    "application/json",
-    { parseAs: "buffer" },
-    (req, body: Buffer, done) => {
-      req.rawBody = body;
-      if (body.length === 0) {
-        done(null, null);
-        return;
-      }
-      try {
-        const json = JSON.parse(body.toString("utf-8"));
-        done(null, json);
-      } catch (err: unknown) {
-        const parseErr = (
-          err instanceof Error ? err : new Error("Invalid JSON")
-        ) as Error & {
-          statusCode?: number;
-        };
-        parseErr.statusCode = 400;
-        done(parseErr, undefined);
-      }
-    },
-  );
+  app.addContentTypeParser("application/json", { parseAs: "buffer" }, (req, body: Buffer, done) => {
+    req.rawBody = body;
+    if (body.length === 0) {
+      done(null, null);
+      return;
+    }
+    try {
+      const json = JSON.parse(body.toString("utf-8"));
+      done(null, json);
+    } catch (err: unknown) {
+      const parseErr = (err instanceof Error ? err : new Error("Invalid JSON")) as Error & {
+        statusCode?: number;
+      };
+      parseErr.statusCode = 400;
+      done(parseErr, undefined);
+    }
+  });
 
   const service = createWebhookService({
     database: options.database,

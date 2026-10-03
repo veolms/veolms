@@ -45,9 +45,7 @@ export function SelectCourseForQuizModal({
     }
 
     const previousActiveElement =
-      typeof document !== "undefined"
-        ? (document.activeElement as HTMLElement | null)
-        : null;
+      typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null;
 
     const timer = window.setTimeout(() => {
       searchInputRef.current?.focus();
@@ -65,9 +63,7 @@ export function SelectCourseForQuizModal({
         modalRef.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
-      ).filter(
-        (el) => el.offsetParent !== null || el === searchInputRef.current,
-      );
+      ).filter((el) => el.offsetParent !== null || el === searchInputRef.current);
 
       if (!focusableElements.length) return;
       const first = focusableElements[0]!;
@@ -95,18 +91,14 @@ export function SelectCourseForQuizModal({
   const filteredCourses = useMemo(() => {
     if (!searchQuery.trim()) return rawCourses;
     const lower = searchQuery.toLowerCase().trim();
-    return rawCourses.filter((course) =>
-      course.title.toLowerCase().includes(lower),
-    );
+    return rawCourses.filter((course) => course.title.toLowerCase().includes(lower));
   }, [rawCourses, searchQuery]);
 
   const handleProceed = useCallback(
     (courseId: string) => {
       dismissThen(() => {
         onClose();
-        onNavigatePage?.(
-          `/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`,
-        );
+        onNavigatePage?.(`/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`);
       });
     },
     [dismissThen, onClose, onNavigatePage],
@@ -116,7 +108,7 @@ export function SelectCourseForQuizModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+      className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm duration-150"
       onClick={dismissModal}
       role="dialog"
       aria-modal="true"
@@ -124,7 +116,7 @@ export function SelectCourseForQuizModal({
     >
       <div
         ref={modalRef}
-        className="relative flex flex-col w-full max-w-lg max-h-[85vh] rounded-[20px] border border-(--border) bg-(--card-surface,var(--surface)) p-5 sm:p-6 text-(--text) shadow-2xl animate-in zoom-in-95 duration-150"
+        className="animate-in zoom-in-95 relative flex max-h-[85vh] w-full max-w-lg flex-col rounded-[20px] border border-(--border) bg-(--card-surface,var(--surface)) p-5 text-(--text) shadow-2xl duration-150 sm:p-6"
         style={{ boxShadow: "var(--card-floating-shadow,var(--card-shadow))" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -140,11 +132,11 @@ export function SelectCourseForQuizModal({
             <div>
               <h3
                 id="select-course-quiz-title"
-                className="min-w-0 text-base sm:text-lg font-bold tracking-tight text-(--text)"
+                className="min-w-0 text-base font-bold tracking-tight text-(--text) sm:text-lg"
               >
                 Select Course for Quiz
               </h3>
-              <p className="m-0 text-xs sm:text-sm text-(--muted)">
+              <p className="m-0 text-xs text-(--muted) sm:text-sm">
                 Choose the course where you want to add or manage quizzes.
               </p>
             </div>
@@ -163,10 +155,10 @@ export function SelectCourseForQuizModal({
         {/* Search */}
         {rawCourses.length > 0 && (
           <div className="pt-4 pb-2">
-            <div className="relative flex items-center w-full">
+            <div className="relative flex w-full items-center">
               <MagnifyingGlass
                 size={16}
-                className="absolute left-3 text-(--muted) pointer-events-none"
+                className="pointer-events-none absolute left-3 text-(--muted)"
               />
               <input
                 ref={searchInputRef}
@@ -174,14 +166,14 @@ export function SelectCourseForQuizModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search your courses..."
-                className="w-full h-9.5 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pl-9 pr-3 text-xs sm:text-sm text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20"
+                className="h-9.5 w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pr-3 pl-9 text-xs text-(--text) transition-all outline-none placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20 sm:text-sm"
               />
             </div>
           </div>
         )}
 
         {/* Course List */}
-        <div className="flex-1 overflow-y-auto min-h-[180px] max-h-[340px] my-2 pr-1 space-y-2">
+        <div className="my-2 max-h-[340px] min-h-[180px] flex-1 space-y-2 overflow-y-auto pr-1">
           {coursesQuery.isLoading ? (
             <CenteredLoadingSpinner
               label="Loading your courses"
@@ -189,16 +181,13 @@ export function SelectCourseForQuizModal({
               size={22}
             />
           ) : rawCourses.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] text-(--accent) mb-3">
+            <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] text-(--accent)">
                 <BookOpen size={24} weight="duotone" />
               </div>
-              <h4 className="text-sm font-semibold text-(--text) mb-1">
-                No courses found
-              </h4>
-              <p className="text-xs text-(--muted) max-w-xs mb-4">
-                You need at least one course to create and attach quizzes in the
-                curriculum.
+              <h4 className="mb-1 text-sm font-semibold text-(--text)">No courses found</h4>
+              <p className="mb-4 max-w-xs text-xs text-(--muted)">
+                You need at least one course to create and attach quizzes in the curriculum.
               </p>
               <button
                 type="button"
@@ -226,13 +215,13 @@ export function SelectCourseForQuizModal({
                   key={course.id}
                   onClick={() => setSelectedCourseId(course.id)}
                   onDoubleClick={() => handleProceed(course.id)}
-                  className={`group flex items-center justify-between gap-3 p-3 rounded-[12px] border transition-all cursor-pointer select-none ${
+                  className={`group flex cursor-pointer items-center justify-between gap-3 rounded-[12px] border p-3 transition-all select-none ${
                     isSelected
                       ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] shadow-xs"
                       : "border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]"
                   }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex min-w-0 items-center gap-3">
                     <div
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors ${
                         isSelected
@@ -243,24 +232,20 @@ export function SelectCourseForQuizModal({
                       <BookOpen size={18} weight="duotone" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs sm:text-sm font-semibold text-(--text) truncate">
+                      <div className="truncate text-xs font-semibold text-(--text) sm:text-sm">
                         {course.title || "Untitled Course"}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-[0.72rem] text-(--muted)">
+                      <div className="mt-0.5 flex items-center gap-2 text-[0.72rem] text-(--muted)">
                         <span
-                          className={`inline-flex items-center rounded-full px-1.5 py-0.2 text-[0.68rem] font-medium ${
+                          className={`py-0.2 inline-flex items-center rounded-full px-1.5 text-[0.68rem] font-medium ${
                             course.status === "published"
                               ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                               : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)"
                           }`}
                         >
-                          {course.status === "published"
-                            ? "Published"
-                            : "Draft"}
+                          {course.status === "published" ? "Published" : "Draft"}
                         </span>
-                        {course.difficulty && (
-                          <span>• {course.difficulty}</span>
-                        )}
+                        {course.difficulty && <span>• {course.difficulty}</span>}
                       </div>
                     </div>
                   </div>
@@ -286,7 +271,7 @@ export function SelectCourseForQuizModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] pt-4 mt-2">
+        <div className="mt-2 flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] pt-4">
           <button
             type="button"
             onClick={dismissModal}
@@ -301,7 +286,7 @@ export function SelectCourseForQuizModal({
             onClick={() => {
               if (selectedCourseId) handleProceed(selectedCourseId);
             }}
-            className="inline-flex min-h-8.5 items-center gap-1.5 rounded-[9px] bg-(--accent) px-4 py-1.5 text-xs font-semibold text-(--on-accent,#ffffff) shadow-xs transition-colors hover:bg-(--accent-hover,var(--accent)) disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex min-h-8.5 items-center gap-1.5 rounded-[9px] bg-(--accent) px-4 py-1.5 text-xs font-semibold text-(--on-accent,#ffffff) shadow-xs transition-colors hover:bg-(--accent-hover,var(--accent)) disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span>Continue to Curriculum</span>
           </button>

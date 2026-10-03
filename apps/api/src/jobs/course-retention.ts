@@ -17,9 +17,7 @@ const storage = new S3StorageService({
 try {
   const service = createCourseDeletionService({ database, storage });
   const result = await service.purgeDueCourses();
-  process.stdout.write(
-    `${JSON.stringify({ job: "course-deletion-retention", ...result })}\n`,
-  );
+  process.stdout.write(`${JSON.stringify({ job: "course-deletion-retention", ...result })}\n`);
   if (result.failed > 0 || result.storage.failed > 0) {
     process.exitCode = 2;
   }

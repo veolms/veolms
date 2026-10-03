@@ -1,11 +1,7 @@
 import type { Json } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 
-export async function findWebhookEvent(
-  database: Executor,
-  provider: string,
-  eventId: string,
-) {
+export async function findWebhookEvent(database: Executor, provider: string, eventId: string) {
   return await database
     .selectFrom("webhook_events")
     .selectAll()
@@ -39,10 +35,7 @@ export async function insertWebhookEvent(
  * handler has actually completed — this is what removes the event from the
  * poller's retry pickup (`WHERE processed_at IS NULL`).
  */
-export async function markWebhookEventProcessed(
-  database: Executor,
-  id: string,
-) {
+export async function markWebhookEventProcessed(database: Executor, id: string) {
   return await database
     .updateTable("webhook_events")
     .set({
@@ -64,11 +57,7 @@ export async function markWebhookEventProcessed(
  * `processed_at = now()` on a failed attempt, permanently burying the event
  * with no retry and no alert.
  */
-export async function markWebhookEventFailed(
-  database: Executor,
-  id: string,
-  error: string,
-) {
+export async function markWebhookEventFailed(database: Executor, id: string, error: string) {
   return await database
     .updateTable("webhook_events")
     .set({ error })

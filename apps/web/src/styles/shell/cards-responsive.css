@@ -124,17 +124,11 @@
 
   .courses-app--collapsed,
   :root[data-sidebar-state="collapsed"] .courses-app {
-    grid-template-columns: var(--sidebar-resize-preview-width, 76px) minmax(
-        0,
-        1fr
-      );
+    grid-template-columns: var(--sidebar-resize-preview-width, 76px) minmax(0, 1fr);
   }
 
   .courses-app.courses-app--resizing:not(.courses-app--hidden) {
-    grid-template-columns: var(--sidebar-resize-preview-width, 76px) minmax(
-        0,
-        1fr
-      );
+    grid-template-columns: var(--sidebar-resize-preview-width, 76px) minmax(0, 1fr);
   }
 
   .courses-app--hidden,
@@ -306,9 +300,7 @@
 
   .courses-app--collapsed .courses-nav button > .courses-nav__text,
   .courses-app--collapsed .courses-nav button > b,
-  .courses-app--collapsed
-    .courses-profile__button
-    > span:not(.courses-profile__avatar-wrap),
+  .courses-app--collapsed .courses-profile__button > span:not(.courses-profile__avatar-wrap),
   .courses-app--collapsed .courses-profile__button > svg,
   .courses-app--collapsed .sidebar-appearance > button > span {
     display: block;
@@ -326,9 +318,7 @@
     padding-inline: 0;
   }
 
-  .courses-app--collapsed
-    .courses-profile__button
-    > span:not(.courses-profile__avatar-wrap) {
+  .courses-app--collapsed .courses-profile__button > span:not(.courses-profile__avatar-wrap) {
     display: grid;
   }
 
@@ -341,18 +331,14 @@
     display: inline-block;
   }
 
-  :root[data-collapsed-sidebar-logo="true"]
-    .courses-app--collapsed
-    .sidebar-collapse {
+  :root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .sidebar-collapse {
     top: 12px;
     right: auto;
     left: 10px;
     transform: none;
   }
 
-  :root[data-collapsed-sidebar-logo="true"]
-    .courses-app--collapsed
-    .courses-logo-clip {
+  :root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .courses-logo-clip {
     top: 15px;
     left: 19.375px;
     transform: none;
@@ -361,9 +347,7 @@
   /* While the rail crosses its collapse snap, keep the full-scale wordmark in
      the same coordinate space and let the sidebar edge crop it. The compact P
      (or the user's hidden-logo preference) takes over only after release. */
-  :root
-    .courses-app--resize-content-visible.courses-app--collapsed
-    .courses-sidebar__brand {
+  :root .courses-app--resize-content-visible.courses-app--collapsed .courses-sidebar__brand {
     min-height: 50px;
     align-items: flex-end;
     flex-direction: row;
@@ -375,15 +359,11 @@
   /* Revealing the 38px wordmark temporarily adds 2px to the compact brand
      slot. Cancel that growth here so the navigation icons keep their exact
      settled y-axis throughout pointer-down and the pre-snap drag. */
-  :root
-    .courses-app--resize-content-visible.courses-app--collapsed
-    .courses-nav {
+  :root .courses-app--resize-content-visible.courses-app--collapsed .courses-nav {
     margin-top: -6px;
   }
 
-  :root
-    .courses-app--resize-content-visible.courses-app--collapsed
-    .courses-logo-clip {
+  :root .courses-app--resize-content-visible.courses-app--collapsed .courses-logo-clip {
     position: static;
     display: block !important;
     width: 156px;
@@ -398,10 +378,7 @@
     transition: none;
   }
 
-  :root
-    .courses-app--resize-content-visible.courses-app--collapsed
-    .courses-logo-clip
-    svg {
+  :root .courses-app--resize-content-visible.courses-app--collapsed .courses-logo-clip svg {
     width: 156px;
     max-width: none;
     height: 38px;
@@ -443,9 +420,7 @@
   /* At rest, the compact logo and expand control share one slot. The control
      replaces the logo on rail hover/focus; it never sits beside it. When the
      compact logo preference is disabled, the control remains available. */
-  :root[data-sidebar-header-layout="inline"]
-    .courses-app--collapsed
-    .courses-sidebar__brand {
+  :root[data-sidebar-header-layout="inline"] .courses-app--collapsed .courses-sidebar__brand {
     justify-content: flex-start;
     gap: 0;
     padding-left: 0;
@@ -538,9 +513,7 @@
   }
 
   .courses-app--resizing .sidebar-appearance--horizontal > button,
-  .courses-app--resizing
-    .sidebar-appearance--horizontal
-    > .sidebar-palette-wrap {
+  .courses-app--resizing .sidebar-appearance--horizontal > .sidebar-palette-wrap {
     width: auto;
     flex: 1 1 0;
   }
@@ -549,9 +522,7 @@
     overflow: hidden;
   }
 
-  .courses-app--resizing.courses-app--collapsed
-    .courses-profile
-    > .courses-profile__button,
+  .courses-app--resizing.courses-app--collapsed .courses-profile > .courses-profile__button,
   :root[data-sidebar-state="collapsed"]
     .courses-app.courses-app--resizing:not(.courses-app--collapsed)
     .courses-profile
@@ -561,8 +532,7 @@
     aspect-ratio: auto;
   }
 
-  .courses-app--resize-content-visible.courses-app--collapsed
-    .courses-profile__button {
+  .courses-app--resize-content-visible.courses-app--collapsed .courses-profile__button {
     /* Keep the expanded profile rhythm while the remaining text width clips. */
     gap: 12px;
   }
@@ -571,9 +541,7 @@
     .courses-nav
     button
     > .courses-nav__text,
-  .courses-app--resize-content-visible.courses-app--collapsed
-    .courses-profile__button
-    > span {
+  .courses-app--resize-content-visible.courses-app--collapsed .courses-profile__button > span {
     display: block;
     max-width: 190px;
     margin-left: initial;
@@ -668,8 +636,7 @@
 
   .home-goal-summary > div + div {
     border-top: 0;
-    border-left: 1px solid
-      color-mix(in srgb, var(--surface-strong) 72%, transparent);
+    border-left: 1px solid color-mix(in srgb, var(--surface-strong) 72%, transparent);
   }
 
   .home-goal-summary > div:first-child > svg,
@@ -705,8 +672,7 @@
 
   .home-goal-summary > div + div {
     border-top: 0;
-    border-left: 1px solid
-      color-mix(in srgb, var(--surface-strong) 72%, transparent);
+    border-left: 1px solid color-mix(in srgb, var(--surface-strong) 72%, transparent);
   }
 
   .home-goal-summary i {

@@ -1,22 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCouponsList } from "../services/coupons";
-import {
-  getCouponStatus,
-  type CouponSortOption,
-  type CouponTabFilter,
-} from "./couponHelpers";
+import { getCouponStatus, type CouponSortOption, type CouponTabFilter } from "./couponHelpers";
 
-export type {
-  CouponStatus,
-  CouponTabFilter,
-  CouponSortOption,
-} from "./couponHelpers";
+export type { CouponStatus, CouponTabFilter, CouponSortOption } from "./couponHelpers";
 export { getCouponStatus } from "./couponHelpers";
 
-export function useCouponsFilter(options?: {
-  courseId?: string | null;
-  enabled?: boolean;
-}) {
+export function useCouponsFilter(options?: { courseId?: string | null; enabled?: boolean }) {
   const enabled = options?.enabled ?? true;
   const {
     data,
@@ -29,10 +18,7 @@ export function useCouponsFilter(options?: {
     isFetchingNextPage,
   } = useCouponsList({ courseId: options?.courseId, limit: 10, enabled });
 
-  const coupons = useMemo(
-    () => data?.pages.flatMap((page) => page.items) ?? [],
-    [data],
-  );
+  const coupons = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -45,9 +31,9 @@ export function useCouponsFilter(options?: {
   const [activeTab, setActiveTab] = useState<CouponTabFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<CouponSortOption>("newest");
-  const [discountTypeFilter, setDiscountTypeFilter] = useState<
-    "all" | "percentage" | "fixed"
-  >("all");
+  const [discountTypeFilter, setDiscountTypeFilter] = useState<"all" | "percentage" | "fixed">(
+    "all",
+  );
 
   const serverSummary = data?.pages[0]?.summary;
   const serverTotalCount = data?.pages[0]?.totalCount;
@@ -126,18 +112,14 @@ export function useCouponsFilter(options?: {
           return false;
         }
 
-        if (
-          discountTypeFilter !== "all" &&
-          coupon.discountType !== discountTypeFilter
-        ) {
+        if (discountTypeFilter !== "all" && coupon.discountType !== discountTypeFilter) {
           return false;
         }
 
         if (searchQuery.trim()) {
           const query = searchQuery.toLowerCase().trim();
           const matchCode = coupon.code.toLowerCase().includes(query);
-          const matchDesc =
-            coupon.description?.toLowerCase().includes(query) ?? false;
+          const matchDesc = coupon.description?.toLowerCase().includes(query) ?? false;
           if (!matchCode && !matchDesc) {
             return false;
           }
@@ -147,21 +129,15 @@ export function useCouponsFilter(options?: {
       })
       .sort((a, b) => {
         if (sortBy === "newest") {
-          return (
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         }
         if (sortBy === "oldest") {
-          return (
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          );
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         }
         if (sortBy === "discount_high") {
           return b.discountValue - a.discountValue;
         }
-        return (
-          new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime()
-        );
+        return new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime();
       });
   }, [coupons, now, activeTab, discountTypeFilter, searchQuery, sortBy]);
 
@@ -175,14 +151,7 @@ export function useCouponsFilter(options?: {
     ) {
       void fetchNextPage();
     }
-  }, [
-    filteredCoupons.length,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isError,
-    fetchNextPage,
-  ]);
+  }, [filteredCoupons.length, hasNextPage, isFetchingNextPage, isLoading, isError, fetchNextPage]);
 
   return {
     coupons: filteredCoupons,

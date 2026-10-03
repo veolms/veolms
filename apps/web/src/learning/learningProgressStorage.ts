@@ -28,15 +28,13 @@ export const EMPTY_LEARNING_PROGRESS_STATE: LocalLearningProgressState = {
   items: [],
 };
 
-const clampProgress = (value: number) =>
-  Math.max(0, Math.min(100, Math.round(value)));
+const clampProgress = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
 
 const getStorageKey = (userId: string, courseKey: string) =>
   `${STORAGE_PREFIX}:${encodeURIComponent(userId)}:${encodeURIComponent(courseKey)}`;
 
-const getItemKey = (
-  item: Pick<LocalLearningProgressItem, "lessonId" | "lessonNumber">,
-) => item.lessonId || `number:${item.lessonNumber}`;
+const getItemKey = (item: Pick<LocalLearningProgressItem, "lessonId" | "lessonNumber">) =>
+  item.lessonId || `number:${item.lessonNumber}`;
 
 function getItemIndex(
   items: readonly LocalLearningProgressItem[],
@@ -54,10 +52,7 @@ function getItemIndex(
 function normalizeState(value: unknown): LocalLearningProgressState {
   if (!value || typeof value !== "object") return EMPTY_LEARNING_PROGRESS_STATE;
   const candidate = value as { version?: unknown; items?: unknown };
-  if (
-    candidate.version !== LEARNING_PROGRESS_STORAGE_VERSION ||
-    !Array.isArray(candidate.items)
-  ) {
+  if (candidate.version !== LEARNING_PROGRESS_STORAGE_VERSION || !Array.isArray(candidate.items)) {
     return EMPTY_LEARNING_PROGRESS_STATE;
   }
 
@@ -109,9 +104,7 @@ export function readLearningProgress(
 
   try {
     const raw = window.localStorage.getItem(getStorageKey(userId, courseKey));
-    return raw
-      ? normalizeState(JSON.parse(raw))
-      : EMPTY_LEARNING_PROGRESS_STATE;
+    return raw ? normalizeState(JSON.parse(raw)) : EMPTY_LEARNING_PROGRESS_STATE;
   } catch {
     return EMPTY_LEARNING_PROGRESS_STATE;
   }
@@ -144,23 +137,12 @@ export function recordLearningProgress(
   },
 ): LocalLearningProgressState {
   const progressPercent = clampProgress(input.progressPercent);
-  const itemIndex = getItemIndex(
-    state.items,
-    input.lessonId,
-    input.lessonNumber,
-  );
+  const itemIndex = getItemIndex(state.items, input.lessonId, input.lessonNumber);
   const existing = itemIndex >= 0 ? state.items[itemIndex] : undefined;
-  const nextProgress = Math.max(
-    existing?.progressPercent ?? 0,
-    progressPercent,
-  );
+  const nextProgress = Math.max(existing?.progressPercent ?? 0, progressPercent);
   const nextLessonId = input.lessonId || existing?.lessonId;
 
-  if (
-    existing &&
-    existing.lessonId === nextLessonId &&
-    existing.progressPercent >= nextProgress
-  ) {
+  if (existing && existing.lessonId === nextLessonId && existing.progressPercent >= nextProgress) {
     return state;
   }
 
@@ -189,19 +171,11 @@ export function mergeServerLearningProgress(
   let changed = false;
 
   for (const lesson of lessons) {
-    const itemIndex = getItemIndex(
-      nextItems,
-      lesson.lessonId,
-      lesson.lessonNumber,
-    );
+    const itemIndex = getItemIndex(nextItems, lesson.lessonId, lesson.lessonNumber);
     const existing = itemIndex >= 0 ? nextItems[itemIndex] : undefined;
-    const progressPercent = Math.max(
-      existing?.progressPercent ?? 0,
-      lesson.progressPercent,
-    );
+    const progressPercent = Math.max(existing?.progressPercent ?? 0, lesson.progressPercent);
     const pending =
-      existing?.pending === true &&
-      (existing.progressPercent ?? 0) > lesson.progressPercent;
+      existing?.pending === true && (existing.progressPercent ?? 0) > lesson.progressPercent;
     const nextItem: LocalLearningProgressItem = {
       lessonId: lesson.lessonId,
       lessonNumber: lesson.lessonNumber,
@@ -238,11 +212,7 @@ export function mergeLocalLearningProgress(
   let changed = false;
 
   for (const incomingItem of incoming.items) {
-    const itemIndex = getItemIndex(
-      nextItems,
-      incomingItem.lessonId,
-      incomingItem.lessonNumber,
-    );
+    const itemIndex = getItemIndex(nextItems, incomingItem.lessonId, incomingItem.lessonNumber);
     const existing = itemIndex >= 0 ? nextItems[itemIndex] : undefined;
     if (!existing) {
       nextItems.push(incomingItem);
@@ -258,10 +228,7 @@ export function mergeLocalLearningProgress(
       ...existing,
       lessonId: incomingItem.lessonId || existing.lessonId,
       lessonNumber: incomingItem.lessonNumber,
-      progressPercent: Math.max(
-        existing.progressPercent,
-        incomingItem.progressPercent,
-      ),
+      progressPercent: Math.max(existing.progressPercent, incomingItem.progressPercent),
       clientUpdatedAt: useIncomingTimestamp
         ? incomingItem.clientUpdatedAt
         : existing.clientUpdatedAt,
@@ -295,8 +262,7 @@ export function markLearningProgressSynced(
   const nextItems = state.items.map((item) => {
     const sent = sentItems.find(
       (sentItem) =>
-        sentItem.lessonId === item.lessonId &&
-        sentItem.clientUpdatedAt === item.clientUpdatedAt,
+        sentItem.lessonId === item.lessonId && sentItem.clientUpdatedAt === item.clientUpdatedAt,
     );
     if (!sent || !item.pending) return item;
     changed = true;
@@ -319,21 +285,13 @@ export function getPendingLearningProgress(
     }));
 }
 
-export function getLearningProgressMap(
-  state: LocalLearningProgressState,
-): Record<number, number> {
+export function getLearningProgressMap(state: LocalLearningProgressState): Record<number, number> {
   return state.items.reduce<Record<number, number>>((progress, item) => {
-    progress[item.lessonNumber] = Math.max(
-      progress[item.lessonNumber] ?? 0,
-      item.progressPercent,
-    );
+    progress[item.lessonNumber] = Math.max(progress[item.lessonNumber] ?? 0, item.progressPercent);
     return progress;
   }, {});
 }
 
-export function getLearningProgressStorageKey(
-  userId: string,
-  courseKey: string,
-) {
+export function getLearningProgressStorageKey(userId: string, courseKey: string) {
   return getStorageKey(userId, courseKey);
 }

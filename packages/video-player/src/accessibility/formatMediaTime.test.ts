@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  formatMediaTime,
-  formatTimeForScreenReader,
-} from "./formatMediaTime.ts";
+import { formatMediaTime, formatTimeForScreenReader } from "./formatMediaTime.ts";
 
 describe("media time formatting", () => {
   it("formats clock values without leaking invalid input", () => {
@@ -18,8 +15,6 @@ describe("media time formatting", () => {
   it("produces screen-reader friendly durations", () => {
     expect(formatTimeForScreenReader(0)).toBe("0 seconds");
     expect(formatTimeForScreenReader(61)).toBe("1 minute, 1 second");
-    expect(formatTimeForScreenReader(7_322)).toBe(
-      "2 hours, 2 minutes, 2 seconds",
-    );
+    expect(formatTimeForScreenReader(7_322)).toBe("2 hours, 2 minutes, 2 seconds");
   });
 });

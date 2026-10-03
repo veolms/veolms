@@ -43,10 +43,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ threadId: z.uuid() }),
         querystring: listLearningRepliesQuerySchema,
         response: {
-          200: jsonResponse(
-            "List of replies",
-            learningRepliesListResponseSchema,
-          ),
+          200: jsonResponse("List of replies", learningRepliesListResponseSchema),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Discussion thread not found"),
         },
@@ -129,15 +126,11 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "acceptLearningReply",
         tags: ["Learning Discussions"],
-        summary:
-          "Mark or unmark a reply as the accepted answer for a Q&A question",
+        summary: "Mark or unmark a reply as the accepted answer for a Q&A question",
         params: z.object({ replyId: z.uuid() }),
         body: acceptReplyRequestSchema,
         response: {
-          200: jsonResponse(
-            "Accepted reply status updated",
-            acceptReplyResponseSchema,
-          ),
+          200: jsonResponse("Accepted reply status updated", acceptReplyResponseSchema),
           400: errorResponse("Not a question or invalid reply"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Question author or moderator only"),

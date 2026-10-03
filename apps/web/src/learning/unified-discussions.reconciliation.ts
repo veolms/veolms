@@ -8,13 +8,7 @@ export interface ReconciliationEntity {
   [key: string]: unknown;
 }
 
-const identityFields = new Set([
-  "id",
-  "clientId",
-  "serverId",
-  "creationStatus",
-  "localSequence",
-]);
+const identityFields = new Set(["id", "clientId", "serverId", "creationStatus", "localSequence"]);
 
 function areValuesEqual(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true;
@@ -42,15 +36,10 @@ function areValuesEqual(left: unknown, right: unknown): boolean {
 }
 
 function getUpdatedAt(entity: ReconciliationEntity): number | undefined {
-  return typeof entity.updatedAt === "string"
-    ? Date.parse(entity.updatedAt)
-    : undefined;
+  return typeof entity.updatedAt === "string" ? Date.parse(entity.updatedAt) : undefined;
 }
 
-function remoteIsNewer(
-  remote: ReconciliationEntity,
-  existing: ReconciliationEntity,
-): boolean {
+function remoteIsNewer(remote: ReconciliationEntity, existing: ReconciliationEntity): boolean {
   const remoteUpdatedAt = getUpdatedAt(remote);
   const existingUpdatedAt = getUpdatedAt(existing);
   return (
@@ -82,8 +71,7 @@ export function reconcileUnifiedEntity<T extends ReconciliationEntity>(
   if (!existing) return remote;
 
   const next: ReconciliationEntity = { ...remote };
-  const useLegacyDifferences =
-    previousRemote !== undefined || !remoteIsNewer(remote, existing);
+  const useLegacyDifferences = previousRemote !== undefined || !remoteIsNewer(remote, existing);
 
   for (const key of Object.keys(existing)) {
     if (identityFields.has(key)) {

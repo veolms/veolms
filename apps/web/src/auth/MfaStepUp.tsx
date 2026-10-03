@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { TwoFactorForm } from "./TwoFactorForm";
 import { startPasskeyAuthentication } from "./webauthn";
-import {
-  usePasskeyLoginOptions,
-  usePasskeyLoginVerify,
-  useVerifyMfaTotp,
-} from "../services/auth";
+import { usePasskeyLoginOptions, usePasskeyLoginVerify, useVerifyMfaTotp } from "../services/auth";
 
 export interface MfaStepUpProps {
   allowPasskey: boolean;
@@ -14,12 +10,7 @@ export interface MfaStepUpProps {
   onBack?: () => void;
 }
 
-export function MfaStepUp({
-  allowAuthenticator,
-  allowPasskey,
-  onBack,
-  onDone,
-}: MfaStepUpProps) {
+export function MfaStepUp({ allowAuthenticator, allowPasskey, onBack, onDone }: MfaStepUpProps) {
   const [method, setMethod] = useState<"passkey" | "authenticator">(
     allowPasskey ? "passkey" : "authenticator",
   );
@@ -47,9 +38,7 @@ export function MfaStepUp({
       onDone();
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
-      setErrorMessage(
-        errorObj?.message || "Something went wrong. Please try again.",
-      );
+      setErrorMessage(errorObj?.message || "Something went wrong. Please try again.");
     }
   };
 

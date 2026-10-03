@@ -1,7 +1,6 @@
 import axios, { type AxiosError } from "axios";
 
-export const GENERIC_API_ERROR_MESSAGE =
-  "Something went wrong on our end. Please try again later.";
+export const GENERIC_API_ERROR_MESSAGE = "Something went wrong on our end. Please try again later.";
 
 export interface ApiError {
   status: number;
@@ -10,11 +9,7 @@ export interface ApiError {
   details?: unknown;
 }
 
-function isTechnicalApiError(
-  status: number,
-  code: string,
-  message: string,
-): boolean {
+function isTechnicalApiError(status: number, code: string, message: string): boolean {
   return (
     status >= 500 ||
     code.trim().toUpperCase() === "INTERNAL_SERVER_ERROR" ||
@@ -39,11 +34,9 @@ export function getApiError(error: unknown): ApiError {
 
     const data = axiosError.response?.data;
     const status = axiosError.response?.status || 500;
-    const code =
-      data?.error?.code || data?.code || axiosError.code || "UNKNOWN_ERROR";
+    const code = data?.error?.code || data?.code || axiosError.code || "UNKNOWN_ERROR";
 
-    const message =
-      data?.error?.message || data?.message || GENERIC_API_ERROR_MESSAGE;
+    const message = data?.error?.message || data?.message || GENERIC_API_ERROR_MESSAGE;
 
     return {
       status,

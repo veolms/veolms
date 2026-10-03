@@ -1,19 +1,10 @@
-import type {
-  NotificationListQuery,
-  UpdateNotificationPreferences,
-} from "@veolms/contracts";
+import type { NotificationListQuery, UpdateNotificationPreferences } from "@veolms/contracts";
 import type { FastifyRequest } from "fastify";
 
 import type { NotificationService } from "./notifications.service.ts";
 
-export function createNotificationController({
-  service,
-}: {
-  service: NotificationService;
-}) {
-  async function list(
-    request: FastifyRequest<{ Querystring: NotificationListQuery }>,
-  ) {
+export function createNotificationController({ service }: { service: NotificationService }) {
+  async function list(request: FastifyRequest<{ Querystring: NotificationListQuery }>) {
     return await service.list(request.user!.id, request.query);
   }
 
@@ -25,9 +16,7 @@ export function createNotificationController({
     return await service.markRead(request.user!.id, request.params.id);
   }
 
-  async function markUnread(
-    request: FastifyRequest<{ Params: { id: string } }>,
-  ) {
+  async function markUnread(request: FastifyRequest<{ Params: { id: string } }>) {
     return await service.markUnread(request.user!.id, request.params.id);
   }
 
@@ -61,6 +50,4 @@ export function createNotificationController({
   };
 }
 
-export type NotificationController = ReturnType<
-  typeof createNotificationController
->;
+export type NotificationController = ReturnType<typeof createNotificationController>;

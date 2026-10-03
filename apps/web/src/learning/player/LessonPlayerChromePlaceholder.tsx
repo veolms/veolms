@@ -28,9 +28,7 @@ export function LessonPlayerChromePlaceholder({
   onMinimize,
 }: LessonVideoPlayerProps) {
   const playerTheme = useLearningPlayerTheme();
-  const [playerPreferences, setPlayerPreferences] = useState(
-    DEFAULT_LEARNING_PLAYER_PREFERENCES,
-  );
+  const [playerPreferences, setPlayerPreferences] = useState(DEFAULT_LEARNING_PLAYER_PREFERENCES);
   useLayoutEffect(() => {
     setPlayerPreferences(getInitialLearningPlayerPreferences());
   }, []);

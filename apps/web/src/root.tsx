@@ -33,11 +33,7 @@ import {
 } from "./shell/sidebarPreferences";
 import { getAcademyPaletteStylesheetBootstrapScript } from "./shell/academyPaletteStyles";
 import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
-import {
-  ACADEMY_THEME_VERSION,
-  DEFAULT_ACADEMY_THEME,
-  academyThemes,
-} from "./themes";
+import { ACADEMY_THEME_VERSION, DEFAULT_ACADEMY_THEME, academyThemes } from "./themes";
 
 interface LayoutProps {
   children: ReactNode;
@@ -99,30 +95,22 @@ const getInitialLayoutDomState = (): InitialLayoutDomState => {
   const rootStyle: Record<string, string> = {};
   for (const attribute of Array.from(document.documentElement.attributes)) {
     if (attribute.name === "style") {
-      for (
-        let index = 0;
-        index < document.documentElement.style.length;
-        index++
-      ) {
+      for (let index = 0; index < document.documentElement.style.length; index++) {
         const property = document.documentElement.style.item(index);
         if (property) {
-          rootStyle[property] =
-            document.documentElement.style.getPropertyValue(property);
+          rootStyle[property] = document.documentElement.style.getPropertyValue(property);
         }
       }
       continue;
     }
-    rootAttributes[attribute.name === "class" ? "className" : attribute.name] =
-      attribute.value;
+    rootAttributes[attribute.name === "class" ? "className" : attribute.name] = attribute.value;
   }
 
   const bodyAttributes: Record<string, string> = {};
   if (document.body) {
     for (const attribute of Array.from(document.body.attributes)) {
       if (attribute.name === "style") continue;
-      bodyAttributes[
-        attribute.name === "class" ? "className" : attribute.name
-      ] = attribute.value;
+      bodyAttributes[attribute.name === "class" ? "className" : attribute.name] = attribute.value;
     }
   }
 
@@ -192,11 +180,7 @@ export function Layout({ children }: LayoutProps) {
         />
         <meta name="theme-color" content="#151718" />
         {videoPlaybackCdnOrigin ? (
-          <link
-            rel="preconnect"
-            href={videoPlaybackCdnOrigin}
-            crossOrigin="anonymous"
-          />
+          <link rel="preconnect" href={videoPlaybackCdnOrigin} crossOrigin="anonymous" />
         ) : null}
         <link rel="icon" type="image/svg+xml" href={procodrrLogoMark} />
         <link
@@ -214,23 +198,13 @@ export function Layout({ children }: LayoutProps) {
         <Meta />
         <script
           dangerouslySetInnerHTML={{
-            __html: getEarlyHlsPreloadInlineScript(
-              EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
-            ),
+            __html: getEarlyHlsPreloadInlineScript(EARLY_HLS_PRELOAD_URL_PLACEHOLDER),
           }}
         />
-        <script
-          dangerouslySetInnerHTML={{ __html: getAppearanceBootstrapScript() }}
-        />
-        <script
-          dangerouslySetInnerHTML={{ __html: getReadingModeBootstrapScript() }}
-        />
-        <script
-          dangerouslySetInnerHTML={{ __html: getSurfaceDepthBootstrapScript() }}
-        />
-        <script
-          dangerouslySetInnerHTML={{ __html: getScrollbarBootstrapScript() }}
-        />
+        <script dangerouslySetInnerHTML={{ __html: getAppearanceBootstrapScript() }} />
+        <script dangerouslySetInnerHTML={{ __html: getReadingModeBootstrapScript() }} />
+        <script dangerouslySetInnerHTML={{ __html: getSurfaceDepthBootstrapScript() }} />
+        <script dangerouslySetInnerHTML={{ __html: getScrollbarBootstrapScript() }} />
         <script
           dangerouslySetInnerHTML={{
             __html: getControlRadiusBootstrapScript(),
@@ -242,10 +216,7 @@ export function Layout({ children }: LayoutProps) {
               rel="modulepreload"
               href={`${import.meta.env.BASE_URL}src/routes/academy-layout.tsx?import`}
             />
-            <link
-              rel="modulepreload"
-              href={`${import.meta.env.BASE_URL}src/CoursesPage.tsx`}
-            />
+            <link rel="modulepreload" href={`${import.meta.env.BASE_URL}src/CoursesPage.tsx`} />
           </>
         ) : null}
         <link rel="stylesheet" href={appBaseStylesheet} />
@@ -277,8 +248,7 @@ export const meta = () => [
 export async function loader({ request, params }: Route.LoaderArgs) {
   if (process.env.VEO_REACT_ROUTER_BUILD !== "true") return null;
 
-  const { loadAcademyStaticPageData } =
-    await import("./routes/academyStaticPageData");
+  const { loadAcademyStaticPageData } = await import("./routes/academyStaticPageData");
   return loadAcademyStaticPageData(request, params.courseSlug);
 }
 

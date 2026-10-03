@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { AcademyTheme } from "../themes";
-import {
-  themeRevealOriginFromClick,
-  themeRevealOriginFromElement,
-} from "./themeViewTransition";
+import { themeRevealOriginFromClick, themeRevealOriginFromElement } from "./themeViewTransition";
 import type { ThemeRevealOrigin } from "./themeViewTransition";
 
 interface AcademyPaletteMenuProps {
@@ -44,9 +41,7 @@ export function AcademyPaletteMenu({
   }, [selectedTheme, themes]);
 
   useEffect(() => {
-    const selectedIndex = themes.findIndex(
-      (theme) => theme.id === selectedTheme,
-    );
+    const selectedIndex = themes.findIndex((theme) => theme.id === selectedTheme);
     itemRefs.current[Math.max(0, selectedIndex)]?.focus({
       preventScroll: true,
     });
@@ -58,10 +53,7 @@ export function AcademyPaletteMenu({
     setActiveTheme(nextTheme.id);
     // Reveal arrow-key previews from the swatch being navigated to; an
     // unmeasured element (jsdom) yields no origin and the corner applies.
-    onPreview(
-      nextTheme.id,
-      themeRevealOriginFromElement(itemRefs.current[index]) ?? undefined,
-    );
+    onPreview(nextTheme.id, themeRevealOriginFromElement(itemRefs.current[index]) ?? undefined);
     itemRefs.current[index]?.focus({ preventScroll: true });
   };
 
@@ -78,15 +70,13 @@ export function AcademyPaletteMenu({
 
     const column = activeIndex % PALETTE_GRID_COLUMNS;
     const nextIndex =
-      activeIndex +
-      (key === "ArrowDown" ? PALETTE_GRID_COLUMNS : -PALETTE_GRID_COLUMNS);
+      activeIndex + (key === "ArrowDown" ? PALETTE_GRID_COLUMNS : -PALETTE_GRID_COLUMNS);
     if (nextIndex >= 0 && nextIndex < themes.length) return nextIndex;
 
     if (key === "ArrowDown") return column;
     return (
       column +
-      Math.floor((themes.length - 1 - column) / PALETTE_GRID_COLUMNS) *
-        PALETTE_GRID_COLUMNS
+      Math.floor((themes.length - 1 - column) / PALETTE_GRID_COLUMNS) * PALETTE_GRID_COLUMNS
     );
   };
 
@@ -124,10 +114,7 @@ export function AcademyPaletteMenu({
       event.preventDefault();
       event.stopPropagation();
       // Reveal the preview revert from the swatch that had focus.
-      onCancel(
-        themeRevealOriginFromElement(itemRefs.current[activeIndex]) ??
-          undefined,
-      );
+      onCancel(themeRevealOriginFromElement(itemRefs.current[activeIndex]) ?? undefined);
     }
   };
 
@@ -153,11 +140,7 @@ export function AcademyPaletteMenu({
           aria-label={`${item.name}. ${item.note}`}
           aria-checked={item.id === activeTheme}
           tabIndex={item.id === activeTheme ? 0 : -1}
-          className={
-            item.id === activeTheme
-              ? "is-selected cursor-pointer"
-              : "cursor-pointer"
-          }
+          className={item.id === activeTheme ? "is-selected cursor-pointer" : "cursor-pointer"}
           key={item.id}
           title={item.name}
           data-theme-swatch={item.id}

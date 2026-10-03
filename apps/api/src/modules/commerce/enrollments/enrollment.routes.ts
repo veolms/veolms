@@ -23,8 +23,7 @@ const enrollmentRoutes: RoutePlugin = async (app, options) => {
         operationId: "listAcademyEnrollments",
         tags: ["Commerce - Enrollments"],
         summary: "List recent academy enrollments",
-        description:
-          "Returns the most recently created enrollment rows visible to academy staff.",
+        description: "Returns the most recently created enrollment rows visible to academy staff.",
         querystring: academyEnrollmentListQuerySchema,
         response: {
           200: jsonResponse(
@@ -52,10 +51,7 @@ const enrollmentRoutes: RoutePlugin = async (app, options) => {
           "Returns the authenticated student's active enrolled courses with course details and progress. " +
           "Excludes revoked, refunded, and expired enrollments.",
         response: {
-          200: jsonResponse(
-            "List of enrolled courses with details",
-            enrolledCoursesResponseSchema,
-          ),
+          200: jsonResponse("List of enrolled courses with details", enrolledCoursesResponseSchema),
           401: errorResponse("Unauthorized"),
         },
       },

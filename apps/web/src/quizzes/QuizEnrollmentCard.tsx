@@ -10,10 +10,7 @@ import { Tag } from "@phosphor-icons/react/Tag";
 import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { useCurrentUser } from "../services/auth";
-import {
-  useCreateCheckoutOrder,
-  useVerifyPayment,
-} from "../services/payments/payment.mutations";
+import { useCreateCheckoutOrder, useVerifyPayment } from "../services/payments/payment.mutations";
 import { quizKeys } from "../services/quizzes/quizzes.keys";
 import { useQuizPricingPreview } from "../services/quizzes/quizzes.queries";
 
@@ -31,8 +28,7 @@ async function loadRazorpay(): Promise<void> {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.onload = () => resolve();
-    script.onerror = () =>
-      reject(new Error("Failed to load payment gateway SDK"));
+    script.onerror = () => reject(new Error("Failed to load payment gateway SDK"));
     document.body.appendChild(script);
   });
 }
@@ -91,7 +87,7 @@ export function QuizEnrollmentCard({
   if (pricingPreviewQuery.isLoading) {
     return (
       <section
-        className="mx-auto max-w-2xl rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-5 sm:p-8 text-(--text)"
+        className="mx-auto max-w-2xl rounded-[16px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-5 text-(--text) sm:rounded-[24px] sm:p-8"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
         <CenteredLoadingSpinner
@@ -106,22 +102,21 @@ export function QuizEnrollmentCard({
   if (pricingPreviewQuery.isError || !preview) {
     return (
       <section
-        className="mx-auto max-w-2xl rounded-[16px] sm:rounded-[24px] border border-red-500/20 bg-(--card-surface,var(--surface)) p-5 sm:p-8 text-(--text)"
+        className="mx-auto max-w-2xl rounded-[16px] border border-red-500/20 bg-(--card-surface,var(--surface)) p-5 text-(--text) sm:rounded-[24px] sm:p-8"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
         {onBackToVideo ? (
           <button
             type="button"
             onClick={onBackToVideo}
-            className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
+            className="mb-4 inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) shadow-(--card-compact-shadow) transition-all hover:border-(--accent) hover:text-(--text) active:scale-95"
           >
             <ArrowLeft size={13} weight="bold" />
             <span>Back to video</span>
           </button>
         ) : null}
         <p className="text-sm text-red-400">
-          Unable to check quiz access.{" "}
-          {pricingPreviewQuery.error?.message ?? "Please try again."}
+          Unable to check quiz access. {pricingPreviewQuery.error?.message ?? "Please try again."}
         </p>
         <Button
           onClick={() => void pricingPreviewQuery.refetch()}
@@ -224,27 +219,23 @@ export function QuizEnrollmentCard({
       rzp.open();
     } catch (err: unknown) {
       setIsProcessing(false);
-      setErrorMessage(
-        err instanceof Error
-          ? err.message
-          : "Failed to initiate quiz enrollment.",
-      );
+      setErrorMessage(err instanceof Error ? err.message : "Failed to initiate quiz enrollment.");
     }
   };
 
   return (
     <section
       data-quiz-surface=""
-      className="mx-auto max-w-2xl rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-8 text-(--text)"
+      className="mx-auto max-w-2xl rounded-[16px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 text-(--text) sm:rounded-[24px] sm:p-8"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       {onBackToVideo || lessonBadge ? (
-        <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+        <div className="mb-4 flex items-center justify-between gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] pb-3">
           {onBackToVideo ? (
             <button
               type="button"
               onClick={onBackToVideo}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) shadow-(--card-compact-shadow) transition-all hover:border-(--accent) hover:text-(--text) active:scale-95"
             >
               <ArrowLeft size={13} weight="bold" />
               <span>Back to video</span>
@@ -261,25 +252,21 @@ export function QuizEnrollmentCard({
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2 mb-2">
+      <div className="mb-2 flex items-center gap-2">
         <div className="flex size-8 items-center justify-center rounded-lg bg-(--accent)/10 text-(--accent)">
-          {isFree ? (
-            <CheckCircle size={18} weight="bold" />
-          ) : (
-            <Lock size={18} weight="bold" />
-          )}
+          {isFree ? <CheckCircle size={18} weight="bold" /> : <Lock size={18} weight="bold" />}
         </div>
         <div>
-          <p className="text-[0.65rem] sm:text-[0.7rem] font-bold uppercase tracking-[0.14em] text-(--accent)">
+          <p className="text-[0.65rem] font-bold tracking-[0.14em] text-(--accent) uppercase sm:text-[0.7rem]">
             {isFree ? "Quiz Access" : "Paid Assessment"}
           </p>
-          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-(--text)">
+          <h1 className="text-lg font-bold tracking-tight text-(--text) sm:text-xl">
             {quizTitle || "Lesson Assessment"}
           </h1>
         </div>
       </div>
 
-      <p className="text-xs sm:text-sm text-(--muted) mt-1 leading-relaxed">
+      <p className="mt-1 text-xs leading-relaxed text-(--muted) sm:text-sm">
         {pricingType === "free"
           ? "This quiz is included with your course enrollment. Click below to start your attempt."
           : "This is a premium assessment designed to test and certify your mastery of the concepts covered in this lesson."}
@@ -288,8 +275,8 @@ export function QuizEnrollmentCard({
       {pricingType === "paid" ? (
         <div className="mt-5 space-y-4">
           {/* Pricing Breakdown Card */}
-          <div className="rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-3.5 sm:p-4.5 space-y-2.5">
-            <div className="flex items-center justify-between text-xs sm:text-sm text-(--muted)">
+          <div className="space-y-2.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-3.5 sm:p-4.5">
+            <div className="flex items-center justify-between text-xs text-(--muted) sm:text-sm">
               <span>Catalog Price</span>
               <span
                 className={
@@ -303,22 +290,18 @@ export function QuizEnrollmentCard({
             </div>
 
             {salePrice !== null && salePrice < catalogPrice ? (
-              <div className="flex items-center justify-between text-xs sm:text-sm text-emerald-400">
+              <div className="flex items-center justify-between text-xs text-emerald-400 sm:text-sm">
                 <span className="flex items-center gap-1">
                   <Tag size={13} weight="bold" />
                   <span>Special Sale Price</span>
                 </span>
-                <span className="font-semibold">
-                  {formatPrice(salePrice, currency)}
-                </span>
+                <span className="font-semibold">{formatPrice(salePrice, currency)}</span>
               </div>
             ) : null}
 
-            <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-2.5 flex items-center justify-between">
-              <span className="text-xs sm:text-sm font-bold text-(--text)">
-                Total Payable
-              </span>
-              <span className="text-base sm:text-xl font-bold text-(--text)">
+            <div className="flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-2.5">
+              <span className="text-xs font-bold text-(--text) sm:text-sm">Total Payable</span>
+              <span className="text-base font-bold text-(--text) sm:text-xl">
                 {formatPrice(activePrice, currency)}
               </span>
             </div>
@@ -327,7 +310,7 @@ export function QuizEnrollmentCard({
       ) : null}
 
       {errorMessage ? (
-        <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs sm:text-sm text-red-400">
+        <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400 sm:text-sm">
           {errorMessage}
         </div>
       ) : null}
@@ -336,11 +319,11 @@ export function QuizEnrollmentCard({
         <Button
           onClick={handleEnrollment}
           disabled={isProcessing}
-          className="h-10 px-5 font-semibold text-xs sm:text-sm"
+          className="h-10 px-5 text-xs font-semibold sm:text-sm"
         >
           {isProcessing ? (
             <>
-              <CircleNotch size={15} className="animate-spin mr-2" />
+              <CircleNotch size={15} className="mr-2 animate-spin" />
               <span>Processing...</span>
             </>
           ) : isFree ? (
@@ -353,7 +336,7 @@ export function QuizEnrollmentCard({
         {onBackToVideo ? (
           <Button
             motion="static"
-            className="h-10 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) px-4 text-xs sm:text-sm text-(--text) shadow-none hover:bg-(--hover)"
+            className="h-10 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) px-4 text-xs text-(--text) shadow-none hover:bg-(--hover) sm:text-sm"
             onClick={onBackToVideo}
           >
             Back to video

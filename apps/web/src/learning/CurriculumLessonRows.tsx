@@ -1,12 +1,5 @@
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
-import {
-  memo,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
@@ -41,8 +34,7 @@ const CurriculumLessonButton = memo(function CurriculumLessonButton({
   onVirtualizedKeyDown,
 }: CurriculumLessonButtonProps) {
   const [number, title, duration, status] = lesson;
-  const completed =
-    status === "done" || progress >= LESSON_PROGRESS_COMPLETE_THRESHOLD;
+  const completed = status === "done" || progress >= LESSON_PROGRESS_COMPLETE_THRESHOLD;
   const showProgress = isActive || progress > 0;
 
   return (
@@ -62,10 +54,7 @@ const CurriculumLessonButton = memo(function CurriculumLessonButton({
       className={`learning-curriculum__lesson ${isActive ? "is-active" : ""} ${!isAvailable ? "cursor-not-allowed opacity-50" : ""}`}
     >
       {completed ? (
-        <span
-          className="learning-curriculum__lesson-status"
-          aria-label="Completed"
-        >
+        <span className="learning-curriculum__lesson-status" aria-label="Completed">
           <Check size={12} weight="bold" />
         </span>
       ) : showProgress ? (
@@ -79,12 +68,7 @@ const CurriculumLessonButton = memo(function CurriculumLessonButton({
           aria-valuetext={`${Math.round(progress)}% watched`}
         >
           <svg viewBox="0 0 20 20" aria-hidden="true">
-            <circle
-              className="learning-curriculum__lesson-progress-track"
-              cx="10"
-              cy="10"
-              r="8"
-            />
+            <circle className="learning-curriculum__lesson-progress-track" cx="10" cy="10" r="8" />
             <circle
               className="learning-curriculum__lesson-progress-value"
               cx="10"
@@ -125,10 +109,7 @@ interface CurriculumLessonRowsProps {
 }
 
 export function CurriculumLessonRows(props: CurriculumLessonRowsProps) {
-  if (
-    !props.forceVirtualized &&
-    props.lessons.length < VIRTUALIZED_LESSON_THRESHOLD
-  ) {
+  if (!props.forceVirtualized && props.lessons.length < VIRTUALIZED_LESSON_THRESHOLD) {
     return (
       <>
         {props.lessons.map((lesson) => (
@@ -140,11 +121,7 @@ export function CurriculumLessonRows(props: CurriculumLessonRowsProps) {
             isAvailable={props.isLessonAvailable?.(lesson[0]) ?? true}
             onSelectLesson={props.onSelectLesson}
             onClose={props.onClose}
-            activeLessonRef={
-              props.selectedLesson === lesson[0]
-                ? props.activeLessonRef
-                : undefined
-            }
+            activeLessonRef={props.selectedLesson === lesson[0] ? props.activeLessonRef : undefined}
           />
         ))}
       </>
@@ -231,9 +208,7 @@ function VirtualizedCurriculumLessonRows({
   const handleVirtualizedTab = useCallback(
     (event: ReactKeyboardEvent<HTMLButtonElement>) => {
       if (event.key !== "Tab") return;
-      const currentIndex = Number(
-        event.currentTarget.dataset.curriculumLessonIndex,
-      );
+      const currentIndex = Number(event.currentTarget.dataset.curriculumLessonIndex);
       if (!Number.isInteger(currentIndex)) return;
 
       const direction = event.shiftKey ? -1 : 1;
@@ -305,10 +280,7 @@ function VirtualizedCurriculumLessonRows({
   );
 }
 
-function getLessonProgress(
-  lessonProgress: Readonly<Record<number, number>>,
-  lesson: Lesson,
-) {
+function getLessonProgress(lessonProgress: Readonly<Record<number, number>>, lesson: Lesson) {
   const [number, , , status] = lesson;
   const storedProgress = lessonProgress[number];
   if (typeof storedProgress === "number") {

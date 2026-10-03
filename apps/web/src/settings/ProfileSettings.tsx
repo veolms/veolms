@@ -25,10 +25,7 @@ import { ShieldWarningIcon as ShieldWarning } from "@phosphor-icons/react/Shield
 import { UserIcon as User } from "@phosphor-icons/react/User";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import {
-  CountryCodeSelect,
-  getDefaultCountry,
-} from "../auth/CountryCodeSelect";
+import { CountryCodeSelect, getDefaultCountry } from "../auth/CountryCodeSelect";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import { ToastNotification } from "../ToastNotification";
 import { PublicProfileCard } from "../components/PublicProfileCard";
@@ -46,11 +43,7 @@ import type { CountryOption } from "../auth/identifier";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { AvatarCropDialog } from "./AvatarCropDialog";
 import { AvatarStylePicker } from "./AvatarStylePicker";
-import type {
-  ProfileIdentity,
-  ProfilePreferences,
-  ProfileRole,
-} from "./profileTypes";
+import type { ProfileIdentity, ProfilePreferences, ProfileRole } from "./profileTypes";
 import { getDefaultProfileIdentity } from "./profileTypes";
 import {
   useCurrentUser,
@@ -66,11 +59,7 @@ import { authStore, useAuthStore, type AuthUser } from "../store/auth.store";
 import type { ProfileUpdateRequest } from "@veolms/contracts";
 import { CircularCheckbox } from "../components/CircularCheckbox";
 import { AutosaveStatus, useAutosync } from "../lib/autosync";
-import {
-  authKeys,
-  authService,
-  resolveAvatarUploadContentType,
-} from "../services/auth";
+import { authKeys, authService, resolveAvatarUploadContentType } from "../services/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { getRoleDisplayName, getUserRoles } from "../shell/workspaceRole";
 
@@ -125,9 +114,7 @@ const profileIdentityFromUser = (
   email: user?.email ?? "",
   mobileNumber: user?.phoneNo ?? "",
   mobileVerified: user?.mobileVerified ?? false,
-  mobilePublic: Boolean(
-    user?.mobilePublic && user?.phoneNo && user?.mobileVerified,
-  ),
+  mobilePublic: Boolean(user?.mobilePublic && user?.phoneNo && user?.mobileVerified),
   emailPublic: Boolean(user?.emailPublic && user?.email && user?.emailVerified),
   linkedinUrl: user?.linkedinUrl ?? "",
   linkedinPublic: Boolean(user?.linkedinPublic && user?.linkedinUrl),
@@ -144,11 +131,9 @@ const normalizedMobileNumber = (value: string | null | undefined) =>
 const profilesMatch = (left: EditableProfile, right: EditableProfile) =>
   left.displayName.trim() === right.displayName.trim() &&
   left.avatarDataUrl === right.avatarDataUrl &&
-  (left.username ?? "").trim().toLowerCase() ===
-    (right.username ?? "").trim().toLowerCase() &&
+  (left.username ?? "").trim().toLowerCase() === (right.username ?? "").trim().toLowerCase() &&
   left.bio.trim() === right.bio.trim() &&
-  normalizedMobileNumber(left.mobileNumber) ===
-    normalizedMobileNumber(right.mobileNumber) &&
+  normalizedMobileNumber(left.mobileNumber) === normalizedMobileNumber(right.mobileNumber) &&
   Boolean(left.mobileVerified) === Boolean(right.mobileVerified) &&
   Boolean(left.emailPublic) === Boolean(right.emailPublic) &&
   Boolean(left.mobilePublic) === Boolean(right.mobilePublic) &&
@@ -210,17 +195,13 @@ const buildProfileUpdatePayload = (
       payload[urlField] = url || null;
       if (!url) payload[visibilityField] = false;
     }
-    if (
-      Boolean(draft[visibilityField]) !== Boolean(saved[visibilityField]) &&
-      url
-    ) {
+    if (Boolean(draft[visibilityField]) !== Boolean(saved[visibilityField]) && url) {
       payload[visibilityField] = draft[visibilityField];
     }
   }
 
   const mobileNumberChanged =
-    normalizedMobileNumber(draft.mobileNumber) !==
-    normalizedMobileNumber(saved.mobileNumber);
+    normalizedMobileNumber(draft.mobileNumber) !== normalizedMobileNumber(saved.mobileNumber);
   if (mobileNumberChanged && !draft.mobileVerified) hasInvalidFields = true;
 
   return {
@@ -229,8 +210,7 @@ const buildProfileUpdatePayload = (
   };
 };
 
-const externalUrl = (value: string) =>
-  /^https?:\/\//i.test(value) ? value : `https://${value}`;
+const externalUrl = (value: string) => (/^https?:\/\//i.test(value) ? value : `https://${value}`);
 
 interface PublicVisibilityCheckboxProps {
   id: string;
@@ -253,8 +233,7 @@ interface LockedProfileControlContextValue {
   setActiveControl: Dispatch<SetStateAction<string | null>>;
 }
 
-const LockedProfileControlContext =
-  createContext<LockedProfileControlContextValue | null>(null);
+const LockedProfileControlContext = createContext<LockedProfileControlContextValue | null>(null);
 
 function LockedProfileControl({
   children,
@@ -263,9 +242,7 @@ function LockedProfileControl({
   onBlocked,
   className = "",
 }: LockedProfileControlProps) {
-  const tooltipId = `profile-auth-tooltip-${label
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")}`;
+  const tooltipId = `profile-auth-tooltip-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   const lockedControlContext = useContext(LockedProfileControlContext);
   const [localTooltipActive, setLocalTooltipActive] = useState(false);
   const isTooltipActive = lockedControlContext
@@ -282,9 +259,7 @@ function LockedProfileControl({
 
   const deactivateTooltip = () => {
     if (lockedControlContext) {
-      lockedControlContext.setActiveControl((current) =>
-        current === tooltipId ? null : current,
-      );
+      lockedControlContext.setActiveControl((current) => (current === tooltipId ? null : current));
       return;
     }
     setLocalTooltipActive(false);
@@ -330,23 +305,14 @@ function LockedProfileControl({
         }}
       >
         <WarningCircle
-          className={`settings-profile__auth-lock-icon${
-            isTooltipActive ? " is-visible" : ""
-          }`}
+          className={`settings-profile__auth-lock-icon${isTooltipActive ? "is-visible" : ""}`}
           size={16}
           weight="fill"
           aria-hidden="true"
         />
         {isTooltipActive && (
-          <span
-            id={tooltipId}
-            className="settings-profile__auth-tooltip is-visible"
-            role="tooltip"
-          >
-            <span
-              className="settings-profile__auth-tooltip-icon"
-              aria-hidden="true"
-            >
+          <span id={tooltipId} className="settings-profile__auth-tooltip is-visible" role="tooltip">
+            <span className="settings-profile__auth-tooltip-icon" aria-hidden="true">
               <Lock size={14} weight="bold" />
             </span>
             <span className="settings-profile__auth-tooltip-copy">
@@ -394,18 +360,13 @@ export function ProfileSettings({
     isFetched: userProfileFetched,
   } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
-  const activeUser =
-    userProfileFetched && !userProfileError ? userProfile : storeUser;
+  const activeUser = userProfileFetched && !userProfileError ? userProfile : storeUser;
   const canEdit = isAuthenticated && Boolean(activeUser);
   const queryClient = useQueryClient();
   const lastPublicProfileUsername = useRef(activeUser?.username ?? null);
   useEffect(() => {
     if (!activeUser) return;
-    updatePublicProfileCacheFromUser(
-      queryClient,
-      activeUser,
-      lastPublicProfileUsername.current,
-    );
+    updatePublicProfileCacheFromUser(queryClient, activeUser, lastPublicProfileUsername.current);
     lastPublicProfileUsername.current = activeUser.username;
   }, [activeUser, queryClient]);
   const {
@@ -419,17 +380,10 @@ export function ProfileSettings({
   const sendEmailVerificationMutation = useSendEmailVerificationOtp();
   const verifyEmailMutation = useVerifyEmail();
 
-  const initialIdentity = useMemo(
-    () => getDefaultProfileIdentity(role),
-    [role],
-  );
+  const initialIdentity = useMemo(() => getDefaultProfileIdentity(role), [role]);
   const serverProfile = useMemo(
     () =>
-      toEditableProfile(
-        activeUser
-          ? profileIdentityFromUser(activeUser, role)
-          : initialIdentity,
-      ),
+      toEditableProfile(activeUser ? profileIdentityFromUser(activeUser, role) : initialIdentity),
     [activeUser, initialIdentity, role],
   );
   const autosyncKey = useMemo(
@@ -441,10 +395,7 @@ export function ProfileSettings({
     [activeUser?.id],
   );
   const syncProfile = useCallback(
-    async (
-      draft: EditableProfile,
-      { previousValue }: { previousValue: EditableProfile },
-    ) => {
+    async (draft: EditableProfile, { previousValue }: { previousValue: EditableProfile }) => {
       const { payload } = buildProfileUpdatePayload(draft, previousValue);
       if (!payload) {
         throw new Error("Complete the required profile fields before syncing.");
@@ -454,14 +405,8 @@ export function ProfileSettings({
     [],
   );
   const validateProfile = useCallback(
-    (
-      draft: EditableProfile,
-      { previousValue }: { previousValue: EditableProfile },
-    ) => {
-      const { payload, hasInvalidFields } = buildProfileUpdatePayload(
-        draft,
-        previousValue,
-      );
+    (draft: EditableProfile, { previousValue }: { previousValue: EditableProfile }) => {
+      const { payload, hasInvalidFields } = buildProfileUpdatePayload(draft, previousValue);
       return {
         valid: Boolean(payload) && !hasInvalidFields,
         message: hasInvalidFields
@@ -479,39 +424,28 @@ export function ProfileSettings({
     Partial<Record<SocialVisibilityField, string>>
   >({});
   const [photoError, setPhotoError] = useState("");
-  const [photoSelectionError, setPhotoSelectionError] = useState<string | null>(
-    null,
-  );
+  const [photoSelectionError, setPhotoSelectionError] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
-  const [optimisticAvatarUrl, setOptimisticAvatarUrl] = useState<string | null>(
-    null,
-  );
+  const [optimisticAvatarUrl, setOptimisticAvatarUrl] = useState<string | null>(null);
   const [blockedControl, setBlockedControl] = useState("");
-  const [activeLockedControl, setActiveLockedControl] = useState<string | null>(
-    null,
-  );
+  const [activeLockedControl, setActiveLockedControl] = useState<string | null>(null);
   const [verificationRequested, setVerificationRequested] = useState(false);
   const [verificationPhone, setVerificationPhone] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
-  const [emailVerificationRequested, setEmailVerificationRequested] =
-    useState(false);
+  const [emailVerificationRequested, setEmailVerificationRequested] = useState(false);
   const [emailVerificationCode, setEmailVerificationCode] = useState("");
   const [emailVerifiedLocally, setEmailVerifiedLocally] = useState(false);
   const [mobileCountryId, setMobileCountryId] = useState(DEFAULT_COUNTRY_ID);
-  const [mobileVisibilityPromptOpen, setMobileVisibilityPromptOpen] =
-    useState(false);
+  const [mobileVisibilityPromptOpen, setMobileVisibilityPromptOpen] = useState(false);
 
   const handleProfileSynced = useCallback(
     (updatedUser: Awaited<ReturnType<typeof authService.updateProfile>>) => {
-      const nextProfile = toEditableProfile(
-        profileIdentityFromUser(updatedUser, role),
-      );
+      const nextProfile = toEditableProfile(profileIdentityFromUser(updatedUser, role));
       authStore.setUser(updatedUser);
       queryClient.setQueryData(authKeys.me(), updatedUser);
       queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
       setMobileCountryId(
-        findCountryByPhoneNumber(nextProfile.mobileNumber ?? "")?.id ??
-          DEFAULT_COUNTRY_ID,
+        findCountryByPhoneNumber(nextProfile.mobileNumber ?? "")?.id ?? DEFAULT_COUNTRY_ID,
       );
       onProfileSaved?.(nextProfile);
       return nextProfile;
@@ -523,10 +457,7 @@ export function ProfileSettings({
     update,
     mergeFromServer,
     status: autosaveStatus,
-  } = useAutosync<
-    EditableProfile,
-    Awaited<ReturnType<typeof authService.updateProfile>>
-  >({
+  } = useAutosync<EditableProfile, Awaited<ReturnType<typeof authService.updateProfile>>>({
     key: autosyncKey,
     initialValue: serverProfile,
     enabled: canEdit,
@@ -544,15 +475,13 @@ export function ProfileSettings({
       avatarSrcSet: updated.avatarSrcSet,
     });
   };
-  const verificationModalOpen =
-    canEdit && (emailVerificationRequested || verificationRequested);
+  const verificationModalOpen = canEdit && (emailVerificationRequested || verificationRequested);
   const verificationChannel = emailVerificationRequested
     ? "email"
     : verificationRequested
       ? "mobile"
       : null;
-  const verificationError =
-    verificationChannel === "email" ? emailError : mobileError;
+  const verificationError = verificationChannel === "email" ? emailError : mobileError;
 
   const closeVerificationDialog = () => {
     setEmailVerificationRequested(false);
@@ -575,14 +504,12 @@ export function ProfileSettings({
   const dismissVerificationModal = useCallback(() => {
     dismissVerificationThen(() => {});
   }, [dismissVerificationThen]);
-  const [mobileVisibilityAcknowledged, setMobileVisibilityAcknowledged] =
-    useState(false);
+  const [mobileVisibilityAcknowledged, setMobileVisibilityAcknowledged] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarCropOpen, setAvatarCropOpen] = useState(false);
   const [avatarCropSource, setAvatarCropSource] = useState<string | null>(null);
-  const [avatarCropFileName, setAvatarCropFileName] =
-    useState("profile-photo.webp");
+  const [avatarCropFileName, setAvatarCropFileName] = useState("profile-photo.webp");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarCropSourceRef = useRef<string | null>(null);
   const optimisticAvatarUrlRef = useRef<string | null>(null);
@@ -600,11 +527,9 @@ export function ProfileSettings({
   const avatarSrcSet = optimisticAvatarUrl ? [] : draftProfile.avatarSrcSet;
   const showAvatar = Boolean(avatarUrl) && !avatarFailed;
   const activeEmail = activeUser?.email || "";
-  const isEmailVerified =
-    Boolean(activeUser?.emailVerified) || emailVerifiedLocally;
+  const isEmailVerified = Boolean(activeUser?.emailVerified) || emailVerifiedLocally;
   const isMobileVerified = Boolean(draftProfile.mobileVerified);
-  const mobileCountry: CountryOption =
-    findCountry(mobileCountryId) ?? getDefaultCountry();
+  const mobileCountry: CountryOption = findCountry(mobileCountryId) ?? getDefaultCountry();
 
   const revokeAvatarCropSource = useCallback(() => {
     const source = avatarCropSourceRef.current;
@@ -682,8 +607,7 @@ export function ProfileSettings({
 
   useEffect(() => {
     setMobileCountryId(
-      findCountryByPhoneNumber(serverProfile.mobileNumber ?? "")?.id ??
-        DEFAULT_COUNTRY_ID,
+      findCountryByPhoneNumber(serverProfile.mobileNumber ?? "")?.id ?? DEFAULT_COUNTRY_ID,
     );
   }, [serverProfile.mobileNumber]);
 
@@ -717,9 +641,7 @@ export function ProfileSettings({
     if (!verificationModalOpen) return undefined;
 
     const previousActiveElement =
-      typeof document !== "undefined"
-        ? (document.activeElement as HTMLElement | null)
-        : null;
+      typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -733,9 +655,7 @@ export function ProfileSettings({
       const dialog = verificationDialogRef.current;
       if (!dialog) return;
       const focusableElements = Array.from(
-        dialog.querySelectorAll<HTMLElement>(
-          "button:not([disabled]), input:not([disabled])",
-        ),
+        dialog.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])"),
       );
       if (!focusableElements.length) return;
 
@@ -752,9 +672,7 @@ export function ProfileSettings({
 
     window.addEventListener("keydown", handleKeyDown);
     const focusTimer = window.setTimeout(() => {
-      verificationDialogRef.current
-        ?.querySelector<HTMLInputElement>(".auth-otp__digit")
-        ?.focus();
+      verificationDialogRef.current?.querySelector<HTMLInputElement>(".auth-otp__digit")?.focus();
     }, 50);
 
     return () => {
@@ -765,17 +683,9 @@ export function ProfileSettings({
   }, [dismissVerificationModal, verificationModalOpen]);
 
   const updateText = (field: keyof EditableProfile, value: string) => {
-    if (
-      field === "linkedinUrl" ||
-      field === "githubUrl" ||
-      field === "websiteUrl"
-    ) {
+    if (field === "linkedinUrl" || field === "githubUrl" || field === "websiteUrl") {
       const socialField =
-        field === "linkedinUrl"
-          ? "linkedin"
-          : field === "githubUrl"
-            ? "github"
-            : "portfolio";
+        field === "linkedinUrl" ? "linkedin" : field === "githubUrl" ? "github" : "portfolio";
       setSocialVisibilityErrors((current) => {
         if (!current[socialField]) return current;
         const next = { ...current };
@@ -812,10 +722,8 @@ export function ProfileSettings({
     update((current) => ({
       ...current,
       mobileNumber: value,
-      mobileVerified:
-        current.mobileNumber === value ? current.mobileVerified : false,
-      mobilePublic:
-        current.mobileNumber === value ? current.mobilePublic : false,
+      mobileVerified: current.mobileNumber === value ? current.mobileVerified : false,
+      mobilePublic: current.mobileNumber === value ? current.mobilePublic : false,
     }));
     setVerificationRequested(false);
     setVerificationPhone("");
@@ -824,25 +732,15 @@ export function ProfileSettings({
   };
 
   const updateMobileCountry = (nextCountry: CountryOption) => {
-    const nationalNumber = toNationalNumber(
-      draftProfile.mobileNumber ?? "",
-      mobileCountry,
-    );
+    const nationalNumber = toNationalNumber(draftProfile.mobileNumber ?? "", mobileCountry);
     setMobileCountryId(nextCountry.id);
     updateMobileNumber(
-      nationalNumber
-        ? toInternationalPhoneNumber(nationalNumber, nextCountry)
-        : "",
+      nationalNumber ? toInternationalPhoneNumber(nationalNumber, nextCountry) : "",
     );
   };
 
   const updateVisibility = (
-    field:
-      | "emailPublic"
-      | "mobilePublic"
-      | "linkedinPublic"
-      | "githubPublic"
-      | "websitePublic",
+    field: "emailPublic" | "mobilePublic" | "linkedinPublic" | "githubPublic" | "websitePublic",
     value: boolean,
   ) => {
     update({ [field]: value } as Partial<EditableProfile>);
@@ -995,9 +893,7 @@ export function ProfileSettings({
         mobileVerified: true,
         mobilePublic: false,
       });
-      setMobileCountryId(
-        findCountryByPhoneNumber(phoneNo)?.id ?? mobileCountryId,
-      );
+      setMobileCountryId(findCountryByPhoneNumber(phoneNo)?.id ?? mobileCountryId);
       setVerificationRequested(false);
       setVerificationPhone("");
       setVerificationCode("");
@@ -1042,9 +938,7 @@ export function ProfileSettings({
       return;
     }
     if (file.size > MAX_PROFILE_PHOTO_BYTES) {
-      setPhotoSelectionError(
-        "Choose a profile photo that is 20 MB or smaller.",
-      );
+      setPhotoSelectionError("Choose a profile photo that is 20 MB or smaller.");
       return;
     }
 
@@ -1063,12 +957,7 @@ export function ProfileSettings({
 
   const handleCroppedPhoto = (file: File) => {
     const activeUserId = authStore.getState().user?.id;
-    if (
-      !activeUserId ||
-      photoUploading ||
-      avatarUploadActiveRef.current ||
-      !isMountedRef.current
-    ) {
+    if (!activeUserId || photoUploading || avatarUploadActiveRef.current || !isMountedRef.current) {
       return;
     }
 
@@ -1137,11 +1026,7 @@ export function ProfileSettings({
           onError={() => setAvatarFailed(true)}
         />
       ) : (
-        <User
-          className="settings-profile__avatar-fallback"
-          size={72}
-          weight="duotone"
-        />
+        <User className="settings-profile__avatar-fallback" size={72} weight="duotone" />
       )}
     </span>
   );
@@ -1149,20 +1034,12 @@ export function ProfileSettings({
   const publicSocialLinks = (
     <div className="settings-profile__public-links">
       {draftProfile.linkedinPublic && draftProfile.linkedinUrl && (
-        <a
-          href={externalUrl(draftProfile.linkedinUrl)}
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href={externalUrl(draftProfile.linkedinUrl)} target="_blank" rel="noreferrer">
           <LinkedinLogo size={16} weight="fill" /> LinkedIn
         </a>
       )}
       {draftProfile.githubPublic && draftProfile.githubUrl && (
-        <a
-          href={externalUrl(draftProfile.githubUrl)}
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href={externalUrl(draftProfile.githubUrl)} target="_blank" rel="noreferrer">
           <GithubLogo size={16} weight="fill" /> GitHub
         </a>
       )}
@@ -1171,19 +1048,13 @@ export function ProfileSettings({
           <EnvelopeSimple size={16} /> {activeEmail}
         </a>
       )}
-      {draftProfile.mobilePublic &&
-        draftProfile.mobileVerified &&
-        draftProfile.mobileNumber && (
-          <a href={`tel:${draftProfile.mobileNumber.replace(/\s/g, "")}`}>
-            <Phone size={16} /> {draftProfile.mobileNumber}
-          </a>
-        )}
+      {draftProfile.mobilePublic && draftProfile.mobileVerified && draftProfile.mobileNumber && (
+        <a href={`tel:${draftProfile.mobileNumber.replace(/\s/g, "")}`}>
+          <Phone size={16} /> {draftProfile.mobileNumber}
+        </a>
+      )}
       {draftProfile.websitePublic && draftProfile.websiteUrl && (
-        <a
-          href={externalUrl(draftProfile.websiteUrl)}
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href={externalUrl(draftProfile.websiteUrl)} target="_blank" rel="noreferrer">
           <Globe size={16} /> Portfolio
         </a>
       )}
@@ -1200,10 +1071,7 @@ export function ProfileSettings({
       <section className="settings-profile" aria-label="Profile settings">
         <div className="settings-profile__layout">
           <div className="settings-profile__preview-column">
-            <section
-              className="settings-profile__identity"
-              aria-labelledby="profile-photo-title"
-            >
+            <section className="settings-profile__identity" aria-labelledby="profile-photo-title">
               <header className="settings-profile__identity-heading">
                 <div>
                   <div className="settings-profile__title-line">
@@ -1219,21 +1087,10 @@ export function ProfileSettings({
               <PublicProfileCard
                 displayName={displayName}
                 username={username}
-                avatar={avatar(
-                  "settings-profile__avatar settings-profile__avatar--large",
-                )}
-                bio={
-                  draftProfile.bio ||
-                  "Add a short bio so people know what you are learning."
-                }
+                avatar={avatar("settings-profile__avatar settings-profile__avatar--large")}
+                bio={draftProfile.bio || "Add a short bio so people know what you are learning."}
                 links={publicSocialLinks}
-                verifiedIcon={
-                  <SealCheck
-                    size={21}
-                    weight="fill"
-                    aria-label="Verified profile"
-                  />
-                }
+                verifiedIcon={<SealCheck size={21} weight="fill" aria-label="Verified profile" />}
                 photoAction={
                   <LockedProfileControl
                     label="profile photo"
@@ -1281,11 +1138,7 @@ export function ProfileSettings({
                           "Saving avatar…"
                         ) : (
                           <>
-                            <MagicWand
-                              size={14}
-                              weight="fill"
-                              aria-hidden="true"
-                            />
+                            <MagicWand size={14} weight="fill" aria-hidden="true" />
                             Generate avatar
                           </>
                         )}
@@ -1309,9 +1162,7 @@ export function ProfileSettings({
                 role="alert"
               >
                 <WarningCircle size={16} weight="fill" aria-hidden="true" />
-                <span>
-                  Sign in to edit your {blockedControl.toLowerCase()}.
-                </span>
+                <span>Sign in to edit your {blockedControl.toLowerCase()}.</span>
               </p>
             )}
             <section className="settings-profile__form-section">
@@ -1337,9 +1188,7 @@ export function ProfileSettings({
                       autoComplete="name"
                       aria-invalid={Boolean(nameError)}
                       disabled={!canEdit}
-                      onChange={(event) =>
-                        updateDisplayName(event.target.value)
-                      }
+                      onChange={(event) => updateDisplayName(event.target.value)}
                     />
                   </LockedProfileControl>
                   {nameError && (
@@ -1452,9 +1301,7 @@ export function ProfileSettings({
                           aria-expanded={emailVerificationRequested}
                           aria-controls="profile-verification-dialog"
                         >
-                          {sendEmailVerificationMutation.isPending
-                            ? "Sending..."
-                            : "Verify now"}
+                          {sendEmailVerificationMutation.isPending ? "Sending..." : "Verify now"}
                         </button>
                       )}
                     </span>
@@ -1509,15 +1356,10 @@ export function ProfileSettings({
                           autoComplete="tel-national"
                           readOnly={isMobileVerified}
                           disabled={!canEdit}
-                          placeholder={
-                            isMobileVerified ? undefined : "98765 43210"
-                          }
+                          placeholder={isMobileVerified ? undefined : "98765 43210"}
                           onChange={(event) =>
                             updateMobileNumber(
-                              toInternationalPhoneNumber(
-                                event.target.value,
-                                mobileCountry,
-                              ),
+                              toInternationalPhoneNumber(event.target.value, mobileCountry),
                             )
                           }
                         />
@@ -1548,9 +1390,7 @@ export function ProfileSettings({
                             aria-expanded={verificationRequested}
                             aria-controls="profile-verification-dialog"
                           >
-                            {sendPhoneVerificationMutation.isPending
-                              ? "Sending..."
-                              : "Verify now"}
+                            {sendPhoneVerificationMutation.isPending ? "Sending..." : "Verify now"}
                           </button>
                         )}
                       </span>
@@ -1616,13 +1456,9 @@ export function ProfileSettings({
                         disabled={!canEdit}
                         aria-invalid={Boolean(socialVisibilityErrors.linkedin)}
                         aria-describedby={
-                          socialVisibilityErrors.linkedin
-                            ? "profile-linkedin-error"
-                            : undefined
+                          socialVisibilityErrors.linkedin ? "profile-linkedin-error" : undefined
                         }
-                        onChange={(event) =>
-                          updateText("linkedinUrl", event.target.value)
-                        }
+                        onChange={(event) => updateText("linkedinUrl", event.target.value)}
                       />
                     </span>
                   </LockedProfileControl>
@@ -1679,13 +1515,9 @@ export function ProfileSettings({
                         disabled={!canEdit}
                         aria-invalid={Boolean(socialVisibilityErrors.github)}
                         aria-describedby={
-                          socialVisibilityErrors.github
-                            ? "profile-github-error"
-                            : undefined
+                          socialVisibilityErrors.github ? "profile-github-error" : undefined
                         }
-                        onChange={(event) =>
-                          updateText("githubUrl", event.target.value)
-                        }
+                        onChange={(event) => updateText("githubUrl", event.target.value)}
                       />
                     </span>
                   </LockedProfileControl>
@@ -1742,13 +1574,9 @@ export function ProfileSettings({
                         disabled={!canEdit}
                         aria-invalid={Boolean(socialVisibilityErrors.portfolio)}
                         aria-describedby={
-                          socialVisibilityErrors.portfolio
-                            ? "profile-portfolio-error"
-                            : undefined
+                          socialVisibilityErrors.portfolio ? "profile-portfolio-error" : undefined
                         }
-                        onChange={(event) =>
-                          updateText("websiteUrl", event.target.value)
-                        }
+                        onChange={(event) => updateText("websiteUrl", event.target.value)}
                       />
                     </span>
                   </LockedProfileControl>
@@ -1804,10 +1632,7 @@ export function ProfileSettings({
                   </button>
 
                   <div className="settings-profile__verification-dialog-content">
-                    <div
-                      className="settings-profile__verification-dialog-icon"
-                      aria-hidden="true"
-                    >
+                    <div className="settings-profile__verification-dialog-icon" aria-hidden="true">
                       {verificationChannel === "email" ? (
                         <EnvelopeSimple size={26} />
                       ) : (
@@ -1822,9 +1647,7 @@ export function ProfileSettings({
                     <p id="profile-verification-dialog-description">
                       We sent a 6-digit code to{" "}
                       <strong>
-                        {verificationChannel === "email"
-                          ? activeEmail
-                          : verificationPhone}
+                        {verificationChannel === "email" ? activeEmail : verificationPhone}
                       </strong>
                       .
                     </p>
@@ -1851,9 +1674,7 @@ export function ProfileSettings({
                       invalid={Boolean(verificationError)}
                       label="Verification code"
                       value={
-                        verificationChannel === "email"
-                          ? emailVerificationCode
-                          : verificationCode
+                        verificationChannel === "email" ? emailVerificationCode : verificationCode
                       }
                       onChange={(code) => {
                         if (verificationChannel === "email") {
@@ -1890,8 +1711,7 @@ export function ProfileSettings({
                       }
                       disabled={
                         verificationChannel === "email"
-                          ? sendEmailVerificationMutation.isPending ||
-                            verifyEmailMutation.isPending
+                          ? sendEmailVerificationMutation.isPending || verifyEmailMutation.isPending
                           : sendPhoneVerificationMutation.isPending ||
                             verifyPhoneNumberMutation.isPending
                       }
@@ -1920,10 +1740,8 @@ export function ProfileSettings({
                       }
                       disabled={
                         verificationChannel === "email"
-                          ? verifyEmailMutation.isPending ||
-                            emailVerificationCode.length !== 6
-                          : verifyPhoneNumberMutation.isPending ||
-                            verificationCode.length !== 6
+                          ? verifyEmailMutation.isPending || emailVerificationCode.length !== 6
+                          : verifyPhoneNumberMutation.isPending || verificationCode.length !== 6
                       }
                     >
                       {verificationChannel === "email"
@@ -1961,39 +1779,28 @@ export function ProfileSettings({
             >
               <X size={18} />
             </button>
-            <div
-              className="settings-profile__privacy-dialog-icon"
-              aria-hidden="true"
-            >
+            <div className="settings-profile__privacy-dialog-icon" aria-hidden="true">
               <ShieldWarning size={25} weight="fill" />
             </div>
             <div className="settings-profile__privacy-dialog-copy">
-              <h2 id="mobile-visibility-dialog-title">
-                Show your mobile number publicly?
-              </h2>
+              <h2 id="mobile-visibility-dialog-title">Show your mobile number publicly?</h2>
               <p id="mobile-visibility-dialog-description">
-                Anyone who can view your profile will be able to see this
-                number. They may call you directly or message you on WhatsApp.
-                You can hide it again before saving your profile.
+                Anyone who can view your profile will be able to see this number. They may call you
+                directly or message you on WhatsApp. You can hide it again before saving your
+                profile.
               </p>
             </div>
             <label className="settings-profile__privacy-consent">
               <input
                 type="checkbox"
                 checked={mobileVisibilityAcknowledged}
-                onChange={(event) =>
-                  setMobileVisibilityAcknowledged(event.target.checked)
-                }
+                onChange={(event) => setMobileVisibilityAcknowledged(event.target.checked)}
               />
-              <span
-                className="settings-profile__privacy-consent-mark"
-                aria-hidden="true"
-              >
+              <span className="settings-profile__privacy-consent-mark" aria-hidden="true">
                 <Check size={12} weight="bold" />
               </span>
               <span>
-                I understand that anyone can call or message me on WhatsApp
-                using this number.
+                I understand that anyone can call or message me on WhatsApp using this number.
               </span>
             </label>
             <div className="settings-profile__privacy-dialog-actions">
@@ -2073,8 +1880,7 @@ export function ProfileSettings({
             // wait for its image download, presign, PUT, and completion calls.
             void (async () => {
               try {
-                const updated =
-                  await authService.uploadGeneratedAvatar(avatarUrl);
+                const updated = await authService.uploadGeneratedAvatar(avatarUrl);
                 handleProfileSynced(updated);
                 mergeFromServer({
                   avatarDataUrl: updated.avatarDataUrl,

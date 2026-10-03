@@ -26,10 +26,7 @@ export interface FindNotificationsInput {
   limit: number;
 }
 
-export async function findNotifications(
-  database: DatabaseExecutor,
-  input: FindNotificationsInput,
-) {
+export async function findNotifications(database: DatabaseExecutor, input: FindNotificationsInput) {
   let query = database
     .selectFrom("notifications")
     .innerJoin("notification_deliveries as in_app", (join) =>
@@ -101,15 +98,11 @@ export async function getSummary(database: DatabaseExecutor, userId: string) {
     )
     .select([
       sql<string>`count(*)`.as("total_count"),
-      sql<string>`count(*) filter (where notifications.read_at is null)`.as(
-        "unread_count",
-      ),
+      sql<string>`count(*) filter (where notifications.read_at is null)`.as("unread_count"),
       sql<string>`count(*) filter (where notifications.type = 'user.mentioned')`.as(
         "mention_count",
       ),
-      sql<string>`count(*) filter (where notifications.category = 'learning')`.as(
-        "learning_count",
-      ),
+      sql<string>`count(*) filter (where notifications.category = 'learning')`.as("learning_count"),
       sql<string>`count(*) filter (
         where notifications.type in (
           'system.maintenance',
@@ -123,11 +116,7 @@ export async function getSummary(database: DatabaseExecutor, userId: string) {
     .executeTakeFirstOrThrow();
 }
 
-export async function markRead(
-  database: DatabaseExecutor,
-  userId: string,
-  notificationId: string,
-) {
+export async function markRead(database: DatabaseExecutor, userId: string, notificationId: string) {
   return await database
     .updateTable("notifications")
     .set({ read_at: new Date() })
@@ -153,10 +142,7 @@ export async function markUnread(
     .executeTakeFirst();
 }
 
-export async function markAllRead(
-  database: DatabaseExecutor,
-  userId: string,
-): Promise<number> {
+export async function markAllRead(database: DatabaseExecutor, userId: string): Promise<number> {
   const result = await database
     .updateTable("notifications")
     .set({ read_at: new Date() })
@@ -182,10 +168,7 @@ export async function archive(
   return Number(result.numUpdatedRows) > 0;
 }
 
-export async function getPreferences(
-  database: DatabaseExecutor,
-  userId: string,
-) {
+export async function getPreferences(database: DatabaseExecutor, userId: string) {
   return await database
     .selectFrom("notification_preferences")
     .select(["notification_type", "channel", "enabled"])
@@ -264,9 +247,7 @@ export async function createNotification(
       archived_at: null,
     })
     .onConflict((conflict) =>
-      conflict
-        .columns(["source_event_id", "recipient_user_id", "type"])
-        .doNothing(),
+      conflict.columns(["source_event_id", "recipient_user_id", "type"]).doNothing(),
     )
     .returning("id")
     .executeTakeFirst();
@@ -308,9 +289,7 @@ export async function createDelivery(
       last_error: null,
       sent_at: input.sentAt,
     })
-    .onConflict((conflict) =>
-      conflict.columns(["notification_id", "channel"]).doNothing(),
-    )
+    .onConflict((conflict) => conflict.columns(["notification_id", "channel"]).doNothing())
     .execute();
 }
 

@@ -1,11 +1,6 @@
 import { z } from "zod";
 
-export const accessGrantStatusSchema = z.enum([
-  "active",
-  "suspended",
-  "revoked",
-  "expired",
-]);
+export const accessGrantStatusSchema = z.enum(["active", "suspended", "revoked", "expired"]);
 export type AccessGrantStatus = z.infer<typeof accessGrantStatusSchema>;
 
 export const accessGrantSourceSchema = z.enum([
@@ -16,12 +11,7 @@ export const accessGrantSourceSchema = z.enum([
 ]);
 export type AccessGrantSource = z.infer<typeof accessGrantSourceSchema>;
 
-export const enrollmentStatusSchema = z.enum([
-  "active",
-  "suspended",
-  "revoked",
-  "expired",
-]);
+export const enrollmentStatusSchema = z.enum(["active", "suspended", "revoked", "expired"]);
 export type EnrollmentStatus = z.infer<typeof enrollmentStatusSchema>;
 
 export const enrollmentSourceSchema = z.enum([
@@ -37,9 +27,7 @@ export const createManualAccessGrantRequestSchema = z.strictObject({
   courseId: z.uuid(),
   validUntil: z.string().or(z.date()).nullable().optional(),
 });
-export type CreateManualAccessGrantRequest = z.infer<
-  typeof createManualAccessGrantRequestSchema
->;
+export type CreateManualAccessGrantRequest = z.infer<typeof createManualAccessGrantRequestSchema>;
 
 export const accessGrantSchema = z.strictObject({
   id: z.uuid(),

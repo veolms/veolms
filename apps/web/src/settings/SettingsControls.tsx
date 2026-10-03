@@ -1,11 +1,5 @@
 import { useRef } from "react";
-import type {
-  ComponentType,
-  HTMLAttributes,
-  KeyboardEvent,
-  MouseEvent,
-  ReactNode,
-} from "react";
+import type { ComponentType, HTMLAttributes, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { ThemedSelect } from "../ThemedSelect";
 import type { ThemedSelectOption } from "../ThemedSelect";
@@ -72,28 +66,19 @@ export interface RadioGroupProps {
   className?: string;
 }
 
-export function RadioGroup({
-  children,
-  label,
-  className = "",
-}: RadioGroupProps) {
+export function RadioGroup({ children, label, className = "" }: RadioGroupProps) {
   const groupRef = useRef<HTMLDivElement>(null);
 
   const moveFocus = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!event.key.startsWith("Arrow")) return;
-    const options = [
-      ...(groupRef.current?.querySelectorAll<HTMLElement>('[role="radio"]') ??
-        []),
-    ];
+    const options = [...(groupRef.current?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
     const activeElement = document.activeElement;
     if (!(activeElement instanceof HTMLElement)) return;
     const currentIndex = options.indexOf(activeElement);
     if (currentIndex < 0) return;
     event.preventDefault();
-    const direction =
-      event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
-    const next =
-      options[(currentIndex + direction + options.length) % options.length];
+    const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+    const next = options[(currentIndex + direction + options.length) % options.length];
     next?.focus();
     next?.click();
   };
@@ -148,9 +133,7 @@ export function clickContainedSettingsToggle(event: MouseEvent<HTMLElement>) {
     return;
   }
 
-  event.currentTarget
-    .querySelector<HTMLButtonElement>(".settings-toggle:not(:disabled)")
-    ?.click();
+  event.currentTarget.querySelector<HTMLButtonElement>(".settings-toggle:not(:disabled)")?.click();
 }
 
 export interface SettingRowProps extends HTMLAttributes<HTMLDivElement> {
@@ -176,11 +159,7 @@ export function SettingRow({
   };
 
   return (
-    <div
-      {...rowProps}
-      className={`settings-row ${className}`}
-      onClick={handleClick}
-    >
+    <div {...rowProps} className={`settings-row ${className}`} onClick={handleClick}>
       <span className="settings-row__icon" aria-hidden="true">
         <Icon size={20} weight="duotone" />
       </span>
@@ -246,20 +225,12 @@ export function LearningToggleRow({
   disabled = false,
 }: LearningToggleRowProps) {
   return (
-    <div
-      className="settings-learning-toggle-row"
-      onClick={clickContainedSettingsToggle}
-    >
+    <div className="settings-learning-toggle-row" onClick={clickContainedSettingsToggle}>
       <span className="settings-learning-toggle-row__copy">
         <strong>{label}</strong>
         <small>{note}</small>
       </span>
-      <SettingsToggle
-        checked={checked}
-        onChange={onChange}
-        label={label}
-        disabled={disabled}
-      />
+      <SettingsToggle checked={checked} onChange={onChange} label={label} disabled={disabled} />
     </div>
   );
 }

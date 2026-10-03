@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  discussionVisibilitySchema,
-  learningThreadAttachmentSummarySchema,
-} from "./threads.ts";
+import { discussionVisibilitySchema, learningThreadAttachmentSummarySchema } from "./threads.ts";
 
 export const learningNoteSchema = z.object({
   id: z.uuid(),
@@ -29,10 +26,7 @@ export const learningNoteSchema = z.object({
   isLiked: z.boolean().optional(),
   isBookmarked: z.boolean().optional(),
   isOwn: z.boolean().optional(),
-  attachments: z
-    .array(learningThreadAttachmentSummarySchema)
-    .optional()
-    .default([]),
+  attachments: z.array(learningThreadAttachmentSummarySchema).optional().default([]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -42,9 +36,7 @@ export const toggleNoteBookmarkResponseSchema = z.object({
   noteId: z.uuid(),
   bookmarked: z.boolean(),
 });
-export type ToggleNoteBookmarkResponse = z.infer<
-  typeof toggleNoteBookmarkResponseSchema
->;
+export type ToggleNoteBookmarkResponse = z.infer<typeof toggleNoteBookmarkResponseSchema>;
 
 export const createLearningNoteRequestSchema = z.object({
   courseId: z.uuid(),
@@ -56,9 +48,7 @@ export const createLearningNoteRequestSchema = z.object({
   tags: z.array(z.string().min(1).max(50)).optional(),
   attachmentIds: z.array(z.uuid()).max(20).optional(),
 });
-export type CreateLearningNoteRequest = z.infer<
-  typeof createLearningNoteRequestSchema
->;
+export type CreateLearningNoteRequest = z.infer<typeof createLearningNoteRequestSchema>;
 
 export const updateLearningNoteRequestSchema = z.object({
   title: z.string().max(255).nullable().optional(),
@@ -68,9 +58,7 @@ export const updateLearningNoteRequestSchema = z.object({
   tags: z.array(z.string().min(1).max(50)).optional(),
   attachmentIds: z.array(z.uuid()).max(20).optional(),
 });
-export type UpdateLearningNoteRequest = z.infer<
-  typeof updateLearningNoteRequestSchema
->;
+export type UpdateLearningNoteRequest = z.infer<typeof updateLearningNoteRequestSchema>;
 
 export const listLearningNotesQuerySchema = z.object({
   courseId: z.uuid().optional(),
@@ -82,18 +70,14 @@ export const listLearningNotesQuerySchema = z.object({
   cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
-export type ListLearningNotesQuery = z.infer<
-  typeof listLearningNotesQuerySchema
->;
+export type ListLearningNotesQuery = z.infer<typeof listLearningNotesQuerySchema>;
 
 export const learningNotesListResponseSchema = z.object({
   notes: z.array(learningNoteSchema),
   nextCursor: z.string().nullable(),
   totalCount: z.number().int().nonnegative().optional(),
 });
-export type LearningNotesListResponse = z.infer<
-  typeof learningNotesListResponseSchema
->;
+export type LearningNotesListResponse = z.infer<typeof learningNotesListResponseSchema>;
 
 export const lessonNotesOverviewItemSchema = z.object({
   lessonId: z.uuid(),
@@ -102,9 +86,7 @@ export const lessonNotesOverviewItemSchema = z.object({
   notesCount: z.number().int().nonnegative(),
   notes: z.array(learningNoteSchema),
 });
-export type LessonNotesOverviewItem = z.infer<
-  typeof lessonNotesOverviewItemSchema
->;
+export type LessonNotesOverviewItem = z.infer<typeof lessonNotesOverviewItemSchema>;
 
 export const sectionNotesOverviewItemSchema = z.object({
   sectionId: z.uuid(),
@@ -113,9 +95,7 @@ export const sectionNotesOverviewItemSchema = z.object({
   notesCount: z.number().int().nonnegative(),
   lessons: z.array(lessonNotesOverviewItemSchema),
 });
-export type SectionNotesOverviewItem = z.infer<
-  typeof sectionNotesOverviewItemSchema
->;
+export type SectionNotesOverviewItem = z.infer<typeof sectionNotesOverviewItemSchema>;
 
 export const courseNotesOverviewResponseSchema = z.object({
   courseId: z.uuid(),
@@ -123,6 +103,4 @@ export const courseNotesOverviewResponseSchema = z.object({
   totalNotesCount: z.number().int().nonnegative(),
   sections: z.array(sectionNotesOverviewItemSchema),
 });
-export type CourseNotesOverviewResponse = z.infer<
-  typeof courseNotesOverviewResponseSchema
->;
+export type CourseNotesOverviewResponse = z.infer<typeof courseNotesOverviewResponseSchema>;

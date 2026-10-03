@@ -11,10 +11,7 @@ import type {
   CourseLifecycleStatus,
   CoursePricing,
 } from "./catalogue";
-import {
-  getCourseThumbnailCdnSrcSet,
-  getCourseThumbnailCdnUrl,
-} from "./courseMedia";
+import { getCourseThumbnailCdnSrcSet, getCourseThumbnailCdnUrl } from "./courseMedia";
 
 export function formatDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return "0h 0m";
@@ -36,9 +33,7 @@ export function resolveCourseDurationSeconds(
   return 0;
 }
 
-export function formatCoursePricing(
-  pricing?: CoursePricingSummary,
-): CoursePricing | undefined {
+export function formatCoursePricing(pricing?: CoursePricingSummary): CoursePricing | undefined {
   if (!pricing) return undefined;
   if (pricing.pricingType === "free") {
     return {
@@ -63,9 +58,7 @@ export function formatCoursePricing(
     pricing.salePrice < pricing.price
   ) {
     const formattedSalePrice = formatAmount(Number(pricing.salePrice));
-    const discountPercent = Math.round(
-      ((pricing.price - pricing.salePrice) / pricing.price) * 100,
-    );
+    const discountPercent = Math.round(((pricing.price - pricing.salePrice) / pricing.price) * 100);
     return {
       price: formattedSalePrice,
       originalPrice: formattedPrice,
@@ -107,13 +100,10 @@ export function adaptCourseSummaryToCatalogueCourse(
       ? enrolled
       : typeof enrolled === "number" || !enrolled
         ? false
-        : enrolled.has(summary.id) ||
-          (summary.slug ? enrolled.has(summary.slug) : false);
+        : enrolled.has(summary.id) || (summary.slug ? enrolled.has(summary.slug) : false);
 
   const validProgressMap =
-    progressMap &&
-    typeof (progressMap as ReadonlyMap<string, number | null>).get ===
-      "function"
+    progressMap && typeof (progressMap as ReadonlyMap<string, number | null>).get === "function"
       ? (progressMap as ReadonlyMap<string, number | null>)
       : null;
 
@@ -155,9 +145,7 @@ export function adaptApiCourseToCatalogueCourse(
   progressMap?: ReadonlyMap<string, number | null> | unknown,
 ): Course {
   const thumbnail =
-    apiCourse.thumbnailUrl ||
-    getCourseThumbnailCdnUrl(apiCourse.thumbnailMediaId) ||
-    "";
+    apiCourse.thumbnailUrl || getCourseThumbnailCdnUrl(apiCourse.thumbnailMediaId) || "";
 
   const validStatus: CourseLifecycleStatus =
     apiCourse.status === "published" ||
@@ -171,13 +159,10 @@ export function adaptApiCourseToCatalogueCourse(
       ? enrolled
       : typeof enrolled === "number" || !enrolled
         ? false
-        : enrolled.has(apiCourse.id) ||
-          (apiCourse.slug ? enrolled.has(apiCourse.slug) : false);
+        : enrolled.has(apiCourse.id) || (apiCourse.slug ? enrolled.has(apiCourse.slug) : false);
 
   const validProgressMap =
-    progressMap &&
-    typeof (progressMap as ReadonlyMap<string, number | null>).get ===
-      "function"
+    progressMap && typeof (progressMap as ReadonlyMap<string, number | null>).get === "function"
       ? (progressMap as ReadonlyMap<string, number | null>)
       : null;
 
@@ -193,8 +178,7 @@ export function adaptApiCourseToCatalogueCourse(
     title: apiCourse.title,
     description: apiCourse.shortDescription || apiCourse.description || "",
     level:
-      apiCourse.difficulty === "advanced" ||
-      apiCourse.difficulty === "intermediate"
+      apiCourse.difficulty === "advanced" || apiCourse.difficulty === "intermediate"
         ? "Intermediate"
         : "Beginner",
     category: "Development",
@@ -206,8 +190,7 @@ export function adaptApiCourseToCatalogueCourse(
     students: 0,
     thumbnail,
     thumbnailSrcSet:
-      apiCourse.thumbnailSrcSet ||
-      getCourseThumbnailCdnSrcSet(apiCourse.thumbnailMediaId),
+      apiCourse.thumbnailSrcSet || getCourseThumbnailCdnSrcSet(apiCourse.thumbnailMediaId),
     lifecycleStatus: validStatus,
     createdAt: apiCourse.createdAt,
     updatedAt: apiCourse.updatedAt,
@@ -220,9 +203,7 @@ export function adaptApiCourseToCatalogueCourse(
  * Adapts a deleted course from GET /v1/bin/courses into the frontend Course model
  * consumed by CourseCatalogue and CourseCard when viewing the Bin.
  */
-export function adaptDeletedCourseToCatalogueCourse(
-  deletedCourse: DeletedCourse,
-): Course {
+export function adaptDeletedCourseToCatalogueCourse(deletedCourse: DeletedCourse): Course {
   const validStatus: CourseLifecycleStatus =
     deletedCourse.status === "published" ||
     deletedCourse.status === "draft" ||

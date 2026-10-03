@@ -37,10 +37,7 @@ export function AudioTrackMenu({
       menuLabel="Audio tracks"
       trigger={
         trigger ?? (
-          <MenuTriggerContent
-            icon={<AudioIcon className="size-4" />}
-            value={currentLabel}
-          />
+          <MenuTriggerContent icon={<AudioIcon className="size-4" />} value={currentLabel} />
         )
       }
       className={className}
@@ -58,10 +55,7 @@ export function AudioTrackMenu({
           key={track.id}
           label={track.label || track.language || "Audio track"}
           description={formatAudioDescription(track)}
-          selected={
-            track.id === selectedAudioTrackId ||
-            (!selectedAudioTrackId && track.active)
-          }
+          selected={track.id === selectedAudioTrackId || (!selectedAudioTrackId && track.active)}
           onClick={() => {
             controller.selectAudioTrack(track.id);
             onAudioTrackChange?.(track.id);

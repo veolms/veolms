@@ -29,12 +29,7 @@ export const createRefundRequestSchema = z.strictObject({
 });
 export type CreateRefundRequest = z.infer<typeof createRefundRequestSchema>;
 
-export const refundRequestStatusSchema = z.enum([
-  "pending",
-  "approved",
-  "rejected",
-  "cancelled",
-]);
+export const refundRequestStatusSchema = z.enum(["pending", "approved", "rejected", "cancelled"]);
 export type RefundRequestStatus = z.infer<typeof refundRequestStatusSchema>;
 
 export const refundRequestSchema = z.strictObject({
@@ -53,9 +48,7 @@ export type RefundRequest = z.infer<typeof refundRequestSchema>;
 export const createStudentRefundRequestSchema = z.strictObject({
   reason: z.string().min(5).max(1000),
 });
-export type CreateStudentRefundRequest = z.infer<
-  typeof createStudentRefundRequestSchema
->;
+export type CreateStudentRefundRequest = z.infer<typeof createStudentRefundRequestSchema>;
 
 export const reviewRefundRequestSchema = z.strictObject({
   action: z.enum(["approve", "reject"]),

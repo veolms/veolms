@@ -28,8 +28,7 @@ export function createLessonDiscussionCountsService(options?: {
   repository?: LessonDiscussionCountsRepository;
 }): LessonDiscussionCountsService {
   const lessonAccess = options?.lessonAccess ?? createLessonDiscussionAccess();
-  const repository =
-    options?.repository ?? createLessonDiscussionCountsRepository();
+  const repository = options?.repository ?? createLessonDiscussionCountsRepository();
 
   return {
     async getCounts(db, { courseId, lessonId, actor }) {
@@ -43,14 +42,9 @@ export function createLessonDiscussionCountsService(options?: {
       const capabilities = {
         allowComments: settings?.allow_comments !== false,
         allowQa: settings?.allow_qa !== false,
-        allowNotes:
-          readAccess.canReadPrivateState && settings?.allow_notes !== false,
+        allowNotes: readAccess.canReadPrivateState && settings?.allow_notes !== false,
       };
-      if (
-        !capabilities.allowComments &&
-        !capabilities.allowQa &&
-        !capabilities.allowNotes
-      ) {
+      if (!capabilities.allowComments && !capabilities.allowQa && !capabilities.allowNotes) {
         return { comments: 0, questions: 0, notes: 0, total: 0 };
       }
 

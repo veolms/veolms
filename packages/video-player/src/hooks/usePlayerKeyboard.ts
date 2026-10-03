@@ -36,10 +36,7 @@ function acquireKeyboardScope(target: Window): SharedKeyboardScope {
   return scope;
 }
 
-function releaseKeyboardScope(
-  target: Window,
-  scope: SharedKeyboardScope,
-): void {
+function releaseKeyboardScope(target: Window, scope: SharedKeyboardScope): void {
   scope.registrations -= 1;
   if (scope.registrations > 0) return;
   scope.detach();
@@ -80,9 +77,7 @@ export function usePlayerKeyboard({
         togglePlayPause: () => controller.togglePlayback(),
         seekBy: (seconds) =>
           controller.seekBy(
-            Math.abs(seconds) === 5
-              ? Math.sign(seconds) * seekIntervalSeconds
-              : seconds,
+            Math.abs(seconds) === 5 ? Math.sign(seconds) * seekIntervalSeconds : seconds,
           ),
         seekToPercentage: (percentage) => {
           const duration = controller.getSnapshot().media.duration;
@@ -92,9 +87,7 @@ export function usePlayerKeyboard({
         toggleCaptions: () => {
           const media = controller.getSnapshot().media;
           controller.selectTextTrack(
-            media.selectedTextTrackId
-              ? null
-              : (media.textTracks[0]?.id ?? null),
+            media.selectedTextTrackId ? null : (media.textTracks[0]?.id ?? null),
           );
         },
         toggleFullscreen: () => controller.toggleFullscreen(),
@@ -130,8 +123,7 @@ export function usePlayerKeyboard({
         },
         endTemporarySpeedBoost: () => {
           const shouldRestoreControls =
-            pausedBeforeBoostRef.current ||
-            controlsVisibleBeforeBoostRef.current;
+            pausedBeforeBoostRef.current || controlsVisibleBeforeBoostRef.current;
           if (rateBeforeBoostRef.current !== null) {
             controller.setPlaybackRate(rateBeforeBoostRef.current);
             rateBeforeBoostRef.current = null;
@@ -162,13 +154,5 @@ export function usePlayerKeyboard({
       registrationRef.current = null;
       releaseKeyboardScope(window, scope);
     };
-  }, [
-    controller,
-    enabled,
-    id,
-    onToggleTheater,
-    rootRef,
-    seekIntervalSeconds,
-    shortcuts,
-  ]);
+  }, [controller, enabled, id, onToggleTheater, rootRef, seekIntervalSeconds, shortcuts]);
 }

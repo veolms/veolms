@@ -1,8 +1,4 @@
-import type {
-  OauthCallbackRequest,
-  OauthProvider,
-  OauthRegisterRequest,
-} from "@veolms/contracts";
+import type { OauthCallbackRequest, OauthProvider, OauthRegisterRequest } from "@veolms/contracts";
 
 import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
@@ -19,16 +15,11 @@ import {
 import type { AuthService } from "../authentication/authentication.service.ts";
 import type { SessionService } from "../session/session.service.ts";
 
-const ALLOW_MOCK_OAUTH =
-  config.NODE_ENV === "development" && config.OAUTH_ALLOW_MOCK_CODES;
+const ALLOW_MOCK_OAUTH = config.NODE_ENV === "development" && config.OAUTH_ALLOW_MOCK_CODES;
 
 function assertAccountActive(user: SessionUser | undefined): void {
   if (user?.is_deleted) {
-    throw new AppError(
-      403,
-      "ACCOUNT_DEACTIVATED",
-      "This account has been deactivated.",
-    );
+    throw new AppError(403, "ACCOUNT_DEACTIVATED", "This account has been deactivated.");
   }
 }
 
@@ -37,10 +28,7 @@ export interface OauthServiceOptions {
   sessionService: SessionService;
 }
 
-export function createOauthService({
-  authService,
-  sessionService,
-}: OauthServiceOptions) {
+export function createOauthService({ authService, sessionService }: OauthServiceOptions) {
   const credentials = {
     googleClientId: config.GOOGLE_CLIENT_ID,
     googleClientSecret: config.GOOGLE_CLIENT_SECRET,
@@ -55,10 +43,7 @@ export function createOauthService({
     };
   }
 
-  function createAuthorizationUrl(
-    provider: OauthProvider,
-    redirectUri: string,
-  ) {
+  function createAuthorizationUrl(provider: OauthProvider, redirectUri: string) {
     const state = generateRandomToken();
     let url: string;
     let codeVerifier: string | undefined;
@@ -107,11 +92,7 @@ export function createOauthService({
     const oauthCode = request.code || request.token;
 
     if (!oauthCode) {
-      throw new AppError(
-        400,
-        "CODE_REQUIRED",
-        "OAuth code or token is required.",
-      );
+      throw new AppError(400, "CODE_REQUIRED", "OAuth code or token is required.");
     }
 
     const isMock = ALLOW_MOCK_OAUTH && oauthCode.startsWith("mock_");
@@ -161,21 +142,17 @@ export function createOauthService({
       existingSessionToken?: string | null;
     },
   ) {
-    let user: SessionUser | undefined =
-      await authService.findUserByOauthAccountIncludingDeleted(
-        provider,
-        profile.providerUserId,
-      );
+    let user: SessionUser | undefined = await authService.findUserByOauthAccountIncludingDeleted(
+      provider,
+      profile.providerUserId,
+    );
     let shouldSyncProviderAvatar = Boolean(user);
     assertAccountActive(user);
 
     if (!user) {
       const existingUser =
         (await authService.findVerifiedUserByEmail(profile.email)) ||
-        (await authService.findUserByIdentifierIncludingDeleted(
-          profile.email,
-          "email",
-        ));
+        (await authService.findUserByIdentifierIncludingDeleted(profile.email, "email"));
       assertAccountActive(existingUser);
 
       if (existingUser) {
@@ -188,9 +165,7 @@ export function createOauthService({
         shouldSyncProviderAvatar = true;
       } else {
         const localPart = profile.email.split("@")[0] || "oauth_user";
-        const username = await authService.generateUniqueUsername(
-          profile.username || localPart,
-        );
+        const username = await authService.generateUniqueUsername(profile.username || localPart);
         const userId = await authService.createUser({
           email: profile.email,
           phoneNo: null,
@@ -207,11 +182,7 @@ export function createOauthService({
     }
 
     if (shouldSyncProviderAvatar && user) {
-      await authService.syncProviderAvatar(
-        user.id,
-        provider,
-        profile.pictureUrl,
-      );
+      await authService.syncProviderAvatar(user.id, provider, profile.pictureUrl);
       user = await authService.requireUser(user.id);
     }
 
@@ -231,9 +202,7 @@ export function createOauthService({
   ) {
     const provider: OauthProviderName = request.provider;
 
-    if (
-      await authService.oauthAccountExists(provider, profile.providerUserId)
-    ) {
+    if (await authService.oauthAccountExists(provider, profile.providerUserId)) {
       throw new AppError(
         400,
         "LOGIN_REQUIRED",
@@ -243,10 +212,7 @@ export function createOauthService({
 
     let user: SessionUser | undefined =
       (await authService.findVerifiedUserByEmail(profile.email)) ||
-      (await authService.findUserByIdentifierIncludingDeleted(
-        profile.email,
-        "email",
-      ));
+      (await authService.findUserByIdentifierIncludingDeleted(profile.email, "email"));
     assertAccountActive(user);
 
     let statusCode: 200 | 201 = 200;
@@ -278,11 +244,7 @@ export function createOauthService({
     }
 
     if (statusCode === 200 && user) {
-      await authService.syncProviderAvatar(
-        user.id,
-        provider,
-        profile.pictureUrl,
-      );
+      await authService.syncProviderAvatar(user.id, provider, profile.pictureUrl);
       user = await authService.requireUser(user.id);
     }
 

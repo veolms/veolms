@@ -27,12 +27,8 @@ export function presentLogin(user: SessionUser, mfa: MfaState) {
       displayName: user.display_name,
       ...presentAvatar(user.avatar_data_url),
       bio: user.bio,
-      emailPublic: Boolean(
-        user.email_public && user.email && user.email_verified_at,
-      ),
-      mobilePublic: Boolean(
-        user.mobile_public && user.phone_no && user.phone_verified_at,
-      ),
+      emailPublic: Boolean(user.email_public && user.email && user.email_verified_at),
+      mobilePublic: Boolean(user.mobile_public && user.phone_no && user.phone_verified_at),
       linkedinUrl: user.linkedin_url,
       linkedinPublic: Boolean(user.linkedin_public && user.linkedin_url),
       githubUrl: user.github_url,

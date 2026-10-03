@@ -9,9 +9,9 @@ import {
 function shouldResumeFromLastPosition(): boolean {
   if (typeof localStorage === "undefined") return true;
   try {
-    const stored = JSON.parse(
-      localStorage.getItem("veolms-learning-preferences") || "{}",
-    ) as { resumeFromLastPosition?: unknown };
+    const stored = JSON.parse(localStorage.getItem("veolms-learning-preferences") || "{}") as {
+      resumeFromLastPosition?: unknown;
+    };
     if (typeof stored.resumeFromLastPosition === "boolean") {
       return stored.resumeFromLastPosition;
     }
@@ -33,9 +33,7 @@ export function createLearningHlsPreloadSource(options: {
   } | null>;
 }) {
   const startTime =
-    options.mediaKey && shouldResumeFromLastPosition()
-      ? readResumePosition(options.mediaKey)
-      : 0;
+    options.mediaKey && shouldResumeFromLastPosition() ? readResumePosition(options.mediaKey) : 0;
   return {
     id: options.mediaKey,
     src: toAbsoluteLearningMediaUrl(options.manifestUrl),

@@ -46,14 +46,12 @@ function createTimeRanges(ranges: Array<[number, number]>): TimeRanges {
     length: ranges.length,
     start(index: number): number {
       const range = ranges[index];
-      if (!range)
-        throw new DOMException("Index out of bounds", "IndexSizeError");
+      if (!range) throw new DOMException("Index out of bounds", "IndexSizeError");
       return range[0];
     },
     end(index: number): number {
       const range = ranges[index];
-      if (!range)
-        throw new DOMException("Index out of bounds", "IndexSizeError");
+      if (!range) throw new DOMException("Index out of bounds", "IndexSizeError");
       return range[1];
     },
   };

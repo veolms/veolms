@@ -1,17 +1,6 @@
 import type { ReactNode } from "react";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-} from "react";
-import {
-  Outlet,
-  useLocation,
-  useNavigate,
-  useSearchParams,
-} from "react-router";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo } from "react";
+import { Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import type { MfaGateUser } from "../auth/mfaGate";
 import { AppLoadingScreen } from "../bootstrap/AppLoadingScreen";
 import { useCapabilities } from "../services/authorization";
@@ -33,8 +22,7 @@ import {
   shouldBlockAcademyRender,
 } from "./routeAccess";
 
-const useIsomorphicLayoutEffect =
-  typeof window === "undefined" ? useEffect : useLayoutEffect;
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 function hasMfaSessionState(user: unknown): user is MfaGateUser {
   if (!user || typeof user !== "object") return false;
@@ -50,11 +38,7 @@ function useSessionAccess() {
   const { data: user, isPending, isFetched } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const resolvedUser = isFetched
-    ? user
-    : hasMfaSessionState(storeUser)
-      ? storeUser
-      : undefined;
+  const resolvedUser = isFetched ? user : hasMfaSessionState(storeUser) ? storeUser : undefined;
   const access = resolveSessionAccess({
     user: resolvedUser,
     isAuthenticated,
@@ -98,8 +82,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const dashboardCapabilities = useCapabilities({
     enabled: access.isSessionReady,
   });
-  const dashboardCapabilityPending =
-    access.isSessionReady && !dashboardCapabilities.isFetched;
+  const dashboardCapabilityPending = access.isSessionReady && !dashboardCapabilities.isFetched;
   const dashboardCapabilitiesResolved = access.isSessionReady
     ? dashboardCapabilities.isFetched
     : !access.isAuthenticated && !pending;
@@ -113,8 +96,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     !canAccessDashboard;
   const courseAuthorRouteDenied =
     access.isSessionReady &&
-    (dashboardRouteDenied ||
-      shouldRedirectFromCourseAuthorPath(path, user?.roles));
+    (dashboardRouteDenied || shouldRedirectFromCourseAuthorPath(path, user?.roles));
 
   useEffect(() => {
     if (pending) {
@@ -134,10 +116,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (access.needsMfaChallenge && path !== "/logout") {
-      navigate(
-        buildMfaChallengePath(`${location.pathname}${location.search}`),
-        { replace: true },
-      );
+      navigate(buildMfaChallengePath(`${location.pathname}${location.search}`), { replace: true });
       return;
     }
 
@@ -205,10 +184,9 @@ export function AuthRouteGuard() {
 
     if (access.needsMfaChallenge) {
       if (path !== "/login") {
-        navigate(
-          buildMfaChallengePath(`${location.pathname}${location.search}`),
-          { replace: true },
-        );
+        navigate(buildMfaChallengePath(`${location.pathname}${location.search}`), {
+          replace: true,
+        });
       }
       return;
     }

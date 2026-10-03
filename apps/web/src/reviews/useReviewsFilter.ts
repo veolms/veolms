@@ -1,8 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  DEFAULT_DEBOUNCE_DELAY_MS,
-  useDebounceValue,
-} from "../hooks/useDebounce";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounceValue } from "../hooks/useDebounce";
 import {
   initialCourseMeta,
   initialHighlights,
@@ -54,11 +51,8 @@ export interface UseReviewsFilterReturn {
   resetFilters: () => void;
 }
 
-export function useReviewsFilter(
-  setNotice?: (message: string) => void,
-): UseReviewsFilterReturn {
-  const [reviewsList, setReviewsList] =
-    useState<readonly ReviewItem[]>(initialReviewsList);
+export function useReviewsFilter(setNotice?: (message: string) => void): UseReviewsFilterReturn {
+  const [reviewsList, setReviewsList] = useState<readonly ReviewItem[]>(initialReviewsList);
   const [activeTab, setActiveTab] = useState<ReviewTabId>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
@@ -75,11 +69,7 @@ export function useReviewsFilter(
   const toggleBookmark = () => {
     setIsBookmarked((prev) => {
       const next = !prev;
-      setNotice?.(
-        next
-          ? "Course reviews bookmarked."
-          : "Bookmark removed from course reviews.",
-      );
+      setNotice?.(next ? "Course reviews bookmarked." : "Bookmark removed from course reviews.");
       return next;
     });
   };
@@ -182,14 +172,7 @@ export function useReviewsFilter(
     });
 
     return result;
-  }, [
-    reviewsList,
-    activeTab,
-    verifiedOnly,
-    ratingFilter,
-    debouncedSearch,
-    sortBy,
-  ]);
+  }, [reviewsList, activeTab, verifiedOnly, ratingFilter, debouncedSearch, sortBy]);
 
   return {
     courseMeta: initialCourseMeta,

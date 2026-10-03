@@ -6,9 +6,7 @@ import {
   ELASTIC_SCROLL_CONTROL_PROGRESS_RADIUS,
 } from "./elasticScrollerModel";
 
-export const elasticScrollerButtonSurface = (
-  appearance: ElasticScrollAppearance,
-): string =>
+export const elasticScrollerButtonSurface = (appearance: ElasticScrollAppearance): string =>
   appearance === "3d"
     ? "border-[color-mix(in_srgb,var(--border-strong)_66%,var(--text)_34%)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong)_88%,white),color-mix(in_srgb,var(--surface-strong)_78%,var(--canvas)))] shadow-[inset_0_1px_0_color-mix(in_srgb,white_28%,transparent),inset_0_-2px_2px_color-mix(in_srgb,var(--canvas)_52%,transparent),0_7px_14px_color-mix(in_srgb,black_42%,transparent)]"
     : "border-[color-mix(in_srgb,var(--border-strong)_88%,var(--accent)_12%)] bg-(--surface-strong) shadow-[0_5px_12px_color-mix(in_srgb,var(--canvas)_30%,transparent)]";
@@ -60,14 +58,10 @@ export function ElasticScrollerSocket({
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeDasharray={
-            hasDynamicProgress
-              ? ELASTIC_SCROLL_CONTROL_PROGRESS_CIRCUMFERENCE
-              : undefined
+            hasDynamicProgress ? ELASTIC_SCROLL_CONTROL_PROGRESS_CIRCUMFERENCE : undefined
           }
           strokeDashoffset={
-            hasDynamicProgress
-              ? ELASTIC_SCROLL_CONTROL_PROGRESS_CIRCUMFERENCE
-              : undefined
+            hasDynamicProgress ? ELASTIC_SCROLL_CONTROL_PROGRESS_CIRCUMFERENCE : undefined
           }
         />
       </svg>

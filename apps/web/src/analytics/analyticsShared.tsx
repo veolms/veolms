@@ -9,15 +9,13 @@ export const surfaceClass =
   "rounded-[14px] sm:rounded-[22px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) text-(--text) shadow-(--card-shadow,var(--surface-depth-shadow))";
 export const selectTriggerClass =
   "!h-9 sm:!h-10 !rounded-[9px] sm:!rounded-[10px] !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] !px-2.5 sm:!px-3.5 !text-xs sm:!text-sm !font-medium !text-(--text) focus:!border-(--accent)";
-export const kpiGridClass =
-  "grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 xl:grid-cols-6";
+export const kpiGridClass = "grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 xl:grid-cols-6";
 
 /** Icon-chip color for a KPI/stat card. Kept to the same status-color
  * vocabulary already used elsewhere in the app (emerald/amber/rose success
  * chips, etc.) so multi-metric rows read at a glance without inventing a new
  * palette. */
-export type KpiTone =
-  "accent" | "violet" | "blue" | "emerald" | "amber" | "teal" | "rose";
+export type KpiTone = "accent" | "violet" | "blue" | "emerald" | "amber" | "teal" | "rose";
 
 export const KPI_TONE_CLASSES: Record<KpiTone, string> = {
   accent: "bg-(--accent)/12 text-(--accent)",
@@ -52,9 +50,7 @@ export function formatCurrencyAmount(amount: number, currency = "INR"): string {
 }
 
 export function formatWholeNumber(value: number): string {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
-    value,
-  );
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
 }
 
 export function formatHours(value: number): string {
@@ -96,37 +92,34 @@ export function KpiCard({
   const isPositive = (kpi.changePercent ?? 0) >= 0;
   return (
     <div
-      className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-2.5 sm:p-5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
+      className="rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-2.5 transition-all duration-200 hover:shadow-(--card-hover-shadow) sm:rounded-[16px] sm:p-5"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex items-start justify-between gap-1.5 sm:gap-2">
-        <p className="text-[0.7rem] sm:text-xs font-semibold leading-snug text-(--muted) tracking-wide">
+        <p className="text-[0.7rem] leading-snug font-semibold tracking-wide text-(--muted) sm:text-xs">
           {label}
         </p>
         {icon ? (
           <span
-            className={`flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg ${KPI_TONE_CLASSES[tone]}`}
+            className={`flex size-6 shrink-0 items-center justify-center rounded-lg sm:size-7 ${KPI_TONE_CLASSES[tone]}`}
           >
             {icon}
           </span>
         ) : null}
       </div>
-      <p className="mt-1.5 sm:mt-2.5 text-xl sm:text-[1.75rem] font-bold tracking-tight text-(--text)">
+      <p className="mt-1.5 text-xl font-bold tracking-tight text-(--text) sm:mt-2.5 sm:text-[1.75rem]">
         {format(kpi.value)}
       </p>
       {hasTrend ? (
         <p
-          className={`mt-0.5 sm:mt-1 text-[0.68rem] sm:text-xs font-semibold ${
+          className={`mt-0.5 text-[0.68rem] font-semibold sm:mt-1 sm:text-xs ${
             isPositive ? "text-emerald-500" : "text-rose-500"
           }`}
         >
-          {isPositive ? "↗" : "↘"} {Math.abs(kpi.changePercent!).toFixed(1)}% vs
-          previous
+          {isPositive ? "↗" : "↘"} {Math.abs(kpi.changePercent!).toFixed(1)}% vs previous
         </p>
       ) : (
-        <p className="mt-0.5 sm:mt-1 text-[0.68rem] sm:text-xs text-(--muted)">
-          New this period
-        </p>
+        <p className="mt-0.5 text-[0.68rem] text-(--muted) sm:mt-1 sm:text-xs">New this period</p>
       )}
     </div>
   );
@@ -157,10 +150,7 @@ export function FunnelList({
       <EmptyState
         icon={<FunnelSimple size={20} weight="bold" />}
         title="Not enough data yet"
-        message={
-          emptyMessage ??
-          "This will fill in once there's activity in the selected range."
-        }
+        message={emptyMessage ?? "This will fill in once there's activity in the selected range."}
         compact
       />
     );
@@ -173,7 +163,7 @@ export function FunnelList({
         return (
           <div
             key={row.label}
-            className="relative overflow-hidden rounded-[10px] sm:rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface))"
+            className="relative overflow-hidden rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) sm:rounded-[12px]"
           >
             <div
               className={`absolute inset-y-0 left-0 ${KPI_TONE_CLASSES[tone].split(" ")[0]}`}
@@ -183,19 +173,19 @@ export function FunnelList({
             <div className="relative flex items-center justify-between gap-3 px-3 py-2.5 sm:px-4 sm:py-3">
               <div className="flex min-w-0 items-center gap-2.5">
                 <span
-                  className={`flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg text-[0.65rem] sm:text-xs font-bold ${KPI_TONE_CLASSES[tone]}`}
+                  className={`flex size-6 shrink-0 items-center justify-center rounded-lg text-[0.65rem] font-bold sm:size-7 sm:text-xs ${KPI_TONE_CLASSES[tone]}`}
                 >
                   {index + 1}
                 </span>
-                <span className="truncate text-xs sm:text-sm font-semibold text-(--text)">
+                <span className="truncate text-xs font-semibold text-(--text) sm:text-sm">
                   {row.label}
                 </span>
               </div>
               <div className="flex shrink-0 items-baseline gap-2">
-                <span className="text-sm sm:text-base font-bold tracking-tight text-(--text) tabular-nums">
+                <span className="text-sm font-bold tracking-tight text-(--text) tabular-nums sm:text-base">
                   {format(row.value)}
                 </span>
-                <span className="text-[0.68rem] sm:text-xs font-semibold text-(--muted) tabular-nums">
+                <span className="text-[0.68rem] font-semibold text-(--muted) tabular-nums sm:text-xs">
                   {Math.round(fillPercent)}%
                 </span>
               </div>
@@ -215,18 +205,16 @@ export function InsightsPanel({ insights }: { insights: string[] }) {
   return (
     <section className={`${surfaceClass} p-3.5 sm:p-6`}>
       <div className="flex items-center gap-2 sm:gap-2.5">
-        <span className="flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/12 text-amber-500">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/12 text-amber-500 sm:size-8">
           <Lightbulb size={16} weight="bold" />
         </span>
-        <h3 className="text-sm sm:text-base font-bold tracking-tight text-(--text)">
-          Insights
-        </h3>
+        <h3 className="text-sm font-bold tracking-tight text-(--text) sm:text-base">Insights</h3>
       </div>
-      <ul className="mt-3 sm:mt-4 grid gap-2 sm:gap-2.5">
+      <ul className="mt-3 grid gap-2 sm:mt-4 sm:gap-2.5">
         {insights.map((insight) => (
           <li
             key={insight}
-            className="flex items-start gap-2 text-xs sm:text-sm leading-5 text-(--muted)"
+            className="flex items-start gap-2 text-xs leading-5 text-(--muted) sm:text-sm"
           >
             <span
               className="mt-[7px] size-1.5 shrink-0 rounded-full bg-(--accent)"
@@ -254,7 +242,7 @@ export function ChartSection({
   return (
     <section className={surfaceClass}>
       <SectionHeading title={title} description={description} action={action} />
-      <div className="p-3 sm:p-7 pt-2 sm:pt-3">{children}</div>
+      <div className="p-3 pt-2 sm:p-7 sm:pt-3">{children}</div>
     </section>
   );
 }
@@ -306,18 +294,14 @@ export function CoursePerformanceTable({
               <td className="py-2.5 pr-3">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span
-                    className={`flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-lg text-[0.6rem] sm:text-[0.65rem] font-bold ${KPI_TONE_CLASSES[toneForIndex(index)]}`}
+                    className={`flex size-7 shrink-0 items-center justify-center rounded-lg text-[0.6rem] font-bold sm:size-8 sm:text-[0.65rem] ${KPI_TONE_CLASSES[toneForIndex(index)]}`}
                   >
                     {courseInitials(row.title)}
                   </span>
-                  <span className="truncate font-medium text-(--text)">
-                    {row.title}
-                  </span>
+                  <span className="truncate font-medium text-(--text)">{row.title}</span>
                 </div>
               </td>
-              <td className="py-2.5 pr-3 text-(--muted) tabular-nums">
-                {row.enrollments}
-              </td>
+              <td className="py-2.5 pr-3 text-(--muted) tabular-nums">{row.enrollments}</td>
               <td className="py-2.5 pr-3 text-(--muted) tabular-nums">
                 {formatCurrencyAmount(row.netRevenue, currency)}
               </td>
@@ -326,7 +310,7 @@ export function CoursePerformanceTable({
               </td>
               <td className="py-2.5 pr-3">
                 <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-14 sm:w-20 shrink-0 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)]">
+                  <div className="h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] sm:w-20">
                     <div
                       className="h-full rounded-full bg-(--accent)"
                       style={{

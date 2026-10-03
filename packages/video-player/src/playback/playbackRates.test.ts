@@ -14,11 +14,7 @@ describe("keyboard playback-rate steps", () => {
   });
 
   it("stays inside the player's supported playback-rate range", () => {
-    expect(getKeyboardPlaybackRate(MIN_CUSTOM_PLAYBACK_RATE, -1)).toBe(
-      MIN_CUSTOM_PLAYBACK_RATE,
-    );
-    expect(getKeyboardPlaybackRate(MAX_CUSTOM_PLAYBACK_RATE, 1)).toBe(
-      MAX_CUSTOM_PLAYBACK_RATE,
-    );
+    expect(getKeyboardPlaybackRate(MIN_CUSTOM_PLAYBACK_RATE, -1)).toBe(MIN_CUSTOM_PLAYBACK_RATE);
+    expect(getKeyboardPlaybackRate(MAX_CUSTOM_PLAYBACK_RATE, 1)).toBe(MAX_CUSTOM_PLAYBACK_RATE);
   });
 });

@@ -10,11 +10,7 @@ import type {
 } from "@veolms/contracts";
 import type { CurriculumService } from "./curriculum.service.ts";
 
-export function createCurriculumController({
-  service,
-}: {
-  service: CurriculumService;
-}) {
+export function createCurriculumController({ service }: { service: CurriculumService }) {
   // --- Sections ---
 
   async function createCourseSection(
@@ -28,12 +24,7 @@ export function createCurriculumController({
     const creatorId = request.user!.id;
     const { title } = request.body;
 
-    const section = await service.createCourseSection(
-      id,
-      creatorId,
-      title,
-      request.user?.roles,
-    );
+    const section = await service.createCourseSection(id, creatorId, title, request.user?.roles);
     reply.code(201);
     return section;
   }
@@ -48,13 +39,7 @@ export function createCurriculumController({
     const creatorId = request.user!.id;
     const { title } = request.body;
 
-    return await service.updateCourseSection(
-      id,
-      sectionId,
-      creatorId,
-      title,
-      request.user?.roles,
-    );
+    return await service.updateCourseSection(id, sectionId, creatorId, title, request.user?.roles);
   }
 
   async function deleteCourseSection(
@@ -63,12 +48,7 @@ export function createCurriculumController({
     const { id, sectionId } = request.params;
     const creatorId = request.user!.id;
 
-    return await service.deleteCourseSection(
-      id,
-      sectionId,
-      creatorId,
-      request.user?.roles,
-    );
+    return await service.deleteCourseSection(id, sectionId, creatorId, request.user?.roles);
   }
 
   async function reorderCourseSections(
@@ -149,12 +129,7 @@ export function createCurriculumController({
     const { id, lessonId } = request.params;
     const creatorId = request.user!.id;
 
-    return await service.deleteCourseLesson(
-      id,
-      lessonId,
-      creatorId,
-      request.user?.roles,
-    );
+    return await service.deleteCourseLesson(id, lessonId, creatorId, request.user?.roles);
   }
 
   async function reorderSectionLessons(
@@ -206,12 +181,7 @@ export function createCurriculumController({
     const { id, resourceId } = request.params;
     const creatorId = request.user!.id;
 
-    return await service.removeLessonResource(
-      id,
-      resourceId,
-      creatorId,
-      request.user?.roles,
-    );
+    return await service.removeLessonResource(id, resourceId, creatorId, request.user?.roles);
   }
 
   return {
@@ -228,6 +198,4 @@ export function createCurriculumController({
   };
 }
 
-export type CurriculumController = ReturnType<
-  typeof createCurriculumController
->;
+export type CurriculumController = ReturnType<typeof createCurriculumController>;

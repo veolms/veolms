@@ -11,10 +11,7 @@ export async function findQuiz(database: DatabaseExecutor, quizId: string) {
 }
 
 /** Batch lookup so list endpoints avoid one query per assignment. */
-export async function listQuizzesByIds(
-  database: DatabaseExecutor,
-  quizIds: readonly string[],
-) {
+export async function listQuizzesByIds(database: DatabaseExecutor, quizIds: readonly string[]) {
   if (quizIds.length === 0) return [];
   return await database
     .selectFrom("quizzes")
@@ -24,10 +21,7 @@ export async function listQuizzesByIds(
     .execute();
 }
 
-export async function listLessonsByIds(
-  database: DatabaseExecutor,
-  lessonIds: readonly string[],
-) {
+export async function listLessonsByIds(database: DatabaseExecutor, lessonIds: readonly string[]) {
   if (lessonIds.length === 0) return [];
   return await database
     .selectFrom("course_lessons")
@@ -37,10 +31,7 @@ export async function listLessonsByIds(
     .execute();
 }
 
-export async function listQuizzesByCreator(
-  database: DatabaseExecutor,
-  creatorId: string,
-) {
+export async function listQuizzesByCreator(database: DatabaseExecutor, creatorId: string) {
   return await database
     .selectFrom("quizzes")
     .selectAll()
@@ -50,10 +41,7 @@ export async function listQuizzesByCreator(
     .execute();
 }
 
-export async function listQuizzesByAcademy(
-  database: DatabaseExecutor,
-  academyId: string,
-) {
+export async function listQuizzesByAcademy(database: DatabaseExecutor, academyId: string) {
   return await database
     .selectFrom("quizzes")
     .selectAll()
@@ -63,10 +51,7 @@ export async function listQuizzesByAcademy(
     .execute();
 }
 
-export async function findVersion(
-  database: DatabaseExecutor,
-  versionId: string,
-) {
+export async function findVersion(database: DatabaseExecutor, versionId: string) {
   return await database
     .selectFrom("quiz_versions")
     .selectAll()
@@ -88,10 +73,7 @@ export async function findLatestVersion(
   quizId: string,
   published: boolean,
 ) {
-  let query = database
-    .selectFrom("quiz_versions")
-    .selectAll()
-    .where("quiz_id", "=", quizId);
+  let query = database.selectFrom("quiz_versions").selectAll().where("quiz_id", "=", quizId);
   query = published
     ? query.where("published_at", "is not", null)
     : query.where("published_at", "is", null);
@@ -133,10 +115,7 @@ export async function updateQuiz(
     .executeTakeFirstOrThrow();
 }
 
-export async function softDeleteQuiz(
-  database: DatabaseExecutor,
-  quizId: string,
-) {
+export async function softDeleteQuiz(database: DatabaseExecutor, quizId: string) {
   return await database
     .updateTable("quizzes")
     .set({
@@ -161,10 +140,7 @@ export async function updateVersion(
     .executeTakeFirstOrThrow();
 }
 
-export async function listQuestions(
-  database: DatabaseExecutor,
-  versionId: string,
-) {
+export async function listQuestions(database: DatabaseExecutor, versionId: string) {
   return await database
     .selectFrom("quiz_questions")
     .selectAll()
@@ -189,10 +165,7 @@ export async function listQuestionsByIds(
     .execute();
 }
 
-export async function listOptions(
-  database: DatabaseExecutor,
-  questionIds: readonly string[],
-) {
+export async function listOptions(database: DatabaseExecutor, questionIds: readonly string[]) {
   if (questionIds.length === 0) return [];
   return await database
     .selectFrom("quiz_question_options")
@@ -218,11 +191,7 @@ export async function insertQuestions(
   values: Insertable<Database["quiz_questions"]>[],
 ) {
   if (values.length === 0) return [];
-  return await database
-    .insertInto("quiz_questions")
-    .values(values)
-    .returningAll()
-    .execute();
+  return await database.insertInto("quiz_questions").values(values).returningAll().execute();
 }
 
 export async function updateQuestion(
@@ -239,10 +208,7 @@ export async function updateQuestion(
     .executeTakeFirstOrThrow();
 }
 
-export async function softDeleteQuestion(
-  database: DatabaseExecutor,
-  questionId: string,
-) {
+export async function softDeleteQuestion(database: DatabaseExecutor, questionId: string) {
   await database
     .updateTable("quiz_questions")
     .set({ deleted_at: new Date(), updated_at: new Date() })
@@ -255,27 +221,17 @@ export async function insertOptions(
   values: Insertable<Database["quiz_question_options"]>[],
 ) {
   if (values.length === 0) return [];
-  return await database
-    .insertInto("quiz_question_options")
-    .values(values)
-    .returningAll()
-    .execute();
+  return await database.insertInto("quiz_question_options").values(values).returningAll().execute();
 }
 
-export async function deleteOptions(
-  database: DatabaseExecutor,
-  questionId: string,
-) {
+export async function deleteOptions(database: DatabaseExecutor, questionId: string) {
   await database
     .deleteFrom("quiz_question_options")
     .where("question_id", "=", questionId)
     .execute();
 }
 
-export async function findAssignment(
-  database: DatabaseExecutor,
-  assignmentId: string,
-) {
+export async function findAssignment(database: DatabaseExecutor, assignmentId: string) {
   return await database
     .selectFrom("quiz_assignments")
     .selectAll()
@@ -283,10 +239,7 @@ export async function findAssignment(
     .executeTakeFirst();
 }
 
-export async function findAssignmentForLesson(
-  database: DatabaseExecutor,
-  lessonId: string,
-) {
+export async function findAssignmentForLesson(database: DatabaseExecutor, lessonId: string) {
   return await database
     .selectFrom("quiz_assignments")
     .selectAll()
@@ -294,10 +247,7 @@ export async function findAssignmentForLesson(
     .executeTakeFirst();
 }
 
-export async function listAssignmentsForCourse(
-  database: DatabaseExecutor,
-  courseId: string,
-) {
+export async function listAssignmentsForCourse(database: DatabaseExecutor, courseId: string) {
   return await database
     .selectFrom("quiz_assignments")
     .selectAll()
@@ -319,10 +269,7 @@ export async function listAssignmentsForCourses(
     .execute();
 }
 
-export async function isPublishedFreeCourse(
-  database: DatabaseExecutor,
-  courseId: string,
-) {
+export async function isPublishedFreeCourse(database: DatabaseExecutor, courseId: string) {
   const row = await database
     .selectFrom("courses")
     .innerJoin("course_pricing", "course_pricing.course_id", "courses.id")
@@ -382,30 +329,18 @@ export async function updateAssignment(
     .executeTakeFirstOrThrow();
 }
 
-export async function deleteAssignment(
-  database: DatabaseExecutor,
-  assignmentId: string,
-) {
+export async function deleteAssignment(database: DatabaseExecutor, assignmentId: string) {
   return await database
     .deleteFrom("quiz_assignments")
     .where("id", "=", assignmentId)
     .executeTakeFirst();
 }
 
-export async function deleteAssignmentsByQuizId(
-  database: DatabaseExecutor,
-  quizId: string,
-) {
-  return await database
-    .deleteFrom("quiz_assignments")
-    .where("quiz_id", "=", quizId)
-    .execute();
+export async function deleteAssignmentsByQuizId(database: DatabaseExecutor, quizId: string) {
+  return await database.deleteFrom("quiz_assignments").where("quiz_id", "=", quizId).execute();
 }
 
-export async function listAttemptsForUser(
-  database: DatabaseExecutor,
-  userId: string,
-) {
+export async function listAttemptsForUser(database: DatabaseExecutor, userId: string) {
   return await database
     .selectFrom("quiz_attempts")
     .selectAll()
@@ -414,10 +349,7 @@ export async function listAttemptsForUser(
     .execute();
 }
 
-export async function findAttempt(
-  database: DatabaseExecutor,
-  attemptId: string,
-) {
+export async function findAttempt(database: DatabaseExecutor, attemptId: string) {
   return await database
     .selectFrom("quiz_attempts")
     .selectAll()
@@ -425,10 +357,7 @@ export async function findAttempt(
     .executeTakeFirst();
 }
 
-export async function findAttemptForUpdate(
-  database: DatabaseExecutor,
-  attemptId: string,
-) {
+export async function findAttemptForUpdate(database: DatabaseExecutor, attemptId: string) {
   return await database
     .selectFrom("quiz_attempts")
     .selectAll()
@@ -488,10 +417,7 @@ export async function updateAttempt(
     .executeTakeFirstOrThrow();
 }
 
-export async function listAnswers(
-  database: DatabaseExecutor,
-  attemptId: string,
-) {
+export async function listAnswers(database: DatabaseExecutor, attemptId: string) {
   return await database
     .selectFrom("quiz_attempt_answers")
     .selectAll()
@@ -520,10 +446,7 @@ export async function upsertAnswers(
     .execute();
 }
 
-export async function listAnalyticsAttempts(
-  database: DatabaseExecutor,
-  assignmentId: string,
-) {
+export async function listAnalyticsAttempts(database: DatabaseExecutor, assignmentId: string) {
   return await database
     .selectFrom("quiz_attempts")
     .select([
@@ -538,10 +461,7 @@ export async function listAnalyticsAttempts(
     .execute();
 }
 
-export async function expireAbandonedAttempts(
-  database: DatabaseExecutor,
-  now: Date = new Date(),
-) {
+export async function expireAbandonedAttempts(database: DatabaseExecutor, now: Date = new Date()) {
   return await database
     .updateTable("quiz_attempts")
     .set({

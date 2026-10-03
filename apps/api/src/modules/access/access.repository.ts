@@ -5,11 +5,7 @@
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 export type { Executor };
 
-export async function findAccessGrant(
-  database: Executor,
-  userId: string,
-  courseId: string,
-) {
+export async function findAccessGrant(database: Executor, userId: string, courseId: string) {
   return await database
     .selectFrom("access_grants")
     .selectAll()
@@ -85,10 +81,7 @@ export async function updateAccessGrantStatus(
     .executeTakeFirst();
 }
 
-export async function revokeAccessGrantsByOrderId(
-  database: Executor,
-  orderId: string,
-) {
+export async function revokeAccessGrantsByOrderId(database: Executor, orderId: string) {
   return await database
     .updateTable("access_grants")
     .set({
@@ -127,9 +120,7 @@ export async function listActiveUserIdsForCourse(
     .select("user_id")
     .where("course_id", "=", courseId)
     .where("status", "=", "active")
-    .where((eb) =>
-      eb.or([eb("valid_until", "is", null), eb("valid_until", ">", now)]),
-    )
+    .where((eb) => eb.or([eb("valid_until", "is", null), eb("valid_until", ">", now)]))
     .execute();
   return rows.map((row) => row.user_id);
 }

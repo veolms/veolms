@@ -16,13 +16,8 @@ import { authStore } from "../store/auth.store";
 
 export function meta() {
   return Object.entries(
-    getAuthRouteMeta(
-      "Authenticating",
-      `Completing authentication with ${productName}.`,
-    ),
-  ).map(([name, content]) =>
-    name === "title" ? { title: content } : { name, content },
-  );
+    getAuthRouteMeta("Authenticating", `Completing authentication with ${productName}.`),
+  ).map(([name, content]) => (name === "title" ? { title: content } : { name, content }));
 }
 
 export default function AuthCallbackRoute() {
@@ -43,9 +38,7 @@ export default function AuthCallbackRoute() {
 
     if (error) {
       clearOauthHandoff();
-      setErrorMessage(
-        errorDescription || "Authentication was cancelled or failed.",
-      );
+      setErrorMessage(errorDescription || "Authentication was cancelled or failed.");
       return;
     }
 
@@ -59,9 +52,7 @@ export default function AuthCallbackRoute() {
     const storedProvider = sessionStorage.getItem(OAUTH_PROVIDER_STORAGE_KEY);
     if (!isOauthProvider(storedProvider)) {
       clearOauthHandoff();
-      setErrorMessage(
-        "We could not identify the OAuth provider. Please restart sign-in.",
-      );
+      setErrorMessage("We could not identify the OAuth provider. Please restart sign-in.");
       return;
     }
     const returnTo = sessionStorage.getItem(OAUTH_RETURN_TO_STORAGE_KEY);
@@ -84,8 +75,7 @@ export default function AuthCallbackRoute() {
       .catch((err: unknown) => {
         clearOauthHandoff();
         const errorObj = err as { message?: string };
-        const message =
-          errorObj?.message || "Authentication failed. Please try again.";
+        const message = errorObj?.message || "Authentication failed. Please try again.";
         setErrorMessage(message);
       });
   }, [searchParams, navigate, oauthLoginMutation]);

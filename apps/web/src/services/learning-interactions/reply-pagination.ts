@@ -30,10 +30,7 @@ function getReplyStableId(reply: LearningReplyCacheItem): string {
   return getServerEntityId(reply) ?? getClientEntityId(reply);
 }
 
-function compareNewestFirst(
-  left: LearningReplyCacheItem,
-  right: LearningReplyCacheItem,
-): number {
+function compareNewestFirst(left: LearningReplyCacheItem, right: LearningReplyCacheItem): number {
   const leftIsAccepted = Boolean(left.isAccepted);
   const rightIsAccepted = Boolean(right.isAccepted);
   if (leftIsAccepted !== rightIsAccepted) {
@@ -50,8 +47,7 @@ function compareNewestFirst(
     const sequenceDifference = getReplySequence(right) - getReplySequence(left);
     if (sequenceDifference !== 0) return sequenceDifference;
   } else {
-    const createdAtDifference =
-      getReplyCreatedAt(right) - getReplyCreatedAt(left);
+    const createdAtDifference = getReplyCreatedAt(right) - getReplyCreatedAt(left);
     if (createdAtDifference !== 0) return createdAtDifference;
   }
 

@@ -85,13 +85,7 @@ export function createRecentUpdatesRepository({
       .where("l.is_published", "=", true)
       .where("l.deleted_at", "is", null)
       .where("l.updated_at", ">=", cutoff)
-      .groupBy([
-        "c.id",
-        "c.slug",
-        "c.title",
-        "c.thumbnail_url",
-        "c.thumbnail_media_id",
-      ])
+      .groupBy(["c.id", "c.slug", "c.title", "c.thumbnail_url", "c.thumbnail_media_id"])
       .orderBy("latest_updated_at", "desc")
       .orderBy("course_id", "asc")
       .limit(limit)
@@ -154,13 +148,7 @@ export function createRecentUpdatesRepository({
 
     return await database
       .selectFrom(recentRankedLessons)
-      .select([
-        "course_id",
-        "lesson_id",
-        "lesson_title",
-        "lesson_number",
-        "lesson_updated_at",
-      ])
+      .select(["course_id", "lesson_id", "lesson_title", "lesson_number", "lesson_updated_at"])
       .where("recent_lesson_rank", "<=", lessonsPerCourse)
       .orderBy("course_id", "asc")
       .orderBy("lesson_updated_at", "desc")

@@ -70,28 +70,16 @@ export function TwoFactorForm({
     setInvalidReason(null);
     onCodeChange(next);
 
-    if (
-      !useBackupCode &&
-      next.length === 6 &&
-      !validateOtpCode(next) &&
-      !verifying
-    ) {
+    if (!useBackupCode && next.length === 6 && !validateOtpCode(next) && !verifying) {
       onSubmit(next);
-    } else if (
-      useBackupCode &&
-      next.length === 8 &&
-      !validateBackupCode(next) &&
-      !verifying
-    ) {
+    } else if (useBackupCode && next.length === 8 && !validateBackupCode(next) && !verifying) {
       onSubmit(next);
     }
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const reason = useBackupCode
-      ? validateBackupCode(code)
-      : validateOtpCode(code);
+    const reason = useBackupCode ? validateBackupCode(code) : validateOtpCode(code);
     setInvalidReason(reason);
 
     if (reason) {
@@ -131,11 +119,7 @@ export function TwoFactorForm({
 
       <div className="auth-card__form-slot">
         {hasBothMethods ? (
-          <div
-            aria-label="Verification method"
-            className="auth-method-switch"
-            role="tablist"
-          >
+          <div aria-label="Verification method" className="auth-method-switch" role="tablist">
             {METHOD_TABS.map(([value, label, glyph]) => (
               <button
                 aria-selected={method === value}
@@ -164,12 +148,7 @@ export function TwoFactorForm({
             <div className="auth-two-factor__panel">
               <div className="auth-two-factor__panel-body">
                 <p className="auth-two-factor__badge">
-                  <Icon
-                    aria-hidden
-                    emphasis="fill"
-                    name="recommended"
-                    size={11}
-                  />
+                  <Icon aria-hidden emphasis="fill" name="recommended" size={11} />
                   Recommended
                 </p>
 
@@ -179,12 +158,10 @@ export function TwoFactorForm({
                   </span>
 
                   <div className="auth-two-factor__copy">
-                    <p className="auth-two-factor__title">
-                      Sign in with your passkey
-                    </p>
+                    <p className="auth-two-factor__title">Sign in with your passkey</p>
                     <p className="auth-two-factor__body">
-                      Your passkey is kept on this device or in your password
-                      manager, so there is no code to type.
+                      Your passkey is kept on this device or in your password manager, so there is
+                      no code to type.
                     </p>
                   </div>
                 </div>
@@ -240,9 +217,7 @@ export function TwoFactorForm({
                     inputMode="numeric"
                     maxLength={8}
                     onChange={(event) => {
-                      const digits = event.target.value
-                        .replace(/\D/g, "")
-                        .slice(0, 8);
+                      const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
                       changeCode(digits);
                     }}
                     placeholder="8-digit backup code"
@@ -264,8 +239,7 @@ export function TwoFactorForm({
 
               {useBackupCode ? (
                 <p className="auth-form__helper">
-                  Enter one of your 8-digit backup codes. Each code can only be
-                  used once.
+                  Enter one of your 8-digit backup codes. Each code can only be used once.
                 </p>
               ) : (
                 <>
@@ -273,8 +247,7 @@ export function TwoFactorForm({
                     Open your authenticator app and enter the 6-digit code.
                   </p>
                   <p className="auth-form__helper">
-                    Works with Google Authenticator, Authy, or Microsoft
-                    Authenticator.
+                    Works with Google Authenticator, Authy, or Microsoft Authenticator.
                   </p>
                 </>
               )}
@@ -293,9 +266,7 @@ export function TwoFactorForm({
               type="submit"
             >
               <span className="auth-form__submit-label">
-                {verifying
-                  ? OTP_ACTION_LABELS.verifying
-                  : OTP_ACTION_LABELS.verify}
+                {verifying ? OTP_ACTION_LABELS.verifying : OTP_ACTION_LABELS.verify}
               </span>
               <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
             </button>
@@ -309,9 +280,7 @@ export function TwoFactorForm({
               }}
               type="button"
             >
-              {useBackupCode
-                ? USE_AUTHENTICATOR_ACTION
-                : USE_BACKUP_CODE_ACTION}
+              {useBackupCode ? USE_AUTHENTICATOR_ACTION : USE_BACKUP_CODE_ACTION}
             </button>
 
             {hasBothMethods ? (

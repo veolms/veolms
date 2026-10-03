@@ -5,8 +5,7 @@
 }
 
 :root {
-  font-family:
-    "Manrope Variable", Manrope, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Manrope Variable", Manrope, ui-sans-serif, system-ui, sans-serif;
   color-scheme: dark;
   --canvas: #060b14;
   --header: #060a12;

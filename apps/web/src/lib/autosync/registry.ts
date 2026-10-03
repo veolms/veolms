@@ -40,10 +40,7 @@ const writeRegistry = (entries: DirtyAutosyncDraft[]) => {
   if (!canUseLocalStorage()) return;
   try {
     if (entries.length) {
-      window.localStorage.setItem(
-        DIRTY_REGISTRY_STORAGE_KEY,
-        JSON.stringify(entries),
-      );
+      window.localStorage.setItem(DIRTY_REGISTRY_STORAGE_KEY, JSON.stringify(entries));
     } else {
       window.localStorage.removeItem(DIRTY_REGISTRY_STORAGE_KEY);
     }
@@ -55,21 +52,16 @@ const writeRegistry = (entries: DirtyAutosyncDraft[]) => {
 export const markAutosyncDraftDirty = (key: AutosyncKey): void => {
   const registry = readRegistry();
   const keyString = getAutosyncKey(key);
-  const next = registry.filter(
-    (entry) => getAutosyncKey(entry.key) !== keyString,
-  );
+  const next = registry.filter((entry) => getAutosyncKey(entry.key) !== keyString);
   next.push({ key, updatedAt: Date.now() });
   writeRegistry(next);
 };
 
 export const markAutosyncDraftClean = (key: AutosyncKey): void => {
   const keyString = getAutosyncKey(key);
-  writeRegistry(
-    readRegistry().filter((entry) => getAutosyncKey(entry.key) !== keyString),
-  );
+  writeRegistry(readRegistry().filter((entry) => getAutosyncKey(entry.key) !== keyString));
 };
 
-export const getDirtyAutosyncDrafts = (): DirtyAutosyncDraft[] =>
-  readRegistry();
+export const getDirtyAutosyncDrafts = (): DirtyAutosyncDraft[] => readRegistry();
 
 export const clearAutosyncRegistry = (): void => writeRegistry([]);

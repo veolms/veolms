@@ -26,9 +26,7 @@ export const API_ROUTE_PREFIX = "/v1";
  */
 const MAX_PARAM_LENGTH = 512;
 
-function getCourseMutation(
-  request: FastifyRequest,
-): PendingCourseStaticRefresh | null {
+function getCourseMutation(request: FastifyRequest): PendingCourseStaticRefresh | null {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return null;
   if (request.routeOptions.url?.includes("static-page-refresh")) return null;
   const courseId = request.url.match(
@@ -38,17 +36,12 @@ function getCourseMutation(
 }
 
 function getCourseSlugFromResponse(payload: unknown): string | undefined {
-  if (typeof payload !== "string" && !Buffer.isBuffer(payload))
-    return undefined;
+  if (typeof payload !== "string" && !Buffer.isBuffer(payload)) return undefined;
   try {
-    const serialized = Buffer.isBuffer(payload)
-      ? payload.toString("utf8")
-      : payload;
+    const serialized = Buffer.isBuffer(payload) ? payload.toString("utf8") : payload;
     const parsed: unknown = JSON.parse(serialized);
     const envelope =
-      parsed && typeof parsed === "object" && "data" in parsed
-        ? parsed.data
-        : parsed;
+      parsed && typeof parsed === "object" && "data" in parsed ? parsed.data : parsed;
     if (!envelope || typeof envelope !== "object") return undefined;
     if (
       "course" in envelope &&
@@ -58,9 +51,7 @@ function getCourseSlugFromResponse(payload: unknown): string | undefined {
       typeof envelope.course.slug === "string"
     )
       return envelope.course.slug;
-    return "slug" in envelope && typeof envelope.slug === "string"
-      ? envelope.slug
-      : undefined;
+    return "slug" in envelope && typeof envelope.slug === "string" ? envelope.slug : undefined;
   } catch {
     return undefined;
   }
@@ -109,13 +100,9 @@ export async function createVeoLMSApi<
   const appServices =
     typeof rawServices === "function"
       ? (rawServices as (app: FastifyInstance) => TServices)(app)
-      : (rawServices ??
-        ({ email: { close: async () => {} } } as unknown as TServices));
+      : (rawServices ?? ({ email: { close: async () => {} } } as unknown as TServices));
 
-  const pendingCourseRefreshes = new WeakMap<
-    FastifyRequest,
-    PendingCourseStaticRefresh
-  >();
+  const pendingCourseRefreshes = new WeakMap<FastifyRequest, PendingCourseStaticRefresh>();
 
   app.addHook("onSend", async (request, _reply, payload) => {
     const pending = getCourseMutation(request);
@@ -154,12 +141,7 @@ export async function createVeoLMSApi<
       return payload.toJSON();
     }
 
-    if (
-      payload &&
-      typeof payload === "object" &&
-      "success" in payload &&
-      "statusCode" in payload
-    ) {
+    if (payload && typeof payload === "object" && "success" in payload && "statusCode" in payload) {
       return payload;
     }
 
@@ -187,8 +169,7 @@ export async function createVeoLMSApi<
   const corsMatcher = createCorsMatcher(config);
 
   await app.register(fastifyCors, {
-    origin: (origin, callback) =>
-      callback(null, corsMatcher.isAllowedOrigin(origin)),
+    origin: (origin, callback) => callback(null, corsMatcher.isAllowedOrigin(origin)),
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
@@ -203,8 +184,7 @@ export async function createVeoLMSApi<
 
   // Auto-load every *.routes.ts file from the caller's modules directory (or default core modules).
   const resolvedModulesDir =
-    modulesDir ??
-    fileURLToPath(new URL("../../../apps/api/src/modules", import.meta.url));
+    modulesDir ?? fileURLToPath(new URL("../../../apps/api/src/modules", import.meta.url));
 
   if (fs.existsSync(resolvedModulesDir)) {
     const excludeSet = new Set(excludeModules);
@@ -216,8 +196,7 @@ export async function createVeoLMSApi<
         ? (path) => path.endsWith(".routes.ts")
         : (path) => {
             if (!path.endsWith(".routes.ts")) return false;
-            const moduleFolder =
-              path.replaceAll("\\", "/").split("/").at(-2) ?? "";
+            const moduleFolder = path.replaceAll("\\", "/").split("/").at(-2) ?? "";
             return !excludeSet.has(moduleFolder);
           };
 
@@ -230,10 +209,7 @@ export async function createVeoLMSApi<
       dirNameRoutePrefix: false,
       ignorePattern: /(?:^|[\\/])_/u,
       options: routePluginOptions
-        ? routePluginOptions(
-            paymentEventQueue as TPaymentEventQueue,
-            appServices,
-          )
+        ? routePluginOptions(paymentEventQueue as TPaymentEventQueue, appServices)
         : { prefix: "/v1", database, services: appServices },
     });
   }

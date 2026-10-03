@@ -12,9 +12,7 @@ export const learningRepliedToSummarySchema = z.object({
   displayName: z.string(),
   textSnippet: z.string().optional(),
 });
-export type LearningRepliedToSummary = z.infer<
-  typeof learningRepliedToSummarySchema
->;
+export type LearningRepliedToSummary = z.infer<typeof learningRepliedToSummarySchema>;
 
 export const learningReplySchema = z.object({
   id: z.uuid(),
@@ -47,34 +45,26 @@ export const createLearningReplyRequestSchema = z.object({
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   attachmentIds: z.array(z.uuid()).optional(),
 });
-export type CreateLearningReplyRequest = z.infer<
-  typeof createLearningReplyRequestSchema
->;
+export type CreateLearningReplyRequest = z.infer<typeof createLearningReplyRequestSchema>;
 
 export const updateLearningReplyRequestSchema = z.object({
   content: z.string().min(1).max(20000).optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
 });
-export type UpdateLearningReplyRequest = z.infer<
-  typeof updateLearningReplyRequestSchema
->;
+export type UpdateLearningReplyRequest = z.infer<typeof updateLearningReplyRequestSchema>;
 
 export const listLearningRepliesQuerySchema = z.object({
   cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
-export type ListLearningRepliesQuery = z.infer<
-  typeof listLearningRepliesQuerySchema
->;
+export type ListLearningRepliesQuery = z.infer<typeof listLearningRepliesQuerySchema>;
 
 export const learningRepliesListResponseSchema = z.object({
   replies: z.array(learningReplySchema),
   nextCursor: z.string().nullable(),
   totalCount: z.number().int().nonnegative().optional(),
 });
-export type LearningRepliesListResponse = z.infer<
-  typeof learningRepliesListResponseSchema
->;
+export type LearningRepliesListResponse = z.infer<typeof learningRepliesListResponseSchema>;
 
 export const acceptReplyRequestSchema = z.object({
   accepted: z.boolean().default(true),

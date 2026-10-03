@@ -41,9 +41,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
         .defaultTo("active")
         .check(sql`status IN ('active', 'hidden', 'deleted')`),
     )
-    .addColumn("is_locked", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("is_locked", "boolean", (column) => column.notNull().defaultTo(false))
     .addColumn("accepted_answer_id", "uuid")
     .addColumn("likes_count", "integer", (column) =>
       column
@@ -107,9 +105,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("timestamp_seconds", "integer", (column) =>
       column.check(sql`timestamp_seconds IS NULL OR timestamp_seconds >= 0`),
     )
-    .addColumn("is_accepted", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("is_accepted", "boolean", (column) => column.notNull().defaultTo(false))
     .addColumn("status", "text", (column) =>
       column
         .notNull()
@@ -277,9 +273,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("title", "text")
     .addColumn("content", "text", (column) => column.notNull())
     .addColumn("plain_text", "text", (column) => column.notNull())
-    .addColumn("tags", sql`text[]`, (column) =>
-      column.notNull().defaultTo(sql`ARRAY[]::text[]`),
-    )
+    .addColumn("tags", sql`text[]`, (column) => column.notNull().defaultTo(sql`ARRAY[]::text[]`))
     .addColumn("visibility", "text", (column) =>
       column
         .notNull()
@@ -308,23 +302,17 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column.notNull().references("users.id").onDelete("cascade"),
     )
     .addColumn("target_type", "text", (column) =>
-      column.check(
-        sql`target_type IS NULL OR target_type IN ('thread', 'reply')`,
-      ),
+      column.check(sql`target_type IS NULL OR target_type IN ('thread', 'reply')`),
     )
     .addColumn("target_id", "uuid")
     .addColumn("kind", "text", (column) =>
-      column
-        .notNull()
-        .check(sql`kind IN ('image', 'screenshot', 'code', 'document')`),
+      column.notNull().check(sql`kind IN ('image', 'screenshot', 'code', 'document')`),
     )
     .addColumn("storage_key", "text", (column) => column.notNull())
     .addColumn("file_name", "text", (column) => column.notNull())
     .addColumn("file_url", "text", (column) => column.notNull())
     .addColumn("mime_type", "text", (column) => column.notNull())
-    .addColumn("file_size", "integer", (column) =>
-      column.notNull().check(sql`file_size >= 0`),
-    )
+    .addColumn("file_size", "integer", (column) => column.notNull().check(sql`file_size >= 0`))
     .addColumn("status", "text", (column) =>
       column
         .notNull()
@@ -353,9 +341,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
   await database.schema
     .createTable("learning_reports")
     .addColumn("id", "uuid", (column) => column.primaryKey())
-    .addColumn("course_id", "uuid", (column) =>
-      column.references("courses.id").onDelete("cascade"),
-    )
+    .addColumn("course_id", "uuid", (column) => column.references("courses.id").onDelete("cascade"))
     .addColumn("reporter_id", "uuid", (column) =>
       column.notNull().references("users.id").onDelete("cascade"),
     )
@@ -402,9 +388,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("academy_id", "uuid", (column) =>
       column.notNull().references("academy.id").onDelete("cascade"),
     )
-    .addColumn("course_id", "uuid", (column) =>
-      column.references("courses.id").onDelete("cascade"),
-    )
+    .addColumn("course_id", "uuid", (column) => column.references("courses.id").onDelete("cascade"))
     .addColumn("user_id", "uuid", (column) =>
       column.notNull().references("users.id").onDelete("cascade"),
     )
@@ -419,9 +403,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     )
     .addColumn("reason", "text", (column) => column.notNull())
     .addColumn("expires_at", "timestamptz")
-    .addColumn("is_active", "boolean", (column) =>
-      column.notNull().defaultTo(true),
-    )
+    .addColumn("is_active", "boolean", (column) => column.notNull().defaultTo(true))
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -443,9 +425,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("academy_id", "uuid", (column) =>
       column.notNull().references("academy.id").onDelete("cascade"),
     )
-    .addColumn("course_id", "uuid", (column) =>
-      column.references("courses.id").onDelete("cascade"),
-    )
+    .addColumn("course_id", "uuid", (column) => column.references("courses.id").onDelete("cascade"))
     .addColumn("actor_user_id", "uuid", (column) =>
       column.references("users.id").onDelete("set null"),
     )

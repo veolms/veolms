@@ -50,28 +50,16 @@ export const learningProgressSyncResponseSchema = z.strictObject({
   synced: z.literal(true),
 });
 
-export type LearningProgressCourseParams = z.infer<
-  typeof learningProgressCourseParamsSchema
->;
+export type LearningProgressCourseParams = z.infer<typeof learningProgressCourseParamsSchema>;
 export type LearningProgressItem = z.infer<typeof learningProgressItemSchema>;
-export type LearningProgressBatchRequest = z.infer<
-  typeof learningProgressBatchRequestSchema
->;
-export type LearningProgressLesson = z.infer<
-  typeof learningProgressLessonSchema
->;
-export type LearningProgressResponse = z.infer<
-  typeof learningProgressResponseSchema
->;
-export type LearningProgressResumeLesson = z.infer<
-  typeof learningProgressResumeLessonSchema
->;
+export type LearningProgressBatchRequest = z.infer<typeof learningProgressBatchRequestSchema>;
+export type LearningProgressLesson = z.infer<typeof learningProgressLessonSchema>;
+export type LearningProgressResponse = z.infer<typeof learningProgressResponseSchema>;
+export type LearningProgressResumeLesson = z.infer<typeof learningProgressResumeLessonSchema>;
 export type LearningProgressResumeContextResponse = z.infer<
   typeof learningProgressResumeContextResponseSchema
 >;
-export type LearningProgressSyncResponse = z.infer<
-  typeof learningProgressSyncResponseSchema
->;
+export type LearningProgressSyncResponse = z.infer<typeof learningProgressSyncResponseSchema>;
 
 z.globalRegistry.add(learningProgressBatchRequestSchema, {
   id: "LearningProgressBatchRequest",
@@ -82,8 +70,7 @@ z.globalRegistry.add(learningProgressResponseSchema, {
 });
 z.globalRegistry.add(learningProgressResumeContextResponseSchema, {
   id: "LearningProgressResumeContextResponse",
-  description:
-    "The best persisted-progress-based lesson resume context for one accessible course.",
+  description: "The best persisted-progress-based lesson resume context for one accessible course.",
 });
 z.globalRegistry.add(learningProgressSyncResponseSchema, {
   id: "LearningProgressSyncResponse",

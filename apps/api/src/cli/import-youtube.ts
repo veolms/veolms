@@ -12,10 +12,7 @@ import { createDatabase, enqueueImageJob } from "@veolms/database";
 import { config } from "../config.ts";
 import { createServices } from "../services/index.ts";
 import { createMediaService } from "../modules/media/index.ts";
-import {
-  ADMIN_ROLE,
-  INSTRUCTOR_ROLE,
-} from "../modules/auth/shared/auth.constants.ts";
+import { ADMIN_ROLE, INSTRUCTOR_ROLE } from "../modules/auth/shared/auth.constants.ts";
 import { slugify } from "../modules/courses/shared/courses.utils.ts";
 import * as courseRepo from "../modules/courses/course/course.repository.ts";
 import * as configRepo from "../modules/courses/configuration/configuration.repository.ts";
@@ -32,23 +29,14 @@ const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
 const cliLogger = {
   child: () => cliLogger,
   info: (msg: unknown) =>
-    console.log(
-      dim(`  [info] ${typeof msg === "string" ? msg : JSON.stringify(msg)}`),
-    ),
+    console.log(dim(`  [info] ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)),
   warn: (msg: unknown) =>
-    console.log(
-      yellow(`  [warn] ${typeof msg === "string" ? msg : JSON.stringify(msg)}`),
-    ),
+    console.log(yellow(`  [warn] ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)),
   error: (obj: unknown, msg?: string) =>
-    console.error(
-      red(
-        `  [error] ${msg ?? (typeof obj === "string" ? obj : JSON.stringify(obj))}`,
-      ),
-    ),
+    console.error(red(`  [error] ${msg ?? (typeof obj === "string" ? obj : JSON.stringify(obj))}`)),
   debug: () => {},
   trace: () => {},
-  fatal: (obj: unknown, msg?: string) =>
-    console.error(red(`  [fatal] ${msg ?? String(obj)}`)),
+  fatal: (obj: unknown, msg?: string) => console.error(red(`  [fatal] ${msg ?? String(obj)}`)),
 };
 
 interface VideoFormatInfo {
@@ -167,28 +155,21 @@ function parseCliArgs() {
   }
 
   const qualitiesRaw =
-    (flags["qualities"] as string) ||
-    (flags["q"] as string) ||
-    "1080p,720p,480p,360p";
+    (flags["qualities"] as string) || (flags["q"] as string) || "1080p,720p,480p,360p";
   const requestedQualities = qualitiesRaw
     .split(",")
     .map((q) => q.trim().toLowerCase())
     .filter((q) => Boolean(QUALITY_DEFINITIONS[q]));
 
   const fetchSubs = Boolean(
-    flags["subs"] !== false &&
-    flags["no-subs"] !== true &&
-    flags["no-captions"] !== true,
+    flags["subs"] !== false && flags["no-subs"] !== true && flags["no-captions"] !== true,
   );
   // "all" is a yt-dlp wildcard matching *every* available language, not a
   // "fallback if English is missing" — combined with auto-captions
   // (YouTube auto-translates into 100+ languages), it was silently pulling
   // dozens of caption files per video. Explicit --sub-langs all still works
   // for anyone who actually wants every language.
-  const subLangs =
-    (flags["sub-langs"] as string) ||
-    (flags["captions"] as string) ||
-    "en.*,en";
+  const subLangs = (flags["sub-langs"] as string) || (flags["captions"] as string) || "en.*,en";
 
   const hasExplicitSelection = Boolean(
     flags["max-videos"] ||
@@ -202,22 +183,16 @@ function parseCliArgs() {
   );
 
   const rawCookies =
-    (flags["cookies"] as string) ||
-    (flags["cookie"] as string) ||
-    (flags["c"] as string);
+    (flags["cookies"] as string) || (flags["cookie"] as string) || (flags["c"] as string);
   const cookiesPath = resolveCookiesPath(rawCookies);
-  const cookiesFromBrowser =
-    (flags["cookies-from-browser"] as string) || undefined;
+  const cookiesFromBrowser = (flags["cookies-from-browser"] as string) || undefined;
 
   return {
     help: Boolean(flags["help"] || flags["h"]),
-    playlistUrl:
-      (flags["url"] as string) || (flags["u"] as string) || positionals[0],
-    instructorEmail:
-      (flags["email"] as string) || (flags["e"] as string) || positionals[1],
+    playlistUrl: (flags["url"] as string) || (flags["u"] as string) || positionals[0],
+    instructorEmail: (flags["email"] as string) || (flags["e"] as string) || positionals[1],
     courseTitle: (flags["title"] as string) || (flags["t"] as string),
-    status: ((flags["status"] as string) || "published") as
-      "draft" | "published",
+    status: ((flags["status"] as string) || "published") as "draft" | "published",
     ytdlpPath: (flags["ytdlp-path"] as string) || process.env.YTDLP_PATH,
     ffmpegPath: (flags["ffmpeg-path"] as string) || process.env.FFMPEG_PATH,
     keepTemp: Boolean(flags["keep-temp"] || flags["k"]),
@@ -236,21 +211,14 @@ function parseCliArgs() {
       : flags["video-end"]
         ? Number(flags["video-end"])
         : undefined,
-    items:
-      (flags["items"] as string) || (flags["range"] as string) || undefined,
+    items: (flags["items"] as string) || (flags["range"] as string) || undefined,
     hasExplicitSelection,
     reverse: Boolean(flags["reverse"]),
     skipShorts: Boolean(flags["skip-shorts"]),
-    minDuration: flags["min-duration"]
-      ? Number(flags["min-duration"])
-      : undefined,
-    maxDuration: flags["max-duration"]
-      ? Number(flags["max-duration"])
-      : undefined,
+    minDuration: flags["min-duration"] ? Number(flags["min-duration"]) : undefined,
+    maxDuration: flags["max-duration"] ? Number(flags["max-duration"]) : undefined,
     sectionTitle: (flags["section-title"] as string) || "Course Content",
-    splitSections: flags["split-sections"]
-      ? Number(flags["split-sections"])
-      : undefined,
+    splitSections: flags["split-sections"] ? Number(flags["split-sections"]) : undefined,
     pricingType: ((flags["pricing"] as string) || "free") as "free" | "paid",
     price: flags["price"] ? Number(flags["price"]) : 0,
     salePrice: flags["sale-price"] ? Number(flags["sale-price"]) : null,
@@ -260,15 +228,9 @@ function parseCliArgs() {
       : flags["preview-count"]
         ? Number(flags["preview-count"])
         : 1,
-    directHls: flags["queue-transcode"]
-      ? false
-      : flags["no-direct-hls"]
-        ? false
-        : true,
+    directHls: flags["queue-transcode"] ? false : flags["no-direct-hls"] ? false : true,
     qualities:
-      requestedQualities.length > 0
-        ? requestedQualities
-        : ["1080p", "720p", "480p", "360p"],
+      requestedQualities.length > 0 ? requestedQualities : ["1080p", "720p", "480p", "360p"],
     subtitles: fetchSubs,
     subLangs,
     cookies: cookiesPath,
@@ -295,10 +257,8 @@ function resolveCookiesPath(customPath?: string): string | undefined {
 
 const GIB = 1024 ** 3;
 const MIN_IMPORT_SCRATCH_BYTES = 2 * GIB;
-const YTDLP_RELEASE_BASE =
-  "https://github.com/yt-dlp/yt-dlp/releases/latest/download";
-const FFMPEG_RELEASE_BASE =
-  "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest";
+const YTDLP_RELEASE_BASE = "https://github.com/yt-dlp/yt-dlp/releases/latest/download";
+const FFMPEG_RELEASE_BASE = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest";
 
 interface YtDlpContext {
   cookies?: string;
@@ -411,9 +371,7 @@ function resolveFfmpegRelease(): {
 async function downloadHttpFile(url: string, destPath: string): Promise<void> {
   const response = await fetch(url, { redirect: "follow" });
   if (!response.ok || !response.body) {
-    throw new Error(
-      `Failed to download ${url}: ${response.status} ${response.statusText}`,
-    );
+    throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`);
   }
 
   await fsp.mkdir(path.dirname(destPath), { recursive: true });
@@ -431,10 +389,7 @@ async function downloadHttpFile(url: string, destPath: string): Promise<void> {
   }
 }
 
-async function findNamedFile(
-  rootDir: string,
-  fileName: string,
-): Promise<string | null> {
+async function findNamedFile(rootDir: string, fileName: string): Promise<string | null> {
   const stack = [rootDir];
   while (stack.length > 0) {
     const current = stack.pop()!;
@@ -479,11 +434,7 @@ async function resolveImportScratchRoot(): Promise<string> {
     return os.tmpdir();
   }
 
-  const candidates = [
-    "/var/lib/veolms/import",
-    path.join(veolmsHomeDir(), "tmp"),
-    "/var/tmp",
-  ];
+  const candidates = ["/var/lib/veolms/import", path.join(veolmsHomeDir(), "tmp"), "/var/tmp"];
   for (const dir of candidates) {
     if (await canUseDirectory(dir)) {
       return dir;
@@ -506,10 +457,7 @@ function estimateScratchBytesForVideo(
   durationSec: number | undefined,
   qualityCount: number,
 ): number {
-  const seconds = Math.max(
-    durationSec && durationSec > 0 ? durationSec : 3600,
-    60,
-  );
+  const seconds = Math.max(durationSec && durationSec > 0 ? durationSec : 3600, 60);
   const qualities = Math.max(qualityCount, 1);
   // ~2 Mbps per quality, kept twice (source download + HLS copy).
   const estimated = (2_000_000 / 8) * seconds * 2 * qualities;
@@ -560,25 +508,16 @@ function isRateLimitedError(text: string): boolean {
 // quality/video is its own process, so yt-dlp's own throttling flags
 // (--sleep-requests etc.) don't cover the gap *between* them. Cheap
 // insurance against tripping YouTube's rate limiting on big playlists.
-const INTER_QUALITY_DELAY_MS =
-  Number(process.env.VEOLMS_IMPORT_QUALITY_DELAY_MS) || 2_000;
-const INTER_VIDEO_DELAY_MS =
-  Number(process.env.VEOLMS_IMPORT_VIDEO_DELAY_MS) || 3_000;
+const INTER_QUALITY_DELAY_MS = Number(process.env.VEOLMS_IMPORT_QUALITY_DELAY_MS) || 2_000;
+const INTER_VIDEO_DELAY_MS = Number(process.env.VEOLMS_IMPORT_VIDEO_DELAY_MS) || 3_000;
 // Extra backoff, on top of yt-dlp's own retries, when a download attempt's
 // own error output looks like a 429 — one additional full-process retry
 // after cooling down.
-const RATE_LIMIT_BACKOFF_MS =
-  Number(process.env.VEOLMS_IMPORT_RATE_LIMIT_BACKOFF_MS) || 45_000;
+const RATE_LIMIT_BACKOFF_MS = Number(process.env.VEOLMS_IMPORT_RATE_LIMIT_BACKOFF_MS) || 45_000;
 
-function capAppend(
-  existing: string,
-  addition: string,
-  maxBytes: number,
-): string {
+function capAppend(existing: string, addition: string, maxBytes: number): string {
   const combined = existing + addition;
-  return combined.length <= maxBytes
-    ? combined
-    : combined.slice(combined.length - maxBytes);
+  return combined.length <= maxBytes ? combined : combined.slice(combined.length - maxBytes);
 }
 
 /** Best-effort kill of a child and, on Windows, its full descendant tree. */
@@ -746,23 +685,17 @@ async function extractFfmpegArchive(
     return;
   }
 
-  const xzRes = await runProcess(
-    "tar",
-    ["-xJf", archivePath, "-C", extractDir],
-    { timeoutMs: METADATA_PROCESS_TIMEOUT_MS },
-  );
+  const xzRes = await runProcess("tar", ["-xJf", archivePath, "-C", extractDir], {
+    timeoutMs: METADATA_PROCESS_TIMEOUT_MS,
+  });
   if (xzRes.code === 0) {
     return;
   }
-  const fallback = await runProcess(
-    "tar",
-    ["-xf", archivePath, "-C", extractDir],
-    { timeoutMs: METADATA_PROCESS_TIMEOUT_MS },
-  );
+  const fallback = await runProcess("tar", ["-xf", archivePath, "-C", extractDir], {
+    timeoutMs: METADATA_PROCESS_TIMEOUT_MS,
+  });
   if (fallback.code !== 0) {
-    throw new Error(
-      fallback.stderr || xzRes.stderr || "Failed to extract FFmpeg tar.xz",
-    );
+    throw new Error(fallback.stderr || xzRes.stderr || "Failed to extract FFmpeg tar.xz");
   }
 }
 
@@ -830,11 +763,7 @@ async function ensureFfmpegBinary(
       return targetFfmpeg;
     }
   } catch (e) {
-    console.log(
-      yellow(
-        `Could not auto-download FFmpeg: ${e instanceof Error ? e.message : e}`,
-      ),
-    );
+    console.log(yellow(`Could not auto-download FFmpeg: ${e instanceof Error ? e.message : e}`));
   } finally {
     await fsp.unlink(archivePath).catch(() => {});
     await fsp.rm(extractDir, { recursive: true, force: true }).catch(() => {});
@@ -863,9 +792,7 @@ async function installStandaloneYtDlp(homeBin: string): Promise<void> {
     );
   }
 
-  console.log(
-    `${green("✓")} yt-dlp downloaded successfully to: ${dim(homeBin)}`,
-  );
+  console.log(`${green("✓")} yt-dlp downloaded successfully to: ${dim(homeBin)}`);
 }
 
 async function ensureYtDlpBinary(
@@ -934,9 +861,7 @@ async function ensureYtDlpBinary(
       );
     }
   } else {
-    console.log(
-      `\n${yellow("!")} ${bold("yt-dlp")} was not found in PATH or at ${dim(homeBin)}.`,
-    );
+    console.log(`\n${yellow("!")} ${bold("yt-dlp")} was not found in PATH or at ${dim(homeBin)}.`);
   }
 
   let shouldDownload = true;
@@ -1052,16 +977,12 @@ async function resolveInstructor(
   } | null = null;
 
   if (email) {
-    const matched = existingInstructors.find(
-      (inst) => inst.email?.toLowerCase() === email,
-    );
+    const matched = existingInstructors.find((inst) => inst.email?.toLowerCase() === email);
     if (matched) {
       selectedUser = matched;
     } else {
       console.log(
-        yellow(
-          `! User "${inputEmail}" was not found among existing active instructors or admins.`,
-        ),
+        yellow(`! User "${inputEmail}" was not found among existing active instructors or admins.`),
       );
     }
   }
@@ -1086,9 +1007,7 @@ async function resolveInstructor(
           selectedUser = existingInstructors[num - 1]!;
         } else {
           console.log(
-            red(
-              `Please enter a valid number between 1 and ${existingInstructors.length}.`,
-            ),
+            red(`Please enter a valid number between 1 and ${existingInstructors.length}.`),
           );
         }
       }
@@ -1124,20 +1043,14 @@ async function extractPlaylistMetadata(
 ): Promise<PlaylistMetadata> {
   console.log(`\n${cyan("➜")} Fetching playlist details with yt-dlp...`);
 
-  const args = buildYtDlpArgs(
-    ["--dump-single-json", "--flat-playlist", playlistUrl],
-    ytCtx,
-  );
+  const args = buildYtDlpArgs(["--dump-single-json", "--flat-playlist", playlistUrl], ytCtx);
 
   const { stdout, stderr, code, timedOut } = await runProcess(ytdlpPath, args, {
     timeoutMs: METADATA_PROCESS_TIMEOUT_MS,
   });
 
   if (code !== 0) {
-    if (
-      stderr.includes("Sign in to confirm you're not a bot") ||
-      stderr.includes("bot")
-    ) {
+    if (stderr.includes("Sign in to confirm you're not a bot") || stderr.includes("bot")) {
       console.error(
         `\n${yellow("!")} YouTube bot detection encountered. Pass cookies with --cookies cookies.txt or place a cookies.txt file in the project folder.`,
       );
@@ -1156,12 +1069,8 @@ async function extractPlaylistMetadata(
         id: String(e.id || ""),
         title: String(e.title || "Untitled Video"),
         description: typeof e.description === "string" ? e.description : "",
-        duration:
-          typeof e.duration === "number" ? Math.round(e.duration) : undefined,
-        url:
-          typeof e.url === "string"
-            ? e.url
-            : `https://www.youtube.com/watch?v=${e.id}`,
+        duration: typeof e.duration === "number" ? Math.round(e.duration) : undefined,
+        url: typeof e.url === "string" ? e.url : `https://www.youtube.com/watch?v=${e.id}`,
         thumbnails: Array.isArray(e.thumbnails)
           ? (e.thumbnails as Array<{ url: string }>)
           : undefined,
@@ -1171,8 +1080,7 @@ async function extractPlaylistMetadata(
     return {
       id: String(parsed.id || ""),
       title: String(parsed.title || "Imported Course"),
-      description:
-        typeof parsed.description === "string" ? parsed.description : "",
+      description: typeof parsed.description === "string" ? parsed.description : "",
       entries,
     };
   } catch (err) {
@@ -1216,8 +1124,7 @@ async function downloadThumbnail(
 }
 
 function resolveVideoMimeType(filename: string): string {
-  if (filename.endsWith(".mp4") || filename.endsWith(".m4v"))
-    return "video/mp4";
+  if (filename.endsWith(".mp4") || filename.endsWith(".m4v")) return "video/mp4";
   if (filename.endsWith(".webm")) return "video/webm";
   if (filename.endsWith(".mkv")) return "video/x-matroska";
   if (filename.endsWith(".mov")) return "video/quicktime";
@@ -1285,10 +1192,7 @@ async function probeVideoDetails(
   ytCtx?: YtDlpContext,
 ): Promise<VideoDetailedInfo | null> {
   try {
-    const args = buildYtDlpArgs(
-      ["--dump-single-json", "--no-playlist", videoUrl],
-      ytCtx,
-    );
+    const args = buildYtDlpArgs(["--dump-single-json", "--no-playlist", videoUrl], ytCtx);
 
     const res = await runProcess(ytdlpBinary, args, {
       timeoutMs: METADATA_PROCESS_TIMEOUT_MS,
@@ -1298,12 +1202,7 @@ async function probeVideoDetails(
     const availableHeights = new Set<number>();
     if (Array.isArray(parsed.formats)) {
       for (const f of parsed.formats) {
-        if (
-          typeof f.height === "number" &&
-          f.height > 0 &&
-          f.vcodec &&
-          f.vcodec !== "none"
-        ) {
+        if (typeof f.height === "number" && f.height > 0 && f.vcodec && f.vcodec !== "none") {
           availableHeights.add(f.height);
         }
       }
@@ -1315,12 +1214,8 @@ async function probeVideoDetails(
     return {
       id: String(parsed.id || ""),
       title: String(parsed.title || ""),
-      description:
-        typeof parsed.description === "string" ? parsed.description : undefined,
-      duration:
-        typeof parsed.duration === "number"
-          ? Math.round(parsed.duration)
-          : undefined,
+      description: typeof parsed.description === "string" ? parsed.description : undefined,
+      duration: typeof parsed.duration === "number" ? Math.round(parsed.duration) : undefined,
       width: typeof parsed.width === "number" ? parsed.width : undefined,
       height: typeof parsed.height === "number" ? parsed.height : undefined,
       availableHeights: Array.from(availableHeights).sort((a, b) => b - a),
@@ -1483,9 +1378,7 @@ function vttTimeToSeconds(ts: string): number {
   if (parts.length !== 3) return 0;
   const [h, m, s] = parts as [string, string, string];
   const seconds = Number(s);
-  return (
-    Number(h) * 3600 + Number(m) * 60 + (Number.isFinite(seconds) ? seconds : 0)
-  );
+  return Number(h) * 3600 + Number(m) * 60 + (Number.isFinite(seconds) ? seconds : 0);
 }
 
 function parseWebVttCues(rawContent: string): CleanedVttCue[] {
@@ -1493,13 +1386,9 @@ function parseWebVttCues(rawContent: string): CleanedVttCue[] {
     return [];
   }
 
-  const lines = rawContent
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n");
+  const lines = rawContent.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   const cleanedCues: Array<{ start: string; end: string; text: string }> = [];
-  const timeRegex =
-    /((?:\d{2}:)?\d{2}:\d{2}\.\d{3})\s*-->\s*((?:\d{2}:)?\d{2}:\d{2}\.\d{3})/;
+  const timeRegex = /((?:\d{2}:)?\d{2}:\d{2}\.\d{3})\s*-->\s*((?:\d{2}:)?\d{2}:\d{2}\.\d{3})/;
 
   let currentStart = "";
   let currentEnd = "";
@@ -1601,11 +1490,7 @@ function parseWebVttCues(rawContent: string): CleanedVttCue[] {
 }
 
 function serializeWebVtt(cues: CleanedVttCue[]): string {
-  const output: string[] = [
-    "WEBVTT",
-    "X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:0",
-    "",
-  ];
+  const output: string[] = ["WEBVTT", "X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:0", ""];
   for (const cue of cues) {
     output.push(`${cue.start} --> ${cue.end}`);
     output.push(cue.text);
@@ -1645,8 +1530,7 @@ async function packageDirectHls(
   // on an ABR quality switch. Re-encoding only the odd-codec-out renditions
   // would "fix" compatibility but leave that same misalignment behind.
   const needsTranscode = variants.some(
-    (v) =>
-      !isTsSafeVideoCodec(v.videoCodec) || !isTsSafeAudioCodec(v.audioCodec),
+    (v) => !isTsSafeVideoCodec(v.videoCodec) || !isTsSafeAudioCodec(v.audioCodec),
   );
   if (needsTranscode) {
     console.log(
@@ -1664,8 +1548,7 @@ async function packageDirectHls(
 
     const fps = variant.fps && variant.fps > 0 ? variant.fps : 30;
     const gopSize = Math.max(1, Math.round(fps * HLS_SEGMENT_SECONDS));
-    const targetBitrate =
-      QUALITY_DEFINITIONS[variant.quality]?.defaultBitrate ?? variant.bandwidth;
+    const targetBitrate = QUALITY_DEFINITIONS[variant.quality]?.defaultBitrate ?? variant.bandwidth;
 
     const codecArgs = needsTranscode
       ? [
@@ -1721,11 +1604,7 @@ async function packageDirectHls(
     if (res.code === 0 && fs.existsSync(variantPlaylist)) {
       successfulVariants.push(variant);
     } else {
-      console.log(
-        yellow(
-          `  [warn] Direct HLS segmentation fallback for ${variant.quality}`,
-        ),
-      );
+      console.log(yellow(`  [warn] Direct HLS segmentation fallback for ${variant.quality}`));
     }
   }
 
@@ -1757,10 +1636,7 @@ async function packageDirectHls(
     }
 
     const totalDuration = Math.ceil(videoDuration) || 7200;
-    const segmentCount = Math.max(
-      1,
-      Math.ceil(totalDuration / SUBTITLE_SEGMENT_SECONDS),
-    );
+    const segmentCount = Math.max(1, Math.ceil(totalDuration / SUBTITLE_SEGMENT_SECONDS));
 
     const subPlaylistLines = [
       "#EXTM3U",
@@ -1772,10 +1648,7 @@ async function packageDirectHls(
 
     for (let segIdx = 0; segIdx < segmentCount; segIdx++) {
       const segStart = segIdx * SUBTITLE_SEGMENT_SECONDS;
-      const segEnd = Math.min(
-        segStart + SUBTITLE_SEGMENT_SECONDS,
-        totalDuration,
-      );
+      const segEnd = Math.min(segStart + SUBTITLE_SEGMENT_SECONDS, totalDuration);
       // Cues aren't split at segment boundaries — each cue's own absolute
       // (whole-video) timestamps stay intact and are just delivered in
       // whichever segment its start time falls into; every segment shares
@@ -1786,25 +1659,14 @@ async function packageDirectHls(
       });
 
       const segFileName = `seg_${segIdx}.vtt`;
-      await fsp.writeFile(
-        path.join(subDir, segFileName),
-        serializeWebVtt(segCues),
-        "utf-8",
-      );
+      await fsp.writeFile(path.join(subDir, segFileName), serializeWebVtt(segCues), "utf-8");
 
-      subPlaylistLines.push(
-        `#EXTINF:${(segEnd - segStart).toFixed(3)},`,
-        segFileName,
-      );
+      subPlaylistLines.push(`#EXTINF:${(segEnd - segStart).toFixed(3)},`, segFileName);
     }
     subPlaylistLines.push("#EXT-X-ENDLIST");
 
     const subPlaylistPath = path.join(subDir, "prog_index.m3u8");
-    await fsp.writeFile(
-      subPlaylistPath,
-      subPlaylistLines.join("\n") + "\n",
-      "utf-8",
-    );
+    await fsp.writeFile(subPlaylistPath, subPlaylistLines.join("\n") + "\n", "utf-8");
 
     processedSubtitles.push({
       language: sub.language,
@@ -1834,11 +1696,7 @@ async function packageDirectHls(
   }
 
   const masterPlaylistPath = path.join(outputHlsDir, "master.m3u8");
-  await fsp.writeFile(
-    masterPlaylistPath,
-    masterPlaylistLines.join("\n") + "\n",
-    "utf-8",
-  );
+  await fsp.writeFile(masterPlaylistPath, masterPlaylistLines.join("\n") + "\n", "utf-8");
   return { success: true, transcoded: needsTranscode };
 }
 
@@ -1857,15 +1715,11 @@ const DOWNLOADED_VIDEO_EXTENSIONS = new Set([
   ".ts",
 ]);
 
-async function findDownloadedVideoFile(
-  tempDir: string,
-  videoId: string,
-): Promise<string | null> {
+async function findDownloadedVideoFile(tempDir: string, videoId: string): Promise<string | null> {
   const files = await fsp.readdir(tempDir);
   const match = files.find(
     (f) =>
-      f.startsWith(`${videoId}.`) &&
-      DOWNLOADED_VIDEO_EXTENSIONS.has(path.extname(f).toLowerCase()),
+      f.startsWith(`${videoId}.`) && DOWNLOADED_VIDEO_EXTENSIONS.has(path.extname(f).toLowerCase()),
   );
   return match ? path.join(tempDir, match) : null;
 }
@@ -1900,15 +1754,10 @@ function sanitizeStateKey(id: string): string {
 }
 
 function importStateFilePath(playlistId: string): string {
-  return path.join(
-    veolmsImportStateDir(),
-    `${sanitizeStateKey(playlistId)}.json`,
-  );
+  return path.join(veolmsImportStateDir(), `${sanitizeStateKey(playlistId)}.json`);
 }
 
-async function loadImportState(
-  playlistId: string,
-): Promise<ImportProgressState | null> {
+async function loadImportState(playlistId: string): Promise<ImportProgressState | null> {
   try {
     const raw = await fsp.readFile(importStateFilePath(playlistId), "utf-8");
     const parsed = JSON.parse(raw) as Partial<ImportProgressState>;
@@ -2004,16 +1853,12 @@ ${bold("Examples:")}
 
   const rl = readline.createInterface({ input: stdin, output: stdout });
 
-  console.log(
-    `\n${bold(cyan("=== VeoLMS YouTube Playlist Course Importer ==="))}\n`,
-  );
+  console.log(`\n${bold(cyan("=== VeoLMS YouTube Playlist Course Importer ==="))}\n`);
 
   let playlistUrl = cliArgs.playlistUrl;
   if (!playlistUrl) {
     playlistUrl = (
-      await rl.question(
-        `${cyan("? ")}${bold("Enter YouTube Playlist or Video URL: ")}`,
-      )
+      await rl.question(`${cyan("? ")}${bold("Enter YouTube Playlist or Video URL: ")}`)
     ).trim();
   }
 
@@ -2043,11 +1888,7 @@ ${bold("Examples:")}
   } else {
     console.log(`${green("✓")} Scratch directory: ${dim(scratchRoot)}`);
   }
-  await assertEnoughDiskSpace(
-    scratchRoot,
-    MIN_IMPORT_SCRATCH_BYTES,
-    "to start import",
-  );
+  await assertEnoughDiskSpace(scratchRoot, MIN_IMPORT_SCRATCH_BYTES, "to start import");
   const tempDir = await fsp.mkdtemp(path.join(scratchRoot, "veolms-yt-"));
 
   // Ctrl-C / SSH drop / systemd stop must not orphan yt-dlp/ffmpeg children —
@@ -2056,9 +1897,7 @@ ${bold("Examples:")}
   const shutdown = async (signal: NodeJS.Signals) => {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log(
-      `\n${yellow("!")} Received ${signal}; stopping yt-dlp/ffmpeg and cleaning up...`,
-    );
+    console.log(`\n${yellow("!")} Received ${signal}; stopping yt-dlp/ffmpeg and cleaning up...`);
     killAllActiveChildren();
     rl.close();
     if (!cliArgs.keepTemp) {
@@ -2078,39 +1917,27 @@ ${bold("Examples:")}
   };
 
   if (ytCtx.cookies) {
-    console.log(
-      `${green("✓")} Using cookies authentication: ${dim(ytCtx.cookies)}`,
-    );
+    console.log(`${green("✓")} Using cookies authentication: ${dim(ytCtx.cookies)}`);
   } else if (ytCtx.cookiesFromBrowser) {
-    console.log(
-      `${green("✓")} Extracting cookies from browser: ${dim(ytCtx.cookiesFromBrowser)}`,
-    );
+    console.log(`${green("✓")} Extracting cookies from browser: ${dim(ytCtx.cookiesFromBrowser)}`);
   }
 
   try {
     // 1. Locate / Auto-update yt-dlp & Auto-install FFmpeg
-    const ytdlp = await ensureYtDlpBinary(
-      cliArgs.ytdlpPath,
-      cliArgs.yes ? undefined : rl,
-    );
+    const ytdlp = await ensureYtDlpBinary(cliArgs.ytdlpPath, cliArgs.yes ? undefined : rl);
     const ytdlpBinary = ytdlp.path;
     ytCtx.supportsJsRuntimes = ytdlp.supportsJsRuntimes;
     console.log(
       `${green("✓")} yt-dlp: ${dim(ytdlpBinary)}${ytdlp.supportsJsRuntimes ? " (node JS runtime enabled)" : ""}`,
     );
-    const ffmpegBinary = await ensureFfmpegBinary(
-      cliArgs.ffmpegPath,
-      cliArgs.yes ? undefined : rl,
-    );
+    const ffmpegBinary = await ensureFfmpegBinary(cliArgs.ffmpegPath, cliArgs.yes ? undefined : rl);
 
     if (ffmpegBinary) {
       console.log(
         `${green("✓")} FFmpeg detected at: ${dim(ffmpegBinary)} (High-quality format merging & fast HLS enabled)`,
       );
     } else {
-      console.log(
-        `${yellow("!")} FFmpeg not detected - downloading standard format streams.`,
-      );
+      console.log(`${yellow("!")} FFmpeg not detected - downloading standard format streams.`);
     }
 
     // 2. Identify Instructor User
@@ -2124,11 +1951,7 @@ ${bold("Examples:")}
     );
 
     // 3. Extract metadata
-    const playlist = await extractPlaylistMetadata(
-      ytdlpBinary,
-      playlistUrl,
-      ytCtx,
-    );
+    const playlist = await extractPlaylistMetadata(ytdlpBinary, playlistUrl, ytCtx);
     const finalCourseTitle = cliArgs.courseTitle || playlist.title;
     let videoEntries = playlist.entries;
 
@@ -2143,14 +1966,8 @@ ${bold("Examples:")}
     const playlistId =
       playlist.id && playlist.id.trim().length > 0
         ? playlist.id.trim()
-        : crypto
-            .createHash("sha256")
-            .update(playlistUrl)
-            .digest("hex")
-            .slice(0, 16);
-    let importState = cliArgs.noResume
-      ? null
-      : await loadImportState(playlistId);
+        : crypto.createHash("sha256").update(playlistUrl).digest("hex").slice(0, 16);
+    let importState = cliArgs.noResume ? null : await loadImportState(playlistId);
 
     if (importState && importState.instructorId !== instructor.id) {
       console.log(
@@ -2178,22 +1995,16 @@ ${bold("Examples:")}
     // Duration Filters (shorts / min / max duration)
     if (cliArgs.skipShorts) {
       const beforeCount = videoEntries.length;
-      videoEntries = videoEntries.filter(
-        (v) => !v.duration || v.duration >= 60,
-      );
+      videoEntries = videoEntries.filter((v) => !v.duration || v.duration >= 60);
       console.log(
         `  ${dim("•")} Filtered out ${beforeCount - videoEntries.length} YouTube Shorts (< 60s)`,
       );
     }
     if (cliArgs.minDuration && cliArgs.minDuration > 0) {
-      videoEntries = videoEntries.filter(
-        (v) => !v.duration || v.duration >= cliArgs.minDuration!,
-      );
+      videoEntries = videoEntries.filter((v) => !v.duration || v.duration >= cliArgs.minDuration!);
     }
     if (cliArgs.maxDuration && cliArgs.maxDuration > 0) {
-      videoEntries = videoEntries.filter(
-        (v) => !v.duration || v.duration <= cliArgs.maxDuration!,
-      );
+      videoEntries = videoEntries.filter((v) => !v.duration || v.duration <= cliArgs.maxDuration!);
     }
 
     // Video Selection: Flags vs Interactive Selection Wizard
@@ -2201,9 +2012,7 @@ ${bold("Examples:")}
     if (cliArgs.items) {
       const indices = parseVideoSelectionRange(cliArgs.items, totalFound);
       if (indices.length > 0) {
-        videoEntries = indices
-          .map((idx) => videoEntries[idx - 1]!)
-          .filter(Boolean);
+        videoEntries = indices.map((idx) => videoEntries[idx - 1]!).filter(Boolean);
         console.log(
           `  ${dim("•")} Selected ${videoEntries.length} videos from range: ${cyan(cliArgs.items)}`,
         );
@@ -2217,20 +2026,14 @@ ${bold("Examples:")}
       );
     } else if (cliArgs.maxVideos && cliArgs.maxVideos > 0) {
       videoEntries = videoEntries.slice(0, cliArgs.maxVideos);
-      console.log(
-        `  ${dim("•")} Limited to first ${videoEntries.length} videos`,
-      );
+      console.log(`  ${dim("•")} Limited to first ${videoEntries.length} videos`);
     } else if (totalFound > 1 && !cliArgs.yes) {
       // Interactive Selection Wizard
-      console.log(
-        `\n${bold(`Playlist contains ${cyan(String(totalFound))} videos:`)}`,
-      );
+      console.log(`\n${bold(`Playlist contains ${cyan(String(totalFound))} videos:`)}`);
       const previewLimit = Math.min(10, totalFound);
       for (let idx = 0; idx < previewLimit; idx++) {
         const v = videoEntries[idx]!;
-        const durStr = v.duration
-          ? ` [${Math.floor(v.duration / 60)}m ${v.duration % 60}s]`
-          : "";
+        const durStr = v.duration ? ` [${Math.floor(v.duration / 60)}m ${v.duration % 60}s]` : "";
         console.log(`  ${dim(`[${idx + 1}]`)} ${v.title}${dim(durStr)}`);
       }
       if (totalFound > 10) {
@@ -2238,27 +2041,19 @@ ${bold("Examples:")}
       }
 
       console.log(`\n${bold("Select download option:")}`);
-      console.log(
-        `  ${cyan("[1]")} Download ALL ${totalFound} videos (Default)`,
-      );
+      console.log(`  ${cyan("[1]")} Download ALL ${totalFound} videos (Default)`);
       console.log(`  ${cyan("[2]")} Download first N videos (e.g. 5)`);
-      console.log(
-        `  ${cyan("[3]")} Download specific range or items (e.g. 1-10 or 1,3,5,8-12)`,
-      );
+      console.log(`  ${cyan("[3]")} Download specific range or items (e.g. 1-10 or 1,3,5,8-12)`);
       console.log(
         `  ${cyan("[4]")} Custom start and end video number (e.g. start at #5, end at #15)`,
       );
 
       const choice = (
-        await rl.question(
-          `\n${cyan("? ")}${bold("Choose an option [1-4] (default 1): ")}`,
-        )
+        await rl.question(`\n${cyan("? ")}${bold("Choose an option [1-4] (default 1): ")}`)
       ).trim();
       if (choice === "2") {
         const countAns = (
-          await rl.question(
-            `${cyan("? ")}${bold("How many videos to download? (e.g. 5): ")}`,
-          )
+          await rl.question(`${cyan("? ")}${bold("How many videos to download? (e.g. 5): ")}`)
         ).trim();
         const count = parseInt(countAns, 10);
         if (!isNaN(count) && count > 0) {
@@ -2266,26 +2061,18 @@ ${bold("Examples:")}
         }
       } else if (choice === "3") {
         const rangeAns = (
-          await rl.question(
-            `${cyan("? ")}${bold("Enter range or items (e.g. 1-5, 8, 12): ")}`,
-          )
+          await rl.question(`${cyan("? ")}${bold("Enter range or items (e.g. 1-5, 8, 12): ")}`)
         ).trim();
         const indices = parseVideoSelectionRange(rangeAns, totalFound);
         if (indices.length > 0) {
-          videoEntries = indices
-            .map((idx) => videoEntries[idx - 1]!)
-            .filter(Boolean);
+          videoEntries = indices.map((idx) => videoEntries[idx - 1]!).filter(Boolean);
         }
       } else if (choice === "4") {
         const startAns = (
-          await rl.question(
-            `${cyan("? ")}${bold("Start video number (1-" + totalFound + "): ")}`,
-          )
+          await rl.question(`${cyan("? ")}${bold("Start video number (1-" + totalFound + "): ")}`)
         ).trim();
         const endAns = (
-          await rl.question(
-            `${cyan("? ")}${bold("End video number (1-" + totalFound + "): ")}`,
-          )
+          await rl.question(`${cyan("? ")}${bold("End video number (1-" + totalFound + "): ")}`)
         ).trim();
         const startNum = Math.max(1, parseInt(startAns, 10) || 1);
         const endNum = Math.min(totalFound, parseInt(endAns, 10) || totalFound);
@@ -2304,9 +2091,7 @@ ${bold("Examples:")}
 
     console.log(`\n${bold("Course to be created:")}`);
     console.log(`  ${dim("•")} Title:         ${cyan(finalCourseTitle)}`);
-    console.log(
-      `  ${dim("•")} Total Videos:  ${cyan(String(videoEntries.length))}`,
-    );
+    console.log(`  ${dim("•")} Total Videos:  ${cyan(String(videoEntries.length))}`);
     console.log(`  ${dim("•")} Status:        ${cyan(cliArgs.status)}`);
     console.log(
       `  ${dim("•")} Pricing:       ${cyan(cliArgs.pricingType === "paid" ? `${cliArgs.currency} ${cliArgs.price}` : "Free")}`,
@@ -2345,11 +2130,7 @@ ${bold("Examples:")}
         thumbnailMediaId = uploadedThumbnailMediaId;
         const storageKey = `public/thumbnails/${uploadedThumbnailMediaId}/original.jpg`;
 
-        await services.storage.uploadFile(
-          storageKey,
-          thumbData.filePath,
-          thumbData.mimeType,
-        );
+        await services.storage.uploadFile(storageKey, thumbData.filePath, thumbData.mimeType);
 
         try {
           await database.transaction().execute(async (trx) => {
@@ -2370,24 +2151,18 @@ ${bold("Examples:")}
             });
           });
         } catch (error) {
-          await services.storage
-            .deleteObject(storageKey)
-            .catch(() => undefined);
+          await services.storage.deleteObject(storageKey).catch(() => undefined);
           throw error;
         }
 
-        console.log(
-          `${green("✓")} Thumbnail uploaded (Media ID: ${dim(thumbnailMediaId)})`,
-        );
+        console.log(`${green("✓")} Thumbnail uploaded (Media ID: ${dim(thumbnailMediaId)})`);
       }
 
       // 5. Create Course in Database
       const baseSlug = slugify(finalCourseTitle);
       slug = baseSlug;
       let attempts = 0;
-      while (
-        await courseRepo.findCourseBySlugIncludingDeleted(database, slug)
-      ) {
+      while (await courseRepo.findCourseBySlugIncludingDeleted(database, slug)) {
         attempts++;
         slug = `${baseSlug}-${crypto.randomBytes(3).toString("hex")}`;
         if (attempts > 5) {
@@ -2403,9 +2178,7 @@ ${bold("Examples:")}
         id: courseId,
         slug,
         title: finalCourseTitle,
-        short_description: playlist.description
-          ? playlist.description.slice(0, 160)
-          : null,
+        short_description: playlist.description ? playlist.description.slice(0, 160) : null,
         description: playlist.description || null,
         creator_id: instructor.id,
         category_id: null,
@@ -2532,9 +2305,7 @@ ${bold("Examples:")}
         continue;
       }
 
-      console.log(
-        `\n${cyan(videoNum)} Processing: ${bold(video.title)} (${dim(video.id)})...`,
-      );
+      console.log(`\n${cyan(videoNum)} Processing: ${bold(video.title)} (${dim(video.id)})...`);
 
       await assertEnoughDiskSpace(
         tempDir,
@@ -2542,8 +2313,7 @@ ${bold("Examples:")}
         `for video ${i + 1}/${videoEntries.length} (${video.title})`,
       );
 
-      const videoUrl =
-        video.url || `https://www.youtube.com/watch?v=${video.id}`;
+      const videoUrl = video.url || `https://www.youtube.com/watch?v=${video.id}`;
       const videoMediaId = crypto.randomUUID();
 
       let isDirectHlsSuccess = false;
@@ -2562,8 +2332,7 @@ ${bold("Examples:")}
       // below so a crash/exception never leaves "ready" media with no
       // lesson pointing at it (matches the transaction boundary
       // apps/media-worker/src/processor.ts already uses for these tables).
-      let pendingMediaWrite: ((trx: typeof database) => Promise<void>) | null =
-        null;
+      let pendingMediaWrite: ((trx: typeof database) => Promise<void>) | null = null;
       let shouldQueueTranscode = false;
       let wasTranscoded = false;
 
@@ -2591,17 +2360,13 @@ ${bold("Examples:")}
             `  ${green("✓")} Captions downloaded: ${cyan(downloadedSubtitles.map((s) => s.label).join(", "))}`,
           );
         } else {
-          console.log(
-            `  ${dim("•")} No YouTube captions found for this video.`,
-          );
+          console.log(`  ${dim("•")} No YouTube captions found for this video.`);
         }
       }
 
       // Check if Direct Multi-Quality HLS mode is enabled and FFmpeg is available
       if (cliArgs.directHls && ffmpegBinary) {
-        console.log(
-          `  ${dim("•")} Inspecting available YouTube qualities with yt-dlp...`,
-        );
+        console.log(`  ${dim("•")} Inspecting available YouTube qualities with yt-dlp...`);
         const probe = await probeVideoDetails(ytdlpBinary, videoUrl, ytCtx);
         if (probe?.duration) videoDuration = probe.duration;
         if (probe?.width) primaryWidth = probe.width;
@@ -2656,18 +2421,13 @@ ${bold("Examples:")}
           if (dlOk && fs.existsSync(qFilePath)) {
             const stat = await fsp.stat(qFilePath);
             const bandwidth =
-              videoDuration > 0
-                ? Math.round((stat.size * 8) / videoDuration)
-                : qDef.defaultBitrate;
+              videoDuration > 0 ? Math.round((stat.size * 8) / videoDuration) : qDef.defaultBitrate;
 
             // yt-dlp's own selector prefers avc1 but silently falls back to
             // "any codec" (often VP9/AV1 for 1080p+) when YouTube has no
             // avc1 at that height — trust what actually landed on disk, not
             // the requested quality's nominal dimensions.
-            const streamInfo = await probeMediaStreamInfo(
-              ffmpegBinary,
-              qFilePath,
-            );
+            const streamInfo = await probeMediaStreamInfo(ffmpegBinary, qFilePath);
 
             downloadedVariants.push({
               quality: q,
@@ -2703,8 +2463,7 @@ ${bold("Examples:")}
 
           if (hlsResult.success) {
             downloadedQualityNames = downloadedVariants.map((v) => v.quality);
-            const outputVisibility =
-              cliArgs.pricingType === "paid" ? "protected" : "public";
+            const outputVisibility = cliArgs.pricingType === "paid" ? "protected" : "public";
             const outputPrefix = `${outputVisibility}/transcoded/${videoMediaId}`;
             console.log(
               `  ${dim("•")} Uploading multi-quality HLS streams to storage (${downloadedQualityNames.join(", ")})...`,
@@ -2775,9 +2534,7 @@ ${bold("Examples:")}
       // Fallback path: Single stream download + worker queue
       if (!isDirectHlsSuccess) {
         if (cliArgs.directHls) {
-          console.log(
-            `  ${yellow("!")} Multi-quality HLS fallback: Downloading single stream...`,
-          );
+          console.log(`  ${yellow("!")} Multi-quality HLS fallback: Downloading single stream...`);
         }
         if (downloadedSubtitles.length > 0) {
           console.log(
@@ -2823,11 +2580,7 @@ ${bold("Examples:")}
               timeoutMs: DOWNLOAD_PROCESS_TIMEOUT_MS,
             });
             localVideoPath = await findDownloadedVideoFile(tempDir, video.id);
-            if (
-              dlRes.code === 0 &&
-              localVideoPath &&
-              fs.existsSync(localVideoPath)
-            ) {
+            if (dlRes.code === 0 && localVideoPath && fs.existsSync(localVideoPath)) {
               break;
             }
             localVideoPath = null;
@@ -2871,11 +2624,7 @@ ${bold("Examples:")}
         console.log(
           `  ${dim("•")} Uploading to storage (${(vStat.size / 1024 / 1024).toFixed(1)} MB)...`,
         );
-        await services.storage.uploadFile(
-          videoStorageKey,
-          localVideoPath,
-          mimeType,
-        );
+        await services.storage.uploadFile(videoStorageKey, localVideoPath, mimeType);
 
         // Deferred, same reason as the direct-HLS branch above; also defer
         // queueing the transcode job until after the transaction commits,
@@ -2909,8 +2658,7 @@ ${bold("Examples:")}
       // Create lesson record
       const lessonId = crypto.randomUUID();
       const lessonNow = new Date();
-      const targetSectionId =
-        sectionIds[Math.floor(i / splitSize)] || sectionIds[0]!;
+      const targetSectionId = sectionIds[Math.floor(i / splitSize)] || sectionIds[0]!;
       const lessonPosition = i % splitSize;
       const isPreview = i < cliArgs.previewCount;
 
@@ -2942,11 +2690,7 @@ ${bold("Examples:")}
       // visible through the non-transactional connection queueTranscodeJob
       // reads from.
       if (shouldQueueTranscode) {
-        await mediaService.queueTranscodeJob(
-          videoMediaId,
-          instructor.id,
-          cliLogger as never,
-        );
+        await mediaService.queueTranscodeJob(videoMediaId, instructor.id, cliLogger as never);
       }
 
       const captionInfo =
@@ -2979,9 +2723,7 @@ ${bold("Examples:")}
       // Remove local temp files unless keepTemp is true
       if (!cliArgs.keepTemp) {
         const videoTempDir = path.join(tempDir, `vid_${video.id}`);
-        await fsp
-          .rm(videoTempDir, { recursive: true, force: true })
-          .catch(() => {});
+        await fsp.rm(videoTempDir, { recursive: true, force: true }).catch(() => {});
         const singleLocal = await findDownloadedVideoFile(tempDir, video.id);
         if (singleLocal) {
           await fsp.unlink(singleLocal).catch(() => {});
@@ -3027,9 +2769,7 @@ ${bold("Examples:")}
     console.log(`  ${dim("•")} Public Link:    ${bold(cyan(courseUrl))}`);
     console.log(`  ${dim("•")} Instructor Link:${bold(cyan(editorUrl))}`);
     if (hadFailures) {
-      console.log(
-        `  ${yellow("•")} Failed videos:  ${dim(failedVideos.join(", "))}`,
-      );
+      console.log(`  ${yellow("•")} Failed videos:  ${dim(failedVideos.join(", "))}`);
       console.log(
         `  ${dim("Re-run the same command to retry the failed video(s) — already-imported lessons are skipped automatically.")}`,
       );

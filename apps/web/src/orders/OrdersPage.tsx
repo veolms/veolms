@@ -5,11 +5,7 @@ import type { CourseRole } from "../courses/catalogue";
 import type { NavigateTo } from "../routing/navigation";
 import { useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
-import {
-  getUserRoles,
-  getWorkspaceRoleStorageKey,
-  isStaffRole,
-} from "../shell/workspaceRole";
+import { getUserRoles, getWorkspaceRoleStorageKey, isStaffRole } from "../shell/workspaceRole";
 import { useOrdersFilter } from "./useOrdersFilter";
 import { OrderSummaryCards } from "./OrderSummaryCards";
 import { OrderFiltersBar } from "./OrderFiltersBar";
@@ -29,11 +25,7 @@ export interface OrdersPageProps {
   role?: CourseRole;
 }
 
-export function OrdersPage({
-  onNavigatePage,
-  setNotice,
-  role,
-}: OrdersPageProps) {
+export function OrdersPage({ onNavigatePage, setNotice, role }: OrdersPageProps) {
   const { data: authUser, isFetched: authUserFetched } = useCurrentUser();
   const storeUser = useAuthStore((s) => s.user);
   const isAuthReady = Boolean(storeUser) || authUserFetched;
@@ -47,17 +39,14 @@ export function OrdersPage({
     if (typeof window === "undefined") return "student";
     try {
       const key = getWorkspaceRoleStorageKey(user?.id);
-      const stored =
-        localStorage.getItem(key) || localStorage.getItem("veolms-role");
+      const stored = localStorage.getItem(key) || localStorage.getItem("veolms-role");
       return stored === "creator" ? "creator" : "student";
     } catch {
       return "student";
     }
   }, [role, user?.id]);
 
-  const isStaff = Boolean(
-    user && isStaffRole(userRoles) && activeRole !== "student",
-  );
+  const isStaff = Boolean(user && isStaffRole(userRoles) && activeRole !== "student");
 
   const filterState = useOrdersFilter({ enabled: isStaff });
 
@@ -72,8 +61,7 @@ export function OrdersPage({
 
       if (
         !isInput &&
-        (event.key === "/" ||
-          ((event.metaKey || event.ctrlKey) && event.key === "k"))
+        (event.key === "/" || ((event.metaKey || event.ctrlKey) && event.key === "k"))
       ) {
         event.preventDefault();
         document.getElementById("orders-search-input")?.focus();
@@ -92,11 +80,7 @@ export function OrdersPage({
         role="status"
         aria-label="Loading orders dashboard"
       >
-        <CircleNotch
-          size={32}
-          className="animate-spin text-(--accent)"
-          aria-hidden="true"
-        />
+        <CircleNotch size={32} className="animate-spin text-(--accent)" aria-hidden="true" />
       </main>
     );
   }
@@ -106,18 +90,12 @@ export function OrdersPage({
     return (
       <Suspense
         fallback={
-          <div
-            className="grid min-h-52 place-items-center"
-            aria-label="Loading order history"
-          >
+          <div className="grid min-h-52 place-items-center" aria-label="Loading order history">
             <CircleNotch size={26} className="animate-spin text-(--accent)" />
           </div>
         }
       >
-        <OrderHistoryPageRoute
-          onNavigatePage={onNavigatePage}
-          setNotice={setNotice}
-        />
+        <OrderHistoryPageRoute onNavigatePage={onNavigatePage} setNotice={setNotice} />
       </Suspense>
     );
   }
@@ -133,7 +111,7 @@ export function OrdersPage({
         <div>
           <h1
             id="orders-page-title"
-            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
+            className="text-[clamp(1.8rem,2.4vw,2.15rem)] leading-tight font-bold tracking-[-0.035em] text-(--text)"
           >
             Orders
           </h1>
@@ -143,7 +121,7 @@ export function OrdersPage({
         </div>
 
         <span
-          className="inline-flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent)"
+          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent) sm:h-14 sm:w-14"
           aria-hidden="true"
         >
           <ShoppingBag size={26} weight="duotone" />
@@ -168,10 +146,7 @@ export function OrdersPage({
       />
 
       {/* 4 KPI Summary Cards */}
-      <OrderSummaryCards
-        stats={filterState.stats}
-        isLoading={filterState.isLoadingStats}
-      />
+      <OrderSummaryCards stats={filterState.stats} isLoading={filterState.isLoadingStats} />
 
       {/* Virtualized Orders Table */}
       <OrdersTable

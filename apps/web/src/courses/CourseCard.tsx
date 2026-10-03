@@ -22,10 +22,7 @@ import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
 import { CourseCardThumbnail } from "./CourseCardThumbnail";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
-export {
-  courseThumbnailSizes,
-  getCourseThumbnailSrcSet,
-} from "./courseThumbnail";
+export { courseThumbnailSizes, getCourseThumbnailSrcSet } from "./courseThumbnail";
 
 const courseOverviewPath = (course: Course) =>
   `/courses/${encodeURIComponent(getCourseRouteKey(course))}/overview`;
@@ -79,9 +76,7 @@ export function CourseCard({
 }: CourseCardProps) {
   const canEdit =
     isAdmin ||
-    (Boolean(currentUserId) &&
-      Boolean(course.creatorId) &&
-      course.creatorId === currentUserId);
+    (Boolean(currentUserId) && Boolean(course.creatorId) && course.creatorId === currentUserId);
   const progress = course.progress ?? 0;
   const overviewPath = courseOverviewPath(course);
   const absoluteCourseUrl =
@@ -158,7 +153,7 @@ export function CourseCard({
     <article
       className={`group relative min-w-0 overflow-hidden rounded-2xl border transition-[background-color,box-shadow,opacity,border-color] duration-200 ${
         isDeleting
-          ? "border-(--border) bg-(--card-surface,var(--surface)) opacity-60 pointer-events-none select-none"
+          ? "pointer-events-none border-(--border) bg-(--card-surface,var(--surface)) opacity-60 select-none"
           : "border-(--border) bg-(--card-surface,var(--surface)) shadow-(--card-shadow) hover:bg-(--card-surface-hover,var(--hover)) hover:shadow-(--card-hover-shadow)"
       }`}
       aria-label={`${course.title}${isDeleting ? ", deleting..." : role === "creator" ? `, ${course.lifecycleStatus}` : course.enrolled ? `, ${progress}% complete` : ", not enrolled"}`}
@@ -191,9 +186,9 @@ export function CourseCard({
         </button>
 
         {isDeleting ? (
-          <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
+          <div className="absolute top-3.5 left-3.5 z-20 flex flex-wrap items-center gap-1.5">
             <span
-              className="course-tag inline-flex items-center gap-1.5 border border-red-500/25 bg-red-500/15 text-red-400 font-medium"
+              className="course-tag inline-flex items-center gap-1.5 border border-red-500/25 bg-red-500/15 font-medium text-red-400"
               data-course-card-tag
               data-testid="course-deleting-tag"
             >
@@ -204,13 +199,10 @@ export function CourseCard({
         ) : null}
       </div>
 
-      <div
-        className="relative flex min-h-46 flex-col px-4 pt-3 pb-4"
-        data-course-card-details
-      >
+      <div className="relative flex min-h-46 flex-col px-4 pt-3 pb-4" data-course-card-details>
         <a
           href={overviewPath}
-          className="absolute inset-0 z-10 cursor-pointer rounded-b-2xl outline-none transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+          className="absolute inset-0 z-10 cursor-pointer rounded-b-2xl transition-colors duration-150 outline-none hover:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
           aria-label={`View course overview for ${course.title}`}
           title="View Course Overview"
           data-course-card-curriculum
@@ -232,12 +224,9 @@ export function CourseCard({
           }}
         />
 
-        <div
-          className="-mx-2 flex min-w-0 items-start"
-          data-course-card-info-row
-        >
+        <div className="-mx-2 flex min-w-0 items-start" data-course-card-info-row>
           <div className="min-w-0 flex-1 px-2 text-left">
-            <h2 className="truncate text-base font-semibold leading-10 tracking-[-0.015em] text-(--text) lg:text-lg">
+            <h2 className="truncate text-base leading-10 font-semibold tracking-[-0.015em] text-(--text) lg:text-lg">
               {course.title}
             </h2>
             <p className="mt-0.5 truncate text-[0.75rem] leading-6 text-(--muted)">
@@ -266,9 +255,7 @@ export function CourseCard({
                     <MenuAction
                       Icon={ArrowCounterClockwise}
                       label="Restore Course"
-                      onClick={() =>
-                        closeThen(() => void handleRestore(course))
-                      }
+                      onClick={() => closeThen(() => void handleRestore(course))}
                     />
                   ) : null
                 ) : canEdit ? (
@@ -294,18 +281,14 @@ export function CourseCard({
                       Icon={ChartBar}
                       label="Analytics"
                       onClick={() =>
-                        closeThen(() =>
-                          onNavigatePage(`/analytics?course=${course.id}`),
-                        )
+                        closeThen(() => onNavigatePage(`/analytics?course=${course.id}`))
                       }
                     />
                     <MenuAction
                       Icon={UsersThree}
                       label="Manage Students"
                       onClick={() =>
-                        closeThen(() =>
-                          onNavigatePage(`/students?course=${course.id}`),
-                        )
+                        closeThen(() => onNavigatePage(`/students?course=${course.id}`))
                       }
                     />
                     <MenuDivider />
@@ -340,9 +323,7 @@ export function CourseCard({
                       Icon={Trash}
                       label="Delete Course"
                       destructive
-                      onClick={() =>
-                        closeThen(() => onDeleteRequested?.(course))
-                      }
+                      onClick={() => closeThen(() => onDeleteRequested?.(course))}
                     />
                   </>
                 ) : (
@@ -356,9 +337,7 @@ export function CourseCard({
                       Icon={ChartBar}
                       label="Analytics"
                       onClick={() =>
-                        closeThen(() =>
-                          onNavigatePage(`/analytics?course=${course.id}`),
-                        )
+                        closeThen(() => onNavigatePage(`/analytics?course=${course.id}`))
                       }
                     />
                     <MenuDivider />
@@ -381,9 +360,7 @@ export function CourseCard({
                     Icon={PaperPlaneTilt}
                     label="Open Discussions"
                     onClick={() =>
-                      closeThen(() =>
-                        onNavigatePage(`/discussions?course=${course.id}`),
-                      )
+                      closeThen(() => onNavigatePage(`/discussions?course=${course.id}`))
                     }
                   />
                   <MenuDivider />
@@ -403,11 +380,7 @@ export function CourseCard({
                       Icon={Certificate}
                       label="View Certificate"
                       onClick={() =>
-                        closeThen(() =>
-                          setNotice(
-                            `Certificate for "${course.title}" is ready.`,
-                          ),
-                        )
+                        closeThen(() => setNotice(`Certificate for "${course.title}" is ready.`))
                       }
                     />
                   )}
@@ -415,11 +388,7 @@ export function CourseCard({
                     Icon={Flag}
                     label="Report an Issue"
                     onClick={() =>
-                      closeThen(() =>
-                        setNotice(
-                          `Issue reporting opened for ${course.title}.`,
-                        ),
-                      )
+                      closeThen(() => setNotice(`Issue reporting opened for ${course.title}.`))
                     }
                   />
                 </>
@@ -438,9 +407,7 @@ export function CourseCard({
                         aria-hidden="true"
                       />
                     }
-                    label={
-                      wishlisted ? "Remove from Wishlist" : "Add to Wishlist"
-                    }
+                    label={wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
                     onClick={() => closeThen(() => onWishlist(course))}
                   />
                   <MenuAction
@@ -459,33 +426,28 @@ export function CourseCard({
           )}
         </div>
 
-        <div
-          className="relative z-10 mt-auto flex flex-col"
-          data-course-card-actions
-        >
-          {role === "student" &&
-            !course.enrolled &&
-            Boolean(course.pricing) && (
-              <div
-                className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"
-                data-course-card-pricing
-                aria-label={`Course price ${course.pricing?.price}`}
-              >
-                <strong className="text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)">
-                  {course.pricing?.price}
-                </strong>
-                {Boolean(course.pricing?.originalPrice) && (
-                  <span className="text-[0.95rem] font-medium leading-none text-(--muted) line-through">
-                    {course.pricing?.originalPrice}
-                  </span>
-                )}
-                {Boolean(course.pricing?.discount) && (
-                  <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] font-bold leading-none text-emerald-300">
-                    {course.pricing?.discount}
-                  </span>
-                )}
-              </div>
-            )}
+        <div className="relative z-10 mt-auto flex flex-col" data-course-card-actions>
+          {role === "student" && !course.enrolled && Boolean(course.pricing) && (
+            <div
+              className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"
+              data-course-card-pricing
+              aria-label={`Course price ${course.pricing?.price}`}
+            >
+              <strong className="text-[1.55rem] leading-none font-extrabold tracking-[-0.035em] text-(--text)">
+                {course.pricing?.price}
+              </strong>
+              {Boolean(course.pricing?.originalPrice) && (
+                <span className="text-[0.95rem] leading-none font-medium text-(--muted) line-through">
+                  {course.pricing?.originalPrice}
+                </span>
+              )}
+              {Boolean(course.pricing?.discount) && (
+                <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] leading-none font-bold text-emerald-300">
+                  {course.pricing?.discount}
+                </span>
+              )}
+            </div>
+          )}
 
           {role === "student" && course.enrolled && (
             <div
@@ -527,32 +489,17 @@ export function CourseCard({
               }`}
               data-control-radius-action
               onPointerEnter={() => {
-                if (
-                  role === "creator" &&
-                  canEdit &&
-                  !isBin &&
-                  !course.deletedAt
-                ) {
+                if (role === "creator" && canEdit && !isBin && !course.deletedAt) {
                   onEditIntent?.(course);
                 }
               }}
               onFocus={() => {
-                if (
-                  role === "creator" &&
-                  canEdit &&
-                  !isBin &&
-                  !course.deletedAt
-                ) {
+                if (role === "creator" && canEdit && !isBin && !course.deletedAt) {
                   onEditIntent?.(course);
                 }
               }}
               onPointerDown={() => {
-                if (
-                  role === "creator" &&
-                  canEdit &&
-                  !isBin &&
-                  !course.deletedAt
-                ) {
+                if (role === "creator" && canEdit && !isBin && !course.deletedAt) {
                   onEditIntent?.(course);
                 }
               }}
@@ -604,12 +551,7 @@ export function CourseCard({
                   </>
                 ) : (
                   <>
-                    <PencilSimple
-                      className="shrink-0"
-                      size={17}
-                      weight="bold"
-                      aria-hidden="true"
-                    />
+                    <PencilSimple className="shrink-0" size={17} weight="bold" aria-hidden="true" />
                     <span>Edit Course</span>
                   </>
                 )
@@ -619,12 +561,7 @@ export function CourseCard({
                 >
                   {course.enrolled ? (
                     <>
-                      <Play
-                        className="shrink-0"
-                        size={17}
-                        weight="fill"
-                        aria-hidden="true"
-                      />
+                      <Play className="shrink-0" size={17} weight="fill" aria-hidden="true" />
                       <span className="truncate">Continue Learning</span>
                     </>
                   ) : (
@@ -647,16 +584,13 @@ export function CourseCard({
 
       {isDeleting && (
         <div
-          className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-[color-mix(in_srgb,var(--card-surface,var(--surface))_60%,transparent)] backdrop-blur-[2px] transition-opacity duration-200 pointer-events-auto"
+          className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center bg-[color-mix(in_srgb,var(--card-surface,var(--surface))_60%,transparent)] p-4 backdrop-blur-[2px] transition-opacity duration-200"
           role="status"
           aria-live="polite"
           data-testid="course-deleting-overlay"
         >
           <div className="inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-(--surface) px-3.5 py-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.08)]">
-            <CircleNotch
-              size={14}
-              className="animate-spin text-red-500 shrink-0"
-            />
+            <CircleNotch size={14} className="shrink-0 animate-spin text-red-500" />
             <span className="text-[0.78rem] font-semibold text-(--text)">
               {isBin || course.deletedAt ? "Deleting..." : "Moving to Bin..."}
             </span>

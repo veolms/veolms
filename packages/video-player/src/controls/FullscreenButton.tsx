@@ -18,13 +18,7 @@ export function FullscreenButton({
   const fullscreen = usePlayerState(({ ui }) => ui.fullscreen);
   const { icons } = usePlayerTheme();
   const Icon = fullscreen ? icons.fullscreenExit : icons.fullscreenEnter;
-  const icon = (
-    <Icon
-      size={iconSize}
-      active={fullscreen}
-      style={{ transform: "rotate(90deg)" }}
-    />
-  );
+  const icon = <Icon size={iconSize} active={fullscreen} style={{ transform: "rotate(90deg)" }} />;
   return (
     <PlayerIconButton
       label="Toggle fullscreen"
@@ -33,10 +27,7 @@ export function FullscreenButton({
       pressed={fullscreen}
       icon={
         iconContainerClassName ? (
-          <span
-            className={iconContainerClassName}
-            data-fullscreen-visual-surface=""
-          >
+          <span className={iconContainerClassName} data-fullscreen-visual-surface="">
             {icon}
           </span>
         ) : (

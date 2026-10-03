@@ -29,9 +29,7 @@ export const oauthProviderSchema = z.enum(["google", "github"]);
 
 export const oauthUrlRequestSchema = z.object({
   provider: oauthProviderSchema,
-  redirectUri: z
-    .url()
-    .meta({ example: "https://app.example.com/oauth/callback" }),
+  redirectUri: z.url().meta({ example: "https://app.example.com/oauth/callback" }),
 });
 
 export const oauthUrlResponseSchema = z.object({
@@ -48,10 +46,7 @@ export const oauthCallbackRequestSchema = z.object({
   code: z.string().meta({ example: "4/0AY0e-g7..." }).optional(),
   token: z.string().meta({ example: "4/0AY0e-g7..." }).optional(),
   state: z.string().meta({ example: "8f14e45fceea167a" }).optional(),
-  redirectUri: z
-    .string()
-    .meta({ example: "https://app.example.com/oauth/callback" })
-    .optional(),
+  redirectUri: z.string().meta({ example: "https://app.example.com/oauth/callback" }).optional(),
 });
 
 export const oauthLoginRequestSchema = oauthCallbackRequestSchema;
@@ -67,10 +62,7 @@ export const oauthRegisterRequestSchema = oauthCallbackRequestSchema.extend({
     .string()
     .min(3, "Username must be at least 3 characters")
     .max(30, "Username is too long")
-    .regex(
-      /^[a-zA-Z0-9_]+$/,
-      "Username must contain only letters, numbers, and underscores",
-    )
+    .regex(/^[a-zA-Z0-9_]+$/, "Username must contain only letters, numbers, and underscores")
     .toLowerCase()
     .meta({ example: "ada_lovelace" })
     .optional(),
@@ -120,24 +112,17 @@ export const sessionParamsSchema = z.object({
 
 // Passkeys & MFA
 export const passkeyRegisterVerifyRequestSchema = z.object({
-  response: z
-    .any()
-    .meta({ description: "WebAuthn PublicKeyCredential registration payload" }),
+  response: z.any().meta({ description: "WebAuthn PublicKeyCredential registration payload" }),
 });
 
 export const passkeyLoginVerifyRequestSchema = z.object({
-  response: z
-    .any()
-    .meta({ description: "WebAuthn PublicKeyCredential assertion payload" }),
+  response: z.any().meta({ description: "WebAuthn PublicKeyCredential assertion payload" }),
 });
 
 export const totpVerifyRequestSchema = z.object({
   code: z
     .string()
-    .regex(
-      /^\d{6}$|^\d{8}$/,
-      "Code must be a 6-digit TOTP code or an 8-digit backup code",
-    )
+    .regex(/^\d{6}$|^\d{8}$/, "Code must be a 6-digit TOTP code or an 8-digit backup code")
     .meta({ example: "123456" }),
 });
 
@@ -147,10 +132,7 @@ export const totpEnableRequestSchema = z.object({
     .length(6, "TOTP code must be 6 digits")
     .regex(/^\d+$/, "TOTP code must contain only digits")
     .meta({ example: "123456" }),
-  secret: z
-    .string()
-    .min(1, "TOTP secret is required")
-    .meta({ example: "JBSWY3DPEHPK3PXP" }),
+  secret: z.string().min(1, "TOTP secret is required").meta({ example: "JBSWY3DPEHPK3PXP" }),
 });
 
 export const totpSetupResponseSchema = z.object({
@@ -193,17 +175,7 @@ const passkeyCredentialDescriptorSchema = z
     id: z.string().min(1),
     type: z.literal("public-key"),
     transports: z
-      .array(
-        z.enum([
-          "ble",
-          "cable",
-          "hybrid",
-          "internal",
-          "nfc",
-          "smart-card",
-          "usb",
-        ]),
-      )
+      .array(z.enum(["ble", "cable", "hybrid", "internal", "nfc", "smart-card", "usb"]))
       .optional(),
   })
   .passthrough();
@@ -244,9 +216,7 @@ export const passkeyAuthenticationOptionsResponseSchema = z
     allowCredentials: z.array(passkeyCredentialDescriptorSchema).optional(),
     rpId: z.string().min(1).optional(),
     timeout: z.number().nonnegative().optional(),
-    userVerification: z
-      .enum(["discouraged", "preferred", "required"])
-      .optional(),
+    userVerification: z.enum(["discouraged", "preferred", "required"]).optional(),
   })
   .passthrough()
   .meta({ description: "Serialized WebAuthn authentication options" });
@@ -258,9 +228,7 @@ export const passkeyOptionsResponseSchema = z.union([
 
 export type LoginRequest = z.input<typeof loginRequestSchema>;
 export type OauthLoginRequest = z.input<typeof oauthLoginRequestSchema>;
-export type GoogleOneTapLoginRequest = z.input<
-  typeof googleOneTapLoginRequestSchema
->;
+export type GoogleOneTapLoginRequest = z.input<typeof googleOneTapLoginRequestSchema>;
 export type OauthRegisterRequest = z.input<typeof oauthRegisterRequestSchema>;
 export type OauthProvider = z.output<typeof oauthProviderSchema>;
 export type OauthUrlRequest = z.input<typeof oauthUrlRequestSchema>;
@@ -271,11 +239,7 @@ export type LoginResponse = z.output<typeof loginResponseSchema>;
 export type AuthMessageResponse = z.output<typeof authMessageResponseSchema>;
 export type SessionParams = z.input<typeof sessionParamsSchema>;
 export type SessionResponse = z.output<typeof sessionResponseSchema>;
-export type PasskeyRegisterVerifyRequest = z.input<
-  typeof passkeyRegisterVerifyRequestSchema
->;
-export type PasskeyLoginVerifyRequest = z.input<
-  typeof passkeyLoginVerifyRequestSchema
->;
+export type PasskeyRegisterVerifyRequest = z.input<typeof passkeyRegisterVerifyRequestSchema>;
+export type PasskeyLoginVerifyRequest = z.input<typeof passkeyLoginVerifyRequestSchema>;
 export type TotpVerifyRequest = z.input<typeof totpVerifyRequestSchema>;
 export type TotpEnableRequest = z.input<typeof totpEnableRequestSchema>;

@@ -17,10 +17,7 @@ export function useMiniPlayerCurriculumSections(
   );
 
   useEffect(() => {
-    const currentSection = getCurriculumSectionForLesson(
-      sections,
-      selectedLesson,
-    );
+    const currentSection = getCurriculumSectionForLesson(sections, selectedLesson);
     if (currentSection) {
       setExpandedSectionIds([currentSection.id]);
     }

@@ -8,10 +8,7 @@ import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import Cropper, { type Area, type Point } from "react-easy-crop";
 
-import {
-  createAvatarCropFile,
-  type AvatarCropAreaPixels,
-} from "./avatar-image-processing";
+import { createAvatarCropFile, type AvatarCropAreaPixels } from "./avatar-image-processing";
 
 export interface AvatarCropDialogProps {
   open: boolean;
@@ -48,8 +45,7 @@ export function AvatarCropDialog({
   const [crop, setCrop] = useState<Point>(DEFAULT_CROP);
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [rotation, setRotation] = useState(0);
-  const [croppedAreaPixels, setCroppedAreaPixels] =
-    useState<AvatarCropAreaPixels | null>(null);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<AvatarCropAreaPixels | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingError, setProcessingError] = useState("");
 
@@ -69,12 +65,9 @@ export function AvatarCropDialog({
     setProcessingError("");
   }, [open, imageUrl]);
 
-  const handleCropComplete = useCallback(
-    (_croppedArea: Area, nextCroppedAreaPixels: Area) => {
-      setCroppedAreaPixels(nextCroppedAreaPixels);
-    },
-    [],
-  );
+  const handleCropComplete = useCallback((_croppedArea: Area, nextCroppedAreaPixels: Area) => {
+    setCroppedAreaPixels(nextCroppedAreaPixels);
+  }, []);
 
   if (!open || !imageUrl) return null;
 
@@ -106,12 +99,7 @@ export function AvatarCropDialog({
     setIsProcessing(true);
     setProcessingError("");
     try {
-      const file = await createAvatarCropFile(
-        imageUrl,
-        croppedAreaPixels,
-        rotation,
-        fileName,
-      );
+      const file = await createAvatarCropFile(imageUrl, croppedAreaPixels, rotation, fileName);
       await onConfirm(file);
     } catch (error: unknown) {
       setProcessingError(getErrorMessage(error));
@@ -144,16 +132,13 @@ export function AvatarCropDialog({
       <div className="settings-profile__privacy-dialog-copy">
         <h2 id="avatar-crop-dialog-title">Edit profile photo</h2>
         <p>
-          Drag to position your photo, pinch or use the slider to zoom, then
-          save it for your profile.
+          Drag to position your photo, pinch or use the slider to zoom, then save it for your
+          profile.
         </p>
       </div>
 
       <div className="settings-profile__crop-dialog-body">
-        <div
-          className="settings-profile__crop-viewport"
-          aria-label="Profile photo crop area"
-        >
+        <div className="settings-profile__crop-viewport" aria-label="Profile photo crop area">
           <Cropper
             image={imageUrl}
             crop={crop}

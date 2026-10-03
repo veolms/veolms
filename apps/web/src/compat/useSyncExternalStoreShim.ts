@@ -45,16 +45,10 @@ export function useSyncExternalStoreWithSelector<Snapshot, Selection>(
   );
   const getServerSelection = useMemo(
     () =>
-      getServerSnapshot
-        ? createSelectionReader(getServerSnapshot, selector, isEqual)
-        : undefined,
+      getServerSnapshot ? createSelectionReader(getServerSnapshot, selector, isEqual) : undefined,
     [getServerSnapshot, selector, isEqual],
   );
-  const selection = useSyncExternalStore(
-    subscribe,
-    getSelection,
-    getServerSelection,
-  );
+  const selection = useSyncExternalStore(subscribe, getSelection, getServerSelection);
   useDebugValue(selection);
   return selection;
 }

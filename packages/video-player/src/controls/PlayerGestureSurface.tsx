@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  type PointerEvent,
-  type TouchEvent,
-} from "react";
+import { useCallback, useEffect, useRef, type PointerEvent, type TouchEvent } from "react";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
@@ -64,8 +58,7 @@ export function PlayerGestureSurface({
       zoomGestureActive: ui.zoom.gestureActive,
     }),
     (left, right) =>
-      left.ready === right.ready &&
-      left.zoomGestureActive === right.zoomGestureActive,
+      left.ready === right.ready && left.zoomGestureActive === right.zoomGestureActive,
   );
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mobileSeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -124,9 +117,7 @@ export function PlayerGestureSurface({
       const seconds = Math.max(1, Math.round(seekIntervalSeconds));
       const activeSequence = mobileSeekSequenceRef.current;
       const totalSeconds =
-        activeSequence?.direction === direction
-          ? activeSequence.totalSeconds + seconds
-          : seconds;
+        activeSequence?.direction === direction ? activeSequence.totalSeconds + seconds : seconds;
 
       mobileSeekSequenceRef.current = { direction, totalSeconds };
       clearMobileSeekTimer();
@@ -137,28 +128,15 @@ export function PlayerGestureSurface({
         direction,
         variant: "mobile-seek",
       });
-      mobileSeekTimerRef.current = setTimeout(
-        finishMobileSeekSequence,
-        MOBILE_SEEK_IDLE_DELAY_MS,
-      );
+      mobileSeekTimerRef.current = setTimeout(finishMobileSeekSequence, MOBILE_SEEK_IDLE_DELAY_MS);
     },
-    [
-      clearMobileSeekTimer,
-      controller,
-      finishMobileSeekSequence,
-      seekIntervalSeconds,
-    ],
+    [clearMobileSeekTimer, controller, finishMobileSeekSequence, seekIntervalSeconds],
   );
 
   const beginPausedScrub = useCallback(() => {
     const { media } = controller.getSnapshot();
     const { startX, width } = pressGeometryRef.current;
-    if (
-      !media.paused ||
-      !Number.isFinite(media.duration) ||
-      media.duration <= 0 ||
-      width <= 0
-    ) {
+    if (!media.paused || !Number.isFinite(media.duration) || media.duration <= 0 || width <= 0) {
       return false;
     }
 
@@ -178,12 +156,8 @@ export function PlayerGestureSurface({
     (clientX: number) => {
       const gesture = pausedScrubRef.current;
       if (!gesture) return false;
-      const deltaTime =
-        ((clientX - gesture.startX) / gesture.width) * gesture.duration;
-      const nextTime = Math.min(
-        gesture.duration,
-        Math.max(0, gesture.startTime + deltaTime),
-      );
+      const deltaTime = ((clientX - gesture.startX) / gesture.width) * gesture.duration;
+      const nextTime = Math.min(gesture.duration, Math.max(0, gesture.startTime + deltaTime));
       controller.setPreviewTime(nextTime);
       controller.seekTo(nextTime);
       return true;
@@ -294,8 +268,7 @@ export function PlayerGestureSurface({
   );
 
   const captureControlsVisibility = () => {
-    controlsVisibleBeforePressRef.current =
-      controller.getSnapshot().ui.controlsVisible;
+    controlsVisibleBeforePressRef.current = controller.getSnapshot().ui.controlsVisible;
   };
 
   const completePress = (direction: SeekDirection, pointerType: string) => {
@@ -336,9 +309,7 @@ export function PlayerGestureSurface({
       timestamp - lastTap.timestamp <= DOUBLE_TAP_WINDOW_MS;
     const desktopDoubleTap = isDoubleTapWindow && !mobileInteraction;
     const mobileSeekDoubleTap =
-      isDoubleTapWindow &&
-      !desktopDoubleTap &&
-      lastTap?.direction === direction;
+      isDoubleTapWindow && !desktopDoubleTap && lastTap?.direction === direction;
 
     if (desktopDoubleTap) {
       clearSingleTapTimer();
@@ -363,10 +334,7 @@ export function PlayerGestureSurface({
     scheduleSingleTap(direction, timestamp, pointerType);
   };
 
-  const capturePressGeometry = (
-    element: HTMLButtonElement,
-    clientX: number,
-  ) => {
+  const capturePressGeometry = (element: HTMLButtonElement, clientX: number) => {
     const bounds = element.getBoundingClientRect();
     pressGeometryRef.current = { startX: clientX, width: bounds.width };
   };
@@ -380,10 +348,7 @@ export function PlayerGestureSurface({
       y: event.clientY,
     };
     capturePressGeometry(event.currentTarget, event.clientX);
-    pressDirectionRef.current = getSeekDirection(
-      event.currentTarget,
-      event.clientX,
-    );
+    pressDirectionRef.current = getSeekDirection(event.currentTarget, event.clientX);
     if (event.pointerType === "touch") {
       touchPointerDownAtRef.current = Date.now();
     }
@@ -400,8 +365,7 @@ export function PlayerGestureSurface({
       return;
     }
     if (
-      Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) <=
-      TOUCH_MOVE_TOLERANCE_PX
+      Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) <= TOUCH_MOVE_TOLERANCE_PX
     ) {
       return;
     }
@@ -427,10 +391,7 @@ export function PlayerGestureSurface({
   const handleTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
     const touch = event.changedTouches[0] ?? event.touches[0];
     if (!touch) return;
-    if (
-      Date.now() - touchPointerDownAtRef.current >=
-      TOUCH_COMPLETION_DEDUPE_MS
-    ) {
+    if (Date.now() - touchPointerDownAtRef.current >= TOUCH_COMPLETION_DEDUPE_MS) {
       captureControlsVisibility();
     }
     const direction = getSeekDirection(event.currentTarget, touch.clientX);
@@ -462,8 +423,7 @@ export function PlayerGestureSurface({
       return;
     }
     if (
-      Math.hypot(touch.clientX - gesture.x, touch.clientY - gesture.y) <=
-      TOUCH_MOVE_TOLERANCE_PX
+      Math.hypot(touch.clientX - gesture.x, touch.clientY - gesture.y) <= TOUCH_MOVE_TOLERANCE_PX
     ) {
       return;
     }
@@ -507,7 +467,7 @@ export function PlayerGestureSurface({
       data-player-shortcut-surface=""
       data-player-ready={ready ? "true" : "false"}
       className={classNames(
-        "absolute inset-0 z-0 cursor-inherit border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white",
+        "cursor-inherit absolute inset-0 z-0 border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white",
         mobileInteraction ? "touch-none" : "touch-pan-y",
       )}
       aria-label={surfaceLabel}

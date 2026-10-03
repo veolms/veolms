@@ -6,10 +6,7 @@ import type { QuizPricingRow } from "../../commerce/pricing/quiz-pricing.amount.
  * Quiz pricing is stored once per course and applies to every quiz attached to
  * it. No row means the course's quizzes are free.
  */
-export async function findPricing(
-  database: DatabaseExecutor,
-  courseId: string,
-) {
+export async function findPricing(database: DatabaseExecutor, courseId: string) {
   return await database
     .selectFrom("course_quiz_pricing")
     .selectAll()
@@ -18,10 +15,7 @@ export async function findPricing(
 }
 
 /** The course's configured currency; quiz pricing always follows it. */
-export async function findCourseCurrency(
-  database: DatabaseExecutor,
-  courseId: string,
-) {
+export async function findCourseCurrency(database: DatabaseExecutor, courseId: string) {
   const row = await database
     .selectFrom("course_pricing")
     .select("currency")
@@ -71,10 +65,7 @@ export async function upsertPricing(
 }
 
 /** Assignment joined with its quiz, course and (nullable) course pricing row. */
-export async function findOfferingByAssignmentId(
-  database: DatabaseExecutor,
-  assignmentId: string,
-) {
+export async function findOfferingByAssignmentId(database: DatabaseExecutor, assignmentId: string) {
   return await database
     .selectFrom("quiz_assignments as qa")
     .innerJoin("quizzes as q", "q.id", "qa.quiz_id")
@@ -136,8 +127,7 @@ export function toPricingRow(offering: {
   return {
     pricing_type: offering.pricing_type,
     price: Number(offering.price ?? 0),
-    sale_price:
-      offering.sale_price === null ? null : Number(offering.sale_price),
+    sale_price: offering.sale_price === null ? null : Number(offering.sale_price),
   };
 }
 
@@ -152,9 +142,7 @@ export async function findActiveGrant(
     .where("user_id", "=", input.userId)
     .where("course_id", "=", input.courseId)
     .where("status", "=", "active")
-    .where((eb) =>
-      eb.or([eb("valid_until", "is", null), eb("valid_until", ">", input.now)]),
-    )
+    .where((eb) => eb.or([eb("valid_until", "is", null), eb("valid_until", ">", input.now)]))
     .executeTakeFirst();
 }
 
@@ -178,10 +166,7 @@ export async function upsertGrant(
     .executeTakeFirstOrThrow();
 }
 
-export async function revokeGrantsByOrderId(
-  database: DatabaseExecutor,
-  orderId: string,
-) {
+export async function revokeGrantsByOrderId(database: DatabaseExecutor, orderId: string) {
   await database
     .updateTable("course_quiz_access_grants")
     .set({ status: "revoked", updated_at: new Date() })

@@ -9,10 +9,7 @@ import type {
 
 // --- Access Rules ---
 
-export async function findAccessRuleByCourseId(
-  database: Kysely<Database>,
-  courseId: string,
-) {
+export async function findAccessRuleByCourseId(database: Kysely<Database>, courseId: string) {
   return await database
     .selectFrom("course_access_rules")
     .selectAll()
@@ -101,10 +98,7 @@ export async function findPricingByCourseId(
  * calculatePricing, which runs on every GET /cart, checkout preview, and
  * order-creation call.
  */
-export async function findPricingByCourseIds(
-  database: DatabaseExecutor,
-  courseIds: string[],
-) {
+export async function findPricingByCourseIds(database: DatabaseExecutor, courseIds: string[]) {
   if (courseIds.length === 0) return [];
   return await database
     .selectFrom("course_pricing")
@@ -170,19 +164,12 @@ export async function updatePricing(
     updated_at: Date;
   },
 ) {
-  await database
-    .updateTable("course_pricing")
-    .set(values)
-    .where("id", "=", pricingId)
-    .execute();
+  await database.updateTable("course_pricing").set(values).where("id", "=", pricingId).execute();
 }
 
 // --- Settings ---
 
-export async function findSettingsByCourseId(
-  database: DatabaseExecutor,
-  courseId: string,
-) {
+export async function findSettingsByCourseId(database: DatabaseExecutor, courseId: string) {
   return await database
     .selectFrom("course_settings")
     .selectAll()
@@ -263,9 +250,5 @@ export async function updateSettings(
     updated_at: Date;
   },
 ) {
-  await database
-    .updateTable("course_settings")
-    .set(values)
-    .where("id", "=", settingsId)
-    .execute();
+  await database.updateTable("course_settings").set(values).where("id", "=", settingsId).execute();
 }

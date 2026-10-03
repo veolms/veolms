@@ -43,11 +43,7 @@ function CurriculumCountField({
   const selectedPreset = presets.includes(value) ? String(value) : "custom";
   const presetOptions = [
     ...presets.map(
-      (preset) =>
-        [
-          String(preset),
-          `${preset.toLocaleString()} ${label.toLowerCase()}`,
-        ] as const,
+      (preset) => [String(preset), `${preset.toLocaleString()} ${label.toLowerCase()}`] as const,
     ),
     ["custom", "Custom"] as const,
   ];
@@ -73,24 +69,16 @@ function CurriculumCountField({
   return (
     <div className="grid gap-3 border-t border-[color-mix(in_srgb,var(--text)_5%,transparent)] py-3 first:border-t-0 first:pt-1 last:pb-1 sm:grid-cols-[minmax(0,1fr)_minmax(230px,0.8fr)] sm:items-center sm:gap-5">
       <div className="grid min-w-0 gap-1">
-        <label
-          htmlFor={`${id}-custom`}
-          className="text-xs font-semibold text-(--text)"
-        >
+        <label htmlFor={`${id}-custom`} className="text-xs font-semibold text-(--text)">
           {label}
         </label>
-        <span
-          id={`${id}-description`}
-          className="text-[0.68rem] leading-relaxed text-(--muted)"
-        >
+        <span id={`${id}-description`} className="text-[0.68rem] leading-relaxed text-(--muted)">
           {note}
         </span>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-2">
         <div className="grid gap-1.5">
-          <span className="text-[0.64rem] font-semibold text-(--text-secondary)">
-            Preset
-          </span>
+          <span className="text-[0.64rem] font-semibold text-(--text-secondary)">Preset</span>
           <ThemedSelect
             id={`${id}-preset`}
             value={selectedPreset}
@@ -112,9 +100,7 @@ function CurriculumCountField({
           />
         </div>
         <div className="grid gap-1.5">
-          <span className="text-[0.64rem] font-semibold text-(--text-secondary)">
-            Custom
-          </span>
+          <span className="text-[0.64rem] font-semibold text-(--text-secondary)">Custom</span>
           <input
             ref={inputRef}
             id={`${id}-custom`}
@@ -125,7 +111,7 @@ function CurriculumCountField({
             step={1}
             value={draftValue}
             aria-describedby={`${id}-description ${id}-range`}
-            className="h-9 min-w-0 rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_74%,var(--surface))] px-3 text-right text-xs font-semibold text-(--text) outline-none transition-[border-color,box-shadow,background-color] duration-150 hover:bg-[color-mix(in_srgb,var(--canvas)_66%,var(--accent-soft))] focus:border-(--accent) focus:ring-2 focus:ring-[color-mix(in_srgb,var(--accent)_24%,transparent)]"
+            className="h-9 min-w-0 rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_74%,var(--surface))] px-3 text-right text-xs font-semibold text-(--text) transition-[border-color,box-shadow,background-color] duration-150 outline-none hover:bg-[color-mix(in_srgb,var(--canvas)_66%,var(--accent-soft))] focus:border-(--accent) focus:ring-2 focus:ring-[color-mix(in_srgb,var(--accent)_24%,transparent)]"
             onChange={(event) => setDraftValue(event.target.value)}
             onBlur={commitDraft}
             onKeyDown={handleInputKeyDown}
@@ -152,10 +138,8 @@ export function CurriculumTestControls() {
   };
 
   const isDefault =
-    preferences.sectionCount ===
-      CURRICULUM_TEST_PREFERENCES_DEFAULTS.sectionCount &&
-    preferences.lectureCount ===
-      CURRICULUM_TEST_PREFERENCES_DEFAULTS.lectureCount;
+    preferences.sectionCount === CURRICULUM_TEST_PREFERENCES_DEFAULTS.sectionCount &&
+    preferences.lectureCount === CURRICULUM_TEST_PREFERENCES_DEFAULTS.lectureCount;
 
   return (
     <section
@@ -170,8 +154,8 @@ export function CurriculumTestControls() {
         </span>
       </header>
       <p className="mb-3 max-w-[68ch] text-[0.7rem] leading-relaxed text-(--muted)">
-        Resize the generated course outline for scroll and performance testing.
-        These values last only for this browser session.
+        Resize the generated course outline for scroll and performance testing. These values last
+        only for this browser session.
       </p>
 
       <div className="grid min-w-0">
@@ -203,8 +187,8 @@ export function CurriculumTestControls() {
           role="status"
           aria-live="polite"
         >
-          Learning screen: {preferences.sectionCount.toLocaleString()} sections
-          · {preferences.lectureCount.toLocaleString()} lectures
+          Learning screen: {preferences.sectionCount.toLocaleString()} sections ·{" "}
+          {preferences.lectureCount.toLocaleString()} lectures
         </p>
         <button
           type="button"

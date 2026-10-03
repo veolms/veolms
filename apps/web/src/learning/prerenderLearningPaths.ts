@@ -25,9 +25,7 @@ const getLectureIds = (scope: LearningPrerenderScope) =>
   Array.from(
     {
       length:
-        scope === "all-lectures"
-          ? CURRICULUM_LECTURE_COUNT_DEFAULT
-          : FIRST_SECTION_LECTURE_COUNT,
+        scope === "all-lectures" ? CURRICULUM_LECTURE_COUNT_DEFAULT : FIRST_SECTION_LECTURE_COUNT,
     },
     (_, index) => index + 1,
   );
@@ -44,8 +42,7 @@ export const createLearningPrerenderPaths = ({
     return [
       `/learn/${encodedCourseSlug}`,
       ...lectureIds.map(
-        (lessonId) =>
-          `/learn/${encodedCourseSlug}/${encodeURIComponent(getLessonSlug(lessonId))}`,
+        (lessonId) => `/learn/${encodedCourseSlug}/${encodeURIComponent(getLessonSlug(lessonId))}`,
       ),
     ];
   });

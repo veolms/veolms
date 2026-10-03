@@ -37,10 +37,7 @@ export function QualityMenu({
       menuLabel="Video quality"
       trigger={
         trigger ?? (
-          <MenuTriggerContent
-            icon={<QualityIcon className="size-4" />}
-            value={currentLabel}
-          />
+          <MenuTriggerContent icon={<QualityIcon className="size-4" />} value={currentLabel} />
         )
       }
       className={className}
@@ -56,9 +53,7 @@ export function QualityMenu({
       <PlayerMenuItem
         label="Auto"
         description={
-          activeQuality
-            ? `Currently ${activeQuality.label}`
-            : "Adapts to your connection"
+          activeQuality ? `Currently ${activeQuality.label}` : "Adapts to your connection"
         }
         selected={auto}
         onClick={() => {
@@ -89,8 +84,7 @@ function formatQualityDetails(quality: {
   hdr?: string;
 }): string | undefined {
   const parts: string[] = [];
-  if (quality.width && quality.height)
-    parts.push(`${quality.width} × ${quality.height}`);
+  if (quality.width && quality.height) parts.push(`${quality.width} × ${quality.height}`);
   if (quality.frameRate) parts.push(`${Math.round(quality.frameRate)} fps`);
   if (quality.hdr) parts.push(quality.hdr);
   return parts.length > 0 ? parts.join(" · ") : undefined;

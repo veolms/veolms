@@ -56,8 +56,7 @@ const placeholderContent: Record<string, PlaceholderContent> = {
   },
   Analytics: {
     title: "Analytics",
-    description:
-      "Understand learning activity, engagement, and academy performance.",
+    description: "Understand learning activity, engagement, and academy performance.",
     message: "Analytics are not implemented yet.",
     icon: ChartBar,
   },
@@ -93,8 +92,7 @@ const placeholderContent: Record<string, PlaceholderContent> = {
   },
   Logout: {
     title: "Sign out",
-    description:
-      "Your sign-out flow will live here when account sessions are connected.",
+    description: "Your sign-out flow will live here when account sessions are connected.",
     message: "Sign out is not implemented yet.",
     icon: SignOut,
   },
@@ -106,11 +104,7 @@ export interface PlaceholderPageProps {
   userRoles?: readonly string[] | null;
 }
 
-export function PlaceholderPage({
-  section = "This page",
-  role,
-  userRoles,
-}: PlaceholderPageProps) {
+export function PlaceholderPage({ section = "This page", role, userRoles }: PlaceholderPageProps) {
   const content = placeholderContent[section] || {
     title: section,
     description: "This workspace is ready for the next VeoLMS feature.",
@@ -121,7 +115,7 @@ export function PlaceholderPage({
 
   return (
     <div
-      className={`courses-placeholder-page${section === "Logout" ? " courses-placeholder-page--logout" : ""}`}
+      className={`courses-placeholder-page${section === "Logout" ? "courses-placeholder-page--logout" : ""}`}
       aria-labelledby="placeholder-page-title"
     >
       <header className="courses-placeholder-heading">
@@ -134,17 +128,14 @@ export function PlaceholderPage({
         </span>
       </header>
 
-      <section
-        className="courses-placeholder-empty"
-        aria-label={`${content.title} placeholder`}
-      >
+      <section className="courses-placeholder-empty" aria-label={`${content.title} placeholder`}>
         <span className="courses-placeholder-empty-icon" aria-hidden="true">
           <Icon size={34} weight="duotone" />
         </span>
         <h2>Nothing here yet</h2>
         <p>
-          {content.message} This placeholder keeps the navigation path ready
-          while the feature is being built.
+          {content.message} This placeholder keeps the navigation path ready while the feature is
+          being built.
         </p>
       </section>
     </div>

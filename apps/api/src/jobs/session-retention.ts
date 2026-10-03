@@ -6,9 +6,7 @@ const database = createDatabase(config.DATABASE_URL);
 
 try {
   const sessionService = createSessionService({ database });
-  const purgedCount = await sessionService.purgeOldSessions(
-    config.SESSION_RETENTION_DAYS,
-  );
+  const purgedCount = await sessionService.purgeOldSessions(config.SESSION_RETENTION_DAYS);
   process.stdout.write(
     `${JSON.stringify({
       job: "session-retention",

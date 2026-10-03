@@ -26,10 +26,7 @@ function readPreviewPalette(): string | null {
   if (typeof window === "undefined" || !import.meta.env.DEV) return null;
   try {
     const requested = new URLSearchParams(window.location.search).get("theme");
-    if (
-      requested !== null &&
-      academyThemes.some((theme) => theme.id === requested)
-    ) {
+    if (requested !== null && academyThemes.some((theme) => theme.id === requested)) {
       return requested;
     }
   } catch {
@@ -51,9 +48,7 @@ function readInitialPalette(): string {
 
 function readInitialThemeMode(): ThemeDisplayMode {
   const storedTheme = readStoredValue("veolms-theme");
-  return storedTheme === "light" ||
-    storedTheme === "dark" ||
-    storedTheme === "device"
+  return storedTheme === "light" || storedTheme === "dark" || storedTheme === "device"
     ? storedTheme
     : "dark";
 }
@@ -63,16 +58,13 @@ function resolveThemeMode(themeMode: ThemeDisplayMode): "light" | "dark" {
     return themeMode === "light" ? "light" : "dark";
   }
 
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function useAuthAppearance() {
   const [palette, setPaletteState] = useState<string>(readInitialPalette);
 
-  const [themeMode, setThemeModeState] =
-    useState<ThemeDisplayMode>(readInitialThemeMode);
+  const [themeMode, setThemeModeState] = useState<ThemeDisplayMode>(readInitialThemeMode);
 
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() =>
     resolveThemeMode(readInitialThemeMode()),
@@ -117,9 +109,7 @@ export function useAuthAppearance() {
       root.dataset.palette = activePalette;
       root.dataset.theme = activeResolved;
       root.dataset.appearance = themeMode;
-      root.dataset.reduceAnimations = String(
-        readFlag("veolms-reduce-animations"),
-      );
+      root.dataset.reduceAnimations = String(readFlag("veolms-reduce-animations"));
       root.dataset.highContrast = String(readFlag("veolms-high-contrast"));
       setResolvedTheme(activeResolved);
     };

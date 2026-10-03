@@ -24,8 +24,7 @@ export function createDiscussionsFeedRoutes(
   dependencies: DiscussionsFeedRouteDependencies = {},
 ): RoutePlugin {
   return async (app, options) => {
-    const permissions =
-      dependencies.permissions ?? createDiscussionPermissions(options);
+    const permissions = dependencies.permissions ?? createDiscussionPermissions(options);
     const service =
       dependencies.service ??
       createLearningDiscussionsFeedService({

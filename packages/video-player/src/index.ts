@@ -25,11 +25,7 @@ export type {
   VideoTextTrack,
 } from "./core/types";
 export { VideoEngineError, normalizeUnknownError } from "./core/errors";
-export type {
-  VideoEngineEvent,
-  VideoEngineEventMap,
-  VideoEngineEventType,
-} from "./core/events";
+export type { VideoEngineEvent, VideoEngineEventMap, VideoEngineEventType } from "./core/events";
 export type { VideoEngineSnapshot } from "./core/snapshot";
 export type { VideoEngine } from "./core/VideoEngine";
 
@@ -38,17 +34,9 @@ export { ShakaVideoEngine } from "./engines/shaka/ShakaVideoEngine";
 export type { ShakaVideoEngineOptions } from "./engines/shaka/ShakaVideoEngine";
 
 export { VideoPlayer } from "./react/VideoPlayer";
-export type {
-  VideoPlayerEngine,
-  VideoPlayerProgress,
-  VideoPlayerProps,
-} from "./react/VideoPlayer";
+export type { VideoPlayerEngine, VideoPlayerProgress, VideoPlayerProps } from "./react/VideoPlayer";
 export { PlayerRoot } from "./react/PlayerRoot";
-export type {
-  PlayerRootProps,
-  VideoEngineFactory,
-  VideoPlayerHandle,
-} from "./react/PlayerRoot";
+export type { PlayerRootProps, VideoEngineFactory, VideoPlayerHandle } from "./react/PlayerRoot";
 export { PlayerChromePreview } from "./react/PlayerChromePreview";
 export type { PlayerChromePreviewProps } from "./react/PlayerChromePreview";
 export { PlayerMedia } from "./react/PlayerMedia";
@@ -101,10 +89,7 @@ export type { PlaybackFeedbackProps } from "./controls/PlaybackFeedback";
 export { ZoomLevelIndicator } from "./controls/ZoomLevelIndicator";
 export type { ZoomLevelIndicatorProps } from "./controls/ZoomLevelIndicator";
 export { DefaultControls } from "./controls/DefaultControls";
-export {
-  BufferingIndicator,
-  VideoLoadingSpinner,
-} from "./controls/BufferingIndicator";
+export { BufferingIndicator, VideoLoadingSpinner } from "./controls/BufferingIndicator";
 export type {
   BufferingIndicatorProps,
   VideoLoadingSpinnerProps,
@@ -148,19 +133,10 @@ export {
   parseChaptersFromDescription,
 } from "./chapters/parseChaptersFromDescription";
 export { resolveChapters } from "./chapters/resolveChapters";
-export {
-  getActiveChapter,
-  getChapterAtTime,
-} from "./chapters/getChapterAtTime";
+export { getActiveChapter, getChapterAtTime } from "./chapters/getChapterAtTime";
 
-export type {
-  StoryboardFrame,
-  StoryboardTrack,
-} from "./storyboard/storyboardTypes";
-export {
-  parseStoryboard,
-  parseWebVttTimestamp,
-} from "./storyboard/parseStoryboard";
+export type { StoryboardFrame, StoryboardTrack } from "./storyboard/storyboardTypes";
+export { parseStoryboard, parseWebVttTimestamp } from "./storyboard/parseStoryboard";
 export { getThumbnailAtTime } from "./storyboard/getThumbnailAtTime";
 
 export {
@@ -201,8 +177,5 @@ export type {
   PlayerThemeStyle,
   PlayerThemeTokens,
 } from "./themes/playerThemes";
-export {
-  PlayerThemeProvider,
-  usePlayerTheme,
-} from "./themes/PlayerThemeContext";
+export { PlayerThemeProvider, usePlayerTheme } from "./themes/PlayerThemeContext";
 export type { PlayerThemeProviderProps } from "./themes/PlayerThemeContext";

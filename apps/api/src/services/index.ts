@@ -4,10 +4,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { createEmailService, type EmailService } from "./email/index.ts";
 import { createSmsService, type SmsService } from "./sms/index.ts";
 import { S3StorageService } from "@veolms/storage";
-import {
-  createVideoDispatchService,
-  type VideoDispatchService,
-} from "./video-dispatch/index.ts";
+import { createVideoDispatchService, type VideoDispatchService } from "./video-dispatch/index.ts";
 
 import type { PaymentGateway } from "@veolms/contracts";
 import { createPaymentGateway } from "../modules/commerce/payments/gateways/gateway.factory.ts";
@@ -46,9 +43,7 @@ function resolveSmsTransport(config: ServerConfig): "http" | "console" {
     return "console";
   }
   const hasMsg91 = Boolean(config.MSG91_AUTH_KEY && config.MSG91_TEMPLATE_ID);
-  const hasPrimary = Boolean(
-    config.SMS_PRIMARY_KEY && config.SMS_PRIMARY_SECRET,
-  );
+  const hasPrimary = Boolean(config.SMS_PRIMARY_KEY && config.SMS_PRIMARY_SECRET);
   const hasBackup = Boolean(config.SMS_BACKUP_SID && config.SMS_BACKUP_TOKEN);
   return hasMsg91 || hasPrimary || hasBackup ? "http" : "console";
 }
@@ -57,10 +52,7 @@ function resolveSmsTransport(config: ServerConfig): "http" | "console" {
  * Composition root for services. Construction is centralised here so routes
  * receive ready-built collaborators and never reach for config themselves.
  */
-export function createServices({
-  config,
-  logger,
-}: CreateServicesOptions): AppServices {
+export function createServices({ config, logger }: CreateServicesOptions): AppServices {
   const smsTransport = resolveSmsTransport(config);
 
   if (
@@ -76,9 +68,7 @@ export function createServices({
 
   if (config.NODE_ENV === "production") {
     if (config.EMAIL_TRANSPORT === "console") {
-      logger.warn(
-        "EMAIL_TRANSPORT is 'console' in production; no email will be delivered",
-      );
+      logger.warn("EMAIL_TRANSPORT is 'console' in production; no email will be delivered");
     }
     if (smsTransport === "console") {
       logger.warn(

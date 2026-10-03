@@ -4,8 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 type StoredStateValidator<T> = (value: unknown) => value is T;
 export const NO_LEGACY_KEYS: readonly string[] = [];
 
-const getSessionStorage = () =>
-  typeof window === "undefined" ? null : window.sessionStorage;
+const getSessionStorage = () => (typeof window === "undefined" ? null : window.sessionStorage);
 
 export function useSessionStorageState<T>(
   key: string,
@@ -66,8 +65,6 @@ export function useSessionStorageState<T>(
   return [value, setValue];
 }
 
-export const isStoredString = (value: unknown): value is string =>
-  typeof value === "string";
+export const isStoredString = (value: unknown): value is string => typeof value === "string";
 
-export const isStoredBoolean = (value: unknown): value is boolean =>
-  typeof value === "boolean";
+export const isStoredBoolean = (value: unknown): value is boolean => typeof value === "boolean";

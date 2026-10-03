@@ -94,16 +94,12 @@ export function AccountForm({
       <h1 className="auth-card__heading" id={AUTH_CARD_HEADING_ID}>
         Welcome to {productName} <span aria-hidden="true">👋</span>
       </h1>
-      <p className="auth-card__subheading">
-        Let&apos;s finish setting up your account
-      </p>
+      <p className="auth-card__subheading">Let&apos;s finish setting up your account</p>
 
       <div style={{ display: "grid", gap: "6px", width: "100%" }}>
         <p className="auth-account-form__verified" style={{ margin: 0 }}>
           <Icon aria-hidden emphasis="bold" name="verified" size={16} />
-          <span className="auth-account-form__verified-mask">
-            {maskIdentifier(identifier)}
-          </span>
+          <span className="auth-account-form__verified-mask">{maskIdentifier(identifier)}</span>
           <span className="auth-account-form__verified-state">verified</span>
         </p>
 
@@ -126,18 +122,12 @@ export function AccountForm({
             </label>
 
             <div className="auth-account-form__identity-row">
-              <span
-                className="auth-account-form__avatar-circle"
-                aria-hidden="true"
-              >
+              <span className="auth-account-form__avatar-circle" aria-hidden="true">
                 {hasName && avatarPreviewName ? (
                   <img
                     alt=""
                     height={44}
-                    src={buildDicebearSvgUrl(
-                      DEFAULT_AVATAR_STYLE,
-                      avatarPreviewName,
-                    )}
+                    src={buildDicebearSvgUrl(DEFAULT_AVATAR_STYLE, avatarPreviewName)}
                     width={44}
                   />
                 ) : (
@@ -202,24 +192,14 @@ export function AccountForm({
             }}
           >
             {onBackToOtp ? (
-              <button
-                className="auth-otp-form__change"
-                onClick={onBackToOtp}
-                type="button"
-              >
+              <button className="auth-otp-form__change" onClick={onBackToOtp} type="button">
                 Re-enter verification code
               </button>
             ) : null}
 
             {onIdentifierChange ? (
-              <button
-                className="auth-otp-form__change"
-                onClick={onIdentifierChange}
-                type="button"
-              >
-                {identifier.method === "email"
-                  ? "Change email address"
-                  : "Change mobile number"}
+              <button className="auth-otp-form__change" onClick={onIdentifierChange} type="button">
+                {identifier.method === "email" ? "Change email address" : "Change mobile number"}
               </button>
             ) : null}
           </div>

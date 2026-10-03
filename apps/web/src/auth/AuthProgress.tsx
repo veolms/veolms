@@ -18,17 +18,11 @@ export function AuthProgress({ title, detail }: AuthProgressProps) {
         {title}
       </h1>
       <p className="auth-card__subheading">{detail}</p>
-      <div
-        aria-live="polite"
-        className="auth-progress__indicator"
-        role="status"
-      >
+      <div aria-live="polite" className="auth-progress__indicator" role="status">
         <LoadingSpinnerIcon size={22} />
         <div className="auth-progress__indicator-copy">
           <p className="auth-progress__indicator-title">Please wait</p>
-          <p className="auth-progress__indicator-detail">
-            This usually takes a few seconds.
-          </p>
+          <p className="auth-progress__indicator-detail">This usually takes a few seconds.</p>
         </div>
       </div>
     </div>
@@ -70,20 +64,11 @@ export function AuthBusySubmit({
         onClick={onClick}
         type={type}
       >
-        <span className="auth-form__submit-label">
-          {busy ? busyLabel : label}
-        </span>
+        <span className="auth-form__submit-label">{busy ? busyLabel : label}</span>
         {busy ? (
-          <CircleNotchIcon
-            aria-hidden
-            className="auth-form__spinner"
-            size={18}
-            weight="bold"
-          />
+          <CircleNotchIcon aria-hidden className="auth-form__spinner" size={18} weight="bold" />
         ) : (
-          (icon ?? (
-            <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
-          ))
+          (icon ?? <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />)
         )}
       </button>
     </>

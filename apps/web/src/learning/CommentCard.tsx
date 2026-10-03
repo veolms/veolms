@@ -49,10 +49,7 @@ import { optimisticEditCoordinator } from "../services/learning-interactions/opt
 import { adaptLearningReplyToCommentReply } from "./learning-replies.adapter";
 import { useCurrentUser } from "../services/auth";
 import { DiscussionAvatar } from "./DiscussionAvatar";
-import {
-  DiscussionAttachmentsList,
-  type DiscussionAttachmentItem,
-} from "./discussion-attachments";
+import { DiscussionAttachmentsList, type DiscussionAttachmentItem } from "./discussion-attachments";
 import {
   getClientEntityId,
   getServerEntityId,
@@ -138,18 +135,9 @@ interface CommentCardProps {
     accepted: boolean,
     serverReplyId?: string,
   ) => Promise<boolean> | void;
-  onToggleLockThread?: (
-    threadId: string | number,
-    isLocked: boolean,
-  ) => Promise<boolean> | void;
-  onToggleBookmark?: (
-    id: string | number,
-    bookmarked: boolean,
-  ) => Promise<boolean> | void;
-  onToggleFollow?: (
-    id: string | number,
-    following: boolean,
-  ) => Promise<boolean> | void;
+  onToggleLockThread?: (threadId: string | number, isLocked: boolean) => Promise<boolean> | void;
+  onToggleBookmark?: (id: string | number, bookmarked: boolean) => Promise<boolean> | void;
+  onToggleFollow?: (id: string | number, following: boolean) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
   onCopyTextNotice?: (message: string) => void;
   isBackendMode?: boolean;
@@ -191,34 +179,19 @@ export const CommentCard = React.memo(function CommentCard({
   const queryClient = useContext(QueryClientContext);
   const [localLiked, setLocalLiked] = useState(comment.liked ?? false);
   const isCommentLiked = isBackendMode ? Boolean(comment.liked) : localLiked;
-  const [repliesOpen, setRepliesOpen] = useState(
-    comment.repliesExpanded ?? false,
-  );
+  const [repliesOpen, setRepliesOpen] = useState(comment.repliesExpanded ?? false);
   const [replyComposerOpen, setReplyComposerOpen] = useState(false);
-  const [replyDraft, setReplyDraft] = useState<DiscussionDraft>(
-    createEmptyDiscussionDraft,
-  );
-  const [localReplies, setLocalReplies] = useState<CommentReply[]>(
-    comment.thread ?? [],
-  );
-  const entryKind =
-    comment.entryKind ?? (comment.isQuestion ? "question" : "comment");
+  const [replyDraft, setReplyDraft] = useState<DiscussionDraft>(createEmptyDiscussionDraft);
+  const [localReplies, setLocalReplies] = useState<CommentReply[]>(comment.thread ?? []);
+  const entryKind = comment.entryKind ?? (comment.isQuestion ? "question" : "comment");
   const isNote = entryKind === "note";
   const showEngagement = !isNote || comment.visibility === "public";
-  const entryLabel =
-    entryKind === "question" ? "Q&A" : isNote ? "Note" : "Comment";
+  const entryLabel = entryKind === "question" ? "Q&A" : isNote ? "Note" : "Comment";
 
   const clientId = getClientEntityId(comment);
   const serverId = getServerEntityId(comment);
-  const deletion = useOptimisticDeletion(
-    isNote ? "note" : "thread",
-    clientId,
-    serverId,
-  );
-  const isEditing = optimisticEditCoordinator.isEditing(
-    isNote ? "note" : "thread",
-    clientId,
-  );
+  const deletion = useOptimisticDeletion(isNote ? "note" : "thread", clientId, serverId);
+  const isEditing = optimisticEditCoordinator.isEditing(isNote ? "note" : "thread", clientId);
   const isBackendEntity = Boolean(isBackendMode && serverId);
   const threadId = serverId;
   const { data: authUser } = useCurrentUser();
@@ -236,10 +209,8 @@ export const CommentCard = React.memo(function CommentCard({
     (authUser as any)?.role === "Instructor" ||
     (authUser as any)?.role === "Admin",
   );
-  const canLock =
-    canParticipate && !isNote && (Boolean(comment.isOwn) || isModerator);
-  const canAcceptAnswer =
-    canParticipate && isQuestion && (Boolean(comment.isOwn) || isModerator);
+  const canLock = canParticipate && !isNote && (Boolean(comment.isOwn) || isModerator);
+  const canAcceptAnswer = canParticipate && isQuestion && (Boolean(comment.isOwn) || isModerator);
 
   const {
     data: repliesData,
@@ -265,10 +236,7 @@ export const CommentCard = React.memo(function CommentCard({
 
   const effectiveReplies = isBackendEntity ? backendReplies : localReplies;
 
-  const unloadedReplyCount = Math.max(
-    0,
-    (comment.replies ?? 0) - (comment.thread?.length ?? 0),
-  );
+  const unloadedReplyCount = Math.max(0, (comment.replies ?? 0) - (comment.thread?.length ?? 0));
   const backendCount = getReplyTotalCount(repliesData);
   const replyCount = isBackendEntity
     ? backendCount !== undefined
@@ -313,9 +281,7 @@ export const CommentCard = React.memo(function CommentCard({
     const text = draft.plainText.trim();
     setLocalReplies((current) =>
       current.map((reply) =>
-        reply.id === id
-          ? { ...reply, text, content: draft, time: "Just now (edited)" }
-          : reply,
+        reply.id === id ? { ...reply, text, content: draft, time: "Just now (edited)" } : reply,
       ),
     );
   };
@@ -362,9 +328,7 @@ export const CommentCard = React.memo(function CommentCard({
     }
   };
 
-  const handleDeleteReply = async (
-    replyId: string | number,
-  ): Promise<boolean> => {
+  const handleDeleteReply = async (replyId: string | number): Promise<boolean> => {
     if (isBackendEntity) {
       const reply = effectiveReplies.find(
         (candidate) => getClientEntityId(candidate) === String(replyId),
@@ -388,25 +352,20 @@ export const CommentCard = React.memo(function CommentCard({
           parentRepliesCount: replyCount,
           queryClient,
           commit: () => deleteReplyMutation.mutateAsync(serverReplyId),
-          onFailure: () =>
-            onDeleteFailure("Couldn't delete this reply. Please try again."),
+          onFailure: () => onDeleteFailure("Couldn't delete this reply. Please try again."),
         }),
       );
     } else if (isBackendMode) {
       return false;
     } else {
-      setLocalReplies((current) =>
-        current.filter((item) => item.id !== replyId),
-      );
+      setLocalReplies((current) => current.filter((item) => item.id !== replyId));
       return true;
     }
   };
 
   const handleLikeReply = (replyId: string | number) => {
     if (isBackendEntity) {
-      const reply = effectiveReplies.find(
-        (r) => getClientEntityId(r) === String(replyId),
-      );
+      const reply = effectiveReplies.find((r) => getClientEntityId(r) === String(replyId));
       if (!reply) return;
       const currentLiked = Boolean(reply?.liked);
       const nextLiked = !currentLiked;
@@ -472,16 +431,10 @@ export const CommentCard = React.memo(function CommentCard({
       >
         <div className="min-h-0 overflow-hidden">
           <div className="relative flex gap-3 sm:gap-3.5">
-            <DiscussionAvatar
-              src={comment.avatar}
-              className="relative z-10 size-10 sm:size-11"
-            />
+            <DiscussionAvatar src={comment.avatar} className="relative z-10 size-10 sm:size-11" />
 
             <div className="min-w-0 flex-1">
-              <div
-                data-comment-meta
-                className="relative flex items-start gap-2 pr-9"
-              >
+              <div data-comment-meta className="relative flex items-start gap-2 pr-9">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
                   <h2 className="text-sm font-semibold text-(--text) sm:text-[15px]">
                     {comment.name}
@@ -492,7 +445,7 @@ export const CommentCard = React.memo(function CommentCard({
                     </span>
                   )}
                   {comment.visibility && comment.visibility !== "public" && (
-                    <span className="rounded-lg bg-(--hover) px-2 py-1 text-[11px] font-medium capitalize text-(--muted)">
+                    <span className="rounded-lg bg-(--hover) px-2 py-1 text-[11px] font-medium text-(--muted) capitalize">
                       {comment.visibility}
                     </span>
                   )}
@@ -503,9 +456,7 @@ export const CommentCard = React.memo(function CommentCard({
                   >
                     ·
                   </span>
-                  <span className="text-xs text-(--muted) sm:text-sm">
-                    {comment.time}
-                  </span>
+                  <span className="text-xs text-(--muted) sm:text-sm">{comment.time}</span>
                   <span
                     role="img"
                     aria-label={entryLabel}
@@ -557,11 +508,7 @@ export const CommentCard = React.memo(function CommentCard({
                       className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-(--text-secondary)"
                       title="Bookmarked"
                     >
-                      <BookmarkSimple
-                        size={12}
-                        weight="bold"
-                        aria-hidden="true"
-                      />
+                      <BookmarkSimple size={12} weight="bold" aria-hidden="true" />
                       <span>Bookmarked</span>
                     </span>
                   )}
@@ -595,12 +542,9 @@ export const CommentCard = React.memo(function CommentCard({
                   onEdit={() => onEdit(comment)}
                   onShare={() =>
                     serverId
-                      ? void shareDiscussionEntry(
-                          serverId,
-                          comment.name,
-                          comment.text,
-                          { isNote: comment.entryKind === "note" },
-                        )
+                      ? void shareDiscussionEntry(serverId, comment.name, comment.text, {
+                          isNote: comment.entryKind === "note",
+                        })
                       : undefined
                   }
                   onDelete={() => {
@@ -668,9 +612,7 @@ export const CommentCard = React.memo(function CommentCard({
                     <p className="truncate text-sm font-medium text-(--text)">
                       {comment.attachment.name}
                     </p>
-                    <p className="mt-0.5 text-xs text-(--muted)">
-                      {comment.attachment.meta}
-                    </p>
+                    <p className="mt-0.5 text-xs text-(--muted)">{comment.attachment.meta}</p>
                   </div>
                 </div>
               ) : null}
@@ -693,10 +635,7 @@ export const CommentCard = React.memo(function CommentCard({
                       aria-label={isCommentLiked ? "Unlike" : "Like"}
                       className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isCommentLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
                     >
-                      <ThumbsUp
-                        size={19}
-                        weight={isCommentLiked ? "fill" : "regular"}
-                      />
+                      <ThumbsUp size={19} weight={isCommentLiked ? "fill" : "regular"} />
                       <span>{comment.likes}</span>
                     </button>
                   )}
@@ -738,13 +677,10 @@ export const CommentCard = React.memo(function CommentCard({
                         aria-label={comment.isLocked ? "View thread" : "Reply"}
                         title={comment.isLocked ? "View thread" : "Reply"}
                         data-reply-action={!comment.isLocked ? "" : undefined}
-                        data-discussion-thread-trigger={
-                          onOpenThread ? "true" : undefined
-                        }
+                        data-discussion-thread-trigger={onOpenThread ? "true" : undefined}
                         onClick={(event) => {
                           event.stopPropagation();
-                          if (onOpenThread)
-                            onOpenThread(comment.id, !comment.isLocked);
+                          if (onOpenThread) onOpenThread(comment.id, !comment.isLocked);
                           else if (!comment.isLocked && canParticipate)
                             setReplyComposerOpen((open) => !open);
                         }}
@@ -771,13 +707,13 @@ export const CommentCard = React.memo(function CommentCard({
                   <div className="mt-3 flex max-w-2xl items-end gap-2">
                     <label className="min-w-0 flex-1">
                       <span className="sr-only">Reply to {comment.name}</span>
-                      <span className="block min-h-12 overflow-hidden rounded-lg border bg-(--surface) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
+                      <span className="block min-h-12 overflow-hidden rounded-lg border [border-color:color-mix(in_srgb,var(--text)_14%,transparent)] bg-(--surface) focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
                         <DiscussionEditor
                           value={replyDraft}
                           documentId={`reply-new-${comment.id}`}
                           label={`Reply to ${comment.name}`}
                           placeholderText={`Reply to ${comment.name}…`}
-                          className="min-h-12 max-h-40"
+                          className="max-h-40 min-h-12"
                           courseId={courseId}
                           mentionsEnabled={true}
                           onChange={setReplyDraft}
@@ -788,7 +724,7 @@ export const CommentCard = React.memo(function CommentCard({
                       type="button"
                       onClick={addReply}
                       disabled={!hasDiscussionDraftContent(replyDraft)}
-                      className="h-10 rounded-lg bg-(--accent) px-3 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                      className="h-10 rounded-lg bg-(--accent) px-3 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       Reply
                     </button>
@@ -798,10 +734,7 @@ export const CommentCard = React.memo(function CommentCard({
           </div>
 
           {repliesOpen && !isNote && (
-            <div
-              className="mt-2.5 space-y-2.5"
-              data-testid="inline-replies-container"
-            >
+            <div className="mt-2.5 space-y-2.5" data-testid="inline-replies-container">
               {isBackendEntity && isRepliesLoading && !repliesData ? (
                 <div
                   className="grid min-h-20 place-items-center py-4"
@@ -812,17 +745,12 @@ export const CommentCard = React.memo(function CommentCard({
                   <LoadingSpinnerIcon size={20} />
                 </div>
               ) : isBackendEntity && isRepliesError && !repliesData ? (
-                <div
-                  className="py-4 text-center"
-                  data-testid="learning-replies-error"
-                >
-                  <p className="text-sm font-semibold text-(--text)">
-                    Failed to load replies
-                  </p>
+                <div className="py-4 text-center" data-testid="learning-replies-error">
+                  <p className="text-sm font-semibold text-(--text)">Failed to load replies</p>
                   <button
                     type="button"
                     onClick={() => refetchReplies()}
-                    className="mt-2 inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                    className="mt-2 inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] ring-inset hover:bg-(--hover)"
                   >
                     Retry
                   </button>
@@ -837,12 +765,7 @@ export const CommentCard = React.memo(function CommentCard({
                     canParticipate={canParticipate}
                     canAcceptAnswer={canAcceptAnswer}
                     onToggleAccept={(replyId, accepted) =>
-                      onToggleAcceptReply?.(
-                        comment.id,
-                        replyId,
-                        accepted,
-                        getServerEntityId(reply),
-                      )
+                      onToggleAcceptReply?.(comment.id, replyId, accepted, getServerEntityId(reply))
                     }
                     onReply={() => {
                       if (onOpenThread) onOpenThread(comment.id, true);
@@ -879,7 +802,7 @@ export const CommentCard = React.memo(function CommentCard({
                     <button
                       type="button"
                       onClick={() => void fetchNextPage()}
-                      className="inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                      className="inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] ring-inset hover:bg-(--hover)"
                     >
                       Retry loading replies
                     </button>
@@ -890,16 +813,10 @@ export const CommentCard = React.memo(function CommentCard({
                       onClick={() => void fetchNextPage()}
                       data-testid="learning-replies-load-more"
                       aria-busy={isFetchingNextPage}
-                      aria-label={
-                        isFetchingNextPage ? "Loading more replies" : undefined
-                      }
-                      className="inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover) disabled:cursor-wait disabled:opacity-60"
+                      aria-label={isFetchingNextPage ? "Loading more replies" : undefined}
+                      className="inline-flex items-center rounded-lg bg-(--surface) px-2.5 py-1 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] ring-inset hover:bg-(--hover) disabled:cursor-wait disabled:opacity-60"
                     >
-                      {isFetchingNextPage ? (
-                        <LoadingSpinnerIcon size={16} />
-                      ) : (
-                        "Load more replies"
-                      )}
+                      {isFetchingNextPage ? <LoadingSpinnerIcon size={16} /> : "Load more replies"}
                     </button>
                   )}
                 </div>
@@ -927,16 +844,9 @@ interface ReplyCardProps {
   isQuestion?: boolean;
   canParticipate?: boolean;
   canAcceptAnswer?: boolean;
-  onToggleAccept?: (
-    replyId: string | number,
-    accepted: boolean,
-    serverReplyId?: string,
-  ) => void;
+  onToggleAccept?: (replyId: string | number, accepted: boolean, serverReplyId?: string) => void;
   onReply: () => void;
-  onEdit: (
-    replyId: string | number,
-    draft: DiscussionDraft,
-  ) => Promise<boolean> | void;
+  onEdit: (replyId: string | number, draft: DiscussionDraft) => Promise<boolean> | void;
   onDelete: (replyId: string | number) => Promise<boolean> | void;
   onLike: (replyId: string | number) => void;
   onReport: () => void;
@@ -969,11 +879,8 @@ function ReplyCard({
   const [editError, setEditError] = useState("");
   const [localLiked, setLocalLiked] = useState(reply.liked ?? false);
   const isReplyLiked = isBackendMode ? Boolean(reply.liked) : localLiked;
-  const replyLikesCount = isBackendMode
-    ? reply.likes
-    : reply.likes + (localLiked ? 1 : 0);
-  const canAcceptReply =
-    Boolean(getServerEntityId(reply)) && reply.creationStatus !== "pending";
+  const replyLikesCount = isBackendMode ? reply.likes : reply.likes + (localLiked ? 1 : 0);
+  const canAcceptReply = Boolean(getServerEntityId(reply)) && reply.creationStatus !== "pending";
   const replyClientId = getClientEntityId(reply);
   const replyServerId = getServerEntityId(reply);
   const deletion = useOptimisticDeletion("reply", replyClientId, replyServerId);
@@ -1015,10 +922,7 @@ function ReplyCard({
             />
 
             <div className="min-w-0 flex-1">
-              <div
-                data-reply-meta
-                className="relative flex items-start gap-2 pr-9"
-              >
+              <div data-reply-meta className="relative flex items-start gap-2 pr-9">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
                   <h3 className="text-sm font-semibold text-(--text) sm:text-[15px]">
                     {reply.name}
@@ -1044,9 +948,7 @@ function ReplyCard({
                   >
                     ·
                   </span>
-                  <span className="text-xs text-(--muted) sm:text-sm">
-                    {reply.time}
-                  </span>
+                  <span className="text-xs text-(--muted) sm:text-sm">{reply.time}</span>
                 </div>
                 <CommentActionMenu
                   name={reply.name}
@@ -1054,49 +956,27 @@ function ReplyCard({
                   textToCopy={reply.content?.markdown ?? reply.text}
                   onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(reply.isOwn)}
-                  canEdit={
-                    canParticipate &&
-                    (!isBackendMode || Boolean(getServerEntityId(reply)))
-                  }
+                  canEdit={canParticipate && (!isBackendMode || Boolean(getServerEntityId(reply)))}
                   canAcceptAnswer={
-                    canParticipate &&
-                    isQuestion &&
-                    canAcceptAnswer &&
-                    canAcceptReply
+                    canParticipate && isQuestion && canAcceptAnswer && canAcceptReply
                   }
                   isAccepted={Boolean(reply.isAccepted)}
                   onToggleAccept={
-                    canParticipate &&
-                    isQuestion &&
-                    canAcceptAnswer &&
-                    onToggleAccept
-                      ? () =>
-                          onToggleAccept(
-                            reply.id,
-                            !reply.isAccepted,
-                            getServerEntityId(reply),
-                          )
+                    canParticipate && isQuestion && canAcceptAnswer && onToggleAccept
+                      ? () => onToggleAccept(reply.id, !reply.isAccepted, getServerEntityId(reply))
                       : undefined
                   }
                   onEdit={() => {
-                    setEditDraft(
-                      reply.content ?? createDiscussionDraft(reply.text),
-                    );
+                    setEditDraft(reply.content ?? createDiscussionDraft(reply.text));
                     setEditing(true);
                   }}
                   onShare={() =>
-                    void shareDiscussionEntry(
-                      reply.id,
-                      reply.name,
-                      reply.text,
-                      {
-                        parentThreadId,
-                      },
-                    )
+                    void shareDiscussionEntry(reply.id, reply.name, reply.text, {
+                      parentThreadId,
+                    })
                   }
                   canDelete={
-                    canParticipate &&
-                    (!isBackendMode || (Boolean(replyServerId) && !isEditing))
+                    canParticipate && (!isBackendMode || (Boolean(replyServerId) && !isEditing))
                   }
                   onDelete={() => {
                     void onDelete(reply.id);
@@ -1116,9 +996,7 @@ function ReplyCard({
                     mentionsEnabled={true}
                     onChange={setEditDraft}
                     onCancel={() => {
-                      setEditDraft(
-                        reply.content ?? createDiscussionDraft(reply.text),
-                      );
+                      setEditDraft(reply.content ?? createDiscussionDraft(reply.text));
                       setEditing(false);
                       setEditError("");
                     }}
@@ -1163,56 +1041,33 @@ function ReplyCard({
                     aria-label={isReplyLiked ? "Unlike reply" : "Like reply"}
                     className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isReplyLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
                   >
-                    <ThumbsUp
-                      size={18}
-                      weight={isReplyLiked ? "fill" : "regular"}
-                    />
+                    <ThumbsUp size={18} weight={isReplyLiked ? "fill" : "regular"} />
                     <span>{replyLikesCount}</span>
                   </button>
                 )}
-                {canParticipate &&
-                  isQuestion &&
-                  canAcceptAnswer &&
-                  onToggleAccept && (
-                    <button
-                      type="button"
-                      data-testid={`accept-reply-btn-${reply.id}`}
-                      disabled={
-                        reply.creationStatus === "pending" ||
-                        !getServerEntityId(reply)
+                {canParticipate && isQuestion && canAcceptAnswer && onToggleAccept && (
+                  <button
+                    type="button"
+                    data-testid={`accept-reply-btn-${reply.id}`}
+                    disabled={reply.creationStatus === "pending" || !getServerEntityId(reply)}
+                    aria-label={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
+                    title={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
+                    onClick={() => {
+                      if (reply.creationStatus === "pending" || !getServerEntityId(reply)) {
+                        return;
                       }
-                      aria-label={
-                        reply.isAccepted ? "Unaccept answer" : "Accept answer"
-                      }
-                      title={
-                        reply.isAccepted ? "Unaccept answer" : "Accept answer"
-                      }
-                      onClick={() => {
-                        if (
-                          reply.creationStatus === "pending" ||
-                          !getServerEntityId(reply)
-                        ) {
-                          return;
-                        }
-                        onToggleAccept(
-                          reply.id,
-                          !reply.isAccepted,
-                          getServerEntityId(reply),
-                        );
-                      }}
-                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
-                        reply.isAccepted
-                          ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
-                          : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
-                      }`}
-                    >
-                      <CheckCircle
-                        size={16}
-                        weight={reply.isAccepted ? "fill" : "bold"}
-                      />
-                      <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
-                    </button>
-                  )}
+                      onToggleAccept(reply.id, !reply.isAccepted, getServerEntityId(reply));
+                    }}
+                    className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
+                      reply.isAccepted
+                        ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
+                        : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
+                    }`}
+                  >
+                    <CheckCircle size={16} weight={reply.isAccepted ? "fill" : "bold"} />
+                    <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
+                  </button>
+                )}
                 {canParticipate && (
                   <button
                     type="button"
@@ -1280,14 +1135,14 @@ export function InlineEditForm({
         onCancel();
       }}
     >
-      <div className="min-h-18 overflow-hidden rounded-lg border bg-(--surface) [border-color:color-mix(in_srgb,var(--text)_18%,transparent)] focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
+      <div className="min-h-18 overflow-hidden rounded-lg border [border-color:color-mix(in_srgb,var(--text)_18%,transparent)] bg-(--surface) focus-within:[border-color:color-mix(in_srgb,var(--accent)_70%,transparent)]">
         <DiscussionEditor
           value={value}
           documentId={documentId}
           label={label}
           placeholderText="Write a reply…"
           autoFocus
-          className="min-h-18 max-h-56"
+          className="max-h-56 min-h-18"
           courseId={courseId}
           mentionsEnabled={mentionsEnabled}
           onChange={onChange}
@@ -1305,7 +1160,7 @@ export function InlineEditForm({
           type="button"
           onClick={onSave}
           disabled={!hasDiscussionDraftContent(value)}
-          className="h-9 rounded-lg bg-(--accent) px-3 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+          className="h-9 rounded-lg bg-(--accent) px-3 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-45"
         >
           Save
         </button>
@@ -1367,12 +1222,9 @@ export function CommentActionMenu({
   const isNote = kind === "note";
   const actionLabel = kind === "question" ? "Q&A" : isNote ? "note" : kind;
   const menuLabel =
-    actionLabel === "Q&A"
-      ? actionLabel
-      : actionLabel[0]?.toUpperCase() + actionLabel.slice(1);
+    actionLabel === "Q&A" ? actionLabel : actionLabel[0]?.toUpperCase() + actionLabel.slice(1);
   const canBookmark = Boolean(onToggleBookmark);
-  const canFollow =
-    (kind === "comment" || kind === "question") && Boolean(onToggleFollow);
+  const canFollow = (kind === "comment" || kind === "question") && Boolean(onToggleFollow);
   const copyTextAction = textToCopy?.trim() ? (
     <MenuAction
       Icon={CopySimple}
@@ -1397,13 +1249,7 @@ export function CommentActionMenu({
       {isNote ? (
         isOwn ? (
           <>
-            {canEdit && (
-              <MenuAction
-                Icon={PencilSimple}
-                label="Edit note"
-                onClick={onEdit}
-              />
-            )}
+            {canEdit && <MenuAction Icon={PencilSimple} label="Edit note" onClick={onEdit} />}
             {canBookmark && onToggleBookmark && (
               <MenuAction
                 Icon={BookmarkSimple}
@@ -1414,12 +1260,7 @@ export function CommentActionMenu({
             {copyTextAction}
             <MenuDivider />
             {canDelete && (
-              <MenuAction
-                Icon={Trash}
-                label="Delete note"
-                destructive
-                onClick={onDelete}
-              />
+              <MenuAction Icon={Trash} label="Delete note" destructive onClick={onDelete} />
             )}
           </>
         ) : (
@@ -1431,28 +1272,16 @@ export function CommentActionMenu({
                 onClick={onToggleBookmark}
               />
             )}
-            <MenuAction
-              Icon={ShareNetwork}
-              label={`Share ${actionLabel}`}
-              onClick={onShare}
-            />
+            <MenuAction Icon={ShareNetwork} label={`Share ${actionLabel}`} onClick={onShare} />
             {copyTextAction}
             <MenuDivider />
-            <MenuAction
-              Icon={Flag}
-              label={`Report ${actionLabel}`}
-              onClick={onReport}
-            />
+            <MenuAction Icon={Flag} label={`Report ${actionLabel}`} onClick={onReport} />
           </>
         )
       ) : isOwn ? (
         <>
           {canEdit && (
-            <MenuAction
-              Icon={PencilSimple}
-              label={`Edit ${actionLabel}`}
-              onClick={onEdit}
-            />
+            <MenuAction Icon={PencilSimple} label={`Edit ${actionLabel}`} onClick={onEdit} />
           )}
           {canBookmark && onToggleBookmark && (
             <MenuAction
@@ -1468,11 +1297,7 @@ export function CommentActionMenu({
               onClick={onToggleFollow}
             />
           )}
-          <MenuAction
-            Icon={ShareNetwork}
-            label={`Share ${actionLabel}`}
-            onClick={onShare}
-          />
+          <MenuAction Icon={ShareNetwork} label={`Share ${actionLabel}`} onClick={onShare} />
           {copyTextAction}
           {canLock && onToggleLock && (
             <MenuAction
@@ -1514,11 +1339,7 @@ export function CommentActionMenu({
               onClick={onToggleFollow}
             />
           )}
-          <MenuAction
-            Icon={ShareNetwork}
-            label={`Share ${actionLabel}`}
-            onClick={onShare}
-          />
+          <MenuAction Icon={ShareNetwork} label={`Share ${actionLabel}`} onClick={onShare} />
           {copyTextAction}
           {canLock && onToggleLock && (
             <MenuAction
@@ -1535,11 +1356,7 @@ export function CommentActionMenu({
             />
           )}
           <MenuDivider />
-          <MenuAction
-            Icon={Flag}
-            label={`Report ${actionLabel}`}
-            onClick={onReport}
-          />
+          <MenuAction Icon={Flag} label={`Report ${actionLabel}`} onClick={onReport} />
         </>
       )}
     </CourseActionMenu>
@@ -1577,9 +1394,7 @@ export async function shareDiscussionEntry(
     }
 
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(
-        [shareText, url.toString()].filter(Boolean).join("\n\n"),
-      );
+      await navigator.clipboard.writeText([shareText, url.toString()].filter(Boolean).join("\n\n"));
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;

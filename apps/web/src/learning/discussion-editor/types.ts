@@ -15,21 +15,15 @@ export const createDiscussionDraft = (markdown = ""): DiscussionDraft => ({
   plainText: markdownToPlainText(markdown),
 });
 
-export const createEmptyDiscussionDraft = (): DiscussionDraft =>
-  createDiscussionDraft();
+export const createEmptyDiscussionDraft = (): DiscussionDraft => createDiscussionDraft();
 
 export const hasDiscussionDraftContent = (draft: DiscussionDraft): boolean =>
-  Boolean(draft.plainText.trim()) ||
-  getDiscussionAttachmentCount(draft.markdown) > 0;
+  Boolean(draft.plainText.trim()) || getDiscussionAttachmentCount(draft.markdown) > 0;
 
 export const getDiscussionAttachmentCount = (markdown: string): number =>
-  Array.from(
-    markdown.matchAll(/!\[[^\]]*\]\((?:<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\)/g),
-  ).length;
+  Array.from(markdown.matchAll(/!\[[^\]]*\]\((?:<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\)/g)).length;
 
-export function isDiscussionContent(
-  value: unknown,
-): value is DiscussionContent {
+export function isDiscussionContent(value: unknown): value is DiscussionContent {
   if (!value || typeof value !== "object") return false;
   const content = value as Partial<DiscussionContent>;
   return (

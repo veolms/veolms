@@ -692,11 +692,7 @@
 
 :root[data-theme="light"] .creator-revenue-summary {
   border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--card-surface-soft) 88%,
-    var(--surface-strong)
-  );
+  background: color-mix(in srgb, var(--card-surface-soft) 88%, var(--surface-strong));
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--surface) 80%, transparent),
     inset 0 -1px 2px color-mix(in srgb, var(--text) 5%, transparent);
@@ -713,8 +709,7 @@
 }
 
 .creator-revenue-summary > div + div {
-  border-left: 1px solid
-    color-mix(in srgb, var(--border-strong) 38%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--border-strong) 38%, transparent);
 }
 
 .creator-revenue-summary span,
@@ -1044,8 +1039,7 @@
 .creator-table-row {
   min-height: 54px;
   padding: 5px 4px;
-  border-top: 1px solid
-    color-mix(in srgb, var(--border-strong) 32%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border-strong) 32%, transparent);
   color: var(--text-secondary);
   font-size: 0.67rem;
 }
@@ -1687,8 +1681,7 @@
   .creator-courses-table .creator-course-skeleton-row .creator-progress-cell i {
     display: none;
   }
-  .creator-courses-table
-    .creator-progress-cell[data-progress-unavailable]::before {
+  .creator-courses-table .creator-progress-cell[data-progress-unavailable]::before {
     display: none;
   }
   .creator-courses-panel .creator-panel-link {
@@ -1856,9 +1849,7 @@
     white-space: nowrap;
   }
 
-  .creator-enrollment-table
-    .creator-enrollment-skeleton-row
-    .creator-enrollment-skeleton-course {
+  .creator-enrollment-table .creator-enrollment-skeleton-row .creator-enrollment-skeleton-course {
     margin-inline-start: 0;
   }
 

@@ -34,14 +34,10 @@ const otpRoutes: RoutePlugin = async (app, options) => {
         operationId: "sendOtp",
         tags: ["Auth"],
         summary: "Send login/register OTP",
-        description:
-          "Dispatches a secure 6-digit verification code via email or SMS.",
+        description: "Dispatches a secure 6-digit verification code via email or SMS.",
         body: otpSendRequestSchema,
         response: {
-          200: jsonResponse(
-            "OTP dispatched successfully.",
-            authMessageResponseSchema,
-          ),
+          200: jsonResponse("OTP dispatched successfully.", authMessageResponseSchema),
           400: errorResponse("Validation error or missing parameters."),
           429: errorResponse("Rate limit exceeded."),
           503: errorResponse("Verification code could not be delivered."),
@@ -58,8 +54,7 @@ const otpRoutes: RoutePlugin = async (app, options) => {
         operationId: "sendPhoneVerificationOtp",
         tags: ["Auth"],
         summary: "Send mobile verification OTP",
-        description:
-          "Sends a verification code to a mobile number for the authenticated account.",
+        description: "Sends a verification code to a mobile number for the authenticated account.",
         body: phoneVerificationSendRequestSchema,
         response: {
           200: jsonResponse(
@@ -89,13 +84,8 @@ const otpRoutes: RoutePlugin = async (app, options) => {
           "Verifies the mobile OTP and attaches the confirmed number to the authenticated account.",
         body: phoneVerificationVerifyRequestSchema,
         response: {
-          200: jsonResponse(
-            "Mobile number verified successfully.",
-            authMessageResponseSchema,
-          ),
-          400: errorResponse(
-            "Validation error, missing parameters, or invalid verification code.",
-          ),
+          200: jsonResponse("Mobile number verified successfully.", authMessageResponseSchema),
+          400: errorResponse("Validation error, missing parameters, or invalid verification code."),
           401: errorResponse("Verification code is invalid or expired."),
           404: errorResponse("User account was not found."),
           409: errorResponse("Phone number is already in use."),
@@ -113,8 +103,7 @@ const otpRoutes: RoutePlugin = async (app, options) => {
         operationId: "sendEmailVerificationOtp",
         tags: ["Auth"],
         summary: "Send email verification OTP",
-        description:
-          "Sends a verification code to the authenticated account's email address.",
+        description: "Sends a verification code to the authenticated account's email address.",
         body: emailVerificationSendRequestSchema,
         response: {
           200: jsonResponse(
@@ -142,10 +131,7 @@ const otpRoutes: RoutePlugin = async (app, options) => {
         description: "Verifies the email OTP for the authenticated account.",
         body: emailVerificationVerifyRequestSchema,
         response: {
-          200: jsonResponse(
-            "Email address verified successfully.",
-            authMessageResponseSchema,
-          ),
+          200: jsonResponse("Email address verified successfully.", authMessageResponseSchema),
           400: errorResponse(
             "No email address is available to verify, or invalid verification code.",
           ),

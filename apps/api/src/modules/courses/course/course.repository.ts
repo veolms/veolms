@@ -46,10 +46,7 @@ export async function findCourseById(
  * of N sequential ones. Used by pricing.service.ts's calculatePricing, which
  * runs on every GET /cart, checkout preview, and order-creation call.
  */
-export async function findCoursesByIds(
-  database: DatabaseExecutor,
-  courseIds: string[],
-) {
+export async function findCoursesByIds(database: DatabaseExecutor, courseIds: string[]) {
   if (courseIds.length === 0) return [];
   return await database
     .selectFrom("courses")
@@ -59,10 +56,7 @@ export async function findCoursesByIds(
     .execute();
 }
 
-export async function findCourseBySlug(
-  database: Kysely<Database>,
-  slug: string,
-) {
+export async function findCourseBySlug(database: Kysely<Database>, slug: string) {
   return await database
     .selectFrom("courses")
     .selectAll()
@@ -76,10 +70,7 @@ export async function findCourseBySlug(
  * database keeps slugs globally unique so a course can be restored with its
  * original public URL during the retention window.
  */
-export async function findCourseBySlugIncludingDeleted(
-  database: Kysely<Database>,
-  slug: string,
-) {
+export async function findCourseBySlugIncludingDeleted(database: Kysely<Database>, slug: string) {
   return await database
     .selectFrom("courses")
     .select(["id"])
@@ -105,9 +96,7 @@ export async function listPublishedCourses(
         .on("categories.deleted_at", "is", null),
     )
     .leftJoin("users", (join) =>
-      join
-        .onRef("users.id", "=", "courses.creator_id")
-        .on("users.is_deleted", "=", false),
+      join.onRef("users.id", "=", "courses.creator_id").on("users.is_deleted", "=", false),
     )
     .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
     .leftJoin("course_settings", "course_settings.course_id", "courses.id")
@@ -160,12 +149,7 @@ export async function listPublishedCourses(
           "course_lessons.content_media_id",
         )
         .select((sub) =>
-          sub.fn
-            .coalesce(
-              sub.fn.sum("lesson_media.duration_seconds"),
-              sql<number>`0`,
-            )
-            .as("sum"),
+          sub.fn.coalesce(sub.fn.sum("lesson_media.duration_seconds"), sql<number>`0`).as("sum"),
         )
         .whereRef("course_lessons.course_id", "=", "courses.id")
         .where("course_lessons.is_published", "=", true)
@@ -226,21 +210,10 @@ export async function listPublishedCourseOptions(database: Kysely<Database>) {
     .execute();
 }
 
-export async function findPublishedCourseBySlug(
-  database: Kysely<Database>,
-  slug: string,
-) {
+export async function findPublishedCourseBySlug(database: Kysely<Database>, slug: string) {
   const row = await database
     .selectFrom("courses")
-    .select([
-      "id",
-      "slug",
-      "title",
-      "short_description",
-      "description",
-      "status",
-      "creator_id",
-    ])
+    .select(["id", "slug", "title", "short_description", "description", "status", "creator_id"])
     .where("slug", "=", slug)
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
@@ -311,12 +284,7 @@ export async function listAllCourses(database: Kysely<Database>) {
           "course_lessons.content_media_id",
         )
         .select((sub) =>
-          sub.fn
-            .coalesce(
-              sub.fn.sum("lesson_media.duration_seconds"),
-              sql<number>`0`,
-            )
-            .as("sum"),
+          sub.fn.coalesce(sub.fn.sum("lesson_media.duration_seconds"), sql<number>`0`).as("sum"),
         )
         .whereRef("course_lessons.course_id", "=", "courses.id")
         .where("course_lessons.deleted_at", "is", null)
@@ -338,10 +306,7 @@ export async function listAllCourseScope(database: Kysely<Database>) {
     .execute();
 }
 
-export async function listCoursesByCreator(
-  database: Kysely<Database>,
-  creatorId: string,
-) {
+export async function listCoursesByCreator(database: Kysely<Database>, creatorId: string) {
   return await database
     .selectFrom("courses")
     .leftJoin("course_settings", "course_settings.course_id", "courses.id")
@@ -393,12 +358,7 @@ export async function listCoursesByCreator(
           "course_lessons.content_media_id",
         )
         .select((sub) =>
-          sub.fn
-            .coalesce(
-              sub.fn.sum("lesson_media.duration_seconds"),
-              sql<number>`0`,
-            )
-            .as("sum"),
+          sub.fn.coalesce(sub.fn.sum("lesson_media.duration_seconds"), sql<number>`0`).as("sum"),
         )
         .whereRef("course_lessons.course_id", "=", "courses.id")
         .where("course_lessons.deleted_at", "is", null)
@@ -411,10 +371,7 @@ export async function listCoursesByCreator(
     .execute();
 }
 
-export async function listAvailableCoursesByCreator(
-  database: Kysely<Database>,
-  creatorId: string,
-) {
+export async function listAvailableCoursesByCreator(database: Kysely<Database>, creatorId: string) {
   return await database
     .selectFrom("courses")
     .selectAll()
@@ -466,11 +423,7 @@ export async function updateCourse(
     .executeTakeFirst();
 }
 
-export async function softDeleteCourse(
-  database: Kysely<Database>,
-  courseId: string,
-  now: Date,
-) {
+export async function softDeleteCourse(database: Kysely<Database>, courseId: string, now: Date) {
   return await database
     .updateTable("courses")
     .set({

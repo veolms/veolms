@@ -1,7 +1,4 @@
-import type {
-  LearningProgressBatchRequest,
-  LearningProgressCourseParams,
-} from "@veolms/contracts";
+import type { LearningProgressBatchRequest, LearningProgressCourseParams } from "@veolms/contracts";
 import type { FastifyRequest } from "fastify";
 
 import type { LearningProgressService } from "./learning-progress.service.ts";
@@ -11,9 +8,7 @@ export function createLearningProgressController({
 }: {
   service: LearningProgressService;
 }) {
-  async function get(
-    request: FastifyRequest<{ Params: LearningProgressCourseParams }>,
-  ) {
+  async function get(request: FastifyRequest<{ Params: LearningProgressCourseParams }>) {
     return await service.getProgress(
       { id: request.user!.id, roles: request.user!.roles },
       request.params.courseKey,
@@ -45,6 +40,4 @@ export function createLearningProgressController({
   return { get, getResumeContext, sync };
 }
 
-export type LearningProgressController = ReturnType<
-  typeof createLearningProgressController
->;
+export type LearningProgressController = ReturnType<typeof createLearningProgressController>;

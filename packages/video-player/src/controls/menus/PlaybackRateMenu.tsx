@@ -1,7 +1,4 @@
-import {
-  DEFAULT_PLAYBACK_RATES,
-  formatPlaybackRate,
-} from "../../playback/playbackRates";
+import { DEFAULT_PLAYBACK_RATES, formatPlaybackRate } from "../../playback/playbackRates";
 import { usePlayerController } from "../../react/context";
 import { usePlayerState } from "../../react/usePlayerState";
 import { usePlayerTheme } from "../../themes/PlayerThemeContext";
@@ -43,10 +40,7 @@ export function PlaybackRateMenu({
       menuLabel="Playback speed"
       trigger={
         trigger ?? (
-          <MenuTriggerContent
-            icon={<PlaybackRateIcon className="size-4" />}
-            value={currentLabel}
-          />
+          <MenuTriggerContent icon={<PlaybackRateIcon className="size-4" />} value={currentLabel} />
         )
       }
       className={className}

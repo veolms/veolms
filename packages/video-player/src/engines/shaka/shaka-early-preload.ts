@@ -124,9 +124,7 @@ export async function discardEarlyShakaPreloadManager(
   await destroyPreloadManager(preloadPromise);
 }
 
-export function consumeEarlyShakaPreloadSession(
-  session: EarlyShakaPreloadSession,
-): void {
+export function consumeEarlyShakaPreloadSession(session: EarlyShakaPreloadSession): void {
   session.consumed = true;
   const store = preloadGlobal();
   if (store[EARLY_SHAKA_PRELOAD_GLOBAL_KEY] === session) {

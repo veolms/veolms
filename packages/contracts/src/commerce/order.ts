@@ -83,27 +83,16 @@ export const cartItemInputSchema = z
   })
   .refine(
     (data) =>
-      (data.itemType === "course" &&
-        !!data.courseId &&
-        !data.bundleId &&
-        !data.quizPricingId) ||
-      (data.itemType === "bundle" &&
-        !!data.bundleId &&
-        !data.courseId &&
-        !data.quizPricingId) ||
-      (data.itemType === "quiz" &&
-        !!data.quizPricingId &&
-        !data.courseId &&
-        !data.bundleId),
+      (data.itemType === "course" && !!data.courseId && !data.bundleId && !data.quizPricingId) ||
+      (data.itemType === "bundle" && !!data.bundleId && !data.courseId && !data.quizPricingId) ||
+      (data.itemType === "quiz" && !!data.quizPricingId && !data.courseId && !data.bundleId),
     {
-      message:
-        "Either courseId, bundleId, or quizPricingId must be provided matching itemType",
+      message: "Either courseId, bundleId, or quizPricingId must be provided matching itemType",
     },
   )
-  .refine(
-    (data) => data.itemType === "course" || data.customAmount === undefined,
-    { message: "Custom amount is only supported on course items" },
-  );
+  .refine((data) => data.itemType === "course" || data.customAmount === undefined, {
+    message: "Custom amount is only supported on course items",
+  });
 export type CartItemInput = z.infer<typeof cartItemInputSchema>;
 
 export const cartItemSchema = z.strictObject({
@@ -230,9 +219,7 @@ export const couponValidationResultSchema = z.strictObject({
   discountAmount: z.number().int().nonnegative().default(0),
   message: z.string().optional(),
 });
-export type CouponValidationResult = z.infer<
-  typeof couponValidationResultSchema
->;
+export type CouponValidationResult = z.infer<typeof couponValidationResultSchema>;
 
 export const couponRedemptionSchema = z.strictObject({
   id: z.uuid(),
@@ -265,9 +252,7 @@ export const pricingItemCalculationSchema = z.strictObject({
   taxAmount: z.number().int().nonnegative().default(0),
   finalAmount: z.number().int().nonnegative(),
 });
-export type PricingItemCalculation = z.infer<
-  typeof pricingItemCalculationSchema
->;
+export type PricingItemCalculation = z.infer<typeof pricingItemCalculationSchema>;
 
 export const pricingCalculationSchema = z.strictObject({
   subtotalAmount: z.number().int().nonnegative(),
@@ -300,8 +285,7 @@ export type OrderView = z.infer<typeof orderViewSchema>;
 // (Postgres `timestamptz` keeps microseconds). The value is bound into SQL and
 // cast with `::timestamptz`, so anything Postgres would reject has to be
 // refused here to surface as a 400 rather than a database error.
-const orderCursorTimestampPattern =
-  /^(?!0000)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/;
+const orderCursorTimestampPattern = /^(?!0000)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/;
 
 export const orderCursorPayloadSchema = z.object({
   id: z.string().uuid(),
@@ -364,8 +348,7 @@ export function decodeOrderCursor(
     const createdAtDate = new Date(result.data.createdAt);
     if (
       Number.isNaN(createdAtDate.getTime()) ||
-      createdAtDate.toISOString().slice(0, 19) !==
-        result.data.createdAt.slice(0, 19)
+      createdAtDate.toISOString().slice(0, 19) !== result.data.createdAt.slice(0, 19)
     ) {
       throw new Error("Invalid cursor timestamp");
     }
@@ -489,26 +472,20 @@ export const checkoutPreviewRequestSchema = z.strictObject({
   items: z.array(cartItemInputSchema).min(1),
   couponCode: z.string().max(50).toUpperCase().optional(),
 });
-export type CheckoutPreviewRequest = z.infer<
-  typeof checkoutPreviewRequestSchema
->;
+export type CheckoutPreviewRequest = z.infer<typeof checkoutPreviewRequestSchema>;
 
 export const checkoutPreviewResponseSchema = z.strictObject({
   pricing: pricingCalculationSchema,
   couponValidation: couponValidationResultSchema.optional(),
 });
-export type CheckoutPreviewResponse = z.infer<
-  typeof checkoutPreviewResponseSchema
->;
+export type CheckoutPreviewResponse = z.infer<typeof checkoutPreviewResponseSchema>;
 
 export const createCheckoutOrderRequestSchema = z.strictObject({
   items: z.array(cartItemInputSchema).min(1),
   couponCode: z.string().max(50).toUpperCase().optional(),
   idempotencyKey: z.string().max(255).optional(),
 });
-export type CreateCheckoutOrderRequest = z.infer<
-  typeof createCheckoutOrderRequestSchema
->;
+export type CreateCheckoutOrderRequest = z.infer<typeof createCheckoutOrderRequestSchema>;
 export const createPurchaseRequestSchema = createCheckoutOrderRequestSchema;
 export type CreatePurchaseRequest = CreateCheckoutOrderRequest;
 
@@ -605,6 +582,4 @@ export const orderDirectRefundRequestSchema = z.strictObject({
   preserveAccess: z.boolean().default(false),
   idempotencyKey: z.string().min(1).max(255).optional(),
 });
-export type OrderDirectRefundRequest = z.infer<
-  typeof orderDirectRefundRequestSchema
->;
+export type OrderDirectRefundRequest = z.infer<typeof orderDirectRefundRequestSchema>;

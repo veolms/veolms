@@ -22,8 +22,7 @@ export const LEARNING_MINI_PLAYER_TABLET_WIDTH = 260;
 export const LEARNING_MINI_PLAYER_DESKTOP_WIDTH = 320;
 export const LEARNING_MINI_PLAYER_DESKTOP_PLAYLIST_HEIGHT = 320;
 export const LEARNING_MINI_PLAYER_DESKTOP_PLAYLIST_MIN_HEIGHT = 120;
-export const LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE =
-  "40%";
+export const LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE = "40%";
 
 export interface LearningMiniPlayerLayout {
   left: number;
@@ -44,12 +43,10 @@ export const getLearningMiniPlayerHeight = (
 ) =>
   width / LEARNING_MINI_PLAYER_ASPECT_RATIO +
   (isDesktop
-    ? LEARNING_MINI_PLAYER_DESKTOP_INFO_BAR_HEIGHT +
-      (isExpanded ? playlistHeight : 0)
+    ? LEARNING_MINI_PLAYER_DESKTOP_INFO_BAR_HEIGHT + (isExpanded ? playlistHeight : 0)
     : 0);
 
-export type LearningMiniPlayerResizeEdges =
-  "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
+export type LearningMiniPlayerResizeEdges = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 
 export interface LearningPlayerViewportBounds {
   height: number;
@@ -77,12 +74,9 @@ export interface LearningMinimizeGeometry {
 }
 
 export const isDesktopLearningMinimizeViewport = (): boolean =>
-  typeof window !== "undefined" &&
-  window.matchMedia(LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY).matches;
+  typeof window !== "undefined" && window.matchMedia(LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY).matches;
 
-export const isUnifiedDesktopLearningMotionSurface = (
-  element: HTMLElement | null,
-): boolean =>
+export const isUnifiedDesktopLearningMotionSurface = (element: HTMLElement | null): boolean =>
   element !== null &&
   isDesktopLearningMinimizeViewport() &&
   element.hasAttribute("data-learning-motion-surface");
@@ -90,9 +84,7 @@ export const isUnifiedDesktopLearningMotionSurface = (
 export const getLearningPlayerMotionTargetElement = (): HTMLElement | null =>
   document.querySelector<HTMLElement>("[data-learning-player-motion-target]");
 
-export const isUnifiedDesktopPlayerMinimize = (
-  motionTarget: HTMLElement | null,
-): boolean =>
+export const isUnifiedDesktopPlayerMinimize = (motionTarget: HTMLElement | null): boolean =>
   motionTarget !== null &&
   isDesktopLearningMinimizeViewport() &&
   motionTarget.hasAttribute("data-learning-player-motion-target") &&
@@ -104,11 +96,7 @@ const UNIFIED_DESKTOP_EXIT_SELECTORS = [
 ] as const;
 
 const applyInlineMinimizeCorner = (element: HTMLElement) => {
-  element.style.setProperty(
-    "border-radius",
-    LEARNING_PLAYER_MINIMIZE_BORDER_RADIUS,
-    "important",
-  );
+  element.style.setProperty("border-radius", LEARNING_PLAYER_MINIMIZE_BORDER_RADIUS, "important");
   element.style.setProperty("overflow", "hidden", "important");
   element.style.setProperty("transition-property", "transform", "important");
 };
@@ -169,9 +157,7 @@ export function applyLearningPlayerMinimizeCornerRadius() {
   const motionTarget = getLearningPlayerMotionTargetElement();
   if (motionTarget) applyInlineMinimizeCorner(motionTarget);
 
-  const persistentPlayer = document.querySelector<HTMLElement>(
-    "[data-learning-persistent-player]",
-  );
+  const persistentPlayer = document.querySelector<HTMLElement>("[data-learning-persistent-player]");
   if (!persistentPlayer) return;
 
   persistentPlayer.dataset.learningPlayerMinimizeCorners = "true";
@@ -204,9 +190,7 @@ export function clearLearningPlayerMinimizeCornerRadius() {
     });
 }
 
-export function clearLearningPlayerMinimizeClipSurfaceStyles(
-  surface: HTMLElement,
-) {
+export function clearLearningPlayerMinimizeClipSurfaceStyles(surface: HTMLElement) {
   clearUnifiedDesktopChildExitMotion(surface);
   surface.style.removeProperty("z-index");
   delete surface.dataset.learningPlayerMotionPhase;
@@ -240,10 +224,7 @@ export function getLearningMinimizeGeometry(
   };
 }
 
-export function runLearningPlayerFlipRestore(
-  element: HTMLElement,
-  startRect: DOMRect,
-): () => void {
+export function runLearningPlayerFlipRestore(element: HTMLElement, startRect: DOMRect): () => void {
   const endRect = element.getBoundingClientRect();
   if (
     startRect.width <= 0 ||
@@ -254,11 +235,9 @@ export function runLearningPlayerFlipRestore(
   }
 
   const scale = startRect.width / endRect.width;
-  const inverseTransform = `translate3d(${(
-    startRect.left - endRect.left
-  ).toFixed(3)}px, ${(startRect.top - endRect.top).toFixed(
-    3,
-  )}px, 0) scale(${scale.toFixed(5)})`;
+  const inverseTransform = `translate3d(${(startRect.left - endRect.left).toFixed(3)}px, ${(
+    startRect.top - endRect.top
+  ).toFixed(3)}px, 0) scale(${scale.toFixed(5)})`;
   element.dataset.learningPlayerRestorePhase = "expanding";
   element.style.borderRadius = "13px";
   element.style.overflow = "hidden";
@@ -289,13 +268,9 @@ export function runLearningPlayerFlipRestore(
     clearLearningPlayerMinimizeCornerRadius();
   };
   const handleTransitionEnd = (event: TransitionEvent) => {
-    if (event.target === element && event.propertyName === "transform")
-      finish();
+    if (event.target === element && event.propertyName === "transform") finish();
   };
-  const timer = window.setTimeout(
-    finish,
-    LEARNING_PLAYER_MOTION_DURATION_MS + 80,
-  );
+  const timer = window.setTimeout(finish, LEARNING_PLAYER_MOTION_DURATION_MS + 80);
   const cleanup = () => {
     if (frame) window.cancelAnimationFrame(frame);
     window.clearTimeout(timer);
@@ -306,11 +281,8 @@ export function runLearningPlayerFlipRestore(
   return finish;
 }
 
-export const clampLearningPlayerValue = (
-  value: number,
-  minimum: number,
-  maximum: number,
-) => Math.min(maximum, Math.max(minimum, value));
+export const clampLearningPlayerValue = (value: number, minimum: number, maximum: number) =>
+  Math.min(maximum, Math.max(minimum, value));
 
 export const getLearningBackgroundMotionState = (
   videoBottom: number,
@@ -328,8 +300,7 @@ export const getLearningBackgroundMotionState = (
     LEARNING_BACKGROUND_REVEAL_END_VIEWPORT_PROGRESS -
     LEARNING_BACKGROUND_REVEAL_START_VIEWPORT_PROGRESS;
   const contentFadeStart = clampLearningPlayerValue(
-    options.contentFadeStartViewportProgress ??
-      LEARNING_CONTENT_FADE_START_VIEWPORT_PROGRESS,
+    options.contentFadeStartViewportProgress ?? LEARNING_CONTENT_FADE_START_VIEWPORT_PROGRESS,
     0,
     LEARNING_CONTENT_FADE_END_VIEWPORT_PROGRESS,
   );
@@ -340,37 +311,23 @@ export const getLearningBackgroundMotionState = (
 
   return {
     contentOpacity:
-      1 -
-      clampLearningPlayerValue(
-        (viewportProgress - contentFadeStart) / contentFadeRange,
-        0,
-        1,
-      ),
+      1 - clampLearningPlayerValue((viewportProgress - contentFadeStart) / contentFadeRange, 0, 1),
     revealProgress: clampLearningPlayerValue(
-      (viewportProgress - LEARNING_BACKGROUND_REVEAL_START_VIEWPORT_PROGRESS) /
-        revealRange,
+      (viewportProgress - LEARNING_BACKGROUND_REVEAL_START_VIEWPORT_PROGRESS) / revealRange,
       0,
       1,
     ),
-    shouldMount:
-      viewportProgress >= LEARNING_BACKGROUND_MOUNT_VIEWPORT_PROGRESS,
+    shouldMount: viewportProgress >= LEARNING_BACKGROUND_MOUNT_VIEWPORT_PROGRESS,
     viewportProgress,
   };
 };
 
 const sampleCubicBezier = (first: number, second: number, progress: number) =>
-  ((1 - 3 * second + 3 * first) * progress + (3 * second - 6 * first)) *
-    progress *
-    progress +
+  ((1 - 3 * second + 3 * first) * progress + (3 * second - 6 * first)) * progress * progress +
   3 * first * progress;
 
-const sampleCubicBezierDerivative = (
-  first: number,
-  second: number,
-  progress: number,
-) =>
-  (3 * (1 - 3 * second + 3 * first) * progress + 2 * (3 * second - 6 * first)) *
-    progress +
+const sampleCubicBezierDerivative = (first: number, second: number, progress: number) =>
+  (3 * (1 - 3 * second + 3 * first) * progress + 2 * (3 * second - 6 * first)) * progress +
   3 * first;
 
 export const easeLearningPlayerMotionProgress = (progress: number) => {
@@ -381,19 +338,13 @@ export const easeLearningPlayerMotionProgress = (progress: number) => {
     const error = sampleCubicBezier(0.16, 0.3, curveProgress) - input;
     const derivative = sampleCubicBezierDerivative(0.16, 0.3, curveProgress);
     if (Math.abs(error) < 0.0001 || Math.abs(derivative) < 0.0001) break;
-    curveProgress = clampLearningPlayerValue(
-      curveProgress - error / derivative,
-      0,
-      1,
-    );
+    curveProgress = clampLearningPlayerValue(curveProgress - error / derivative, 0, 1);
   }
 
   return sampleCubicBezier(1, 1, curveProgress);
 };
 
-export const clearLearningPlayerMinimizeMotionStyles = (
-  element: HTMLElement,
-) => {
+export const clearLearningPlayerMinimizeMotionStyles = (element: HTMLElement) => {
   clearLearningPlayerMinimizeCornerRadius();
   element.style.removeProperty("border-radius");
   element.style.removeProperty("overflow");
@@ -407,20 +358,17 @@ export const clearLearningPlayerMinimizeMotionStyles = (
   delete element.dataset.learningPlayerMotionPhase;
 };
 
-export const getLearningPlayerViewportBounds =
-  (): LearningPlayerViewportBounds => {
-    const viewport = window.visualViewport;
-    return {
-      height: viewport?.height ?? window.innerHeight,
-      left: viewport?.offsetLeft ?? 0,
-      top: viewport?.offsetTop ?? 0,
-      width: viewport?.width ?? window.innerWidth,
-    };
+export const getLearningPlayerViewportBounds = (): LearningPlayerViewportBounds => {
+  const viewport = window.visualViewport;
+  return {
+    height: viewport?.height ?? window.innerHeight,
+    left: viewport?.offsetLeft ?? 0,
+    top: viewport?.offsetTop ?? 0,
+    width: viewport?.width ?? window.innerWidth,
   };
+};
 
-export const getLearningMiniPlayerBottomEdge = (
-  viewport = getLearningPlayerViewportBounds(),
-) => {
+export const getLearningMiniPlayerBottomEdge = (viewport = getLearningPlayerViewportBounds()) => {
   const viewportBottom = viewport.top + viewport.height;
   const mobileNavigation = document.querySelector<HTMLElement>(
     ".mobile-bottom-nav:not(.is-scroll-hidden)",
@@ -437,13 +385,8 @@ export const getLearningMiniPlayerBottomEdge = (
   return viewportBottom - LEARNING_MINI_PLAYER_MARGIN;
 };
 
-export const getLearningMiniPlayerWidthBounds = (
-  viewport = getLearningPlayerViewportBounds(),
-) => {
-  const maximumWidth = Math.max(
-    1,
-    viewport.width - LEARNING_MINI_PLAYER_MARGIN * 2,
-  );
+export const getLearningMiniPlayerWidthBounds = (viewport = getLearningPlayerViewportBounds()) => {
+  const maximumWidth = Math.max(1, viewport.width - LEARNING_MINI_PLAYER_MARGIN * 2);
   return {
     maximumWidth,
     minimumWidth: Math.min(LEARNING_MINI_PLAYER_MIN_WIDTH, maximumWidth),
@@ -465,8 +408,7 @@ export const getDefaultLearningMiniPlayerLayout = (
   viewport = getLearningPlayerViewportBounds(),
   preferredWidth = getPreferredLearningMiniPlayerWidth(viewport.width),
 ): LearningMiniPlayerLayout => {
-  const { maximumWidth, minimumWidth } =
-    getLearningMiniPlayerWidthBounds(viewport);
+  const { maximumWidth, minimumWidth } = getLearningMiniPlayerWidthBounds(viewport);
   const width = Math.min(
     maximumSourceWidth,
     clampLearningPlayerValue(preferredWidth, minimumWidth, maximumWidth),
@@ -492,18 +434,9 @@ export const getLearningMiniPlayerPointerResizeLayout = (
 ): LearningMiniPlayerLayout => {
   const isDesktop = isDesktopLearningMinimizeViewport();
   const playlistHeight = getLearningMiniPlayerPlaylistHeight(initialLayout);
-  const horizontalDirection = edges.includes("e")
-    ? 1
-    : edges.includes("w")
-      ? -1
-      : 0;
-  const verticalDirection = edges.includes("s")
-    ? 1
-    : edges.includes("n")
-      ? -1
-      : 0;
-  const isExpandedVerticalResize =
-    isDesktop && isExpanded && verticalDirection !== 0;
+  const horizontalDirection = edges.includes("e") ? 1 : edges.includes("w") ? -1 : 0;
+  const verticalDirection = edges.includes("s") ? 1 : edges.includes("n") ? -1 : 0;
+  const isExpandedVerticalResize = isDesktop && isExpanded && verticalDirection !== 0;
 
   if (isExpandedVerticalResize) {
     const chromeHeight =
@@ -525,9 +458,7 @@ export const getLearningMiniPlayerPointerResizeLayout = (
       maxPlaylist,
     );
     const height = chromeHeight + nextPlaylistHeight;
-    const top = edges.includes("n")
-      ? initialBottom - height
-      : initialLayout.top;
+    const top = edges.includes("n") ? initialBottom - height : initialLayout.top;
     const maximumTop = Math.max(minTop, bottomEdge - height);
 
     return {
@@ -537,19 +468,16 @@ export const getLearningMiniPlayerPointerResizeLayout = (
       width: initialLayout.width,
     };
   }
-  const aspectAdjustedVerticalDirection =
-    verticalDirection / LEARNING_MINI_PLAYER_ASPECT_RATIO;
+  const aspectAdjustedVerticalDirection = verticalDirection / LEARNING_MINI_PLAYER_ASPECT_RATIO;
   const widthDelta =
     horizontalDirection && verticalDirection
-      ? (horizontalDirection * deltaX +
-          aspectAdjustedVerticalDirection * deltaY) /
+      ? (horizontalDirection * deltaX + aspectAdjustedVerticalDirection * deltaY) /
         (horizontalDirection * horizontalDirection +
           aspectAdjustedVerticalDirection * aspectAdjustedVerticalDirection)
       : horizontalDirection
         ? horizontalDirection * deltaX
         : verticalDirection * deltaY * LEARNING_MINI_PLAYER_ASPECT_RATIO;
-  const { maximumWidth, minimumWidth } =
-    getLearningMiniPlayerWidthBounds(viewport);
+  const { maximumWidth, minimumWidth } = getLearningMiniPlayerWidthBounds(viewport);
   const width = clampLearningPlayerValue(
     initialLayout.width + widthDelta,
     minimumWidth,
@@ -561,12 +489,7 @@ export const getLearningMiniPlayerPointerResizeLayout = (
     isExpanded,
     playlistHeight,
   );
-  const height = getLearningMiniPlayerHeight(
-    width,
-    isDesktop,
-    isExpanded,
-    playlistHeight,
-  );
+  const height = getLearningMiniPlayerHeight(width, isDesktop, isExpanded, playlistHeight);
   const initialRight = initialLayout.left + initialLayout.width;
   const initialBottom = initialLayout.top + initialHeight;
   const minimumLeft = viewport.left + LEARNING_MINI_PLAYER_MARGIN;
@@ -575,10 +498,7 @@ export const getLearningMiniPlayerPointerResizeLayout = (
     viewport.left + viewport.width - LEARNING_MINI_PLAYER_MARGIN - width,
   );
   const minimumTop = viewport.top + LEARNING_MINI_PLAYER_MARGIN;
-  const maximumTop = Math.max(
-    minimumTop,
-    getLearningMiniPlayerBottomEdge(viewport) - height,
-  );
+  const maximumTop = Math.max(minimumTop, getLearningMiniPlayerBottomEdge(viewport) - height);
   const left = edges.includes("w")
     ? initialRight - width
     : edges.includes("e")

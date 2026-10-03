@@ -7,14 +7,7 @@ export interface AutosyncKey {
 }
 
 export type AutosyncStatus =
-  | "idle"
-  | "pending"
-  | "syncing"
-  | "saved"
-  | "offline"
-  | "blocked"
-  | "error"
-  | "conflict";
+  "idle" | "pending" | "syncing" | "saved" | "offline" | "blocked" | "error" | "conflict";
 
 export interface AutosyncValidationResult {
   valid: boolean;
@@ -31,8 +24,7 @@ export type AutosyncSync<TValue, TServerValue> = (
   context: AutosyncSyncContext<TValue>,
 ) => Promise<TServerValue>;
 
-export type AutosyncUpdater<TValue> =
-  Partial<TValue> | ((currentValue: TValue) => TValue);
+export type AutosyncUpdater<TValue> = Partial<TValue> | ((currentValue: TValue) => TValue);
 
 export interface AutosyncRegistration {
   key: AutosyncKey;
@@ -54,10 +46,7 @@ export interface AutosyncOptions<TValue, TServerValue = TValue> {
     value: TValue,
     context: AutosyncSyncContext<TValue>,
   ) => AutosyncValidationResult | boolean;
-  onSynced?: (
-    serverValue: TServerValue,
-    submittedValue: TValue,
-  ) => TValue | undefined;
+  onSynced?: (serverValue: TServerValue, submittedValue: TValue) => TValue | undefined;
 }
 
 export interface AutosyncResult<TValue> {

@@ -1,9 +1,5 @@
 import type { FastifyBaseLogger } from "fastify";
-import type {
-  ISmsProvider,
-  SendOtpOptions,
-  SmsProviderResult,
-} from "../sms-provider.interface.ts";
+import type { ISmsProvider, SendOtpOptions, SmsProviderResult } from "../sms-provider.interface.ts";
 
 export class ConsoleProvider implements ISmsProvider {
   readonly name = "console";
@@ -30,10 +26,7 @@ export class ConsoleProvider implements ISmsProvider {
   }
 
   async sendText(phoneNo: string, text: string): Promise<SmsProviderResult> {
-    this.log?.info(
-      { to: phoneNo, text },
-      "[DEV] SMS text message (console provider)",
-    );
+    this.log?.info({ to: phoneNo, text }, "[DEV] SMS text message (console provider)");
     return { provider: this.name };
   }
 }

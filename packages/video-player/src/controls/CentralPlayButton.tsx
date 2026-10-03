@@ -11,9 +11,7 @@ export function CentralPlayButton() {
       controlsVisible: ui.controlsVisible,
       paused: media.paused || media.ended,
     }),
-    (left, right) =>
-      left.controlsVisible === right.controlsVisible &&
-      left.paused === right.paused,
+    (left, right) => left.controlsVisible === right.controlsVisible && left.paused === right.paused,
   );
   const { icons } = usePlayerTheme();
   const Icon = paused ? icons.play : icons.pause;
@@ -25,11 +23,7 @@ export function CentralPlayButton() {
       data-player-control=""
       className={`absolute inset-0 z-10 m-auto size-16 place-items-center self-center rounded-full bg-(--video-player-control-surface) text-(--video-player-control-text) shadow-(--video-player-control-shadow) backdrop-blur-md transition-[opacity,transform] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) motion-reduce:transition-none ${
         mobileInteraction ? "grid" : "hidden"
-      } ${
-        controlsVisible && paused
-          ? "opacity-100"
-          : "pointer-events-none scale-90 opacity-0"
-      }`}
+      } ${controlsVisible && paused ? "opacity-100" : "pointer-events-none scale-90 opacity-0"}`}
       onClick={() => void controller.togglePlayback().catch(() => undefined)}
     >
       <Icon size={31} active />

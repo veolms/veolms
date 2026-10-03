@@ -48,9 +48,5 @@ export function subscribeToIconPack(listener: () => void): () => void {
 }
 
 export function useIconPack(): IconPack {
-  return useSyncExternalStore(
-    subscribeToIconPack,
-    getIconPack,
-    () => DEFAULT_ICON_PACK,
-  );
+  return useSyncExternalStore(subscribeToIconPack, getIconPack, () => DEFAULT_ICON_PACK);
 }

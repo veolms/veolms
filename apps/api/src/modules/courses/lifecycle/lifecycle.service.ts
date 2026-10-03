@@ -1,9 +1,6 @@
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
-import type {
-  CourseValidationIssue,
-  CourseValidationResponse,
-} from "@veolms/contracts";
+import type { CourseValidationIssue, CourseValidationResponse } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
 import * as courseRepo from "../course/course.repository.ts";
@@ -16,10 +13,7 @@ import {
   type ConfigurationService,
 } from "../configuration/configuration.service.ts";
 import { createMediaService, type MediaService } from "../../media/index.ts";
-import {
-  createCourseService,
-  type CourseService,
-} from "../course/course.service.ts";
+import { createCourseService, type CourseService } from "../course/course.service.ts";
 import {
   assertOptimisticUpdate,
   getCourseAndVerifyOwner as verifyCourseOwner,
@@ -92,14 +86,13 @@ export function createLifecycleService({
     }
 
     // 2. Concurrently load curriculum, access rules, pricing, and settings
-    const [sections, lessons, accessRules, pricing, settings] =
-      await Promise.all([
-        curriculumService.findSectionsByCourseId(courseId),
-        curriculumService.findLessonsByCourseId(courseId),
-        configurationService.findAccessRuleByCourseId(courseId),
-        configurationService.findPricingByCourseId(courseId),
-        configurationService.findSettingsByCourseId(courseId),
-      ]);
+    const [sections, lessons, accessRules, pricing, settings] = await Promise.all([
+      curriculumService.findSectionsByCourseId(courseId),
+      curriculumService.findLessonsByCourseId(courseId),
+      configurationService.findAccessRuleByCourseId(courseId),
+      configurationService.findPricingByCourseId(courseId),
+      configurationService.findSettingsByCourseId(courseId),
+    ]);
 
     // 3. Curriculum Validation
     const curriculumErrors: string[] = [];
@@ -144,9 +137,7 @@ export function createLifecycleService({
     }
 
     const mediaAssets =
-      mediaIds.size > 0
-        ? await mediaService.getMediaAssets(Array.from(mediaIds))
-        : [];
+      mediaIds.size > 0 ? await mediaService.getMediaAssets(Array.from(mediaIds)) : [];
     const mediaMap = new Map(mediaAssets.map((m) => [m.id, m]));
 
     if (course.thumbnail_media_id) {
@@ -238,8 +229,7 @@ export function createLifecycleService({
         accessRules.duration_type === "fixed_duration" &&
         (!accessRules.duration_days || accessRules.duration_days <= 0)
       ) {
-        const msg =
-          "Fixed duration must specify a duration in days greater than 0.";
+        const msg = "Fixed duration must specify a duration in days greater than 0.";
         accessRulesErrors.push(msg);
         errors.push({
           code: "INVALID_ACCESS_DURATION",
@@ -315,9 +305,7 @@ export function createLifecycleService({
       }
     }
 
-    const extrasStatus = settings?.certificate_enabled
-      ? "Certificate Enabled"
-      : "Disabled";
+    const extrasStatus = settings?.certificate_enabled ? "Certificate Enabled" : "Disabled";
 
     const sectionsValidation = {
       basics: {
@@ -372,24 +360,12 @@ export function createLifecycleService({
     creatorId: string,
     userRoles?: readonly string[],
   ): Promise<CourseValidationResponse> {
-    const course = await getCourseAndVerifyOwner(
-      courseId,
-      creatorId,
-      userRoles,
-    );
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
     return await validateCourseObject(course, creatorId, userRoles);
   }
 
-  async function publishCourse(
-    courseId: string,
-    creatorId: string,
-    userRoles?: readonly string[],
-  ) {
-    const course = await getCourseAndVerifyOwner(
-      courseId,
-      creatorId,
-      userRoles,
-    );
+  async function publishCourse(courseId: string, creatorId: string, userRoles?: readonly string[]) {
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const validation = await validateCourseObject(course, creatorId, userRoles);
     if (!validation.canPublish || validation.errors.length > 0) {
@@ -402,17 +378,12 @@ export function createLifecycleService({
 
     const now = new Date();
     await database.transaction().execute(async (trx) => {
-      const result = await courseRepo.updateCourse(
-        trx,
-        courseId,
-        course.version,
-        {
-          status: "published",
-          published_at: now,
-          version: course.version + 1,
-          updated_at: now,
-        },
-      );
+      const result = await courseRepo.updateCourse(trx, courseId, course.version, {
+        status: "published",
+        published_at: now,
+        version: course.version + 1,
+        updated_at: now,
+      });
       assertOptimisticUpdate(result);
       await outbox.publish(trx, {
         type: "course.published",
@@ -435,8 +406,7 @@ export function createLifecycleService({
       title: course.title,
       shortDescription: course.short_description,
       description: course.description,
-      difficulty: course.difficulty as
-        "beginner" | "intermediate" | "advanced" | null,
+      difficulty: course.difficulty as "beginner" | "intermediate" | "advanced" | null,
       status: "published" as const,
       creatorId: course.creator_id as string,
       categoryId: course.category_id,
@@ -455,23 +425,14 @@ export function createLifecycleService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(
-      courseId,
-      creatorId,
-      userRoles,
-    );
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const now = new Date();
-    const updateResult = await courseRepo.updateCourse(
-      database,
-      courseId,
-      course.version,
-      {
-        status: "draft",
-        version: course.version + 1,
-        updated_at: now,
-      },
-    );
+    const updateResult = await courseRepo.updateCourse(database, courseId, course.version, {
+      status: "draft",
+      version: course.version + 1,
+      updated_at: now,
+    });
     assertOptimisticUpdate(updateResult);
 
     return {
@@ -480,8 +441,7 @@ export function createLifecycleService({
       title: course.title,
       shortDescription: course.short_description,
       description: course.description,
-      difficulty: course.difficulty as
-        "beginner" | "intermediate" | "advanced" | null,
+      difficulty: course.difficulty as "beginner" | "intermediate" | "advanced" | null,
       status: "draft" as const,
       creatorId: course.creator_id as string,
       categoryId: course.category_id,
@@ -500,11 +460,7 @@ export function createLifecycleService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    return await courseService.getCourseEditorData(
-      courseId,
-      creatorId,
-      userRoles,
-    );
+    return await courseService.getCourseEditorData(courseId, creatorId, userRoles);
   }
 
   return {

@@ -8,6 +8,4 @@ export const discussionUploadResponseSchema = z.object({
   size: z.number().int().nonnegative(),
 });
 
-export type DiscussionUploadResponse = z.infer<
-  typeof discussionUploadResponseSchema
->;
+export type DiscussionUploadResponse = z.infer<typeof discussionUploadResponseSchema>;

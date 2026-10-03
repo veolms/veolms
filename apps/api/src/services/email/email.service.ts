@@ -20,9 +20,7 @@ export interface EmailServiceOptions {
 }
 
 export type EmailDeliveryResult =
-  | { status: "sent"; messageId: string }
-  | { status: "logged" }
-  | { status: "failed"; error: Error };
+  { status: "sent"; messageId: string } | { status: "logged" } | { status: "failed"; error: Error };
 
 export interface EmailService {
   /**
@@ -38,10 +36,7 @@ export interface EmailService {
   close(): Promise<void>;
 }
 
-export function createEmailService({
-  config,
-  logger,
-}: EmailServiceOptions): EmailService {
+export function createEmailService({ config, logger }: EmailServiceOptions): EmailService {
   const log = logger.child({ service: "email" });
 
   // Built once and reused. A transporter per send would pay a fresh TCP
@@ -57,19 +52,13 @@ export function createEmailService({
       secure: config.port === 465,
       requireTLS: config.port !== 465,
       pool: true,
-      auth:
-        config.user && config.pass
-          ? { user: config.user, pass: config.pass }
-          : undefined,
+      auth: config.user && config.pass ? { user: config.user, pass: config.pass } : undefined,
     });
 
     return transporter;
   }
 
-  async function send(
-    to: string,
-    content: EmailContent,
-  ): Promise<EmailDeliveryResult> {
+  async function send(to: string, content: EmailContent): Promise<EmailDeliveryResult> {
     if (config.transport === "console") {
       log.info(
         { to, subject: content.subject, body: content.text },

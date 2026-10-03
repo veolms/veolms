@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type {
-  MouseEventHandler,
-  PointerEvent,
-  PointerEventHandler,
-} from "react";
+import type { MouseEventHandler, PointerEvent, PointerEventHandler } from "react";
 
 const HOLD_DURATION_MS = 500;
 const MOVE_TOLERANCE_PX = 10;
@@ -25,8 +21,7 @@ function isExcludedLongPressTarget(target: EventTarget | null): boolean {
     'button, input, textarea, select, summary, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="link"], a',
   );
   return Boolean(
-    interactive &&
-    !interactive.classList.contains("discussion-thread__navigation-link"),
+    interactive && !interactive.classList.contains("discussion-thread__navigation-link"),
   );
 }
 
@@ -118,19 +113,13 @@ export function useDiscussionWorkspaceCardLongPress<T extends HTMLElement>({
   const onPointerMoveCapture: PointerEventHandler<T> = useCallback(
     (event) => {
       const candidate = candidateRef.current;
-      if (
-        !candidate ||
-        candidate.pointerId !== event.pointerId ||
-        candidate.completed
-      ) {
+      if (!candidate || candidate.pointerId !== event.pointerId || candidate.completed) {
         return;
       }
 
       if (
-        Math.hypot(
-          event.clientX - candidate.startX,
-          event.clientY - candidate.startY,
-        ) > MOVE_TOLERANCE_PX
+        Math.hypot(event.clientX - candidate.startX, event.clientY - candidate.startY) >
+        MOVE_TOLERANCE_PX
       ) {
         cancelCandidate();
       }
@@ -148,8 +137,7 @@ export function useDiscussionWorkspaceCardLongPress<T extends HTMLElement>({
 
       if (!shouldSuppressClick || !candidate.completed) return;
 
-      suppressClickUntilRef.current =
-        performance.now() + CLICK_SUPPRESSION_EXPIRY_MS;
+      suppressClickUntilRef.current = performance.now() + CLICK_SUPPRESSION_EXPIRY_MS;
       if (suppressClickExpiryRef.current !== null) {
         window.clearTimeout(suppressClickExpiryRef.current);
       }

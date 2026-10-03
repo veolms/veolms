@@ -53,10 +53,7 @@ const configurationRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid() }),
         body: updateCoursePricingRequestSchema,
         response: {
-          200: jsonResponse(
-            "Pricing configuration updated",
-            coursePricingSchema,
-          ),
+          200: jsonResponse("Pricing configuration updated", coursePricingSchema),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
         },

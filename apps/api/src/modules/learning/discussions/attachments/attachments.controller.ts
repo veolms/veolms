@@ -43,11 +43,7 @@ export function createAttachmentsController({
   return {
     async initiateUpload(request, reply) {
       const user = request.user!;
-      const result = await service.initiateUpload(
-        database,
-        discussionActor(user),
-        request.body,
-      );
+      const result = await service.initiateUpload(database, discussionActor(user), request.body);
       reply.status(201).send(result);
     },
 
@@ -61,17 +57,12 @@ export function createAttachmentsController({
       }
 
       const buffer = await multipartFile.toBuffer();
-      const attachment = await service.uploadFile(
-        database,
-        attachmentId,
-        user.id,
-        {
-          filename: multipartFile.filename,
-          mimetype: multipartFile.mimetype,
-          data: buffer,
-          ...readMultipartDimensions(multipartFile.fields),
-        },
-      );
+      const attachment = await service.uploadFile(database, attachmentId, user.id, {
+        filename: multipartFile.filename,
+        mimetype: multipartFile.mimetype,
+        data: buffer,
+        ...readMultipartDimensions(multipartFile.fields),
+      });
 
       reply.status(200).send(attachment);
     },
@@ -79,11 +70,7 @@ export function createAttachmentsController({
     async completeUpload(request, reply) {
       const user = request.user!;
       const { attachmentId } = request.body;
-      const attachment = await service.completeUpload(
-        database,
-        attachmentId,
-        user.id,
-      );
+      const attachment = await service.completeUpload(database, attachmentId, user.id);
       reply.status(200).send(attachment);
     },
 
@@ -95,21 +82,14 @@ export function createAttachmentsController({
         return;
       }
 
-      const context = readDiscussionAttachmentUploadContext(
-        multipartFile.fields,
-      );
+      const context = readDiscussionAttachmentUploadContext(multipartFile.fields);
       const buffer = await multipartFile.toBuffer();
-      const result = await service.processUpload(
-        database,
-        discussionActor(user),
-        context,
-        {
-          filename: multipartFile.filename,
-          mimetype: multipartFile.mimetype,
-          data: buffer,
-          ...readMultipartDimensions(multipartFile.fields),
-        },
-      );
+      const result = await service.processUpload(database, discussionActor(user), context, {
+        filename: multipartFile.filename,
+        mimetype: multipartFile.mimetype,
+        data: buffer,
+        ...readMultipartDimensions(multipartFile.fields),
+      });
 
       reply.status(201).send(result);
     },

@@ -1,7 +1,4 @@
-import type {
-  DatabaseExecutor,
-  LearningAttachmentTable,
-} from "@veolms/database";
+import type { DatabaseExecutor, LearningAttachmentTable } from "@veolms/database";
 import type { Selectable } from "kysely";
 import type {
   AcceptReplyResponse,
@@ -28,10 +25,7 @@ import {
   takePage,
   toDate,
 } from "../shared/discussion.utils.ts";
-import {
-  createDiscussionAccess,
-  type DiscussionActor,
-} from "../shared/discussion.access.ts";
+import { createDiscussionAccess, type DiscussionActor } from "../shared/discussion.access.ts";
 import {
   createLessonDiscussionAccess,
   type LessonDiscussionAccess,
@@ -39,10 +33,7 @@ import {
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
-import type {
-  RepliesRepository,
-  ReplyRowWithAuthor,
-} from "./replies.repository.ts";
+import type { RepliesRepository, ReplyRowWithAuthor } from "./replies.repository.ts";
 
 type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
 
@@ -75,11 +66,7 @@ export interface RepliesService {
     updates: UpdateLearningReplyRequest,
   ): Promise<LearningReply>;
 
-  deleteReply(
-    db: DatabaseExecutor,
-    replyId: string,
-    actor: DiscussionActor,
-  ): Promise<void>;
+  deleteReply(db: DatabaseExecutor, replyId: string, actor: DiscussionActor): Promise<void>;
 
   acceptReply(
     db: DatabaseExecutor,
@@ -119,9 +106,7 @@ export function createRepliesService({
             userId: row.replyToUserId || row.userId,
             username: (row.replyToUsername || "user").split("@")[0] || "user",
             displayName: row.replyToDisplayName || "Learner",
-            textSnippet: row.replyToContent
-              ? row.replyToContent.slice(0, 120)
-              : undefined,
+            textSnippet: row.replyToContent ? row.replyToContent.slice(0, 120) : undefined,
           }
         : null;
 
@@ -136,9 +121,7 @@ export function createRepliesService({
       author: {
         id: row.userId,
         displayName: row.authorName || "Anonymous Learner",
-        username:
-          (row.authorUsername || row.authorEmail || "user").split("@")[0] ||
-          "user",
+        username: (row.authorUsername || row.authorEmail || "user").split("@")[0] || "user",
         avatarUrl: row.authorAvatarUrl,
         role: mapAuthorRole(row.authorRole),
       },
@@ -152,9 +135,7 @@ export function createRepliesService({
         id: a.id,
         kind: a.kind,
         fileName: a.file_name,
-        fileUrl: storage
-          ? getCdnDeliveryUrl(storage, a.storage_key).url
-          : a.file_url,
+        fileUrl: storage ? getCdnDeliveryUrl(storage, a.storage_key).url : a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
         ...getAttachmentDimensionFields(a.metadata),
@@ -167,13 +148,9 @@ export function createRepliesService({
       isLiked,
       isOwn,
       createdAt:
-        row.createdAt instanceof Date
-          ? row.createdAt.toISOString()
-          : String(row.createdAt),
+        row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
       updatedAt:
-        row.updatedAt instanceof Date
-          ? row.updatedAt.toISOString()
-          : String(row.updatedAt),
+        row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
     };
   }
 
@@ -183,11 +160,7 @@ export function createRepliesService({
         // 1. Check thread existence & lock status
         const thread = await threadsRepo.findThreadById(trx, input.threadId);
         if (!thread) {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
 
         await courseAccess.assertCanParticipateInCourse(
@@ -208,12 +181,7 @@ export function createRepliesService({
         );
         courseAccess.assertThreadIsActive(thread);
         courseAccess.assertThreadNotLocked(thread);
-        await courseAccess.assertNotSuspended(
-          trx,
-          input.userId,
-          thread.courseId,
-          thread.kind,
-        );
+        await courseAccess.assertNotSuspended(trx, input.userId, thread.courseId, thread.kind);
 
         // Resolve reply-to from the parent reply only — never from client user ids
         let targetReplyId = input.replyToReplyId || input.parentReplyId || null;
@@ -221,10 +189,7 @@ export function createRepliesService({
         let targetUserId: string | null = null;
 
         if (targetReplyId) {
-          const targetReply = await repliesRepo.findReplyById(
-            trx,
-            targetReplyId,
-          );
+          const targetReply = await repliesRepo.findReplyById(trx, targetReplyId);
           if (!targetReply || targetReply.threadId !== input.threadId) {
             throw DiscussionErrors.invalidReply();
           }
@@ -239,10 +204,7 @@ export function createRepliesService({
         }
 
         if (parentReplyId && parentReplyId !== targetReplyId) {
-          const parentReply = await repliesRepo.findReplyById(
-            trx,
-            parentReplyId,
-          );
+          const parentReply = await repliesRepo.findReplyById(trx, parentReplyId);
           if (!parentReply || parentReply.threadId !== input.threadId) {
             throw DiscussionErrors.invalidReply();
           }
@@ -338,11 +300,7 @@ export function createRepliesService({
       } else if (lessonReadAccess) {
         courseAccess.assertThreadIsActive(thread);
         if (thread.visibility !== "public") {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
       } else {
         if (!actor) {
@@ -408,12 +366,7 @@ export function createRepliesService({
       }
 
       const replies = page.map((r) =>
-        mapReplyRow(
-          r,
-          actor?.userId,
-          attachmentsByReplyId.get(r.id) ?? [],
-          likedReplyIds,
-        ),
+        mapReplyRow(r, actor?.userId, attachmentsByReplyId.get(r.id) ?? [], likedReplyIds),
       );
 
       const last = page.at(-1);
@@ -440,40 +393,21 @@ export function createRepliesService({
 
         const thread = await threadsRepo.findThreadById(trx, reply.threadId);
         if (!thread) {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
-        await courseAccess.assertCanParticipateInCourse(
-          trx,
-          actor,
-          thread.courseId,
-        );
+        await courseAccess.assertCanParticipateInCourse(trx, actor, thread.courseId);
         await courseAccess.assertCanAccessThread(trx, actor, thread);
         courseAccess.assertThreadIsActive(thread);
         courseAccess.assertReplyIsActive(reply);
 
         if (reply.userId !== actor.userId) {
-          throw httpError(
-            403,
-            "FORBIDDEN",
-            "You are not allowed to update this reply",
-          );
+          throw httpError(403, "FORBIDDEN", "You are not allowed to update this reply");
         }
 
         courseAccess.assertThreadNotLocked(thread);
-        await courseAccess.assertNotSuspended(
-          trx,
-          actor.userId,
-          thread.courseId,
-          thread.kind,
-        );
+        await courseAccess.assertNotSuspended(trx, actor.userId, thread.courseId, thread.kind);
 
-        const plainText = updates.content
-          ? extractPlainText(updates.content)
-          : undefined;
+        const plainText = updates.content ? extractPlainText(updates.content) : undefined;
         await repliesRepo.updateReply(trx, replyId, {
           ...updates,
           ...(plainText ? { plainText } : {}),
@@ -509,32 +443,16 @@ export function createRepliesService({
 
         const thread = await threadsRepo.findThreadById(trx, reply.threadId);
         if (!thread) {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
-        await courseAccess.assertCanParticipateInCourse(
-          trx,
-          actor,
-          thread.courseId,
-        );
+        await courseAccess.assertCanParticipateInCourse(trx, actor, thread.courseId);
         await courseAccess.assertCanAccessThread(trx, actor, thread);
         courseAccess.assertThreadIsActive(thread);
         courseAccess.assertReplyIsActive(reply);
 
-        const canStaffModerate = await courseAccess.canModerateCourse(
-          trx,
-          actor,
-          thread.courseId,
-        );
+        const canStaffModerate = await courseAccess.canModerateCourse(trx, actor, thread.courseId);
         if (reply.userId !== actor.userId && !canStaffModerate) {
-          throw httpError(
-            403,
-            "FORBIDDEN",
-            "You are not allowed to delete this reply",
-          );
+          throw httpError(403, "FORBIDDEN", "You are not allowed to delete this reply");
         }
 
         const deleted = await repliesRepo.deleteReply(trx, replyId);
@@ -573,26 +491,13 @@ export function createRepliesService({
 
         const thread = await threadsRepo.findThreadById(trx, reply.threadId);
         if (!thread) {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
-        await courseAccess.assertCanParticipateInCourse(
-          trx,
-          actor,
-          thread.courseId,
-        );
+        await courseAccess.assertCanParticipateInCourse(trx, actor, thread.courseId);
         await courseAccess.assertCanAccessThread(trx, actor, thread);
         courseAccess.assertThreadIsActive(thread);
         courseAccess.assertReplyIsActive(reply);
-        await courseAccess.assertNotSuspended(
-          trx,
-          actor.userId,
-          thread.courseId,
-          thread.kind,
-        );
+        await courseAccess.assertNotSuspended(trx, actor.userId, thread.courseId, thread.kind);
 
         if (thread.kind !== "question") {
           throw DiscussionErrors.notAQuestion();
@@ -602,11 +507,7 @@ export function createRepliesService({
           throw DiscussionErrors.invalidReply();
         }
 
-        const canStaffModerate = await courseAccess.canModerateCourse(
-          trx,
-          actor,
-          thread.courseId,
-        );
+        const canStaffModerate = await courseAccess.canModerateCourse(trx, actor, thread.courseId);
         if (thread.userId !== actor.userId && !canStaffModerate) {
           throw httpError(
             403,
@@ -624,21 +525,13 @@ export function createRepliesService({
           .forUpdate()
           .executeTakeFirst();
         if (!lockedThread) {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
         thread.acceptedAnswerId = lockedThread.acceptedAnswerId ?? null;
 
         if (accepted) {
           if (thread.acceptedAnswerId && thread.acceptedAnswerId !== replyId) {
-            await repliesRepo.setAcceptedStatus(
-              trx,
-              thread.acceptedAnswerId,
-              false,
-            );
+            await repliesRepo.setAcceptedStatus(trx, thread.acceptedAnswerId, false);
           }
 
           await repliesRepo.setAcceptedStatus(trx, replyId, true);
@@ -646,11 +539,7 @@ export function createRepliesService({
 
           if (reply.userId !== actor.userId) {
             const actorName = await resolveActorName(trx, actor.userId);
-            const deepLink = await resolveDeepLink(
-              trx,
-              thread.courseId,
-              thread.id,
-            );
+            const deepLink = await resolveDeepLink(trx, thread.courseId, thread.id);
             await outbox.publish(trx, {
               type: "discussion.answer_accepted",
               version: 1,
@@ -682,10 +571,7 @@ export function createRepliesService({
           replyId,
           threadId: thread.id,
           isAccepted: false,
-          acceptedAnswerId:
-            thread.acceptedAnswerId === replyId
-              ? null
-              : thread.acceptedAnswerId,
+          acceptedAnswerId: thread.acceptedAnswerId === replyId ? null : thread.acceptedAnswerId,
         };
       });
     },

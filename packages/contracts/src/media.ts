@@ -54,9 +54,7 @@ export interface QualityProfile {
   segmentDurationSeconds: number;
 }
 
-export const QUALITY_PROFILES: Readonly<
-  Record<VideoQualityLevel, QualityProfile>
-> = {
+export const QUALITY_PROFILES: Readonly<Record<VideoQualityLevel, QualityProfile>> = {
   "2160p": {
     name: "2160p",
     width: 3840,
@@ -237,9 +235,7 @@ export const videoMetadataSchema = z.looseObject({
 export const persistedVideoMetadataSchema = videoMetadataSchema.omit({
   rawStreams: true,
 });
-export type PersistedVideoMetadata = z.infer<
-  typeof persistedVideoMetadataSchema
->;
+export type PersistedVideoMetadata = z.infer<typeof persistedVideoMetadataSchema>;
 
 export const videoJobEventSchema = z.looseObject({
   action: lambdaActionSchema.optional(),
@@ -266,16 +262,10 @@ export type MediaAssetStatus = z.infer<typeof mediaAssetStatusSchema>;
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 export type PresignMediaRequest = z.infer<typeof presignMediaRequestSchema>;
 export type PresignMediaResponse = z.infer<typeof presignMediaResponseSchema>;
-export type MediaUploadCompleteResponse = z.infer<
-  typeof mediaUploadCompleteResponseSchema
->;
+export type MediaUploadCompleteResponse = z.infer<typeof mediaUploadCompleteResponseSchema>;
 export type MediaDeliveryResponse = z.infer<typeof mediaDeliveryResponseSchema>;
-export type MediaImageVariantManifest = z.infer<
-  typeof mediaImageVariantManifestSchema
->;
-export type VideoJobProgressResponse = z.infer<
-  typeof videoJobProgressResponseSchema
->;
+export type MediaImageVariantManifest = z.infer<typeof mediaImageVariantManifestSchema>;
+export type VideoJobProgressResponse = z.infer<typeof videoJobProgressResponseSchema>;
 export type VideoMetadata = z.infer<typeof videoMetadataSchema>;
 export type VideoJobEvent = z.infer<typeof videoJobEventSchema>;
 export type LambdaResponse = z.infer<typeof lambdaResponseSchema>;

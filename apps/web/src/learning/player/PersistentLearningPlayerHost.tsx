@@ -9,10 +9,7 @@ import {
 } from "react";
 import "../learning-feature.css";
 import { createPortal } from "react-dom";
-import {
-  LessonVideoPlayer,
-  type LessonVideoPlayerProps,
-} from "./LessonVideoPlayer";
+import { LessonVideoPlayer, type LessonVideoPlayerProps } from "./LessonVideoPlayer";
 import {
   getLearningPlayerMotionTargetElement,
   isDesktopLearningMinimizeViewport,
@@ -82,9 +79,7 @@ export function PersistentLearningPlayerHost({
   );
   const resolvedScrollport =
     player.anchor?.closest<HTMLElement>(".courses-main") ??
-    (typeof document !== "undefined"
-      ? document.querySelector<HTMLElement>(".courses-main")
-      : null);
+    (typeof document !== "undefined" ? document.querySelector<HTMLElement>(".courses-main") : null);
   if (resolvedScrollport) {
     mainScrollportRef.current = resolvedScrollport;
   }
@@ -100,9 +95,7 @@ export function PersistentLearningPlayerHost({
   const resolveMinimizeMotionTarget = useCallback(() => {
     if (isDesktopLearningMinimizeViewport()) {
       return (
-        player.anchor?.closest<HTMLElement>(
-          "[data-learning-player-motion-target]",
-        ) ??
+        player.anchor?.closest<HTMLElement>("[data-learning-player-motion-target]") ??
         getLearningPlayerMotionTargetElement() ??
         hostRef.current
       );
@@ -165,10 +158,7 @@ export function PersistentLearningPlayerHost({
           : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
             ? scrollport.clientHeight
             : 1;
-      const maxScrollTop = Math.max(
-        0,
-        scrollport.scrollHeight - scrollport.clientHeight,
-      );
+      const maxScrollTop = Math.max(0, scrollport.scrollHeight - scrollport.clientHeight);
       const nextScrollTop = Math.min(
         maxScrollTop,
         Math.max(0, scrollport.scrollTop + event.deltaY * deltaUnit),
@@ -202,9 +192,7 @@ export function PersistentLearningPlayerHost({
     }
     if (previousPresentation !== "mini") return;
 
-    const playerWrap = player.anchor?.closest<HTMLElement>(
-      "[data-learning-player-motion-target]",
-    );
+    const playerWrap = player.anchor?.closest<HTMLElement>("[data-learning-player-motion-target]");
     const startRect = lastMiniRectRef.current;
     if (!startRect) {
       clearLearningPlayerMinimizeCornerRadius();
@@ -212,10 +200,7 @@ export function PersistentLearningPlayerHost({
     }
 
     if (isDesktopLearningMinimizeViewport() && playerWrap) {
-      restoreCleanupRef.current = runLearningPlayerFlipRestore(
-        playerWrap,
-        startRect,
-      );
+      restoreCleanupRef.current = runLearningPlayerFlipRestore(playerWrap, startRect);
       return;
     }
 
@@ -236,8 +221,7 @@ export function PersistentLearningPlayerHost({
     const sections = player.curriculumSections ?? EMPTY_CURRICULUM_SECTIONS;
     return sections.flatMap(({ lessons }) => lessons.map(([id]) => id));
   }, [player.curriculumSections]);
-  const miniCurriculumSections =
-    player.curriculumSections ?? EMPTY_CURRICULUM_SECTIONS;
+  const miniCurriculumSections = player.curriculumSections ?? EMPTY_CURRICULUM_SECTIONS;
   const miniSelectedLesson = player.selectedLesson ?? 1;
   const {
     sectionIds: miniSectionIds,
@@ -245,28 +229,19 @@ export function PersistentLearningPlayerHost({
     setExpandedSectionIds: setMiniExpandedSectionIds,
     expandAllSections: expandAllMiniSections,
     collapseAllSections: collapseAllMiniSections,
-  } = useMiniPlayerCurriculumSections(
-    miniCurriculumSections,
-    miniSelectedLesson,
-  );
-  const miniSelectedLessonIndex =
-    miniLessonSequence.indexOf(miniSelectedLesson);
+  } = useMiniPlayerCurriculumSections(miniCurriculumSections, miniSelectedLesson);
+  const miniSelectedLessonIndex = miniLessonSequence.indexOf(miniSelectedLesson);
   const miniPreviousLessonId =
-    miniSelectedLessonIndex > 0
-      ? miniLessonSequence[miniSelectedLessonIndex - 1]
-      : undefined;
+    miniSelectedLessonIndex > 0 ? miniLessonSequence[miniSelectedLessonIndex - 1] : undefined;
   const miniNextLessonId =
-    miniSelectedLessonIndex >= 0 &&
-    miniSelectedLessonIndex < miniLessonSequence.length - 1
+    miniSelectedLessonIndex >= 0 && miniSelectedLessonIndex < miniLessonSequence.length - 1
       ? miniLessonSequence[miniSelectedLessonIndex + 1]
       : undefined;
 
   useEffect(() => {
     if (!mini) return;
     const courseSlug =
-      player.courseSlug ??
-      courseRouteKeyFromLessonPath(player.lessonPath) ??
-      player.courseRouteKey;
+      player.courseSlug ?? courseRouteKeyFromLessonPath(player.lessonPath) ?? player.courseRouteKey;
     if (!courseSlug || !player.playerProps.protectedPlayback) return;
 
     if (miniNextLessonId !== undefined) {
@@ -351,13 +326,11 @@ export function PersistentLearningPlayerHost({
       ref={hostRef}
       className={
         mini
-          ? "fixed z-130 m-0 touch-none overflow-hidden rounded-xl border-0 bg-black p-0 shadow-[0_18px_48px_rgba(0,0,0,0.52)] ring-1 ring-white/14 ring-inset select-none flex flex-col group/mini-player-shell data-[mini-player-mode=dragging]:cursor-grabbing data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+          ? "group/mini-player-shell fixed z-130 m-0 flex touch-none flex-col overflow-hidden rounded-xl border-0 bg-black p-0 shadow-[0_18px_48px_rgba(0,0,0,0.52)] ring-1 ring-white/14 select-none ring-inset data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] data-[mini-player-mode=dragging]:cursor-grabbing motion-reduce:transition-none"
           : "learning-persistent-player--full z-[39] overflow-visible bg-transparent"
       }
       style={mini ? miniStyle : undefined}
-      aria-label={
-        mini ? `Mini player for ${player.playerProps.lessonTitle}` : undefined
-      }
+      aria-label={mini ? `Mini player for ${player.playerProps.lessonTitle}` : undefined}
       aria-describedby={mini ? "learning-mini-player-gesture-help" : undefined}
       popover={mini ? "manual" : undefined}
       data-learning-persistent-player=""
@@ -367,8 +340,7 @@ export function PersistentLearningPlayerHost({
     >
       {mini ? (
         <span id="learning-mini-player-gesture-help" className="sr-only">
-          Drag to move, resize from an edge, pinch to resize, or swipe down
-          quickly to close.
+          Drag to move, resize from an edge, pinch to resize, or swipe down quickly to close.
         </span>
       ) : null}
       {mini ? <MiniPlayerResizeHandles expanded={isExpanded} /> : null}
@@ -400,7 +372,7 @@ export function PersistentLearningPlayerHost({
       ) : null}
       {mini && isExpanded ? (
         <div
-          className="hidden min-[641px]:flex flex-col w-full h-(--learning-mini-player-playlist-height,320px) shrink-0 overflow-hidden"
+          className="hidden h-(--learning-mini-player-playlist-height,320px) w-full shrink-0 flex-col overflow-hidden min-[641px]:flex"
           data-learning-mini-player-gesture-ignore=""
           data-learning-mini-player-playlist-shell=""
         >
@@ -418,9 +390,7 @@ export function PersistentLearningPlayerHost({
               LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE
             }
             expandedSectionIds={miniExpandedSectionIds}
-            onExpandedSectionIdsChange={(sectionIds) =>
-              setMiniExpandedSectionIds([...sectionIds])
-            }
+            onExpandedSectionIdsChange={(sectionIds) => setMiniExpandedSectionIds([...sectionIds])}
             onOpenCourseOverview={onOpenCourseOverview}
           />
         </div>

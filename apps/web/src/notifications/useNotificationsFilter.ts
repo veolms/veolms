@@ -1,10 +1,7 @@
 import type { NotificationCategory } from "@veolms/contracts";
 import { useMemo, useState } from "react";
 
-import {
-  DEFAULT_DEBOUNCE_DELAY_MS,
-  useDebounceValue,
-} from "../hooks/useDebounce";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounceValue } from "../hooks/useDebounce";
 
 import {
   useArchiveNotification,
@@ -25,10 +22,7 @@ import {
 
 export interface UseNotificationsFilterReturn {
   notifications: readonly NotificationItem[];
-  groupedNotifications: Record<
-    NotificationDateGroup,
-    readonly NotificationItem[]
-  >;
+  groupedNotifications: Record<NotificationDateGroup, readonly NotificationItem[]>;
   recentMentions: readonly RecentMentionItem[];
   totalFilteredCount: number;
   activeTab: NotificationTabId;
@@ -99,9 +93,7 @@ export function useNotificationsFilter(
 
   const notifications = useMemo(() => {
     const items =
-      feed.data?.pages
-        .flatMap((page) => page.items)
-        .map((item) => toNotificationItem(item)) ?? [];
+      feed.data?.pages.flatMap((page) => page.items).map((item) => toNotificationItem(item)) ?? [];
     if (sortBy === "oldest") return [...items].reverse();
     if (sortBy === "unread") {
       return [...items].sort((left, right) =>

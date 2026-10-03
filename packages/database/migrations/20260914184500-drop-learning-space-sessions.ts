@@ -1,13 +1,8 @@
 import { sql, type Kysely } from "kysely";
 
 export async function up(database: Kysely<unknown>): Promise<void> {
-  await sql`drop index if exists idx_learning_space_sessions_user_updated`.execute(
-    database,
-  );
-  await database.schema
-    .dropTable("learning_space_sessions")
-    .ifExists()
-    .execute();
+  await sql`drop index if exists idx_learning_space_sessions_user_updated`.execute(database);
+  await database.schema.dropTable("learning_space_sessions").ifExists().execute();
 
   // Clean up any RBAC menu rows for Learning Space
   await sql`

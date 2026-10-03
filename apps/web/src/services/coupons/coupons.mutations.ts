@@ -1,9 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type {
-  Coupon,
-  CreateCouponRequest,
-  UpdateCouponRequest,
-} from "@veolms/contracts";
+import type { Coupon, CreateCouponRequest, UpdateCouponRequest } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { couponKeys } from "./coupons.keys";
 import { couponsService } from "./coupons.service";
@@ -22,11 +18,7 @@ export function useCreateCoupon() {
 export function useUpdateCoupon() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    Coupon,
-    ApiError,
-    { id: string; payload: UpdateCouponRequest }
-  >({
+  return useMutation<Coupon, ApiError, { id: string; payload: UpdateCouponRequest }>({
     mutationFn: ({ id, payload }) => couponsService.updateCoupon(id, payload),
     onSuccess: (updatedCoupon) => {
       queryClient.invalidateQueries({ queryKey: couponKeys.lists() });

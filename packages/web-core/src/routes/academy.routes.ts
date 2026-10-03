@@ -1,9 +1,4 @@
-import {
-  index,
-  layout,
-  route,
-  type RouteConfigEntry,
-} from "@veolms/plugin-sdk";
+import { index, layout, route, type RouteConfigEntry } from "@veolms/plugin-sdk";
 
 const marker = "routes/academy-marker.tsx";
 const homeMarker = "routes/home-marker.tsx";

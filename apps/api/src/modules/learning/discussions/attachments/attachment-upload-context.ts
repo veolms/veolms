@@ -13,10 +13,7 @@ export type DiscussionAttachmentUploadContext = z.infer<
 export function readDiscussionAttachmentUploadContext(
   fields: unknown,
 ): DiscussionAttachmentUploadContext {
-  const record =
-    fields && typeof fields === "object"
-      ? (fields as Record<string, unknown>)
-      : {};
+  const record = fields && typeof fields === "object" ? (fields as Record<string, unknown>) : {};
   const parsed = discussionAttachmentUploadContextSchema.safeParse({
     courseId: readMultipartText(record.courseId),
     lessonId: readMultipartText(record.lessonId),

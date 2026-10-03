@@ -57,10 +57,7 @@ const categoryRoutes: RoutePlugin = async (app, options) => {
         summary: "Soft delete a category",
         params: z.object({ categoryId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Category soft-deleted",
-            z.object({ success: z.boolean() }),
-          ),
+          200: jsonResponse("Category soft-deleted", z.object({ success: z.boolean() })),
           404: errorResponse("Category not found"),
         },
       },

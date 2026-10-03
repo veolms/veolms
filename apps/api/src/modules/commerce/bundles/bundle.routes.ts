@@ -24,13 +24,9 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
         operationId: "listPublishedBundles",
         tags: ["Commerce - Bundles"],
         summary: "List published course bundles",
-        description:
-          "Returns all published course bundles available for purchase.",
+        description: "Returns all published course bundles available for purchase.",
         response: {
-          200: jsonResponse(
-            "List of published course bundles",
-            z.array(courseBundleSchema),
-          ),
+          200: jsonResponse("List of published course bundles", z.array(courseBundleSchema)),
         },
       },
     },
@@ -45,8 +41,7 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
         operationId: "getBundleBySlug",
         tags: ["Commerce - Bundles"],
         summary: "Get bundle details by slug",
-        description:
-          "Returns full bundle details with included course curriculum snapshots.",
+        description: "Returns full bundle details with included course curriculum snapshots.",
         params: z.object({
           slug: z.string().min(1).max(160),
         }),
@@ -68,13 +63,9 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
         operationId: "listAllBundles",
         tags: ["Commerce - Bundles"],
         summary: "List all bundles (draft, published, archived)",
-        description:
-          "Returns all course bundles across all lifecycle states for management.",
+        description: "Returns all course bundles across all lifecycle states for management.",
         response: {
-          200: jsonResponse(
-            "List of all course bundles",
-            z.array(courseBundleSchema),
-          ),
+          200: jsonResponse("List of all course bundles", z.array(courseBundleSchema)),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
         },
@@ -115,14 +106,10 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
         operationId: "createBundle",
         tags: ["Commerce - Bundles"],
         summary: "Create a new course bundle",
-        description:
-          "Creates a package of multiple courses with unified bundle pricing.",
+        description: "Creates a package of multiple courses with unified bundle pricing.",
         body: createBundleRequestSchema,
         response: {
-          200: jsonResponse(
-            "Course bundle created successfully",
-            courseBundleSchema,
-          ),
+          200: jsonResponse("Course bundle created successfully", courseBundleSchema),
           400: errorResponse("Invalid bundle parameters"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
@@ -147,10 +134,7 @@ const bundleRoutes: RoutePlugin = async (app, options) => {
         }),
         body: updateBundleRequestSchema,
         response: {
-          200: jsonResponse(
-            "Course bundle updated successfully",
-            courseBundleSchema,
-          ),
+          200: jsonResponse("Course bundle updated successfully", courseBundleSchema),
           400: errorResponse("Invalid update parameters"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),

@@ -31,15 +31,11 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
   const filteredCourses = useMemo(() => {
     if (!searchQuery.trim()) return rawCourses;
     const lower = searchQuery.toLowerCase().trim();
-    return rawCourses.filter((course) =>
-      course.title.toLowerCase().includes(lower),
-    );
+    return rawCourses.filter((course) => course.title.toLowerCase().includes(lower));
   }, [rawCourses, searchQuery]);
 
   const handleProceed = (courseId: string) => {
-    onNavigatePage?.(
-      `/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`,
-    );
+    onNavigatePage?.(`/courses/create?edit=${encodeURIComponent(courseId)}&tab=curriculum`);
   };
 
   if (quizId) {
@@ -49,10 +45,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
         className="mx-auto w-full max-w-[1320px] px-0 py-0.5 sm:px-4 sm:py-6 lg:px-8"
       >
         <Suspense fallback={<QuizAuthoringLoadingSkeleton />}>
-          <QuizAuthoringPanel
-            initialQuizId={quizId}
-            onBack={() => onNavigatePage?.("/quizzes")}
-          />
+          <QuizAuthoringPanel initialQuizId={quizId} onBack={() => onNavigatePage?.("/quizzes")} />
         </Suspense>
       </main>
     );
@@ -65,35 +58,34 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
         <button
           type="button"
           onClick={() => onNavigatePage?.("/quizzes")}
-          className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-(--muted) hover:text-(--text) transition-colors"
+          className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-(--muted) transition-colors hover:text-(--text)"
         >
           <ArrowLeft size={14} weight="bold" />
           <span>Back to Quizzes</span>
         </button>
 
         <div className="flex flex-col gap-1">
-          <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
+          <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] leading-tight font-bold tracking-[-0.035em] text-(--text)">
             Create New Quiz
           </h1>
           <p className="max-w-2xl text-[0.88rem] leading-6 text-(--muted)">
-            Select a course to create or manage quizzes directly inside its
-            curriculum.
+            Select a course to create or manage quizzes directly inside its curriculum.
           </p>
         </div>
       </div>
 
       {/* Course Selection Card */}
-      <div className="rounded-[18px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-5 sm:p-7 shadow-(--card-shadow)">
-        <div className="flex items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] pb-4 mb-4">
+      <div className="rounded-[18px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-5 shadow-(--card-shadow) sm:p-7">
+        <div className="mb-4 flex items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] text-(--accent)">
               <PuzzlePiece size={22} weight="duotone" />
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-bold text-(--text) m-0">
+              <h2 className="m-0 text-sm font-bold text-(--text) sm:text-base">
                 Choose Target Course
               </h2>
-              <p className="text-xs text-(--muted) m-0">
+              <p className="m-0 text-xs text-(--muted)">
                 Quizzes are attached to lessons in your course curriculum.
               </p>
             </div>
@@ -102,40 +94,33 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
 
         {/* Search Input */}
         {rawCourses.length > 0 && (
-          <div className="relative flex items-center w-full mb-4">
+          <div className="relative mb-4 flex w-full items-center">
             <MagnifyingGlass
               size={16}
-              className="absolute left-3 text-(--muted) pointer-events-none"
+              className="pointer-events-none absolute left-3 text-(--muted)"
             />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search your courses..."
-              className="w-full h-10 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pl-9 pr-3 text-xs sm:text-sm text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20"
+              className="h-10 w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pr-3 pl-9 text-xs text-(--text) transition-all outline-none placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20 sm:text-sm"
             />
           </div>
         )}
 
         {/* Courses list */}
-        <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+        <div className="max-h-[420px] space-y-2.5 overflow-y-auto pr-1">
           {coursesQuery.isLoading ? (
-            <CenteredLoadingSpinner
-              label="Loading your courses"
-              className="min-h-48"
-              size={24}
-            />
+            <CenteredLoadingSpinner label="Loading your courses" className="min-h-48" size={24} />
           ) : rawCourses.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] text-(--accent) mb-3">
+            <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] text-(--accent)">
                 <BookOpen size={24} weight="duotone" />
               </div>
-              <h3 className="text-sm font-semibold text-(--text) mb-1">
-                No courses found
-              </h3>
-              <p className="text-xs text-(--muted) max-w-sm mb-4">
-                You must have an existing course to create and attach quizzes in
-                its curriculum.
+              <h3 className="mb-1 text-sm font-semibold text-(--text)">No courses found</h3>
+              <p className="mb-4 max-w-sm text-xs text-(--muted)">
+                You must have an existing course to create and attach quizzes in its curriculum.
               </p>
               <Button
                 onClick={() => onNavigatePage?.("/courses/create")}
@@ -157,13 +142,13 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
                   key={course.id}
                   onClick={() => setSelectedCourseId(course.id)}
                   onDoubleClick={() => handleProceed(course.id)}
-                  className={`group flex items-center justify-between gap-3 p-3.5 rounded-[12px] border transition-all cursor-pointer select-none ${
+                  className={`group flex cursor-pointer items-center justify-between gap-3 rounded-[12px] border p-3.5 transition-all select-none ${
                     isSelected
                       ? "border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] shadow-xs"
                       : "border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]"
                   }`}
                 >
-                  <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex min-w-0 items-center gap-3.5">
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
                         isSelected
@@ -174,24 +159,20 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
                       <BookOpen size={20} weight="duotone" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs sm:text-sm font-semibold text-(--text) truncate">
+                      <div className="truncate text-xs font-semibold text-(--text) sm:text-sm">
                         {course.title || "Untitled Course"}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-[0.72rem] text-(--muted)">
+                      <div className="mt-0.5 flex items-center gap-2 text-[0.72rem] text-(--muted)">
                         <span
-                          className={`inline-flex items-center rounded-full px-1.5 py-0.2 text-[0.68rem] font-medium ${
+                          className={`py-0.2 inline-flex items-center rounded-full px-1.5 text-[0.68rem] font-medium ${
                             course.status === "published"
                               ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                               : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)"
                           }`}
                         >
-                          {course.status === "published"
-                            ? "Published"
-                            : "Draft"}
+                          {course.status === "published" ? "Published" : "Draft"}
                         </span>
-                        {course.difficulty && (
-                          <span>• {course.difficulty}</span>
-                        )}
+                        {course.difficulty && <span>• {course.difficulty}</span>}
                       </div>
                     </div>
                   </div>
@@ -218,7 +199,7 @@ export function QuizBuilderPage({ quizId, onNavigatePage }: Props) {
 
         {/* Action Button */}
         {rawCourses.length > 0 && (
-          <div className="flex items-center justify-end gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-4 mt-4">
+          <div className="mt-4 flex items-center justify-end gap-3 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-4">
             <Button
               disabled={!selectedCourseId}
               onClick={() => {

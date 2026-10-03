@@ -15,12 +15,7 @@ export function MfaQrCode({ value, size }: { value: string; size: number }) {
         />
       }
     >
-      <LocalQrCode
-        className="auth-mfa-setup__qr"
-        value={value}
-        size={size}
-        level="M"
-      />
+      <LocalQrCode className="auth-mfa-setup__qr" value={value} size={size} level="M" />
     </Suspense>
   );
 }

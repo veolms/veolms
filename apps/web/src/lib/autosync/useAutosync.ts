@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  onlineManager,
-  useMutation,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { onlineManager, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAutosyncDraftKey, getAutosyncMutationKey } from "./keys";
 import { getAutosyncOnlineState, autosyncManager } from "./manager";
 import { markAutosyncDraftClean, markAutosyncDraftDirty } from "./registry";
@@ -31,8 +27,7 @@ const defaultEqual = <TValue>(left: TValue, right: TValue) => {
   }
 };
 
-const browserIsOnline = () =>
-  typeof navigator === "undefined" ? true : navigator.onLine;
+const browserIsOnline = () => (typeof navigator === "undefined" ? true : navigator.onLine);
 
 const toErrorMessage = (error: unknown) => {
   if (error && typeof error === "object" && "message" in error) {
@@ -53,10 +48,7 @@ export function useAutosync<TValue, TServerValue = TValue>({
   onSynced,
 }: AutosyncOptions<TValue, TServerValue>): AutosyncResult<TValue> {
   const queryClient = useQueryClient();
-  const draftKey = useMemo(
-    () => getAutosyncDraftKey(key),
-    [key.entity, key.entityId, key.scope],
-  );
+  const draftKey = useMemo(() => getAutosyncDraftKey(key), [key.entity, key.entityId, key.scope]);
   const mutationKey = useMemo(
     () => getAutosyncMutationKey(key),
     [key.entity, key.entityId, key.scope],
@@ -145,10 +137,7 @@ export function useAutosync<TValue, TServerValue = TValue>({
 
     const context = { key: keyRef.current, previousValue };
     const validation = validateRef.current?.(draft, context);
-    if (
-      validation === false ||
-      (typeof validation === "object" && !validation.valid)
-    ) {
+    if (validation === false || (typeof validation === "object" && !validation.valid)) {
       const message =
         typeof validation === "object" && validation.message
           ? validation.message
@@ -174,8 +163,7 @@ export function useAutosync<TValue, TServerValue = TValue>({
     const request = mutation
       .mutateAsync(submittedValue)
       .then((serverValue) => {
-        const nextBaseline =
-          onSyncedRef.current?.(serverValue, submittedValue) ?? submittedValue;
+        const nextBaseline = onSyncedRef.current?.(serverValue, submittedValue) ?? submittedValue;
         baselineRef.current = nextBaseline;
         setBaseline(nextBaseline);
 
@@ -221,10 +209,7 @@ export function useAutosync<TValue, TServerValue = TValue>({
 
   const schedule = useCallback(
     (delay = debounceMs) => {
-      if (
-        !enabledRef.current ||
-        equalRef.current(valueRef.current, baselineRef.current)
-      ) {
+      if (!enabledRef.current || equalRef.current(valueRef.current, baselineRef.current)) {
         return;
       }
 
@@ -293,10 +278,7 @@ export function useAutosync<TValue, TServerValue = TValue>({
 
   const mergeFromServer = useCallback(
     (serverPatch: Partial<TValue>) => {
-      if (
-        typeof baselineRef.current !== "object" ||
-        baselineRef.current === null
-      ) {
+      if (typeof baselineRef.current !== "object" || baselineRef.current === null) {
         return;
       }
       const nextBaseline = {
@@ -324,30 +306,18 @@ export function useAutosync<TValue, TServerValue = TValue>({
     [setValueInternally],
   );
 
-  const discard = useCallback(
-    () => replaceFromServer(baselineRef.current),
-    [replaceFromServer],
-  );
+  const discard = useCallback(() => replaceFromServer(baselineRef.current), [replaceFromServer]);
 
   useEffect(() => {
     const keyChanged = initializedKeyRef.current !== draftKey;
-    const initialValueChanged = !equalRef.current(
-      initialValueRef.current,
-      initialValue,
-    );
+    const initialValueChanged = !equalRef.current(initialValueRef.current, initialValue);
     const enabledChanged = initializedEnabledRef.current !== enabled;
     if (!keyChanged && !initialValueChanged && !enabledChanged) return;
 
     initialValueRef.current = initialValue;
     initializedEnabledRef.current = enabled;
-    const baselineChanged = !equalRef.current(
-      initialValue,
-      baselineRef.current,
-    );
-    const currentIsDirty = !equalRef.current(
-      valueRef.current,
-      baselineRef.current,
-    );
+    const baselineChanged = !equalRef.current(initialValue, baselineRef.current);
+    const currentIsDirty = !equalRef.current(valueRef.current, baselineRef.current);
 
     if (keyChanged) {
       clearTimers();
@@ -372,13 +342,8 @@ export function useAutosync<TValue, TServerValue = TValue>({
     const generation = ++restoreGenerationRef.current;
     const valueVersion = valueVersionRef.current;
     setIsRestoring(true);
-    const applyDraft = (
-      draft: Awaited<ReturnType<typeof readAutosyncDraft<TValue>>>,
-    ) => {
-      if (
-        generation !== restoreGenerationRef.current ||
-        valueVersion !== valueVersionRef.current
-      ) {
+    const applyDraft = (draft: Awaited<ReturnType<typeof readAutosyncDraft<TValue>>>) => {
+      if (generation !== restoreGenerationRef.current || valueVersion !== valueVersionRef.current) {
         setIsRestoring(false);
         return;
       }
@@ -420,10 +385,7 @@ export function useAutosync<TValue, TServerValue = TValue>({
         }
         return;
       }
-      if (
-        enabledRef.current &&
-        !equalRef.current(valueRef.current, baselineRef.current)
-      ) {
+      if (enabledRef.current && !equalRef.current(valueRef.current, baselineRef.current)) {
         setStatus("pending");
         scheduleRef.current(0);
       }

@@ -13,9 +13,7 @@ export interface ConfigurationServiceOptions {
   database: Kysely<Database>;
 }
 
-export function createConfigurationService({
-  database,
-}: ConfigurationServiceOptions) {
+export function createConfigurationService({ database }: ConfigurationServiceOptions) {
   function getCourseAndVerifyOwner(
     courseId: string,
     creatorId: string,
@@ -36,9 +34,7 @@ export function createConfigurationService({
 
     const durationType = updates.durationType;
     const durationDays =
-      updates.durationType === "fixed_duration"
-        ? (updates.durationDays ?? null)
-        : null;
+      updates.durationType === "fixed_duration" ? (updates.durationDays ?? null) : null;
 
     const id = await configRepo.upsertAccessRule(database, {
       id: crypto.randomUUID(),
@@ -71,8 +67,7 @@ export function createConfigurationService({
 
     const price = updates.pricingType === "free" ? 0 : updates.price;
     const currency = updates.currency ?? "INR";
-    const salePrice =
-      updates.pricingType === "free" ? null : (updates.salePrice ?? null);
+    const salePrice = updates.pricingType === "free" ? null : (updates.salePrice ?? null);
 
     const id = await configRepo.upsertPricing(database, {
       id: crypto.randomUUID(),
@@ -105,15 +100,9 @@ export function createConfigurationService({
 
     const now = new Date();
 
-    const existing = await configRepo.findSettingsByCourseId(
-      database,
-      courseId,
-    );
+    const existing = await configRepo.findSettingsByCourseId(database, courseId);
 
-    const allowQa =
-      updates.allowQa !== undefined
-        ? updates.allowQa
-        : (existing?.allow_qa ?? true);
+    const allowQa = updates.allowQa !== undefined ? updates.allowQa : (existing?.allow_qa ?? true);
     const allowComments =
       updates.allowComments !== undefined
         ? updates.allowComments
@@ -123,9 +112,7 @@ export function createConfigurationService({
         ? updates.allowDownloads
         : (existing?.allow_downloads ?? false);
     const allowNotes =
-      updates.allowNotes !== undefined
-        ? updates.allowNotes
-        : (existing?.allow_notes ?? true);
+      updates.allowNotes !== undefined ? updates.allowNotes : (existing?.allow_notes ?? true);
     const certificateEnabled =
       updates.certificateEnabled !== undefined
         ? updates.certificateEnabled
@@ -135,9 +122,7 @@ export function createConfigurationService({
         ? updates.showInstructorName
         : (existing?.show_instructor_name ?? true);
     const language =
-      updates.language !== undefined
-        ? updates.language
-        : (existing?.language ?? "en");
+      updates.language !== undefined ? updates.language : (existing?.language ?? "en");
     const estimatedDuration =
       updates.estimatedDuration !== undefined
         ? updates.estimatedDuration
@@ -197,6 +182,4 @@ export function createConfigurationService({
   };
 }
 
-export type ConfigurationService = ReturnType<
-  typeof createConfigurationService
->;
+export type ConfigurationService = ReturnType<typeof createConfigurationService>;

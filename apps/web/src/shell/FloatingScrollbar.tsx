@@ -9,8 +9,7 @@ const MINIMUM_TRACK_INSET = 8;
 const MINIMUM_THUMB_HEIGHT = 40;
 const DRAG_DIRECTION_THRESHOLD = 4;
 
-export const FLOATING_SCROLLBAR_HORIZONTAL_DRAG_EVENT =
-  "veolms:floating-scrollbar-horizontal-drag";
+export const FLOATING_SCROLLBAR_HORIZONTAL_DRAG_EVENT = "veolms:floating-scrollbar-horizontal-drag";
 
 export interface FloatingScrollbarHorizontalDragDetail {
   phase: "start" | "move" | "end" | "cancel";
@@ -95,8 +94,7 @@ export function FloatingScrollbar({
       const canScroll =
         !disabled &&
         scrollport.getClientRects().length > 0 &&
-        (scrollportStyle.overflowY === "auto" ||
-          scrollportStyle.overflowY === "scroll") &&
+        (scrollportStyle.overflowY === "auto" || scrollportStyle.overflowY === "scroll") &&
         scrollport.scrollHeight > scrollport.clientHeight + 1;
 
       scrollbar.classList.toggle("is-visible", canScroll);
@@ -110,12 +108,9 @@ export function FloatingScrollbar({
 
       const scrollportRect = scrollport.getBoundingClientRect();
       const selectedRightEdgeRect = rightEdgeSelector
-        ? scrollport
-            .querySelector<HTMLElement>(rightEdgeSelector)
-            ?.getBoundingClientRect()
+        ? scrollport.querySelector<HTMLElement>(rightEdgeSelector)?.getBoundingClientRect()
         : null;
-      const referencedRightEdgeRect =
-        rightEdgeRef?.current?.getBoundingClientRect() ?? null;
+      const referencedRightEdgeRect = rightEdgeRef?.current?.getBoundingClientRect() ?? null;
       const topTrackInset = selectedRightEdgeRect
         ? 0
         : Math.max(
@@ -128,10 +123,7 @@ export function FloatingScrollbar({
             MINIMUM_TRACK_INSET,
             Number.parseFloat(scrollportStyle.borderBottomRightRadius) || 0,
           );
-      const trackHeight = Math.max(
-        0,
-        scrollportRect.height - topTrackInset - bottomTrackInset,
-      );
+      const trackHeight = Math.max(0, scrollportRect.height - topTrackInset - bottomTrackInset);
       const thumbHeight = Math.min(
         trackHeight,
         Math.max(
@@ -140,21 +132,11 @@ export function FloatingScrollbar({
         ),
       );
       const maximumThumbOffset = Math.max(0, trackHeight - thumbHeight);
-      const maximumScrollOffset = Math.max(
-        1,
-        scrollport.scrollHeight - scrollport.clientHeight,
-      );
-      const thumbOffset =
-        maximumThumbOffset * (scrollport.scrollTop / maximumScrollOffset);
+      const maximumScrollOffset = Math.max(1, scrollport.scrollHeight - scrollport.clientHeight);
+      const thumbOffset = maximumThumbOffset * (scrollport.scrollTop / maximumScrollOffset);
 
-      scrollbar.setAttribute(
-        "aria-valuemax",
-        String(Math.round(maximumScrollOffset)),
-      );
-      scrollbar.setAttribute(
-        "aria-valuenow",
-        String(Math.round(scrollport.scrollTop)),
-      );
+      scrollbar.setAttribute("aria-valuemax", String(Math.round(maximumScrollOffset)));
+      scrollbar.setAttribute("aria-valuenow", String(Math.round(scrollport.scrollTop)));
 
       scrollbar.style.setProperty(
         "--floating-scrollbar-top",
@@ -170,18 +152,9 @@ export function FloatingScrollbar({
               scrollportRect.right),
         )}px`,
       );
-      scrollbar.style.setProperty(
-        "--floating-scrollbar-height",
-        `${trackHeight}px`,
-      );
-      scrollbar.style.setProperty(
-        "--floating-scrollbar-thumb-height",
-        `${thumbHeight}px`,
-      );
-      scrollbar.style.setProperty(
-        "--floating-scrollbar-thumb-offset",
-        `${thumbOffset}px`,
-      );
+      scrollbar.style.setProperty("--floating-scrollbar-height", `${trackHeight}px`);
+      scrollbar.style.setProperty("--floating-scrollbar-thumb-height", `${thumbHeight}px`);
+      scrollbar.style.setProperty("--floating-scrollbar-thumb-offset", `${thumbOffset}px`);
     };
 
     const scheduleSync = () => {
@@ -194,11 +167,7 @@ export function FloatingScrollbar({
     // changes the surrounding layout. Observe and listen through that chain so
     // the fixed thumb follows the panel before the user scrolls it.
     const layoutAncestors: HTMLElement[] = [];
-    for (
-      let ancestor = scrollport.parentElement;
-      ancestor;
-      ancestor = ancestor.parentElement
-    ) {
+    for (let ancestor = scrollport.parentElement; ancestor; ancestor = ancestor.parentElement) {
       layoutAncestors.push(ancestor);
     }
 
@@ -213,20 +182,14 @@ export function FloatingScrollbar({
     document.addEventListener("transitionend", scheduleSync, true);
 
     const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(scheduleSync);
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleSync);
     resizeObserver?.observe(scrollport);
     if (rightEdgeRef?.current) resizeObserver?.observe(rightEdgeRef.current);
     layoutAncestors.forEach((ancestor) => resizeObserver?.observe(ancestor));
-    Array.from(scrollport.children).forEach((child) =>
-      resizeObserver?.observe(child),
-    );
+    Array.from(scrollport.children).forEach((child) => resizeObserver?.observe(child));
 
     const contentObserver = new MutationObserver(() => {
-      Array.from(scrollport.children).forEach((child) =>
-        resizeObserver?.observe(child),
-      );
+      Array.from(scrollport.children).forEach((child) => resizeObserver?.observe(child));
       scheduleSync();
     });
     contentObserver.observe(scrollport, { childList: true, subtree: true });
@@ -236,9 +199,7 @@ export function FloatingScrollbar({
     return () => {
       if (animationFrame !== 0) window.cancelAnimationFrame(animationFrame);
       scrollport.removeEventListener("scroll", scheduleSync);
-      layoutAncestors.forEach((ancestor) =>
-        ancestor.removeEventListener("scroll", scheduleSync),
-      );
+      layoutAncestors.forEach((ancestor) => ancestor.removeEventListener("scroll", scheduleSync));
       window.removeEventListener("resize", scheduleSync);
       window.removeEventListener("pageshow", scheduleSync);
       document.removeEventListener("transitionrun", scheduleSync, true);
@@ -247,13 +208,7 @@ export function FloatingScrollbar({
       resizeObserver?.disconnect();
       contentObserver.disconnect();
     };
-  }, [
-    disabled,
-    rightEdgeRef,
-    rightEdgeSelector,
-    scrollportReadyVersion,
-    scrollportRef,
-  ]);
+  }, [disabled, rightEdgeRef, rightEdgeSelector, scrollportReadyVersion, scrollportRef]);
 
   const getTrackScrollTop = (drag: ScrollbarDrag, clientY: number) => {
     if (drag.maximumThumbOffset <= 0) return 0;
@@ -262,10 +217,7 @@ export function FloatingScrollbar({
       0,
       drag.maximumThumbOffset,
     );
-    return (
-      (requestedThumbOffset / drag.maximumThumbOffset) *
-      drag.maximumScrollOffset
-    );
+    return (requestedThumbOffset / drag.maximumThumbOffset) * drag.maximumScrollOffset;
   };
 
   const dispatchHorizontalDrag = (
@@ -293,28 +245,19 @@ export function FloatingScrollbar({
   };
 
   const beginDrag = (event: ReactPointerEvent<HTMLSpanElement>) => {
-    if (
-      event.button !== 0 ||
-      !event.currentTarget.classList.contains("is-visible")
-    ) {
+    if (event.button !== 0 || !event.currentTarget.classList.contains("is-visible")) {
       return;
     }
 
     const scrollport = scrollportRef.current;
-    const thumb = event.currentTarget.querySelector<HTMLElement>(
-      ".floating-scrollbar__thumb",
-    );
+    const thumb = event.currentTarget.querySelector<HTMLElement>(".floating-scrollbar__thumb");
     if (!scrollport || !thumb) return;
 
     const trackRect = event.currentTarget.getBoundingClientRect();
     const thumbRect = thumb.getBoundingClientRect();
     const maximumThumbOffset = Math.max(0, trackRect.height - thumbRect.height);
-    const maximumScrollOffset = Math.max(
-      0,
-      scrollport.scrollHeight - scrollport.clientHeight,
-    );
-    const clickedThumb =
-      event.clientY >= thumbRect.top && event.clientY <= thumbRect.bottom;
+    const maximumScrollOffset = Math.max(0, scrollport.scrollHeight - scrollport.clientHeight);
+    const clickedThumb = event.clientY >= thumbRect.top && event.clientY <= thumbRect.bottom;
     let startScrollTop = scrollport.scrollTop;
 
     if (!enableHorizontalDrag && !clickedThumb && maximumThumbOffset > 0) {
@@ -323,8 +266,7 @@ export function FloatingScrollbar({
         0,
         maximumThumbOffset,
       );
-      startScrollTop =
-        (requestedThumbOffset / maximumThumbOffset) * maximumScrollOffset;
+      startScrollTop = (requestedThumbOffset / maximumThumbOffset) * maximumScrollOffset;
       scrollport.scrollTop = startScrollTop;
     }
 
@@ -348,9 +290,7 @@ export function FloatingScrollbar({
   const dragThumb = (event: ReactPointerEvent<HTMLSpanElement>) => {
     const drag = dragRef.current;
     const scrollport = scrollportRef.current;
-    const thumb = event.currentTarget.querySelector<HTMLElement>(
-      ".floating-scrollbar__thumb",
-    );
+    const thumb = event.currentTarget.querySelector<HTMLElement>(".floating-scrollbar__thumb");
     if (!drag || drag.pointerId !== event.pointerId || !scrollport || !thumb) {
       return;
     }
@@ -358,22 +298,14 @@ export function FloatingScrollbar({
     if (drag.mode === "pending") {
       const horizontalDistance = Math.abs(event.clientX - drag.startClientX);
       const verticalDistance = Math.abs(event.clientY - drag.startClientY);
-      if (
-        Math.max(horizontalDistance, verticalDistance) <
-        DRAG_DIRECTION_THRESHOLD
-      ) {
+      if (Math.max(horizontalDistance, verticalDistance) < DRAG_DIRECTION_THRESHOLD) {
         return;
       }
 
       if (horizontalDistance > verticalDistance) {
         drag.mode = "resize";
         event.currentTarget.classList.add("is-resizing");
-        dispatchHorizontalDrag(
-          "start",
-          event,
-          drag.startClientX,
-          drag.startClientY,
-        );
+        dispatchHorizontalDrag("start", event, drag.startClientX, drag.startClientY);
       } else {
         drag.mode = "scroll";
         if (!drag.clickedThumb) {
@@ -393,32 +325,20 @@ export function FloatingScrollbar({
       1,
       event.currentTarget.clientHeight - thumb.getBoundingClientRect().height,
     );
-    const maximumScrollOffset = Math.max(
-      0,
-      scrollport.scrollHeight - scrollport.clientHeight,
-    );
+    const maximumScrollOffset = Math.max(0, scrollport.scrollHeight - scrollport.clientHeight);
     scrollport.scrollTop = clamp(
       drag.startScrollTop +
-        ((event.clientY - drag.startClientY) / maximumThumbOffset) *
-          maximumScrollOffset,
+        ((event.clientY - drag.startClientY) / maximumThumbOffset) * maximumScrollOffset,
       0,
       maximumScrollOffset,
     );
   };
 
-  const endDrag = (
-    event: ReactPointerEvent<HTMLSpanElement>,
-    cancelled = false,
-  ) => {
+  const endDrag = (event: ReactPointerEvent<HTMLSpanElement>, cancelled = false) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     const scrollport = scrollportRef.current;
-    if (
-      !cancelled &&
-      drag.mode === "pending" &&
-      !drag.clickedThumb &&
-      scrollport
-    ) {
+    if (!cancelled && drag.mode === "pending" && !drag.clickedThumb && scrollport) {
       scrollport.scrollTop = getTrackScrollTop(drag, drag.startClientY);
     } else if (drag.mode === "resize") {
       dispatchHorizontalDrag(cancelled ? "cancel" : "end", event);
@@ -437,10 +357,7 @@ export function FloatingScrollbar({
 
     const lineStep = Math.max(40, scrollport.clientHeight * 0.08);
     const pageStep = scrollport.clientHeight * 0.9;
-    const maximumScrollOffset = Math.max(
-      0,
-      scrollport.scrollHeight - scrollport.clientHeight,
-    );
+    const maximumScrollOffset = Math.max(0, scrollport.scrollHeight - scrollport.clientHeight);
     const nextScrollTop = {
       ArrowDown: scrollport.scrollTop + lineStep,
       ArrowUp: scrollport.scrollTop - lineStep,

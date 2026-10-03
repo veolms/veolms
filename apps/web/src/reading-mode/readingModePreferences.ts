@@ -53,9 +53,7 @@ const normalizePercent = (value: unknown, fallback: number): number => {
 const normalizeColors = (value: unknown): ReadingModeColors =>
   value === "light" || value === "black-and-white" ? value : "full";
 
-export function normalizeReadingModePreferences(
-  value: unknown,
-): ReadingModePreferences {
+export function normalizeReadingModePreferences(value: unknown): ReadingModePreferences {
   if (typeof value !== "object" || value === null) {
     return { ...READING_MODE_DEFAULTS };
   }
@@ -63,9 +61,7 @@ export function normalizeReadingModePreferences(
   const candidate = value as Partial<ReadingModePreferences>;
   return {
     enabled:
-      typeof candidate.enabled === "boolean"
-        ? candidate.enabled
-        : READING_MODE_DEFAULTS.enabled,
+      typeof candidate.enabled === "boolean" ? candidate.enabled : READING_MODE_DEFAULTS.enabled,
     colorTemperature: normalizePercent(
       candidate.colorTemperature,
       READING_MODE_DEFAULTS.colorTemperature,
@@ -80,18 +76,13 @@ export function normalizeReadingModePreferences(
 }
 
 export function getReadingModeTextureGrainScale(value: unknown): number {
-  const grainSize = normalizePercent(
-    value,
-    READING_MODE_DEFAULTS.textureGrainSize,
-  );
+  const grainSize = normalizePercent(value, READING_MODE_DEFAULTS.textureGrainSize);
   return grainSize <= 50 ? 0.5 + grainSize / 100 : grainSize / 50;
 }
 
 export function getReadingModeTextureTileSize(
   grainSize: unknown,
-  pixelRatio: unknown = typeof window === "undefined"
-    ? 1
-    : window.devicePixelRatio,
+  pixelRatio: unknown = typeof window === "undefined" ? 1 : window.devicePixelRatio,
 ): number {
   const numericPixelRatio = Number(pixelRatio);
   const densityScale =
@@ -101,9 +92,7 @@ export function getReadingModeTextureTileSize(
         ? 2
         : 1;
   return (
-    READING_MODE_TEXTURE_BASE_TILE_SIZE *
-    densityScale *
-    getReadingModeTextureGrainScale(grainSize)
+    READING_MODE_TEXTURE_BASE_TILE_SIZE * densityScale * getReadingModeTextureGrainScale(grainSize)
   );
 }
 
@@ -127,20 +116,14 @@ export function getReadingModeVisuals(
   const textureStrength = Math.pow(texture, READING_MODE_TEXTURE_EXPONENT);
   const temperature = normalizePercent(preferences.colorTemperature, 50);
   const temperatureDistance = Math.abs(temperature - 50) / 50;
-  const temperatureStrength = Math.pow(
-    temperatureDistance,
-    READING_MODE_TEMPERATURE_EXPONENT,
-  );
+  const temperatureStrength = Math.pow(temperatureDistance, READING_MODE_TEMPERATURE_EXPONENT);
   const isWarm = temperature >= 50;
 
   return {
     textureStrength,
     textureOpacityDark: textureStrength * READING_MODE_TEXTURE_DARK_MAX_OPACITY,
-    textureOpacityLight:
-      textureStrength * READING_MODE_TEXTURE_LIGHT_MAX_OPACITY,
-    temperatureColor: isWarm
-      ? READING_MODE_WARM_COLOR
-      : READING_MODE_COOL_COLOR,
+    textureOpacityLight: textureStrength * READING_MODE_TEXTURE_LIGHT_MAX_OPACITY,
+    temperatureColor: isWarm ? READING_MODE_WARM_COLOR : READING_MODE_COOL_COLOR,
     temperatureOpacity:
       temperatureStrength *
       (isWarm ? READING_MODE_WARM_MAX_OPACITY : READING_MODE_COOL_MAX_OPACITY),
@@ -158,9 +141,7 @@ export function applyReadingModePreferences(
 
   const visuals = getReadingModeVisuals(normalized);
   root.dataset.readingMode = String(normalized.enabled);
-  root.dataset.readingModeTexture = String(
-    normalized.enabled && normalized.texture > 0,
-  );
+  root.dataset.readingModeTexture = String(normalized.enabled && normalized.texture > 0);
   root.dataset.readingModeTemperature = String(
     normalized.enabled && normalized.colorTemperature !== 50,
   );
@@ -177,10 +158,7 @@ export function applyReadingModePreferences(
     "--reading-mode-texture-tile-size",
     `${getReadingModeTextureTileSize(normalized.textureGrainSize).toFixed(2)}px`,
   );
-  root.style.setProperty(
-    "--reading-mode-temperature-color",
-    visuals.temperatureColor,
-  );
+  root.style.setProperty("--reading-mode-temperature-color", visuals.temperatureColor);
   root.style.setProperty(
     "--reading-mode-temperature-opacity",
     normalized.enabled ? visuals.temperatureOpacity.toFixed(5) : "0",
@@ -195,10 +173,7 @@ export function persistReadingModePreferences(
   if (typeof window === "undefined") return normalized;
 
   try {
-    window.localStorage.setItem(
-      READING_MODE_STORAGE_KEY,
-      JSON.stringify(normalized),
-    );
+    window.localStorage.setItem(READING_MODE_STORAGE_KEY, JSON.stringify(normalized));
   } catch {
     // Applying the preference should still work in storage-restricted contexts.
   }

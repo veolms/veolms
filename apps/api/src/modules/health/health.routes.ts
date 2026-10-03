@@ -15,10 +15,7 @@ const healthRoutes: RoutePlugin = async (app) => {
           "Succeeds as soon as the API process is accepting requests. Does not " +
           "check the database.",
         response: {
-          200: jsonResponse(
-            "The API is accepting requests.",
-            healthResponseSchema,
-          ),
+          200: jsonResponse("The API is accepting requests.", healthResponseSchema),
         },
       },
     },

@@ -1,7 +1,6 @@
 import { isCourseEditorPath } from "../courses/courseEditorRouting";
 
-export type ShellRouteModuleKey =
-  "settings" | "catalogue" | "placeholder" | "workspace";
+export type ShellRouteModuleKey = "settings" | "catalogue" | "placeholder" | "workspace";
 
 const routeModuleCache = new Map<ShellRouteModuleKey, unknown>();
 const routeModulePromises = new Map<ShellRouteModuleKey, Promise<unknown>>();
@@ -54,34 +53,22 @@ export async function preloadActiveRouteForHydration(pathname: string) {
     pathname === "/courses/wishlist" ||
     pathname === "/wishlist"
   ) {
-    await loadShellRouteModule(
-      "catalogue",
-      () => import("../courses/CourseCatalogue"),
-    );
+    await loadShellRouteModule("catalogue", () => import("../courses/CourseCatalogue"));
     return;
   }
 
   if (isCourseEditorPath(pathname)) {
-    await loadShellRouteModule(
-      "placeholder",
-      () => import("../courses/PlaceholderPage"),
-    );
+    await loadShellRouteModule("placeholder", () => import("../courses/PlaceholderPage"));
     return;
   }
 
   if (pathname === "/discussions" || pathname.startsWith("/discussions/")) {
-    await loadShellRouteModule(
-      "workspace",
-      () => import("../workspace/WorkspacePages"),
-    );
+    await loadShellRouteModule("workspace", () => import("../workspace/WorkspacePages"));
     return;
   }
 
   if (pathname === "/logout") {
-    await loadShellRouteModule(
-      "workspace",
-      () => import("../workspace/WorkspacePages"),
-    );
+    await loadShellRouteModule("workspace", () => import("../workspace/WorkspacePages"));
     return;
   }
 
@@ -92,9 +79,6 @@ export async function preloadActiveRouteForHydration(pathname: string) {
     !pathname.startsWith("/learn/") &&
     !pathname.startsWith("/courses/")
   ) {
-    await loadShellRouteModule(
-      "placeholder",
-      () => import("../courses/PlaceholderPage"),
-    );
+    await loadShellRouteModule("placeholder", () => import("../courses/PlaceholderPage"));
   }
 }

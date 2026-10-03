@@ -74,13 +74,8 @@ export type StorageVisibility = "public" | "protected";
  */
 export function assertVisibilityPrefixedKey(key: string): string {
   const normalized = key.replace(/^\/+/, "");
-  if (
-    !normalized.startsWith("public/") &&
-    !normalized.startsWith("protected/")
-  ) {
-    throw new Error(
-      "Storage object keys must start with public/ or protected/.",
-    );
+  if (!normalized.startsWith("public/") && !normalized.startsWith("protected/")) {
+    throw new Error("Storage object keys must start with public/ or protected/.");
   }
   return normalized;
 }
@@ -101,23 +96,13 @@ export class S3StorageService {
       throw new Error("Storage bucket name is required.");
     }
     this.bucket = options.bucket;
-    this.publicBaseUrl =
-      options.publicBaseUrl?.trim().replace(/\/+$/, "") || null;
+    this.publicBaseUrl = options.publicBaseUrl?.trim().replace(/\/+$/, "") || null;
     this.cdnSigningSecret = options.cdnSigningSecret?.trim() || null;
-    this.cdnTokenTtlSeconds = normalizeCdnTokenTtlSeconds(
-      options.cdnTokenTtlSeconds,
-    );
-    this.cdnHlsTokenTtlSeconds = normalizeCdnTokenTtlSeconds(
-      options.cdnHlsTokenTtlSeconds,
-    );
+    this.cdnTokenTtlSeconds = normalizeCdnTokenTtlSeconds(options.cdnTokenTtlSeconds);
+    this.cdnHlsTokenTtlSeconds = normalizeCdnTokenTtlSeconds(options.cdnHlsTokenTtlSeconds);
     this.requireVisibilityPrefix = options.requireVisibilityPrefix ?? false;
     this.cdnPublicFolders = (
-      options.cdnPublicFolders ?? [
-        "public",
-        "thumbnails",
-        "course-hls",
-        "course-videos",
-      ]
+      options.cdnPublicFolders ?? ["public", "thumbnails", "course-hls", "course-videos"]
     )
       .map((folder) => folder.trim().replace(/^\/+|\/+$/g, ""))
       .filter(Boolean);
@@ -171,9 +156,7 @@ export class S3StorageService {
   }
 
   private keyForWrite(key: string): string {
-    return this.requireVisibilityPrefix
-      ? assertVisibilityPrefixedKey(key)
-      : key;
+    return this.requireVisibilityPrefix ? assertVisibilityPrefixedKey(key) : key;
   }
 
   /**
@@ -218,8 +201,7 @@ export class S3StorageService {
     if (!this.cdnSigningSecret) return null;
     const normalizedKey = key.replace(/^\/+|\/+$/g, "");
     if (!normalizedKey) return null;
-    const expiry =
-      expiresAt ?? Math.floor(Date.now() / 1000) + this.cdnTokenTtlSeconds;
+    const expiry = expiresAt ?? Math.floor(Date.now() / 1000) + this.cdnTokenTtlSeconds;
     const payload = Buffer.from(
       JSON.stringify({ v: 1, k: normalizedKey, e: Math.floor(expiry) }),
       "utf8",
@@ -240,9 +222,7 @@ export class S3StorageService {
    * Verifies if an object exists in storage using Metadata/HEAD operation,
    * returning object metadata or null if not found.
    */
-  async headObject(
-    key: string,
-  ): Promise<{ contentLength?: number; contentType?: string } | null> {
+  async headObject(key: string): Promise<{ contentLength?: number; contentType?: string } | null> {
     try {
       const response = await this.client.send(
         new HeadObjectCommand({
@@ -255,10 +235,7 @@ export class S3StorageService {
         contentType: response.ContentType,
       };
     } catch (error: unknown) {
-      if (
-        error instanceof S3ServiceException &&
-        error.$metadata.httpStatusCode === 404
-      ) {
+      if (error instanceof S3ServiceException && error.$metadata.httpStatusCode === 404) {
         return null;
       }
       throw error;
@@ -283,9 +260,7 @@ export class S3StorageService {
 
     const body = response.Body as Readable;
     if (!body) {
-      throw new Error(
-        `Failed to download object: response body is empty for key ${key}`,
-      );
+      throw new Error(`Failed to download object: response body is empty for key ${key}`);
     }
 
     const writeStream = createWriteStream(localFilePath);
@@ -295,11 +270,7 @@ export class S3StorageService {
   /**
    * Uploads a local file to S3/R2 with automatic retries on network drop.
    */
-  async uploadFile(
-    key: string,
-    localFilePath: string,
-    contentType: string,
-  ): Promise<void> {
+  async uploadFile(key: string, localFilePath: string, contentType: string): Promise<void> {
     const storageKey = this.keyForWrite(key);
     const fileBuffer = await readFile(localFilePath);
 
@@ -317,10 +288,7 @@ export class S3StorageService {
   /**
    * Uploads a batch of files concurrently with retry and exponential backoff.
    */
-  async uploadFiles(
-    files: readonly StorageUploadItem[],
-    concurrency = 6,
-  ): Promise<number> {
+  async uploadFiles(files: readonly StorageUploadItem[], concurrency = 6): Promise<number> {
     if (files.length === 0) {
       return 0;
     }
@@ -351,18 +319,13 @@ export class S3StorageService {
             if (attempts >= maxRetries) {
               throw err;
             }
-            await new Promise((resolve) =>
-              setTimeout(resolve, 500 * Math.pow(2, attempts)),
-            );
+            await new Promise((resolve) => setTimeout(resolve, 500 * Math.pow(2, attempts)));
           }
         }
       }
     };
 
-    const workerCount = Math.min(
-      Math.max(1, Math.floor(concurrency)),
-      files.length,
-    );
+    const workerCount = Math.min(Math.max(1, Math.floor(concurrency)), files.length);
     const workers = Array.from({ length: workerCount }, () => uploadWorker());
     await Promise.all(workers);
 
@@ -384,10 +347,7 @@ export class S3StorageService {
         : `${s3Prefix}/`;
     const fileList: StorageUploadItem[] = [];
 
-    const collectFiles = async (
-      currentDir: string,
-      relativePath: string,
-    ): Promise<void> => {
+    const collectFiles = async (currentDir: string, relativePath: string): Promise<void> => {
       const entries = await readdir(currentDir);
 
       for (const entry of entries) {
@@ -549,10 +509,7 @@ export class S3StorageService {
         contentLength: response.ContentLength,
       };
     } catch (error: unknown) {
-      if (
-        error instanceof S3ServiceException &&
-        error.$metadata.httpStatusCode === 404
-      ) {
+      if (error instanceof S3ServiceException && error.$metadata.httpStatusCode === 404) {
         return null;
       }
       throw error;
@@ -590,9 +547,7 @@ export class S3StorageService {
       );
 
       if (response.Errors && response.Errors.length > 0) {
-        throw new Error(
-          `Failed to delete ${response.Errors.length} storage object(s).`,
-        );
+        throw new Error(`Failed to delete ${response.Errors.length} storage object(s).`);
       }
     }
   }
@@ -619,9 +574,7 @@ export class S3StorageService {
         .map((object) => object.Key)
         .filter((key): key is string => Boolean(key));
       await this.deleteObjects(keys);
-      continuationToken = response.IsTruncated
-        ? response.NextContinuationToken
-        : undefined;
+      continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
     } while (continuationToken);
   }
 }

@@ -9,15 +9,7 @@ export interface CourseVideo {
 
 export type LessonStatus = "done" | "active" | "todo";
 export type LessonContentType = "video" | "document" | "quiz";
-export type Lesson = [
-  number,
-  string,
-  string,
-  LessonStatus,
-  boolean?,
-  LessonContentType?,
-  string?,
-];
+export type Lesson = [number, string, string, LessonStatus, boolean?, LessonContentType?, string?];
 
 export interface CourseSection {
   id: number;
@@ -58,15 +50,12 @@ export const createLessonsById = (courseSections: readonly CourseSection[]) =>
     ),
   );
 
-export const createLessonSequence = (
-  courseSections: readonly CourseSection[],
-) => courseSections.flatMap(({ lessons }) => lessons.map(([id]) => id));
+export const createLessonSequence = (courseSections: readonly CourseSection[]) =>
+  courseSections.flatMap(({ lessons }) => lessons.map(([id]) => id));
 
 export function getLessonSlug(lessonId: number): string {
   const normalizedId =
-    Number.isInteger(lessonId) &&
-    lessonId > 0 &&
-    lessonId <= CURRICULUM_LECTURE_COUNT_MAX
+    Number.isInteger(lessonId) && lessonId > 0 && lessonId <= CURRICULUM_LECTURE_COUNT_MAX
       ? lessonId
       : 1;
   return `lecture-${normalizedId}`;
@@ -87,7 +76,5 @@ export function resolveLessonIdentifier(
   const idMatch = /^(?:lesson-|lecture-)?(\d+)$/.exec(normalizedIdentifier);
   if (!idMatch) return null;
   const lessonId = Number(idMatch[1]);
-  return lessonId > 0 && lessonId <= CURRICULUM_LECTURE_COUNT_MAX
-    ? lessonId
-    : null;
+  return lessonId > 0 && lessonId <= CURRICULUM_LECTURE_COUNT_MAX ? lessonId : null;
 }

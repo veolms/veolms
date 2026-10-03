@@ -28,23 +28,13 @@ function resolveExplicitSource(
  * Resolves exactly one chapter source using this precedence:
  * manual configuration, metadata, then parsed description timestamps.
  */
-export function resolveChapters(
-  options: ResolveChaptersOptions,
-): ResolvedChapters {
-  const manual = resolveExplicitSource(
-    "manual",
-    options.manualChapters,
-    options.duration,
-  );
+export function resolveChapters(options: ResolveChaptersOptions): ResolvedChapters {
+  const manual = resolveExplicitSource("manual", options.manualChapters, options.duration);
   if (manual) {
     return manual;
   }
 
-  const metadata = resolveExplicitSource(
-    "metadata",
-    options.metadataChapters,
-    options.duration,
-  );
+  const metadata = resolveExplicitSource("metadata", options.metadataChapters, options.duration);
   if (metadata) {
     return metadata;
   }
@@ -54,10 +44,7 @@ export function resolveChapters(
     duration: options.duration,
   });
 
-  if (
-    normalizedDescription.length === 0 ||
-    normalizedDescription[0]?.startTime !== 0
-  ) {
+  if (normalizedDescription.length === 0 || normalizedDescription[0]?.startTime !== 0) {
     return { source: null, chapters: [] };
   }
 

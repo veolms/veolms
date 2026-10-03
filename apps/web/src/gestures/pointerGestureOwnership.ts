@@ -1,12 +1,8 @@
 export const POINTER_GESTURE_CLAIM_EVENT = "veolms:pointer-gesture-claim";
-export const DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS =
-  "drawer-swipe-through-viewport";
+export const DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS = "drawer-swipe-through-viewport";
 
-export const isDrawerSwipeThroughViewportTarget = (
-  target: EventTarget | null,
-) =>
-  target instanceof Element &&
-  target.classList.contains(DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS);
+export const isDrawerSwipeThroughViewportTarget = (target: EventTarget | null) =>
+  target instanceof Element && target.classList.contains(DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS);
 
 export const isPointerInsideElementBounds = (
   element: Element | null,
@@ -32,9 +28,7 @@ export const isFullLearningPlayerSwipeTarget = (
 
   return (
     isDrawerSwipeThroughViewportTarget(target) ||
-    target.closest(
-      "[data-learning-persistent-player]:not([data-learning-mini-player])",
-    ) !== null
+    target.closest("[data-learning-persistent-player]:not([data-learning-mini-player])") !== null
   );
 };
 
@@ -45,9 +39,7 @@ export const getLearningPlayerSwipeSplitX = (playerAnchor: Element) => {
   );
   const drawerBounds = courseDrawer?.getBoundingClientRect();
   const visibleRight =
-    drawerBounds &&
-    drawerBounds.left > playerBounds.left &&
-    drawerBounds.left < playerBounds.right
+    drawerBounds && drawerBounds.left > playerBounds.left && drawerBounds.left < playerBounds.right
       ? drawerBounds.left
       : playerBounds.right;
 
@@ -67,17 +59,13 @@ export const claimPointerGesture = (claim: PointerGestureClaim) => {
   );
 };
 
-export const subscribeToPointerGestureClaims = (
-  listener: (claim: PointerGestureClaim) => void,
-) => {
+export const subscribeToPointerGestureClaims = (listener: (claim: PointerGestureClaim) => void) => {
   const handleClaim = (event: Event) => {
     const detail = (event as CustomEvent<PointerGestureClaim>).detail;
-    if (detail?.owner !== "curriculum" || !Number.isInteger(detail.pointerId))
-      return;
+    if (detail?.owner !== "curriculum" || !Number.isInteger(detail.pointerId)) return;
     listener(detail);
   };
 
   window.addEventListener(POINTER_GESTURE_CLAIM_EVENT, handleClaim);
-  return () =>
-    window.removeEventListener(POINTER_GESTURE_CLAIM_EVENT, handleClaim);
+  return () => window.removeEventListener(POINTER_GESTURE_CLAIM_EVENT, handleClaim);
 };

@@ -14,13 +14,8 @@ export * from "./distributed.dispatcher.ts";
  * 2. "direct" (api-server): In-process direct HLS on this API server instance (stubbed).
  * 3. "distributed" (worker-vm / lambda): External worker VMs, Lambda, or Fleet Manager trigger.
  */
-export function createVideoDispatchService(
-  options: VideoDispatchOptions,
-): VideoDispatchService {
-  const strategyRaw =
-    options.strategy ||
-    options.config.VIDEO_DISPATCH_STRATEGY ||
-    "mediaconvert";
+export function createVideoDispatchService(options: VideoDispatchOptions): VideoDispatchService {
+  const strategyRaw = options.strategy || options.config.VIDEO_DISPATCH_STRATEGY || "mediaconvert";
 
   const strategy = strategyRaw.toLowerCase();
 
@@ -32,9 +27,7 @@ export function createVideoDispatchService(
           strategy: "mediaconvert",
           endpoint: options.config.MEDIACONVERT_ENDPOINT || "aws-default",
           region:
-            options.config.MEDIACONVERT_REGION ||
-            options.config.STORAGE_REGION ||
-            "us-east-1",
+            options.config.MEDIACONVERT_REGION || options.config.STORAGE_REGION || "us-east-1",
         },
         "Initializing VideoDispatchService with Strategy 1: AWS MediaConvert (inbuilt)",
       );

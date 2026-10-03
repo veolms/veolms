@@ -76,18 +76,15 @@ export function SettingsMenu({
 
   const qualityLabel = media.autoQuality
     ? "Auto"
-    : (media.qualities.find((item) => item.id === media.selectedQualityId)
-        ?.label ?? "Auto");
+    : (media.qualities.find((item) => item.id === media.selectedQualityId)?.label ?? "Auto");
   const audioLabel =
-    media.audioTracks.find((item) => item.id === media.selectedAudioTrackId)
-      ?.label ??
+    media.audioTracks.find((item) => item.id === media.selectedAudioTrackId)?.label ??
     media.audioTracks[0]?.label ??
     "Default";
   const activeTextTrack =
     media.textTracks.find((item) => item.id === media.selectedTextTrackId) ??
     media.textTracks.find((item) => item.active);
-  const captionsLabel =
-    activeTextTrack?.label || activeTextTrack?.language || "Off";
+  const captionsLabel = activeTextTrack?.label || activeTextTrack?.language || "Off";
 
   const openView = (next: typeof view) => controller.setSettingsView(next);
   const settingsOpen = view !== "closed";
@@ -119,7 +116,7 @@ export function SettingsMenu({
           data-settings-icon={theme.id === "youtube" ? "gear-six" : theme.id}
           data-settings-icon-state={settingsOpen ? "open" : "closed"}
           size={22}
-          className={`origin-center transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none ${mobileInteraction ? "size-5" : ""}`}
+          className={`origin-center transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none max-sm:size-5 ${mobileInteraction ? "size-5" : ""}`}
           style={{
             transform: `rotate(${theme.motion.settingsClosedRotation + (settingsOpen ? SETTINGS_OPEN_TURN_DEGREES : 0)}deg)`,
           }}
@@ -184,9 +181,7 @@ export function SettingsMenu({
                   description={captionsLabel}
                   leading={
                     <CaptionsIcon
-                      data-caption-icon-state={
-                        activeTextTrack ? "filled" : "outline"
-                      }
+                      data-caption-icon-state={activeTextTrack ? "filled" : "outline"}
                       size={19}
                       active={Boolean(activeTextTrack)}
                     />
@@ -209,9 +204,7 @@ export function SettingsMenu({
                 <PlayerMenuItem
                   data-menu-keep-open=""
                   label="Chapters"
-                  description={
-                    chapters.find((item) => item.id === activeChapterId)?.title
-                  }
+                  description={chapters.find((item) => item.id === activeChapterId)?.title}
                   leading={<ChaptersIcon size={19} />}
                   trailing={<DisclosureIcon size={17} />}
                   onClick={() => openView("chapters")}
@@ -219,22 +212,11 @@ export function SettingsMenu({
               ) : null}
               {includePictureInPicture && pictureInPictureAvailable ? (
                 <PlayerMenuItem
-                  label={
-                    pictureInPictureActive
-                      ? "Exit picture in picture"
-                      : "Picture in picture"
-                  }
+                  label={pictureInPictureActive ? "Exit picture in picture" : "Picture in picture"}
                   description={
-                    pictureInPictureActive
-                      ? "Playing above other apps"
-                      : "Play above other apps"
+                    pictureInPictureActive ? "Playing above other apps" : "Play above other apps"
                   }
-                  leading={
-                    <PictureInPictureIcon
-                      size={19}
-                      active={pictureInPictureActive}
-                    />
-                  }
+                  leading={<PictureInPictureIcon size={19} active={pictureInPictureActive} />}
                   onClick={() => {
                     void controller.togglePictureInPicture();
                   }}
@@ -256,19 +238,14 @@ export function SettingsMenu({
               {media.qualities
                 .filter(
                   (quality, index, qualities) =>
-                    qualities.findIndex(
-                      (candidate) => candidate.label === quality.label,
-                    ) === index,
+                    qualities.findIndex((candidate) => candidate.label === quality.label) === index,
                 )
                 .sort((left, right) => (right.height ?? 0) - (left.height ?? 0))
                 .map((quality) => (
                   <PlayerMenuItem
                     key={quality.id}
                     label={quality.label}
-                    selected={
-                      !media.autoQuality &&
-                      quality.id === media.selectedQualityId
-                    }
+                    selected={!media.autoQuality && quality.id === media.selectedQualityId}
                     onClick={() => {
                       controller.selectQuality(quality.id);
                     }}

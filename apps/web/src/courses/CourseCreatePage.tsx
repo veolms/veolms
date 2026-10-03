@@ -21,10 +21,7 @@ import {
   toLessonResourceItem,
   type LessonResourceItem,
 } from "./lesson-resources/LessonResourceManager";
-import {
-  CourseDescriptionEditor,
-  LessonDescriptionEditor,
-} from "./CourseDescriptionEditor";
+import { CourseDescriptionEditor, LessonDescriptionEditor } from "./CourseDescriptionEditor";
 import {
   LessonContentTypeIcon,
   LessonStudioEditor,
@@ -98,10 +95,7 @@ import { SettingsToggle } from "../settings/SettingsControls";
 import type { NavigateTo } from "../routing/navigation";
 import { getCourseEditorPath } from "./courseEditorRouting";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
-import {
-  getNumberShortcutIndex,
-  isEditingShortcutTarget,
-} from "../keyboardShortcuts";
+import { getNumberShortcutIndex, isEditingShortcutTarget } from "../keyboardShortcuts";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import {
@@ -134,10 +128,7 @@ import {
   usePublishCourse,
   useUnpublishCourse,
 } from "../services/courses";
-import {
-  getCourseThumbnailCdnUrl,
-  waitForCourseThumbnailCdnUrl,
-} from "./courseMedia";
+import { getCourseThumbnailCdnUrl, waitForCourseThumbnailCdnUrl } from "./courseMedia";
 import { useIsMutating } from "@tanstack/react-query";
 import type {
   Category,
@@ -148,14 +139,8 @@ import type {
   LessonResource,
 } from "@veolms/contracts";
 import { MEDIA_MAX_SIZES } from "@veolms/contracts";
-import {
-  CourseOverviewPage,
-  CourseOverviewSkeleton,
-} from "./CourseOverviewPage";
-import type {
-  CourseInclude,
-  CourseOverviewPricingProps,
-} from "./CourseOverviewPage";
+import { CourseOverviewPage, CourseOverviewSkeleton } from "./CourseOverviewPage";
+import type { CourseInclude, CourseOverviewPricingProps } from "./CourseOverviewPage";
 import type { Course, CourseLevel, CourseCategory } from "./catalogue";
 import type { Lesson } from "../learning/courseContent";
 import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
@@ -173,16 +158,11 @@ interface StoredLessonEditorDraft extends LessonEditorDraft {
   savedAt: number;
 }
 
-function getLessonEditorDraftStorageKey(
-  courseId: string | null,
-  lessonId: string,
-): string {
+function getLessonEditorDraftStorageKey(courseId: string | null, lessonId: string): string {
   return `${LESSON_EDITOR_DRAFT_STORAGE_PREFIX}${courseId || "new-course"}:${lessonId}`;
 }
 
-function isStudioLessonContentType(
-  value: unknown,
-): value is StudioLessonContentType {
+function isStudioLessonContentType(value: unknown): value is StudioLessonContentType {
   return (
     value === "video" ||
     value === "audio" ||
@@ -216,13 +196,9 @@ function readLessonEditorDraft(
 
     return {
       title: parsed.title,
-      description:
-        typeof parsed.description === "string" ? parsed.description : "",
+      description: typeof parsed.description === "string" ? parsed.description : "",
       contentType: parsed.contentType,
-      contentMediaId:
-        typeof parsed.contentMediaId === "string"
-          ? parsed.contentMediaId
-          : null,
+      contentMediaId: typeof parsed.contentMediaId === "string" ? parsed.contentMediaId : null,
       isPublished: parsed.isPublished !== false,
       isPreview: parsed.isPreview === true,
       savedAt: parsed.savedAt,
@@ -250,16 +226,11 @@ function writeLessonEditorDraft(
   }
 }
 
-function clearLessonEditorDraft(
-  courseId: string | null,
-  lessonId: string,
-): void {
+function clearLessonEditorDraft(courseId: string | null, lessonId: string): void {
   if (typeof window === "undefined") return;
 
   try {
-    window.localStorage.removeItem(
-      getLessonEditorDraftStorageKey(courseId, lessonId),
-    );
+    window.localStorage.removeItem(getLessonEditorDraftStorageKey(courseId, lessonId));
   } catch {
     // Ignore storage cleanup failures; the saved lesson is already persisted.
   }
@@ -285,9 +256,9 @@ function LessonDescriptionPreview({
     : "No description added yet.";
 
   return (
-    <div className="flex flex-col gap-2 mb-3">
+    <div className="mb-3 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-(--text-secondary) text-[0.84rem] font-semibold">
+        <span className="text-[0.84rem] font-semibold text-(--text-secondary)">
           Lesson Description
         </span>
         <button
@@ -302,7 +273,7 @@ function LessonDescriptionPreview({
       </div>
       <p
         data-lesson-description-preview
-        className={`m-0 whitespace-pre-line line-clamp-4 overflow-hidden text-sm leading-6 sm:text-[15px] ${hasDescription ? "text-(--text-secondary)" : "italic text-(--muted)"}`}
+        className={`m-0 line-clamp-4 overflow-hidden text-sm leading-6 whitespace-pre-line sm:text-[15px] ${hasDescription ? "text-(--text-secondary)" : "text-(--muted) italic"}`}
       >
         {preview}
       </p>
@@ -344,10 +315,7 @@ const getCurriculumLessonKey = (lesson: CurriculumLessonItem) => lesson.id;
  * payload only carries the asset ID and duration, so nothing else is implied.
  */
 const getLessonMediaInfo = (
-  lesson: Pick<
-    CurriculumLessonItem,
-    "contentMediaId" | "contentType" | "durationSeconds"
-  >,
+  lesson: Pick<CurriculumLessonItem, "contentMediaId" | "contentType" | "durationSeconds">,
 ): AttachedMediaInfo | null =>
   lesson.contentMediaId
     ? {
@@ -520,9 +488,7 @@ export const WIZARD_STEPS: readonly WizardStepDefinition[] = [
   { id: "publish", label: "Publish", Icon: Lightning, tone: "rose" },
 ];
 
-export const WIZARD_STEP_IDS: readonly CourseWizardStepId[] = WIZARD_STEPS.map(
-  ({ id }) => id,
-);
+export const WIZARD_STEP_IDS: readonly CourseWizardStepId[] = WIZARD_STEPS.map(({ id }) => id);
 
 const COURSE_WIZARD_ARROW_KEY_OWNER_SELECTOR = [
   '[role="dialog"]',
@@ -536,9 +502,7 @@ const COURSE_WIZARD_ARROW_KEY_OWNER_SELECTOR = [
   '[role="tree"]',
 ].join(",");
 
-function getAdjacentWizardSteps(
-  activeStep: CourseWizardStepId,
-): Set<CourseWizardStepId> {
+function getAdjacentWizardSteps(activeStep: CourseWizardStepId): Set<CourseWizardStepId> {
   const index = WIZARD_STEP_IDS.indexOf(activeStep);
   const mounted = new Set<CourseWizardStepId>([activeStep]);
   const previous = WIZARD_STEP_IDS[index - 1];
@@ -576,9 +540,7 @@ export const initialBasicsState: BasicsFormState = {
   showInstructorName: true,
 };
 
-export const normalizeBasicsState = (
-  raw?: Partial<BasicsFormState> | null,
-): BasicsFormState => ({
+export const normalizeBasicsState = (raw?: Partial<BasicsFormState> | null): BasicsFormState => ({
   title: raw?.title ?? "",
   shortDescription: raw?.shortDescription ?? "",
   description: raw?.description ?? "",
@@ -587,9 +549,7 @@ export const normalizeBasicsState = (
   language: raw?.language || "en",
   instructorAlias: raw?.instructorAlias ?? "",
   showInstructorName:
-    raw?.showInstructorName !== undefined
-      ? Boolean(raw.showInstructorName)
-      : true,
+    raw?.showInstructorName !== undefined ? Boolean(raw.showInstructorName) : true,
 });
 
 function getThumbnailUploadErrorMessage(error: unknown): string {
@@ -605,10 +565,7 @@ function getThumbnailUploadErrorMessage(error: unknown): string {
   return "Thumbnail upload failed. Please try again.";
 }
 
-export const isBasicsMetaEqual = (
-  a: BasicsFormState,
-  b: BasicsFormState,
-): boolean => {
+export const isBasicsMetaEqual = (a: BasicsFormState, b: BasicsFormState): boolean => {
   const normA = normalizeBasicsState(a);
   const normB = normalizeBasicsState(b);
   return (
@@ -621,31 +578,18 @@ export const isBasicsMetaEqual = (
   );
 };
 
-export const isBasicsSettingsEqual = (
-  a: BasicsFormState,
-  b: BasicsFormState,
-): boolean => {
+export const isBasicsSettingsEqual = (a: BasicsFormState, b: BasicsFormState): boolean => {
   const normA = normalizeBasicsState(a);
   const normB = normalizeBasicsState(b);
-  return (
-    normA.language === normB.language &&
-    normA.showInstructorName === normB.showInstructorName
-  );
+  return normA.language === normB.language && normA.showInstructorName === normB.showInstructorName;
 };
 
-export const isBasicsEqual = (
-  a: BasicsFormState,
-  b: BasicsFormState,
-): boolean => {
+export const isBasicsEqual = (a: BasicsFormState, b: BasicsFormState): boolean => {
   return isBasicsMetaEqual(a, b) && isBasicsSettingsEqual(a, b);
 };
 
 export type BasicsFieldKey =
-  | "title"
-  | "shortDescription"
-  | "courseDescription"
-  | "instructorAlias"
-  | "showInstructorName";
+  "title" | "shortDescription" | "courseDescription" | "instructorAlias" | "showInstructorName";
 
 export const BasicsFieldStatusIndicator = ({
   status,
@@ -663,10 +607,7 @@ export const BasicsFieldStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch
-          size={12}
-          className="animate-spin text-(--accent) shrink-0"
-        />
+        <CircleNotch size={12} className="shrink-0 animate-spin text-(--accent)" />
         <span>Saving...</span>
       </span>
     );
@@ -691,11 +632,7 @@ export const BasicsFieldStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle
-          size={12}
-          weight="fill"
-          className="shrink-0 text-rose-500"
-        />
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
         <span>Save failed</span>
       </span>
     );
@@ -729,10 +666,7 @@ export const AccessRulesControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch
-          size={12}
-          className="animate-spin text-(--accent) shrink-0"
-        />
+        <CircleNotch size={12} className="shrink-0 animate-spin text-(--accent)" />
         <span>Saving...</span>
       </span>
     );
@@ -757,11 +691,7 @@ export const AccessRulesControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle
-          size={12}
-          weight="fill"
-          className="shrink-0 text-rose-500"
-        />
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
         <span>Save failed</span>
       </span>
     );
@@ -771,11 +701,7 @@ export const AccessRulesControlStatusIndicator = ({
 };
 
 export type PricingControlKey =
-  | "pricingType"
-  | "currency"
-  | "sellingPrice"
-  | "originalPrice"
-  | "pricingDetails";
+  "pricingType" | "currency" | "sellingPrice" | "originalPrice" | "pricingDetails";
 
 export const PricingControlStatusIndicator = ({
   status,
@@ -793,10 +719,7 @@ export const PricingControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch
-          size={12}
-          className="animate-spin text-(--accent) shrink-0"
-        />
+        <CircleNotch size={12} className="shrink-0 animate-spin text-(--accent)" />
         <span>Saving...</span>
       </span>
     );
@@ -821,11 +744,7 @@ export const PricingControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle
-          size={12}
-          weight="fill"
-          className="shrink-0 text-rose-500"
-        />
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
         <span>Save failed</span>
       </span>
     );
@@ -834,8 +753,7 @@ export const PricingControlStatusIndicator = ({
   return null;
 };
 
-export type ExtrasControlKey =
-  "enableCertificate" | "inclusions" | (string & {});
+export type ExtrasControlKey = "enableCertificate" | "inclusions" | (string & {});
 
 export const ExtrasControlStatusIndicator = ({
   status,
@@ -853,10 +771,7 @@ export const ExtrasControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch
-          size={12}
-          className="animate-spin text-(--accent) shrink-0"
-        />
+        <CircleNotch size={12} className="shrink-0 animate-spin text-(--accent)" />
         <span>Saving...</span>
       </span>
     );
@@ -881,11 +796,7 @@ export const ExtrasControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle
-          size={12}
-          weight="fill"
-          className="shrink-0 text-rose-500"
-        />
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
         <span>Save failed</span>
       </span>
     );
@@ -912,10 +823,7 @@ export const CurriculumItemStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch
-          size={12}
-          className="animate-spin text-(--accent) shrink-0"
-        />
+        <CircleNotch size={12} className="shrink-0 animate-spin text-(--accent)" />
         <span>Saving...</span>
       </span>
     );
@@ -940,11 +848,7 @@ export const CurriculumItemStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle
-          size={12}
-          weight="fill"
-          className="shrink-0 text-rose-500"
-        />
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
         <span>Save failed</span>
       </span>
     );
@@ -971,10 +875,7 @@ export const PublishControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-(--accent)"
         aria-live="polite"
       >
-        <CircleNotch
-          size={12}
-          className="animate-spin text-(--accent) shrink-0"
-        />
+        <CircleNotch size={12} className="shrink-0 animate-spin text-(--accent)" />
         <span>Saving...</span>
       </span>
     );
@@ -999,11 +900,7 @@ export const PublishControlStatusIndicator = ({
         className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-rose-500"
         role="alert"
       >
-        <WarningCircle
-          size={12}
-          weight="fill"
-          className="shrink-0 text-rose-500"
-        />
+        <WarningCircle size={12} weight="fill" className="shrink-0 text-rose-500" />
         <span>Save failed</span>
       </span>
     );
@@ -1028,9 +925,7 @@ export function formatIsoToDatetimeLocal(isoString?: string | null): string {
   }
 }
 
-export function formatDatetimeLocalToIso(
-  localString?: string | null,
-): string | null {
+export function formatDatetimeLocalToIso(localString?: string | null): string | null {
   if (!localString || !localString.trim()) return null;
   try {
     const d = new Date(localString);
@@ -1073,14 +968,11 @@ export const normalizeAccessRulesState = (
 ): AccessRulesFormState => ({
   accessType: (raw?.accessType || "everyone") as AccessType,
   durationMode: (raw?.durationMode || "") as AccessDurationMode,
-  fixedDurationValue:
-    typeof raw?.fixedDurationValue === "number" ? raw.fixedDurationValue : 30,
+  fixedDurationValue: typeof raw?.fixedDurationValue === "number" ? raw.fixedDurationValue : 30,
   fixedDurationUnit: (raw?.fixedDurationUnit || "Days") as DurationUnit,
   enableQA: raw?.enableQA !== undefined ? Boolean(raw.enableQA) : true,
-  enableComments:
-    raw?.enableComments !== undefined ? Boolean(raw.enableComments) : true,
-  enableDownloads:
-    raw?.enableDownloads !== undefined ? Boolean(raw.enableDownloads) : false,
+  enableComments: raw?.enableComments !== undefined ? Boolean(raw.enableComments) : true,
+  enableDownloads: raw?.enableDownloads !== undefined ? Boolean(raw.enableDownloads) : false,
   enableNotes: raw?.enableNotes !== undefined ? Boolean(raw.enableNotes) : true,
 });
 
@@ -1112,10 +1004,7 @@ export const isAccessSettingsEqual = (
   );
 };
 
-export const isAccessRulesEqual = (
-  a: AccessRulesFormState,
-  b: AccessRulesFormState,
-): boolean => {
+export const isAccessRulesEqual = (a: AccessRulesFormState, b: AccessRulesFormState): boolean => {
   return isAccessRuleConfigEqual(a, b) && isAccessSettingsEqual(a, b);
 };
 
@@ -1147,10 +1036,7 @@ export const normalizePricingState = (
   currency: raw?.currency ? String(raw.currency).trim() : "INR",
 });
 
-export const isPricingEqual = (
-  a: PricingFormState,
-  b: PricingFormState,
-): boolean => {
+export const isPricingEqual = (a: PricingFormState, b: PricingFormState): boolean => {
   const normA = normalizePricingState(a);
   const normB = normalizePricingState(b);
 
@@ -1161,10 +1047,7 @@ export const isPricingEqual = (
     return true;
   }
 
-  return (
-    normA.sellingPrice === normB.sellingPrice &&
-    normA.originalPrice === normB.originalPrice
-  );
+  return normA.sellingPrice === normB.sellingPrice && normA.originalPrice === normB.originalPrice;
 };
 
 // Extras State Model & Normalization (server-backed: certificateEnabled)
@@ -1176,16 +1059,11 @@ export const initialExtrasState: ExtrasFormState = {
   enableCertificate: false,
 };
 
-export const normalizeExtrasState = (
-  raw?: Partial<ExtrasFormState> | null,
-): ExtrasFormState => ({
+export const normalizeExtrasState = (raw?: Partial<ExtrasFormState> | null): ExtrasFormState => ({
   enableCertificate: Boolean(raw?.enableCertificate),
 });
 
-export const isExtrasEqual = (
-  a: ExtrasFormState,
-  b: ExtrasFormState,
-): boolean => {
+export const isExtrasEqual = (a: ExtrasFormState, b: ExtrasFormState): boolean => {
   return a.enableCertificate === b.enableCertificate;
 };
 
@@ -1293,9 +1171,7 @@ export function deriveSuggestedInclusions(params: {
     "Access on all devices",
   );
 
-  const existing = new Set(
-    (params.currentDraft || []).map((d) => d.text.trim().toLowerCase()),
-  );
+  const existing = new Set((params.currentDraft || []).map((d) => d.text.trim().toLowerCase()));
 
   return suggestions.filter(
     (sug, idx, arr) =>
@@ -1347,9 +1223,7 @@ export const checkIsCurriculumDirty = (
   const hasEditingSection = sections.some(
     (s) =>
       s.isEditingTitle &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        s.id,
-      ),
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id),
   );
   if (hasEditingSection) return true;
 
@@ -1389,20 +1263,7 @@ export function getCurrencyOptions(): Array<
     const codes =
       typeof Intl.supportedValuesOf === "function"
         ? Intl.supportedValuesOf("currency")
-        : [
-            "USD",
-            "EUR",
-            "GBP",
-            "INR",
-            "AUD",
-            "CAD",
-            "JPY",
-            "CNY",
-            "SGD",
-            "NZD",
-            "CHF",
-            "AED",
-          ];
+        : ["USD", "EUR", "GBP", "INR", "AUD", "CAD", "JPY", "CNY", "SGD", "NZD", "CHF", "AED"];
 
     const list: Array<{ code: string; name: string; label: string }> = [];
     for (const code of codes) {
@@ -1528,10 +1389,7 @@ const setCustomDragImage = (
   ghost.innerHTML = htmlContent;
   document.body.appendChild(ghost);
 
-  const offsetX = Math.min(
-    Math.max(e.clientX - rect.left, 24),
-    Math.max(rect.width - 24, 24),
-  );
+  const offsetX = Math.min(Math.max(e.clientX - rect.left, 24), Math.max(rect.width - 24, 24));
   const offsetY = 24;
 
   e.dataTransfer.effectAllowed = "move";
@@ -1549,11 +1407,7 @@ const setCustomDragImage = (
   }, 0);
 };
 
-const sectionGhostHtml = (
-  title: string,
-  index: number,
-  lessonCount: number,
-) => `
+const sectionGhostHtml = (title: string, index: number, lessonCount: number) => `
   <div style="
     display: flex;
     align-items: center;
@@ -1670,8 +1524,7 @@ export function buildPricingPayload(state: PricingFormState) {
   const origNum = rawOrig ? Math.round(parseFloat(rawOrig)) : null;
 
   const price = origNum && origNum > 0 ? origNum : isNaN(sellNum) ? 0 : sellNum;
-  const salePrice =
-    origNum && origNum > 0 ? (isNaN(sellNum) ? null : sellNum) : null;
+  const salePrice = origNum && origNum > 0 ? (isNaN(sellNum) ? null : sellNum) : null;
 
   return {
     pricingType: "paid" as const,
@@ -1767,10 +1620,7 @@ export function buildLocalPreviewData({
   }
 
   const totalSectionsCount = sections.length;
-  const totalLessonsCount = sections.reduce(
-    (acc, sec) => acc + (sec.lessons?.length ?? 0),
-    0,
-  );
+  const totalLessonsCount = sections.reduce((acc, sec) => acc + (sec.lessons?.length ?? 0), 0);
 
   const isFixedDuration = accessRulesDraft.durationMode === "fixed";
   const unitMultiplier =
@@ -1794,17 +1644,14 @@ export function buildLocalPreviewData({
     shortDescription: shortDescription.trim() || null,
     description: courseDescription.trim() || null,
     difficulty: difficultyLevel ? difficultyLevel : null,
-    status: isPublished
-      ? "published"
-      : editorDefaults?.course?.status || "draft",
+    status: isPublished ? "published" : editorDefaults?.course?.status || "draft",
     creatorId: editorDefaults?.course?.creatorId || null,
     categoryId: categoryId || null,
     thumbnailMediaId:
       thumbnailMediaId !== undefined
         ? thumbnailMediaId
         : editorDefaults?.course?.thumbnailMediaId || null,
-    trailerMediaId:
-      trailerMediaId ?? (editorDefaults?.course?.trailerMediaId || null),
+    trailerMediaId: trailerMediaId ?? (editorDefaults?.course?.trailerMediaId || null),
     instructorAlias: instructorAlias.trim() || null,
     version: courseVersion,
     createdAt: editorDefaults?.course?.createdAt || now,
@@ -1812,43 +1659,40 @@ export function buildLocalPreviewData({
     publishedAt: editorDefaults?.course?.publishedAt || null,
     totalSections: totalSectionsCount,
     totalLessons: totalLessonsCount,
-    totalDurationSeconds:
-      totalDurationSeconds ?? editorDefaults?.course?.totalDurationSeconds ?? 0,
+    totalDurationSeconds: totalDurationSeconds ?? editorDefaults?.course?.totalDurationSeconds ?? 0,
   };
 
-  const sectionsData: CourseEditorDataResponse["sections"] = sections.map(
-    (sec, secIdx) => ({
-      id: sec.id,
+  const sectionsData: CourseEditorDataResponse["sections"] = sections.map((sec, secIdx) => ({
+    id: sec.id,
+    courseId: currentCourseId,
+    title: sec.title,
+    position: secIdx,
+    lessons: (sec.lessons || []).map((les, lesIdx) => ({
+      id: les.id,
       courseId: currentCourseId,
-      title: sec.title,
-      position: secIdx,
-      lessons: (sec.lessons || []).map((les, lesIdx) => ({
-        id: les.id,
-        courseId: currentCourseId,
-        sectionId: sec.id,
-        title: les.title,
-        description: les.description || null,
-        contentType: (les.contentType === "audio"
-          ? "video"
-          : les.contentType === "image"
-            ? "document"
-            : les.contentType) as "video" | "document" | "quiz",
-        contentMediaId: les.contentMediaId ?? null,
-        durationSeconds: les.durationSeconds,
-        position: lesIdx,
-        isPreview: Boolean(les.isPreview),
-        isPublished: les.isPublished !== undefined ? les.isPublished : true,
-        resources: (les.resources || []).map((res, resIdx) => ({
-          id: res.id,
-          lessonId: les.id,
-          mediaAssetId: res.mediaAssetId || res.id,
-          title: res.name,
-          position: resIdx,
-          createdAt: now,
-        })),
+      sectionId: sec.id,
+      title: les.title,
+      description: les.description || null,
+      contentType: (les.contentType === "audio"
+        ? "video"
+        : les.contentType === "image"
+          ? "document"
+          : les.contentType) as "video" | "document" | "quiz",
+      contentMediaId: les.contentMediaId ?? null,
+      durationSeconds: les.durationSeconds,
+      position: lesIdx,
+      isPreview: Boolean(les.isPreview),
+      isPublished: les.isPublished !== undefined ? les.isPublished : true,
+      resources: (les.resources || []).map((res, resIdx) => ({
+        id: res.id,
+        lessonId: les.id,
+        mediaAssetId: res.mediaAssetId || res.id,
+        title: res.name,
+        position: resIdx,
+        createdAt: now,
       })),
-    }),
-  );
+    })),
+  }));
 
   const accessRulesData: CourseEditorDataResponse["accessRules"] = {
     id: editorDefaults?.accessRules?.id || "preview-access-rules",
@@ -1902,16 +1746,10 @@ export function buildLocalPreviewData({
   };
 }
 
-export function parseWizardTab(
-  rawParam: string | null | undefined,
-): CourseWizardStepId | null {
+export function parseWizardTab(rawParam: string | null | undefined): CourseWizardStepId | null {
   if (!rawParam) return null;
   const normalized = rawParam.toLowerCase().trim();
-  if (
-    normalized === "access" ||
-    normalized === "accessrules" ||
-    normalized === "access-rules"
-  ) {
+  if (normalized === "access" || normalized === "accessrules" || normalized === "access-rules") {
     return "access-rules";
   }
   if (WIZARD_STEPS.some((s) => s.id === normalized)) {
@@ -1928,7 +1766,7 @@ export function CourseWizardSkeleton({
   return (
     <div
       id="course-wizard-tab-panel"
-      className="swipeable-tab-panel course-wizard-tab-content relative min-h-0 flex-1 flex flex-col pt-4 pb-6 max-[640px]:pt-3 animate-pulse"
+      className="swipeable-tab-panel course-wizard-tab-content relative flex min-h-0 flex-1 animate-pulse flex-col pt-4 pb-6 max-[640px]:pt-3"
       role="tabpanel"
       aria-labelledby={`course-wizard-tab-${activeStep}`}
       data-testid="course-wizard-skeleton"
@@ -1936,36 +1774,36 @@ export function CourseWizardSkeleton({
     >
       <div className="swipeable-tab-panel__native-slide w-full min-w-0">
         {activeStep === "basics" ? (
-          <div className="relative z-10 grid grid-cols-1 md:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
+          <div className="relative z-10 grid w-full min-w-0 grid-cols-1 items-start gap-6 max-[768px]:gap-4.5 md:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)]">
             {/* Left Column: Basic Information Form */}
             <div className="flex flex-col gap-5">
-              <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+              <section className="relative z-10 rounded-[14px] bg-(--surface) p-6 shadow-(--card-shadow) max-[768px]:p-4">
                 <div className="mb-4.5">
-                  <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                  <h2 className="m-0 text-[1.18rem] font-[650] tracking-[-0.015em] text-(--text)">
                     Basic Information
                   </h2>
-                  <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
+                  <p className="m-0 mt-1 mb-5 text-[0.82rem] text-(--muted)">
                     Update the essential details of your course.
                   </p>
                 </div>
 
                 {/* Course Title */}
-                <div className="flex flex-col gap-2 mb-5">
+                <div className="mb-5 flex flex-col gap-2">
                   <div className="h-4 w-28 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                   <div className="h-11 w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
                 </div>
 
                 {/* Short Description */}
-                <div className="flex flex-col gap-2 mb-5">
+                <div className="mb-5 flex flex-col gap-2">
                   <div className="h-4 w-36 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                   <div className="h-18 w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
                 </div>
 
                 {/* Course Description with Rich Text Toolbar */}
-                <div className="flex flex-col gap-2 mb-5">
+                <div className="mb-5 flex flex-col gap-2">
                   <div className="h-4 w-40 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
-                  <div className="border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
-                    <div className="h-10 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] flex items-center gap-2 px-3">
+                  <div className="overflow-hidden rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+                    <div className="flex h-10 items-center gap-2 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-3">
                       <div className="h-6 w-16 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
                       <div className="h-6 w-6 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
                       <div className="h-6 w-6 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
@@ -1973,14 +1811,14 @@ export function CourseWizardSkeleton({
                       <div className="h-6 w-6 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
                     </div>
                     <div className="h-36 w-full p-3.5">
-                      <div className="h-4 w-3/4 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)] mb-2.5" />
+                      <div className="mb-2.5 h-4 w-3/4 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                       <div className="h-4 w-1/2 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                     </div>
                   </div>
                 </div>
 
                 {/* 2-Column: Category & Difficulty */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-2">
                     <div className="h-4 w-24 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                     <div className="h-11 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
@@ -1992,7 +1830,7 @@ export function CourseWizardSkeleton({
                 </div>
 
                 {/* 2-Column: Language & Instructor Alias */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-2">
                     <div className="h-4 w-20 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                     <div className="h-11 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
@@ -2004,13 +1842,13 @@ export function CourseWizardSkeleton({
                 </div>
 
                 {/* Media Uploaders */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <div className="aspect-video w-full rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] flex flex-col items-center justify-center p-3">
-                    <div className="w-8 h-8 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] mb-2" />
+                <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2">
+                  <div className="flex aspect-video w-full flex-col items-center justify-center rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] p-3">
+                    <div className="mb-2 h-8 w-8 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
                     <div className="h-7 w-20 rounded-md bg-[color-mix(in_srgb,var(--accent)_30%,transparent)]" />
                   </div>
-                  <div className="aspect-video w-full rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] flex flex-col items-center justify-center p-3">
-                    <div className="w-8 h-8 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] mb-2" />
+                  <div className="flex aspect-video w-full flex-col items-center justify-center rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] p-3">
+                    <div className="mb-2 h-8 w-8 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
                     <div className="h-7 w-20 rounded-md bg-[color-mix(in_srgb,var(--accent)_30%,transparent)]" />
                   </div>
                 </div>
@@ -2019,30 +1857,28 @@ export function CourseWizardSkeleton({
 
             {/* Right Column: Live Course Preview */}
             <div className="flex min-w-0 flex-col gap-5 md:sticky md:top-0 md:self-start">
-              <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
-                <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
-                  Course Preview
-                </h2>
-                <p className="m-0 mt-1 mb-4 text-(--muted) text-[0.8rem]">
+              <section className="rounded-[14px] bg-(--surface) p-5 shadow-(--card-shadow)">
+                <h2 className="m-0 text-[1.1rem] font-[650] text-(--text)">Course Preview</h2>
+                <p className="m-0 mt-1 mb-4 text-[0.8rem] text-(--muted)">
                   This is how your course will appear to students.
                 </p>
 
                 {/* Aspect-video dashed preview */}
-                <div className="aspect-video w-full border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] flex flex-col items-center justify-center gap-2 p-4 mb-4">
-                  <div className="w-9 h-9 rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] flex items-center justify-center">
-                    <div className="w-4 h-4 rounded bg-[color-mix(in_srgb,var(--text)_15%,transparent)]" />
+                <div className="mb-4 flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-4">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)]">
+                    <div className="h-4 w-4 rounded bg-[color-mix(in_srgb,var(--text)_15%,transparent)]" />
                   </div>
                   <div className="h-3 w-44 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                 </div>
 
                 <div className="flex flex-col gap-2.5">
                   <div className="h-5 w-3/4 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
-                  <div className="flex items-center gap-3 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3 text-(--muted) text-[0.8rem]">
+                  <div className="flex items-center gap-3 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3 text-[0.8rem] text-(--muted)">
                     <div className="h-3.5 w-20 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                     <div className="h-3.5 w-20 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                     <div className="h-3.5 w-16 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                   </div>
-                  <div className="pt-1 flex flex-col gap-2">
+                  <div className="flex flex-col gap-2 pt-1">
                     <div className="h-4 w-32 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
                     <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                     <div className="h-3 w-4/5 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
@@ -2052,113 +1888,100 @@ export function CourseWizardSkeleton({
             </div>
           </div>
         ) : activeStep === "curriculum" ? (
-          <div className="flex flex-col gap-4 w-full flex-1 min-h-0">
+          <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
             {/* Top Toolbar */}
-            <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
+            <div className="mb-2 flex items-center justify-between max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
               <div>
-                <h2 className="m-0 text-(--text) text-[1.25rem] font-bold tracking-[-0.015em]">
+                <h2 className="m-0 text-[1.25rem] font-bold tracking-[-0.015em] text-(--text)">
                   Course Curriculum
                 </h2>
-                <p className="m-0 mt-1 text-(--muted) text-[0.85rem]">
-                  Organize your course into sections and lessons. You can
-                  reorder them anytime.
+                <p className="m-0 mt-1 text-[0.85rem] text-(--muted)">
+                  Organize your course into sections and lessons. You can reorder them anytime.
                 </p>
               </div>
-              <div className="inline-flex items-center justify-center gap-1.5 h-[34px] px-4 rounded-lg bg-[color-mix(in_srgb,var(--accent)_30%,transparent)] text-white text-[0.80rem] font-bold max-[768px]:self-start">
+              <div className="inline-flex h-[34px] items-center justify-center gap-1.5 rounded-lg bg-[color-mix(in_srgb,var(--accent)_30%,transparent)] px-4 text-[0.80rem] font-bold text-white max-[768px]:self-start">
                 <Plus size={15} weight="bold" />
                 <span>Add Section</span>
               </div>
             </div>
 
             {/* Section 1 Card */}
-            <div className="border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden">
+            <div className="overflow-hidden rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) shadow-(--card-shadow)">
               {/* Section Header */}
-              <div className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]">
-                <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
-                  <DotsSixVertical
-                    size={18}
-                    className="text-(--muted) opacity-40 shrink-0"
-                  />
-                  <CaretDown size={16} className="text-(--muted) shrink-0" />
-                  <div className="h-4.5 w-40 max-[640px]:w-28 max-[480px]:w-24 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] shrink-0" />
-                  <div className="h-4.5 flex-1 max-w-36 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
-                  <div className="h-5 w-18 rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] shrink-0 max-[480px]:hidden" />
+              <div className="flex items-center justify-between bg-[color-mix(in_srgb,var(--text)_2%,transparent)] px-[18px] py-3.5 select-none max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]">
+                <div className="flex items-center gap-3 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:flex-1 max-[768px]:gap-2">
+                  <DotsSixVertical size={18} className="shrink-0 text-(--muted) opacity-40" />
+                  <CaretDown size={16} className="shrink-0 text-(--muted)" />
+                  <div className="h-4.5 w-40 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] max-[640px]:w-28 max-[480px]:w-24" />
+                  <div className="h-4.5 max-w-36 flex-1 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                  <div className="h-5 w-18 shrink-0 rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[480px]:hidden" />
                 </div>
-                <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-end max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-end max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:pt-2">
+                  <div className="h-7 w-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  <div className="h-7 w-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  <div className="h-7 w-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                 </div>
               </div>
 
               {/* Lessons List inside Section 1 */}
-              <div className="p-[14px_18px] max-[768px]:p-[12px_14px] flex flex-col gap-2.5">
+              <div className="flex flex-col gap-2.5 p-[14px_18px] max-[768px]:p-[12px_14px]">
                 {/* Lesson 1 */}
-                <div className="flex items-center justify-between p-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-2.5 gap-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <DotsSixVertical
-                      size={16}
-                      className="text-(--muted) opacity-40 shrink-0"
-                    />
+                <div className="flex items-center justify-between gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-3 max-[768px]:p-2.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <DotsSixVertical size={16} className="shrink-0 text-(--muted) opacity-40" />
                     <PlayCircle
                       size={20}
-                      className="text-(--accent) opacity-60 shrink-0"
+                      className="shrink-0 text-(--accent) opacity-60"
                       weight="fill"
                     />
-                    <div className="h-4 flex-1 max-w-64 min-w-16 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                    <div className="h-4 max-w-64 min-w-16 flex-1 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                     <div className="h-4 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex shrink-0 items-center gap-2">
                     <div className="h-6 w-16 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[640px]:hidden" />
-                    <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                    <div className="h-7 w-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                   </div>
                 </div>
 
                 {/* Lesson 2 */}
-                <div className="flex items-center justify-between p-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-2.5 gap-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <DotsSixVertical
-                      size={16}
-                      className="text-(--muted) opacity-40 shrink-0"
-                    />
+                <div className="flex items-center justify-between gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-3 max-[768px]:p-2.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <DotsSixVertical size={16} className="shrink-0 text-(--muted) opacity-40" />
                     <PlayCircle
                       size={20}
-                      className="text-(--accent) opacity-60 shrink-0"
+                      className="shrink-0 text-(--accent) opacity-60"
                       weight="fill"
                     />
-                    <div className="h-4 flex-1 max-w-48 min-w-16 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                    <div className="h-4 max-w-48 min-w-16 flex-1 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                     <div className="h-4 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex shrink-0 items-center gap-2">
                     <div className="h-6 w-16 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[640px]:hidden" />
-                    <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                    <div className="h-7 w-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                   </div>
                 </div>
 
                 {/* Lesson 3 */}
-                <div className="flex items-center justify-between p-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-2.5 gap-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <DotsSixVertical
-                      size={16}
-                      className="text-(--muted) opacity-40 shrink-0"
-                    />
+                <div className="flex items-center justify-between gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-3 max-[768px]:p-2.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <DotsSixVertical size={16} className="shrink-0 text-(--muted) opacity-40" />
                     <PlayCircle
                       size={20}
-                      className="text-(--accent) opacity-60 shrink-0"
+                      className="shrink-0 text-(--accent) opacity-60"
                       weight="fill"
                     />
-                    <div className="h-4 flex-1 max-w-56 min-w-16 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+                    <div className="h-4 max-w-56 min-w-16 flex-1 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                     <div className="h-4 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex shrink-0 items-center gap-2">
                     <div className="h-6 w-16 rounded-md bg-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[640px]:hidden" />
-                    <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                    <div className="h-7 w-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                   </div>
                 </div>
 
                 {/* Add Lesson action */}
                 <div className="mt-1">
-                  <div className="inline-flex items-center gap-1.5 text-(--muted) text-[0.82rem] font-semibold">
+                  <div className="inline-flex items-center gap-1.5 text-[0.82rem] font-semibold text-(--muted)">
                     <Plus size={16} />
                     <span>Add Lesson</span>
                   </div>
@@ -2167,22 +1990,19 @@ export function CourseWizardSkeleton({
             </div>
 
             {/* Section 2 Card */}
-            <div className="border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden">
-              <div className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]">
-                <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
-                  <DotsSixVertical
-                    size={18}
-                    className="text-(--muted) opacity-40 shrink-0"
-                  />
-                  <CaretRight size={16} className="text-(--muted) shrink-0" />
-                  <div className="h-4.5 w-40 max-[640px]:w-28 max-[480px]:w-24 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] shrink-0" />
-                  <div className="h-4.5 flex-1 max-w-44 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
-                  <div className="h-5 w-18 rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] shrink-0 max-[480px]:hidden" />
+            <div className="overflow-hidden rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) shadow-(--card-shadow)">
+              <div className="flex items-center justify-between bg-[color-mix(in_srgb,var(--text)_2%,transparent)] px-[18px] py-3.5 select-none max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]">
+                <div className="flex items-center gap-3 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:flex-1 max-[768px]:gap-2">
+                  <DotsSixVertical size={18} className="shrink-0 text-(--muted) opacity-40" />
+                  <CaretRight size={16} className="shrink-0 text-(--muted)" />
+                  <div className="h-4.5 w-40 shrink-0 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] max-[640px]:w-28 max-[480px]:w-24" />
+                  <div className="h-4.5 max-w-44 flex-1 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                  <div className="h-5 w-18 shrink-0 rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[480px]:hidden" />
                 </div>
-                <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-end max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
-                  <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-end max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:pt-2">
+                  <div className="h-7 w-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  <div className="h-7 w-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
+                  <div className="h-7 w-7 rounded-lg bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                 </div>
               </div>
             </div>
@@ -2190,50 +2010,48 @@ export function CourseWizardSkeleton({
         ) : activeStep === "access-rules" ? (
           <div className="flex w-full flex-col gap-5">
             {/* Top Grid: 1. Who can access & 2. Access duration */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+            <div className="grid w-full min-w-0 grid-cols-1 gap-5 max-[768px]:gap-3.5 md:grid-cols-2">
               {/* Card 1: Who can access this course? */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+              <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                     1. Who can access this course?
                   </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                  <p className="m-0 text-[0.83rem] text-(--muted)">
                     Choose who is allowed to access this course.
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-3">
                   {/* Option: Everyone */}
-                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
-                      <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                  <div className="relative flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] p-3.5 px-4">
+                    <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
+                      <div className="h-2 w-2 rounded-full bg-(--accent)" />
                     </div>
                     <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                      <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                         Everyone
                       </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Anyone with access to the platform can access this
-                        course.
+                      <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                        Anyone with access to the platform can access this course.
                       </p>
                     </div>
                   </div>
 
                   {/* Option: Restricted access */}
-                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] opacity-60">
-                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                  <div className="relative flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-3.5 px-4 opacity-60">
+                    <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
                     <div className="flex flex-1 flex-col gap-0.75">
                       <div className="flex items-center gap-2">
-                        <strong className="text-(--text) text-[0.9rem] font-[650] leading-[18px]">
+                        <strong className="text-[0.9rem] leading-[18px] font-[650] text-(--text)">
                           Restricted access
                         </strong>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                        <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-0.5 text-[0.68rem] font-semibold tracking-wide text-(--muted)">
                           Coming soon
                         </span>
                       </div>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Only users who meet the selected requirements can access
-                        this course.
+                      <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                        Only users who meet the selected requirements can access this course.
                       </p>
                     </div>
                   </div>
@@ -2241,42 +2059,41 @@ export function CourseWizardSkeleton({
               </div>
 
               {/* Card 2: Access duration */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+              <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                     2. Access duration
                   </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                  <p className="m-0 text-[0.83rem] text-(--muted)">
                     Set how long learners can access this course.
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-3">
                   {/* Option 1: Lifetime access */}
-                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
-                      <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                  <div className="relative flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] p-3.5 px-4">
+                    <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
+                      <div className="h-2 w-2 rounded-full bg-(--accent)" />
                     </div>
                     <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                      <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                         Lifetime access
                       </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                      <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
                         Learners can access this course forever.
                       </p>
                     </div>
                   </div>
 
                   {/* Option 2: Fixed duration */}
-                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                  <div className="relative flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-3.5 px-4">
+                    <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
                     <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                      <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                         Fixed duration
                       </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Set a specific number of days or months learners have
-                        access.
+                      <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                        Set a specific number of days or months learners have access.
                       </p>
                     </div>
                   </div>
@@ -2285,49 +2102,49 @@ export function CourseWizardSkeleton({
             </div>
 
             {/* Card 3: Additional Settings (Toggles) */}
-            <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+            <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
               <div className="mb-4.5">
-                <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                   3. Additional Settings
                 </h3>
-                <p className="m-0 text-(--muted) text-[0.83rem]">
+                <p className="m-0 text-[0.83rem] text-(--muted)">
                   Configure social and learning features for this course.
                 </p>
               </div>
 
               <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                <div className="flex items-center justify-between rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4.5 py-3.5">
+                  <div className="flex min-w-0 items-center gap-3.5 pr-3">
+                    <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
                       <ChatCircleText size={20} weight="fill" />
                     </div>
                     <div>
-                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                      <strong className="mb-0.5 block text-[0.9rem] font-[650] text-(--text)">
                         Comments
                       </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem]">
+                      <p className="m-0 text-[0.8rem] text-(--muted)">
                         Allow learners to comment on course content.
                       </p>
                     </div>
                   </div>
-                  <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
+                  <div className="h-6 w-11 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
                 </div>
 
-                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                    <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                <div className="flex items-center justify-between rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4.5 py-3.5">
+                  <div className="flex min-w-0 items-center gap-3.5 pr-3">
+                    <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
                       <NotePencil size={20} weight="bold" />
                     </div>
                     <div>
-                      <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                      <strong className="mb-0.5 block text-[0.9rem] font-[650] text-(--text)">
                         Notes
                       </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem]">
+                      <p className="m-0 text-[0.8rem] text-(--muted)">
                         Allow learners to take notes while learning.
                       </p>
                     </div>
                   </div>
-                  <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
+                  <div className="h-6 w-11 rounded-full bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" />
                 </div>
               </div>
             </div>
@@ -2335,42 +2152,42 @@ export function CourseWizardSkeleton({
         ) : activeStep === "pricing" ? (
           <div className="flex w-full flex-col gap-5">
             {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+            <div className="grid w-full min-w-0 grid-cols-1 gap-5 max-[768px]:gap-3.5 md:grid-cols-2">
               {/* Card 1: Course pricing */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+              <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                     1. Course pricing
                   </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                  <p className="m-0 text-[0.83rem] text-(--muted)">
                     Choose how you want to sell this course.
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-3">
                   {/* Radio Option: Free */}
-                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                  <div className="relative flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-3.5 px-4">
+                    <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
                     <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                      <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                         Free
                       </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                      <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
                         Anyone who can access the course can enroll for free.
                       </p>
                     </div>
                   </div>
 
                   {/* Radio Option: Paid */}
-                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
-                      <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                  <div className="relative flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] p-3.5 px-4">
+                    <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
+                      <div className="h-2 w-2 rounded-full bg-(--accent)" />
                     </div>
                     <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                      <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                         Paid
                       </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                      <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
                         Learners must purchase the course to get access.
                       </p>
                     </div>
@@ -2379,43 +2196,42 @@ export function CourseWizardSkeleton({
               </div>
 
               {/* Card 2: Price details */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+              <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                     2. Price details
                   </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                  <p className="m-0 text-[0.83rem] text-(--muted)">
                     Set the pricing for your course.
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-2">
-                    <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                      Currency <span className="text-[#ff5252] ml-0.5">*</span>
+                    <label className="text-[0.84rem] font-semibold text-(--text-secondary)">
+                      Currency <span className="ml-0.5 text-[#ff5252]">*</span>
                     </label>
-                    <div className="h-11 w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 flex items-center justify-between bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+                    <div className="flex h-11 w-full items-center justify-between rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5">
                       <div className="h-4 w-28 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
                       <CaretDown size={14} className="text-(--muted)" />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                     <div className="flex flex-col gap-2">
-                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                        Price (INR){" "}
-                        <span className="text-[#ff5252] ml-0.5">*</span>
+                      <label className="text-[0.84rem] font-semibold text-(--text-secondary)">
+                        Price (INR) <span className="ml-0.5 text-[#ff5252]">*</span>
                       </label>
-                      <div className="h-11 w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 flex items-center bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+                      <div className="flex h-11 w-full items-center rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5">
                         <div className="h-4 w-16 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                      <label className="text-[0.84rem] font-semibold text-(--text-secondary)">
                         Original Price (Optional)
                       </label>
-                      <div className="h-11 w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 flex items-center bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+                      <div className="flex h-11 w-full items-center rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5">
                         <div className="h-4 w-16 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                       </div>
                     </div>
@@ -2425,13 +2241,13 @@ export function CourseWizardSkeleton({
             </div>
 
             {/* Card 3: Pricing Summary */}
-            <div className="border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow) flex items-center justify-between">
+            <div className="flex items-center justify-between rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 shadow-(--card-shadow)">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] flex items-center justify-center text-(--accent)">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
                   <Tag size={20} weight="bold" />
                 </div>
                 <div>
-                  <div className="h-4 w-32 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] mb-1" />
+                  <div className="mb-1 h-4 w-32 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
                   <div className="h-3 w-48 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                 </div>
               </div>
@@ -2441,103 +2257,99 @@ export function CourseWizardSkeleton({
         ) : activeStep === "extras" ? (
           <div className="flex w-full flex-col gap-5">
             {/* Top 2-Column Grid: 1. Certificates & 2. This course includes */}
-            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+            <div className="grid w-full min-w-0 grid-cols-1 items-start gap-5 max-[768px]:gap-3.5 md:grid-cols-2">
               {/* Card 1: Certificates */}
-              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+              <div className="flex h-fit flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                     1. Certificates
                   </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                  <p className="m-0 text-[0.83rem] text-(--muted)">
                     Configure how certificates will be issued for this course.
                   </p>
                 </div>
 
                 {/* Enable Certificate Toggle Row */}
-                <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-4.5">
-                  <div className="flex flex-col min-w-0 pr-3">
-                    <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                <div className="mb-4.5 flex items-center justify-between rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4.5 py-3.5">
+                  <div className="flex min-w-0 flex-col pr-3">
+                    <strong className="mb-0.5 block text-[0.9rem] font-[650] text-(--text)">
                       Enable certificate
                     </strong>
-                    <p className="m-0 text-(--muted) text-[0.8rem]">
+                    <p className="m-0 text-[0.8rem] text-(--muted)">
                       Issue certificates to learners on course completion.
                     </p>
                   </div>
-                  <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--text)_18%,transparent)] shrink-0" />
+                  <div className="h-6 w-11 shrink-0 rounded-full bg-[color-mix(in_srgb,var(--text)_18%,transparent)]" />
                 </div>
 
                 {/* Certificate Configuration Controls */}
                 <div className="flex flex-col gap-4.5 opacity-60">
                   {/* Template Selector */}
-                  <div className="flex flex-col gap-2 mb-5">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                  <div className="mb-5 flex flex-col gap-2">
+                    <div className="mb-0.5 flex items-center justify-between">
+                      <span className="text-[0.84rem] font-semibold text-(--text-secondary)">
                         Certificate template
                       </span>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                      <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-0.5 text-[0.68rem] font-semibold tracking-wide text-(--muted)">
                         Coming soon
                       </span>
                     </div>
-                    <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
+                    <p className="m-0 mt-0.5 mb-2 text-[0.78rem] text-(--muted)">
                       Choose from pre-designed certificate templates.
                     </p>
-                    <div className="h-10 w-full rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5 flex items-center justify-between">
+                    <div className="flex h-10 w-full items-center justify-between rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5">
                       <div className="h-4 w-44 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
                       <CaretDown size={14} className="text-(--muted)" />
                     </div>
                   </div>
 
                   {/* Certificate Issuance Options */}
-                  <div className="flex flex-col gap-2 mb-5">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                  <div className="mb-5 flex flex-col gap-2">
+                    <div className="mb-0.5 flex items-center justify-between">
+                      <span className="text-[0.84rem] font-semibold text-(--text-secondary)">
                         Certificate issuance
                       </span>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                      <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-0.5 text-[0.68rem] font-semibold tracking-wide text-(--muted)">
                         Coming soon
                       </span>
                     </div>
-                    <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
+                    <p className="m-0 mt-0.5 mb-2 text-[0.78rem] text-(--muted)">
                       Choose when the certificate should be issued.
                     </p>
 
                     <div className="flex flex-col gap-2.5">
                       {/* Option 1: On course completion */}
-                      <div className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                        <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
-                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                      <div className="relative flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] p-3.5 px-4">
+                        <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
+                          <div className="h-2 w-2 rounded-full bg-(--accent)" />
                         </div>
                         <div className="flex flex-1 flex-col gap-0.75">
-                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                          <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                             On course completion
                           </strong>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Issue certificate when the learner completes all
-                            lessons.
+                          <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                            Issue certificate when the learner completes all lessons.
                           </p>
                         </div>
                       </div>
 
                       {/* Option 2: Minimum completion percentage */}
-                      <div className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                        <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                      <div className="relative flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-3.5 px-4">
+                        <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
                         <div className="flex flex-1 flex-col gap-0.75">
-                          <div className="flex items-center justify-between w-full">
-                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                          <div className="flex w-full items-center justify-between">
+                            <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                               Minimum completion percentage
                             </strong>
                             <div className="flex items-center gap-1.5">
-                              <div className="w-[76px] h-8 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] flex items-center justify-center text-(--muted) text-[0.86rem] font-semibold">
+                              <div className="flex h-8 w-[76px] items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.86rem] font-semibold text-(--muted)">
                                 95
                               </div>
-                              <span className="text-(--text) text-[0.86rem] font-bold">
-                                %
-                              </span>
+                              <span className="text-[0.86rem] font-bold text-(--text)">%</span>
                             </div>
                           </div>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Issue certificate when learner reaches the selected
-                            percentage.
+                          <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                            Issue certificate when learner reaches the selected percentage.
                           </p>
                         </div>
                       </div>
@@ -2547,49 +2359,45 @@ export function CourseWizardSkeleton({
               </div>
 
               {/* Card 2: This course includes */}
-              <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+              <div className="flex h-fit flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                     2. This course includes
                   </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                  <p className="m-0 text-[0.83rem] text-(--muted)">
                     These details are calculated from your curriculum.
                   </p>
                 </div>
 
                 {/* 3 Metrics Cards */}
-                <div className="grid grid-cols-1 min-[1024px]:grid-cols-3 gap-3 mb-6 max-[768px]:gap-2.5">
-                  <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                    <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14]">
+                <div className="mb-6 grid grid-cols-1 gap-3 max-[768px]:gap-2.5 min-[1024px]:grid-cols-3">
+                  <div className="flex items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-3 py-3.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-indigo-500/[0.14] text-indigo-500">
                       <BookOpen size={20} weight="fill" />
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="h-4 w-6 rounded bg-[color-mix(in_srgb,var(--text)_16%,transparent)]" />
-                      <span className="text-(--muted) text-[0.74rem] font-medium">
-                        Sections
-                      </span>
+                      <span className="text-[0.74rem] font-medium text-(--muted)">Sections</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                    <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14]">
+                  <div className="flex items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-3 py-3.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-purple-500/[0.14] text-purple-500">
                       <PlayCircle size={20} weight="fill" />
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="h-4 w-6 rounded bg-[color-mix(in_srgb,var(--text)_16%,transparent)]" />
-                      <span className="text-(--muted) text-[0.74rem] font-medium">
-                        Lessons
-                      </span>
+                      <span className="text-[0.74rem] font-medium text-(--muted)">Lessons</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                    <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14]">
+                  <div className="flex items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-3 py-3.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-blue-500/[0.14] text-blue-500">
                       <Clock size={20} weight="bold" />
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="h-4 w-8 rounded bg-[color-mix(in_srgb,var(--text)_16%,transparent)]" />
-                      <span className="text-(--muted) text-[0.74rem] font-medium">
+                      <span className="text-[0.74rem] font-medium text-(--muted)">
                         Content length
                       </span>
                     </div>
@@ -2599,64 +2407,54 @@ export function CourseWizardSkeleton({
                 {/* Course Inclusions Header */}
                 <div className="flex flex-col gap-3.5">
                   <div className="flex items-center justify-between">
-                    <h4 className="m-0 text-(--text) text-[0.95rem] font-bold">
+                    <h4 className="m-0 text-[0.95rem] font-bold text-(--text)">
                       Course inclusions
                     </h4>
-                    <span className="inline-flex items-center px-2.5 py-0.75 rounded-full text-[0.72rem] font-bold bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                    <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2.5 py-0.75 text-[0.72rem] font-bold text-(--muted)">
                       3 / 6
                     </span>
                   </div>
-                  <p className="m-0 text-(--muted) text-[0.82rem] leading-normal">
-                    Perks and benefits your learners will receive upon enrolling
-                    (max 6 items). Click suggestions below or add custom
-                    inclusions.
+                  <p className="m-0 text-[0.82rem] leading-normal text-(--muted)">
+                    Perks and benefits your learners will receive upon enrolling (max 6 items).
+                    Click suggestions below or add custom inclusions.
                   </p>
 
                   {/* Inclusion items */}
                   <div className="flex flex-col gap-2.5">
-                    <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                      <DotsSixVertical
-                        size={18}
-                        className="text-(--muted) opacity-40 shrink-0"
-                      />
-                      <div className="h-4 w-40 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] flex-1" />
-                      <div className="w-7 h-7 rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] flex items-center justify-center text-(--muted) opacity-40">
+                    <div className="flex items-center gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 px-3.5">
+                      <DotsSixVertical size={18} className="shrink-0 text-(--muted) opacity-40" />
+                      <div className="h-4 w-40 flex-1 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
+                      <div className="flex h-7 w-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) opacity-40">
                         <Trash size={14} />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                      <DotsSixVertical
-                        size={18}
-                        className="text-(--muted) opacity-40 shrink-0"
-                      />
-                      <div className="h-4 w-32 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] flex-1" />
-                      <div className="w-7 h-7 rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] flex items-center justify-center text-(--muted) opacity-40">
+                    <div className="flex items-center gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 px-3.5">
+                      <DotsSixVertical size={18} className="shrink-0 text-(--muted) opacity-40" />
+                      <div className="h-4 w-32 flex-1 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
+                      <div className="flex h-7 w-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) opacity-40">
                         <Trash size={14} />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                      <DotsSixVertical
-                        size={18}
-                        className="text-(--muted) opacity-40 shrink-0"
-                      />
-                      <div className="h-4 w-36 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] flex-1" />
-                      <div className="w-7 h-7 rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] flex items-center justify-center text-(--muted) opacity-40">
+                    <div className="flex items-center gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 px-3.5">
+                      <DotsSixVertical size={18} className="shrink-0 text-(--muted) opacity-40" />
+                      <div className="h-4 w-36 flex-1 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
+                      <div className="flex h-7 w-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) opacity-40">
                         <Trash size={14} />
                       </div>
                     </div>
                   </div>
 
                   {/* Suggested perks chips */}
-                  <div className="flex flex-col gap-2 mt-2">
-                    <span className="text-(--muted) text-[0.74rem] font-bold uppercase tracking-wider">
+                  <div className="mt-2 flex flex-col gap-2">
+                    <span className="text-[0.74rem] font-bold tracking-wider text-(--muted) uppercase">
                       Suggested perks (click to add)
                     </span>
                     <div className="flex flex-wrap gap-2">
-                      <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--text)_20%,transparent)] text-(--muted) text-[0.8rem] font-medium bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                      <div className="inline-flex items-center gap-1 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--text)_20%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-3 py-1.5 text-[0.8rem] font-medium text-(--muted)">
                         <Plus size={13} weight="bold" />
                         <span>Community access</span>
                       </div>
-                      <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--text)_20%,transparent)] text-(--muted) text-[0.8rem] font-medium bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
+                      <div className="inline-flex items-center gap-1 rounded-lg border border-dashed border-[color-mix(in_srgb,var(--text)_20%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-3 py-1.5 text-[0.8rem] font-medium text-(--muted)">
                         <Plus size={13} weight="bold" />
                         <span>Assignments & feedback</span>
                       </div>
@@ -2670,14 +2468,14 @@ export function CourseWizardSkeleton({
           /* activeStep === 'publish' */
           <div className="flex w-full flex-col gap-5">
             {/* Top 2-Column Grid: 1. Publish settings & 2. Pre-publish Checklist */}
-            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+            <div className="grid w-full min-w-0 grid-cols-1 items-start gap-5 max-[768px]:gap-3.5 md:grid-cols-2">
               {/* Card 1: Publish settings */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+              <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                     1. Publish settings
                   </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                  <p className="m-0 text-[0.83rem] text-(--muted)">
                     Choose when and how your course becomes visible.
                   </p>
                 </div>
@@ -2685,11 +2483,9 @@ export function CourseWizardSkeleton({
                 <div className="flex flex-col gap-4">
                   {/* Status row */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-(--text) text-[0.86rem] font-[650]">
-                      Course status
-                    </label>
-                    <div className="flex items-center mt-0.5">
-                      <span className="inline-flex items-center rounded-md px-2.5 py-1 text-[0.8rem] font-bold uppercase tracking-[0.04em] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]">
+                    <label className="text-[0.86rem] font-[650] text-(--text)">Course status</label>
+                    <div className="mt-0.5 flex items-center">
+                      <span className="inline-flex items-center rounded-md border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] px-2.5 py-1 text-[0.8rem] font-bold tracking-[0.04em] text-(--muted) uppercase">
                         Draft
                       </span>
                     </div>
@@ -2697,10 +2493,10 @@ export function CourseWizardSkeleton({
 
                   {/* Visibility */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-(--text) text-[0.86rem] font-[650]">
+                    <label className="text-[0.86rem] font-[650] text-(--text)">
                       Course visibility
                     </label>
-                    <div className="h-10 w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3.5 flex items-center justify-between bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]">
+                    <div className="flex h-10 w-full items-center justify-between rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5">
                       <div className="h-4 w-28 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
                       <CaretDown size={14} className="text-(--muted)" />
                     </div>
@@ -2708,14 +2504,12 @@ export function CourseWizardSkeleton({
 
                   {/* Schedule */}
                   <div className="flex flex-col gap-2">
-                    <label className="text-(--text) text-[0.86rem] font-[650]">
-                      Publish on
-                    </label>
-                    <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] rounded-xl p-3 px-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                      <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
-                        <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                    <label className="text-[0.86rem] font-[650] text-(--text)">Publish on</label>
+                    <div className="relative flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] p-3 px-4">
+                      <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
+                        <div className="h-2 w-2 rounded-full bg-(--accent)" />
                       </div>
-                      <strong className="text-(--text) text-[0.88rem] font-[650]">
+                      <strong className="text-[0.88rem] font-[650] text-(--text)">
                         Publish immediately
                       </strong>
                     </div>
@@ -2724,57 +2518,53 @@ export function CourseWizardSkeleton({
               </div>
 
               {/* Card 2: Pre-publish Checklist */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+              <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                 <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                  <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                     2. Pre-publish Checklist
                   </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
+                  <p className="m-0 text-[0.83rem] text-(--muted)">
                     Review all required items before publishing your course.
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-2.5">
                   {/* Step Checklist Items */}
-                  {[
-                    "Basics",
-                    "Curriculum",
-                    "Access Rules",
-                    "Pricing",
-                    "Extras",
-                  ].map((stepTitle) => (
-                    <div
-                      key={stepTitle}
-                      className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[10px] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                    >
-                      <div className="flex items-center gap-3">
-                        <CheckCircle
-                          size={20}
-                          weight="fill"
-                          className="text-green-500 opacity-80"
-                        />
-                        <strong className="text-(--text) text-[0.9rem] font-[650]">
-                          {stepTitle}
-                        </strong>
+                  {["Basics", "Curriculum", "Access Rules", "Pricing", "Extras"].map(
+                    (stepTitle) => (
+                      <div
+                        key={stepTitle}
+                        className="flex items-center justify-between rounded-[10px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4 py-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <CheckCircle
+                            size={20}
+                            weight="fill"
+                            className="text-green-500 opacity-80"
+                          />
+                          <strong className="text-[0.9rem] font-[650] text-(--text)">
+                            {stepTitle}
+                          </strong>
+                        </div>
+                        <div className="flex items-center gap-2 text-[0.82rem] text-(--muted)">
+                          <span>Ready</span>
+                          <CaretRight size={16} />
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-(--muted) text-[0.82rem]">
-                        <span>Ready</span>
-                        <CaretRight size={16} />
-                      </div>
-                    </div>
-                  ))}
+                    ),
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Bottom Readiness banner */}
-            <div className="border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow) flex items-center justify-between">
+            <div className="flex items-center justify-between rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 shadow-(--card-shadow)">
               <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] flex items-center justify-center text-(--accent)">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
                   <Lightning size={22} weight="fill" />
                 </div>
                 <div>
-                  <div className="h-4.5 w-48 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)] mb-1" />
+                  <div className="mb-1 h-4.5 w-48 rounded bg-[color-mix(in_srgb,var(--text)_14%,transparent)]" />
                   <div className="h-3.5 w-72 rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
                 </div>
               </div>
@@ -2828,9 +2618,7 @@ export function CourseCreatePage({
   const editorRouteIdentity = `${activeEditId || "create"}:${routeRequestedStep || "basics"}`;
   const [activeStep, setActiveStep] = useState<CourseWizardStepId>(initialStep);
   const pendingWizardNavigationRef = useRef<CourseWizardStepId | null>(null);
-  const [slideDirection, setSlideDirection] = useState<"right" | "left">(
-    "right",
-  );
+  const [slideDirection, setSlideDirection] = useState<"right" | "left">("right");
   // Keep the active wizard panel and its immediate neighbors warm for smooth
   // tab navigation. Heavy lesson editors are mounted only when opened below.
   const [mountedTabs, setMountedTabs] = useState<Set<CourseWizardStepId>>(() =>
@@ -2839,9 +2627,7 @@ export function CourseCreatePage({
 
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const stepsNavRef = useRef<HTMLElement | null>(null);
-  const [mountedLessonEditorIds, setMountedLessonEditorIds] = useState<
-    string[]
-  >([]);
+  const [mountedLessonEditorIds, setMountedLessonEditorIds] = useState<string[]>([]);
   const [editingLessonTarget, setEditingLessonTarget] = useState<{
     sectionId: string;
     lessonId: string;
@@ -2869,9 +2655,9 @@ export function CourseCreatePage({
     });
   }, []);
 
-  const navigateToStepRef = useRef<
-    (destination: CourseWizardStepId) => Promise<void>
-  >((async () => {}) as any);
+  const navigateToStepRef = useRef<(destination: CourseWizardStepId) => Promise<void>>(
+    (async () => {}) as any,
+  );
   const [isNavMouseDown, setIsNavMouseDown] = useState(false);
   const [navStartX, setNavStartX] = useState(0);
   const [navScrollLeft, setNavScrollLeft] = useState(0);
@@ -2906,33 +2692,21 @@ export function CourseCreatePage({
       const nav = stepsNavRef.current;
       if (nav) {
         const style = getComputedStyle(activeEl);
-        const indicatorToken = style
-          .getPropertyValue("--page-tab-active-indicator")
-          .trim();
+        const indicatorToken = style.getPropertyValue("--page-tab-active-indicator").trim();
         const toneToken = style.getPropertyValue("--page-tab-tone").trim();
         const color =
-          indicatorToken.includes("--page-tab-tone") ||
-          indicatorToken === "var(--page-tab-tone)"
+          indicatorToken.includes("--page-tab-tone") || indicatorToken === "var(--page-tab-tone)"
             ? toneToken
             : indicatorToken || "var(--accent)";
 
-        nav.style.setProperty(
-          "--page-tab-indicator-left",
-          `${activeEl.offsetLeft}px`,
-        );
-        nav.style.setProperty(
-          "--page-tab-indicator-width",
-          `${activeEl.offsetWidth}px`,
-        );
+        nav.style.setProperty("--page-tab-indicator-left", `${activeEl.offsetLeft}px`);
+        nav.style.setProperty("--page-tab-indicator-width", `${activeEl.offsetWidth}px`);
         nav.style.setProperty("--page-tab-indicator-color", color);
 
         const navWidth = nav.offsetWidth;
         const elLeft = activeEl.offsetLeft;
         const elWidth = activeEl.offsetWidth;
-        if (
-          elLeft < nav.scrollLeft ||
-          elLeft + elWidth > nav.scrollLeft + navWidth
-        ) {
+        if (elLeft < nav.scrollLeft || elLeft + elWidth > nav.scrollLeft + navWidth) {
           nav.scrollTo({
             left: elLeft - navWidth / 2 + elWidth / 2,
             behavior: "smooth",
@@ -2993,8 +2767,7 @@ export function CourseCreatePage({
 
   useEffect(() => {
     const navigateWizardTab = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditingShortcutTarget(event.target))
-        return;
+      if (event.defaultPrevented || isEditingShortcutTarget(event.target)) return;
 
       let destination: WizardStepDefinition | undefined;
       if (event.altKey) {
@@ -3012,8 +2785,7 @@ export function CourseCreatePage({
       ) {
         const offset = event.key === "ArrowRight" ? 1 : -1;
         const currentIndex = WIZARD_STEP_IDS.indexOf(activeStep);
-        const nextIndex =
-          (currentIndex + offset + WIZARD_STEPS.length) % WIZARD_STEPS.length;
+        const nextIndex = (currentIndex + offset + WIZARD_STEPS.length) % WIZARD_STEPS.length;
         destination = WIZARD_STEPS[nextIndex];
       }
 
@@ -3051,8 +2823,7 @@ export function CourseCreatePage({
       searchParams.has("courseId") ||
       searchParams.has("tab") ||
       searchParams.has("step");
-    const shouldReplace =
-      location.pathname === "/courses/create" || hasLegacyQueryParams;
+    const shouldReplace = location.pathname === "/courses/create" || hasLegacyQueryParams;
     void navigate(canonicalPath, { replace: shouldReplace });
   }, [
     activeEditId,
@@ -3076,10 +2847,8 @@ export function CourseCreatePage({
   }, [editorRouteIdentity, initialStep]);
 
   // Basics server-confirmed baseline and local draft states
-  const [serverBasics, setServerBasics] =
-    useState<BasicsFormState>(initialBasicsState);
-  const [basicsDraft, setBasicsDraft] =
-    useState<BasicsFormState>(initialBasicsState);
+  const [serverBasics, setServerBasics] = useState<BasicsFormState>(initialBasicsState);
+  const [basicsDraft, setBasicsDraft] = useState<BasicsFormState>(initialBasicsState);
 
   // Derived isDirty for Basics
   const isBasicsDirty = useMemo(
@@ -3128,9 +2897,7 @@ export function CourseCreatePage({
     basicsDraftRef.current = { ...basicsDraftRef.current, showInstructorName };
   };
 
-  const [currentCourseId, setCurrentCourseId] = useState<string | null>(
-    activeEditId,
-  );
+  const [currentCourseId, setCurrentCourseId] = useState<string | null>(activeEditId);
   const [courseVersion, setCourseVersion] = useState<number>(1);
   const courseVersionRef = useRef<number>(courseVersion);
   courseVersionRef.current = courseVersion;
@@ -3144,26 +2911,19 @@ export function CourseCreatePage({
   }, [activeEditId]);
 
   const [thumbnail, setThumbnail] = useState<string | null>(null);
-  const [thumbnailMediaId, setThumbnailMediaId] = useState<
-    string | null | undefined
-  >(undefined);
+  const [thumbnailMediaId, setThumbnailMediaId] = useState<string | null | undefined>(undefined);
   // The upload state is kept for concurrency, rollback, and server-refresh
   // protection. The selected file is shown immediately, so upload progress is
   // intentionally not rendered in the course editor.
-  const [thumbnailUploadStatus, setThumbnailUploadStatus] =
-    useState<ThumbnailUploadStatus>("idle");
-  const [thumbnailUploadError, setThumbnailUploadError] = useState<
-    string | null
-  >(null);
+  const [thumbnailUploadStatus, setThumbnailUploadStatus] = useState<ThumbnailUploadStatus>("idle");
+  const [thumbnailUploadError, setThumbnailUploadError] = useState<string | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
   const thumbnailMediaIdRef = useRef<string | null>(null);
   const thumbnailUploadStatusRef = useRef<ThumbnailUploadStatus>("idle");
   thumbnailUploadStatusRef.current = thumbnailUploadStatus;
   const thumbnailDirtyRef = useRef(false);
   const thumbnailObjectUrlRef = useRef<string | null>(null);
-  const thumbnailUploadAbortControllerRef = useRef<AbortController | null>(
-    null,
-  );
+  const thumbnailUploadAbortControllerRef = useRef<AbortController | null>(null);
   const thumbnailRequestIdRef = useRef(0);
   const thumbnailMountedRef = useRef(true);
   const isThumbnailBusy =
@@ -3186,9 +2946,7 @@ export function CourseCreatePage({
   const [videoTrailer, setVideoTrailer] = useState<string | null>(null);
   const videoTrailerInputRef = useRef<HTMLInputElement | null>(null);
 
-  async function handleThumbnailFileSelect(
-    e: React.ChangeEvent<HTMLInputElement>,
-  ): Promise<void> {
+  async function handleThumbnailFileSelect(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || isThumbnailBusy) return;
@@ -3212,9 +2970,7 @@ export function CourseCreatePage({
 
     const targetCourseId = currentCourseIdRef.current || currentCourseId;
     if (!targetCourseId) {
-      setThumbnailUploadError(
-        "Save the course title before uploading a thumbnail.",
-      );
+      setThumbnailUploadError("Save the course title before uploading a thumbnail.");
       setThumbnailUploadStatus("error");
       return;
     }
@@ -3232,8 +2988,7 @@ export function CourseCreatePage({
     setThumbnailUploadStatus("uploading");
 
     const requestIsActive = () =>
-      thumbnailMountedRef.current &&
-      thumbnailRequestIdRef.current === requestId;
+      thumbnailMountedRef.current && thumbnailRequestIdRef.current === requestId;
 
     const restorePreviousThumbnail = () => {
       if (!requestIsActive()) return;
@@ -3250,9 +3005,7 @@ export function CourseCreatePage({
 
     try {
       if (!(await flushBasicsPersistence()) || !requestIsActive()) {
-        throw new Error(
-          "Save the course details before uploading a thumbnail.",
-        );
+        throw new Error("Save the course details before uploading a thumbnail.");
       }
 
       const presigned = await mediaService.presignMediaUpload({
@@ -3274,16 +3027,13 @@ export function CourseCreatePage({
 
       if (!requestIsActive()) return;
       setThumbnailUploadStatus("confirming");
-      const confirmation = await mediaService.confirmUpload(
-        presigned.mediaAssetId,
-      );
+      const confirmation = await mediaService.confirmUpload(presigned.mediaAssetId);
 
       if (!requestIsActive()) return;
       setThumbnailUploadStatus("processing");
-      const processedThumbnailUrl = await waitForCourseThumbnailCdnUrl(
-        presigned.mediaAssetId,
-        { signal: uploadAbortController.signal },
-      );
+      const processedThumbnailUrl = await waitForCourseThumbnailCdnUrl(presigned.mediaAssetId, {
+        signal: uploadAbortController.signal,
+      });
 
       if (!requestIsActive()) return;
       setThumbnailUploadStatus("saving");
@@ -3310,10 +3060,7 @@ export function CourseCreatePage({
       if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
       thumbnailObjectUrlRef.current = null;
     } catch (error: unknown) {
-      if (
-        !requestIsActive() ||
-        (error instanceof Error && error.name === "AbortError")
-      ) {
+      if (!requestIsActive() || (error instanceof Error && error.name === "AbortError")) {
         return;
       }
 
@@ -3365,9 +3112,7 @@ export function CourseCreatePage({
 
     try {
       if (!(await flushBasicsPersistence())) {
-        throw new Error(
-          "Save the course details before removing the thumbnail.",
-        );
+        throw new Error("Save the course details before removing the thumbnail.");
       }
 
       const updated = await updateBasicsMutation.mutateAsync({
@@ -3378,10 +3123,7 @@ export function CourseCreatePage({
         },
       });
 
-      if (
-        !thumbnailMountedRef.current ||
-        thumbnailRequestIdRef.current !== requestId
-      ) {
+      if (!thumbnailMountedRef.current || thumbnailRequestIdRef.current !== requestId) {
         return;
       }
 
@@ -3394,10 +3136,7 @@ export function CourseCreatePage({
       if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
       thumbnailObjectUrlRef.current = null;
     } catch (error: unknown) {
-      if (
-        !thumbnailMountedRef.current ||
-        thumbnailRequestIdRef.current !== requestId
-      ) {
+      if (!thumbnailMountedRef.current || thumbnailRequestIdRef.current !== requestId) {
         return;
       }
 
@@ -3407,16 +3146,12 @@ export function CourseCreatePage({
       setThumbnail(previousThumbnail);
       setThumbnailUploadStatus("error");
       setThumbnailUploadError(
-        error instanceof Error
-          ? error.message
-          : "Thumbnail removal failed. Please try again.",
+        error instanceof Error ? error.message : "Thumbnail removal failed. Please try again.",
       );
     }
   }
 
-  const handleVideoTrailerFileSelect = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleVideoTrailerFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const videoUrl = URL.createObjectURL(file);
@@ -3424,9 +3159,7 @@ export function CourseCreatePage({
     }
   };
 
-  const handleTrailerMediaAttached = async (
-    mediaAssetId: string,
-  ): Promise<boolean> => {
+  const handleTrailerMediaAttached = async (mediaAssetId: string): Promise<boolean> => {
     if (!currentCourseId || !editorData?.course) return false;
 
     try {
@@ -3457,9 +3190,7 @@ export function CourseCreatePage({
   };
 
   // Immediate persistence states for Basics interactive controls
-  const [savingBasicsControls, setSavingBasicsControls] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [savingBasicsControls, setSavingBasicsControls] = useState<Set<string>>(() => new Set());
   const savingBasicsControlsRef = useRef<Set<string>>(new Set());
   const basicsVersionRef = useRef<number>(0);
   const inFlightBasicsControlsRef = useRef<Record<string, number>>({
@@ -3487,9 +3218,7 @@ export function CourseCreatePage({
    * 1-second debounce timer for initial new-course title creation.
    * Cleared whenever the user presses Enter, blurs, navigates, saves, or unmounts.
    */
-  const titleCreationDebounceTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const titleCreationDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cancelTitleCreationDebounce = () => {
     if (titleCreationDebounceTimerRef.current) {
@@ -3519,9 +3248,7 @@ export function CourseCreatePage({
   >({});
   const [basicsSaveFailed, setBasicsSaveFailed] = useState(false);
   const [showBasicsSavedBriefly, setShowBasicsSavedBriefly] = useState(false);
-  const basicsSavedBrieflyTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const basicsSavedBrieflyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerBasicsSavedBriefly = () => {
     if (basicsSavedBrieflyTimerRef.current) {
@@ -3608,9 +3335,7 @@ export function CourseCreatePage({
     if (
       savingBasicsControls.has(fieldKey) ||
       (inFlightBasicsControlsRef.current[fieldKey] ?? 0) > 0 ||
-      (!currentCourseId &&
-        fieldKey === "title" &&
-        createCourseMutation.isPending)
+      (!currentCourseId && fieldKey === "title" && createCourseMutation.isPending)
     ) {
       return "saving";
     }
@@ -3628,18 +3353,14 @@ export function CourseCreatePage({
 
   const isEditing = Boolean(activeEditId);
   const isCourseTitleFilled = Boolean(courseTitle.trim());
-  const [
-    isInitialCurriculumBootstrapInProgress,
-    setIsInitialCurriculumBootstrapInProgress,
-  ] = useState(false);
+  const [isInitialCurriculumBootstrapInProgress, setIsInitialCurriculumBootstrapInProgress] =
+    useState(false);
   const isInitialCurriculumBootstrapInProgressRef = useRef(false);
-  isInitialCurriculumBootstrapInProgressRef.current =
-    isInitialCurriculumBootstrapInProgress;
+  isInitialCurriculumBootstrapInProgressRef.current = isInitialCurriculumBootstrapInProgress;
 
   // Downstream tabs and fields are unlocked ONLY after a confirmed server-side
   // course ID exists AND initial curriculum bootstrap (Introduction section + lesson) has completed.
-  const isDownstreamUnlocked =
-    Boolean(currentCourseId) && !isInitialCurriculumBootstrapInProgress;
+  const isDownstreamUnlocked = Boolean(currentCourseId) && !isInitialCurriculumBootstrapInProgress;
 
   useEffect(() => {
     currentCourseIdRef.current = currentCourseId;
@@ -3675,18 +3396,10 @@ export function CourseCreatePage({
     ) {
       setActiveStep(tabFromUrl);
     }
-  }, [
-    searchParams,
-    routeEditTab,
-    isDownstreamUnlocked,
-    activeEditId,
-    activeStep,
-  ]);
+  }, [searchParams, routeEditTab, isDownstreamUnlocked, activeEditId, activeStep]);
 
-  const {
-    data: serverCategories = EMPTY_CATEGORIES,
-    isLoading: isLoadingCategories,
-  } = useCategories();
+  const { data: serverCategories = EMPTY_CATEGORIES, isLoading: isLoadingCategories } =
+    useCategories();
   const {
     data: editorData,
     isLoading: isLoadingEditor,
@@ -3695,8 +3408,7 @@ export function CourseCreatePage({
     error: editorError,
     refetch: refetchEditor,
   } = useCourseEditor(currentCourseId);
-  const isInitialLoadingCourse =
-    isEditing && (isLoadingEditor || isFetchingEditor) && !editorData;
+  const isInitialLoadingCourse = isEditing && (isLoadingEditor || isFetchingEditor) && !editorData;
   const {
     data: previewData,
     isLoading: isPreviewLoading,
@@ -3725,24 +3437,14 @@ export function CourseCreatePage({
   const deleteLessonResourceMutation = useDeleteLessonResource();
   const reorderLessonsMutation = useReorderLessons();
   const [isCreatingSection, setIsCreatingSection] = useState(false);
-  const [creatingLessonSectionId, setCreatingLessonSectionId] = useState<
-    string | null
-  >(null);
+  const [creatingLessonSectionId, setCreatingLessonSectionId] = useState<string | null>(null);
   const [savingLessonId, setSavingLessonId] = useState<string | null>(null);
   const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
-  const [reorderingLessonsSectionId, setReorderingLessonsSectionId] = useState<
-    string | null
-  >(null);
-  const [isReorderingSections, setIsReorderingSections] =
-    useState<boolean>(false);
-  const [isReorderingIncludes, setIsReorderingIncludes] =
-    useState<boolean>(false);
-  const [updatingSectionId, setUpdatingSectionId] = useState<string | null>(
-    null,
-  );
-  const [deletingSectionId, setDeletingSectionId] = useState<string | null>(
-    null,
-  );
+  const [reorderingLessonsSectionId, setReorderingLessonsSectionId] = useState<string | null>(null);
+  const [isReorderingSections, setIsReorderingSections] = useState<boolean>(false);
+  const [isReorderingIncludes, setIsReorderingIncludes] = useState<boolean>(false);
+  const [updatingSectionId, setUpdatingSectionId] = useState<string | null>(null);
+  const [deletingSectionId, setDeletingSectionId] = useState<string | null>(null);
   const createCategoryMutation = useCreateCategory();
   const deleteCategoryMutation = useDeleteCategory();
   const upsertAccessRulesMutation = useUpsertAccessRules();
@@ -3794,11 +3496,9 @@ export function CourseCreatePage({
     (inFlightBasicsControlsRef.current.showInstructorName ?? 0) > 0;
 
   const hasBasicsFieldFailed =
-    basicsSaveFailed ||
-    Object.values(basicsFieldStatus).some((status) => status === "failed");
+    basicsSaveFailed || Object.values(basicsFieldStatus).some((status) => status === "failed");
 
-  const basicsOverallStatus = useMemo(():
-    "saving" | "failed" | "saved" | null => {
+  const basicsOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
     if (isAnyBasicsSaving) return "saving";
     if (hasBasicsFieldFailed) return "failed";
     if (showBasicsSavedBriefly) return "saved";
@@ -3845,8 +3545,7 @@ export function CourseCreatePage({
   };
 
   const handleCloseAddCategoryModal = () => {
-    if (createCategoryMutation.isPending || deleteCategoryMutation.isPending)
-      return;
+    if (createCategoryMutation.isPending || deleteCategoryMutation.isPending) return;
     setIsAddCategoryModalOpen(false);
     setNewCategoryName("");
     setAddCategoryError("");
@@ -3900,9 +3599,9 @@ export function CourseCreatePage({
 
   const languageOptions = useMemo(() => {
     const codes = ISO6391.getAllCodes();
-    const options: Array<
-      readonly [string, string, { searchKeywords?: string }?]
-    > = [["", "Select language"]];
+    const options: Array<readonly [string, string, { searchKeywords?: string }?]> = [
+      ["", "Select language"],
+    ];
     for (const code of codes) {
       const name = ISO6391.getName(code);
       if (name) {
@@ -3979,9 +3678,7 @@ export function CourseCreatePage({
     ) {
       const overflowY = window.getComputedStyle(parent).overflowY;
       if (
-        (overflowY === "auto" ||
-          overflowY === "scroll" ||
-          overflowY === "overlay") &&
+        (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
         parent.scrollHeight > parent.clientHeight + 1
       ) {
         scrollport = parent;
@@ -4037,18 +3734,14 @@ export function CourseCreatePage({
     }
 
     const currentSections = sectionsRef.current;
-    const targetIndex = currentSections.findIndex(
-      (section) => section.id === requestedSectionId,
-    );
+    const targetIndex = currentSections.findIndex((section) => section.id === requestedSectionId);
     const targetAlreadyExpanded = currentSections.some(
       (section) => section.id === requestedSectionId && section.isExpanded,
     );
     if (targetIndex >= 0 && !targetAlreadyExpanded) {
       sectionScrollDelayRef.current = currentSections.some(
         (section, index) =>
-          index < targetIndex &&
-          section.id !== requestedSectionId &&
-          section.isExpanded,
+          index < targetIndex && section.id !== requestedSectionId && section.isExpanded,
       )
         ? 300
         : 0;
@@ -4096,22 +3789,12 @@ export function CourseCreatePage({
       window.clearTimeout(retryTimer);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [
-    activeEditId,
-    activeStep,
-    requestedSectionId,
-    scrollSectionHeaderIntoView,
-  ]);
+  }, [activeEditId, activeStep, requestedSectionId, scrollSectionHeaderIntoView]);
 
   const isCollapsingSectionRef = useRef(false);
-  const inFlightLessonSavesRef = useRef<Map<string, Promise<boolean>>>(
-    new Map(),
-  );
+  const inFlightLessonSavesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const isSavingAllDirtyLessonsRef = useRef(false);
-  const isCurriculumDirty = useMemo(
-    () => checkIsCurriculumDirty(sections),
-    [sections],
-  );
+  const isCurriculumDirty = useMemo(() => checkIsCurriculumDirty(sections), [sections]);
   const dragInitialSectionsStateRef = useRef<{
     sectionIds: string[];
     previousSections: CurriculumSectionItem[];
@@ -4126,15 +3809,10 @@ export function CourseCreatePage({
   const [curriculumItemStatus, setCurriculumItemStatus] = useState<
     Record<string, "saved" | "failed" | null>
   >({});
-  const curriculumItemTimersRef = useRef<
-    Record<string, ReturnType<typeof setTimeout>>
-  >({});
+  const curriculumItemTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [curriculumSaveFailed, setCurriculumSaveFailed] = useState(false);
-  const [showCurriculumSavedBriefly, setShowCurriculumSavedBriefly] =
-    useState(false);
-  const curriculumSavedBrieflyTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const [showCurriculumSavedBriefly, setShowCurriculumSavedBriefly] = useState(false);
+  const curriculumSavedBrieflyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerCurriculumSavedBriefly = () => {
     if (curriculumSavedBrieflyTimerRef.current) {
@@ -4211,9 +3889,7 @@ export function CourseCreatePage({
     setShowCurriculumSavedBriefly(false);
   };
 
-  const getCurriculumItemDisplayStatus = (
-    itemId: string,
-  ): "saving" | "saved" | "failed" | null => {
+  const getCurriculumItemDisplayStatus = (itemId: string): "saving" | "saved" | "failed" | null => {
     if (
       updatingSectionId === itemId ||
       savingLessonId === itemId ||
@@ -4235,25 +3911,18 @@ export function CourseCreatePage({
     deletingLessonId !== null ||
     reorderingLessonsSectionId !== null ||
     inFlightLessonSavesRef.current.size > 0 ||
-    sections.some(
-      (s) => s.isPendingCreation || s.lessons.some((l) => l.isPendingCreation),
-    );
+    sections.some((s) => s.isPendingCreation || s.lessons.some((l) => l.isPendingCreation));
 
   const hasCurriculumItemFailed =
     curriculumSaveFailed ||
     Object.values(curriculumItemStatus).some((status) => status === "failed");
 
-  const curriculumOverallStatus = useMemo(():
-    "saving" | "failed" | "saved" | null => {
+  const curriculumOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
     if (isAnyCurriculumSaving) return "saving";
     if (hasCurriculumItemFailed) return "failed";
     if (showCurriculumSavedBriefly) return "saved";
     return null;
-  }, [
-    isAnyCurriculumSaving,
-    hasCurriculumItemFailed,
-    showCurriculumSavedBriefly,
-  ]);
+  }, [isAnyCurriculumSaving, hasCurriculumItemFailed, showCurriculumSavedBriefly]);
 
   // Access Rules Step server-confirmed and draft states
   const [accessRulesExists, setAccessRulesExists] = useState(false);
@@ -4270,15 +3939,12 @@ export function CourseCreatePage({
   const isAccessRulesDirtyRef = useRef(isAccessRulesDirty);
   isAccessRulesDirtyRef.current = isAccessRulesDirty;
 
-  const needsAccessRulesSave =
-    isAccessRulesDirty && Boolean(accessRulesDraft.durationMode);
+  const needsAccessRulesSave = isAccessRulesDirty && Boolean(accessRulesDraft.durationMode);
   const accessRules = accessRulesDraft;
   const setAccessRules = setAccessRulesDraft;
 
   // Immediate persistence states for Access Rules interactive controls
-  const [savingAccessControls, setSavingAccessControls] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [savingAccessControls, setSavingAccessControls] = useState<Set<string>>(() => new Set());
   const savingAccessControlsRef = useRef<Set<string>>(new Set());
   const accessControlVersionsRef = useRef<{
     accessType: number;
@@ -4306,9 +3972,7 @@ export function CourseCreatePage({
     enableDownloads: 0,
     enableNotes: 0,
   });
-  const fixedDurationDebounceTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const fixedDurationDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlightDurationPromiseRef = useRef<Promise<unknown> | null>(null);
 
   const markAccessControlSaving = (controlKey: string, isSaving: boolean) => {
@@ -4331,11 +3995,8 @@ export function CourseCreatePage({
     Partial<Record<AccessRulesControlKey, ReturnType<typeof setTimeout>>>
   >({});
   const [accessRulesSaveFailed, setAccessRulesSaveFailed] = useState(false);
-  const [showAccessRulesSavedBriefly, setShowAccessRulesSavedBriefly] =
-    useState(false);
-  const accessRulesSavedBrieflyTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const [showAccessRulesSavedBriefly, setShowAccessRulesSavedBriefly] = useState(false);
+  const accessRulesSavedBrieflyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerAccessRulesSavedBriefly = () => {
     if (accessRulesSavedBrieflyTimerRef.current) {
@@ -4439,17 +4100,12 @@ export function CourseCreatePage({
     accessRulesSaveFailed ||
     Object.values(accessControlStatus).some((status) => status === "failed");
 
-  const accessRulesOverallStatus = useMemo(():
-    "saving" | "failed" | "saved" | null => {
+  const accessRulesOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
     if (isAnyAccessRulesSaving) return "saving";
     if (hasAccessControlFailed) return "failed";
     if (showAccessRulesSavedBriefly) return "saved";
     return null;
-  }, [
-    isAnyAccessRulesSaving,
-    hasAccessControlFailed,
-    showAccessRulesSavedBriefly,
-  ]);
+  }, [isAnyAccessRulesSaving, hasAccessControlFailed, showAccessRulesSavedBriefly]);
 
   useEffect(() => {
     return () => {
@@ -4478,13 +4134,11 @@ export function CourseCreatePage({
   }
 
   // Pricing Step server-confirmed and draft states
-  const [serverPricing, setServerPricing] =
-    useState<PricingFormState>(initialPricingState);
+  const [serverPricing, setServerPricing] = useState<PricingFormState>(initialPricingState);
   const serverPricingRef = useRef(serverPricing);
   serverPricingRef.current = serverPricing;
 
-  const [pricingDraft, setPricingDraft] =
-    useState<PricingFormState>(initialPricingState);
+  const [pricingDraft, setPricingDraft] = useState<PricingFormState>(initialPricingState);
   const pricingDraftRef = useRef(pricingDraft);
   pricingDraftRef.current = pricingDraft;
 
@@ -4496,9 +4150,7 @@ export function CourseCreatePage({
   isPricingDirtyRef.current = isPricingDirty;
 
   const pricing = pricingDraft;
-  const [pricingValidationError, setPricingValidationError] = useState<
-    string | null
-  >(null);
+  const [pricingValidationError, setPricingValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!pricingValidationError) return;
@@ -4509,9 +4161,7 @@ export function CourseCreatePage({
   }, [pricingValidationError]);
 
   // Immediate persistence states for Pricing interactive controls
-  const [savingPricingControls, setSavingPricingControls] = useState<
-    Set<string>
-  >(() => new Set());
+  const [savingPricingControls, setSavingPricingControls] = useState<Set<string>>(() => new Set());
   const savingPricingControlsRef = useRef<Set<string>>(new Set());
   const pricingControlVersionsRef = useRef<{
     pricingType: number;
@@ -4528,9 +4178,7 @@ export function CourseCreatePage({
     currency: 0,
     pricingDetails: 0,
   });
-  const pricingDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const pricingDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlightPricingPromiseRef = useRef<Promise<unknown> | null>(null);
 
   const markPricingControlSaving = (controlKey: string, isSaving: boolean) => {
@@ -4546,9 +4194,7 @@ export function CourseCreatePage({
     savingPricingControlsRef.current.has(controlKey) ||
     (inFlightPricingControlsRef.current[controlKey] ?? 0) > 0;
 
-  const lastEditedPricingFieldRef = useRef<
-    "sellingPrice" | "originalPrice" | null
-  >(null);
+  const lastEditedPricingFieldRef = useRef<"sellingPrice" | "originalPrice" | null>(null);
 
   const [pricingControlStatus, setPricingControlStatus] = useState<
     Partial<Record<PricingControlKey, "saved" | "failed" | null>>
@@ -4558,9 +4204,7 @@ export function CourseCreatePage({
   >({});
   const [pricingSaveFailed, setPricingSaveFailed] = useState(false);
   const [showPricingSavedBriefly, setShowPricingSavedBriefly] = useState(false);
-  const pricingSavedBrieflyTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const pricingSavedBrieflyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerPricingSavedBriefly = () => {
     if (pricingSavedBrieflyTimerRef.current) {
@@ -4646,8 +4290,7 @@ export function CourseCreatePage({
         (inFlightPricingControlsRef.current.pricingDetails ?? 0) > 0;
       if (
         isDetailsSaving &&
-        (lastEditedPricingFieldRef.current === controlKey ||
-          !lastEditedPricingFieldRef.current)
+        (lastEditedPricingFieldRef.current === controlKey || !lastEditedPricingFieldRef.current)
       ) {
         return "saving";
       }
@@ -4670,11 +4313,9 @@ export function CourseCreatePage({
     (inFlightPricingControlsRef.current.pricingDetails ?? 0) > 0;
 
   const hasPricingControlFailed =
-    pricingSaveFailed ||
-    Object.values(pricingControlStatus).some((status) => status === "failed");
+    pricingSaveFailed || Object.values(pricingControlStatus).some((status) => status === "failed");
 
-  const pricingOverallStatus = useMemo(():
-    "saving" | "failed" | "saved" | null => {
+  const pricingOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
     if (isAnyPricingSaving) return "saving";
     if (hasPricingControlFailed) return "failed";
     if (showPricingSavedBriefly) return "saved";
@@ -4710,12 +4351,12 @@ export function CourseCreatePage({
     scheduleDate: "2026-08-20",
     scheduleTime: "10:00",
   });
-  const [expandedValidationArea, setExpandedValidationArea] =
-    useState<CourseValidationArea | null>(null);
+  const [expandedValidationArea, setExpandedValidationArea] = useState<CourseValidationArea | null>(
+    null,
+  );
 
   // Course Overview Live Full Preview Modal State
-  const [isUnpublishModalOpen, setIsUnpublishModalOpen] =
-    useState<boolean>(false);
+  const [isUnpublishModalOpen, setIsUnpublishModalOpen] = useState<boolean>(false);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -4731,9 +4372,7 @@ export function CourseCreatePage({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isPreviewModalOpen]);
 
-  const [publishValidationError, setPublishValidationError] = useState<
-    string | null
-  >(null);
+  const [publishValidationError, setPublishValidationError] = useState<string | null>(null);
 
   // Auto-hide validation error message after 3.5 seconds
   useEffect(() => {
@@ -4748,14 +4387,10 @@ export function CourseCreatePage({
   const [publishControlStatus, setPublishControlStatus] = useState<
     Record<string, "saving" | "saved" | "failed" | null>
   >({});
-  const publishControlTimersRef = useRef<
-    Record<string, ReturnType<typeof setTimeout>>
-  >({});
+  const publishControlTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [publishSaveFailed, setPublishSaveFailed] = useState(false);
   const [showPublishSavedBriefly, setShowPublishSavedBriefly] = useState(false);
-  const publishSavedBrieflyTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const publishSavedBrieflyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerPublishSavedBriefly = () => {
     if (publishSavedBrieflyTimerRef.current) {
@@ -4780,15 +4415,12 @@ export function CourseCreatePage({
   }, []);
 
   const isAnyPublishSaving =
-    isSavingPublish ||
-    Object.values(publishControlStatus).some((status) => status === "saving");
+    isSavingPublish || Object.values(publishControlStatus).some((status) => status === "saving");
 
   const hasPublishControlFailed =
-    publishSaveFailed ||
-    Object.values(publishControlStatus).some((status) => status === "failed");
+    publishSaveFailed || Object.values(publishControlStatus).some((status) => status === "failed");
 
-  const publishOverallStatus = useMemo(():
-    "saving" | "failed" | "saved" | null => {
+  const publishOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
     if (isAnyPublishSaving) return "saving";
     if (hasPublishControlFailed) return "failed";
     if (showPublishSavedBriefly) return "saved";
@@ -4796,8 +4428,7 @@ export function CourseCreatePage({
   }, [isAnyPublishSaving, hasPublishControlFailed, showPublishSavedBriefly]);
 
   // Extras Step server-confirmed and draft states
-  const [serverExtras, setServerExtras] =
-    useState<ExtrasFormState>(initialExtrasState);
+  const [serverExtras, setServerExtras] = useState<ExtrasFormState>(initialExtrasState);
   const [serverIncludes, setServerIncludes] = useState<CourseIncludeItem[]>([]);
   const [manualIncludesDraft, setManualIncludesDraft] = useState<
     Array<{ id: string; text: string; isPendingCreation?: boolean }>
@@ -4813,27 +4444,19 @@ export function CourseCreatePage({
     }>;
   } | null>(null);
   const deletingIncludeIdsRef = useRef<Set<string>>(new Set());
-  const [deletingIncludeIds, setDeletingIncludeIds] = useState<Set<string>>(
-    new Set(),
-  );
+  const [deletingIncludeIds, setDeletingIncludeIds] = useState<Set<string>>(new Set());
   const savingIncludeIdsRef = useRef<Set<string>>(new Set());
-  const [savingIncludeIds, setSavingIncludeIds] = useState<Set<string>>(
-    new Set(),
-  );
+  const [savingIncludeIds, setSavingIncludeIds] = useState<Set<string>>(new Set());
   const [isSavingCertificate, setIsSavingCertificate] = useState(false);
   const isSavingCertificateRef = useRef(false);
 
   const [extrasControlStatus, setExtrasControlStatus] = useState<
     Record<string, "saved" | "failed" | null>
   >({});
-  const extrasControlTimersRef = useRef<
-    Record<string, ReturnType<typeof setTimeout>>
-  >({});
+  const extrasControlTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [extrasSaveFailed, setExtrasSaveFailed] = useState(false);
   const [showExtrasSavedBriefly, setShowExtrasSavedBriefly] = useState(false);
-  const extrasSavedBrieflyTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const extrasSavedBrieflyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerExtrasSavedBriefly = () => {
     if (extrasSavedBrieflyTimerRef.current) {
@@ -4934,9 +4557,7 @@ export function CourseCreatePage({
     if (
       savingIncludeIds.has(controlKey) ||
       deletingIncludeIds.has(controlKey) ||
-      manualIncludesDraft.some(
-        (m) => m.id === controlKey && m.isPendingCreation,
-      )
+      manualIncludesDraft.some((m) => m.id === controlKey && m.isPendingCreation)
     ) {
       return "saving";
     }
@@ -4954,11 +4575,9 @@ export function CourseCreatePage({
     manualIncludesDraft.some((m) => m.isPendingCreation);
 
   const hasExtrasControlFailed =
-    extrasSaveFailed ||
-    Object.values(extrasControlStatus).some((status) => status === "failed");
+    extrasSaveFailed || Object.values(extrasControlStatus).some((status) => status === "failed");
 
-  const extrasOverallStatus = useMemo(():
-    "saving" | "failed" | "saved" | null => {
+  const extrasOverallStatus = useMemo((): "saving" | "failed" | "saved" | null => {
     if (isAnyExtrasSaving) return "saving";
     if (hasExtrasControlFailed) return "failed";
     if (showExtrasSavedBriefly) return "saved";
@@ -4976,9 +4595,7 @@ export function CourseCreatePage({
   });
 
   const suggestedInclusions = useMemo<string[]>(() => {
-    const hasPreviewLessons = sections.some((s) =>
-      s.lessons.some((l) => l.isPreview),
-    );
+    const hasPreviewLessons = sections.some((s) => s.lessons.some((l) => l.isPreview));
     return deriveSuggestedInclusions({
       durationMode: accessRulesDraft.durationMode,
       fixedDurationValue: accessRulesDraft.fixedDurationValue,
@@ -5005,10 +4622,8 @@ export function CourseCreatePage({
 
   const isExtrasDirty = useMemo(
     () =>
-      !isExtrasEqual(
-        { enableCertificate: extras.enableCertificate },
-        serverExtras,
-      ) || isManualIncludesDirty,
+      !isExtrasEqual({ enableCertificate: extras.enableCertificate }, serverExtras) ||
+      isManualIncludesDirty,
     [extras.enableCertificate, serverExtras, isManualIncludesDirty],
   );
   const isExtrasDirtyRef = useRef(isExtrasDirty);
@@ -5024,11 +4639,7 @@ export function CourseCreatePage({
   };
 
   const hasUnsavedChanges =
-    isBasicsDirty ||
-    isCurriculumDirty ||
-    needsAccessRulesSave ||
-    isPricingDirty ||
-    isExtrasDirty;
+    isBasicsDirty || isCurriculumDirty || needsAccessRulesSave || isPricingDirty || isExtrasDirty;
 
   // Pre-populate fields when editing an existing course
   useEffect(() => {
@@ -5053,35 +4664,25 @@ export function CourseCreatePage({
       courseVersionRef.current = c.version || 1;
 
       const confirmedThumbnailMediaId = c.thumbnailMediaId ?? null;
-      if (
-        !thumbnailDirtyRef.current &&
-        thumbnailUploadStatusRef.current === "idle"
-      ) {
+      if (!thumbnailDirtyRef.current && thumbnailUploadStatusRef.current === "idle") {
         if (thumbnailObjectUrlRef.current) {
           URL.revokeObjectURL(thumbnailObjectUrlRef.current);
           thumbnailObjectUrlRef.current = null;
         }
         thumbnailMediaIdRef.current = confirmedThumbnailMediaId;
         setThumbnailMediaId(confirmedThumbnailMediaId);
-        setThumbnail(
-          c.thumbnailUrl ??
-            getCourseThumbnailCdnUrl(confirmedThumbnailMediaId) ??
-            null,
-        );
+        setThumbnail(c.thumbnailUrl ?? getCourseThumbnailCdnUrl(confirmedThumbnailMediaId) ?? null);
       }
 
       const isBasicsSavingActive =
-        savingBasicsControlsRef.current.size > 0 ||
-        Boolean(inFlightBasicsPromiseRef.current);
+        savingBasicsControlsRef.current.size > 0 || Boolean(inFlightBasicsPromiseRef.current);
       if (!isBasicsDirtyRef.current && !isBasicsSavingActive) {
         setBasicsDraft(confirmedBasics);
         basicsDraftRef.current = confirmedBasics;
       }
       setIsPublished(c.status === "published");
 
-      const hasAccessRules = Boolean(
-        editorData.accessRules && editorData.accessRules.id,
-      );
+      const hasAccessRules = Boolean(editorData.accessRules && editorData.accessRules.id);
       setAccessRulesExists(hasAccessRules);
 
       const ar = editorData.accessRules;
@@ -5090,12 +4691,7 @@ export function CourseCreatePage({
       let fixedVal = 30;
       let fixedUnit: DurationUnit = "Days";
 
-      if (
-        hasAccessRules &&
-        isFixed &&
-        ar?.durationDays &&
-        ar.durationDays > 0
-      ) {
+      if (hasAccessRules && isFixed && ar?.durationDays && ar.durationDays > 0) {
         const days = ar.durationDays;
         if (days % 365 === 0 && days >= 365) {
           fixedVal = days / 365;
@@ -5112,29 +4708,23 @@ export function CourseCreatePage({
         }
       }
 
-      const confirmedAccessRules: AccessRulesFormState =
-        normalizeAccessRulesState({
-          accessType: (ar?.accessType as AccessType) || "everyone",
-          durationMode: hasAccessRules ? (isFixed ? "fixed" : "lifetime") : "",
-          fixedDurationValue: fixedVal,
-          fixedDurationUnit: fixedUnit,
-          enableQA:
-            s?.allowQa !== undefined
-              ? Boolean(s.allowQa)
-              : initialAccessRulesState.enableQA,
-          enableComments:
-            s?.allowComments !== undefined
-              ? Boolean(s.allowComments)
-              : initialAccessRulesState.enableComments,
-          enableDownloads:
-            s?.allowDownloads !== undefined
-              ? Boolean(s.allowDownloads)
-              : initialAccessRulesState.enableDownloads,
-          enableNotes:
-            s?.allowNotes !== undefined
-              ? Boolean(s.allowNotes)
-              : initialAccessRulesState.enableNotes,
-        });
+      const confirmedAccessRules: AccessRulesFormState = normalizeAccessRulesState({
+        accessType: (ar?.accessType as AccessType) || "everyone",
+        durationMode: hasAccessRules ? (isFixed ? "fixed" : "lifetime") : "",
+        fixedDurationValue: fixedVal,
+        fixedDurationUnit: fixedUnit,
+        enableQA: s?.allowQa !== undefined ? Boolean(s.allowQa) : initialAccessRulesState.enableQA,
+        enableComments:
+          s?.allowComments !== undefined
+            ? Boolean(s.allowComments)
+            : initialAccessRulesState.enableComments,
+        enableDownloads:
+          s?.allowDownloads !== undefined
+            ? Boolean(s.allowDownloads)
+            : initialAccessRulesState.enableDownloads,
+        enableNotes:
+          s?.allowNotes !== undefined ? Boolean(s.allowNotes) : initialAccessRulesState.enableNotes,
+      });
 
       setServerAccessRules((prev) => ({
         accessType: isAccessControlSaving("accessType")
@@ -5149,9 +4739,7 @@ export function CourseCreatePage({
         fixedDurationUnit: isAccessControlSaving("fixedDuration")
           ? prev.fixedDurationUnit
           : confirmedAccessRules.fixedDurationUnit,
-        enableQA: isAccessControlSaving("enableQA")
-          ? prev.enableQA
-          : confirmedAccessRules.enableQA,
+        enableQA: isAccessControlSaving("enableQA") ? prev.enableQA : confirmedAccessRules.enableQA,
         enableComments: isAccessControlSaving("enableComments")
           ? prev.enableComments
           : confirmedAccessRules.enableComments,
@@ -5163,10 +4751,7 @@ export function CourseCreatePage({
           : confirmedAccessRules.enableNotes,
       }));
 
-      if (
-        !isAccessRulesDirtyRef.current &&
-        savingAccessControlsRef.current.size === 0
-      ) {
+      if (!isAccessRulesDirtyRef.current && savingAccessControlsRef.current.size === 0) {
         setAccessRulesDraft((prev) => {
           const next = {
             accessType: isAccessControlSaving("accessType")
@@ -5222,18 +4807,14 @@ export function CourseCreatePage({
             const pendingItems = prev.filter((p) => p.isPendingCreation);
             if (pendingItems.length === 0) return serverItems;
             const serverIds = new Set(serverItems.map((s) => s.id));
-            const uniquePending = pendingItems.filter(
-              (p) => !serverIds.has(p.id),
-            );
+            const uniquePending = pendingItems.filter((p) => !serverIds.has(p.id));
             return [...serverItems, ...uniquePending];
           });
         }
       } else {
         setServerIncludes([]);
         if (!isExtrasDirtyRef.current) {
-          setManualIncludesDraft((prev) =>
-            prev.filter((p) => p.isPendingCreation),
-          );
+          setManualIncludesDraft((prev) => prev.filter((p) => p.isPendingCreation));
         }
       }
 
@@ -5255,10 +4836,7 @@ export function CourseCreatePage({
         });
         setServerPricing(confirmedPricing);
         serverPricingRef.current = confirmedPricing;
-        if (
-          !isPricingDirtyRef.current &&
-          savingPricingControlsRef.current.size === 0
-        ) {
+        if (!isPricingDirtyRef.current && savingPricingControlsRef.current.size === 0) {
           setPricingDraft(confirmedPricing);
           pricingDraftRef.current = confirmedPricing;
         }
@@ -5266,111 +4844,86 @@ export function CourseCreatePage({
       if (editorData.sections && editorData.sections.length > 0) {
         setSections((prev) => {
           const prevMap = new Map(prev.map((s) => [s.id, s]));
-          const mappedServerSections = editorData.sections.map(
-            (sec, secIdx) => {
-              const existing = prevMap.get(sec.id);
-              const serverLessonIds = new Set(
-                (sec.lessons || []).map((l) => l.id),
-              );
-              const serverLessons = (sec.lessons || []).map((les) => {
-                const existingLesson = existing?.lessons.find(
-                  (l) => l.id === les.id,
-                );
-                const storedLessonDraft = readLessonEditorDraft(
-                  currentCourseIdRef.current,
-                  les.id,
-                );
-                const isDirty = existingLesson
-                  ? isLessonDirty(existingLesson)
-                  : false;
-                const title =
-                  isDirty && existingLesson
-                    ? existingLesson.title
-                    : (storedLessonDraft?.title ?? les.title);
-                const description =
-                  isDirty && existingLesson
-                    ? existingLesson.description || ""
-                    : (storedLessonDraft?.description ??
-                      (les.description || ""));
-                const contentType =
-                  isDirty && existingLesson
-                    ? existingLesson.contentType
-                    : (storedLessonDraft?.contentType ?? les.contentType);
-                const contentMediaId =
-                  isDirty && existingLesson
-                    ? (existingLesson.contentMediaId ?? null)
-                    : (storedLessonDraft?.contentMediaId ??
-                      les.contentMediaId ??
-                      null);
-                const durationSeconds =
-                  isDirty && existingLesson
-                    ? existingLesson.durationSeconds
-                    : les.durationSeconds;
-                const isPub =
-                  isDirty && existingLesson
-                    ? existingLesson.isPublished !== undefined
-                      ? existingLesson.isPublished
-                      : true
-                    : (storedLessonDraft?.isPublished ??
-                      (les.isPublished !== undefined ? les.isPublished : true));
-                const isPrev =
-                  isDirty && existingLesson
-                    ? existingLesson.isPreview !== undefined
-                      ? existingLesson.isPreview
-                      : false
-                    : (storedLessonDraft?.isPreview ??
-                      (les.isPreview !== undefined ? les.isPreview : false));
-                const desc = les.description || "";
-                return {
-                  id: les.id,
-                  title,
-                  isEditingTitle: existingLesson?.isEditingTitle ?? false,
-                  contentTypeSelected:
-                    existingLesson?.contentTypeSelected ?? true,
-                  description,
-                  contentType,
-                  contentMediaId,
-                  durationSeconds,
-                  isExpanded: existingLesson
-                    ? existingLesson.isExpanded
-                    : false,
-                  isPublished: isPub,
-                  isPreview: isPrev,
-                  initialState: existingLesson?.initialState || {
-                    title: les.title,
-                    description: desc,
-                    contentType: les.contentType,
-                    contentMediaId: les.contentMediaId ?? null,
-                    isPublished:
-                      les.isPublished !== undefined ? les.isPublished : true,
-                    isPreview:
-                      les.isPreview !== undefined ? les.isPreview : false,
-                  },
-                  resources: (les.resources || []).map((res) =>
-                    toLessonResourceItem(res),
-                  ),
-                };
-              });
-
-              // Preserve any pending optimistic lessons that are still being created
-              const pendingLessons = (existing?.lessons || []).filter(
-                (l) => l.isPendingCreation || !serverLessonIds.has(l.id),
-              );
-
+          const mappedServerSections = editorData.sections.map((sec, secIdx) => {
+            const existing = prevMap.get(sec.id);
+            const serverLessonIds = new Set((sec.lessons || []).map((l) => l.id));
+            const serverLessons = (sec.lessons || []).map((les) => {
+              const existingLesson = existing?.lessons.find((l) => l.id === les.id);
+              const storedLessonDraft = readLessonEditorDraft(currentCourseIdRef.current, les.id);
+              const isDirty = existingLesson ? isLessonDirty(existingLesson) : false;
+              const title =
+                isDirty && existingLesson
+                  ? existingLesson.title
+                  : (storedLessonDraft?.title ?? les.title);
+              const description =
+                isDirty && existingLesson
+                  ? existingLesson.description || ""
+                  : (storedLessonDraft?.description ?? (les.description || ""));
+              const contentType =
+                isDirty && existingLesson
+                  ? existingLesson.contentType
+                  : (storedLessonDraft?.contentType ?? les.contentType);
+              const contentMediaId =
+                isDirty && existingLesson
+                  ? (existingLesson.contentMediaId ?? null)
+                  : (storedLessonDraft?.contentMediaId ?? les.contentMediaId ?? null);
+              const durationSeconds =
+                isDirty && existingLesson ? existingLesson.durationSeconds : les.durationSeconds;
+              const isPub =
+                isDirty && existingLesson
+                  ? existingLesson.isPublished !== undefined
+                    ? existingLesson.isPublished
+                    : true
+                  : (storedLessonDraft?.isPublished ??
+                    (les.isPublished !== undefined ? les.isPublished : true));
+              const isPrev =
+                isDirty && existingLesson
+                  ? existingLesson.isPreview !== undefined
+                    ? existingLesson.isPreview
+                    : false
+                  : (storedLessonDraft?.isPreview ??
+                    (les.isPreview !== undefined ? les.isPreview : false));
+              const desc = les.description || "";
               return {
-                id: sec.id,
-                title: sec.title,
-                isExpanded: existing ? existing.isExpanded : secIdx === 0,
-                isEditingTitle: existing ? existing.isEditingTitle : false,
-                lessons: [...serverLessons, ...pendingLessons],
+                id: les.id,
+                title,
+                isEditingTitle: existingLesson?.isEditingTitle ?? false,
+                contentTypeSelected: existingLesson?.contentTypeSelected ?? true,
+                description,
+                contentType,
+                contentMediaId,
+                durationSeconds,
+                isExpanded: existingLesson ? existingLesson.isExpanded : false,
+                isPublished: isPub,
+                isPreview: isPrev,
+                initialState: existingLesson?.initialState || {
+                  title: les.title,
+                  description: desc,
+                  contentType: les.contentType,
+                  contentMediaId: les.contentMediaId ?? null,
+                  isPublished: les.isPublished !== undefined ? les.isPublished : true,
+                  isPreview: les.isPreview !== undefined ? les.isPreview : false,
+                },
+                resources: (les.resources || []).map((res) => toLessonResourceItem(res)),
               };
-            },
-          );
+            });
+
+            // Preserve any pending optimistic lessons that are still being created
+            const pendingLessons = (existing?.lessons || []).filter(
+              (l) => l.isPendingCreation || !serverLessonIds.has(l.id),
+            );
+
+            return {
+              id: sec.id,
+              title: sec.title,
+              isExpanded: existing ? existing.isExpanded : secIdx === 0,
+              isEditingTitle: existing ? existing.isEditingTitle : false,
+              lessons: [...serverLessons, ...pendingLessons],
+            };
+          });
 
           // Preserve any pending optimistic sections that are still being created
-          const serverSectionIds = new Set(
-            editorData.sections.map((s) => s.id),
-          );
+          const serverSectionIds = new Set(editorData.sections.map((s) => s.id));
           const pendingSections = prev.filter(
             (s) => s.isPendingCreation || !serverSectionIds.has(s.id),
           );
@@ -5384,15 +4937,9 @@ export function CourseCreatePage({
   }, [editorData, serverCategories]);
 
   // Extras Inclusions Handlers
-  const [draggedInclusionIndex, setDraggedInclusionIndex] = useState<
-    number | null
-  >(null);
-  const [dragEnabledInclusionId, setDragEnabledInclusionId] = useState<
-    string | null
-  >(null);
-  const [focusedInclusionId, setFocusedInclusionId] = useState<string | null>(
-    null,
-  );
+  const [draggedInclusionIndex, setDraggedInclusionIndex] = useState<number | null>(null);
+  const [dragEnabledInclusionId, setDragEnabledInclusionId] = useState<string | null>(null);
+  const [focusedInclusionId, setFocusedInclusionId] = useState<string | null>(null);
 
   const handleAddManualInclusion = async (customText?: string) => {
     if (manualIncludesDraftRef.current.length >= 6) return;
@@ -5418,9 +4965,7 @@ export function CourseCreatePage({
     // 2. Ensure course ID exists
     let targetCourseId = currentCourseId;
     if (!targetCourseId) {
-      setManualIncludesDraft((prev) =>
-        prev.filter((item) => item.id !== tempId),
-      );
+      setManualIncludesDraft((prev) => prev.filter((item) => item.id !== tempId));
       setToastMessage("Please enter a course title on the Basics tab first.");
       return;
     }
@@ -5454,12 +4999,9 @@ export function CourseCreatePage({
       markExtrasControlSaved("inclusions");
     } catch (err: unknown) {
       // 5. On failure: remove ONLY this failed temporary inclusion
-      setManualIncludesDraft((prev) =>
-        prev.filter((item) => item.id !== tempId),
-      );
+      setManualIncludesDraft((prev) => prev.filter((item) => item.id !== tempId));
       markExtrasControlFailed("inclusions");
-      const errorMsg =
-        (err as { message?: string })?.message || "Failed to add inclusion.";
+      const errorMsg = (err as { message?: string })?.message || "Failed to add inclusion.";
       setToastMessage(errorMsg);
     }
   };
@@ -5469,24 +5011,18 @@ export function CourseCreatePage({
     clearExtrasControlStatus("inclusions");
     const truncated = text.slice(0, 25);
     setManualIncludesDraft((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, text: truncated } : item,
-      ),
+      prev.map((item) => (item.id === id ? { ...item, text: truncated } : item)),
     );
   };
 
   const handleManualInclusionBlur = async (id: string) => {
     setFocusedInclusionId(null);
 
-    if (
-      savingIncludeIdsRef.current.has(id) ||
-      deletingIncludeIdsRef.current.has(id)
-    ) {
+    if (savingIncludeIdsRef.current.has(id) || deletingIncludeIdsRef.current.has(id)) {
       return;
     }
 
-    const UUID_REGEX =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     if (!currentCourseId || !UUID_REGEX.test(id)) {
       return;
@@ -5507,9 +5043,7 @@ export function CourseCreatePage({
     // Empty text handling: revert to server-confirmed value because backend schema requires min(1)
     if (!trimmed) {
       setManualIncludesDraft((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, text: serverItem.text } : item,
-        ),
+        prev.map((item) => (item.id === id ? { ...item, text: serverItem.text } : item)),
       );
       return;
     }
@@ -5518,9 +5052,7 @@ export function CourseCreatePage({
     if (trimmed === serverItem.text.trim()) {
       if (trimmed !== currentItem.text) {
         setManualIncludesDraft((prev) =>
-          prev.map((item) =>
-            item.id === id ? { ...item, text: trimmed } : item,
-          ),
+          prev.map((item) => (item.id === id ? { ...item, text: trimmed } : item)),
         );
       }
       return;
@@ -5550,12 +5082,9 @@ export function CourseCreatePage({
       markExtrasControlFailed("inclusions");
       // Revert on failure to the last confirmed server value
       setManualIncludesDraft((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, text: serverItem.text } : item,
-        ),
+        prev.map((item) => (item.id === id ? { ...item, text: serverItem.text } : item)),
       );
-      const errorMsg =
-        (err as { message?: string })?.message || "Failed to update inclusion.";
+      const errorMsg = (err as { message?: string })?.message || "Failed to update inclusion.";
       setToastMessage(errorMsg);
     } finally {
       savingIncludeIdsRef.current.delete(id);
@@ -5566,8 +5095,7 @@ export function CourseCreatePage({
   const handleDeleteManualInclusion = async (id: string) => {
     if (deletingIncludeIdsRef.current.has(id)) return;
 
-    const UUID_REGEX =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     // If it is not a real server UUID (e.g. client-only temp item) or no course ID, remove locally
     if (!currentCourseId || !UUID_REGEX.test(id)) {
@@ -5606,8 +5134,7 @@ export function CourseCreatePage({
       markExtrasControlFailed(id);
       markExtrasControlFailed("inclusions");
       // On failure: keep inclusion visible and show error toast
-      const errorMsg =
-        (err as { message?: string })?.message || "Failed to delete inclusion.";
+      const errorMsg = (err as { message?: string })?.message || "Failed to delete inclusion.";
       setToastMessage(errorMsg);
     } finally {
       deletingIncludeIdsRef.current.delete(id);
@@ -5615,16 +5142,8 @@ export function CourseCreatePage({
     }
   };
 
-  const handleInclusionDragStart = (
-    e: React.DragEvent,
-    index: number,
-    text: string,
-  ) => {
-    if (
-      isReorderingIncludes ||
-      reorderIncludesMutation.isPending ||
-      isExtrasSaving
-    ) {
+  const handleInclusionDragStart = (e: React.DragEvent, index: number, text: string) => {
+    if (isReorderingIncludes || reorderIncludesMutation.isPending || isExtrasSaving) {
       e.preventDefault();
       return;
     }
@@ -5633,17 +5152,12 @@ export function CourseCreatePage({
       previousIncludes: structuredClone(manualIncludesDraftRef.current),
     };
     setDraggedInclusionIndex(index);
-    setCustomDragImage(
-      e,
-      e.currentTarget as HTMLElement,
-      inclusionGhostHtml(text),
-    );
+    setCustomDragImage(e, e.currentTarget as HTMLElement, inclusionGhostHtml(text));
   };
 
   const handleInclusionDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    if (draggedInclusionIndex === null || draggedInclusionIndex === index)
-      return;
+    if (draggedInclusionIndex === null || draggedInclusionIndex === index) return;
     setManualIncludesDraft((prev) => {
       const copy = [...prev];
       const [moved] = copy.splice(draggedInclusionIndex, 1);
@@ -5677,9 +5191,7 @@ export function CourseCreatePage({
     if (currentCourseId) {
       // Validate if all IDs are valid persisted UUIDs
       const allValidUuids = currentIds.every((id) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          id,
-        ),
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
       );
 
       if (allValidUuids && serverIncludes.length === currentIds.length) {
@@ -5764,8 +5276,7 @@ export function CourseCreatePage({
         enableCertificate: previousValue,
       }));
       const errorMsg =
-        (err as { message?: string })?.message ||
-        "Failed to update certificate setting.";
+        (err as { message?: string })?.message || "Failed to update certificate setting.";
       setToastMessage(errorMsg);
     } finally {
       isSavingCertificateRef.current = false;
@@ -5834,10 +5345,7 @@ export function CourseCreatePage({
 
       let durationDays: number | null = null;
       if (accessRulesDraftRef.current.durationMode === "fixed") {
-        const val = Math.max(
-          1,
-          accessRulesDraftRef.current.fixedDurationValue || 1,
-        );
+        const val = Math.max(1, accessRulesDraftRef.current.fixedDurationValue || 1);
         const unitMultiplier =
           accessRulesDraftRef.current.fixedDurationUnit === "Years"
             ? 365
@@ -5854,13 +5362,8 @@ export function CourseCreatePage({
         payload: {
           accessType: type,
           durationType:
-            accessRulesDraftRef.current.durationMode === "fixed"
-              ? "fixed_duration"
-              : "lifetime",
-          durationDays:
-            accessRulesDraftRef.current.durationMode === "fixed"
-              ? durationDays
-              : null,
+            accessRulesDraftRef.current.durationMode === "fixed" ? "fixed_duration" : "lifetime",
+          durationDays: accessRulesDraftRef.current.durationMode === "fixed" ? durationDays : null,
         },
       });
 
@@ -5883,9 +5386,7 @@ export function CourseCreatePage({
           ...prev,
           accessType: previousValue,
         }));
-        const errorMsg =
-          (err as { message?: string })?.message ||
-          "Failed to update access type.";
+        const errorMsg = (err as { message?: string })?.message || "Failed to update access type.";
         setToastMessage(errorMsg);
       }
     } finally {
@@ -5928,10 +5429,7 @@ export function CourseCreatePage({
 
       let durationDays: number | null = null;
       if (mode === "fixed") {
-        const val = Math.max(
-          1,
-          accessRulesDraftRef.current.fixedDurationValue || 1,
-        );
+        const val = Math.max(1, accessRulesDraftRef.current.fixedDurationValue || 1);
         const unitMultiplier =
           accessRulesDraftRef.current.fixedDurationUnit === "Years"
             ? 365
@@ -5959,10 +5457,8 @@ export function CourseCreatePage({
           durationMode: mode,
           ...(mode === "fixed"
             ? {
-                fixedDurationValue:
-                  accessRulesDraftRef.current.fixedDurationValue,
-                fixedDurationUnit:
-                  accessRulesDraftRef.current.fixedDurationUnit,
+                fixedDurationValue: accessRulesDraftRef.current.fixedDurationValue,
+                fixedDurationUnit: accessRulesDraftRef.current.fixedDurationUnit,
               }
             : {}),
         }));
@@ -5980,8 +5476,7 @@ export function CourseCreatePage({
           durationMode: previousMode,
         }));
         const errorMsg =
-          (err as { message?: string })?.message ||
-          "Failed to update access duration.";
+          (err as { message?: string })?.message || "Failed to update access duration.";
         setToastMessage(errorMsg);
       }
     } finally {
@@ -5995,33 +5490,20 @@ export function CourseCreatePage({
     }
   };
 
-  const persistFixedDuration = async (
-    explicitVal?: number,
-    explicitUnit?: DurationUnit,
-  ) => {
+  const persistFixedDuration = async (explicitVal?: number, explicitUnit?: DurationUnit) => {
     const currentDraft = accessRulesDraftRef.current;
     if (currentDraft.durationMode !== "fixed") return;
 
     clearAccessControlStatus("fixedDuration");
     const val = Math.max(
       1,
-      explicitVal !== undefined
-        ? explicitVal
-        : currentDraft.fixedDurationValue || 1,
+      explicitVal !== undefined ? explicitVal : currentDraft.fixedDurationValue || 1,
     );
     const unit =
-      explicitUnit !== undefined
-        ? explicitUnit
-        : currentDraft.fixedDurationUnit || "Days";
+      explicitUnit !== undefined ? explicitUnit : currentDraft.fixedDurationUnit || "Days";
 
     const unitMultiplier =
-      unit === "Years"
-        ? 365
-        : unit === "Months"
-          ? 30
-          : unit === "Weeks"
-            ? 7
-            : 1;
+      unit === "Years" ? 365 : unit === "Months" ? 30 : unit === "Weeks" ? 7 : 1;
     const durationDays = val * unitMultiplier;
 
     const previousVal = serverAccessRules.fixedDurationValue;
@@ -6075,8 +5557,7 @@ export function CourseCreatePage({
             fixedDurationUnit: previousUnit,
           }));
           const errorMsg =
-            (err as { message?: string })?.message ||
-            "Failed to update fixed access duration.";
+            (err as { message?: string })?.message || "Failed to update fixed access duration.";
           setToastMessage(errorMsg);
         }
       } finally {
@@ -6108,8 +5589,7 @@ export function CourseCreatePage({
     const isDurationDirty =
       currentDraft.durationMode === "fixed" &&
       (serverAccessRules.durationMode !== "fixed" ||
-        currentDraft.fixedDurationValue !==
-          serverAccessRules.fixedDurationValue ||
+        currentDraft.fixedDurationValue !== serverAccessRules.fixedDurationValue ||
         currentDraft.fixedDurationUnit !== serverAccessRules.fixedDurationUnit);
 
     if (isDurationDirty) {
@@ -6151,10 +5631,7 @@ export function CourseCreatePage({
       fixedDurationUnit: unit,
     };
     setAccessRules((prev) => ({ ...prev, fixedDurationUnit: unit }));
-    void persistFixedDuration(
-      accessRulesDraftRef.current.fixedDurationValue,
-      unit,
-    );
+    void persistFixedDuration(accessRulesDraftRef.current.fixedDurationValue, unit);
   };
 
   const handleToggleQA = async () => {
@@ -6184,8 +5661,7 @@ export function CourseCreatePage({
       });
 
       if (accessControlVersionsRef.current.enableQA === version) {
-        const confirmedQa =
-          res.allowQa !== undefined ? Boolean(res.allowQa) : nextValue;
+        const confirmedQa = res.allowQa !== undefined ? Boolean(res.allowQa) : nextValue;
 
         accessRulesDraftRef.current = {
           ...accessRulesDraftRef.current,
@@ -6212,9 +5688,7 @@ export function CourseCreatePage({
           ...prev,
           enableQA: previousValue,
         }));
-        const errorMsg =
-          (err as { message?: string })?.message ||
-          "Failed to update Q&A setting.";
+        const errorMsg = (err as { message?: string })?.message || "Failed to update Q&A setting.";
         setToastMessage(errorMsg);
       }
     } finally {
@@ -6256,9 +5730,7 @@ export function CourseCreatePage({
 
       if (accessControlVersionsRef.current.enableComments === version) {
         const confirmedComments =
-          res.allowComments !== undefined
-            ? Boolean(res.allowComments)
-            : nextValue;
+          res.allowComments !== undefined ? Boolean(res.allowComments) : nextValue;
 
         accessRulesDraftRef.current = {
           ...accessRulesDraftRef.current,
@@ -6286,8 +5758,7 @@ export function CourseCreatePage({
           enableComments: previousValue,
         }));
         const errorMsg =
-          (err as { message?: string })?.message ||
-          "Failed to update comments setting.";
+          (err as { message?: string })?.message || "Failed to update comments setting.";
         setToastMessage(errorMsg);
       }
     } finally {
@@ -6329,9 +5800,7 @@ export function CourseCreatePage({
 
       if (accessControlVersionsRef.current.enableDownloads === version) {
         const confirmedDownloads =
-          res.allowDownloads !== undefined
-            ? Boolean(res.allowDownloads)
-            : nextValue;
+          res.allowDownloads !== undefined ? Boolean(res.allowDownloads) : nextValue;
 
         accessRulesDraftRef.current = {
           ...accessRulesDraftRef.current,
@@ -6359,8 +5828,7 @@ export function CourseCreatePage({
           enableDownloads: previousValue,
         }));
         const errorMsg =
-          (err as { message?: string })?.message ||
-          "Failed to update downloads setting.";
+          (err as { message?: string })?.message || "Failed to update downloads setting.";
         setToastMessage(errorMsg);
       }
     } finally {
@@ -6401,8 +5869,7 @@ export function CourseCreatePage({
       });
 
       if (accessControlVersionsRef.current.enableNotes === version) {
-        const confirmedNotes =
-          res.allowNotes !== undefined ? Boolean(res.allowNotes) : nextValue;
+        const confirmedNotes = res.allowNotes !== undefined ? Boolean(res.allowNotes) : nextValue;
 
         accessRulesDraftRef.current = {
           ...accessRulesDraftRef.current,
@@ -6430,8 +5897,7 @@ export function CourseCreatePage({
           enableNotes: previousValue,
         }));
         const errorMsg =
-          (err as { message?: string })?.message ||
-          "Failed to update notes setting.";
+          (err as { message?: string })?.message || "Failed to update notes setting.";
         setToastMessage(errorMsg);
       }
     } finally {
@@ -6446,15 +5912,10 @@ export function CourseCreatePage({
   };
 
   // Drag and Drop state for Sections & Lessons
-  const [draggedSectionIndex, setDraggedSectionIndex] = useState<number | null>(
-    null,
-  );
-  const [dragEnabledSectionId, setDragEnabledSectionId] = useState<
-    string | null
-  >(null);
+  const [draggedSectionIndex, setDraggedSectionIndex] = useState<number | null>(null);
+  const [dragEnabledSectionId, setDragEnabledSectionId] = useState<string | null>(null);
 
-  const [draggedLessonState, setDraggedLessonState] =
-    useState<DraggedLessonState | null>(null);
+  const [draggedLessonState, setDraggedLessonState] = useState<DraggedLessonState | null>(null);
   const pinnedVirtualizedLessonIds = useMemo(
     () =>
       new Set([
@@ -6464,12 +5925,9 @@ export function CourseCreatePage({
     [draggedLessonState, mountedLessonEditorIds],
   );
   const draggedLessonStateRef = useRef<DraggedLessonState | null>(null);
-  const [lessonDropTarget, setLessonDropTarget] =
-    useState<LessonDropTarget | null>(null);
+  const [lessonDropTarget, setLessonDropTarget] = useState<LessonDropTarget | null>(null);
   const lessonDropTargetRef = useRef<LessonDropTarget | null>(null);
-  const [dragEnabledLessonId, setDragEnabledLessonId] = useState<string | null>(
-    null,
-  );
+  const [dragEnabledLessonId, setDragEnabledLessonId] = useState<string | null>(null);
 
   // Reusable Delete Confirmation Modal state
   const [deleteModalState, setDeleteModalState] = useState<{
@@ -6486,11 +5944,7 @@ export function CourseCreatePage({
 
   // Section actions
   const handleAddSection = async () => {
-    if (
-      isCreatingSection ||
-      createSectionMutation.isPending ||
-      createCourseMutation.isPending
-    )
+    if (isCreatingSection || createSectionMutation.isPending || createCourseMutation.isPending)
       return;
 
     const tempSectionId = `temp-sec-${Date.now()}`;
@@ -6535,11 +5989,7 @@ export function CourseCreatePage({
         if (hasServerSection) {
           return prev
             .filter((s) => s.id !== tempSectionId)
-            .map((s) =>
-              s.id === createdSection.id
-                ? { ...s, isPendingCreation: false }
-                : s,
-            );
+            .map((s) => (s.id === createdSection.id ? { ...s, isPendingCreation: false } : s));
         }
         return prev.map((s) =>
           s.id === tempSectionId
@@ -6558,8 +6008,7 @@ export function CourseCreatePage({
         pendingAddedSectionScrollRef.current = null;
       }
       setSections((prev) => prev.filter((s) => s.id !== tempSectionId));
-      const errorMsg =
-        (err as { message?: string })?.message || "Failed to create section.";
+      const errorMsg = (err as { message?: string })?.message || "Failed to create section.";
       setToastMessage(errorMsg);
     } finally {
       setIsCreatingSection(false);
@@ -6569,25 +6018,18 @@ export function CourseCreatePage({
   const handleStartEditSectionTitle = (sectionId: string) => {
     clearCurriculumItemStatus(sectionId);
     setSections((prev) =>
-      prev.map((s) =>
-        s.id === sectionId ? { ...s, isEditingTitle: true } : s,
-      ),
+      prev.map((s) => (s.id === sectionId ? { ...s, isEditingTitle: true } : s)),
     );
   };
 
-  const handleSaveSectionTitle = async (
-    sectionId: string,
-    newTitle: string,
-  ) => {
+  const handleSaveSectionTitle = async (sectionId: string, newTitle: string) => {
     const trimmedTitle = newTitle.trim();
     const sec = sections.find((s) => s.id === sectionId);
     if (!sec) return;
 
     if (!trimmedTitle || trimmedTitle === sec.title) {
       setSections((prev) =>
-        prev.map((s) =>
-          s.id === sectionId ? { ...s, isEditingTitle: false } : s,
-        ),
+        prev.map((s) => (s.id === sectionId ? { ...s, isEditingTitle: false } : s)),
       );
       return;
     }
@@ -6602,21 +6044,16 @@ export function CourseCreatePage({
         });
         setSections((prev) =>
           prev.map((s) =>
-            s.id === sectionId
-              ? { ...s, title: trimmedTitle, isEditingTitle: false }
-              : s,
+            s.id === sectionId ? { ...s, title: trimmedTitle, isEditingTitle: false } : s,
           ),
         );
         markCurriculumItemSaved(sectionId);
       } catch (err: unknown) {
         const errorMsg =
-          (err as { message?: string })?.message ||
-          "Failed to update section title.";
+          (err as { message?: string })?.message || "Failed to update section title.";
         setToastMessage(errorMsg);
         setSections((prev) =>
-          prev.map((s) =>
-            s.id === sectionId ? { ...s, isEditingTitle: false } : s,
-          ),
+          prev.map((s) => (s.id === sectionId ? { ...s, isEditingTitle: false } : s)),
         );
         markCurriculumItemFailed(sectionId);
       } finally {
@@ -6625,9 +6062,7 @@ export function CourseCreatePage({
     } else {
       setSections((prev) =>
         prev.map((s) =>
-          s.id === sectionId
-            ? { ...s, title: trimmedTitle, isEditingTitle: false }
-            : s,
+          s.id === sectionId ? { ...s, title: trimmedTitle, isEditingTitle: false } : s,
         ),
       );
     }
@@ -6651,9 +6086,7 @@ export function CourseCreatePage({
             setSections((prev) => prev.filter((s) => s.id !== sectionId));
             setToastMessage(`Section "${sec.title}" deleted.`);
           } catch (err: unknown) {
-            const errorMsg =
-              (err as { message?: string })?.message ||
-              "Failed to delete section.";
+            const errorMsg = (err as { message?: string })?.message || "Failed to delete section.";
             setToastMessage(errorMsg);
           } finally {
             setDeletingSectionId(null);
@@ -6729,9 +6162,7 @@ export function CourseCreatePage({
     if (currentCourseId) {
       // Validate that all IDs are valid UUIDs (persisted sections)
       const allValidUuids = currentIds.every((id) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          id,
-        ),
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
       );
 
       if (allValidUuids) {
@@ -6802,10 +6233,7 @@ export function CourseCreatePage({
         if (s.id !== sectionId) return s;
         return {
           ...s,
-          lessons: [
-            ...s.lessons.map((l) => ({ ...l, isExpanded: false })),
-            optimisticLesson,
-          ],
+          lessons: [...s.lessons.map((l) => ({ ...l, isExpanded: false })), optimisticLesson],
         };
       }),
     );
@@ -6829,11 +6257,7 @@ export function CourseCreatePage({
     }
 
     let targetSectionId = sectionId;
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        targetSectionId,
-      )
-    ) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetSectionId)) {
       try {
         const createdSection = await createSectionMutation.mutateAsync({
           courseId: targetCourseId,
@@ -6841,9 +6265,7 @@ export function CourseCreatePage({
         });
         targetSectionId = createdSection.id;
         setSections((prev) =>
-          prev.map((s) =>
-            s.id === sectionId ? { ...s, id: targetSectionId } : s,
-          ),
+          prev.map((s) => (s.id === sectionId ? { ...s, id: targetSectionId } : s)),
         );
       } catch (err: unknown) {
         // Rollback temporary lesson
@@ -6858,8 +6280,7 @@ export function CourseCreatePage({
           ),
         );
         const errorMsg =
-          (err as { message?: string })?.message ||
-          "Failed to create section on server.";
+          (err as { message?: string })?.message || "Failed to create section on server.";
         setToastMessage(errorMsg);
         setCreatingLessonSectionId(null);
         return;
@@ -6881,20 +6302,14 @@ export function CourseCreatePage({
       setSections((prev) =>
         prev.map((s) => {
           if (s.id !== targetSectionId && s.id !== sectionId) return s;
-          const hasServerLesson = s.lessons.some(
-            (l) => l.id === createdLesson.id,
-          );
+          const hasServerLesson = s.lessons.some((l) => l.id === createdLesson.id);
           if (hasServerLesson) {
             return {
               ...s,
               id: targetSectionId,
               lessons: s.lessons
                 .filter((l) => l.id !== tempLessonId)
-                .map((l) =>
-                  l.id === createdLesson.id
-                    ? { ...l, isPendingCreation: false }
-                    : l,
-                ),
+                .map((l) => (l.id === createdLesson.id ? { ...l, isPendingCreation: false } : l)),
             };
           }
           return {
@@ -6911,10 +6326,8 @@ export function CourseCreatePage({
                       description: l.description || "",
                       contentType: l.contentType,
                       contentMediaId: l.contentMediaId ?? null,
-                      isPublished:
-                        l.isPublished !== undefined ? l.isPublished : true,
-                      isPreview:
-                        l.isPreview !== undefined ? l.isPreview : false,
+                      isPublished: l.isPublished !== undefined ? l.isPublished : true,
+                      isPreview: l.isPreview !== undefined ? l.isPreview : false,
                     },
                   }
                 : l,
@@ -6933,8 +6346,7 @@ export function CourseCreatePage({
           };
         }),
       );
-      const errorMsg =
-        (err as { message?: string })?.message || "Failed to create lesson.";
+      const errorMsg = (err as { message?: string })?.message || "Failed to create lesson.";
       setToastMessage(errorMsg);
     } finally {
       setCreatingLessonSectionId(null);
@@ -6953,9 +6365,7 @@ export function CourseCreatePage({
       onConfirm: async () => {
         if (
           currentCourseId &&
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-            lessonId,
-          )
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lessonId)
         ) {
           setDeletingLessonId(lessonId);
           try {
@@ -6974,9 +6384,7 @@ export function CourseCreatePage({
             );
             setToastMessage(`Lesson "${les.title}" deleted.`);
           } catch (err: unknown) {
-            const errorMsg =
-              (err as { message?: string })?.message ||
-              "Failed to delete lesson.";
+            const errorMsg = (err as { message?: string })?.message || "Failed to delete lesson.";
             setToastMessage(errorMsg);
           } finally {
             setDeletingLessonId(null);
@@ -7007,9 +6415,7 @@ export function CourseCreatePage({
       if (sec.id !== sectionId) return sec;
       return {
         ...sec,
-        lessons: sec.lessons.map((l) =>
-          l.id === lessonId ? { ...l, ...updates } : l,
-        ),
+        lessons: sec.lessons.map((l) => (l.id === lessonId ? { ...l, ...updates } : l)),
       };
     });
     sectionsRef.current = nextSections;
@@ -7083,8 +6489,7 @@ export function CourseCreatePage({
         return false;
       }
 
-      const isPublishedVal =
-        les.isPublished !== undefined ? les.isPublished : true;
+      const isPublishedVal = les.isPublished !== undefined ? les.isPublished : true;
       const isPreviewVal = les.isPreview !== undefined ? les.isPreview : false;
 
       // 4. Snapshot the exact payload being persisted
@@ -7106,9 +6511,7 @@ export function CourseCreatePage({
 
       if (
         targetCourseId &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          lessonId,
-        )
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lessonId)
       ) {
         setSavingLessonId(lessonId);
         try {
@@ -7127,9 +6530,7 @@ export function CourseCreatePage({
                   if (l.id !== lessonId) return l;
                   return {
                     ...l,
-                    isExpanded: options?.collapseOnSuccess
-                      ? false
-                      : l.isExpanded,
+                    isExpanded: options?.collapseOnSuccess ? false : l.isExpanded,
                     initialState: {
                       ...persistedSnapshot,
                     },
@@ -7145,9 +6546,7 @@ export function CourseCreatePage({
           clearLessonEditorDraft(targetCourseId, lessonId);
           return true;
         } catch (err: unknown) {
-          const errorMsg =
-            (err as { message?: string })?.message ||
-            "Failed to update lesson.";
+          const errorMsg = (err as { message?: string })?.message || "Failed to update lesson.";
           setToastMessage(errorMsg);
           markCurriculumItemFailed(lessonId);
           return false;
@@ -7188,10 +6587,7 @@ export function CourseCreatePage({
     return savePromise;
   };
 
-  const handleSaveLesson = async (
-    sectionId: string,
-    lessonId: string,
-  ): Promise<boolean> => {
+  const handleSaveLesson = async (sectionId: string, lessonId: string): Promise<boolean> => {
     return await persistLesson(sectionId, lessonId, {
       collapseOnSuccess: true,
       showCleanToast: true,
@@ -7246,9 +6642,7 @@ export function CourseCreatePage({
                 lesson.id === lessonId
                   ? {
                       ...lesson,
-                      ...(originalTitle !== undefined
-                        ? { title: originalTitle }
-                        : {}),
+                      ...(originalTitle !== undefined ? { title: originalTitle } : {}),
                       isEditingTitle: false,
                     }
                   : lesson,
@@ -7270,19 +6664,14 @@ export function CourseCreatePage({
           : {
               ...section,
               lessons: section.lessons.map((lesson) =>
-                lesson.id === lessonId
-                  ? { ...lesson, isEditingTitle: false }
-                  : lesson,
+                lesson.id === lessonId ? { ...lesson, isEditingTitle: false } : lesson,
               ),
             },
       ),
     );
   };
 
-  const handleCancelLessonDescriptionEdit = (
-    sectionId: string,
-    lessonId: string,
-  ) => {
+  const handleCancelLessonDescriptionEdit = (sectionId: string, lessonId: string) => {
     const currentSections = sectionsRef.current || sections;
     const lesson = currentSections
       .find((section) => section.id === sectionId)
@@ -7341,9 +6730,7 @@ export function CourseCreatePage({
     const courseId = currentCourseIdRef.current || currentCourseId;
     const isPersistedLesson =
       !lesson.isPendingCreation &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        lessonId,
-      );
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lessonId);
     if (!courseId || !isPersistedLesson) {
       // Unsaved lessons carry the media ID in their creation payload.
       handleUpdateLesson(sectionId, lessonId, { contentMediaId: mediaAssetId });
@@ -7361,8 +6748,7 @@ export function CourseCreatePage({
       });
     } catch (err: unknown) {
       setToastMessage(
-        (err as { message?: string })?.message ||
-          "The video could not be attached to this lesson.",
+        (err as { message?: string })?.message || "The video could not be attached to this lesson.",
       );
       return false;
     }
@@ -7405,9 +6791,7 @@ export function CourseCreatePage({
     await Promise.allSettled([refetchEditor(), refetchPreview()]);
   };
 
-  const saveAllDirtyLessons = async (
-    explicitCourseId?: string | null,
-  ): Promise<boolean> => {
+  const saveAllDirtyLessons = async (explicitCourseId?: string | null): Promise<boolean> => {
     if (isSavingAllDirtyLessonsRef.current) return false;
     isSavingAllDirtyLessonsRef.current = true;
     try {
@@ -7457,10 +6841,7 @@ export function CourseCreatePage({
     return true;
   };
 
-  const navigateToCurriculumFocus = (
-    sectionId?: string | null,
-    lessonId?: string | null,
-  ) => {
+  const navigateToCurriculumFocus = (sectionId?: string | null, lessonId?: string | null) => {
     void navigate(
       getCourseEditorPath({
         mode: isEditing ? "edit" : "create",
@@ -7479,19 +6860,14 @@ export function CourseCreatePage({
 
     // 1. When the section is being EXPANDED:
     if (!sec.isExpanded) {
-      if (
-        isCollapsingSectionRef.current ||
-        isSavingAllDirtyLessonsRef.current
-      ) {
+      if (isCollapsingSectionRef.current || isSavingAllDirtyLessonsRef.current) {
         return;
       }
 
       const sectionsToCollapse = currentSections.filter(
         (section) => section.id !== sectionId && section.isExpanded,
       );
-      const targetIndex = currentSections.findIndex(
-        (section) => section.id === sectionId,
-      );
+      const targetIndex = currentSections.findIndex((section) => section.id === sectionId);
       sectionScrollDelayRef.current = currentSections
         .slice(0, targetIndex)
         .some((section) => section.isExpanded)
@@ -7499,9 +6875,7 @@ export function CourseCreatePage({
         : 0;
       const dirtyLessons = sectionsToCollapse.flatMap((section) =>
         section.lessons
-          .filter(
-            (lesson) => isLessonDirty(lesson) && !lesson.isPendingCreation,
-          )
+          .filter((lesson) => isLessonDirty(lesson) && !lesson.isPendingCreation)
           .map((lesson) => ({ sectionId: section.id, lesson })),
       );
 
@@ -7541,16 +6915,12 @@ export function CourseCreatePage({
 
     // 2. When the section is being COLLAPSED:
     // Find dirty lessons in that section
-    const dirtyLessons = sec.lessons.filter(
-      (l) => isLessonDirty(l) && !l.isPendingCreation,
-    );
+    const dirtyLessons = sec.lessons.filter((l) => isLessonDirty(l) && !l.isPendingCreation);
 
     // No dirty lessons? Collapse immediately
     if (dirtyLessons.length === 0) {
       setSections((prev) => {
-        const next = prev.map((s) =>
-          s.id === sectionId ? { ...s, isExpanded: false } : s,
-        );
+        const next = prev.map((s) => (s.id === sectionId ? { ...s, isExpanded: false } : s));
         sectionsRef.current = next;
         return next;
       });
@@ -7585,9 +6955,7 @@ export function CourseCreatePage({
     // No  -> Keep section expanded
     if (allSuccessful) {
       setSections((prev) => {
-        const next = prev.map((s) =>
-          s.id === sectionId ? { ...s, isExpanded: false } : s,
-        );
+        const next = prev.map((s) => (s.id === sectionId ? { ...s, isExpanded: false } : s));
         sectionsRef.current = next;
         return next;
       });
@@ -7636,9 +7004,7 @@ export function CourseCreatePage({
     });
   };
 
-  const handleDeleteLessonResource = async (
-    resourceId: string,
-  ): Promise<void> => {
+  const handleDeleteLessonResource = async (resourceId: string): Promise<void> => {
     if (!currentCourseId) {
       throw new Error("Save the course before removing lesson resources.");
     }
@@ -7702,11 +7068,7 @@ export function CourseCreatePage({
     setCustomDragImage(
       e,
       e.currentTarget as HTMLElement,
-      lessonGhostHtml(
-        lesson.title,
-        lessonIndex,
-        lesson.pendingContentType || lesson.contentType,
-      ),
+      lessonGhostHtml(lesson.title, lessonIndex, lesson.pendingContentType || lesson.contentType),
     );
     e.stopPropagation();
   };
@@ -7727,8 +7089,7 @@ export function CourseCreatePage({
     }
 
     const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const position =
-      e.clientY < targetRect.top + targetRect.height / 2 ? "before" : "after";
+    const position = e.clientY < targetRect.top + targetRect.height / 2 ? "before" : "after";
     const nextDropTarget = {
       sectionId: targetSectionId,
       lessonId: targetLessonId,
@@ -7749,30 +7110,20 @@ export function CourseCreatePage({
     setLessonDropTarget(null);
     dragInitialLessonStateRef.current = null;
 
-    if (
-      !initial ||
-      !draggedLesson ||
-      !dropTarget ||
-      dropTarget.sectionId !== initial.sectionId
-    ) {
+    if (!initial || !draggedLesson || !dropTarget || dropTarget.sectionId !== initial.sectionId) {
       return;
     }
 
-    const currentSec = sectionsRef.current.find(
-      (s) => s.id === initial.sectionId,
-    );
+    const currentSec = sectionsRef.current.find((s) => s.id === initial.sectionId);
     if (!currentSec) return;
 
     const sourceIndex = currentSec.lessons.findIndex(
       (lesson) => lesson.id === draggedLesson.lessonId,
     );
-    const targetIndex = currentSec.lessons.findIndex(
-      (lesson) => lesson.id === dropTarget.lessonId,
-    );
+    const targetIndex = currentSec.lessons.findIndex((lesson) => lesson.id === dropTarget.lessonId);
     if (sourceIndex < 0 || targetIndex < 0) return;
 
-    let insertionIndex =
-      targetIndex + (dropTarget.position === "after" ? 1 : 0);
+    let insertionIndex = targetIndex + (dropTarget.position === "after" ? 1 : 0);
     if (sourceIndex < insertionIndex) insertionIndex -= 1;
     if (sourceIndex === insertionIndex) return;
 
@@ -7782,9 +7133,7 @@ export function CourseCreatePage({
     nextLessons.splice(insertionIndex, 0, movedLesson);
 
     const nextSections = sectionsRef.current.map((section) =>
-      section.id === initial.sectionId
-        ? { ...section, lessons: nextLessons }
-        : section,
+      section.id === initial.sectionId ? { ...section, lessons: nextLessons } : section,
     );
     sectionsRef.current = nextSections;
     setSections(nextSections);
@@ -7800,14 +7149,10 @@ export function CourseCreatePage({
 
     if (
       currentCourseId &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        initial.sectionId,
-      )
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(initial.sectionId)
     ) {
       const allValidUuids = currentLessonIds.every((id) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          id,
-        ),
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
       );
 
       if (allValidUuids) {
@@ -7846,10 +7191,7 @@ export function CourseCreatePage({
 
   // Computed total stats
   const totalSections = sections.length;
-  const totalLessons = sections.reduce(
-    (acc, sec) => acc + sec.lessons.length,
-    0,
-  );
+  const totalLessons = sections.reduce((acc, sec) => acc + sec.lessons.length, 0);
 
   // Prefer the server-calculated duration or estimated duration from editor data.
   const courseDurationSeconds = resolveCourseDurationSeconds(
@@ -7862,8 +7204,7 @@ export function CourseCreatePage({
   const previewCourse: Course = {
     id: currentCourseId || "preview-course",
     title: courseTitle.trim() || "Course Title",
-    description:
-      courseDescription.trim() || "This is a short description of your course.",
+    description: courseDescription.trim() || "This is a short description of your course.",
     level: (difficultyLevel
       ? difficultyLevel.charAt(0).toUpperCase() + difficultyLevel.slice(1)
       : "Beginner") as CourseLevel,
@@ -7900,16 +7241,12 @@ export function CourseCreatePage({
     }));
   }, [previewInclusions]);
 
-  const ensureCourseDraftForPricing = async (
-    explicitCourseId?: string | null,
-  ): Promise<string> => {
-    let targetId =
-      explicitCourseId || currentCourseIdRef.current || currentCourseId;
+  const ensureCourseDraftForPricing = async (explicitCourseId?: string | null): Promise<string> => {
+    let targetId = explicitCourseId || currentCourseIdRef.current || currentCourseId;
     if (targetId) return targetId;
     if (inFlightBasicsPromiseRef.current) {
       await inFlightBasicsPromiseRef.current;
-      targetId =
-        explicitCourseId || currentCourseIdRef.current || currentCourseId;
+      targetId = explicitCourseId || currentCourseIdRef.current || currentCourseId;
       if (targetId) return targetId;
     }
     throw new Error(
@@ -8067,11 +7404,7 @@ export function CourseCreatePage({
     markPricingControlSaving("pricingDetails", true);
 
     const previousSnapshot = { ...serverPricingRef.current };
-    return await executeSerializedPricingMutation(
-      "pricingDetails",
-      version,
-      previousSnapshot,
-    );
+    return await executeSerializedPricingMutation("pricingDetails", version, previousSnapshot);
   };
 
   const flushPricingPersistence = async () => {
@@ -8128,11 +7461,7 @@ export function CourseCreatePage({
     markPricingControlSaving("pricingType", true);
 
     try {
-      await executeSerializedPricingMutation(
-        "pricingType",
-        version,
-        previousSnapshot,
-      );
+      await executeSerializedPricingMutation("pricingType", version, previousSnapshot);
     } catch {
       // Error handled in executeSerializedPricingMutation
     }
@@ -8209,11 +7538,7 @@ export function CourseCreatePage({
     markPricingControlSaving("currency", true);
 
     try {
-      await executeSerializedPricingMutation(
-        "currency",
-        version,
-        previousSnapshot,
-      );
+      await executeSerializedPricingMutation("currency", version, previousSnapshot);
     } catch {
       // Error handled in executeSerializedPricingMutation
     }
@@ -8243,14 +7568,10 @@ export function CourseCreatePage({
             pricing.sellingPrice.trim() &&
             previewOriginalAmount > previewSellingAmount
               ? `${Math.round(
-                  ((previewOriginalAmount - previewSellingAmount) /
-                    previewOriginalAmount) *
-                    100,
+                  ((previewOriginalAmount - previewSellingAmount) / previewOriginalAmount) * 100,
                 )}% OFF`
               : undefined,
-          amount: Number.isFinite(previewSellingAmount)
-            ? previewSellingAmount
-            : 0,
+          amount: Number.isFinite(previewSellingAmount) ? previewSellingAmount : 0,
           currency: previewCurrency,
         };
 
@@ -8262,8 +7583,7 @@ export function CourseCreatePage({
   const editorCourseCreatedAt = editorData?.course?.createdAt;
   const editorCourseUpdatedAt = editorData?.course?.updatedAt;
   const editorCoursePublishedAt = editorData?.course?.publishedAt;
-  const editorCourseTotalDurationSeconds =
-    editorData?.course?.totalDurationSeconds;
+  const editorCourseTotalDurationSeconds = editorData?.course?.totalDurationSeconds;
   const editorAccessRulesId = editorData?.accessRules?.id;
   const editorPricingId = editorData?.pricing?.id;
   const editorSettingsId = editorData?.settings?.id;
@@ -8374,16 +7694,12 @@ export function CourseCreatePage({
     {
       area: "accessRules",
       label: "Access Rules",
-      summary:
-        accessRules.accessType === "everyone"
-          ? "Everyone"
-          : "Restricted Access",
+      summary: accessRules.accessType === "everyone" ? "Everyone" : "Restricted Access",
     },
     {
       area: "pricing",
       label: "Pricing",
-      summary:
-        pricing.pricingType === "free" ? "Free" : `₹${pricing.sellingPrice}`,
+      summary: pricing.pricingType === "free" ? "Free" : `₹${pricing.sellingPrice}`,
     },
     {
       area: "extras",
@@ -8433,8 +7749,7 @@ export function CourseCreatePage({
   };
 
   const executeSerializedBasicsMetaMutation = async (
-    controlKey:
-      "title" | "shortDescription" | "courseDescription" | "instructorAlias",
+    controlKey: "title" | "shortDescription" | "courseDescription" | "instructorAlias",
     targetVersion: number,
     previousSnapshot: BasicsFormState,
   ) => {
@@ -8493,8 +7808,7 @@ export function CourseCreatePage({
           shortDescription: updated.shortDescription || "",
           description: updated.description || "",
           categoryId: updated.categoryId || "",
-          difficulty:
-            (updated.difficulty as BasicsFormState["difficulty"]) || "",
+          difficulty: (updated.difficulty as BasicsFormState["difficulty"]) || "",
           language: serverBasicsRef.current.language,
           instructorAlias: updated.instructorAlias || "",
           showInstructorName: serverBasicsRef.current.showInstructorName,
@@ -8596,8 +7910,7 @@ export function CourseCreatePage({
         id: currentCourseIdRef.current,
         version: courseVersionRef.current,
         title: serverBasicsRef.current.title || title,
-        instructorAlias:
-          serverBasicsRef.current.instructorAlias || instructorAlias,
+        instructorAlias: serverBasicsRef.current.instructorAlias || instructorAlias,
       };
     }
 
@@ -8625,11 +7938,7 @@ export function CourseCreatePage({
         if (currentUrl.searchParams.get("edit") !== created.id) {
           currentUrl.searchParams.set("edit", created.id);
           currentUrl.searchParams.delete("courseId");
-          window.history.replaceState(
-            window.history.state,
-            "",
-            currentUrl.toString(),
-          );
+          window.history.replaceState(window.history.state, "", currentUrl.toString());
         }
       }
 
@@ -8706,8 +8015,7 @@ export function CourseCreatePage({
   };
 
   const persistBasicsField = async (
-    fieldKey:
-      "title" | "shortDescription" | "courseDescription" | "instructorAlias",
+    fieldKey: "title" | "shortDescription" | "courseDescription" | "instructorAlias",
   ) => {
     const currentDraft = basicsDraftRef.current;
     const baseline = serverBasicsRef.current;
@@ -8752,9 +8060,7 @@ export function CourseCreatePage({
             }));
             basicsDraftRef.current = {
               ...basicsDraftRef.current,
-              instructorAlias:
-                created.instructorAlias ??
-                basicsDraftRef.current.instructorAlias,
+              instructorAlias: created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
             };
             // Now that currentCourseId is established, persist the latest title
             // through the EXISTING COURSE update path (executeSerializedBasicsMetaMutation).
@@ -8769,9 +8075,7 @@ export function CourseCreatePage({
             basicsDraftRef.current = {
               ...basicsDraftRef.current,
               title: created.title,
-              instructorAlias:
-                created.instructorAlias ??
-                basicsDraftRef.current.instructorAlias,
+              instructorAlias: created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
             };
             markBasicsFieldSaved("title");
           }
@@ -8779,9 +8083,7 @@ export function CourseCreatePage({
         } catch (err: unknown) {
           markBasicsFieldFailed("title");
           const errorMsg =
-            err instanceof Error
-              ? err.message
-              : "Failed to create course. Please try again.";
+            err instanceof Error ? err.message : "Failed to create course. Please try again.";
           setToastMessage(errorMsg);
         } finally {
           markBasicsControlSaving("title", false);
@@ -8812,10 +8114,7 @@ export function CourseCreatePage({
         return;
       }
       if (fieldKey === "shortDescription") {
-        if (
-          currentDraft.shortDescription.trim() ===
-          baseline.shortDescription.trim()
-        ) {
+        if (currentDraft.shortDescription.trim() === baseline.shortDescription.trim()) {
           return;
         }
       } else if (fieldKey === "courseDescription") {
@@ -8823,10 +8122,7 @@ export function CourseCreatePage({
           return;
         }
       } else if (fieldKey === "instructorAlias") {
-        if (
-          currentDraft.instructorAlias.trim() ===
-          baseline.instructorAlias.trim()
-        ) {
+        if (currentDraft.instructorAlias.trim() === baseline.instructorAlias.trim()) {
           return;
         }
       }
@@ -8838,11 +8134,7 @@ export function CourseCreatePage({
       (inFlightBasicsControlsRef.current[fieldKey] || 0) + 1;
     const previousSnapshot = { ...serverBasicsRef.current };
 
-    return await executeSerializedBasicsMetaMutation(
-      fieldKey,
-      version,
-      previousSnapshot,
-    );
+    return await executeSerializedBasicsMetaMutation(fieldKey, version, previousSnapshot);
   };
 
   const handleShowInstructorNameChange = async (nextValue: boolean) => {
@@ -8878,9 +8170,7 @@ export function CourseCreatePage({
 
       if (basicsVersionRef.current === version) {
         const confirmedShow =
-          res.showInstructorName !== undefined
-            ? res.showInstructorName
-            : nextValue;
+          res.showInstructorName !== undefined ? res.showInstructorName : nextValue;
         const newBaseline: BasicsFormState = {
           ...serverBasicsRef.current,
           showInstructorName: confirmedShow,
@@ -8894,9 +8184,7 @@ export function CourseCreatePage({
         setShowInstructorName(previousValue);
         markBasicsFieldFailed("showInstructorName");
         const errorMsg =
-          err instanceof Error
-            ? err.message
-            : "Failed to update instructor name visibility.";
+          err instanceof Error ? err.message : "Failed to update instructor name visibility.";
         setToastMessage(errorMsg);
       }
     } finally {
@@ -8947,10 +8235,7 @@ export function CourseCreatePage({
       }
     }
 
-    const isMetaDirty = !isBasicsMetaEqual(
-      basicsDraftRef.current,
-      serverBasicsRef.current,
-    );
+    const isMetaDirty = !isBasicsMetaEqual(basicsDraftRef.current, serverBasicsRef.current);
     if (isMetaDirty) {
       if (!basicsDraftRef.current.title.trim()) {
         setCourseTitle(serverBasicsRef.current.title);
@@ -8959,27 +8244,18 @@ export function CourseCreatePage({
       }
       const version = ++basicsVersionRef.current;
       markBasicsControlSaving("title", true);
-      inFlightBasicsControlsRef.current.title =
-        (inFlightBasicsControlsRef.current.title || 0) + 1;
+      inFlightBasicsControlsRef.current.title = (inFlightBasicsControlsRef.current.title || 0) + 1;
       const previousSnapshot = { ...serverBasicsRef.current };
       try {
-        await executeSerializedBasicsMetaMutation(
-          "title",
-          version,
-          previousSnapshot,
-        );
+        await executeSerializedBasicsMetaMutation("title", version, previousSnapshot);
         return true;
       } catch {
         return false;
       }
-    } else if (
-      inFlightCourseCreationPromiseRef.current ||
-      inFlightBasicsPromiseRef.current
-    ) {
+    } else if (inFlightCourseCreationPromiseRef.current || inFlightBasicsPromiseRef.current) {
       try {
         // Await whichever in-flight operation is active (creation takes priority).
-        await (inFlightCourseCreationPromiseRef.current ??
-          inFlightBasicsPromiseRef.current);
+        await (inFlightCourseCreationPromiseRef.current ?? inFlightBasicsPromiseRef.current);
         return true;
       } catch {
         return false;
@@ -8990,10 +8266,7 @@ export function CourseCreatePage({
 
   const saveBasicsStep = async (explicitCourseId?: string | null) => {
     const targetCourseId = explicitCourseId || currentCourseId;
-    if (
-      targetCourseId &&
-      isBasicsEqual(basicsDraftRef.current, serverBasicsRef.current)
-    ) {
+    if (targetCourseId && isBasicsEqual(basicsDraftRef.current, serverBasicsRef.current)) {
       return serverBasicsRef.current;
     }
 
@@ -9031,8 +8304,7 @@ export function CourseCreatePage({
           }));
           basicsDraftRef.current = {
             ...basicsDraftRef.current,
-            instructorAlias:
-              created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
+            instructorAlias: created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
           };
           void persistBasicsField("title");
         } else {
@@ -9044,8 +8316,7 @@ export function CourseCreatePage({
           basicsDraftRef.current = {
             ...basicsDraftRef.current,
             title: created.title,
-            instructorAlias:
-              created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
+            instructorAlias: created.instructorAlias ?? basicsDraftRef.current.instructorAlias,
           };
         }
 
@@ -9059,13 +8330,11 @@ export function CourseCreatePage({
             id: created.id,
             payload: {
               title: created.title,
-              shortDescription:
-                basicsDraftRef.current.shortDescription.trim() || null,
+              shortDescription: basicsDraftRef.current.shortDescription.trim() || null,
               description: basicsDraftRef.current.description.trim() || null,
               categoryId: basicsDraftRef.current.categoryId || null,
               difficulty: basicsDraftRef.current.difficulty || null,
-              instructorAlias:
-                basicsDraftRef.current.instructorAlias.trim() || null,
+              instructorAlias: basicsDraftRef.current.instructorAlias.trim() || null,
               version: created.version,
             },
           });
@@ -9076,8 +8345,7 @@ export function CourseCreatePage({
             shortDescription: updated.shortDescription || "",
             description: updated.description || "",
             categoryId: updated.categoryId || "",
-            difficulty:
-              (updated.difficulty as BasicsFormState["difficulty"]) || "",
+            difficulty: (updated.difficulty as BasicsFormState["difficulty"]) || "",
           });
           setServerBasics(updatedBaseline);
           serverBasicsRef.current = updatedBaseline;
@@ -9117,9 +8385,7 @@ export function CourseCreatePage({
       const editingSections = sections.filter(
         (s) =>
           s.isEditingTitle &&
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-            s.id,
-          ),
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id),
       );
       if (editingSections.length > 0) {
         await Promise.all(
@@ -9132,9 +8398,7 @@ export function CourseCreatePage({
                 payload: { title: trimmed },
               });
               setSections((prev) =>
-                prev.map((s) =>
-                  s.id === sec.id ? { ...s, isEditingTitle: false } : s,
-                ),
+                prev.map((s) => (s.id === sec.id ? { ...s, isEditingTitle: false } : s)),
               );
               markCurriculumItemSaved(sec.id);
             }
@@ -9174,10 +8438,7 @@ export function CourseCreatePage({
 
       let durationDays: number | null = null;
       if (accessRulesDraftRef.current.durationMode === "fixed") {
-        const val = Math.max(
-          1,
-          accessRulesDraftRef.current.fixedDurationValue || 1,
-        );
+        const val = Math.max(1, accessRulesDraftRef.current.fixedDurationValue || 1);
         const unitMultiplier =
           accessRulesDraftRef.current.fixedDurationUnit === "Years"
             ? 365
@@ -9202,13 +8463,9 @@ export function CourseCreatePage({
           payload: {
             accessType: accessRulesDraftRef.current.accessType || "everyone",
             durationType:
-              accessRulesDraftRef.current.durationMode === "fixed"
-                ? "fixed_duration"
-                : "lifetime",
+              accessRulesDraftRef.current.durationMode === "fixed" ? "fixed_duration" : "lifetime",
             durationDays:
-              accessRulesDraftRef.current.durationMode === "fixed"
-                ? durationDays
-                : null,
+              accessRulesDraftRef.current.durationMode === "fixed" ? durationDays : null,
           },
         });
       }
@@ -9246,10 +8503,7 @@ export function CourseCreatePage({
     await flushPricingPersistence();
 
     // If already saved and clean, do not fire redundant duplicate mutation
-    const isDirty = !isPricingEqual(
-      pricingDraftRef.current,
-      serverPricingRef.current,
-    );
+    const isDirty = !isPricingEqual(pricingDraftRef.current, serverPricingRef.current);
     if (!isDirty) {
       return { ...serverPricingRef.current };
     }
@@ -9264,8 +8518,7 @@ export function CourseCreatePage({
 
     setIsSavingPricing(true);
     try {
-      const targetCourseId =
-        await ensureCourseDraftForPricing(explicitCourseId);
+      const targetCourseId = await ensureCourseDraftForPricing(explicitCourseId);
       const payload = buildPricingPayload(pricingDraftRef.current);
       const res = await upsertPricingMutation.mutateAsync({
         courseId: targetCourseId,
@@ -9360,9 +8613,7 @@ export function CourseCreatePage({
         // Refetch latest includes list from server
         const listRes = await coursesService.listIncludes(targetCourseId!);
         setServerIncludes(listRes.items);
-        setManualIncludesDraft(
-          listRes.items.map((inc) => ({ id: inc.id, text: inc.text })),
-        );
+        setManualIncludesDraft(listRes.items.map((inc) => ({ id: inc.id, text: inc.text })));
       }
 
       setExtrasSaveFailed(false);
@@ -9422,11 +8673,7 @@ export function CourseCreatePage({
 
     const leavingStep = activeStep;
 
-    if (
-      leavingStep === "basics" &&
-      !currentCourseIdRef.current &&
-      !currentCourseId
-    ) {
+    if (leavingStep === "basics" && !currentCourseIdRef.current && !currentCourseId) {
       const flushed = await flushBasicsPersistence();
       if (!flushed) {
         setShowTitleTooltip(true);
@@ -9436,11 +8683,7 @@ export function CourseCreatePage({
       }
     }
 
-    if (
-      !currentCourseIdRef.current &&
-      !isDownstreamUnlocked &&
-      destination !== "basics"
-    ) {
+    if (!currentCourseIdRef.current && !isDownstreamUnlocked && destination !== "basics") {
       setShowTitleTooltip(true);
       titleInputRef.current?.focus();
       setToastMessage("Add a course title to continue.");
@@ -9458,8 +8701,7 @@ export function CourseCreatePage({
     setMountedTabs((current) => {
       const next = getAdjacentWizardSteps(destination);
       next.add(leavingStep);
-      const hasSameTabs =
-        next.size === current.size && [...next].every((id) => current.has(id));
+      const hasSameTabs = next.size === current.size && [...next].every((id) => current.has(id));
       return hasSameTabs ? current : next;
     });
     pendingWizardNavigationRef.current = destination;
@@ -9485,11 +8727,8 @@ export function CourseCreatePage({
           await saveCurrentStep();
         }
       } catch (err: unknown) {
-        const stepLabel =
-          WIZARD_STEPS.find((s) => s.id === leavingStep)?.label || leavingStep;
-        setToastMessage(
-          `Failed to save ${stepLabel}. Your changes are kept locally.`,
-        );
+        const stepLabel = WIZARD_STEPS.find((s) => s.id === leavingStep)?.label || leavingStep;
+        setToastMessage(`Failed to save ${stepLabel}. Your changes are kept locally.`);
       } finally {
         setActionLoading(null);
         saveActionInFlightRef.current = false;
@@ -9511,12 +8750,9 @@ export function CourseCreatePage({
   navigateToStepRef.current = navigateToStep;
 
   const currentStepIndex = WIZARD_STEP_IDS.indexOf(activeStep);
-  const previousStepId =
-    currentStepIndex > 0 ? WIZARD_STEP_IDS[currentStepIndex - 1] : null;
+  const previousStepId = currentStepIndex > 0 ? WIZARD_STEP_IDS[currentStepIndex - 1] : null;
   const nextStepId =
-    currentStepIndex < WIZARD_STEP_IDS.length - 1
-      ? WIZARD_STEP_IDS[currentStepIndex + 1]
-      : null;
+    currentStepIndex < WIZARD_STEP_IDS.length - 1 ? WIZARD_STEP_IDS[currentStepIndex + 1] : null;
 
   const reconcileDirtyState = async (explicitCourseId?: string | null) => {
     let targetCourseId = explicitCourseId || currentCourseId;
@@ -9531,11 +8767,7 @@ export function CourseCreatePage({
     // 1. If basics is dirty or course has not been created yet, save basics first
     if (!targetCourseId || isBasicsDirty) {
       const createdOrUpdated = await saveBasicsStep(targetCourseId);
-      if (
-        createdOrUpdated &&
-        typeof createdOrUpdated === "object" &&
-        "id" in createdOrUpdated
-      ) {
+      if (createdOrUpdated && typeof createdOrUpdated === "object" && "id" in createdOrUpdated) {
         targetCourseId = (createdOrUpdated as { id: string }).id;
       } else if (!targetCourseId) {
         targetCourseId = currentCourseId;
@@ -9592,8 +8824,7 @@ export function CourseCreatePage({
       }
     } catch (err: unknown) {
       const errorMsg =
-        (err as { message?: string })?.message ||
-        "Failed to save changes or validate course.";
+        (err as { message?: string })?.message || "Failed to save changes or validate course.";
       setToastMessage(errorMsg);
     } finally {
       setActionLoading(null);
@@ -9625,8 +8856,7 @@ export function CourseCreatePage({
       }
 
       // 3. Trigger publish API mutation
-      const publishedCourse =
-        await publishCourseMutation.mutateAsync(targetCourseId);
+      const publishedCourse = await publishCourseMutation.mutateAsync(targetCourseId);
 
       // 4. Synchronize server-returned state & version
       setIsPublished(publishedCourse.status === "published");
@@ -9650,20 +8880,17 @@ export function CourseCreatePage({
   };
 
   const handleConfirmUnpublishCourse = async () => {
-    if (!currentCourseId || actionLoading || saveActionInFlightRef.current)
-      return;
+    if (!currentCourseId || actionLoading || saveActionInFlightRef.current) return;
     saveActionInFlightRef.current = true;
     setActionLoading("unpublish");
     try {
-      const draftCourse =
-        await unpublishCourseMutation.mutateAsync(currentCourseId);
+      const draftCourse = await unpublishCourseMutation.mutateAsync(currentCourseId);
       setIsPublished(draftCourse.status === "published");
       setCourseVersion(draftCourse.version);
       setToastMessage("Course unpublished and returned to draft.");
       setIsUnpublishModalOpen(false);
     } catch (err: unknown) {
-      const errorMsg =
-        (err as { message?: string })?.message || "Failed to unpublish course.";
+      const errorMsg = (err as { message?: string })?.message || "Failed to unpublish course.";
       setToastMessage(errorMsg);
     } finally {
       setActionLoading(null);
@@ -9673,23 +8900,23 @@ export function CourseCreatePage({
 
   if (isEditorError && !editorData && isEditing) {
     return (
-      <div className="relative flex w-full flex-1 flex-col min-h-[calc(100dvh-130px)] p-0 text-[--text] box-border max-[768px]:pb-0">
-        <header className="relative shrink-0 mb-4 max-[768px]:mb-2 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
-          <div className="flex items-start justify-between gap-4 mb-3 max-[768px]:flex-col max-[768px]:gap-3 max-[768px]:mb-2">
-            <div className="flex items-start gap-3 min-w-0">
+      <div className="relative box-border flex min-h-[calc(100dvh-130px)] w-full flex-1 flex-col p-0 text-[--text] max-[768px]:pb-0">
+        <header className="relative mb-4 shrink-0 max-[768px]:mb-2 max-[768px]:box-border max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0">
+          <div className="mb-3 flex items-start justify-between gap-4 max-[768px]:mb-2 max-[768px]:flex-col max-[768px]:gap-3">
+            <div className="flex min-w-0 items-start gap-3">
               <button
                 type="button"
-                className="flex w-9 h-9 shrink-0 items-center justify-center border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg text-(--text-secondary) bg-[color-mix(in_srgb,var(--text)_4%,transparent)] cursor-pointer transition-[border-color,background-color,color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] text-(--text-secondary) transition-[border-color,background-color,color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
                 onClick={handleBack}
                 aria-label="Go back to courses"
               >
                 <ArrowLeft size={17} weight="bold" />
               </button>
-              <div className="pt-0.5 min-w-0">
-                <h1 className="m-0 text-(--text) text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
+              <div className="min-w-0 pt-0.5">
+                <h1 className="m-0 text-[clamp(1.2rem,1.8vw,1.55rem)] leading-[1.2] font-bold tracking-[-0.015em] text-(--text)">
                   Edit Course
                 </h1>
-                <p className="m-0 mt-1 text-(--muted) text-[0.84rem] max-w-155 leading-[1.4]">
+                <p className="m-0 mt-1 max-w-155 text-[0.84rem] leading-[1.4] text-(--muted)">
                   Unable to load course data.
                 </p>
               </div>
@@ -9697,7 +8924,7 @@ export function CourseCreatePage({
           </div>
         </header>
 
-        <div className="relative flex flex-1 flex-col items-center justify-center w-full min-h-[calc(100dvh-230px)] rounded-[14px] border border-red-500/20 bg-(--surface) p-8 text-center shadow-(--card-shadow) my-auto">
+        <div className="relative my-auto flex min-h-[calc(100dvh-230px)] w-full flex-1 flex-col items-center justify-center rounded-[14px] border border-red-500/20 bg-(--surface) p-8 text-center shadow-(--card-shadow)">
           <div className="relative mb-5 flex h-18 w-18 items-center justify-center rounded-full bg-red-500/10 text-red-400">
             <WarningCircle size={38} weight="bold" />
           </div>
@@ -9711,14 +8938,14 @@ export function CourseCreatePage({
           <div className="mt-5 flex items-center gap-3">
             <button
               type="button"
-              className="inline-flex h-9 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] px-4 text-[0.82rem] font-semibold text-(--text) cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] hover:text-(--text)"
+              className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] px-4 text-[0.82rem] font-semibold text-(--text) transition-colors hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] hover:text-(--text)"
               onClick={handleBack}
             >
               Back to Courses
             </button>
             <button
               type="button"
-              className="inline-flex h-9 items-center justify-center rounded-lg border-none bg-(--accent) px-4 text-[0.82rem] font-semibold text-(--on-accent,#ffffff) shadow-[0_2px_8px_var(--accent-shadow,rgba(0,0,0,0.2))] cursor-pointer transition-all hover:bg-(--accent-hover,var(--accent)) hover:brightness-110 active:scale-[0.98]"
+              className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg border-none bg-(--accent) px-4 text-[0.82rem] font-semibold text-(--on-accent,#ffffff) shadow-[0_2px_8px_var(--accent-shadow,rgba(0,0,0,0.2))] transition-all hover:bg-(--accent-hover,var(--accent)) hover:brightness-110 active:scale-[0.98]"
               onClick={() => void refetchEditor()}
             >
               Retry
@@ -9731,38 +8958,38 @@ export function CourseCreatePage({
 
   return (
     <div
-      className="relative flex w-full flex-1 flex-col min-h-full p-0 text-[--text] box-border"
+      className="relative box-border flex min-h-full w-full flex-1 flex-col p-0 text-[--text]"
       data-course-wizard
     >
       <CourseStaticPageRefreshNotice courseId={currentCourseId} />
       {/* Wizard Header */}
-      <header className="relative shrink-0 mb-2 max-[768px]:mb-1.5 max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0 max-[768px]:box-border">
-        <div className="flex items-start justify-between gap-4 mb-1 max-[768px]:flex-col max-[768px]:gap-2 max-[768px]:mb-1.5">
-          <div className="flex items-start gap-3 min-w-0">
+      <header className="relative mb-2 shrink-0 max-[768px]:mb-1.5 max-[768px]:box-border max-[768px]:w-full max-[768px]:max-w-full max-[768px]:min-w-0">
+        <div className="mb-1 flex items-start justify-between gap-4 max-[768px]:mb-1.5 max-[768px]:flex-col max-[768px]:gap-2">
+          <div className="flex min-w-0 items-start gap-3">
             <button
               type="button"
-              className="flex w-9 h-9 shrink-0 items-center justify-center border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg text-(--text-secondary) bg-[color-mix(in_srgb,var(--text)_4%,transparent)] cursor-pointer transition-[border-color,background-color,color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
+              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_4%,transparent)] text-(--text-secondary) transition-[border-color,background-color,color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text)"
               onClick={handleBack}
               aria-label="Go back to courses"
             >
               <ArrowLeft size={17} weight="bold" />
             </button>
-            <div className="pt-0.5 min-w-0">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="m-0 text-(--text) text-[clamp(1.2rem,1.8vw,1.55rem)] font-bold tracking-[-0.015em] leading-[1.2]">
+            <div className="min-w-0 pt-0.5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="m-0 text-[clamp(1.2rem,1.8vw,1.55rem)] leading-[1.2] font-bold tracking-[-0.015em] text-(--text)">
                   {isEditing ? "Edit Course" : "Create New Course"}
                 </h1>
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium tracking-[0.02em] ${
                     isPublished
-                      ? "is-published border border-green-500/35 text-green-400 bg-green-500/12"
-                      : "border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                      ? "is-published border border-green-500/35 bg-green-500/12 text-green-400"
+                      : "border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--muted)"
                   }`}
                 >
                   {isPublished ? "Published" : "Draft"}
                 </span>
               </div>
-              <p className="m-0 mt-0.5 text-(--muted) text-[0.82rem] max-w-155 leading-[1.35]">
+              <p className="m-0 mt-0.5 max-w-155 text-[0.82rem] leading-[1.35] text-(--muted)">
                 {activeStep === "curriculum"
                   ? isEditing
                     ? "Manage and organize your course sections, lessons, and resources."
@@ -9795,7 +9022,7 @@ export function CourseCreatePage({
 
         {/* Publish validation error toast if any */}
         {publishValidationError && activeStep === "publish" && (
-          <div className="flex items-center gap-2.5 mb-3 border border-red-400/35 rounded-[10px] px-4 py-2 text-red-400 bg-red-500/12 backdrop-blur-md shadow-[0_4px_16px_rgba(239,68,68,0.15)] text-[0.84rem] font-semibold animate-[bannerSlideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
+          <div className="mb-3 flex animate-[bannerSlideUp_0.3s_cubic-bezier(0.16,1,0.3,1)] items-center gap-2.5 rounded-[10px] border border-red-400/35 bg-red-500/12 px-4 py-2 text-[0.84rem] font-semibold text-red-400 shadow-[0_4px_16px_rgba(239,68,68,0.15)] backdrop-blur-md">
             <Info size={16} weight="bold" />
             <span>{publishValidationError}</span>
           </div>
@@ -9806,9 +9033,7 @@ export function CourseCreatePage({
       <nav
         ref={stepsNavRef}
         className="course-wizard-steps-nav settings-tabs page-tabs border-b border-[color-mix(in_srgb,var(--text)_12%,transparent)] [&::after]:hidden!"
-        aria-label={
-          isEditing ? "Course editing steps" : "Course creation steps"
-        }
+        aria-label={isEditing ? "Course editing steps" : "Course creation steps"}
         role="tablist"
         onMouseDown={handleNavMouseDown}
         onMouseLeave={handleNavMouseLeave}
@@ -9841,27 +9066,20 @@ export function CourseCreatePage({
                   ? "Add a course title to continue."
                   : undefined
               }
-              disabled={
-                actionLoading !== null ||
-                (!isDownstreamUnlocked && step.id !== "basics")
-              }
-              className={`inline-flex flex-row items-center gap-2 !border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
+              disabled={actionLoading !== null || (!isDownstreamUnlocked && step.id !== "basics")}
+              className={`inline-flex shrink-0 flex-row items-center gap-2 !border-b-transparent whitespace-nowrap disabled:!cursor-not-allowed disabled:!opacity-50 ${isActive ? "is-active" : ""}`}
               onClick={() => {
                 if (isInitialLoadingCourse) return;
                 void navigateToStep(step.id);
               }}
               onKeyDown={handleRovingTabKeyDown}
             >
-              <Icon
-                size={17}
-                weight={isActive ? "fill" : "regular"}
-                className="shrink-0"
-              />
+              <Icon size={17} weight={isActive ? "fill" : "regular"} className="shrink-0" />
               <span className="inline-flex items-center gap-1.5">
                 <span>{step.label}</span>
                 {isDirty && (
                   <span
-                    className="inline-block w-1.5 h-1.5 rounded-full bg-(--accent) shrink-0"
+                    className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-(--accent)"
                     title="Unsaved changes"
                     aria-label="Unsaved changes"
                   />
@@ -9892,28 +9110,25 @@ export function CourseCreatePage({
             }}
             tabListRef={stepsNavRef}
             id="course-wizard-tab-panel"
-            className="course-wizard-tab-content relative min-h-0 flex-1 flex flex-col pt-4 pb-6 max-[640px]:pt-3"
+            className="course-wizard-tab-content relative flex min-h-0 flex-1 flex-col pt-4 pb-6 max-[640px]:pt-3"
             stateAttribute="data-wizard-step"
             labelledBy={`course-wizard-tab-${activeStep}`}
-            disabled={
-              actionLoading !== null ||
-              (!isDownstreamUnlocked && activeStep === "basics")
-            }
+            disabled={actionLoading !== null || (!isDownstreamUnlocked && activeStep === "basics")}
             spaceBetween={32}
           >
             {(panelStep) =>
               !mountedTabs.has(panelStep) ? null : panelStep === "basics" ? (
-                <div className="relative z-10 grid grid-cols-1 md:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
+                <div className="relative z-10 grid w-full min-w-0 grid-cols-1 items-start gap-6 max-[768px]:gap-4.5 md:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)]">
                   {/* Left Column: Form Sections */}
                   <div className="flex flex-col gap-5">
                     {/* Basic Information Section */}
-                    <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+                    <section className="relative z-10 rounded-[14px] bg-(--surface) p-6 shadow-(--card-shadow) max-[768px]:p-4">
                       <div className="mb-4.5 flex items-center justify-between">
                         <div>
-                          <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                          <h2 className="m-0 text-[1.18rem] font-[650] tracking-[-0.015em] text-(--text)">
                             Basic Information
                           </h2>
-                          <p className="m-0 mt-1 mb-0 text-(--muted) text-[0.82rem]">
+                          <p className="m-0 mt-1 mb-0 text-[0.82rem] text-(--muted)">
                             {isEditing
                               ? "Update the essential details of your course."
                               : "Add the essential details of your course."}
@@ -9921,7 +9136,7 @@ export function CourseCreatePage({
                         </div>
                       </div>
 
-                      <div className="relative flex flex-col gap-2 mb-5">
+                      <div className="relative mb-5 flex flex-col gap-2">
                         {showTitleTooltip &&
                           !isDownstreamUnlocked &&
                           !isInitialCourseCreationPending && (
@@ -9930,21 +9145,14 @@ export function CourseCreatePage({
                               id="course-title-tooltip"
                               data-testid="basics-title-tooltip"
                               onClick={() => titleInputRef.current?.focus()}
-                              className="absolute -top-9 left-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--surface-strong) text-(--text) text-[0.78rem] font-medium border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] shadow-[0_6px_20px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)] transition-all select-none cursor-pointer group"
+                              className="group absolute -top-9 left-0 z-30 flex cursor-pointer items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-(--surface-strong) px-3 py-1.5 text-[0.78rem] font-medium text-(--text) shadow-[0_6px_20px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)] transition-all select-none"
                             >
-                              <Info
-                                size={15}
-                                weight="fill"
-                                className="text-(--accent) shrink-0"
-                              />
-                              <span>
-                                Continue course creation by entering a course
-                                title
-                              </span>
+                              <Info size={15} weight="fill" className="shrink-0 text-(--accent)" />
+                              <span>Continue course creation by entering a course title</span>
                               <button
                                 type="button"
                                 aria-label="Dismiss tooltip"
-                                className="ml-1 p-0.5 rounded hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) hover:text-(--text) transition-colors border-none bg-transparent cursor-pointer inline-flex items-center justify-center"
+                                className="ml-1 inline-flex cursor-pointer items-center justify-center rounded border-none bg-transparent p-0.5 text-(--muted) transition-colors hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] hover:text-(--text)"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setShowTitleTooltip(false);
@@ -9953,7 +9161,7 @@ export function CourseCreatePage({
                                 <X size={13} />
                               </button>
                               <div
-                                className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-(--surface-strong) border-r border-b border-[color-mix(in_srgb,var(--accent)_35%,var(--border))]"
+                                className="absolute -bottom-1.5 left-6 h-3 w-3 rotate-45 border-r border-b border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-(--surface-strong)"
                                 aria-hidden="true"
                               />
                             </div>
@@ -9961,10 +9169,9 @@ export function CourseCreatePage({
                         <div className="flex items-center justify-between">
                           <label
                             htmlFor="course-title"
-                            className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                            className="text-[0.84rem] font-semibold text-(--text-secondary)"
                           >
-                            Course Title{" "}
-                            <span className="text-[#ff5252] ml-0.5">*</span>
+                            Course Title <span className="ml-0.5 text-[#ff5252]">*</span>
                           </label>
                           <BasicsFieldStatusIndicator
                             status={getBasicsFieldDisplayStatus("title")}
@@ -9991,19 +9198,13 @@ export function CourseCreatePage({
                               }
 
                               // 1-second debounce for brand-new courses only
-                              if (
-                                !currentCourseIdRef.current &&
-                                !currentCourseId &&
-                                !isEditing
-                              ) {
+                              if (!currentCourseIdRef.current && !currentCourseId && !isEditing) {
                                 cancelTitleCreationDebounce();
                                 if (val.trim()) {
-                                  titleCreationDebounceTimerRef.current =
-                                    setTimeout(() => {
-                                      titleCreationDebounceTimerRef.current =
-                                        null;
-                                      void persistBasicsField("title");
-                                    }, 1000);
+                                  titleCreationDebounceTimerRef.current = setTimeout(() => {
+                                    titleCreationDebounceTimerRef.current = null;
+                                    void persistBasicsField("title");
+                                  }, 1000);
                                 }
                               }
                             }}
@@ -10015,11 +9216,7 @@ export function CourseCreatePage({
                               if (e.key === "Enter") {
                                 e.preventDefault();
                                 // Pressing Enter triggers immediate creation, cancelling pending debounce
-                                if (
-                                  !currentCourseIdRef.current &&
-                                  !currentCourseId &&
-                                  !isEditing
-                                ) {
+                                if (!currentCourseIdRef.current && !currentCourseId && !isEditing) {
                                   cancelTitleCreationDebounce();
                                   void persistBasicsField("title");
                                 }
@@ -10043,24 +9240,23 @@ export function CourseCreatePage({
                                   ? "basics-title-helper"
                                   : undefined
                             }
-                            className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="h-11 w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] py-0 pr-[75px] pl-3.5 text-[0.88rem] text-(--text) transition-[border-color] duration-150 outline-none focus:border-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
                           />
-                          <span className="absolute right-3.5 text-(--muted) text-[0.76rem] pointer-events-none">
+                          <span className="pointer-events-none absolute right-3.5 text-[0.76rem] text-(--muted)">
                             {courseTitle.length} / 120
                           </span>
                         </div>
                         {!isDownstreamUnlocked && (
                           <p
-                            className="m-0 mt-0.5 text-(--muted) text-[0.78rem] flex items-center gap-1.5"
+                            className="m-0 mt-0.5 flex items-center gap-1.5 text-[0.78rem] text-(--muted)"
                             role="status"
                             data-testid="basics-title-helper"
                           >
-                            {createCourseMutation.isPending ||
-                            isInitialCourseCreationPending ? (
+                            {createCourseMutation.isPending || isInitialCourseCreationPending ? (
                               <>
                                 <CircleNotch
                                   size={13}
-                                  className="animate-spin text-(--accent) shrink-0"
+                                  className="shrink-0 animate-spin text-(--accent)"
                                 />
                                 <span>Creating course…</span>
                               </>
@@ -10070,18 +9266,16 @@ export function CourseCreatePage({
                           </p>
                         )}
                       </div>
-                      <div className="flex flex-col gap-2 mb-5">
+                      <div className="mb-5 flex flex-col gap-2">
                         <div className="flex items-center justify-between">
                           <label
                             htmlFor="course-short-description"
-                            className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                            className="text-[0.84rem] font-semibold text-(--text-secondary)"
                           >
                             Short Description
                           </label>
                           <BasicsFieldStatusIndicator
-                            status={getBasicsFieldDisplayStatus(
-                              "shortDescription",
-                            )}
+                            status={getBasicsFieldDisplayStatus("shortDescription")}
                             testId="basics-field-status-shortDescription"
                           />
                         </div>
@@ -10100,16 +9294,16 @@ export function CourseCreatePage({
                             onBlur={() => {
                               void persistBasicsField("shortDescription");
                             }}
-                            className="w-full min-h-[68px] max-h-[140px] resize-y border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] pl-3.5 pr-[75px] py-2.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed font-[inherit]"
+                            className="max-h-[140px] min-h-[68px] w-full resize-y rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] py-2.5 pr-[75px] pl-3.5 font-[inherit] text-[0.88rem] text-(--text) transition-[border-color] duration-150 outline-none focus:border-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
                           />
-                          <span className="absolute right-3.5 bottom-2.5 text-(--muted) text-[0.76rem] pointer-events-none">
+                          <span className="pointer-events-none absolute right-3.5 bottom-2.5 text-[0.76rem] text-(--muted)">
                             {shortDescription.length} / 150
                           </span>
                         </div>
                       </div>
 
                       <div
-                        className="flex flex-col gap-2 mb-5"
+                        className="mb-5 flex flex-col gap-2"
                         onBlur={() => {
                           void persistBasicsField("courseDescription");
                         }}
@@ -10117,15 +9311,12 @@ export function CourseCreatePage({
                         <div className="flex items-center justify-between">
                           <label
                             htmlFor="course-description"
-                            className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                            className="text-[0.84rem] font-semibold text-(--text-secondary)"
                           >
-                            Course Description{" "}
-                            <span className="text-[#ff5252] ml-0.5">*</span>
+                            Course Description <span className="ml-0.5 text-[#ff5252]">*</span>
                           </label>
                           <BasicsFieldStatusIndicator
-                            status={getBasicsFieldDisplayStatus(
-                              "courseDescription",
-                            )}
+                            status={getBasicsFieldDisplayStatus("courseDescription")}
                             testId="basics-field-status-courseDescription"
                           />
                         </div>
@@ -10143,18 +9334,16 @@ export function CourseCreatePage({
                       </div>
 
                       {/* Instructor Alias & Visibility (Frontend Visual Demo) */}
-                      <div className="flex flex-col gap-2 mb-4.5">
+                      <div className="mb-4.5 flex flex-col gap-2">
                         <div className="flex items-center justify-between">
                           <label
                             htmlFor="instructor-alias"
-                            className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                            className="text-[0.84rem] font-semibold text-(--text-secondary)"
                           >
                             Instructor Alias
                           </label>
                           <BasicsFieldStatusIndicator
-                            status={getBasicsFieldDisplayStatus(
-                              "instructorAlias",
-                            )}
+                            status={getBasicsFieldDisplayStatus("instructorAlias")}
                             testId="basics-field-status-instructorAlias"
                           />
                         </div>
@@ -10172,70 +9361,57 @@ export function CourseCreatePage({
                           onBlur={() => {
                             void persistBasicsField("instructorAlias");
                           }}
-                          className="w-full h-11 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] px-3.5 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="h-11 w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5 py-0 text-[0.88rem] text-(--text) transition-[border-color] duration-150 outline-none focus:border-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
                         />
-                        <p className="m-0 text-(--muted) text-[0.78rem]">
-                          Optional custom name shown to students instead of your
-                          account name.
+                        <p className="m-0 text-[0.78rem] text-(--muted)">
+                          Optional custom name shown to students instead of your account name.
                         </p>
                       </div>
 
                       {/* Show Instructor Name Settings Row */}
-                      <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                        <div className="flex flex-col min-w-0 pr-3">
+                      <div className="flex items-center justify-between rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4.5 py-3.5">
+                        <div className="flex min-w-0 flex-col pr-3">
                           <div className="flex items-center gap-2">
-                            <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                            <strong className="mb-0.5 block text-[0.9rem] font-[650] text-(--text)">
                               Show Instructor Name
                             </strong>
                             <BasicsFieldStatusIndicator
-                              status={getBasicsFieldDisplayStatus(
-                                "showInstructorName",
-                              )}
+                              status={getBasicsFieldDisplayStatus("showInstructorName")}
                               testId="basics-field-status-showInstructorName"
                             />
                           </div>
-                          <p className="m-0 text-(--muted) text-[0.8rem]">
-                            Control whether the instructor name is shown to
-                            students.
+                          <p className="m-0 text-[0.8rem] text-(--muted)">
+                            Control whether the instructor name is shown to students.
                           </p>
                         </div>
                         <SettingsToggle
                           checked={showInstructorName}
                           disabled={
-                            !isDownstreamUnlocked ||
-                            isBasicsControlSaving("showInstructorName")
+                            !isDownstreamUnlocked || isBasicsControlSaving("showInstructorName")
                           }
-                          onChange={() =>
-                            void handleShowInstructorNameChange(
-                              !showInstructorName,
-                            )
-                          }
+                          onChange={() => void handleShowInstructorNameChange(!showInstructorName)}
                           label="Toggle Show Instructor Name"
                         />
                       </div>
                     </section>
 
                     {/* Course Media Section */}
-                    <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+                    <section className="relative z-10 rounded-[14px] bg-(--surface) p-6 shadow-(--card-shadow) max-[768px]:p-4">
                       <div className="mb-4.5">
-                        <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                        <h2 className="m-0 text-[1.18rem] font-[650] tracking-[-0.015em] text-(--text)">
                           Course Media
                         </h2>
-                        <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
+                        <p className="m-0 mt-1 mb-5 text-[0.82rem] text-(--muted)">
                           Add media that best represents your course.
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         {/* Hidden Thumbnail File Input */}
                         <input
                           type="file"
                           ref={thumbnailInputRef}
-                          disabled={
-                            !isDownstreamUnlocked ||
-                            isBasicsSaving ||
-                            isThumbnailBusy
-                          }
+                          disabled={!isDownstreamUnlocked || isBasicsSaving || isThumbnailBusy}
                           onChange={(event) => {
                             void handleThumbnailFileSelect(event);
                           }}
@@ -10254,28 +9430,25 @@ export function CourseCreatePage({
                         />
 
                         {/* Thumbnail Upload */}
-                        <div className="flex flex-col min-w-0">
-                          <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
-                            Thumbnail{" "}
-                            <span className="text-[#ff5252] ml-0.5">*</span>
+                        <div className="flex min-w-0 flex-col">
+                          <h3 className="m-0 mb-1 text-[0.86rem] font-semibold text-(--text-secondary)">
+                            Thumbnail <span className="ml-0.5 text-[#ff5252]">*</span>
                           </h3>
-                          <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
+                          <p className="m-0 mb-3 min-h-[1.15rem] text-[0.78rem] text-(--muted)">
                             Upload a thumbnail for your course.
                           </p>
                           {thumbnail ? (
-                            <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
+                            <div className="group relative box-border flex aspect-video min-h-43.75 w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] p-0 text-center">
                               <img
                                 src={thumbnail}
                                 alt="Course thumbnail preview"
-                                className="w-full h-full object-cover block"
+                                className="block h-full w-full object-cover"
                               />
-                              <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
+                              <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/55 p-3 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:opacity-100">
                                 <button
                                   type="button"
                                   disabled={
-                                    !isDownstreamUnlocked ||
-                                    isBasicsSaving ||
-                                    isThumbnailBusy
+                                    !isDownstreamUnlocked || isBasicsSaving || isThumbnailBusy
                                   }
                                   style={{
                                     fontSize: "0.80rem",
@@ -10286,7 +9459,7 @@ export function CourseCreatePage({
                                     paddingLeft: "16px",
                                     paddingRight: "16px",
                                   }}
-                                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="inline-flex cursor-pointer items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                                   onClick={triggerThumbnailUpload}
                                 >
                                   <ImageIcon size={15} /> Change Image
@@ -10294,9 +9467,7 @@ export function CourseCreatePage({
                                 <button
                                   type="button"
                                   disabled={
-                                    !isDownstreamUnlocked ||
-                                    isBasicsSaving ||
-                                    isThumbnailBusy
+                                    !isDownstreamUnlocked || isBasicsSaving || isThumbnailBusy
                                   }
                                   style={{
                                     fontSize: "0.80rem",
@@ -10307,7 +9478,7 @@ export function CourseCreatePage({
                                     paddingLeft: "14px",
                                     paddingRight: "14px",
                                   }}
-                                  className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="inline-flex cursor-pointer items-center border-none bg-red-500 text-white transition-all duration-150 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                                   onClick={handleRemoveThumbnail}
                                   title="Remove Thumbnail"
                                 >
@@ -10316,17 +9487,15 @@ export function CourseCreatePage({
                               </div>
                             </div>
                           ) : (
-                            <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
+                            <div className="relative box-border flex aspect-video min-h-43.75 w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] p-4 text-center transition-[border-color,background-color] duration-180 ease-out">
                               <div className="mb-2 text-(--muted)">
                                 <ImageIcon size={30} weight="light" />
                               </div>
-                              <div className="flex items-center justify-center gap-2.5 flex-wrap">
+                              <div className="flex flex-wrap items-center justify-center gap-2.5">
                                 <button
                                   type="button"
                                   disabled={
-                                    !isDownstreamUnlocked ||
-                                    isBasicsSaving ||
-                                    isThumbnailBusy
+                                    !isDownstreamUnlocked || isBasicsSaving || isThumbnailBusy
                                   }
                                   style={{
                                     fontSize: "0.80rem",
@@ -10337,48 +9506,43 @@ export function CourseCreatePage({
                                     paddingLeft: "16px",
                                     paddingRight: "16px",
                                   }}
-                                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="inline-flex cursor-pointer items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:cursor-not-allowed disabled:opacity-50"
                                   onClick={triggerThumbnailUpload}
                                 >
                                   <UploadSimple size={15} /> Upload
                                 </button>
                               </div>
-                              <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
+                              <p className="m-0 mt-2 text-[0.74rem] text-(--muted)">
                                 Recommended: 1280x720px (16:9)
                               </p>
                             </div>
                           )}
                           {thumbnailUploadError ? (
-                            <p
-                              className="m-0 mt-2 text-red-400 text-[0.75rem]"
-                              role="alert"
-                            >
+                            <p className="m-0 mt-2 text-[0.75rem] text-red-400" role="alert">
                               {thumbnailUploadError}
                             </p>
                           ) : null}
                         </div>
 
                         {/* Video Trailer Upload */}
-                        <div className="flex flex-col min-w-0">
-                          <h3 className="m-0 mb-1 text-(--text-secondary) text-[0.86rem] font-semibold">
+                        <div className="flex min-w-0 flex-col">
+                          <h3 className="m-0 mb-1 text-[0.86rem] font-semibold text-(--text-secondary)">
                             Video Trailer (Optional)
                           </h3>
-                          <p className="m-0 mb-3 text-(--muted) text-[0.78rem] min-h-[1.15rem]">
+                          <p className="m-0 mb-3 min-h-[1.15rem] text-[0.78rem] text-(--muted)">
                             Add a trailer video to your course.
                           </p>
                           {videoTrailer ? (
-                            <div className="group relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-0 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden">
+                            <div className="group relative box-border flex aspect-video min-h-43.75 w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-solid border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] p-0 text-center">
                               <video
                                 src={videoTrailer}
-                                className="w-full h-full object-cover block"
+                                className="block h-full w-full object-cover"
                                 controls
                               />
-                              <div className="absolute inset-0 flex items-center justify-center gap-2 p-3 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[2px]">
+                              <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/55 p-3 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:opacity-100">
                                 <button
                                   type="button"
-                                  disabled={
-                                    !isDownstreamUnlocked || isBasicsSaving
-                                  }
+                                  disabled={!isDownstreamUnlocked || isBasicsSaving}
                                   style={{
                                     fontSize: "0.80rem",
                                     fontWeight: 700,
@@ -10388,16 +9552,14 @@ export function CourseCreatePage({
                                     paddingLeft: "16px",
                                     paddingRight: "16px",
                                   }}
-                                  className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="inline-flex cursor-pointer items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                                   onClick={triggerVideoTrailerUpload}
                                 >
                                   <PlayCircle size={15} /> Change Video
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={
-                                    !isDownstreamUnlocked || isBasicsSaving
-                                  }
+                                  disabled={!isDownstreamUnlocked || isBasicsSaving}
                                   style={{
                                     fontSize: "0.80rem",
                                     fontWeight: 500,
@@ -10407,7 +9569,7 @@ export function CourseCreatePage({
                                     paddingLeft: "14px",
                                     paddingRight: "14px",
                                   }}
-                                  className="inline-flex items-center border-none text-white bg-red-500 cursor-pointer transition-all duration-150 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="inline-flex cursor-pointer items-center border-none bg-red-500 text-white transition-all duration-150 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                                   onClick={handleRemoveVideoTrailer}
                                   title="Remove Video Trailer"
                                 >
@@ -10416,18 +9578,14 @@ export function CourseCreatePage({
                               </div>
                             </div>
                           ) : (
-                            <div className="relative flex flex-col items-center justify-center aspect-video w-full min-h-43.75 box-border border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-center overflow-hidden transition-[border-color,background-color] duration-180 ease-out">
+                            <div className="relative box-border flex aspect-video min-h-43.75 w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] p-4 text-center transition-[border-color,background-color] duration-180 ease-out">
                               <div className="mb-2 text-(--muted)">
                                 <PlayCircle size={30} weight="light" />
                               </div>
-                              <div className="flex items-center justify-center gap-2.5 flex-wrap">
+                              <div className="flex flex-wrap items-center justify-center gap-2.5">
                                 <LessonVideoUpload
-                                  disabled={
-                                    !isDownstreamUnlocked || isBasicsSaving
-                                  }
-                                  mediaAssetId={
-                                    editorData?.course?.trailerMediaId
-                                  }
+                                  disabled={!isDownstreamUnlocked || isBasicsSaving}
+                                  mediaAssetId={editorData?.course?.trailerMediaId}
                                   visibility="public"
                                   hideUploadWhenAttached={Boolean(
                                     editorData?.course?.trailerMediaId,
@@ -10440,7 +9598,7 @@ export function CourseCreatePage({
                                   }}
                                 />
                               </div>
-                              <p className="m-0 mt-2 text-(--muted) text-[0.74rem]">
+                              <p className="m-0 mt-2 text-[0.74rem] text-(--muted)">
                                 Recommended: 16:9 video
                               </p>
                             </div>
@@ -10452,26 +9610,20 @@ export function CourseCreatePage({
 
                   {/* Right Column: Live Course Preview */}
                   <div className="flex min-w-0 flex-col gap-5 md:sticky md:top-0 md:self-start">
-                    <section className="rounded-[14px] p-5 bg-(--surface) shadow-(--card-shadow)">
-                      <h2 className="m-0 text-(--text) text-[1.1rem] font-[650]">
-                        Course Preview
-                      </h2>
-                      <p className="m-0 mt-1 mb-4 text-(--muted) text-[0.8rem]">
+                    <section className="rounded-[14px] bg-(--surface) p-5 shadow-(--card-shadow)">
+                      <h2 className="m-0 text-[1.1rem] font-[650] text-(--text)">Course Preview</h2>
+                      <p className="m-0 mt-1 mb-4 text-[0.8rem] text-(--muted)">
                         This is how your course will appear to students.
                       </p>
 
                       <div
-                        className={`relative aspect-video border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[10px] overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-180 ease-out ${
+                        className={`relative aspect-video overflow-hidden rounded-[10px] border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-180 ease-out ${
                           !thumbnail
                             ? "is-clickable cursor-pointer hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))]"
                             : ""
                         }`}
-                        onClick={
-                          !thumbnail ? triggerThumbnailUpload : undefined
-                        }
-                        title={
-                          !thumbnail ? "Click to upload thumbnail" : undefined
-                        }
+                        onClick={!thumbnail ? triggerThumbnailUpload : undefined}
+                        title={!thumbnail ? "Click to upload thumbnail" : undefined}
                         role={!thumbnail ? "button" : undefined}
                         tabIndex={!thumbnail ? 0 : undefined}
                         onKeyDown={
@@ -10485,22 +9637,22 @@ export function CourseCreatePage({
                         }
                       >
                         {thumbnail ? (
-                          <div className="relative w-full h-full">
+                          <div className="relative h-full w-full">
                             <img
                               src={thumbnail}
                               alt="Course Thumbnail"
-                              className="w-full h-full object-cover block"
+                              className="block h-full w-full object-cover"
                             />
                           </div>
                         ) : (
-                          <div className="flex h-full flex-col items-center justify-center gap-2 text-(--muted) text-[0.8rem]">
+                          <div className="flex h-full flex-col items-center justify-center gap-2 text-[0.8rem] text-(--muted)">
                             <div className="flex items-center justify-center text-(--muted) opacity-60">
                               <ImageIcon size={32} weight="light" />
                             </div>
                             <span className="text-(--muted) opacity-70">
                               Course thumbnail will appear here
                             </span>
-                            <span className="inline-block mt-0.5 rounded-md px-2 py-0.5 text-[0.72rem] font-semibold text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors duration-150">
+                            <span className="mt-0.5 inline-block rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-2 py-0.5 text-[0.72rem] font-semibold text-(--accent) transition-colors duration-150">
                               Click to upload
                             </span>
                           </div>
@@ -10508,11 +9660,11 @@ export function CourseCreatePage({
                       </div>
 
                       <div className="mt-4">
-                        <h3 className="m-0 mb-3 text-(--text) text-[1.15rem] font-bold leading-[1.3]">
+                        <h3 className="m-0 mb-3 text-[1.15rem] leading-[1.3] font-bold text-(--text)">
                           {courseTitle.trim() ? courseTitle : "Course Title"}
                         </h3>
 
-                        <div className="flex items-center gap-3.5 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3.5 text-(--muted) text-[0.8rem]">
+                        <div className="flex items-center gap-3.5 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-3.5 text-[0.8rem] text-(--muted)">
                           <span className="flex items-center gap-1.25">
                             <BookOpen size={15} /> {totalSections} Sections
                           </span>
@@ -10527,22 +9679,20 @@ export function CourseCreatePage({
                           </span>
                         </div>
 
-                        <div className="mt-3.5 min-w-0 max-w-full overflow-hidden wrap-anywhere wrap-break-word">
-                          <h4 className="m-0 mb-1.5 text-(--text-secondary) text-[0.84rem] font-[650]">
+                        <div className="mt-3.5 max-w-full min-w-0 overflow-hidden wrap-anywhere wrap-break-word">
+                          <h4 className="m-0 mb-1.5 text-[0.84rem] font-[650] text-(--text-secondary)">
                             About this course
                           </h4>
                           {courseDescription.trim() ? (
                             <DiscussionMarkdown
-                              content={createDiscussionDraft(
-                                courseDescription.trim(),
-                              )}
+                              content={createDiscussionDraft(courseDescription.trim())}
                               label="Course description preview"
-                              className="[&>:first-child]:mt-0 max-w-none"
+                              className="max-w-none [&>:first-child]:mt-0"
                             />
                           ) : (
-                            <p className="m-0 text-(--muted) text-[0.82rem] leading-normal wrap-anywhere wrap-break-word">
-                              This is a short description of your course. It
-                              will appear here on the course card.
+                            <p className="m-0 text-[0.82rem] leading-normal wrap-anywhere wrap-break-word text-(--muted)">
+                              This is a short description of your course. It will appear here on the
+                              course card.
                             </p>
                           )}
                         </div>
@@ -10555,9 +9705,7 @@ export function CourseCreatePage({
                 sections.some(
                   (s) =>
                     s.id === editingLessonTarget.sectionId &&
-                    s.lessons.some(
-                      (l) => l.id === editingLessonTarget.lessonId,
-                    ),
+                    s.lessons.some((l) => l.id === editingLessonTarget.lessonId),
                 ) ? (
                   (() => {
                     const activeSection = sections.find(
@@ -10566,15 +9714,11 @@ export function CourseCreatePage({
                     const activeLesson = activeSection.lessons.find(
                       (l) => l.id === editingLessonTarget.lessonId,
                     )!;
-                    const secIdx = sections.findIndex(
-                      (s) => s.id === activeSection.id,
-                    );
-                    const lesIdx = activeSection.lessons.findIndex(
-                      (l) => l.id === activeLesson.id,
-                    );
+                    const secIdx = sections.findIndex((s) => s.id === activeSection.id);
+                    const lesIdx = activeSection.lessons.findIndex((l) => l.id === activeLesson.id);
 
                     return (
-                      <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
+                      <div className="course-wizard-curriculum-panel flex min-h-0 w-full flex-1 flex-col gap-4">
                         <LessonStudioEditor
                           sectionNumber={secIdx + 1}
                           sectionTitle={activeSection.title}
@@ -10587,8 +9731,7 @@ export function CourseCreatePage({
                           courseSlug={editorData?.course?.slug}
                           courseTitle={courseTitle || undefined}
                           contentType={
-                            (activeLesson.contentType as StudioLessonContentType) ||
-                            "video"
+                            (activeLesson.contentType as StudioLessonContentType) || "video"
                           }
                           isPublished={activeLesson.isPublished !== false}
                           isPreview={activeLesson.isPreview === true}
@@ -10603,57 +9746,35 @@ export function CourseCreatePage({
                           isSaving={savingLessonId === activeLesson.id}
                           onBack={() => setEditingLessonTarget(null)}
                           onCancel={(draft) =>
-                            handleCancelLessonDraft(
-                              activeSection.id,
-                              activeLesson.id,
-                              draft,
-                            )
+                            handleCancelLessonDraft(activeSection.id, activeLesson.id, draft)
                           }
                           onSave={async (payload) => {
-                            handleUpdateLesson(
-                              activeSection.id,
-                              activeLesson.id,
-                              {
-                                title: payload.title,
-                                contentType: payload.contentType,
-                                isPublished: payload.isPublished,
-                                isPreview: payload.isPreview,
-                              },
-                            );
-                            const saved = await persistLesson(
-                              activeSection.id,
-                              activeLesson.id,
-                              { collapseOnSuccess: false },
-                            );
+                            handleUpdateLesson(activeSection.id, activeLesson.id, {
+                              title: payload.title,
+                              contentType: payload.contentType,
+                              isPublished: payload.isPublished,
+                              isPreview: payload.isPreview,
+                            });
+                            const saved = await persistLesson(activeSection.id, activeLesson.id, {
+                              collapseOnSuccess: false,
+                            });
                             if (saved) {
-                              setToastMessage(
-                                "Lesson changes saved successfully.",
-                              );
+                              setToastMessage("Lesson changes saved successfully.");
                               setEditingLessonTarget(null);
                             }
                           }}
                           onContentTypeChange={(contentType) => {
-                            handleUpdateLesson(
-                              activeSection.id,
-                              activeLesson.id,
-                              {
-                                contentType,
-                              },
-                            );
+                            handleUpdateLesson(activeSection.id, activeLesson.id, {
+                              contentType,
+                            });
                           }}
                           onDeleteLesson={() => {
-                            handleDeleteLesson(
-                              activeSection.id,
-                              activeLesson.id,
-                            );
+                            handleDeleteLesson(activeSection.id, activeLesson.id);
                             setEditingLessonTarget(null);
                           }}
                           onPreviewLesson={() => {
                             if (currentCourseId) {
-                              window.open(
-                                `/courses/${currentCourseId}`,
-                                "_blank",
-                              );
+                              window.open(`/courses/${currentCourseId}`, "_blank");
                             }
                           }}
                           onMediaAttached={(mediaAssetId) =>
@@ -10663,32 +9784,26 @@ export function CourseCreatePage({
                               mediaAssetId,
                             )
                           }
-                          onProcessingComplete={() =>
-                            handleLessonProcessingComplete()
-                          }
+                          onProcessingComplete={() => handleLessonProcessingComplete()}
                           onUploadMedia={async (file) => {
                             try {
-                              const presigned =
-                                await mediaService.presignMediaUpload({
-                                  filename: file.name,
-                                  contentType:
-                                    file.type || "application/octet-stream",
-                                  fileSize: file.size,
-                                  type:
-                                    activeLesson.contentType === "image"
-                                      ? "image"
-                                      : activeLesson.contentType === "document"
-                                        ? "document"
-                                        : "video",
-                                  visibility: "protected",
-                                });
+                              const presigned = await mediaService.presignMediaUpload({
+                                filename: file.name,
+                                contentType: file.type || "application/octet-stream",
+                                fileSize: file.size,
+                                type:
+                                  activeLesson.contentType === "image"
+                                    ? "image"
+                                    : activeLesson.contentType === "document"
+                                      ? "document"
+                                      : "video",
+                                visibility: "protected",
+                              });
                               await mediaService.uploadFileToPresignedUrl(
                                 presigned.uploadUrl,
                                 file,
                               );
-                              await mediaService.confirmUpload(
-                                presigned.mediaAssetId,
-                              );
+                              await mediaService.confirmUpload(presigned.mediaAssetId);
                               const attached = await handleLessonMediaAttached(
                                 activeSection.id,
                                 activeLesson.id,
@@ -10696,70 +9811,49 @@ export function CourseCreatePage({
                               );
                               // A failed attach has already shown its own error.
                               if (!attached) return;
-                              setToastMessage(
-                                "Media uploaded and attached successfully.",
-                              );
+                              setToastMessage("Media uploaded and attached successfully.");
                             } catch (err: unknown) {
                               setToastMessage(
-                                err instanceof Error
-                                  ? err.message
-                                  : "Media upload failed.",
+                                err instanceof Error ? err.message : "Media upload failed.",
                               );
                             }
                           }}
                           onAddResourceFile={async (file) => {
                             try {
-                              const presigned =
-                                await mediaService.presignMediaUpload({
-                                  filename: file.name,
-                                  contentType:
-                                    file.type || "application/octet-stream",
-                                  fileSize: file.size,
-                                  type: "document",
-                                  visibility: "protected",
-                                });
+                              const presigned = await mediaService.presignMediaUpload({
+                                filename: file.name,
+                                contentType: file.type || "application/octet-stream",
+                                fileSize: file.size,
+                                type: "document",
+                                visibility: "protected",
+                              });
                               await mediaService.uploadFileToPresignedUrl(
                                 presigned.uploadUrl,
                                 file,
                               );
-                              await mediaService.confirmUpload(
-                                presigned.mediaAssetId,
-                              );
-                              const created = await handleCreateLessonResource(
-                                activeLesson.id,
-                                {
-                                  title: file.name,
-                                  mediaAssetId: presigned.mediaAssetId,
-                                },
-                              );
-                              handleLessonResourceAdded(
-                                activeSection.id,
-                                activeLesson.id,
-                                {
-                                  id: created.id,
-                                  name: created.title,
-                                  type: "document",
-                                  size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-                                  mediaAssetId: created.mediaAssetId,
-                                },
-                              );
-                              setToastMessage(
-                                "Resource attached successfully.",
-                              );
+                              await mediaService.confirmUpload(presigned.mediaAssetId);
+                              const created = await handleCreateLessonResource(activeLesson.id, {
+                                title: file.name,
+                                mediaAssetId: presigned.mediaAssetId,
+                              });
+                              handleLessonResourceAdded(activeSection.id, activeLesson.id, {
+                                id: created.id,
+                                name: created.title,
+                                type: "document",
+                                size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+                                mediaAssetId: created.mediaAssetId,
+                              });
+                              setToastMessage("Resource attached successfully.");
                             } catch (err: unknown) {
                               setToastMessage(
-                                err instanceof Error
-                                  ? err.message
-                                  : "Resource upload failed.",
+                                err instanceof Error ? err.message : "Resource upload failed.",
                               );
                             }
                           }}
                           onDeleteResource={async (resId) => {
                             try {
                               await handleDeleteLessonResource(resId);
-                              const resItem = activeLesson.resources.find(
-                                (r) => r.id === resId,
-                              );
+                              const resItem = activeLesson.resources.find((r) => r.id === resId);
                               if (resItem) {
                                 handleLessonResourceRemoved(
                                   activeSection.id,
@@ -10770,9 +9864,7 @@ export function CourseCreatePage({
                               setToastMessage("Resource removed.");
                             } catch (err: unknown) {
                               setToastMessage(
-                                err instanceof Error
-                                  ? err.message
-                                  : "Could not remove resource.",
+                                err instanceof Error ? err.message : "Could not remove resource.",
                               );
                             }
                           }}
@@ -10786,11 +9878,9 @@ export function CourseCreatePage({
                                 }
                                 value={activeLesson.description}
                                 onChange={(val) =>
-                                  handleUpdateLesson(
-                                    activeSection.id,
-                                    activeLesson.id,
-                                    { description: val },
-                                  )
+                                  handleUpdateLesson(activeSection.id, activeLesson.id, {
+                                    description: val,
+                                  })
                                 }
                                 placeholder="Add a detailed description of what students will learn in this lesson..."
                                 maxLength={10000}
@@ -10810,8 +9900,7 @@ export function CourseCreatePage({
                               />
                             ) : (
                               <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
-                                Save the course and lesson before configuring an
-                                attached Quiz.
+                                Save the course and lesson before configuring an attached Quiz.
                               </div>
                             )
                           }
@@ -10820,26 +9909,22 @@ export function CourseCreatePage({
                     );
                   })()
                 ) : (
-                  <div className="course-wizard-curriculum-panel flex flex-col gap-4 w-full flex-1 min-h-0">
+                  <div className="course-wizard-curriculum-panel flex min-h-0 w-full flex-1 flex-col gap-4">
                     {/* Header row */}
-                    <div className="flex items-center justify-between mb-2 max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
+                    <div className="mb-2 flex items-center justify-between max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3">
                       <div className="">
-                        <h2 className="m-0 text-(--text) text-[1.25rem] font-bold tracking-[-0.015em]">
+                        <h2 className="m-0 text-[1.25rem] font-bold tracking-[-0.015em] text-(--text)">
                           Course Curriculum
                         </h2>
-                        <p className="m-0 mt-1 text-(--muted) text-[0.85rem]">
-                          Organize your course into sections and lessons. You
-                          can reorder them anytime.
+                        <p className="m-0 mt-1 text-[0.85rem] text-(--muted)">
+                          Organize your course into sections and lessons. You can reorder them
+                          anytime.
                         </p>
                       </div>
                       <div className="flex items-center gap-2.5">
-                        {(isReorderingSections ||
-                          reorderSectionsMutation.isPending) && (
-                          <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                            <CircleNotch
-                              size={13}
-                              className="animate-spin text-(--accent)"
-                            />
+                        {(isReorderingSections || reorderSectionsMutation.isPending) && (
+                          <span className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-2.5 py-1 text-[0.74rem] font-bold text-(--accent)">
+                            <CircleNotch size={13} className="animate-spin text-(--accent)" />
                             <span>Saving section order...</span>
                           </span>
                         )}
@@ -10861,7 +9946,7 @@ export function CourseCreatePage({
                             paddingLeft: "16px",
                             paddingRight: "16px",
                           }}
-                          className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:whitespace-nowrap max-[768px]:self-start"
+                          className="inline-flex cursor-pointer items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:self-start max-[768px]:whitespace-nowrap"
                           onClick={handleAddSection}
                         >
                           {isCreatingSection ||
@@ -10883,16 +9968,15 @@ export function CourseCreatePage({
 
                     {/* Sections list or Empty State */}
                     {sections.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center">
-                        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent) mb-3.5">
+                      <div className="flex min-h-[420px] flex-1 flex-col items-center justify-center p-8 text-center">
+                        <div className="mb-3.5 flex h-12 w-12 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
                           <BookOpen size={24} weight="bold" />
                         </div>
-                        <h3 className="m-0 text-(--text) text-[1.05rem] font-bold">
+                        <h3 className="m-0 text-[1.05rem] font-bold text-(--text)">
                           No sections added yet
                         </h3>
-                        <p className="m-0 mt-1.5 max-w-[320px] text-(--muted) text-[0.84rem]">
-                          Add your first section to start building your course
-                          curriculum.
+                        <p className="m-0 mt-1.5 max-w-[320px] text-[0.84rem] text-(--muted)">
+                          Add your first section to start building your course curriculum.
                         </p>
                         <button
                           type="button"
@@ -10913,7 +9997,7 @@ export function CourseCreatePage({
                             paddingRight: "16px",
                             marginTop: "18px",
                           }}
-                          className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="inline-flex cursor-pointer items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:cursor-not-allowed disabled:opacity-60"
                           onClick={handleAddSection}
                         >
                           {isCreatingSection ||
@@ -10935,11 +10019,11 @@ export function CourseCreatePage({
                       sections.map((sec, secIndex) => (
                         <div
                           key={sec.id}
-                          className={`border rounded-[14px] bg-(--surface) shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+                          className={`overflow-hidden rounded-[14px] border bg-(--surface) shadow-(--card-shadow) transition-[border-color,box-shadow,opacity] duration-150 ${
                             deletingSectionId === sec.id
-                              ? "opacity-45 pointer-events-none border-red-500/30"
+                              ? "pointer-events-none border-red-500/30 opacity-45"
                               : draggedSectionIndex === secIndex
-                                ? "opacity-35 border-dashed border-(--accent)"
+                                ? "border-dashed border-(--accent) opacity-35"
                                 : "border-[color-mix(in_srgb,var(--text)_8%,transparent)]"
                           }`}
                           draggable={
@@ -10950,9 +10034,7 @@ export function CourseCreatePage({
                             !isReorderingSections &&
                             !reorderSectionsMutation.isPending
                           }
-                          onDragStart={(e) =>
-                            handleSectionDragStart(e, secIndex, sec)
-                          }
+                          onDragStart={(e) => handleSectionDragStart(e, secIndex, sec)}
                           onDragOver={(e) => handleSectionDragOver(e, secIndex)}
                           onDragEnd={handleSectionDragEnd}
                         >
@@ -10960,32 +10042,28 @@ export function CourseCreatePage({
                           <div
                             ref={(element) => {
                               if (element) {
-                                sectionHeaderElementsRef.current.set(
-                                  sec.id,
-                                  element,
-                                );
+                                sectionHeaderElementsRef.current.set(sec.id, element);
                               } else {
                                 sectionHeaderElementsRef.current.delete(sec.id);
                               }
                             }}
-                            className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]"
+                            className="flex cursor-pointer items-center justify-between bg-[color-mix(in_srgb,var(--text)_2%,transparent)] px-[18px] py-3.5 select-none max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]"
                             onClick={() => handleToggleSectionExpand(sec.id)}
                             title="Click to toggle section"
                           >
-                            <div className="flex items-center gap-3 max-[768px]:flex-1 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:gap-2">
+                            <div className="flex items-center gap-3 max-[768px]:w-full max-[768px]:min-w-0 max-[768px]:flex-1 max-[768px]:gap-2">
                               <span
                                 className={`flex items-center justify-center text-(--muted) transition-opacity duration-150 ${
                                   sec.isPendingCreation ||
                                   isReorderingSections ||
                                   reorderSectionsMutation.isPending
-                                    ? "opacity-25 cursor-not-allowed pointer-events-none"
+                                    ? "pointer-events-none cursor-not-allowed opacity-25"
                                     : "cursor-grab opacity-60 hover:opacity-100"
                                 }`}
                                 title={
                                   sec.isPendingCreation
                                     ? "Creating section..."
-                                    : isReorderingSections ||
-                                        reorderSectionsMutation.isPending
+                                    : isReorderingSections || reorderSectionsMutation.isPending
                                       ? "Reordering in progress..."
                                       : "Drag to reorder section"
                                 }
@@ -10999,8 +10077,7 @@ export function CourseCreatePage({
                                   }
                                 }}
                                 onMouseLeave={() => {
-                                  if (draggedSectionIndex === null)
-                                    setDragEnabledSectionId(null);
+                                  if (draggedSectionIndex === null) setDragEnabledSectionId(null);
                                 }}
                                 onMouseDown={() => {
                                   if (
@@ -11012,15 +10089,14 @@ export function CourseCreatePage({
                                   }
                                 }}
                                 onMouseUp={() => {
-                                  if (draggedSectionIndex === null)
-                                    setDragEnabledSectionId(null);
+                                  if (draggedSectionIndex === null) setDragEnabledSectionId(null);
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <DotsSixVertical size={18} />
                               </span>
-                              <div className="flex items-center gap-2.5 max-[768px]:flex-1 max-[768px]:min-w-0 max-[768px]:flex-wrap max-[768px]:gap-1.5">
-                                <span className="text-(--text) text-[0.92rem] font-bold max-[768px]:whitespace-nowrap max-[768px]:shrink-0">
+                              <div className="flex items-center gap-2.5 max-[768px]:min-w-0 max-[768px]:flex-1 max-[768px]:flex-wrap max-[768px]:gap-1.5">
+                                <span className="text-[0.92rem] font-bold text-(--text) max-[768px]:shrink-0 max-[768px]:whitespace-nowrap">
                                   Section {secIndex + 1}
                                 </span>
                                 {sec.isEditingTitle ? (
@@ -11030,20 +10106,14 @@ export function CourseCreatePage({
                                   >
                                     <input
                                       type="text"
-                                      className="border border-(--accent) rounded-md px-2 py-0.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                      className="rounded-md border border-(--accent) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-2 py-0.75 text-[0.9rem] font-semibold text-(--text) outline-none disabled:cursor-not-allowed disabled:opacity-60"
                                       defaultValue={sec.title}
                                       autoFocus
                                       disabled={
-                                        sec.isPendingCreation ||
-                                        updatingSectionId === sec.id
+                                        sec.isPendingCreation || updatingSectionId === sec.id
                                       }
                                       onClick={(e) => e.stopPropagation()}
-                                      onBlur={(e) =>
-                                        handleSaveSectionTitle(
-                                          sec.id,
-                                          e.target.value,
-                                        )
-                                      }
+                                      onBlur={(e) => handleSaveSectionTitle(sec.id, e.target.value)}
                                       onKeyDown={(e) => {
                                         if (e.key === "Enter") {
                                           (e.target as HTMLInputElement).blur();
@@ -11053,11 +10123,11 @@ export function CourseCreatePage({
                                   </div>
                                 ) : (
                                   <span
-                                    className={`text-(--text) text-[0.92rem] font-semibold max-[768px]:break-words max-[768px]:min-w-0 ${
+                                    className={`text-[0.92rem] font-semibold text-(--text) max-[768px]:min-w-0 max-[768px]:break-words ${
                                       sec.isPendingCreation ||
                                       updatingSectionId === sec.id ||
                                       deletingSectionId === sec.id
-                                        ? "opacity-60 pointer-events-none"
+                                        ? "pointer-events-none opacity-60"
                                         : ""
                                     }`}
                                     onClick={(e) => {
@@ -11079,44 +10149,31 @@ export function CourseCreatePage({
                                     {sec.title}
                                   </span>
                                 )}
-                                <span className="ml-1 text-(--muted) text-[0.76rem] font-normal">
+                                <span className="ml-1 text-[0.76rem] font-normal text-(--muted)">
                                   {sec.lessons.length}{" "}
-                                  {sec.lessons.length === 1
-                                    ? "Lesson"
-                                    : "Lessons"}
+                                  {sec.lessons.length === 1 ? "Lesson" : "Lessons"}
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                            <div className="flex items-center gap-1.5 max-[768px]:w-full max-[768px]:justify-between max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:pt-2">
                               {sec.isPendingCreation ? (
-                                <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                                  <CircleNotch
-                                    size={12}
-                                    className="animate-spin text-(--accent)"
-                                  />
+                                <span className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-2 py-0.5 text-[0.74rem] font-bold text-(--accent)">
+                                  <CircleNotch size={12} className="animate-spin text-(--accent)" />
                                   <span>Creating...</span>
                                 </span>
                               ) : deletingSectionId === sec.id ? (
-                                <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
-                                  <CircleNotch
-                                    size={12}
-                                    className="animate-spin text-red-400"
-                                  />
+                                <span className="inline-flex items-center gap-1 rounded-md border border-red-500/28 bg-red-500/10 px-2 py-0.5 text-[0.74rem] font-bold text-red-400">
+                                  <CircleNotch size={12} className="animate-spin text-red-400" />
                                   <span>Deleting...</span>
                                 </span>
                               ) : reorderingLessonsSectionId === sec.id ? (
-                                <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                                  <CircleNotch
-                                    size={12}
-                                    className="animate-spin text-(--accent)"
-                                  />
+                                <span className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-2 py-0.5 text-[0.74rem] font-bold text-(--accent)">
+                                  <CircleNotch size={12} className="animate-spin text-(--accent)" />
                                   <span>Saving order...</span>
                                 </span>
                               ) : (
                                 <CurriculumItemStatusIndicator
-                                  status={getCurriculumItemDisplayStatus(
-                                    sec.id,
-                                  )}
+                                  status={getCurriculumItemDisplayStatus(sec.id)}
                                   testId={`curriculum-status-section-${sec.id}`}
                                 />
                               )}
@@ -11127,7 +10184,7 @@ export function CourseCreatePage({
                                   updatingSectionId === sec.id ||
                                   deletingSectionId === sec.id
                                 }
-                                className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-[color,background-color,border-color] duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] bg-transparent p-0 text-(--muted) transition-[color,background-color,border-color] duration-150 hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:text-(--text) disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
                                 aria-label="Edit section title"
                                 title="Edit section title"
                                 onClick={(e) => {
@@ -11136,10 +10193,7 @@ export function CourseCreatePage({
                                 }}
                               >
                                 {updatingSectionId === sec.id ? (
-                                  <CircleNotch
-                                    size={14}
-                                    className="animate-spin text-(--accent)"
-                                  />
+                                  <CircleNotch size={14} className="animate-spin text-(--accent)" />
                                 ) : (
                                   <PencilSimple size={15} />
                                 )}
@@ -11151,7 +10205,7 @@ export function CourseCreatePage({
                                   deletingSectionId === sec.id ||
                                   updatingSectionId === sec.id
                                 }
-                                className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] bg-transparent p-0 text-(--muted) transition-all duration-150 hover:!border-red-500/30 hover:!bg-red-500/10 hover:!text-[#ef4444] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
                                 aria-label="Delete section"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -11159,10 +10213,7 @@ export function CourseCreatePage({
                                 }}
                               >
                                 {deletingSectionId === sec.id ? (
-                                  <CircleNotch
-                                    size={14}
-                                    className="animate-spin text-red-400"
-                                  />
+                                  <CircleNotch size={14} className="animate-spin text-red-400" />
                                 ) : (
                                   <Trash size={15} />
                                 )}
@@ -11170,16 +10221,10 @@ export function CourseCreatePage({
                               <button
                                 type="button"
                                 disabled={deletingSectionId === sec.id}
-                                className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none [&>svg]:transition-transform [&>svg]:duration-200 ${
-                                  sec.isExpanded
-                                    ? "is-expanded [&>svg]:rotate-180"
-                                    : ""
+                                className={`inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] bg-transparent p-0 text-(--muted) transition-all duration-150 hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:text-(--text) disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40 [&>svg]:transition-transform [&>svg]:duration-200 ${
+                                  sec.isExpanded ? "is-expanded [&>svg]:rotate-180" : ""
                                 }`}
-                                aria-label={
-                                  sec.isExpanded
-                                    ? "Collapse section"
-                                    : "Expand section"
-                                }
+                                aria-label={sec.isExpanded ? "Collapse section" : "Expand section"}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleToggleSectionExpand(sec.id);
@@ -11193,15 +10238,13 @@ export function CourseCreatePage({
                           {/* Section Body with CSS expand transition */}
                           <div
                             className={`grid transition-[grid-template-rows] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                              sec.isExpanded
-                                ? "is-open grid-rows-[1fr]"
-                                : "grid-rows-[0fr]"
+                              sec.isExpanded ? "is-open grid-rows-[1fr]" : "grid-rows-[0fr]"
                             }`}
                           >
                             <div
                               className={`min-h-0 overflow-hidden border-t border-transparent transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                                 sec.isExpanded
-                                  ? "px-4 pt-3 pb-4 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)]"
+                                  ? "border-t-[color-mix(in_srgb,var(--text)_8%,transparent)] px-4 pt-3 pb-4"
                                   : "px-4 py-0"
                               }`}
                             >
@@ -11214,8 +10257,7 @@ export function CourseCreatePage({
                                   itemGap={10}
                                   renderItem={(les, lesIndex) => {
                                     const isDraggedLesson =
-                                      draggedLessonState?.sectionId ===
-                                        sec.id &&
+                                      draggedLessonState?.sectionId === sec.id &&
                                       draggedLessonState.lessonId === les.id;
                                     const isDropBefore =
                                       lessonDropTarget?.sectionId === sec.id &&
@@ -11230,27 +10272,17 @@ export function CourseCreatePage({
 
                                     return (
                                       <Fragment key={les.id}>
-                                        {isDropBefore && (
-                                          <LessonDropIndicator />
-                                        )}
+                                        {isDropBefore && <LessonDropIndicator />}
                                         <MemoizedLessonCard
                                           lesson={les}
                                           sectionId={sec.id}
                                           lessonIndex={lesIndex}
                                           isDragged={isDraggedLesson}
-                                          isDragEnabled={
-                                            dragEnabledLessonId === les.id
-                                          }
+                                          isDragEnabled={dragEnabledLessonId === les.id}
                                           isSaving={savingLessonId === les.id}
-                                          isDeleting={
-                                            deletingLessonId === les.id
-                                          }
-                                          isSectionReordering={Boolean(
-                                            reorderingLessonsSectionId,
-                                          )}
-                                          isReorderPending={
-                                            reorderLessonsMutation.isPending
-                                          }
+                                          isDeleting={deletingLessonId === les.id}
+                                          isSectionReordering={Boolean(reorderingLessonsSectionId)}
+                                          isReorderPending={reorderLessonsMutation.isPending}
                                           isResourceBusy={
                                             createLessonResourceMutation.isPending ||
                                             deleteLessonResourceMutation.isPending
@@ -11262,9 +10294,7 @@ export function CourseCreatePage({
                                             requestedSectionId === sec.id &&
                                             requestedLessonId === les.id
                                           }
-                                          onLessonEditorOpen={
-                                            rememberLessonEditor
-                                          }
+                                          onLessonEditorOpen={rememberLessonEditor}
                                           render={({
                                             isExpanded,
                                             setExpanded,
@@ -11277,8 +10307,7 @@ export function CourseCreatePage({
                                             onLessonEditorOpen,
                                           }) => {
                                             const shouldKeepEditorMounted =
-                                              isEditorOpen ||
-                                              isLessonEditorMounted;
+                                              isEditorOpen || isLessonEditorMounted;
                                             const toggleLesson = async () => {
                                               const nextExpanded = !isExpanded;
                                               if (nextExpanded) {
@@ -11286,16 +10315,14 @@ export function CourseCreatePage({
                                                 setEditorOpen(true);
                                                 onLessonEditorOpen(les.id);
                                               }
-                                              const canToggle =
-                                                await handleToggleLessonExpand(
-                                                  sec.id,
-                                                  les.id,
-                                                  nextExpanded,
-                                                );
+                                              const canToggle = await handleToggleLessonExpand(
+                                                sec.id,
+                                                les.id,
+                                                nextExpanded,
+                                              );
                                               if (!canToggle) {
                                                 setExpanded(isExpanded);
-                                                if (nextExpanded)
-                                                  setEditorOpen(false);
+                                                if (nextExpanded) setEditorOpen(false);
                                               } else if (!nextExpanded) {
                                                 setExpanded(false);
                                                 setEditorOpen(false);
@@ -11312,34 +10339,24 @@ export function CourseCreatePage({
                                             return (
                                               <div
                                                 style={{ contain: "layout" }}
-                                                className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+                                                className={`overflow-hidden rounded-[10px] border bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) transition-[border-color,box-shadow,opacity] duration-150 ${
                                                   isDraggedLesson
-                                                    ? "opacity-35 border-dashed border-(--accent)"
+                                                    ? "border-dashed border-(--accent) opacity-35"
                                                     : "border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
                                                 }`}
                                                 draggable={
-                                                  dragEnabledLessonId ===
-                                                    les.id &&
+                                                  dragEnabledLessonId === les.id &&
                                                   !les.isPendingCreation &&
                                                   !reorderingLessonsSectionId &&
                                                   !reorderLessonsMutation.isPending
                                                 }
                                                 onDragStart={(e) => {
                                                   e.stopPropagation();
-                                                  handleLessonDragStart(
-                                                    e,
-                                                    sec.id,
-                                                    lesIndex,
-                                                    les,
-                                                  );
+                                                  handleLessonDragStart(e, sec.id, lesIndex, les);
                                                 }}
                                                 onDragOver={(e) => {
                                                   e.stopPropagation();
-                                                  handleLessonDragOver(
-                                                    e,
-                                                    sec.id,
-                                                    les.id,
-                                                  );
+                                                  handleLessonDragOver(e, sec.id, les.id);
                                                 }}
                                                 onDragEnd={(e) => {
                                                   e.stopPropagation();
@@ -11349,10 +10366,8 @@ export function CourseCreatePage({
                                                 <>
                                                   {/* Lesson Header */}
                                                   <div
-                                                    className="flex items-center justify-between px-4 py-3 select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
-                                                    onClick={() =>
-                                                      void toggleLesson()
-                                                    }
+                                                    className="flex cursor-pointer items-center justify-between px-4 py-3 select-none max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[10px_12px]"
+                                                    onClick={() => void toggleLesson()}
                                                     title="Expand lesson editor"
                                                   >
                                                     <div className="flex min-w-0 flex-1 items-center gap-2.5 max-[768px]:w-full max-[768px]:gap-2">
@@ -11361,7 +10376,7 @@ export function CourseCreatePage({
                                                           les.isPendingCreation ||
                                                           reorderingLessonsSectionId ||
                                                           reorderLessonsMutation.isPending
-                                                            ? "opacity-25 cursor-not-allowed pointer-events-none"
+                                                            ? "pointer-events-none cursor-not-allowed opacity-25"
                                                             : "cursor-grab opacity-60 hover:opacity-100"
                                                         }`}
                                                         title={
@@ -11378,18 +10393,12 @@ export function CourseCreatePage({
                                                             !reorderingLessonsSectionId &&
                                                             !reorderLessonsMutation.isPending
                                                           ) {
-                                                            setDragEnabledLessonId(
-                                                              les.id,
-                                                            );
+                                                            setDragEnabledLessonId(les.id);
                                                           }
                                                         }}
                                                         onMouseLeave={() => {
-                                                          if (
-                                                            !draggedLessonState
-                                                          )
-                                                            setDragEnabledLessonId(
-                                                              null,
-                                                            );
+                                                          if (!draggedLessonState)
+                                                            setDragEnabledLessonId(null);
                                                         }}
                                                         onMouseDown={() => {
                                                           if (
@@ -11397,41 +10406,28 @@ export function CourseCreatePage({
                                                             !reorderingLessonsSectionId &&
                                                             !reorderLessonsMutation.isPending
                                                           ) {
-                                                            setDragEnabledLessonId(
-                                                              les.id,
-                                                            );
+                                                            setDragEnabledLessonId(les.id);
                                                           }
                                                         }}
                                                         onMouseUp={() => {
-                                                          if (
-                                                            !draggedLessonState
-                                                          )
-                                                            setDragEnabledLessonId(
-                                                              null,
-                                                            );
+                                                          if (!draggedLessonState)
+                                                            setDragEnabledLessonId(null);
                                                         }}
-                                                        onClick={(e) =>
-                                                          e.stopPropagation()
-                                                        }
+                                                        onClick={(e) => e.stopPropagation()}
                                                       >
-                                                        <DotsSixVertical
-                                                          size={18}
-                                                        />
+                                                        <DotsSixVertical size={18} />
                                                       </span>
                                                       <LessonContentTypeIcon
                                                         contentType={
-                                                          les.pendingContentType ||
-                                                          les.contentType
+                                                          les.pendingContentType || les.contentType
                                                         }
                                                       />
                                                       {les.isEditingTitle ? (
                                                         <div
                                                           className="flex min-w-0 flex-1 items-center gap-2"
-                                                          onClick={(e) =>
-                                                            e.stopPropagation()
-                                                          }
+                                                          onClick={(e) => e.stopPropagation()}
                                                         >
-                                                          <span className="shrink-0 text-(--text) text-[0.88rem] font-medium">
+                                                          <span className="shrink-0 text-[0.88rem] font-medium text-(--text)">
                                                             {lesIndex + 1}.{" "}
                                                           </span>
                                                           <input
@@ -11442,30 +10438,20 @@ export function CourseCreatePage({
                                                             value={les.title}
                                                             autoFocus
                                                             style={{
-                                                              fontFamily:
-                                                                "inherit",
-                                                              fontSize:
-                                                                "0.88rem",
+                                                              fontFamily: "inherit",
+                                                              fontSize: "0.88rem",
                                                               fontWeight: 500,
                                                               lineHeight: 1.5,
-                                                              borderRadius:
-                                                                "6px",
+                                                              borderRadius: "6px",
                                                             }}
                                                             disabled={
                                                               les.isPendingCreation ||
-                                                              savingLessonId ===
-                                                                les.id
+                                                              savingLessonId === les.id
                                                             }
                                                             onChange={(e) =>
-                                                              handleUpdateLesson(
-                                                                sec.id,
-                                                                les.id,
-                                                                {
-                                                                  title:
-                                                                    e.target
-                                                                      .value,
-                                                                },
-                                                              )
+                                                              handleUpdateLesson(sec.id, les.id, {
+                                                                title: e.target.value,
+                                                              })
                                                             }
                                                             onBlur={() => {
                                                               void handleLessonTitleBlur(
@@ -11474,16 +10460,10 @@ export function CourseCreatePage({
                                                               );
                                                             }}
                                                             onKeyDown={(e) => {
-                                                              if (
-                                                                e.key ===
-                                                                "Enter"
-                                                              ) {
+                                                              if (e.key === "Enter") {
                                                                 e.preventDefault();
                                                                 e.currentTarget.blur();
-                                                              } else if (
-                                                                e.key ===
-                                                                "Escape"
-                                                              ) {
+                                                              } else if (e.key === "Escape") {
                                                                 e.preventDefault();
                                                                 handleCancelEditLessonTitle(
                                                                   sec.id,
@@ -11492,16 +10472,14 @@ export function CourseCreatePage({
                                                               }
                                                             }}
                                                             placeholder="e.g. Introduction to React Hooks"
-                                                            className="h-7 min-w-0 flex-1 border border-[color-mix(in_srgb,var(--accent)_52%,transparent)] rounded-[6px] px-2 py-0.5 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.88rem] font-medium leading-[1.5] outline-none [font-family:inherit] focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                                                            className="h-7 min-w-0 flex-1 rounded-[6px] border border-[color-mix(in_srgb,var(--accent)_52%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-2 py-0.5 [font-family:inherit] text-[0.88rem] leading-[1.5] font-medium text-(--text) outline-none focus:border-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
                                                           />
                                                           <button
                                                             type="button"
                                                             aria-label="Cancel lesson title edit"
                                                             title="Cancel title edit"
                                                             className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:text-(--text)"
-                                                            onMouseDown={(
-                                                              e,
-                                                            ) => {
+                                                            onMouseDown={(e) => {
                                                               e.preventDefault();
                                                               e.stopPropagation();
                                                             }}
@@ -11518,18 +10496,15 @@ export function CourseCreatePage({
                                                         </div>
                                                       ) : (
                                                         <div className="group/title flex min-w-0 flex-1 items-center gap-1.5">
-                                                          <span className="min-w-0 flex-1 truncate whitespace-nowrap text-(--text) text-[0.88rem] font-medium cursor-pointer">
-                                                            {lesIndex + 1}.{" "}
-                                                            {les.title}
+                                                          <span className="min-w-0 flex-1 cursor-pointer truncate text-[0.88rem] font-medium whitespace-nowrap text-(--text)">
+                                                            {lesIndex + 1}. {les.title}
                                                           </span>
                                                           <button
                                                             type="button"
                                                             aria-label="Edit lesson title"
                                                             title="Edit lesson title"
-                                                            disabled={
-                                                              les.isPendingCreation
-                                                            }
-                                                            className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-transparent bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-(--muted) opacity-0 transition-[opacity,color,background-color] duration-150 group-hover/title:opacity-100 group-focus-within/title:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-30"
+                                                            disabled={les.isPendingCreation}
+                                                            className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-transparent bg-[color-mix(in_srgb,var(--text)_6%,transparent)] text-(--muted) opacity-0 transition-[opacity,color,background-color] duration-150 group-focus-within/title:opacity-100 group-hover/title:opacity-100 hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-30"
                                                             onClick={(e) => {
                                                               e.stopPropagation();
                                                               handleStartEditLessonTitle(
@@ -11538,35 +10513,27 @@ export function CourseCreatePage({
                                                               );
                                                             }}
                                                           >
-                                                            <PencilSimple
-                                                              size={14}
-                                                              weight="bold"
-                                                            />
+                                                            <PencilSimple size={14} weight="bold" />
                                                           </button>
                                                         </div>
                                                       )}
                                                     </div>
-                                                    <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pt-2 max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+                                                    <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:justify-between max-[768px]:border-t max-[768px]:border-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:pt-2">
                                                       {les.isPendingCreation ? (
-                                                        <span className="inline-flex items-center gap-1 text-(--accent) text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
+                                                        <span className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-2 py-0.5 text-[0.74rem] font-bold text-(--accent)">
                                                           <CircleNotch
                                                             size={12}
                                                             className="animate-spin text-(--accent)"
                                                           />
-                                                          <span>
-                                                            Creating...
-                                                          </span>
+                                                          <span>Creating...</span>
                                                         </span>
-                                                      ) : deletingLessonId ===
-                                                        les.id ? (
-                                                        <span className="inline-flex items-center gap-1 text-red-400 text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/28">
+                                                      ) : deletingLessonId === les.id ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-md border border-red-500/28 bg-red-500/10 px-2 py-0.5 text-[0.74rem] font-bold text-red-400">
                                                           <CircleNotch
                                                             size={12}
                                                             className="animate-spin text-red-400"
                                                           />
-                                                          <span>
-                                                            Deleting...
-                                                          </span>
+                                                          <span>Deleting...</span>
                                                         </span>
                                                       ) : (
                                                         <CurriculumItemStatusIndicator
@@ -11576,16 +10543,12 @@ export function CourseCreatePage({
                                                           testId={`curriculum-status-lesson-${les.id}`}
                                                         />
                                                       )}
-                                                      {les.isPublished ===
-                                                        false && (
+                                                      {les.isPublished === false && (
                                                         <span
-                                                          className="inline-flex items-center gap-1 text-[#f59e0b] text-[0.74rem] font-bold px-2 py-0.5 rounded-md bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] border border-[color-mix(in_srgb,#f59e0b_28%,transparent)]"
+                                                          className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,#f59e0b_28%,transparent)] bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] px-2 py-0.5 text-[0.74rem] font-bold text-[#f59e0b]"
                                                           title="Draft mode: This lesson is not published and is hidden from students."
                                                         >
-                                                          <EyeSlash
-                                                            size={13}
-                                                            weight="bold"
-                                                          />{" "}
+                                                          <EyeSlash size={13} weight="bold" />{" "}
                                                           Unpublished
                                                         </span>
                                                       )}
@@ -11594,10 +10557,8 @@ export function CourseCreatePage({
                                                           <button
                                                             type="button"
                                                             disabled={
-                                                              savingLessonId ===
-                                                                les.id ||
-                                                              deletingLessonId ===
-                                                                les.id
+                                                              savingLessonId === les.id ||
+                                                              deletingLessonId === les.id
                                                             }
                                                             className="inline-flex h-7 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-2.5 text-[14px]! font-[700]! text-(--text) transition-colors hover:bg-[color-mix(in_srgb,var(--text)_12%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
                                                             onClick={(e) => {
@@ -11610,10 +10571,8 @@ export function CourseCreatePage({
                                                           <button
                                                             type="button"
                                                             disabled={
-                                                              savingLessonId ===
-                                                                les.id ||
-                                                              deletingLessonId ===
-                                                                les.id
+                                                              savingLessonId === les.id ||
+                                                              deletingLessonId === les.id
                                                             }
                                                             className="inline-flex h-7 items-center rounded-[8px] bg-(--accent) px-2.5 text-[14px]! font-[700]! text-(--on-accent,#ffffff) shadow-[0_2px_8px_var(--accent-shadow)] transition-colors hover:bg-(--accent-hover,var(--accent)) disabled:cursor-not-allowed disabled:opacity-50"
                                                             onClick={(e) => {
@@ -11629,21 +10588,16 @@ export function CourseCreatePage({
                                                         type="button"
                                                         disabled={
                                                           les.isPendingCreation ||
-                                                          deletingLessonId ===
-                                                            les.id
+                                                          deletingLessonId === les.id
                                                         }
-                                                        className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all duration-150 bg-transparent cursor-pointer p-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] bg-transparent p-0 text-(--muted) transition-all duration-150 hover:!border-red-500/30 hover:!bg-red-500/10 hover:!text-[#ef4444] disabled:cursor-not-allowed disabled:opacity-40"
                                                         aria-label="Delete lesson"
                                                         onClick={(e) => {
                                                           e.stopPropagation();
-                                                          handleDeleteLesson(
-                                                            sec.id,
-                                                            les.id,
-                                                          );
+                                                          handleDeleteLesson(sec.id, les.id);
                                                         }}
                                                       >
-                                                        {deletingLessonId ===
-                                                        les.id ? (
+                                                        {deletingLessonId === les.id ? (
                                                           <CircleNotch
                                                             size={14}
                                                             className="animate-spin text-red-400"
@@ -11654,7 +10608,7 @@ export function CourseCreatePage({
                                                       </button>
                                                       <button
                                                         type="button"
-                                                        className={`inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0 [&>svg]:transition-transform [&>svg]:duration-200 ${
+                                                        className={`inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] bg-transparent p-0 text-(--muted) transition-all duration-150 hover:border-[color-mix(in_srgb,var(--surface-strong)90%,transparent)] hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:text-(--text) [&>svg]:transition-transform [&>svg]:duration-200 ${
                                                           isExpanded
                                                             ? "is-expanded [&>svg]:rotate-180"
                                                             : ""
@@ -11674,19 +10628,14 @@ export function CourseCreatePage({
                                                     </div>
                                                   </div>
 
-                                                  {(isExpanded ||
-                                                    shouldKeepEditorMounted) && (
+                                                  {(isExpanded || shouldKeepEditorMounted) && (
                                                     <div
                                                       aria-hidden={!isExpanded}
-                                                      className={
-                                                        isExpanded
-                                                          ? undefined
-                                                          : "hidden"
-                                                      }
+                                                      className={isExpanded ? undefined : "hidden"}
                                                     >
                                                       {les.isPendingCreation ? (
                                                         <div className="flex min-h-48 items-center justify-center border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-8">
-                                                          <div className="flex items-center gap-2 text-(--muted) text-[0.86rem] font-semibold">
+                                                          <div className="flex items-center gap-2 text-[0.86rem] font-semibold text-(--muted)">
                                                             <CircleNotch
                                                               size={16}
                                                               className="animate-spin text-(--accent)"
@@ -11697,80 +10646,44 @@ export function CourseCreatePage({
                                                       ) : shouldKeepEditorMounted ? (
                                                         <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-5 py-5 max-[768px]:p-[14px_12px_16px]">
                                                           <LessonStudioEditor
-                                                            ref={
-                                                              lessonEditorRef
-                                                            }
+                                                            ref={lessonEditorRef}
                                                             hideHeader
                                                             sectionNumber={
                                                               sections.findIndex(
-                                                                (item) =>
-                                                                  item.id ===
-                                                                  sec.id,
+                                                                (item) => item.id === sec.id,
                                                               ) + 1
                                                             }
-                                                            sectionTitle={
-                                                              sec.title
-                                                            }
-                                                            lessonNumber={
-                                                              lesIndex + 1
-                                                            }
+                                                            sectionTitle={sec.title}
+                                                            lessonNumber={lesIndex + 1}
                                                             playbackLessonNumber={getCourseWideLessonNumber(
                                                               sections,
                                                               les.id,
                                                             )}
-                                                            lessonTitle={
-                                                              les.title
-                                                            }
-                                                            courseSlug={
-                                                              editorData?.course
-                                                                ?.slug
-                                                            }
-                                                            courseTitle={
-                                                              courseTitle ||
-                                                              undefined
-                                                            }
+                                                            lessonTitle={les.title}
+                                                            courseSlug={editorData?.course?.slug}
+                                                            courseTitle={courseTitle || undefined}
                                                             contentType={
                                                               (les.contentType as StudioLessonContentType) ||
                                                               "video"
                                                             }
-                                                            isPublished={
-                                                              les.isPublished !==
-                                                              false
-                                                            }
-                                                            isPreview={
-                                                              les.isPreview ===
-                                                              true
-                                                            }
-                                                            playbackSuspended={
-                                                              !isExpanded
-                                                            }
-                                                            mediaInfo={getLessonMediaInfo(
-                                                              les,
-                                                            )}
+                                                            isPublished={les.isPublished !== false}
+                                                            isPreview={les.isPreview === true}
+                                                            playbackSuspended={!isExpanded}
+                                                            mediaInfo={getLessonMediaInfo(les)}
                                                             resources={les.resources.map(
                                                               (resource) => ({
                                                                 id: resource.id,
                                                                 name: resource.name,
                                                                 type: resource.type,
                                                                 size: resource.size,
-                                                                mediaAssetId:
-                                                                  resource.mediaAssetId,
+                                                                mediaAssetId: resource.mediaAssetId,
                                                               }),
                                                             )}
-                                                            isSaving={
-                                                              savingLessonId ===
-                                                              les.id
-                                                            }
+                                                            isSaving={savingLessonId === les.id}
                                                             onBack={() => {
-                                                              setExpanded(
-                                                                false,
-                                                              );
-                                                              setEditorOpen(
-                                                                false,
-                                                              );
-                                                              setQuizOpen(
-                                                                false,
-                                                              );
+                                                              setExpanded(false);
+                                                              setEditorOpen(false);
+                                                              setQuizOpen(false);
                                                             }}
                                                             onCancel={(draft) =>
                                                               handleCancelLessonDraft(
@@ -11779,54 +10692,33 @@ export function CourseCreatePage({
                                                                 draft,
                                                               )
                                                             }
-                                                            onSave={async (
-                                                              payload,
-                                                            ) => {
-                                                              handleUpdateLesson(
+                                                            onSave={async (payload) => {
+                                                              handleUpdateLesson(sec.id, les.id, {
+                                                                title: payload.title,
+                                                                contentType: payload.contentType,
+                                                                isPublished: payload.isPublished,
+                                                                isPreview: payload.isPreview,
+                                                              });
+                                                              const saved = await persistLesson(
                                                                 sec.id,
                                                                 les.id,
                                                                 {
-                                                                  title:
-                                                                    payload.title,
-                                                                  contentType:
-                                                                    payload.contentType,
-                                                                  isPublished:
-                                                                    payload.isPublished,
-                                                                  isPreview:
-                                                                    payload.isPreview,
+                                                                  collapseOnSuccess: false,
                                                                 },
                                                               );
-                                                              const saved =
-                                                                await persistLesson(
-                                                                  sec.id,
-                                                                  les.id,
-                                                                  {
-                                                                    collapseOnSuccess: false,
-                                                                  },
-                                                                );
                                                               if (saved) {
                                                                 setToastMessage(
                                                                   "Lesson changes saved successfully.",
                                                                 );
-                                                                setEditorOpen(
-                                                                  false,
-                                                                );
+                                                                setEditorOpen(false);
                                                               }
                                                             }}
-                                                            onContentTypeChange={(
-                                                              contentType,
-                                                            ) => {
-                                                              handleUpdateLesson(
-                                                                sec.id,
-                                                                les.id,
-                                                                {
-                                                                  contentType,
-                                                                },
-                                                              );
+                                                            onContentTypeChange={(contentType) => {
+                                                              handleUpdateLesson(sec.id, les.id, {
+                                                                contentType,
+                                                              });
                                                             }}
-                                                            onMediaAttached={(
-                                                              mediaAssetId,
-                                                            ) =>
+                                                            onMediaAttached={(mediaAssetId) =>
                                                               handleLessonMediaAttached(
                                                                 sec.id,
                                                                 les.id,
@@ -11836,30 +10728,24 @@ export function CourseCreatePage({
                                                             onProcessingComplete={() =>
                                                               handleLessonProcessingComplete()
                                                             }
-                                                            onUploadMedia={async (
-                                                              file,
-                                                            ) => {
+                                                            onUploadMedia={async (file) => {
                                                               try {
                                                                 const presigned =
                                                                   await mediaService.presignMediaUpload(
                                                                     {
-                                                                      filename:
-                                                                        file.name,
+                                                                      filename: file.name,
                                                                       contentType:
                                                                         file.type ||
                                                                         "application/octet-stream",
-                                                                      fileSize:
-                                                                        file.size,
+                                                                      fileSize: file.size,
                                                                       type:
-                                                                        les.contentType ===
-                                                                        "image"
+                                                                        les.contentType === "image"
                                                                           ? "image"
                                                                           : les.contentType ===
                                                                               "document"
                                                                             ? "document"
                                                                             : "video",
-                                                                      visibility:
-                                                                        "protected",
+                                                                      visibility: "protected",
                                                                     },
                                                                   );
                                                                 await mediaService.uploadFileToPresignedUrl(
@@ -11876,15 +10762,13 @@ export function CourseCreatePage({
                                                                     presigned.mediaAssetId,
                                                                   );
                                                                 // A failed attach has already shown its own error.
-                                                                if (!attached)
-                                                                  return;
+                                                                if (!attached) return;
                                                                 setToastMessage(
                                                                   "Media uploaded and attached successfully.",
                                                                 );
                                                               } catch (err: unknown) {
                                                                 setToastMessage(
-                                                                  err instanceof
-                                                                    Error
+                                                                  err instanceof Error
                                                                     ? err.message
                                                                     : "Media upload failed.",
                                                                 );
@@ -11895,73 +10779,51 @@ export function CourseCreatePage({
                                                                 id={`lesson-description-${les.id}`}
                                                                 disabled={
                                                                   les.isPendingCreation ||
-                                                                  savingLessonId ===
-                                                                    les.id
+                                                                  savingLessonId === les.id
                                                                 }
-                                                                value={
-                                                                  les.description
-                                                                }
-                                                                onChange={(
-                                                                  value,
-                                                                ) =>
+                                                                value={les.description}
+                                                                onChange={(value) =>
                                                                   handleUpdateLesson(
                                                                     sec.id,
                                                                     les.id,
                                                                     {
-                                                                      description:
-                                                                        value,
+                                                                      description: value,
                                                                     },
                                                                   )
                                                                 }
                                                                 placeholder="Add a detailed description of what students will learn in this lesson..."
-                                                                maxLength={
-                                                                  10000
-                                                                }
+                                                                maxLength={10000}
                                                               />
                                                             }
                                                             resourcesSection={
                                                               <LessonResourceManager
-                                                                courseId={
-                                                                  currentCourseId
-                                                                }
-                                                                lessonId={
-                                                                  les.id
-                                                                }
-                                                                resources={
-                                                                  les.resources
-                                                                }
+                                                                courseId={currentCourseId}
+                                                                lessonId={les.id}
+                                                                resources={les.resources}
                                                                 disabled={
                                                                   les.isPendingCreation ||
                                                                   createLessonResourceMutation.isPending ||
                                                                   deleteLessonResourceMutation.isPending
                                                                 }
-                                                                onCreateResource={(
-                                                                  payload,
-                                                                ) =>
+                                                                onCreateResource={(payload) =>
                                                                   handleCreateLessonResource(
                                                                     les.id,
                                                                     payload,
                                                                   )
                                                                 }
-                                                                onResourceAdded={(
-                                                                  resource,
-                                                                ) =>
+                                                                onResourceAdded={(resource) =>
                                                                   handleLessonResourceAdded(
                                                                     sec.id,
                                                                     les.id,
                                                                     resource,
                                                                   )
                                                                 }
-                                                                onDeleteResource={(
-                                                                  resourceId,
-                                                                ) =>
+                                                                onDeleteResource={(resourceId) =>
                                                                   handleDeleteLessonResource(
                                                                     resourceId,
                                                                   )
                                                                 }
-                                                                onResourceRemoved={(
-                                                                  resource,
-                                                                ) =>
+                                                                onResourceRemoved={(resource) =>
                                                                   handleLessonResourceRemoved(
                                                                     sec.id,
                                                                     les.id,
@@ -11976,24 +10838,15 @@ export function CourseCreatePage({
                                                                 les.id,
                                                               ) ? (
                                                                 <QuizAuthoringPanel
-                                                                  courseId={
-                                                                    currentCourseId
-                                                                  }
-                                                                  lessonId={
-                                                                    les.id
-                                                                  }
-                                                                  lessonTitle={
-                                                                    les.title
-                                                                  }
+                                                                  courseId={currentCourseId}
+                                                                  lessonId={les.id}
+                                                                  lessonTitle={les.title}
                                                                   onQuizDeleted={() => {}}
                                                                 />
                                                               ) : (
                                                                 <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
-                                                                  Save the
-                                                                  course and
-                                                                  lesson before
-                                                                  configuring an
-                                                                  attached Quiz.
+                                                                  Save the course and lesson before
+                                                                  configuring an attached Quiz.
                                                                 </div>
                                                               )
                                                             }
@@ -12007,14 +10860,12 @@ export function CourseCreatePage({
                                                               : "grid-rows-[0fr]"
                                                           }`}
                                                           draggable={false}
-                                                          onMouseDown={(e) =>
-                                                            e.stopPropagation()
-                                                          }
+                                                          onMouseDown={(e) => e.stopPropagation()}
                                                         >
                                                           <div
                                                             className={`min-h-0 overflow-hidden border-t border-transparent bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] transition-[padding,border-color] duration-280 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                                                               isExpanded
-                                                                ? "px-5 pt-4 pb-5 border-t-[color-mix(in_srgb,var(--text)_8%,transparent)] max-[768px]:p-[14px_12px_16px]"
+                                                                ? "border-t-[color-mix(in_srgb,var(--text)_8%,transparent)] px-5 pt-4 pb-5 max-[768px]:p-[14px_12px_16px]"
                                                                 : "px-5 py-0 max-[768px]:p-0"
                                                             }`}
                                                           >
@@ -12026,31 +10877,24 @@ export function CourseCreatePage({
                                                                     <div className="flex items-center justify-between gap-3">
                                                                       <label
                                                                         id={`les-desc-label-${les.id}`}
-                                                                        className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                                                                        className="text-[0.84rem] font-semibold text-(--text-secondary)"
                                                                       >
-                                                                        Lesson
-                                                                        Description
+                                                                        Lesson Description
                                                                       </label>
                                                                       <button
                                                                         type="button"
                                                                         className="inline-flex min-h-8 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent px-2.5 text-xs font-semibold text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-                                                                        onMouseDown={(
-                                                                          e,
-                                                                        ) => {
+                                                                        onMouseDown={(e) => {
                                                                           e.preventDefault();
                                                                           e.stopPropagation();
                                                                         }}
-                                                                        onClick={(
-                                                                          e,
-                                                                        ) => {
+                                                                        onClick={(e) => {
                                                                           e.stopPropagation();
                                                                           handleCancelLessonDescriptionEdit(
                                                                             sec.id,
                                                                             les.id,
                                                                           );
-                                                                          setEditorOpen(
-                                                                            false,
-                                                                          );
+                                                                          setEditorOpen(false);
                                                                         }}
                                                                       >
                                                                         Cancel
@@ -12059,12 +10903,10 @@ export function CourseCreatePage({
                                                                     <div
                                                                       className={
                                                                         les.isPendingCreation
-                                                                          ? "opacity-60 pointer-events-none"
+                                                                          ? "pointer-events-none opacity-60"
                                                                           : ""
                                                                       }
-                                                                      onBlur={(
-                                                                        e,
-                                                                      ) => {
+                                                                      onBlur={(e) => {
                                                                         if (
                                                                           !e.currentTarget.contains(
                                                                             e.relatedTarget as Node,
@@ -12082,40 +10924,27 @@ export function CourseCreatePage({
                                                                         disabled={
                                                                           les.isPendingCreation
                                                                         }
-                                                                        value={
-                                                                          les.description
-                                                                        }
-                                                                        onChange={(
-                                                                          val,
-                                                                        ) =>
+                                                                        value={les.description}
+                                                                        onChange={(val) =>
                                                                           handleUpdateLesson(
                                                                             sec.id,
                                                                             les.id,
                                                                             {
-                                                                              description:
-                                                                                val,
+                                                                              description: val,
                                                                             },
                                                                           )
                                                                         }
                                                                         placeholder="Add a detailed description of what students will learn in this lesson..."
-                                                                        maxLength={
-                                                                          10000
-                                                                        }
+                                                                        maxLength={10000}
                                                                       />
                                                                     </div>
                                                                   </div>
                                                                 ) : (
                                                                   <LessonDescriptionPreview
-                                                                    description={
-                                                                      les.description
-                                                                    }
+                                                                    description={les.description}
                                                                     onEdit={() => {
-                                                                      setEditorOpen(
-                                                                        true,
-                                                                      );
-                                                                      onLessonEditorOpen(
-                                                                        les.id,
-                                                                      );
+                                                                      setEditorOpen(true);
+                                                                      onLessonEditorOpen(les.id);
                                                                     }}
                                                                   />
                                                                 )}
@@ -12124,72 +10953,65 @@ export function CourseCreatePage({
                                                               {/* Right column */}
                                                               <div className="order-1 flex min-w-0 flex-col gap-4.5">
                                                                 {/* Content Type Selector */}
-                                                                <div className="flex flex-col gap-2 mb-4">
-                                                                  <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                                                                <div className="mb-4 flex flex-col gap-2">
+                                                                  <label className="text-[0.84rem] font-semibold text-(--text-secondary)">
                                                                     Content Type
                                                                     {""}
-                                                                    <span className="text-[#ff5252] ml-0.5">
+                                                                    <span className="ml-0.5 text-[#ff5252]">
                                                                       *
                                                                     </span>
                                                                   </label>
-                                                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                                                                     <div
-                                                                      className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                                                      className={`relative flex items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
                                                                         les.isPendingCreation
-                                                                          ? "opacity-60 cursor-not-allowed"
+                                                                          ? "cursor-not-allowed opacity-60"
                                                                           : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
                                                                       } ${
-                                                                        les.contentType ===
-                                                                        "video"
+                                                                        les.contentType === "video"
                                                                           ? "is-selected border-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
                                                                           : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
                                                                       }`}
                                                                       onClick={() => {
-                                                                        if (
-                                                                          les.isPendingCreation
-                                                                        )
+                                                                        if (les.isPendingCreation)
                                                                           return;
                                                                         void handleLessonDiscreteChange(
                                                                           sec.id,
                                                                           les.id,
                                                                           {
-                                                                            contentType:
-                                                                              "video",
+                                                                            contentType: "video",
                                                                           },
                                                                         );
                                                                       }}
                                                                     >
                                                                       <div
-                                                                        className={`flex w-4 h-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
+                                                                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "video" ? "border-(--accent)" : "border-(--muted)"}`}
                                                                       >
                                                                         {les.contentType ===
                                                                           "video" && (
-                                                                          <div className="w-1.5 h-1.5 rounded-full bg-(--accent)" />
+                                                                          <div className="h-1.5 w-1.5 rounded-full bg-(--accent)" />
                                                                         )}
                                                                       </div>
                                                                       <div className="flex items-center justify-center text-(--accent)">
                                                                         <Video
-                                                                          size={
-                                                                            16
-                                                                          }
+                                                                          size={16}
                                                                           weight="fill"
                                                                         />
                                                                       </div>
-                                                                      <div className="flex flex-col min-w-0">
-                                                                        <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
+                                                                      <div className="flex min-w-0 flex-col">
+                                                                        <span className="truncate text-[0.82rem] leading-tight font-bold text-(--text)">
                                                                           Video
                                                                         </span>
-                                                                        <span className="text-(--muted) text-[0.70rem] truncate">
-                                                                          Video
-                                                                          lesson
+                                                                        <span className="truncate text-[0.70rem] text-(--muted)">
+                                                                          Video lesson
                                                                         </span>
                                                                       </div>
                                                                     </div>
 
                                                                     <div
-                                                                      className={`relative flex items-center gap-2.5 border rounded-[10px] px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
+                                                                      className={`relative flex items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-left transition-[border-color,background-color] duration-150 ease-out ${
                                                                         les.isPendingCreation
-                                                                          ? "opacity-60 cursor-not-allowed"
+                                                                          ? "cursor-not-allowed opacity-60"
                                                                           : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
                                                                       } ${
                                                                         les.contentType ===
@@ -12198,43 +11020,37 @@ export function CourseCreatePage({
                                                                           : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)]"
                                                                       }`}
                                                                       onClick={() => {
-                                                                        if (
-                                                                          les.isPendingCreation
-                                                                        )
+                                                                        if (les.isPendingCreation)
                                                                           return;
                                                                         void handleLessonDiscreteChange(
                                                                           sec.id,
                                                                           les.id,
                                                                           {
-                                                                            contentType:
-                                                                              "document",
+                                                                            contentType: "document",
                                                                           },
                                                                         );
                                                                       }}
                                                                     >
                                                                       <div
-                                                                        className={`flex w-4 h-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
+                                                                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-[1.5px] ${les.contentType === "document" ? "border-(--accent)" : "border-(--muted)"}`}
                                                                       >
                                                                         {les.contentType ===
                                                                           "document" && (
-                                                                          <div className="w-1.5 h-1.5 rounded-full bg-(--accent)" />
+                                                                          <div className="h-1.5 w-1.5 rounded-full bg-(--accent)" />
                                                                         )}
                                                                       </div>
                                                                       <div className="flex items-center justify-center text-(--accent)">
                                                                         <FileText
-                                                                          size={
-                                                                            16
-                                                                          }
+                                                                          size={16}
                                                                           weight="fill"
                                                                         />
                                                                       </div>
-                                                                      <div className="flex flex-col min-w-0">
-                                                                        <span className="text-(--text) text-[0.82rem] font-bold leading-tight truncate">
+                                                                      <div className="flex min-w-0 flex-col">
+                                                                        <span className="truncate text-[0.82rem] leading-tight font-bold text-(--text)">
                                                                           Document
                                                                         </span>
-                                                                        <span className="text-(--muted) text-[0.70rem] truncate">
-                                                                          PDF /
-                                                                          Reading
+                                                                        <span className="truncate text-[0.70rem] text-(--muted)">
+                                                                          PDF / Reading
                                                                         </span>
                                                                       </div>
                                                                     </div>
@@ -12243,18 +11059,16 @@ export function CourseCreatePage({
 
                                                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                                                   {/* Content Source Controls (Video or Document) */}
-                                                                  <div className="flex flex-col gap-2 mb-0">
-                                                                    <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                                                      {les.contentType ===
-                                                                      "video"
+                                                                  <div className="mb-0 flex flex-col gap-2">
+                                                                    <label className="text-[0.84rem] font-semibold text-(--text-secondary)">
+                                                                      {les.contentType === "video"
                                                                         ? "Video Source"
                                                                         : "Document / PDF Source"}
-                                                                      <span className="text-[#ff5252] ml-0.5">
+                                                                      <span className="ml-0.5 text-[#ff5252]">
                                                                         *
                                                                       </span>
                                                                     </label>
-                                                                    {les.contentType ===
-                                                                    "video" ? (
+                                                                    {les.contentType === "video" ? (
                                                                       <LessonVideoUpload
                                                                         mediaAssetId={
                                                                           les.contentMediaId
@@ -12276,33 +11090,24 @@ export function CourseCreatePage({
                                                                         }
                                                                       />
                                                                     ) : (
-                                                                      <div className="flex items-center gap-2 max-[768px]:w-full max-[768px]:flex max-[768px]:gap-2">
+                                                                      <div className="flex items-center gap-2 max-[768px]:flex max-[768px]:w-full max-[768px]:gap-2">
                                                                         <button
                                                                           type="button"
                                                                           disabled={
                                                                             les.isPendingCreation
                                                                           }
                                                                           style={{
-                                                                            fontSize:
-                                                                              "0.80rem",
+                                                                            fontSize: "0.80rem",
                                                                             fontWeight: 700,
-                                                                            height:
-                                                                              "34px",
-                                                                            borderRadius:
-                                                                              "8px",
+                                                                            height: "34px",
+                                                                            borderRadius: "8px",
                                                                             gap: "6px",
-                                                                            paddingLeft:
-                                                                              "16px",
-                                                                            paddingRight:
-                                                                              "16px",
+                                                                            paddingLeft: "16px",
+                                                                            paddingRight: "16px",
                                                                           }}
-                                                                          className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                                                          className="inline-flex cursor-pointer items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                                                         >
-                                                                          <UploadSimple
-                                                                            size={
-                                                                              15
-                                                                            }
-                                                                          />
+                                                                          <UploadSimple size={15} />
                                                                           Upload
                                                                         </button>
                                                                         <button
@@ -12311,74 +11116,52 @@ export function CourseCreatePage({
                                                                             les.isPendingCreation
                                                                           }
                                                                           style={{
-                                                                            fontSize:
-                                                                              "0.80rem",
+                                                                            fontSize: "0.80rem",
                                                                             fontWeight: 500,
-                                                                            height:
-                                                                              "34px",
-                                                                            borderRadius:
-                                                                              "8px",
+                                                                            height: "34px",
+                                                                            borderRadius: "8px",
                                                                             gap: "6px",
-                                                                            paddingLeft:
-                                                                              "14px",
-                                                                            paddingRight:
-                                                                              "14px",
+                                                                            paddingLeft: "14px",
+                                                                            paddingRight: "14px",
                                                                           }}
-                                                                          className="inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text) bg-[color-mix(in_srgb,var(--text)_5%,transparent)] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:opacity-60 disabled:cursor-not-allowed max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
+                                                                          className="inline-flex cursor-pointer items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--text) transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 max-[768px]:justify-center max-[768px]:whitespace-nowrap"
                                                                         >
                                                                           <FileText
-                                                                            size={
-                                                                              15
-                                                                            }
+                                                                            size={15}
                                                                             className="text-(--text-secondary)"
                                                                           />
-                                                                          Select
-                                                                          from
-                                                                          Media
+                                                                          Select from Media
                                                                         </button>
                                                                       </div>
                                                                     )}
                                                                   </div>
 
                                                                   {/* Lesson Publishing Status */}
-                                                                  <div className="flex flex-col gap-2 mb-0">
-                                                                    <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                                                                      Publishing
-                                                                      Status
+                                                                  <div className="mb-0 flex flex-col gap-2">
+                                                                    <label className="text-[0.84rem] font-semibold text-(--text-secondary)">
+                                                                      Publishing Status
                                                                     </label>
                                                                     <ThemedSelect
                                                                       value={
-                                                                        les.isPublished !==
-                                                                        false
+                                                                        les.isPublished !== false
                                                                           ? "published"
                                                                           : "draft"
                                                                       }
-                                                                      onValueChange={(
-                                                                        value,
-                                                                      ) => {
-                                                                        if (
-                                                                          les.isPendingCreation
-                                                                        )
+                                                                      onValueChange={(value) => {
+                                                                        if (les.isPendingCreation)
                                                                           return;
                                                                         void handleLessonDiscreteChange(
                                                                           sec.id,
                                                                           les.id,
                                                                           {
                                                                             isPublished:
-                                                                              value ===
-                                                                              "published",
+                                                                              value === "published",
                                                                           },
                                                                         );
                                                                       }}
                                                                       options={[
-                                                                        [
-                                                                          "published",
-                                                                          "Published",
-                                                                        ],
-                                                                        [
-                                                                          "draft",
-                                                                          "Draft (Hidden)",
-                                                                        ],
+                                                                        ["published", "Published"],
+                                                                        ["draft", "Draft (Hidden)"],
                                                                       ]}
                                                                       disabled={
                                                                         les.isPendingCreation
@@ -12391,44 +11174,28 @@ export function CourseCreatePage({
 
                                                                 {/* Free Preview Toggle */}
                                                                 <div
-                                                                  className={`flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[8px] px-3 py-2 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-3 ${les.isPendingCreation ? "opacity-60 pointer-events-none" : ""}`}
+                                                                  className={`mb-3 flex items-center justify-between rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-3 py-2 ${les.isPendingCreation ? "pointer-events-none opacity-60" : ""}`}
                                                                 >
                                                                   <div className="pr-3">
-                                                                    <strong className="block mb-0.5 text-(--text) text-[0.88rem] font-[650]">
-                                                                      Free
-                                                                      Preview
+                                                                    <strong className="mb-0.5 block text-[0.88rem] font-[650] text-(--text)">
+                                                                      Free Preview
                                                                     </strong>
-                                                                    <p className="m-0 text-(--muted) text-[0.78rem]">
-                                                                      Allow
-                                                                      prospective
-                                                                      students
-                                                                      to view
-                                                                      this
-                                                                      lesson
-                                                                      before
-                                                                      enrolling
-                                                                      or
-                                                                      purchasing.
+                                                                    <p className="m-0 text-[0.78rem] text-(--muted)">
+                                                                      Allow prospective students to
+                                                                      view this lesson before
+                                                                      enrolling or purchasing.
                                                                     </p>
                                                                   </div>
                                                                   <SettingsToggle
-                                                                    checked={
-                                                                      les.isPreview ===
-                                                                      true
-                                                                    }
-                                                                    onChange={(
-                                                                      checked,
-                                                                    ) => {
-                                                                      if (
-                                                                        les.isPendingCreation
-                                                                      )
+                                                                    checked={les.isPreview === true}
+                                                                    onChange={(checked) => {
+                                                                      if (les.isPendingCreation)
                                                                         return;
                                                                       void handleLessonDiscreteChange(
                                                                         sec.id,
                                                                         les.id,
                                                                         {
-                                                                          isPreview:
-                                                                            checked,
+                                                                          isPreview: checked,
                                                                         },
                                                                       );
                                                                     }}
@@ -12438,47 +11205,33 @@ export function CourseCreatePage({
 
                                                                 {/* Lesson Resources */}
                                                                 <LessonResourceManager
-                                                                  courseId={
-                                                                    currentCourseId
-                                                                  }
-                                                                  lessonId={
-                                                                    les.id
-                                                                  }
-                                                                  resources={
-                                                                    les.resources
-                                                                  }
+                                                                  courseId={currentCourseId}
+                                                                  lessonId={les.id}
+                                                                  resources={les.resources}
                                                                   disabled={
                                                                     les.isPendingCreation ||
                                                                     createLessonResourceMutation.isPending ||
                                                                     deleteLessonResourceMutation.isPending
                                                                   }
-                                                                  onCreateResource={(
-                                                                    payload,
-                                                                  ) =>
+                                                                  onCreateResource={(payload) =>
                                                                     handleCreateLessonResource(
                                                                       les.id,
                                                                       payload,
                                                                     )
                                                                   }
-                                                                  onResourceAdded={(
-                                                                    resource,
-                                                                  ) =>
+                                                                  onResourceAdded={(resource) =>
                                                                     handleLessonResourceAdded(
                                                                       sec.id,
                                                                       les.id,
                                                                       resource,
                                                                     )
                                                                   }
-                                                                  onDeleteResource={(
-                                                                    resourceId,
-                                                                  ) =>
+                                                                  onDeleteResource={(resourceId) =>
                                                                     handleDeleteLessonResource(
                                                                       resourceId,
                                                                     )
                                                                   }
-                                                                  onResourceRemoved={(
-                                                                    resource,
-                                                                  ) =>
+                                                                  onResourceRemoved={(resource) =>
                                                                     handleLessonResourceRemoved(
                                                                       sec.id,
                                                                       les.id,
@@ -12496,24 +11249,17 @@ export function CourseCreatePage({
                                                                   <div className="flex items-center justify-between gap-3">
                                                                     <div className="flex items-center gap-2 text-xs font-semibold text-(--text)">
                                                                       <PuzzlePiece
-                                                                        size={
-                                                                          16
-                                                                        }
+                                                                        size={16}
                                                                         className="text-(--accent)"
                                                                         weight="fill"
                                                                       />
-                                                                      <span>
-                                                                        Quiz
-                                                                        Assessment
-                                                                      </span>
+                                                                      <span>Quiz Assessment</span>
                                                                     </div>
                                                                     <button
                                                                       type="button"
                                                                       className="inline-flex min-h-8 items-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-transparent px-2.5 text-xs font-semibold text-(--muted) transition-colors hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:text-(--text)"
                                                                       onClick={() =>
-                                                                        setQuizOpen(
-                                                                          false,
-                                                                        )
+                                                                        setQuizOpen(false)
                                                                       }
                                                                     >
                                                                       Close
@@ -12524,28 +11270,17 @@ export function CourseCreatePage({
                                                                     les.id,
                                                                   ) ? (
                                                                     <QuizAuthoringPanel
-                                                                      courseId={
-                                                                        currentCourseId
-                                                                      }
-                                                                      lessonId={
-                                                                        les.id
-                                                                      }
-                                                                      lessonTitle={
-                                                                        les.title
-                                                                      }
+                                                                      courseId={currentCourseId}
+                                                                      lessonId={les.id}
+                                                                      lessonTitle={les.title}
                                                                       onQuizDeleted={() => {
                                                                         // Quiz deleted, query invalidation in hook updates UI
                                                                       }}
                                                                     />
                                                                   ) : (
                                                                     <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
-                                                                      Save the
-                                                                      course and
-                                                                      lesson
-                                                                      before
-                                                                      configuring
-                                                                      an
-                                                                      attached
+                                                                      Save the course and lesson
+                                                                      before configuring an attached
                                                                       Quiz.
                                                                     </div>
                                                                   )}
@@ -12553,15 +11288,9 @@ export function CourseCreatePage({
                                                               ) : (
                                                                 <button
                                                                   type="button"
-                                                                  disabled={
-                                                                    les.isPendingCreation
-                                                                  }
+                                                                  disabled={les.isPendingCreation}
                                                                   className="inline-flex min-h-9 items-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] px-3 text-xs font-semibold text-(--accent-ink,var(--accent)) transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] disabled:cursor-not-allowed disabled:opacity-50"
-                                                                  onClick={() =>
-                                                                    setQuizOpen(
-                                                                      true,
-                                                                    )
-                                                                  }
+                                                                  onClick={() => setQuizOpen(true)}
                                                                 >
                                                                   <PuzzlePiece
                                                                     size={15}
@@ -12597,7 +11326,7 @@ export function CourseCreatePage({
                                     creatingLessonSectionId === sec.id ||
                                     createLessonMutation.isPending
                                   }
-                                  className="inline-flex items-center gap-1.5 text-(--muted) enabled:hover:text-(--text) text-[0.82rem] font-medium border-0 bg-transparent p-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none enabled:cursor-pointer"
+                                  className="inline-flex items-center gap-1.5 border-0 bg-transparent p-0 text-[0.82rem] font-medium text-(--muted) transition-colors enabled:cursor-pointer enabled:hover:text-(--text) disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
                                   onClick={() => handleAddLesson(sec.id)}
                                 >
                                   {creatingLessonSectionId === sec.id ? (
@@ -12625,15 +11354,15 @@ export function CourseCreatePage({
               ) : panelStep === "access-rules" ? (
                 <div className="flex w-full flex-col gap-5">
                   {/* Top Grid: 1. Who can access & 2. Access duration */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                  <div className="grid w-full min-w-0 grid-cols-1 gap-5 max-[768px]:gap-3.5 md:grid-cols-2">
                     {/* Card 1: Who can access this course? */}
-                    <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                    <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                       <div className="mb-4.5 flex items-center justify-between">
                         <div>
-                          <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                          <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                             1. Who can access this course?
                           </h3>
-                          <p className="m-0 text-(--muted) text-[0.83rem]">
+                          <p className="m-0 text-[0.83rem] text-(--muted)">
                             Choose who is allowed to access this course.
                           </p>
                         </div>
@@ -12646,10 +11375,9 @@ export function CourseCreatePage({
                       <div className="flex flex-col gap-3">
                         {/* Radio option: Everyone */}
                         <label
-                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                            isAccessRulesSaving ||
-                            savingAccessControls.has("accessType")
-                              ? "opacity-60 cursor-not-allowed"
+                          className={`relative flex items-center gap-3.5 rounded-xl border p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            isAccessRulesSaving || savingAccessControls.has("accessType")
+                              ? "cursor-not-allowed opacity-60"
                               : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
                           } ${
                             accessRules.accessType === "everyone"
@@ -12657,54 +11385,49 @@ export function CourseCreatePage({
                               : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                           }`}
                           onClick={() => {
-                            if (
-                              !isAccessRulesSaving &&
-                              !savingAccessControls.has("accessType")
-                            ) {
+                            if (!isAccessRulesSaving && !savingAccessControls.has("accessType")) {
                               handleAccessTypeChange("everyone");
                             }
                           }}
                         >
                           <div
-                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                            className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                               accessRules.accessType === "everyone"
                                 ? "border-(--accent)"
                                 : "border-(--muted)"
                             }`}
                           >
                             {accessRules.accessType === "everyone" && (
-                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                              <div className="h-2 w-2 rounded-full bg-(--accent)" />
                             )}
                           </div>
                           <div className="flex flex-1 flex-col gap-0.75">
-                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                            <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                               Everyone
                             </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                              Anyone with access to the platform can access this
-                              course.
+                            <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                              Anyone with access to the platform can access this course.
                             </p>
                           </div>
                         </label>
 
                         {/* Radio option: Restricted access (Coming soon - Disabled) */}
                         <div
-                          className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 opacity-60 cursor-not-allowed select-none border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
+                          className="relative flex cursor-not-allowed items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-3.5 px-4 opacity-60 select-none"
                           aria-disabled="true"
                         >
-                          <div className="flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
-                          <div className="flex flex-1 flex-col gap-0.75 min-w-0">
+                          <div className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
+                          <div className="flex min-w-0 flex-1 flex-col gap-0.75">
                             <div className="flex items-center gap-2">
-                              <strong className="text-(--text) text-[0.9rem] font-[650] leading-[18px]">
+                              <strong className="text-[0.9rem] leading-[18px] font-[650] text-(--text)">
                                 Restricted access
                               </strong>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                              <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-0.5 text-[0.68rem] font-semibold tracking-wide text-(--muted)">
                                 Coming soon
                               </span>
                             </div>
-                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                              Only users who meet the selected requirements can
-                              access this course.
+                            <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                              Only users who meet the selected requirements can access this course.
                             </p>
                           </div>
                         </div>
@@ -12712,13 +11435,13 @@ export function CourseCreatePage({
                     </div>
 
                     {/* Card 2: Access duration */}
-                    <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                    <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                       <div className="mb-4.5 flex items-center justify-between">
                         <div>
-                          <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                          <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                             2. Access duration
                           </h3>
-                          <p className="m-0 text-(--muted) text-[0.83rem]">
+                          <p className="m-0 text-[0.83rem] text-(--muted)">
                             Set how long learners can access this course.
                           </p>
                         </div>
@@ -12731,10 +11454,9 @@ export function CourseCreatePage({
                       <div className="flex flex-col gap-3">
                         {/* Option 1: Lifetime access */}
                         <div
-                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                            isAccessRulesSaving ||
-                            savingAccessControls.has("durationMode")
-                              ? "opacity-60 cursor-not-allowed"
+                          className={`relative flex items-center gap-3.5 rounded-xl border p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            isAccessRulesSaving || savingAccessControls.has("durationMode")
+                              ? "cursor-not-allowed opacity-60"
                               : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
                           } ${
                             accessRules.durationMode === "lifetime"
@@ -12748,21 +11470,21 @@ export function CourseCreatePage({
                           }
                         >
                           <div
-                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                            className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                               accessRules.durationMode === "lifetime"
                                 ? "border-(--accent)"
                                 : "border-(--muted)"
                             }`}
                           >
                             {accessRules.durationMode === "lifetime" && (
-                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                              <div className="h-2 w-2 rounded-full bg-(--accent)" />
                             )}
                           </div>
                           <div className="flex flex-1 flex-col gap-0.75">
-                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                            <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                               Lifetime access
                             </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                            <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
                               Learners can access this course forever.
                             </p>
                           </div>
@@ -12770,10 +11492,9 @@ export function CourseCreatePage({
 
                         {/* Option 2: Fixed duration */}
                         <div
-                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                            isAccessRulesSaving ||
-                            savingAccessControls.has("durationMode")
-                              ? "opacity-60 cursor-not-allowed"
+                          className={`relative flex items-center gap-3.5 rounded-xl border p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            isAccessRulesSaving || savingAccessControls.has("durationMode")
+                              ? "cursor-not-allowed opacity-60"
                               : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
                           } ${
                             accessRules.durationMode === "fixed"
@@ -12787,43 +11508,39 @@ export function CourseCreatePage({
                           }
                         >
                           <div
-                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                            className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                               accessRules.durationMode === "fixed"
                                 ? "border-(--accent)"
                                 : "border-(--muted)"
                             }`}
                           >
                             {accessRules.durationMode === "fixed" && (
-                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                              <div className="h-2 w-2 rounded-full bg-(--accent)" />
                             )}
                           </div>
                           <div className="flex flex-1 flex-col gap-0.75">
-                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                            <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                               Fixed duration
                             </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                              Set a duration for how long learners can access
-                              this course.
+                            <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                              Set a duration for how long learners can access this course.
                             </p>
 
                             {accessRules.durationMode === "fixed" && (
                               <div
-                                className="flex items-center gap-2.5 mt-3 flex-wrap"
+                                className="mt-3 flex flex-wrap items-center gap-2.5"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <input
                                   type="number"
                                   disabled={
-                                    isAccessRulesSaving ||
-                                    savingAccessControls.has("durationMode")
+                                    isAccessRulesSaving || savingAccessControls.has("durationMode")
                                   }
-                                  className="w-[80px] h-9 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-0 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] font-semibold outline-none transition-[border-color] duration-150 hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] focus:border-(--accent) box-border text-center disabled:opacity-60 disabled:cursor-not-allowed"
+                                  className="box-border h-9 w-[80px] rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3 py-0 text-center text-[0.84rem] font-semibold text-(--text) transition-[border-color] duration-150 outline-none hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] focus:border-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
                                   min={1}
                                   value={accessRules.fixedDurationValue}
                                   onChange={(e) =>
-                                    handleFixedDurationValueChange(
-                                      parseInt(e.target.value, 10),
-                                    )
+                                    handleFixedDurationValueChange(parseInt(e.target.value, 10))
                                   }
                                   onBlur={() => {
                                     void flushFixedDurationPersistence();
@@ -12837,9 +11554,7 @@ export function CourseCreatePage({
                                   }
                                   value={accessRules.fixedDurationUnit}
                                   onValueChange={(val) =>
-                                    handleFixedDurationUnitChange(
-                                      val as DurationUnit,
-                                    )
+                                    handleFixedDurationUnitChange(val as DurationUnit)
                                   }
                                   options={[
                                     ["Days", "Days"],
@@ -12851,9 +11566,7 @@ export function CourseCreatePage({
                                   triggerClassName="!w-[130px] !h-9 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-lg !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.84rem] font-semibold hover:!border-[color-mix(in_srgb,var(--text)_24%,transparent)] transition-all flex items-center justify-between disabled:!opacity-60 disabled:!cursor-not-allowed"
                                 />
                                 <AccessRulesControlStatusIndicator
-                                  status={getAccessControlDisplayStatus(
-                                    "fixedDuration",
-                                  )}
+                                  status={getAccessControlDisplayStatus("fixedDuration")}
                                   testId="access-rules-status-fixedDuration"
                                 />
                               </div>
@@ -12865,43 +11578,40 @@ export function CourseCreatePage({
                   </div>
 
                   {/* Bottom Card: 3. Learner interactions */}
-                  <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) w-full">
+                  <div className="flex w-full flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                     <div className="mb-4.5">
-                      <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                      <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                         3. Learner interactions
                       </h3>
-                      <p className="m-0 text-(--muted) text-[0.83rem]">
+                      <p className="m-0 text-[0.83rem] text-(--muted)">
                         Manage how learners can interact within this course.
                       </p>
                     </div>
 
                     <div className="flex flex-col gap-3">
                       {/* Toggle 1: Q&A */}
-                      <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                        <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                          <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                      <div className="flex items-center justify-between rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4.5 py-3.5">
+                        <div className="flex min-w-0 items-center gap-3.5 pr-3">
+                          <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
                             <Question size={20} weight="bold" />
                           </div>
                           <div className="min-w-0">
-                            <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                            <strong className="mb-0.5 block text-[0.9rem] font-[650] text-(--text)">
                               Q&A
                             </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem]">
+                            <p className="m-0 text-[0.8rem] text-(--muted)">
                               Allow learners to ask questions about lessons.
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="flex shrink-0 items-center gap-2.5">
                           <AccessRulesControlStatusIndicator
                             status={getAccessControlDisplayStatus("enableQA")}
                             testId="access-rules-status-enableQA"
                           />
                           <SettingsToggle
                             checked={accessRules.enableQA}
-                            disabled={
-                              isAccessRulesSaving ||
-                              savingAccessControls.has("enableQA")
-                            }
+                            disabled={isAccessRulesSaving || savingAccessControls.has("enableQA")}
                             onChange={handleToggleQA}
                             label="Toggle Q&A"
                           />
@@ -12909,32 +11619,29 @@ export function CourseCreatePage({
                       </div>
 
                       {/* Toggle 2: Comments */}
-                      <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                        <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                          <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                      <div className="flex items-center justify-between rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4.5 py-3.5">
+                        <div className="flex min-w-0 items-center gap-3.5 pr-3">
+                          <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
                             <ChatCircleText size={20} weight="fill" />
                           </div>
                           <div className="min-w-0">
-                            <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                            <strong className="mb-0.5 block text-[0.9rem] font-[650] text-(--text)">
                               Comments
                             </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem]">
+                            <p className="m-0 text-[0.8rem] text-(--muted)">
                               Allow learners to comment on course content.
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="flex shrink-0 items-center gap-2.5">
                           <AccessRulesControlStatusIndicator
-                            status={getAccessControlDisplayStatus(
-                              "enableComments",
-                            )}
+                            status={getAccessControlDisplayStatus("enableComments")}
                             testId="access-rules-status-enableComments"
                           />
                           <SettingsToggle
                             checked={accessRules.enableComments}
                             disabled={
-                              isAccessRulesSaving ||
-                              savingAccessControls.has("enableComments")
+                              isAccessRulesSaving || savingAccessControls.has("enableComments")
                             }
                             onChange={handleToggleComments}
                             label="Toggle Comments"
@@ -12943,32 +11650,29 @@ export function CourseCreatePage({
                       </div>
 
                       {/* Toggle 3: Notes */}
-                      <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                        <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                          <div className="flex w-[38px] h-[38px] items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                      <div className="flex items-center justify-between rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4.5 py-3.5">
+                        <div className="flex min-w-0 items-center gap-3.5 pr-3">
+                          <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
                             <NotePencil size={20} weight="bold" />
                           </div>
                           <div className="min-w-0">
-                            <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                            <strong className="mb-0.5 block text-[0.9rem] font-[650] text-(--text)">
                               Notes
                             </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem]">
+                            <p className="m-0 text-[0.8rem] text-(--muted)">
                               Allow learners to take notes while learning.
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="flex shrink-0 items-center gap-2.5">
                           <AccessRulesControlStatusIndicator
-                            status={getAccessControlDisplayStatus(
-                              "enableNotes",
-                            )}
+                            status={getAccessControlDisplayStatus("enableNotes")}
                             testId="access-rules-status-enableNotes"
                           />
                           <SettingsToggle
                             checked={accessRules.enableNotes}
                             disabled={
-                              isAccessRulesSaving ||
-                              savingAccessControls.has("enableNotes")
+                              isAccessRulesSaving || savingAccessControls.has("enableNotes")
                             }
                             onChange={handleToggleNotes}
                             label="Toggle Notes"
@@ -12982,25 +11686,21 @@ export function CourseCreatePage({
                 <div className="flex w-full flex-col gap-5">
                   {pricingValidationError && (
                     <div className="flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[0.84rem] font-semibold text-red-400">
-                      <WarningCircle
-                        size={18}
-                        weight="bold"
-                        className="shrink-0"
-                      />
+                      <WarningCircle size={18} weight="bold" className="shrink-0" />
                       <span>{pricingValidationError}</span>
                     </div>
                   )}
 
                   {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                  <div className="grid w-full min-w-0 grid-cols-1 gap-5 max-[768px]:gap-3.5 md:grid-cols-2">
                     {/* Card 1: Course pricing */}
-                    <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
-                      <div className="flex items-center justify-between mb-4.5">
+                    <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow) transition-opacity duration-200">
+                      <div className="mb-4.5 flex items-center justify-between">
                         <div>
-                          <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                          <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                             1. Course pricing
                           </h3>
-                          <p className="m-0 text-(--muted) text-[0.83rem]">
+                          <p className="m-0 text-[0.83rem] text-(--muted)">
                             Choose how you want to sell this course.
                           </p>
                         </div>
@@ -13013,10 +11713,9 @@ export function CourseCreatePage({
                       <div className="flex flex-col gap-3">
                         {/* Radio Option: Free */}
                         <div
-                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                            isSavingPricing ||
-                            isPricingControlSaving("pricingType")
-                              ? "opacity-60 cursor-not-allowed"
+                          className={`relative flex items-center gap-3.5 rounded-xl border p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            isSavingPricing || isPricingControlSaving("pricingType")
+                              ? "cursor-not-allowed opacity-60"
                               : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
                           } ${
                             pricing.pricingType === "free"
@@ -13030,33 +11729,31 @@ export function CourseCreatePage({
                           }
                         >
                           <div
-                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                            className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                               pricing.pricingType === "free"
                                 ? "border-(--accent)"
                                 : "border-(--muted)"
                             }`}
                           >
                             {pricing.pricingType === "free" && (
-                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                              <div className="h-2 w-2 rounded-full bg-(--accent)" />
                             )}
                           </div>
                           <div className="flex flex-1 flex-col gap-0.75">
-                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                            <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                               Free
                             </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                              Anyone who can access the course can enroll for
-                              free.
+                            <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                              Anyone who can access the course can enroll for free.
                             </p>
                           </div>
                         </div>
 
                         {/* Radio Option: Paid */}
                         <div
-                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                            isSavingPricing ||
-                            isPricingControlSaving("pricingType")
-                              ? "opacity-60 cursor-not-allowed"
+                          className={`relative flex items-center gap-3.5 rounded-xl border p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                            isSavingPricing || isPricingControlSaving("pricingType")
+                              ? "cursor-not-allowed opacity-60"
                               : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
                           } ${
                             pricing.pricingType === "paid"
@@ -13070,21 +11767,21 @@ export function CourseCreatePage({
                           }
                         >
                           <div
-                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                            className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                               pricing.pricingType === "paid"
                                 ? "border-(--accent)"
                                 : "border-(--muted)"
                             }`}
                           >
                             {pricing.pricingType === "paid" && (
-                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                              <div className="h-2 w-2 rounded-full bg-(--accent)" />
                             )}
                           </div>
                           <div className="flex flex-1 flex-col gap-0.75">
-                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                            <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                               Paid
                             </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                            <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
                               Learners must purchase the course to get access.
                             </p>
                           </div>
@@ -13094,18 +11791,18 @@ export function CourseCreatePage({
 
                     {/* Card 2: Price details */}
                     <div
-                      className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200 ${
+                      className={`flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow) transition-opacity duration-200 ${
                         pricing.pricingType === "free"
-                          ? "is-disabled opacity-55 pointer-events-none"
+                          ? "is-disabled pointer-events-none opacity-55"
                           : ""
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-4.5">
+                      <div className="mb-4.5 flex items-center justify-between">
                         <div>
-                          <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                          <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                             2. Price details
                           </h3>
-                          <p className="m-0 text-(--muted) text-[0.83rem]">
+                          <p className="m-0 text-[0.83rem] text-(--muted)">
                             Set the pricing for your course.
                           </p>
                         </div>
@@ -13113,19 +11810,16 @@ export function CourseCreatePage({
 
                       <div className="flex flex-col gap-1.75">
                         {/* Currency Combobox Field */}
-                        <div className="flex flex-col gap-2 mb-5">
+                        <div className="mb-5 flex flex-col gap-2">
                           <div className="flex items-center justify-between">
                             <label
                               id="currency-label"
-                              className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                              className="text-[0.84rem] font-semibold text-(--text-secondary)"
                             >
-                              Currency{" "}
-                              <span className="text-[#ff5252] ml-0.5">*</span>
+                              Currency <span className="ml-0.5 text-[#ff5252]">*</span>
                             </label>
                             <PricingControlStatusIndicator
-                              status={getPricingControlDisplayStatus(
-                                "currency",
-                              )}
+                              status={getPricingControlDisplayStatus("currency")}
                               testId="pricing-field-status-currency"
                             />
                           </div>
@@ -13144,30 +11838,27 @@ export function CourseCreatePage({
                             searchPlaceholder="Search currencies by name or code..."
                             triggerClassName="!w-full !h-11 !border !border-[color-mix(in_srgb,var(--text)_12%,transparent)] !rounded-[10px] !px-3.5 !py-0 !text-(--text) !bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] !text-[0.88rem] !font-medium disabled:!opacity-60 disabled:!cursor-not-allowed"
                           />
-                          <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
+                          <p className="m-0 mt-1 text-[0.78rem] text-(--muted)">
                             Choose the currency for course pricing.
                           </p>
                         </div>
 
                         {/* Selling Price Field */}
-                        <div className="flex flex-col gap-2 mb-5">
+                        <div className="mb-5 flex flex-col gap-2">
                           <div className="flex items-center justify-between">
                             <label
                               htmlFor="selling-price"
-                              className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                              className="text-[0.84rem] font-semibold text-(--text-secondary)"
                             >
-                              Selling price{" "}
-                              <span className="text-[#ff5252] ml-0.5">*</span>
+                              Selling price <span className="ml-0.5 text-[#ff5252]">*</span>
                             </label>
                             <PricingControlStatusIndicator
-                              status={getPricingControlDisplayStatus(
-                                "sellingPrice",
-                              )}
+                              status={getPricingControlDisplayStatus("sellingPrice")}
                               testId="pricing-field-status-sellingPrice"
                             />
                           </div>
-                          <div className="relative flex items-center w-full">
-                            <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
+                          <div className="relative flex w-full items-center">
+                            <span className="pointer-events-none absolute left-3.5 text-[0.9rem] font-semibold text-(--muted)">
                               {getCurrencySymbol(pricing.currency || "INR")}
                             </span>
                             <input
@@ -13181,39 +11872,35 @@ export function CourseCreatePage({
                                 isPricingControlSaving("pricingType")
                               }
                               value={pricing.sellingPrice}
-                              onChange={(e) =>
-                                handleSellingPriceChange(e.target.value)
-                              }
+                              onChange={(e) => handleSellingPriceChange(e.target.value)}
                               onBlur={() => {
                                 void flushPricingPersistence();
                               }}
                               placeholder="1999"
-                              className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] py-2.5 pr-3.5 pl-8 text-[0.9rem] font-semibold text-(--text) transition-[border-color] duration-150 outline-none focus:border-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
                             />
                           </div>
-                          <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
+                          <p className="m-0 mt-1 text-[0.78rem] text-(--muted)">
                             This is the price learners will pay.
                           </p>
                         </div>
 
                         {/* Original Price Field */}
-                        <div className="flex flex-col gap-2 mb-5">
+                        <div className="mb-5 flex flex-col gap-2">
                           <div className="flex items-center justify-between">
                             <label
                               htmlFor="original-price"
-                              className="text-(--text-secondary) text-[0.84rem] font-semibold"
+                              className="text-[0.84rem] font-semibold text-(--text-secondary)"
                             >
                               Original price
                             </label>
                             <PricingControlStatusIndicator
-                              status={getPricingControlDisplayStatus(
-                                "originalPrice",
-                              )}
+                              status={getPricingControlDisplayStatus("originalPrice")}
                               testId="pricing-field-status-originalPrice"
                             />
                           </div>
-                          <div className="relative flex items-center w-full">
-                            <span className="absolute left-3.5 text-(--muted) text-[0.9rem] font-semibold pointer-events-none">
+                          <div className="relative flex w-full items-center">
+                            <span className="pointer-events-none absolute left-3.5 text-[0.9rem] font-semibold text-(--muted)">
                               {getCurrencySymbol(pricing.currency || "INR")}
                             </span>
                             <input
@@ -13227,67 +11914,48 @@ export function CourseCreatePage({
                                 isPricingControlSaving("pricingType")
                               }
                               value={pricing.originalPrice}
-                              onChange={(e) =>
-                                handleOriginalPriceChange(e.target.value)
-                              }
+                              onChange={(e) => handleOriginalPriceChange(e.target.value)}
                               onBlur={() => {
                                 void flushPricingPersistence();
                               }}
                               placeholder="2999"
-                              className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-[10px] py-2.5 pr-3.5 pl-8 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.9rem] font-semibold outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="w-full rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] py-2.5 pr-3.5 pl-8 text-[0.9rem] font-semibold text-(--text) transition-[border-color] duration-150 outline-none focus:border-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
                             />
                           </div>
-                          <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
+                          <p className="m-0 mt-1 text-[0.78rem] text-(--muted)">
                             Enter original price to show discount.
                           </p>
                         </div>
 
                         {/* Dynamic Discount Calculation Badge */}
                         {(() => {
-                          const sell = parseFloat(
-                            pricing.sellingPrice.replace(/,/g, ""),
-                          );
-                          const orig = parseFloat(
-                            pricing.originalPrice.replace(/,/g, ""),
-                          );
+                          const sell = parseFloat(pricing.sellingPrice.replace(/,/g, ""));
+                          const orig = parseFloat(pricing.originalPrice.replace(/,/g, ""));
                           let discountPercent = 0;
                           let isValidDiscount = false;
 
-                          if (
-                            !isNaN(sell) &&
-                            !isNaN(orig) &&
-                            sell > 0 &&
-                            orig > sell
-                          ) {
-                            discountPercent = Math.round(
-                              ((orig - sell) / orig) * 100,
-                            );
+                          if (!isNaN(sell) && !isNaN(orig) && sell > 0 && orig > sell) {
+                            discountPercent = Math.round(((orig - sell) / orig) * 100);
                             isValidDiscount = discountPercent > 0;
                           }
 
                           return (
-                            <div className="flex items-center gap-3 mt-1 flex-wrap">
+                            <div className="mt-1 flex flex-wrap items-center gap-3">
                               <div
-                                className={`inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border rounded-lg px-2.5 py-1.5 text-[0.80rem] font-bold transition-[border-color,background-color,color] duration-150 ease-out ${
-                                  isValidDiscount &&
-                                  pricing.pricingType === "paid"
-                                    ? "is-active border-green-500/40 text-green-400 bg-green-500/12"
-                                    : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[0.80rem] font-bold whitespace-nowrap transition-[border-color,background-color,color] duration-150 ease-out ${
+                                  isValidDiscount && pricing.pricingType === "paid"
+                                    ? "is-active border-green-500/40 bg-green-500/12 text-green-400"
+                                    : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--muted)"
                                 }`}
                               >
-                                <Tag
-                                  size={15}
-                                  weight="bold"
-                                  className="shrink-0"
-                                />
-                                <span className="whitespace-nowrap leading-none">
-                                  {isValidDiscount &&
-                                  pricing.pricingType === "paid"
+                                <Tag size={15} weight="bold" className="shrink-0" />
+                                <span className="leading-none whitespace-nowrap">
+                                  {isValidDiscount && pricing.pricingType === "paid"
                                     ? `${discountPercent}% OFF`
                                     : "0% OFF"}
                                 </span>
                               </div>
-                              <span className="text-(--muted) text-[0.8rem] leading-tight">
+                              <span className="text-[0.8rem] leading-tight text-(--muted)">
                                 Discount is calculated automatically.
                               </span>
                             </div>
@@ -13308,18 +11976,17 @@ export function CourseCreatePage({
                   />
 
                   {/* Bottom Card: Coupons Banner */}
-                  <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-[14px] px-5.5 py-4 bg-(--surface) shadow-(--card-shadow) max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
+                  <div className="flex items-center justify-between rounded-[14px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) px-5.5 py-4 shadow-(--card-shadow) max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-3.5">
                     <div className="flex items-center gap-3.5">
-                      <div className="flex w-9.5 h-9.5 items-center justify-center rounded-[10px] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] shrink-0">
+                      <div className="flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
                         <Info size={20} weight="bold" />
                       </div>
                       <div>
-                        <strong className="block mb-0.5 text-(--text) text-[0.92rem] font-[650]">
+                        <strong className="mb-0.5 block text-[0.92rem] font-[650] text-(--text)">
                           Coupons
                         </strong>
-                        <p className="m-0 text-(--muted) text-[0.82rem]">
-                          Create and manage coupon codes separately from the
-                          Coupons section.
+                        <p className="m-0 text-[0.82rem] text-(--muted)">
+                          Create and manage coupon codes separately from the Coupons section.
                         </p>
                       </div>
                     </div>
@@ -13335,7 +12002,7 @@ export function CourseCreatePage({
                         paddingLeft: "18px",
                         paddingRight: "18px",
                       }}
-                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:w-full max-[768px]:justify-center"
+                      className="inline-flex cursor-pointer items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] max-[768px]:w-full max-[768px]:justify-center"
                       onClick={() => {
                         if (!onNavigatePage) return;
                         if (!currentCourseId) {
@@ -13359,34 +12026,31 @@ export function CourseCreatePage({
               ) : panelStep === "extras" ? (
                 <div className="flex w-full flex-col gap-5">
                   {/* Top 2-Column Grid: 1. Certificates & 2. This course includes */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                  <div className="grid w-full min-w-0 grid-cols-1 items-start gap-5 max-[768px]:gap-3.5 md:grid-cols-2">
                     {/* Card 1: Certificates */}
-                    <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                    <div className="flex h-fit flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                       <div className="mb-4.5">
-                        <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                        <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                           1. Certificates
                         </h3>
-                        <p className="m-0 text-(--muted) text-[0.83rem]">
-                          Configure how certificates will be issued for this
-                          course.
+                        <p className="m-0 text-[0.83rem] text-(--muted)">
+                          Configure how certificates will be issued for this course.
                         </p>
                       </div>
 
                       {/* Enable Certificate Toggle Row */}
-                      <div className="flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-4.5 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] mb-4.5">
-                        <div className="flex flex-col min-w-0 pr-3">
-                          <strong className="block mb-0.5 text-(--text) text-[0.9rem] font-[650]">
+                      <div className="mb-4.5 flex items-center justify-between rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4.5 py-3.5">
+                        <div className="flex min-w-0 flex-col pr-3">
+                          <strong className="mb-0.5 block text-[0.9rem] font-[650] text-(--text)">
                             Enable certificate
                           </strong>
-                          <p className="m-0 text-(--muted) text-[0.8rem]">
+                          <p className="m-0 text-[0.8rem] text-(--muted)">
                             Issue certificates to learners on course completion.
                           </p>
                         </div>
-                        <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="flex shrink-0 items-center gap-2.5">
                           <ExtrasControlStatusIndicator
-                            status={getExtrasControlDisplayStatus(
-                              "enableCertificate",
-                            )}
+                            status={getExtrasControlDisplayStatus("enableCertificate")}
                             testId="extras-field-status-enableCertificate"
                           />
                           <SettingsToggle
@@ -13402,40 +12066,31 @@ export function CourseCreatePage({
                       <div
                         className={`flex flex-col gap-4.5 transition-opacity duration-200 ${
                           !extras.enableCertificate
-                            ? "is-disabled opacity-50 pointer-events-none"
+                            ? "is-disabled pointer-events-none opacity-50"
                             : ""
                         }`}
                       >
                         {/* Template Selector */}
-                        <div className="flex flex-col gap-2 mb-5">
-                          <div className="flex items-center justify-between mb-0.5">
-                            <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                        <div className="mb-5 flex flex-col gap-2">
+                          <div className="mb-0.5 flex items-center justify-between">
+                            <label className="text-[0.84rem] font-semibold text-(--text-secondary)">
                               Certificate template
                             </label>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                            <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-0.5 text-[0.68rem] font-semibold tracking-wide text-(--muted)">
                               Coming soon
                             </span>
                           </div>
-                          <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
+                          <p className="m-0 mt-0.5 mb-2 text-[0.78rem] text-(--muted)">
                             Choose from pre-designed certificate templates.
                           </p>
-                          <div className="opacity-60 cursor-not-allowed pointer-events-none">
+                          <div className="pointer-events-none cursor-not-allowed opacity-60">
                             <ThemedSelect
                               value={extras.certificateTemplate}
                               onValueChange={handleCertificateTemplateChange}
                               options={[
-                                [
-                                  "purple-certificate",
-                                  "Modern Purple Certificate",
-                                ],
-                                [
-                                  "blue-certificate",
-                                  "Classic Blue Certificate",
-                                ],
-                                [
-                                  "dark-certificate",
-                                  "Minimal Dark Certificate",
-                                ],
+                                ["purple-certificate", "Modern Purple Certificate"],
+                                ["blue-certificate", "Classic Blue Certificate"],
+                                ["dark-certificate", "Minimal Dark Certificate"],
                               ]}
                               ariaLabel="Select certificate template"
                               className="w-full"
@@ -13446,72 +12101,71 @@ export function CourseCreatePage({
                         </div>
 
                         {/* Certificate Issuance Options */}
-                        <div className="flex flex-col gap-2 mb-5">
-                          <div className="flex items-center justify-between mb-0.5">
-                            <label className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                        <div className="mb-5 flex flex-col gap-2">
+                          <div className="mb-0.5 flex items-center justify-between">
+                            <label className="text-[0.84rem] font-semibold text-(--text-secondary)">
                               Certificate issuance
                             </label>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                            <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-0.5 text-[0.68rem] font-semibold tracking-wide text-(--muted)">
                               Coming soon
                             </span>
                           </div>
-                          <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
+                          <p className="m-0 mt-0.5 mb-2 text-[0.78rem] text-(--muted)">
                             Choose when the certificate should be issued.
                           </p>
 
-                          <div className="flex flex-col gap-2.5 opacity-60 cursor-not-allowed pointer-events-none select-none">
+                          <div className="pointer-events-none flex cursor-not-allowed flex-col gap-2.5 opacity-60 select-none">
                             {/* Option 1: On course completion */}
                             <div
-                              className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                              className={`relative flex items-center gap-3.5 rounded-xl border p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
                                 extras.issuanceType === "completion"
                                   ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
                                   : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                               }`}
                             >
                               <div
-                                className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                                className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                                   extras.issuanceType === "completion"
                                     ? "border-(--accent)"
                                     : "border-(--muted)"
                                 }`}
                               >
                                 {extras.issuanceType === "completion" && (
-                                  <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                  <div className="h-2 w-2 rounded-full bg-(--accent)" />
                                 )}
                               </div>
                               <div className="flex flex-1 flex-col gap-0.75">
-                                <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                                <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                                   On course completion
                                 </strong>
-                                <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                                  Issue certificate when the learner completes
-                                  all lessons.
+                                <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                                  Issue certificate when the learner completes all lessons.
                                 </p>
                               </div>
                             </div>
 
                             {/* Option 2: Minimum completion percentage */}
                             <div
-                              className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                              className={`relative flex items-center gap-3.5 rounded-xl border p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
                                 extras.issuanceType === "percentage"
                                   ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
                                   : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                               }`}
                             >
                               <div
-                                className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                                className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                                   extras.issuanceType === "percentage"
                                     ? "border-(--accent)"
                                     : "border-(--muted)"
                                 }`}
                               >
                                 {extras.issuanceType === "percentage" && (
-                                  <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                  <div className="h-2 w-2 rounded-full bg-(--accent)" />
                                 )}
                               </div>
                               <div className="flex flex-1 flex-col gap-0.75">
-                                <div className="flex items-center justify-between w-full">
-                                  <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                                <div className="flex w-full items-center justify-between">
+                                  <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                                     Minimum completion percentage
                                   </strong>
                                   {extras.issuanceType === "percentage" && (
@@ -13519,51 +12173,49 @@ export function CourseCreatePage({
                                       <input
                                         type="number"
                                         disabled
-                                        className="w-[76px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.86rem] font-semibold outline-none text-center cursor-not-allowed"
+                                        className="w-[76px] cursor-not-allowed rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3 py-1.75 text-center text-[0.86rem] font-semibold text-(--text) outline-none"
                                         min={1}
                                         max={100}
                                         value={extras.minCompletionPercentage}
                                         readOnly
                                       />
-                                      <span className="text-(--text) text-[0.86rem] font-bold">
+                                      <span className="text-[0.86rem] font-bold text-(--text)">
                                         %
                                       </span>
                                     </div>
                                   )}
                                 </div>
-                                <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                                  Issue certificate when learner reaches the
-                                  selected percentage.
+                                <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                                  Issue certificate when learner reaches the selected percentage.
                                 </p>
                               </div>
                             </div>
 
                             {/* Option 3: Custom rule */}
                             <div
-                              className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
+                              className={`relative flex items-center gap-3.5 rounded-xl border p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
                                 extras.issuanceType === "custom"
                                   ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
                                   : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                               }`}
                             >
                               <div
-                                className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+                                className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
                                   extras.issuanceType === "custom"
                                     ? "border-(--accent)"
                                     : "border-(--muted)"
                                 }`}
                               >
                                 {extras.issuanceType === "custom" && (
-                                  <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                  <div className="h-2 w-2 rounded-full bg-(--accent)" />
                                 )}
                               </div>
                               <div className="flex flex-1 flex-col gap-0.75">
-                                <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                                <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                                   Custom rule
                                 </strong>
-                                <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                                  Define your own custom rule for certificate
-                                  issuance.
+                                <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                                  Define your own custom rule for certificate issuance.
                                 </p>
 
                                 {extras.issuanceType === "custom" && (
@@ -13572,7 +12224,7 @@ export function CourseCreatePage({
                                       type="text"
                                       disabled
                                       readOnly
-                                      className="w-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg px-3 py-1.75 text-(--text) bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-[0.84rem] outline-none cursor-not-allowed"
+                                      className="w-full cursor-not-allowed rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3 py-1.75 text-[0.84rem] text-(--text) outline-none"
                                       value={extras.customRuleText}
                                       placeholder="e.g. Complete all quizzes with > 80% score"
                                     />
@@ -13584,17 +12236,17 @@ export function CourseCreatePage({
                         </div>
 
                         {/* Delivery Toggle Row */}
-                        <div className="flex items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5 opacity-60 cursor-not-allowed">
+                        <div className="flex cursor-not-allowed items-center justify-between border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5 opacity-60">
                           <div>
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <strong className="text-(--text) text-[0.88rem] font-[650]">
+                            <div className="mb-0.5 flex items-center gap-2">
+                              <strong className="text-[0.88rem] font-[650] text-(--text)">
                                 Delivery
                               </strong>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                              <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-0.5 text-[0.68rem] font-semibold tracking-wide text-(--muted)">
                                 Coming soon
                               </span>
                             </div>
-                            <p className="m-0 text-(--muted) text-[0.78rem]">
+                            <p className="m-0 text-[0.78rem] text-(--muted)">
                               Automatically email the certificate to learners.
                             </p>
                           </div>
@@ -13610,58 +12262,58 @@ export function CourseCreatePage({
                     </div>
 
                     {/* Card 2: This course includes */}
-                    <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                    <div className="flex h-fit flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                       <div className="mb-4.5">
-                        <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                        <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                           2. This course includes
                         </h3>
-                        <p className="m-0 text-(--muted) text-[0.83rem]">
+                        <p className="m-0 text-[0.83rem] text-(--muted)">
                           These details are calculated from your curriculum.
                         </p>
                       </div>
 
                       {/* Derived Live Stats Summary Grid */}
-                      <div className="grid grid-cols-1 min-[1024px]:grid-cols-3 gap-3 mb-6 max-[768px]:gap-2.5">
-                        <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-                          <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
+                      <div className="mb-6 grid grid-cols-1 gap-3 max-[768px]:gap-2.5 min-[1024px]:grid-cols-3">
+                        <div className="flex items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-3 py-3.5 max-[768px]:gap-3.5 max-[768px]:p-[12px_14px]">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-indigo-500/[0.14] text-indigo-500 max-[768px]:h-10 max-[768px]:w-10">
                             <BookOpen size={20} weight="fill" />
                           </div>
                           <div className="flex flex-col">
-                            <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
+                            <strong className="text-base leading-[1.2] font-[750] text-(--text) max-[768px]:text-[1.05rem]">
                               {totalSections}
                             </strong>
-                            <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                            <span className="text-[0.74rem] font-medium text-(--muted) max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
                               Sections
                             </span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-                          <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
+                        <div className="flex items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-3 py-3.5 max-[768px]:gap-3.5 max-[768px]:p-[12px_14px]">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-purple-500/[0.14] text-purple-500 max-[768px]:h-10 max-[768px]:w-10">
                             <PlayCircle size={20} weight="fill" />
                           </div>
                           <div className="flex flex-col">
-                            <strong className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]">
+                            <strong className="text-base leading-[1.2] font-[750] text-(--text) max-[768px]:text-[1.05rem]">
                               {totalLessons}
                             </strong>
-                            <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                            <span className="text-[0.74rem] font-medium text-(--muted) max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
                               Lessons
                             </span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl px-3 py-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] max-[768px]:p-[12px_14px] max-[768px]:gap-3.5">
-                          <div className="flex w-9 h-9 shrink-0 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14] max-[768px]:w-10 max-[768px]:h-10">
+                        <div className="flex items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] px-3 py-3.5 max-[768px]:gap-3.5 max-[768px]:p-[12px_14px]">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-blue-500/[0.14] text-blue-500 max-[768px]:h-10 max-[768px]:w-10">
                             <Clock size={20} weight="bold" />
                           </div>
                           <div className="flex flex-col">
                             <strong
-                              className="text-(--text) text-base font-[750] leading-[1.2] max-[768px]:text-[1.05rem]"
+                              className="text-base leading-[1.2] font-[750] text-(--text) max-[768px]:text-[1.05rem]"
                               data-testid="course-extra-duration"
                             >
                               {computedDuration}
                             </strong>
-                            <span className="text-(--muted) text-[0.74rem] font-medium max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
+                            <span className="text-[0.74rem] font-medium text-(--muted) max-[768px]:text-[0.8rem] max-[768px]:whitespace-nowrap">
                               Content length
                             </span>
                           </div>
@@ -13669,55 +12321,48 @@ export function CourseCreatePage({
                       </div>
 
                       {/* Divider between Stats & Inclusions */}
-                      <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] my-4.5" />
+                      <div className="my-4.5 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]" />
 
                       {/* Additional Inclusions Section */}
                       <div className="flex flex-col gap-3.5">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2.5">
-                            <h4 className="m-0 text-(--text) text-[0.95rem] font-bold">
+                            <h4 className="m-0 text-[0.95rem] font-bold text-(--text)">
                               Course inclusions
                             </h4>
-                            {isReorderingIncludes ||
-                            reorderIncludesMutation.isPending ? (
-                              <span className="inline-flex items-center gap-1 text-(--accent) text-[0.72rem] font-bold px-2.5 py-0.5 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_28%,transparent)]">
-                                <CircleNotch
-                                  size={12}
-                                  className="animate-spin text-(--accent)"
-                                />
+                            {isReorderingIncludes || reorderIncludesMutation.isPending ? (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-2.5 py-0.5 text-[0.72rem] font-bold text-(--accent)">
+                                <CircleNotch size={12} className="animate-spin text-(--accent)" />
                                 <span>Saving inclusion order...</span>
                               </span>
                             ) : (
                               <ExtrasControlStatusIndicator
-                                status={
-                                  extrasControlStatus["inclusions"] ?? null
-                                }
+                                status={extrasControlStatus["inclusions"] ?? null}
                                 testId="extras-field-status-inclusions"
                               />
                             )}
                           </div>
                           <span
-                            className={`inline-flex items-center px-2.5 py-0.75 rounded-full text-[0.72rem] font-bold tracking-wide border ${
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.75 text-[0.72rem] font-bold tracking-wide ${
                               manualIncludesDraft.length >= 6
-                                ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
-                                : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) border-[color-mix(in_srgb,var(--text)_12%,transparent)]"
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
+                                : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)"
                             }`}
                           >
                             {manualIncludesDraft.length} / 6
                           </span>
                         </div>
-                        <p className="m-0 text-(--muted) text-[0.82rem] leading-normal">
-                          Perks and benefits your learners will receive upon
-                          enrolling (max 6 items). Click suggestions below or
-                          add custom inclusions.
+                        <p className="m-0 text-[0.82rem] leading-normal text-(--muted)">
+                          Perks and benefits your learners will receive upon enrolling (max 6
+                          items). Click suggestions below or add custom inclusions.
                         </p>
 
                         {/* Active Inclusions List */}
                         <div className="flex flex-col gap-2.5">
                           {manualIncludesDraft.length === 0 ? (
-                            <div className="border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-xl p-5 text-center text-(--muted) text-[0.82rem] bg-[color-mix(in_srgb,var(--canvas)_30%,var(--surface))]">
-                              No inclusions added yet. Choose from the suggested
-                              perks below or add a custom benefit.
+                            <div className="rounded-xl border border-dashed border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_30%,var(--surface))] p-5 text-center text-[0.82rem] text-(--muted)">
+                              No inclusions added yet. Choose from the suggested perks below or add
+                              a custom benefit.
                             </div>
                           ) : (
                             manualIncludesDraft.map((item, index) => (
@@ -13732,26 +12377,22 @@ export function CourseCreatePage({
                                   !savingIncludeIds.has(item.id) &&
                                   dragEnabledInclusionId === item.id
                                 }
-                                onDragStart={(e) =>
-                                  handleInclusionDragStart(e, index, item.text)
-                                }
-                                onDragOver={(e) =>
-                                  handleInclusionDragOver(e, index)
-                                }
+                                onDragStart={(e) => handleInclusionDragStart(e, index, item.text)}
+                                onDragOver={(e) => handleInclusionDragOver(e, index)}
                                 onDragEnd={handleInclusionDragEnd}
-                                className={`flex items-center gap-2.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-2.5 px-3.5 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] transition-all ${
+                                className={`flex items-center gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 px-3.5 transition-all ${
                                   item.isPendingCreation ||
                                   deletingIncludeIds.has(item.id) ||
                                   savingIncludeIds.has(item.id)
-                                    ? "opacity-75 border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
+                                    ? "border-[color-mix(in_srgb,var(--accent)_35%,transparent)] opacity-75"
                                     : isReorderingIncludes || isExtrasSaving
                                       ? "opacity-60"
-                                      : "hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-xs"
+                                      : "shadow-xs hover:border-[color-mix(in_srgb,var(--accent)_40%,transparent)]"
                                 }`}
                               >
                                 {item.isPendingCreation ? (
                                   <span
-                                    className="flex items-center justify-center p-1 rounded-md shrink-0 text-(--accent)"
+                                    className="flex shrink-0 items-center justify-center rounded-md p-1 text-(--accent)"
                                     title="Adding inclusion..."
                                   >
                                     <CircleNotch
@@ -13761,14 +12402,14 @@ export function CourseCreatePage({
                                   </span>
                                 ) : (
                                   <span
-                                    className={`flex items-center justify-center p-1 rounded-md shrink-0 transition-colors ${
+                                    className={`flex shrink-0 items-center justify-center rounded-md p-1 transition-colors ${
                                       isReorderingIncludes ||
                                       reorderIncludesMutation.isPending ||
                                       isExtrasSaving ||
                                       deletingIncludeIds.has(item.id) ||
                                       savingIncludeIds.has(item.id)
-                                        ? "opacity-30 cursor-not-allowed pointer-events-none"
-                                        : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] select-none cursor-grab active:cursor-grabbing"
+                                        ? "pointer-events-none cursor-not-allowed opacity-30"
+                                        : "cursor-grab text-(--muted) select-none hover:bg-[color-mix(in_srgb,var(--text)_8%,transparent)] hover:text-(--text) active:cursor-grabbing"
                                     }`}
                                     onMouseEnter={() => {
                                       if (
@@ -13781,9 +12422,7 @@ export function CourseCreatePage({
                                         setDragEnabledInclusionId(item.id);
                                       }
                                     }}
-                                    onMouseLeave={() =>
-                                      setDragEnabledInclusionId(null)
-                                    }
+                                    onMouseLeave={() => setDragEnabledInclusionId(null)}
                                     title={
                                       isReorderingIncludes
                                         ? "Saving order..."
@@ -13807,7 +12446,7 @@ export function CourseCreatePage({
                                     deletingIncludeIds.has(item.id) ||
                                     savingIncludeIds.has(item.id)
                                   }
-                                  className="flex-1 min-w-0 border-none text-(--text) bg-transparent text-[0.88rem] font-medium outline-none placeholder:text-(--muted) disabled:opacity-60 disabled:cursor-not-allowed"
+                                  className="min-w-0 flex-1 border-none bg-transparent text-[0.88rem] font-medium text-(--text) outline-none placeholder:text-(--muted) disabled:cursor-not-allowed disabled:opacity-60"
                                   value={item.text}
                                   onFocus={() => setFocusedInclusionId(item.id)}
                                   onBlur={() => {
@@ -13824,13 +12463,11 @@ export function CourseCreatePage({
                                 />
                                 {getExtrasControlDisplayStatus(item.id) ? (
                                   <ExtrasControlStatusIndicator
-                                    status={getExtrasControlDisplayStatus(
-                                      item.id,
-                                    )}
+                                    status={getExtrasControlDisplayStatus(item.id)}
                                     testId={`extras-field-status-inclusion-${item.id}`}
                                   />
                                 ) : focusedInclusionId === item.id ? (
-                                  <span className="text-(--muted) text-[0.74rem] font-medium shrink-0 select-none px-1">
+                                  <span className="shrink-0 px-1 text-[0.74rem] font-medium text-(--muted) select-none">
                                     {item.text.length} / 25
                                   </span>
                                 ) : null}
@@ -13844,10 +12481,8 @@ export function CourseCreatePage({
                                     deletingIncludeIds.has(item.id) ||
                                     savingIncludeIds.has(item.id)
                                   }
-                                  onClick={() =>
-                                    handleDeleteManualInclusion(item.id)
-                                  }
-                                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] text-(--muted) hover:!text-[#ef4444] hover:!bg-red-500/10 hover:!border-red-500/30 transition-all bg-transparent cursor-pointer p-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none shrink-0"
+                                  onClick={() => handleDeleteManualInclusion(item.id)}
+                                  className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--surface-strong)60%,transparent)] bg-transparent p-0 text-(--muted) transition-all hover:!border-red-500/30 hover:!bg-red-500/10 hover:!text-[#ef4444] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-30"
                                   aria-label={
                                     deletingIncludeIds.has(item.id)
                                       ? "Deleting inclusion..."
@@ -13860,10 +12495,7 @@ export function CourseCreatePage({
                                   }
                                 >
                                   {deletingIncludeIds.has(item.id) ? (
-                                    <CircleNotch
-                                      size={14}
-                                      className="animate-spin text-red-500"
-                                    />
+                                    <CircleNotch size={14} className="animate-spin text-red-500" />
                                   ) : (
                                     <Trash size={15} />
                                   )}
@@ -13874,37 +12506,34 @@ export function CourseCreatePage({
                         </div>
 
                         {/* Suggested quick-add chips */}
-                        {manualIncludesDraft.length < 6 &&
-                          suggestedInclusions.length > 0 && (
-                            <div className="flex flex-col gap-2 mt-1">
-                              <span className="text-(--muted) text-[0.74rem] font-bold uppercase tracking-wider">
-                                Suggested perks (click to add)
-                              </span>
-                              <div className="flex flex-wrap gap-2">
-                                {suggestedInclusions
-                                  .slice(0, 6 - manualIncludesDraft.length)
-                                  .map((suggestion) => (
-                                    <button
-                                      key={suggestion}
-                                      type="button"
-                                      disabled={
-                                        isReorderingIncludes ||
-                                        reorderIncludesMutation.isPending ||
-                                        isExtrasSaving ||
-                                        manualIncludesDraft.length >= 6
-                                      }
-                                      onClick={() =>
-                                        handleAddManualInclusion(suggestion)
-                                      }
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.78rem] font-semibold border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] text-(--text-secondary) hover:text-(--text) hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
-                                    >
-                                      <Plus size={13} weight="bold" />
-                                      <span>{suggestion}</span>
-                                    </button>
-                                  ))}
-                              </div>
+                        {manualIncludesDraft.length < 6 && suggestedInclusions.length > 0 && (
+                          <div className="mt-1 flex flex-col gap-2">
+                            <span className="text-[0.74rem] font-bold tracking-wider text-(--muted) uppercase">
+                              Suggested perks (click to add)
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              {suggestedInclusions
+                                .slice(0, 6 - manualIncludesDraft.length)
+                                .map((suggestion) => (
+                                  <button
+                                    key={suggestion}
+                                    type="button"
+                                    disabled={
+                                      isReorderingIncludes ||
+                                      reorderIncludesMutation.isPending ||
+                                      isExtrasSaving ||
+                                      manualIncludesDraft.length >= 6
+                                    }
+                                    onClick={() => handleAddManualInclusion(suggestion)}
+                                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-3 py-1.5 text-[0.78rem] font-semibold text-(--text-secondary) transition-all hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))] hover:text-(--text) disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    <Plus size={13} weight="bold" />
+                                    <span>{suggestion}</span>
+                                  </button>
+                                ))}
                             </div>
-                          )}
+                          </div>
+                        )}
 
                         {/* Add inclusion button */}
                         <button
@@ -13916,12 +12545,12 @@ export function CourseCreatePage({
                             manualIncludesDraft.length >= 6
                           }
                           onClick={() => handleAddManualInclusion()}
-                          className={`inline-flex items-center justify-center gap-2 h-9 w-full border border-dashed rounded-xl text-[0.84rem] font-bold mt-1 transition-all ${
+                          className={`mt-1 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-dashed text-[0.84rem] font-bold transition-all ${
                             manualIncludesDraft.length >= 6 ||
                             isReorderingIncludes ||
                             isExtrasSaving
-                              ? "border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) opacity-50 cursor-not-allowed"
-                              : "border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] hover:border-(--accent) cursor-pointer"
+                              ? "cursor-not-allowed border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) opacity-50"
+                              : "cursor-pointer border-[color-mix(in_srgb,var(--accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--accent)_6%,var(--surface))] text-(--accent) hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))]"
                           }`}
                           title={
                             isReorderingIncludes
@@ -13945,51 +12574,51 @@ export function CourseCreatePage({
               ) : panelStep === "publish" ? (
                 <div className="flex w-full flex-col gap-5">
                   {/* Top 2-Column Grid: 1. Publish settings & 2. Final checklist */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                  <div className="grid w-full min-w-0 grid-cols-1 items-start gap-5 max-[768px]:gap-3.5 md:grid-cols-2">
                     {/* Card 1: Publish settings */}
-                    <div className="flex flex-col h-fit border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                    <div className="flex h-fit flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                       <div className="mb-4.5">
-                        <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                        <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                           1. Publish settings
                         </h3>
-                        <p className="m-0 text-(--muted) text-[0.83rem]">
+                        <p className="m-0 text-[0.83rem] text-(--muted)">
                           Choose when and how your course becomes visible.
                         </p>
                       </div>
 
                       {/* Informational Course Status Display */}
-                      <div className="flex flex-col gap-1.5 mb-4.5">
-                        <label className="text-(--text) text-[0.86rem] font-[650]">
+                      <div className="mb-4.5 flex flex-col gap-1.5">
+                        <label className="text-[0.86rem] font-[650] text-(--text)">
                           Course status
                         </label>
-                        <div className="flex items-center mt-0.5">
+                        <div className="mt-0.5 flex items-center">
                           <span
-                            className={`inline-flex items-center rounded-md px-2.5 py-1 text-[0.8rem] font-bold uppercase tracking-[0.04em] ${
+                            className={`inline-flex items-center rounded-md px-2.5 py-1 text-[0.8rem] font-bold tracking-[0.04em] uppercase ${
                               isPublished
-                                ? "is-published border border-green-500/35 text-green-500 bg-green-500/12"
-                                : "is-draft border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                                ? "is-published border border-green-500/35 bg-green-500/12 text-green-500"
+                                : "is-draft border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,transparent)] text-(--muted)"
                             }`}
                           >
                             {isPublished ? "Published" : "Draft"}
                           </span>
                         </div>
-                        <p className="m-0 mt-1 text-(--muted) text-[0.78rem] leading-[1.4]">
+                        <p className="m-0 mt-1 text-[0.78rem] leading-[1.4] text-(--muted)">
                           {isPublished
                             ? "Your course is currently published and visible to students according to your settings."
                             : "Your course is currently a draft and hasn't been published yet."}
                         </p>
                       </div>
                       {/* Course visibility select */}
-                      <div className="flex flex-col gap-1.5 mb-4.5">
+                      <div className="mb-4.5 flex flex-col gap-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-(--text) text-[0.86rem] font-[650]">
+                          <label className="text-[0.86rem] font-[650] text-(--text)">
                             Course visibility
                           </label>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                          <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-0.5 text-[0.68rem] font-semibold tracking-wide text-(--muted)">
                             Coming soon
                           </span>
                         </div>
-                        <div className="opacity-60 cursor-not-allowed pointer-events-none">
+                        <div className="pointer-events-none cursor-not-allowed opacity-60">
                           <ThemedSelect
                             disabled
                             value={publishSettings.visibility}
@@ -14020,41 +12649,41 @@ export function CourseCreatePage({
                       </div>
 
                       {/* Publish on radio options */}
-                      <div className="flex flex-col gap-1.5 mb-4.5">
+                      <div className="mb-4.5 flex flex-col gap-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-(--text) text-[0.86rem] font-[650]">
+                          <label className="text-[0.86rem] font-[650] text-(--text)">
                             Publish on
                           </label>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
+                          <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-0.5 text-[0.68rem] font-semibold tracking-wide text-(--muted)">
                             Coming soon
                           </span>
                         </div>
 
-                        <div className="flex flex-col gap-2.5 opacity-60 pointer-events-none cursor-not-allowed select-none">
+                        <div className="pointer-events-none flex cursor-not-allowed flex-col gap-2.5 opacity-60 select-none">
                           {/* Option 1: Publish immediately */}
                           <div
-                            className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-not-allowed select-none ${
+                            className={`relative flex cursor-not-allowed items-center gap-3.5 rounded-xl border p-3.5 px-4 select-none ${
                               publishSettings.scheduleOption === "now"
                                 ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
                                 : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                             }`}
                           >
                             <div
-                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
+                              className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
                                 publishSettings.scheduleOption === "now"
                                   ? "border-(--accent)"
                                   : "border-(--muted)"
                               }`}
                             >
                               {publishSettings.scheduleOption === "now" && (
-                                <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                <div className="h-2 w-2 rounded-full bg-(--accent)" />
                               )}
                             </div>
                             <div className="flex flex-1 flex-col gap-0.75">
-                              <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                              <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                                 Publish immediately
                               </strong>
-                              <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                              <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
                                 Make this course live immediately upon saving.
                               </p>
                             </div>
@@ -14062,30 +12691,29 @@ export function CourseCreatePage({
 
                           {/* Option 2: Schedule for later */}
                           <div
-                            className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 cursor-not-allowed select-none ${
+                            className={`relative flex cursor-not-allowed items-center gap-3.5 rounded-xl border p-3.5 px-4 select-none ${
                               publishSettings.scheduleOption === "later"
                                 ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
                                 : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
                             }`}
                           >
                             <div
-                              className={`flex w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
+                              className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
                                 publishSettings.scheduleOption === "later"
                                   ? "border-(--accent)"
                                   : "border-(--muted)"
                               }`}
                             >
                               {publishSettings.scheduleOption === "later" && (
-                                <div className="w-2 h-2 rounded-full bg-(--accent)" />
+                                <div className="h-2 w-2 rounded-full bg-(--accent)" />
                               )}
                             </div>
                             <div className="flex flex-1 flex-col gap-0.75">
-                              <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
+                              <strong className="text-[0.9rem] leading-4.5 font-[650] text-(--text)">
                                 Schedule for a future date
                               </strong>
-                              <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                                Set a specific date and time when this course
-                                should go live.
+                              <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                                Set a specific date and time when this course should go live.
                               </p>
                             </div>
                           </div>
@@ -14094,25 +12722,22 @@ export function CourseCreatePage({
                     </div>
 
                     {/* Card 2: Pre-publish Checklist */}
-                    <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
+                    <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
                       <div className="mb-4.5">
-                        <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+                        <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
                           2. Pre-publish Checklist
                         </h3>
-                        <p className="m-0 text-(--muted) text-[0.83rem]">
-                          Review all required items before publishing your
-                          course.
+                        <p className="m-0 text-[0.83rem] text-(--muted)">
+                          Review all required items before publishing your course.
                         </p>
                       </div>
 
-                      <div className="flex flex-col gap-2.5 mb-5">
+                      <div className="mb-5 flex flex-col gap-2.5">
                         {validationChecklistItems.map((item) => {
                           const state = getChecklistState(item.area);
-                          const sectionErrors =
-                            serverValidation?.sections[item.area].errors ?? [];
+                          const sectionErrors = serverValidation?.sections[item.area].errors ?? [];
                           const isInvalid = state === "invalid";
-                          const isExpanded =
-                            isInvalid && expandedValidationArea === item.area;
+                          const isExpanded = isInvalid && expandedValidationArea === item.area;
                           const errorSummary =
                             sectionErrors.length > 1
                               ? String(sectionErrors.length) + " issues"
@@ -14122,10 +12747,8 @@ export function CourseCreatePage({
                             <div key={item.area}>
                               <div
                                 className={[
-                                  "flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] px-4 py-3 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] transition-[border-color,background-color] duration-150 ease-out",
-                                  isExpanded
-                                    ? "rounded-t-[10px] rounded-b-none"
-                                    : "rounded-[10px]",
+                                  "flex items-center justify-between border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4 py-3 transition-[border-color,background-color] duration-150 ease-out",
+                                  isExpanded ? "rounded-t-[10px] rounded-b-none" : "rounded-[10px]",
                                 ].join(" ")}
                               >
                                 <div className="flex min-w-0 items-center gap-3">
@@ -14153,23 +12776,17 @@ export function CourseCreatePage({
                                       className="shrink-0 text-(--muted)"
                                     />
                                   )}
-                                  <strong className="truncate text-(--text) text-[0.9rem] font-[650]">
+                                  <strong className="truncate text-[0.9rem] font-[650] text-(--text)">
                                     {item.label}
                                   </strong>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-2 text-[0.82rem]">
                                   {state === "validating" ? (
-                                    <span className="text-(--accent)">
-                                      Validating...
-                                    </span>
+                                    <span className="text-(--accent)">Validating...</span>
                                   ) : state === "idle" ? (
-                                    <span className="text-(--muted)">
-                                      Not checked
-                                    </span>
+                                    <span className="text-(--muted)">Not checked</span>
                                   ) : state === "valid" ? (
-                                    <span className="text-(--muted)">
-                                      {item.summary}
-                                    </span>
+                                    <span className="text-(--muted)">{item.summary}</span>
                                   ) : (
                                     <>
                                       <span className="max-w-[15rem] truncate text-rose-400">
@@ -14179,14 +12796,10 @@ export function CourseCreatePage({
                                         type="button"
                                         className="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border-0 bg-transparent p-0 text-rose-300 transition-colors hover:bg-rose-500/10 hover:text-rose-200"
                                         onClick={() =>
-                                          setExpandedValidationArea(
-                                            isExpanded ? null : item.area,
-                                          )
+                                          setExpandedValidationArea(isExpanded ? null : item.area)
                                         }
                                         aria-expanded={isExpanded}
-                                        aria-controls={
-                                          "validation-errors-" + item.area
-                                        }
+                                        aria-controls={"validation-errors-" + item.area}
                                         aria-label={
                                           (isExpanded ? "Hide" : "Show") +
                                           " " +
@@ -14211,16 +12824,14 @@ export function CourseCreatePage({
                                   "grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
                                   isExpanded
                                     ? "grid-rows-[1fr] opacity-100"
-                                    : "grid-rows-[0fr] opacity-0 pointer-events-none",
+                                    : "pointer-events-none grid-rows-[0fr] opacity-0",
                                 ].join(" ")}
                               >
                                 <div className="min-h-0">
-                                  <div className="-mt-px border-x border-b border-[color-mix(in_srgb,#fb7185_24%,transparent)] rounded-b-[10px] bg-[color-mix(in_srgb,#fb7185_5%,var(--surface))] px-4 py-3 text-[0.78rem] leading-[1.45] text-(--text-secondary)">
+                                  <div className="-mt-px rounded-b-[10px] border-x border-b border-[color-mix(in_srgb,#fb7185_24%,transparent)] bg-[color-mix(in_srgb,#fb7185_5%,var(--surface))] px-4 py-3 text-[0.78rem] leading-[1.45] text-(--text-secondary)">
                                     <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 marker:text-rose-400">
                                       {sectionErrors.map((message, index) => (
-                                        <li key={item.area + "-error-" + index}>
-                                          {message}
-                                        </li>
+                                        <li key={item.area + "-error-" + index}>{message}</li>
                                       ))}
                                     </ul>
                                   </div>
@@ -14233,32 +12844,31 @@ export function CourseCreatePage({
 
                       {/* Ready-to-publish State Box */}
                       {isCourseReadyToPublish ? (
-                        <div className="flex items-center gap-4 border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] rounded-xl px-4.5 py-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                          <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-(--accent) bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]">
+                        <div className="flex items-center gap-4 rounded-xl border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] px-4.5 py-4">
+                          <div className="flex h-10.5 w-10.5 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-(--accent)">
                             <BookOpen size={24} weight="fill" />
                           </div>
                           <div>
-                            <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
+                            <strong className="mb-0.75 block text-[0.94rem] font-bold text-(--text)">
                               Your course is ready to be published!
                             </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                              Once published, students can see and enroll in
-                              this course according to your settings.
+                            <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                              Once published, students can see and enroll in this course according
+                              to your settings.
                             </p>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-4 border border-red-500/30 rounded-xl px-4.5 py-4 bg-red-500/8">
-                          <div className="flex w-10.5 h-10.5 shrink-0 items-center justify-center rounded-xl text-red-500 bg-red-500/16">
+                        <div className="flex items-center gap-4 rounded-xl border border-red-500/30 bg-red-500/8 px-4.5 py-4">
+                          <div className="flex h-10.5 w-10.5 shrink-0 items-center justify-center rounded-xl bg-red-500/16 text-red-500">
                             <Info size={24} weight="bold" />
                           </div>
                           <div>
-                            <strong className="block mb-0.75 text-(--text) text-[0.94rem] font-bold">
+                            <strong className="mb-0.75 block text-[0.94rem] font-bold text-(--text)">
                               Course needs attention
                             </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem]">
-                              Please fix incomplete sections highlighted above
-                              before publishing.
+                            <p className="m-0 text-[0.8rem] text-(--muted)">
+                              Please fix incomplete sections highlighted above before publishing.
                             </p>
                           </div>
                         </div>
@@ -14267,70 +12877,67 @@ export function CourseCreatePage({
                   </div>
 
                   {/* Bottom Card 3: What happens after publishing? */}
-                  <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                    <h3 className="m-0 mb-4.5 text-(--text) text-[1.05rem] font-bold">
+                  <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
+                    <h3 className="m-0 mb-4.5 text-[1.05rem] font-bold text-(--text)">
                       3. What happens after publishing?
                     </h3>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
                       {/* Feature 1: Visible to students */}
-                      <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                        <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-indigo-500 bg-indigo-500/[0.14]">
+                      <div className="flex flex-col gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-indigo-500/[0.14] text-indigo-500">
                           <Eye size={22} weight="bold" />
                         </div>
                         <div>
-                          <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                          <strong className="mb-1 block text-[0.9rem] font-[650] text-(--text)">
                             Visible to students
                           </strong>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Students will be able to discover your course on the
-                            platform.
+                          <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                            Students will be able to discover your course on the platform.
                           </p>
                         </div>
                       </div>
 
                       {/* Feature 2: Enrollment starts */}
-                      <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                        <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-purple-500 bg-purple-500/[0.14]">
+                      <div className="flex flex-col gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-purple-500/[0.14] text-purple-500">
                           <UserPlus size={22} weight="bold" />
                         </div>
                         <div>
-                          <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                          <strong className="mb-1 block text-[0.9rem] font-[650] text-(--text)">
                             Enrollment starts
                           </strong>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Students who meet the access rules can enroll in
-                            your course.
+                          <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                            Students who meet the access rules can enroll in your course.
                           </p>
                         </div>
                       </div>
 
                       {/* Feature 3: Track performance */}
-                      <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                        <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-blue-500 bg-blue-500/[0.14]">
+                      <div className="flex flex-col gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-blue-500/[0.14] text-blue-500">
                           <PlayCircle size={22} weight="fill" />
                         </div>
                         <div>
-                          <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                          <strong className="mb-1 block text-[0.9rem] font-[650] text-(--text)">
                             Track performance
                           </strong>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Monitor enrollments, progress, and engagement in
-                            real-time.
+                          <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
+                            Monitor enrollments, progress, and engagement in real-time.
                           </p>
                         </div>
                       </div>
 
                       {/* Feature 4: Earn with every sale */}
-                      <div className="flex flex-col gap-3 border border-[color-mix(in_srgb,var(--text)_10%,transparent)] rounded-xl p-4 bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))]">
-                        <div className="flex w-10 h-10 items-center justify-center rounded-[10px] text-pink-500 bg-pink-500/[0.14]">
+                      <div className="flex flex-col gap-3 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-pink-500/[0.14] text-pink-500">
                           <ChartBar size={22} weight="bold" />
                         </div>
                         <div>
-                          <strong className="block mb-1 text-(--text) text-[0.9rem] font-[650]">
+                          <strong className="mb-1 block text-[0.9rem] font-[650] text-(--text)">
                             Earn with every sale
                           </strong>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
+                          <p className="m-0 text-[0.8rem] leading-[1.4] text-(--muted)">
                             Get paid for every successful enrollment.
                           </p>
                         </div>
@@ -14339,13 +12946,13 @@ export function CourseCreatePage({
                   </div>
                 </div>
               ) : (
-                <div className="relative z-10 grid grid-cols-1 min-[1100px]:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)] gap-6 items-start max-[768px]:gap-4.5 w-full min-w-0">
-                  <section className="relative z-10 rounded-[14px] p-6 bg-(--surface) shadow-(--card-shadow) max-[768px]:p-4">
+                <div className="relative z-10 grid w-full min-w-0 grid-cols-1 items-start gap-6 max-[768px]:gap-4.5 min-[1100px]:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)]">
+                  <section className="relative z-10 rounded-[14px] bg-(--surface) p-6 shadow-(--card-shadow) max-[768px]:p-4">
                     <div className="mb-4.5">
-                      <h2 className="m-0 text-(--text) text-[1.18rem] font-[650] tracking-[-0.015em]">
+                      <h2 className="m-0 text-[1.18rem] font-[650] tracking-[-0.015em] text-(--text)">
                         {WIZARD_STEPS.find((s) => s.id === panelStep)?.label}
                       </h2>
-                      <p className="m-0 mt-1 mb-5 text-(--muted) text-[0.82rem]">
+                      <p className="m-0 mt-1 mb-5 text-[0.82rem] text-(--muted)">
                         This section will allow configuring course {panelStep}.
                       </p>
                     </div>
@@ -14362,9 +12969,9 @@ export function CourseCreatePage({
         className="course-wizard-sticky-bottom-bar"
         data-testid="course-wizard-sticky-bottom-bar"
       >
-        <div className="relative flex items-center justify-between gap-2.5 sm:gap-3 w-full max-w-[1400px] mx-auto">
+        <div className="relative mx-auto flex w-full max-w-[1400px] items-center justify-between gap-2.5 sm:gap-3">
           {/* Left: Preview Button */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex shrink-0 items-center gap-2.5">
             {!(activeStep === "publish" && isPublished) && (
               <button
                 type="button"
@@ -14377,9 +12984,9 @@ export function CourseCreatePage({
                   paddingLeft: "14px",
                   paddingRight: "14px",
                 }}
-                className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
+                className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent text-(--text-secondary) transition-all duration-150 ${
                   isAnyApiInProgress || isPreviewLoading
-                    ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                    ? "!pointer-events-none !cursor-not-allowed !opacity-40 hover:!bg-transparent hover:!text-(--text-secondary)"
                     : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
                 }`}
                 onClick={handlePreviewAction}
@@ -14387,10 +12994,7 @@ export function CourseCreatePage({
               >
                 {isPreviewLoading ? (
                   <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-(--accent)"
-                    />
+                    <CircleNotch size={14} className="animate-spin text-(--accent)" />
                     <span>Opening...</span>
                   </>
                 ) : (
@@ -14406,39 +13010,26 @@ export function CourseCreatePage({
           {/* Center: True horizontal center save status */}
           {activeStep === "basics" && basicsOverallStatus && (
             <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center transition-all duration-200 select-none"
               data-testid="basics-overall-save-status"
               aria-live="polite"
             >
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-1 text-[0.78rem] font-medium shadow-xs backdrop-blur-xs select-none">
                 {basicsOverallStatus === "saving" && (
                   <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-(--accent)"
-                    />
-                    <span className="text-(--text-secondary)">
-                      Saving changes...
-                    </span>
+                    <CircleNotch size={14} className="animate-spin text-(--accent)" />
+                    <span className="text-(--text-secondary)">Saving changes...</span>
                   </>
                 )}
                 {basicsOverallStatus === "failed" && (
                   <>
-                    <WarningCircle
-                      size={14}
-                      weight="fill"
-                      className="text-rose-500 shrink-0"
-                    />
+                    <WarningCircle size={14} weight="fill" className="shrink-0 text-rose-500" />
                     <span className="text-rose-500">Save failed</span>
                   </>
                 )}
                 {basicsOverallStatus === "saved" && (
                   <>
-                    <CheckCircle
-                      size={14}
-                      weight="fill"
-                      className="text-emerald-500 shrink-0"
-                    />
+                    <CheckCircle size={14} weight="fill" className="shrink-0 text-emerald-500" />
                     <span className="text-emerald-500">All changes saved</span>
                   </>
                 )}
@@ -14449,39 +13040,26 @@ export function CourseCreatePage({
           {/* Center: True horizontal center save status for Curriculum */}
           {activeStep === "curriculum" && curriculumOverallStatus && (
             <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center transition-all duration-200 select-none"
               data-testid="curriculum-overall-save-status"
               aria-live="polite"
             >
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-1 text-[0.78rem] font-medium shadow-xs backdrop-blur-xs select-none">
                 {curriculumOverallStatus === "saving" && (
                   <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-(--accent)"
-                    />
-                    <span className="text-(--text-secondary)">
-                      Saving changes...
-                    </span>
+                    <CircleNotch size={14} className="animate-spin text-(--accent)" />
+                    <span className="text-(--text-secondary)">Saving changes...</span>
                   </>
                 )}
                 {curriculumOverallStatus === "failed" && (
                   <>
-                    <WarningCircle
-                      size={14}
-                      weight="fill"
-                      className="text-rose-500 shrink-0"
-                    />
+                    <WarningCircle size={14} weight="fill" className="shrink-0 text-rose-500" />
                     <span className="text-rose-500">Save failed</span>
                   </>
                 )}
                 {curriculumOverallStatus === "saved" && (
                   <>
-                    <CheckCircle
-                      size={14}
-                      weight="fill"
-                      className="text-emerald-500 shrink-0"
-                    />
+                    <CheckCircle size={14} weight="fill" className="shrink-0 text-emerald-500" />
                     <span className="text-emerald-500">All changes saved</span>
                   </>
                 )}
@@ -14492,39 +13070,26 @@ export function CourseCreatePage({
           {/* Center: True horizontal center save status for Access Rules */}
           {activeStep === "access-rules" && accessRulesOverallStatus && (
             <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center transition-all duration-200 select-none"
               data-testid="access-rules-overall-save-status"
               aria-live="polite"
             >
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-1 text-[0.78rem] font-medium shadow-xs backdrop-blur-xs select-none">
                 {accessRulesOverallStatus === "saving" && (
                   <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-(--accent)"
-                    />
-                    <span className="text-(--text-secondary)">
-                      Saving changes...
-                    </span>
+                    <CircleNotch size={14} className="animate-spin text-(--accent)" />
+                    <span className="text-(--text-secondary)">Saving changes...</span>
                   </>
                 )}
                 {accessRulesOverallStatus === "failed" && (
                   <>
-                    <WarningCircle
-                      size={14}
-                      weight="fill"
-                      className="text-rose-500 shrink-0"
-                    />
+                    <WarningCircle size={14} weight="fill" className="shrink-0 text-rose-500" />
                     <span className="text-rose-500">Save failed</span>
                   </>
                 )}
                 {accessRulesOverallStatus === "saved" && (
                   <>
-                    <CheckCircle
-                      size={14}
-                      weight="fill"
-                      className="text-emerald-500 shrink-0"
-                    />
+                    <CheckCircle size={14} weight="fill" className="shrink-0 text-emerald-500" />
                     <span className="text-emerald-500">All changes saved</span>
                   </>
                 )}
@@ -14535,39 +13100,26 @@ export function CourseCreatePage({
           {/* Center: True horizontal center save status for Pricing */}
           {activeStep === "pricing" && pricingOverallStatus && (
             <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center transition-all duration-200 select-none"
               data-testid="pricing-overall-save-status"
               aria-live="polite"
             >
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-1 text-[0.78rem] font-medium shadow-xs backdrop-blur-xs select-none">
                 {pricingOverallStatus === "saving" && (
                   <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-(--accent)"
-                    />
-                    <span className="text-(--text-secondary)">
-                      Saving changes...
-                    </span>
+                    <CircleNotch size={14} className="animate-spin text-(--accent)" />
+                    <span className="text-(--text-secondary)">Saving changes...</span>
                   </>
                 )}
                 {pricingOverallStatus === "failed" && (
                   <>
-                    <WarningCircle
-                      size={14}
-                      weight="fill"
-                      className="text-rose-500 shrink-0"
-                    />
+                    <WarningCircle size={14} weight="fill" className="shrink-0 text-rose-500" />
                     <span className="text-rose-500">Save failed</span>
                   </>
                 )}
                 {pricingOverallStatus === "saved" && (
                   <>
-                    <CheckCircle
-                      size={14}
-                      weight="fill"
-                      className="text-emerald-500 shrink-0"
-                    />
+                    <CheckCircle size={14} weight="fill" className="shrink-0 text-emerald-500" />
                     <span className="text-emerald-500">All changes saved</span>
                   </>
                 )}
@@ -14578,39 +13130,26 @@ export function CourseCreatePage({
           {/* Center: True horizontal center save status for Extras */}
           {activeStep === "extras" && extrasOverallStatus && (
             <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center transition-all duration-200 select-none"
               data-testid="extras-overall-save-status"
               aria-live="polite"
             >
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-1 text-[0.78rem] font-medium shadow-xs backdrop-blur-xs select-none">
                 {extrasOverallStatus === "saving" && (
                   <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-(--accent)"
-                    />
-                    <span className="text-(--text-secondary)">
-                      Saving changes...
-                    </span>
+                    <CircleNotch size={14} className="animate-spin text-(--accent)" />
+                    <span className="text-(--text-secondary)">Saving changes...</span>
                   </>
                 )}
                 {extrasOverallStatus === "failed" && (
                   <>
-                    <WarningCircle
-                      size={14}
-                      weight="fill"
-                      className="text-rose-500 shrink-0"
-                    />
+                    <WarningCircle size={14} weight="fill" className="shrink-0 text-rose-500" />
                     <span className="text-rose-500">Save failed</span>
                   </>
                 )}
                 {extrasOverallStatus === "saved" && (
                   <>
-                    <CheckCircle
-                      size={14}
-                      weight="fill"
-                      className="text-emerald-500 shrink-0"
-                    />
+                    <CheckCircle size={14} weight="fill" className="shrink-0 text-emerald-500" />
                     <span className="text-emerald-500">All changes saved</span>
                   </>
                 )}
@@ -14621,39 +13160,26 @@ export function CourseCreatePage({
           {/* Center: True horizontal center save status for Publish */}
           {activeStep === "publish" && publishOverallStatus && (
             <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center z-10 select-none transition-all duration-200"
+              className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center transition-all duration-200 select-none"
               data-testid="publish-overall-save-status"
               aria-live="polite"
             >
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.78rem] font-medium bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] border border-[color-mix(in_srgb,var(--border)_70%,transparent)] shadow-xs backdrop-blur-xs select-none">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-1 text-[0.78rem] font-medium shadow-xs backdrop-blur-xs select-none">
                 {publishOverallStatus === "saving" && (
                   <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-(--accent)"
-                    />
-                    <span className="text-(--text-secondary)">
-                      Saving changes...
-                    </span>
+                    <CircleNotch size={14} className="animate-spin text-(--accent)" />
+                    <span className="text-(--text-secondary)">Saving changes...</span>
                   </>
                 )}
                 {publishOverallStatus === "failed" && (
                   <>
-                    <WarningCircle
-                      size={14}
-                      weight="fill"
-                      className="text-rose-500 shrink-0"
-                    />
+                    <WarningCircle size={14} weight="fill" className="shrink-0 text-rose-500" />
                     <span className="text-rose-500">Save failed</span>
                   </>
                 )}
                 {publishOverallStatus === "saved" && (
                   <>
-                    <CheckCircle
-                      size={14}
-                      weight="fill"
-                      className="text-emerald-500 shrink-0"
-                    />
+                    <CheckCircle size={14} weight="fill" className="shrink-0 text-emerald-500" />
                     <span className="text-emerald-500">All changes saved</span>
                   </>
                 )}
@@ -14662,7 +13188,7 @@ export function CourseCreatePage({
           )}
 
           {/* Right: Previous & Next / Validate / Publish Actions */}
-          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5">
             {/* Previous Button */}
             {!(activeStep === "publish" && isPublished) && (
               <button
@@ -14676,9 +13202,9 @@ export function CourseCreatePage({
                   paddingLeft: "14px",
                   paddingRight: "14px",
                 }}
-                className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all duration-150 ${
+                className={`inline-flex items-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent text-(--text-secondary) transition-all duration-150 ${
                   activeStep === "basics" || actionLoading !== null
-                    ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                    ? "!pointer-events-none !cursor-not-allowed !opacity-40 hover:!bg-transparent hover:!text-(--text-secondary)"
                     : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
                 }`}
                 onClick={() => {
@@ -14705,16 +13231,13 @@ export function CourseCreatePage({
                   paddingLeft: "16px",
                   paddingRight: "16px",
                 }}
-                className="inline-flex items-center border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex cursor-pointer items-center border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] text-(--accent) transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={handleValidateCourseAction}
                 disabled={actionLoading !== null || isValidating}
               >
                 {actionLoading === "validate" || isValidating ? (
                   <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-(--accent)"
-                    />
+                    <CircleNotch size={14} className="animate-spin text-(--accent)" />
                     <span>Validating...</span>
                   </>
                 ) : (
@@ -14736,10 +13259,9 @@ export function CourseCreatePage({
                   paddingLeft: "16px",
                   paddingRight: "16px",
                 }}
-                className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
-                  actionLoading !== null ||
-                  (!isDownstreamUnlocked && activeStep === "basics")
-                    ? "!opacity-40 !cursor-not-allowed !shadow-none"
+                className={`inline-flex items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
+                  actionLoading !== null || (!isDownstreamUnlocked && activeStep === "basics")
+                    ? "!cursor-not-allowed !opacity-40 !shadow-none"
                     : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
                 }`}
                 onClick={() => {
@@ -14751,17 +13273,13 @@ export function CourseCreatePage({
                     : undefined
                 }
                 disabled={
-                  actionLoading !== null ||
-                  (!isDownstreamUnlocked && activeStep === "basics")
+                  actionLoading !== null || (!isDownstreamUnlocked && activeStep === "basics")
                 }
                 aria-label="Next Step"
               >
                 {actionLoading === "save" ? (
                   <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-white"
-                    />
+                    <CircleNotch size={14} className="animate-spin text-white" />
                     <span>Saving...</span>
                   </>
                 ) : (
@@ -14788,17 +13306,14 @@ export function CourseCreatePage({
                       paddingLeft: "14px",
                       paddingRight: "14px",
                     }}
-                    className="inline-flex items-center justify-center border border-red-500/30 text-red-400 bg-red-500/10 cursor-pointer transition-all duration-150 hover:bg-red-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex cursor-pointer items-center justify-center border border-red-500/30 bg-red-500/10 text-red-400 transition-all duration-150 hover:bg-red-500/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={actionLoading !== null}
                     onClick={() => setIsUnpublishModalOpen(true)}
                     title="Unpublish this course and return it to draft state"
                   >
                     {actionLoading === "unpublish" ? (
                       <>
-                        <CircleNotch
-                          size={14}
-                          className="animate-spin text-red-400"
-                        />
+                        <CircleNotch size={14} className="animate-spin text-red-400" />
                         <span>Unpublishing...</span>
                       </>
                     ) : (
@@ -14822,9 +13337,9 @@ export function CourseCreatePage({
                       paddingLeft: "18px",
                       paddingRight: "18px",
                     }}
-                    className={`inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
+                    className={`inline-flex items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out ${
                       !isCourseReadyToPublish
-                        ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
+                        ? "pointer-events-none !cursor-not-allowed !opacity-40 !shadow-none blur-[0.4px] filter select-none"
                         : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
                     }`}
                     disabled={actionLoading !== null || !isCourseReadyToPublish}
@@ -14837,10 +13352,7 @@ export function CourseCreatePage({
                   >
                     {actionLoading === "publish" ? (
                       <>
-                        <CircleNotch
-                          size={15}
-                          className="animate-spin text-white"
-                        />
+                        <CircleNotch size={15} className="animate-spin text-white" />
                         <span>Publishing...</span>
                       </>
                     ) : (
@@ -14860,47 +13372,33 @@ export function CourseCreatePage({
       {/* Mobile Sticky / Fixed Bottom Save Status Pill (Basics only, above mobile bar) */}
       {activeStep === "basics" && basicsOverallStatus && (
         <div
-          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+          className={`pointer-events-none fixed left-1/2 z-[136] -translate-x-1/2 transition-all duration-200 select-none min-[641px]:hidden ${
             bottomNavHidden
-              ? "opacity-0 translate-y-3 pointer-events-none"
-              : "opacity-100 translate-y-0"
+              ? "pointer-events-none translate-y-3 opacity-0"
+              : "translate-y-0 opacity-100"
           }`}
           style={{
-            bottom:
-              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+            bottom: "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
           }}
           data-testid="basics-overall-save-status-mobile"
           aria-live="polite"
         >
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] px-3 py-1 text-[0.75rem] font-medium shadow-md backdrop-blur-sm">
             {basicsOverallStatus === "saving" && (
               <>
-                <CircleNotch
-                  size={13}
-                  className="animate-spin text-(--accent)"
-                />
-                <span className="text-(--text-secondary)">
-                  Saving changes...
-                </span>
+                <CircleNotch size={13} className="animate-spin text-(--accent)" />
+                <span className="text-(--text-secondary)">Saving changes...</span>
               </>
             )}
             {basicsOverallStatus === "failed" && (
               <>
-                <WarningCircle
-                  size={13}
-                  weight="fill"
-                  className="text-rose-500 shrink-0"
-                />
+                <WarningCircle size={13} weight="fill" className="shrink-0 text-rose-500" />
                 <span className="text-rose-500">Save failed</span>
               </>
             )}
             {basicsOverallStatus === "saved" && (
               <>
-                <CheckCircle
-                  size={13}
-                  weight="fill"
-                  className="text-emerald-500 shrink-0"
-                />
+                <CheckCircle size={13} weight="fill" className="shrink-0 text-emerald-500" />
                 <span className="text-emerald-500">All changes saved</span>
               </>
             )}
@@ -14911,47 +13409,33 @@ export function CourseCreatePage({
       {/* Mobile Sticky / Fixed Bottom Save Status Pill (Curriculum only, above mobile bar) */}
       {activeStep === "curriculum" && curriculumOverallStatus && (
         <div
-          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+          className={`pointer-events-none fixed left-1/2 z-[136] -translate-x-1/2 transition-all duration-200 select-none min-[641px]:hidden ${
             bottomNavHidden
-              ? "opacity-0 translate-y-3 pointer-events-none"
-              : "opacity-100 translate-y-0"
+              ? "pointer-events-none translate-y-3 opacity-0"
+              : "translate-y-0 opacity-100"
           }`}
           style={{
-            bottom:
-              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+            bottom: "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
           }}
           data-testid="curriculum-overall-save-status-mobile"
           aria-live="polite"
         >
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] px-3 py-1 text-[0.75rem] font-medium shadow-md backdrop-blur-sm">
             {curriculumOverallStatus === "saving" && (
               <>
-                <CircleNotch
-                  size={13}
-                  className="animate-spin text-(--accent)"
-                />
-                <span className="text-(--text-secondary)">
-                  Saving changes...
-                </span>
+                <CircleNotch size={13} className="animate-spin text-(--accent)" />
+                <span className="text-(--text-secondary)">Saving changes...</span>
               </>
             )}
             {curriculumOverallStatus === "failed" && (
               <>
-                <WarningCircle
-                  size={13}
-                  weight="fill"
-                  className="text-rose-500 shrink-0"
-                />
+                <WarningCircle size={13} weight="fill" className="shrink-0 text-rose-500" />
                 <span className="text-rose-500">Save failed</span>
               </>
             )}
             {curriculumOverallStatus === "saved" && (
               <>
-                <CheckCircle
-                  size={13}
-                  weight="fill"
-                  className="text-emerald-500 shrink-0"
-                />
+                <CheckCircle size={13} weight="fill" className="shrink-0 text-emerald-500" />
                 <span className="text-emerald-500">All changes saved</span>
               </>
             )}
@@ -14962,47 +13446,33 @@ export function CourseCreatePage({
       {/* Mobile Sticky / Fixed Bottom Save Status Pill (Access Rules only, above mobile bar) */}
       {activeStep === "access-rules" && accessRulesOverallStatus && (
         <div
-          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+          className={`pointer-events-none fixed left-1/2 z-[136] -translate-x-1/2 transition-all duration-200 select-none min-[641px]:hidden ${
             bottomNavHidden
-              ? "opacity-0 translate-y-3 pointer-events-none"
-              : "opacity-100 translate-y-0"
+              ? "pointer-events-none translate-y-3 opacity-0"
+              : "translate-y-0 opacity-100"
           }`}
           style={{
-            bottom:
-              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+            bottom: "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
           }}
           data-testid="access-rules-overall-save-status-mobile"
           aria-live="polite"
         >
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] px-3 py-1 text-[0.75rem] font-medium shadow-md backdrop-blur-sm">
             {accessRulesOverallStatus === "saving" && (
               <>
-                <CircleNotch
-                  size={13}
-                  className="animate-spin text-(--accent)"
-                />
-                <span className="text-(--text-secondary)">
-                  Saving changes...
-                </span>
+                <CircleNotch size={13} className="animate-spin text-(--accent)" />
+                <span className="text-(--text-secondary)">Saving changes...</span>
               </>
             )}
             {accessRulesOverallStatus === "failed" && (
               <>
-                <WarningCircle
-                  size={13}
-                  weight="fill"
-                  className="text-rose-500 shrink-0"
-                />
+                <WarningCircle size={13} weight="fill" className="shrink-0 text-rose-500" />
                 <span className="text-rose-500">Save failed</span>
               </>
             )}
             {accessRulesOverallStatus === "saved" && (
               <>
-                <CheckCircle
-                  size={13}
-                  weight="fill"
-                  className="text-emerald-500 shrink-0"
-                />
+                <CheckCircle size={13} weight="fill" className="shrink-0 text-emerald-500" />
                 <span className="text-emerald-500">All changes saved</span>
               </>
             )}
@@ -15013,47 +13483,33 @@ export function CourseCreatePage({
       {/* Mobile Sticky / Fixed Bottom Save Status Pill (Pricing only, above mobile bar) */}
       {activeStep === "pricing" && pricingOverallStatus && (
         <div
-          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+          className={`pointer-events-none fixed left-1/2 z-[136] -translate-x-1/2 transition-all duration-200 select-none min-[641px]:hidden ${
             bottomNavHidden
-              ? "opacity-0 translate-y-3 pointer-events-none"
-              : "opacity-100 translate-y-0"
+              ? "pointer-events-none translate-y-3 opacity-0"
+              : "translate-y-0 opacity-100"
           }`}
           style={{
-            bottom:
-              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+            bottom: "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
           }}
           data-testid="pricing-overall-save-status-mobile"
           aria-live="polite"
         >
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] px-3 py-1 text-[0.75rem] font-medium shadow-md backdrop-blur-sm">
             {pricingOverallStatus === "saving" && (
               <>
-                <CircleNotch
-                  size={13}
-                  className="animate-spin text-(--accent)"
-                />
-                <span className="text-(--text-secondary)">
-                  Saving changes...
-                </span>
+                <CircleNotch size={13} className="animate-spin text-(--accent)" />
+                <span className="text-(--text-secondary)">Saving changes...</span>
               </>
             )}
             {pricingOverallStatus === "failed" && (
               <>
-                <WarningCircle
-                  size={13}
-                  weight="fill"
-                  className="text-rose-500 shrink-0"
-                />
+                <WarningCircle size={13} weight="fill" className="shrink-0 text-rose-500" />
                 <span className="text-rose-500">Save failed</span>
               </>
             )}
             {pricingOverallStatus === "saved" && (
               <>
-                <CheckCircle
-                  size={13}
-                  weight="fill"
-                  className="text-emerald-500 shrink-0"
-                />
+                <CheckCircle size={13} weight="fill" className="shrink-0 text-emerald-500" />
                 <span className="text-emerald-500">All changes saved</span>
               </>
             )}
@@ -15064,47 +13520,33 @@ export function CourseCreatePage({
       {/* Mobile Sticky / Fixed Bottom Save Status Pill (Extras only, above mobile bar) */}
       {activeStep === "extras" && extrasOverallStatus && (
         <div
-          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+          className={`pointer-events-none fixed left-1/2 z-[136] -translate-x-1/2 transition-all duration-200 select-none min-[641px]:hidden ${
             bottomNavHidden
-              ? "opacity-0 translate-y-3 pointer-events-none"
-              : "opacity-100 translate-y-0"
+              ? "pointer-events-none translate-y-3 opacity-0"
+              : "translate-y-0 opacity-100"
           }`}
           style={{
-            bottom:
-              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+            bottom: "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
           }}
           data-testid="extras-overall-save-status-mobile"
           aria-live="polite"
         >
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] px-3 py-1 text-[0.75rem] font-medium shadow-md backdrop-blur-sm">
             {extrasOverallStatus === "saving" && (
               <>
-                <CircleNotch
-                  size={13}
-                  className="animate-spin text-(--accent)"
-                />
-                <span className="text-(--text-secondary)">
-                  Saving changes...
-                </span>
+                <CircleNotch size={13} className="animate-spin text-(--accent)" />
+                <span className="text-(--text-secondary)">Saving changes...</span>
               </>
             )}
             {extrasOverallStatus === "failed" && (
               <>
-                <WarningCircle
-                  size={13}
-                  weight="fill"
-                  className="text-rose-500 shrink-0"
-                />
+                <WarningCircle size={13} weight="fill" className="shrink-0 text-rose-500" />
                 <span className="text-rose-500">Save failed</span>
               </>
             )}
             {extrasOverallStatus === "saved" && (
               <>
-                <CheckCircle
-                  size={13}
-                  weight="fill"
-                  className="text-emerald-500 shrink-0"
-                />
+                <CheckCircle size={13} weight="fill" className="shrink-0 text-emerald-500" />
                 <span className="text-emerald-500">All changes saved</span>
               </>
             )}
@@ -15115,47 +13557,33 @@ export function CourseCreatePage({
       {/* Mobile Sticky / Fixed Bottom Save Status Pill (Publish only, above mobile bar) */}
       {activeStep === "publish" && publishOverallStatus && (
         <div
-          className={`fixed left-1/2 -translate-x-1/2 z-[136] pointer-events-none min-[641px]:hidden transition-all duration-200 select-none ${
+          className={`pointer-events-none fixed left-1/2 z-[136] -translate-x-1/2 transition-all duration-200 select-none min-[641px]:hidden ${
             bottomNavHidden
-              ? "opacity-0 translate-y-3 pointer-events-none"
-              : "opacity-100 translate-y-0"
+              ? "pointer-events-none translate-y-3 opacity-0"
+              : "translate-y-0 opacity-100"
           }`}
           style={{
-            bottom:
-              "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
+            bottom: "calc(58px + var(--app-viewport-safe-area-bottom, 0px) + 72px)",
           }}
           data-testid="publish-overall-save-status-mobile"
           aria-live="polite"
         >
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.75rem] font-medium bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] shadow-md backdrop-blur-sm">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_95%,transparent)] px-3 py-1 text-[0.75rem] font-medium shadow-md backdrop-blur-sm">
             {publishOverallStatus === "saving" && (
               <>
-                <CircleNotch
-                  size={13}
-                  className="animate-spin text-(--accent)"
-                />
-                <span className="text-(--text-secondary)">
-                  Saving changes...
-                </span>
+                <CircleNotch size={13} className="animate-spin text-(--accent)" />
+                <span className="text-(--text-secondary)">Saving changes...</span>
               </>
             )}
             {publishOverallStatus === "failed" && (
               <>
-                <WarningCircle
-                  size={13}
-                  weight="fill"
-                  className="text-rose-500 shrink-0"
-                />
+                <WarningCircle size={13} weight="fill" className="shrink-0 text-rose-500" />
                 <span className="text-rose-500">Save failed</span>
               </>
             )}
             {publishOverallStatus === "saved" && (
               <>
-                <CheckCircle
-                  size={13}
-                  weight="fill"
-                  className="text-emerald-500 shrink-0"
-                />
+                <CheckCircle size={13} weight="fill" className="shrink-0 text-emerald-500" />
                 <span className="text-emerald-500">All changes saved</span>
               </>
             )}
@@ -15170,7 +13598,7 @@ export function CourseCreatePage({
           isPreviewModalOpen ||
           isAddCategoryModalOpen ||
           Boolean(categoryToDelete)
-            ? " is-scroll-hidden"
+            ? "is-scroll-hidden"
             : ""
         }`}
       >
@@ -15185,9 +13613,9 @@ export function CourseCreatePage({
               borderRadius: "12px",
               gap: "6px",
             }}
-            className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
+            className={`inline-flex flex-1 items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent text-(--text-secondary) transition-all active:scale-[0.98] ${
               isAnyApiInProgress || isPreviewLoading
-                ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                ? "!pointer-events-none !cursor-not-allowed !opacity-40 hover:!bg-transparent hover:!text-(--text-secondary)"
                 : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
             }`}
             onClick={handlePreviewAction}
@@ -15195,10 +13623,7 @@ export function CourseCreatePage({
           >
             {isPreviewLoading ? (
               <>
-                <CircleNotch
-                  size={14}
-                  className="animate-spin text-(--accent)"
-                />
+                <CircleNotch size={14} className="animate-spin text-(--accent)" />
                 <span>Opening...</span>
               </>
             ) : (
@@ -15221,9 +13646,9 @@ export function CourseCreatePage({
               borderRadius: "12px",
               gap: "6px",
             }}
-            className={`flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent transition-all active:scale-[0.98] ${
+            className={`inline-flex flex-1 items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent text-(--text-secondary) transition-all active:scale-[0.98] ${
               activeStep === "basics" || actionLoading !== null
-                ? "!opacity-40 !cursor-not-allowed !pointer-events-none hover:!bg-transparent hover:!text-(--text-secondary)"
+                ? "!pointer-events-none !cursor-not-allowed !opacity-40 hover:!bg-transparent hover:!text-(--text-secondary)"
                 : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
             }`}
             onClick={() => {
@@ -15248,16 +13673,13 @@ export function CourseCreatePage({
               borderRadius: "12px",
               gap: "6px",
             }}
-            className="flex-1 inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] text-(--accent) bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] cursor-pointer transition-all hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="inline-flex flex-1 cursor-pointer items-center justify-center border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] text-(--accent) transition-all hover:bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface))] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             onClick={handleValidateCourseAction}
             disabled={actionLoading !== null || isValidating}
           >
             {actionLoading === "validate" || isValidating ? (
               <>
-                <CircleNotch
-                  size={14}
-                  className="animate-spin text-(--accent)"
-                />
+                <CircleNotch size={14} className="animate-spin text-(--accent)" />
                 <span>Validating...</span>
               </>
             ) : (
@@ -15277,10 +13699,9 @@ export function CourseCreatePage({
               borderRadius: "12px",
               gap: "6px",
             }}
-            className={`flex-1 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
-              actionLoading !== null ||
-              (!isDownstreamUnlocked && activeStep === "basics")
-                ? "!opacity-40 !cursor-not-allowed !shadow-none"
+            className={`inline-flex flex-1 items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
+              actionLoading !== null || (!isDownstreamUnlocked && activeStep === "basics")
+                ? "!cursor-not-allowed !opacity-40 !shadow-none"
                 : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98]"
             }`}
             onClick={() => {
@@ -15291,10 +13712,7 @@ export function CourseCreatePage({
                 ? "Add a course title to continue."
                 : undefined
             }
-            disabled={
-              actionLoading !== null ||
-              (!isDownstreamUnlocked && activeStep === "basics")
-            }
+            disabled={actionLoading !== null || (!isDownstreamUnlocked && activeStep === "basics")}
             aria-label="Next Step"
           >
             {actionLoading === "save" ? (
@@ -15324,16 +13742,13 @@ export function CourseCreatePage({
                   borderRadius: "14px",
                   gap: "6px",
                 }}
-                className="flex-1 inline-flex items-center justify-center border border-red-500/35 text-red-400 bg-red-500/10 cursor-pointer transition-all hover:bg-red-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex flex-1 cursor-pointer items-center justify-center border border-red-500/35 bg-red-500/10 text-red-400 transition-all hover:bg-red-500/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={actionLoading !== null}
                 onClick={() => setIsUnpublishModalOpen(true)}
               >
                 {actionLoading === "unpublish" ? (
                   <>
-                    <CircleNotch
-                      size={14}
-                      className="animate-spin text-red-400"
-                    />
+                    <CircleNotch size={14} className="animate-spin text-red-400" />
                     <span>Unpublishing...</span>
                   </>
                 ) : (
@@ -15355,9 +13770,9 @@ export function CourseCreatePage({
                   borderRadius: "14px",
                   gap: "6px",
                 }}
-                className={`flex-1 inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
+                className={`inline-flex flex-1 items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all ${
                   !isCourseReadyToPublish
-                    ? "!opacity-40 !cursor-not-allowed filter blur-[0.4px] pointer-events-none select-none !shadow-none"
+                    ? "pointer-events-none !cursor-not-allowed !opacity-40 !shadow-none blur-[0.4px] filter select-none"
                     : "cursor-pointer hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98]"
                 }`}
                 disabled={actionLoading !== null || !isCourseReadyToPublish}
@@ -15370,10 +13785,7 @@ export function CourseCreatePage({
               >
                 {actionLoading === "publish" ? (
                   <>
-                    <CircleNotch
-                      size={15}
-                      className="animate-spin text-white"
-                    />
+                    <CircleNotch size={15} className="animate-spin text-white" />
                     <span>Publishing...</span>
                   </>
                 ) : (
@@ -15402,9 +13814,7 @@ export function CourseCreatePage({
         title={deleteModalState.title}
         message={deleteModalState.message}
         onConfirm={deleteModalState.onConfirm}
-        onClose={() =>
-          setDeleteModalState((prev) => ({ ...prev, isOpen: false }))
-        }
+        onClose={() => setDeleteModalState((prev) => ({ ...prev, isOpen: false }))}
       />
 
       {/* Realistic Student-Facing Course Overview Full Preview Modal */}
@@ -15412,42 +13822,38 @@ export function CourseCreatePage({
         typeof document !== "undefined" &&
         createPortal(
           <div
-            className="fixed inset-0 z-1200 flex flex-col bg-black/80 backdrop-blur-xl animate-[deleteModalFadeIn_0.2s_ease-out] p-4 box-border max-[640px]:p-0"
+            className="fixed inset-0 z-1200 box-border flex animate-[deleteModalFadeIn_0.2s_ease-out] flex-col bg-black/80 p-4 backdrop-blur-xl max-[640px]:p-0"
             onClick={() => setIsPreviewModalOpen(false)}
             role="dialog"
             aria-modal="true"
             aria-label="Course Overview Preview"
           >
             <div
-              className="relative flex flex-col w-full max-w-345 h-full max-h-[94vh] m-auto border border-[color-mix(in_srgb,var(--text)_14%,transparent)] rounded-[20px] bg-[color-mix(in_srgb,var(--surface)_24%,var(--canvas))] shadow-[0_24px_64px_rgba(0,0,0,0.6)] overflow-hidden animate-[deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)] max-[640px]:max-h-screen max-[640px]:h-screen max-[640px]:rounded-none max-[640px]:border-none"
+              className="relative m-auto flex h-full max-h-[94vh] w-full max-w-345 animate-[deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)] flex-col overflow-hidden rounded-[20px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface)_24%,var(--canvas))] shadow-[0_24px_64px_rgba(0,0,0,0.6)] max-[640px]:h-screen max-[640px]:max-h-screen max-[640px]:rounded-none max-[640px]:border-none"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Top Bar */}
-              <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) shrink-0 max-[640px]:px-3.5 max-[640px]:py-2.5">
-                <div className="flex items-center flex-wrap gap-x-3 gap-y-2 min-w-0 flex-1 max-[640px]:gap-1.5">
-                  <div className="inline-flex items-center gap-2 text-[0.92rem] font-bold text-(--text) tracking-[-0.01em] whitespace-nowrap overflow-hidden text-ellipsis max-[640px]:text-[0.85rem]">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--surface) px-5 py-3 max-[640px]:px-3.5 max-[640px]:py-2.5">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 max-[640px]:gap-1.5">
+                  <div className="inline-flex items-center gap-2 overflow-hidden text-[0.92rem] font-bold tracking-[-0.01em] text-ellipsis whitespace-nowrap text-(--text) max-[640px]:text-[0.85rem]">
                     <Eye size={18} weight="bold" />
                     <span>Student Course Overview Preview</span>
                   </div>
                   {hasUnsavedChanges ? (
-                    <span className="inline-flex items-center gap-1.25 px-2.25 py-0.75 rounded-full border border-[color-mix(in_srgb,#f59e0b_35%,transparent)] bg-[color-mix(in_srgb,#f59e0b_15%,transparent)] text-[#d97706] dark:text-[#fbbf24] text-[0.7rem] font-[650] whitespace-nowrap shrink-0 max-[640px]:text-[0.66rem] max-[640px]:px-1.75 max-[640px]:py-0.5">
+                    <span className="inline-flex shrink-0 items-center gap-1.25 rounded-full border border-[color-mix(in_srgb,#f59e0b_35%,transparent)] bg-[color-mix(in_srgb,#f59e0b_15%,transparent)] px-2.25 py-0.75 text-[0.7rem] font-[650] whitespace-nowrap text-[#d97706] max-[640px]:px-1.75 max-[640px]:py-0.5 max-[640px]:text-[0.66rem] dark:text-[#fbbf24]">
                       <Info size={12} weight="bold" />
                       Last saved version
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.25 px-2.25 py-0.75 rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_40%,transparent)] text-(--muted) text-[0.7rem] font-medium whitespace-nowrap shrink-0 max-[640px]:text-[0.66rem] max-[640px]:px-1.75 max-[640px]:py-0.5">
-                      <CheckCircle
-                        size={12}
-                        weight="fill"
-                        className="text-(--accent)"
-                      />
+                    <span className="inline-flex shrink-0 items-center gap-1.25 rounded-full border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_40%,transparent)] px-2.25 py-0.75 text-[0.7rem] font-medium whitespace-nowrap text-(--muted) max-[640px]:px-1.75 max-[640px]:py-0.5 max-[640px]:text-[0.66rem]">
+                      <CheckCircle size={12} weight="fill" className="text-(--accent)" />
                       Previewing saved version
                     </span>
                   )}
                 </div>
                 <button
                   type="button"
-                  className="inline-flex w-7 h-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--surface-strong)72%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] transition-all duration-150 bg-transparent cursor-pointer p-0"
+                  className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--surface-strong)72%,transparent)] bg-transparent p-0 text-(--muted) transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--surface)48%,transparent)] hover:text-(--text)"
                   onClick={() => setIsPreviewModalOpen(false)}
                   aria-label="Close Preview"
                 >
@@ -15457,32 +13863,24 @@ export function CourseCreatePage({
 
               {/* Informational banner when unsaved changes exist in editor */}
               {hasUnsavedChanges && currentCourseId && (
-                <div className="flex items-center gap-2 px-5 py-2 bg-[color-mix(in_srgb,#f59e0b_10%,var(--surface))] border-b border-[color-mix(in_srgb,#f59e0b_22%,transparent)] text-[#d97706] dark:text-[#fbbf24] text-[0.79rem] font-medium shrink-0 max-[640px]:px-3.5 max-[640px]:py-1.75">
-                  <Info
-                    size={15}
-                    className="shrink-0 text-[#f59e0b]"
-                    weight="bold"
-                  />
+                <div className="flex shrink-0 items-center gap-2 border-b border-[color-mix(in_srgb,#f59e0b_22%,transparent)] bg-[color-mix(in_srgb,#f59e0b_10%,var(--surface))] px-5 py-2 text-[0.79rem] font-medium text-[#d97706] max-[640px]:px-3.5 max-[640px]:py-1.75 dark:text-[#fbbf24]">
+                  <Info size={15} className="shrink-0 text-[#f59e0b]" weight="bold" />
                   <span className="leading-snug">
-                    This preview reflects the last saved version on the server.
-                    Save your current changes in the editor to update the
-                    preview.
+                    This preview reflects the last saved version on the server. Save your current
+                    changes in the editor to update the preview.
                   </span>
                 </div>
               )}
 
               {/* Modal Body: Render authentic CourseOverviewPage */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-0 flex flex-col">
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-0">
                 {!currentCourseId ? (
-                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-8 text-center text-(--muted) my-auto">
-                    <BookOpen
-                      size={44}
-                      className="mb-3.5 opacity-60 text-(--accent)"
-                    />
-                    <h3 className="text-[1.15rem] font-bold text-(--text) mb-1.5">
+                  <div className="my-auto flex min-h-[420px] flex-1 flex-col items-center justify-center p-8 text-center text-(--muted)">
+                    <BookOpen size={44} className="mb-3.5 text-(--accent) opacity-60" />
+                    <h3 className="mb-1.5 text-[1.15rem] font-bold text-(--text)">
                       No Saved Course Data
                     </h3>
-                    <p className="text-[0.88rem] max-w-[420px] mb-5 text-(--muted) leading-[1.45]">
+                    <p className="mb-5 max-w-[420px] text-[0.88rem] leading-[1.45] text-(--muted)">
                       Please save the course before opening Preview.
                     </p>
                     <button
@@ -15497,7 +13895,7 @@ export function CourseCreatePage({
                         paddingLeft: "16px",
                         paddingRight: "16px",
                       }}
-                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                      className="inline-flex cursor-pointer items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
                     >
                       <ArrowLeft size={15} weight="bold" />
                       <span>Back to Editor</span>
@@ -15511,22 +13909,21 @@ export function CourseCreatePage({
                     onNavigateCourses={() => setIsPreviewModalOpen(false)}
                   />
                 ) : isPreviewLoading ? (
-                  <div className="p-6 max-[640px]:p-3 w-full">
+                  <div className="w-full p-6 max-[640px]:p-3">
                     <CourseOverviewSkeleton
                       onNavigateCourses={() => setIsPreviewModalOpen(false)}
                     />
                   </div>
                 ) : isPreviewError ? (
-                  <div className="flex flex-col items-center justify-center flex-1 min-h-[420px] p-12 text-center text-(--muted) my-auto">
-                    <div className="w-10 h-10 rounded-full bg-[rgba(239,68,68,0.12)] text-[#ef4444] flex items-center justify-center mb-3">
+                  <div className="my-auto flex min-h-[420px] flex-1 flex-col items-center justify-center p-12 text-center text-(--muted)">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(239,68,68,0.12)] text-[#ef4444]">
                       <X size={20} />
                     </div>
-                    <h3 className="text-[1.05rem] font-bold text-(--text) mb-1">
+                    <h3 className="mb-1 text-[1.05rem] font-bold text-(--text)">
                       Failed to Load Preview
                     </h3>
-                    <p className="text-[0.86rem] max-w-[400px] mb-4 text-(--muted)">
-                      An error occurred while fetching the course preview from
-                      the server.
+                    <p className="mb-4 max-w-[400px] text-[0.86rem] text-(--muted)">
+                      An error occurred while fetching the course preview from the server.
                     </p>
                     <button
                       type="button"
@@ -15540,7 +13937,7 @@ export function CourseCreatePage({
                         paddingLeft: "16px",
                         paddingRight: "16px",
                       }}
-                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out cursor-pointer hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
+                      className="inline-flex cursor-pointer items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] active:scale-[0.98]"
                     >
                       <span>Retry</span>
                     </button>
@@ -15557,32 +13954,32 @@ export function CourseCreatePage({
         typeof document !== "undefined" &&
         createPortal(
           <div
-            className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4 [animation:deleteModalFadeIn_0.18s_ease-out]"
+            className="fixed inset-0 z-[1200] flex [animation:deleteModalFadeIn_0.18s_ease-out] items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
             onClick={handleCloseAddCategoryModal}
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-category-modal-title"
           >
             <div
-              className="relative w-full max-w-[460px] rounded-[16px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--surface) p-6 shadow-[0_20px_48px_rgba(0,0,0,0.45)] [animation:deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)]"
+              className="relative w-full max-w-[460px] [animation:deleteModalPopIn_0.22s_cubic-bezier(0.16,1,0.3,1)] rounded-[16px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--surface) p-6 shadow-[0_20px_48px_rgba(0,0,0,0.45)]"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <h3
                     id="add-category-modal-title"
-                    className="m-0 text-(--text) text-[1.1rem] font-bold tracking-tight"
+                    className="m-0 text-[1.1rem] font-bold tracking-tight text-(--text)"
                   >
                     Manage Categories
                   </h3>
-                  <p className="m-0 mt-0.5 text-(--muted) text-[0.78rem]">
+                  <p className="m-0 mt-0.5 text-[0.78rem] text-(--muted)">
                     Create new categories or remove existing ones.
                   </p>
                 </div>
                 <button
                   type="button"
-                  className="inline-flex w-7 h-7 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] transition-colors duration-150 bg-transparent cursor-pointer p-0 shrink-0"
+                  className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-transparent p-0 text-(--muted) transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
                   onClick={handleCloseAddCategoryModal}
                   aria-label="Close modal"
                 >
@@ -15593,15 +13990,14 @@ export function CourseCreatePage({
               {/* Add New Category Form */}
               <form
                 onSubmit={handleCreateCategory}
-                className="flex flex-col gap-3 pb-4 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+                className="flex flex-col gap-3 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-4"
               >
                 <div className="flex flex-col gap-1.5">
                   <label
                     htmlFor="new-category-name-input"
-                    className="text-(--text-secondary) text-[0.82rem] font-semibold"
+                    className="text-[0.82rem] font-semibold text-(--text-secondary)"
                   >
-                    Add New Category{" "}
-                    <span className="text-[#ff5252] ml-0.5">*</span>
+                    Add New Category <span className="ml-0.5 text-[#ff5252]">*</span>
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -15615,14 +14011,11 @@ export function CourseCreatePage({
                       }}
                       placeholder="e.g. Mobile Development"
                       maxLength={100}
-                      className="flex-1 h-10 px-3 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] text-(--text) text-[0.88rem] focus:outline-none focus:border-(--accent) transition-colors placeholder:text-(--muted)"
+                      className="h-10 flex-1 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3 text-[0.88rem] text-(--text) transition-colors placeholder:text-(--muted) focus:border-(--accent) focus:outline-none"
                     />
                     <button
                       type="submit"
-                      disabled={
-                        !newCategoryName.trim() ||
-                        createCategoryMutation.isPending
-                      }
+                      disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
                       style={{
                         fontSize: "0.80rem",
                         fontWeight: 700,
@@ -15632,7 +14025,7 @@ export function CourseCreatePage({
                         paddingLeft: "16px",
                         paddingRight: "16px",
                       }}
-                      className="inline-flex items-center justify-center border-none text-(--on-accent,#ffffff) bg-(--accent) cursor-pointer shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+                      className="inline-flex shrink-0 cursor-pointer items-center justify-center border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] transition-all duration-150 ease-out hover:bg-(--accent-hover,var(--accent)) hover:shadow-[0_4px_14px_var(--accent-shadow)] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {createCategoryMutation.isPending ? (
                         <>
@@ -15648,7 +14041,7 @@ export function CourseCreatePage({
                     </button>
                   </div>
                   {addCategoryError && (
-                    <p className="m-0 text-[0.78rem] text-[#ff5252] font-medium">
+                    <p className="m-0 text-[0.78rem] font-medium text-[#ff5252]">
                       {addCategoryError}
                     </p>
                   )}
@@ -15657,51 +14050,42 @@ export function CourseCreatePage({
 
               {/* Existing Categories List */}
               <div className="pt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-(--text-secondary) text-[0.80rem] font-semibold">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[0.80rem] font-semibold text-(--text-secondary)">
                     Existing Categories ({serverCategories.length})
                   </span>
                   {isLoadingCategories && (
-                    <CircleNotch
-                      size={13}
-                      className="animate-spin text-(--muted)"
-                    />
+                    <CircleNotch size={13} className="animate-spin text-(--muted)" />
                   )}
                 </div>
 
-                <div className="max-h-[220px] overflow-y-auto flex flex-col gap-1.5 pr-1">
+                <div className="flex max-h-[220px] flex-col gap-1.5 overflow-y-auto pr-1">
                   {serverCategories.length === 0 ? (
-                    <div className="py-6 text-center text-(--muted) text-[0.82rem] italic">
+                    <div className="py-6 text-center text-[0.82rem] text-(--muted) italic">
                       No categories found. Add your first category above.
                     </div>
                   ) : (
                     serverCategories.map((cat) => (
                       <div
                         key={cat.id}
-                        className="flex items-center justify-between gap-3 px-3 py-2 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:border-[color-mix(in_srgb,var(--text)_16%,transparent)] transition-all duration-150"
+                        className="flex items-center justify-between gap-3 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-3 py-2 transition-all duration-150 hover:border-[color-mix(in_srgb,var(--text)_16%,transparent)]"
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Tag
-                            size={15}
-                            className="text-(--accent) shrink-0"
-                            weight="duotone"
-                          />
-                          <span className="text-(--text) text-[0.86rem] font-medium truncate">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Tag size={15} className="shrink-0 text-(--accent)" weight="duotone" />
+                          <span className="truncate text-[0.86rem] font-medium text-(--text)">
                             {cat.name}
                           </span>
-                          <span className="text-(--muted) text-[0.72rem] px-1.5 py-0.5 rounded-[4px] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] shrink-0">
+                          <span className="shrink-0 rounded-[4px] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-1.5 py-0.5 text-[0.72rem] text-(--muted)">
                             {cat.slug}
                           </span>
                         </div>
                         <button
                           type="button"
-                          onClick={() =>
-                            setCategoryToDelete({ id: cat.id, name: cat.name })
-                          }
+                          onClick={() => setCategoryToDelete({ id: cat.id, name: cat.name })}
                           disabled={deleteCategoryMutation.isPending}
                           title={`Delete category ${cat.name}`}
                           aria-label={`Delete category ${cat.name}`}
-                          className="inline-flex w-7 h-7 items-center justify-center rounded-[6px] text-(--muted) hover:text-red-500 hover:bg-red-500/10 border-none bg-transparent cursor-pointer transition-colors duration-150 p-0 shrink-0"
+                          className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent p-0 text-(--muted) transition-colors duration-150 hover:bg-red-500/10 hover:text-red-500"
                         >
                           <Trash size={14} />
                         </button>
@@ -15712,7 +14096,7 @@ export function CourseCreatePage({
               </div>
 
               {/* Modal Footer */}
-              <div className="flex items-center justify-end pt-4 mt-2 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+              <div className="mt-2 flex items-center justify-end border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-4">
                 <button
                   type="button"
                   onClick={handleCloseAddCategoryModal}
@@ -15724,7 +14108,7 @@ export function CourseCreatePage({
                     paddingLeft: "16px",
                     paddingRight: "16px",
                   }}
-                  className="inline-flex items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] text-(--text-secondary) bg-transparent cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
+                  className="inline-flex cursor-pointer items-center justify-center border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-transparent text-(--text-secondary) transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)] hover:text-(--text)"
                 >
                   Done
                 </button>

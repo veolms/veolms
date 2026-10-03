@@ -80,15 +80,13 @@ describe("player themes", () => {
     });
 
     expect(theme.tokens.accent).toBe("#22c55e");
-    expect(theme.tokens.controlRadius).toBe(
-      BUILT_IN_PLAYER_THEMES.minimal.tokens.controlRadius,
-    );
+    expect(theme.tokens.controlRadius).toBe(BUILT_IN_PLAYER_THEMES.minimal.tokens.controlRadius);
     expect(theme.icons.play).toBe(CustomPlayIcon);
     expect(theme.icons.pause).toBe(BUILT_IN_PLAYER_THEMES.minimal.icons.pause);
     expect(getPlayerThemeStyle(theme)["--video-player-accent"]).toBe("#22c55e");
-    expect(
-      getPlayerThemeStyle(theme)["--video-player-menu-solid-surface"],
-    ).toBe(BUILT_IN_PLAYER_THEMES.minimal.tokens.menuSolidSurface);
+    expect(getPlayerThemeStyle(theme)["--video-player-menu-solid-surface"]).toBe(
+      BUILT_IN_PLAYER_THEMES.minimal.tokens.menuSolidSurface,
+    );
   });
 
   it("applies the selected theme to the root and all default controls", () => {
@@ -104,12 +102,11 @@ describe("player themes", () => {
 
     const player = screen.getByRole("region", { name: "Video player" });
     expect(player).toHaveAttribute("data-player-theme", "aurora");
-    expect(player.style.getPropertyValue("--video-player-accent")).toBe(
-      "#a78bfa",
+    expect(player.style.getPropertyValue("--video-player-accent")).toBe("#a78bfa");
+    expect(screen.getByRole("button", { name: "Settings" }).querySelector("svg")).toHaveAttribute(
+      "data-settings-icon",
+      "aurora",
     );
-    expect(
-      screen.getByRole("button", { name: "Settings" }).querySelector("svg"),
-    ).toHaveAttribute("data-settings-icon", "aurora");
   });
 
   it.each(BUILT_IN_PLAYER_THEME_IDS)(
@@ -127,8 +124,7 @@ describe("player themes", () => {
 
       const trigger = screen.getByRole("button", { name: "Settings" });
       const icon = trigger.querySelector<SVGElement>("svg")!;
-      const restingRotation =
-        BUILT_IN_PLAYER_THEMES[themeId].motion.settingsClosedRotation;
+      const restingRotation = BUILT_IN_PLAYER_THEMES[themeId].motion.settingsClosedRotation;
 
       expect(icon).toHaveStyle({
         transform: `rotate(${restingRotation}deg)`,
@@ -136,18 +132,14 @@ describe("player themes", () => {
 
       fireEvent.click(trigger);
       expect(trigger).toHaveAttribute("aria-expanded", "true");
-      expect(
-        screen.getByRole("menu", { name: "Video settings" }),
-      ).toBeVisible();
+      expect(screen.getByRole("menu", { name: "Video settings" })).toBeVisible();
       expect(icon).toHaveStyle({
         transform: `rotate(${restingRotation + 30}deg)`,
       });
 
       fireEvent.click(trigger);
       expect(trigger).toHaveAttribute("aria-expanded", "false");
-      expect(
-        screen.queryByRole("menu", { name: "Video settings" }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("menu", { name: "Video settings" })).not.toBeInTheDocument();
       expect(icon).toHaveStyle({
         transform: `rotate(${restingRotation}deg)`,
       });

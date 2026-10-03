@@ -1,9 +1,5 @@
 import crypto from "node:crypto";
-import type {
-  Refund,
-  CreateRefundRequest,
-  PaymentGateway,
-} from "@veolms/contracts";
+import type { Refund, CreateRefundRequest, PaymentGateway } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { AppError } from "../../../lib/errors.ts";
@@ -16,10 +12,7 @@ import { createCourseAccessService } from "../shared/course-access.service.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 
 export interface RefundService {
-  processRefund(
-    adminUserId: string,
-    request: CreateRefundRequest,
-  ): Promise<Refund>;
+  processRefund(adminUserId: string, request: CreateRefundRequest): Promise<Refund>;
   getRefundById(refundId: string): Promise<Refund | undefined>;
   listRefundsForOrder(orderId: string): Promise<Refund[]>;
 }
@@ -66,10 +59,7 @@ export function createRefundService({
    * same row once the gateway responds. The gateway call deliberately stays
    * outside both transactions: never hold a row lock across a network call.
    */
-  async function processRefund(
-    adminUserId: string,
-    request: CreateRefundRequest,
-  ): Promise<Refund> {
+  async function processRefund(adminUserId: string, request: CreateRefundRequest): Promise<Refund> {
     const { orderId, orderItemId, amount, reason, idempotencyKey } = request;
     const newRefundId = crypto.randomUUID();
 
@@ -86,11 +76,7 @@ export function createRefundService({
       // Must run before the status check below — the first request may
       // already have moved the order to `refunded`.
       if (idempotencyKey) {
-        const existing = await refundRepo.findRefundByIdempotencyKey(
-          trx,
-          order.id,
-          idempotencyKey,
-        );
+        const existing = await refundRepo.findRefundByIdempotencyKey(trx, order.id, idempotencyKey);
         if (existing) {
           const sameRequest =
             existing.order_item_id === (orderItemId ?? null) &&
@@ -104,20 +90,12 @@ export function createRefundService({
           // under the same gateway key instead of reporting it as done — the
           // gateway hands back the original refund if it was created.
           if (existing.status === "pending" && !existing.gateway_refund_id) {
-            const payment = await paymentRepo.findPaymentById(
-              trx,
-              existing.payment_id,
-            );
+            const payment = await paymentRepo.findPaymentById(trx, existing.payment_id);
             if (!payment?.gateway_payment_id) {
-              throw CommerceErrors.REFUND_NOT_ALLOWED(
-                "No captured payment exists for this order.",
-              );
+              throw CommerceErrors.REFUND_NOT_ALLOWED("No captured payment exists for this order.");
             }
             const resumedItem = existing.order_item_id
-              ? ((await orderRepo.findOrderItemById(
-                  trx,
-                  existing.order_item_id,
-                )) ?? null)
+              ? ((await orderRepo.findOrderItemById(trx, existing.order_item_id)) ?? null)
               : null;
             return {
               kind: "dispatch" as const,
@@ -126,11 +104,9 @@ export function createRefundService({
               targetItem: resumedItem,
               payment,
               requestedAmount: existing.amount,
-              totalRefundedAlready: await refundRepo.sumOtherCountedRefunds(
-                trx,
-                order.id,
-                { refundId: existing.id },
-              ),
+              totalRefundedAlready: await refundRepo.sumOtherCountedRefunds(trx, order.id, {
+                refundId: existing.id,
+              }),
             };
           }
 
@@ -139,53 +115,35 @@ export function createRefundService({
       }
 
       if (order.status !== "paid" && order.status !== "partially_refunded") {
-        throw CommerceErrors.REFUND_NOT_ALLOWED(
-          "Order is not in a refundable state.",
-        );
+        throw CommerceErrors.REFUND_NOT_ALLOWED("Order is not in a refundable state.");
       }
 
       let targetItem = null;
       if (orderItemId) {
         targetItem = await orderRepo.findOrderItemById(trx, orderItemId);
         if (!targetItem || targetItem.order_id !== orderId) {
-          throw CommerceErrors.REFUND_NOT_ALLOWED(
-            "Target order item not found on this order.",
-          );
+          throw CommerceErrors.REFUND_NOT_ALLOWED("Target order item not found on this order.");
         }
       }
 
       const payment = await paymentRepo.findPaymentByOrderId(trx, orderId);
-      if (
-        !payment ||
-        !payment.gateway_payment_id ||
-        payment.status !== "captured"
-      ) {
-        throw CommerceErrors.REFUND_NOT_ALLOWED(
-          "No captured payment exists for this order.",
-        );
+      if (!payment || !payment.gateway_payment_id || payment.status !== "captured") {
+        throw CommerceErrors.REFUND_NOT_ALLOWED("No captured payment exists for this order.");
       }
 
       // Calculate total already refunded — safe from the race now that
       // this read happens under the order row's lock. No exclusion
       // needed: this refund doesn't exist as a row yet.
-      const totalRefundedAlready = await refundRepo.sumOtherCountedRefunds(
-        trx,
-        orderId,
-      );
+      const totalRefundedAlready = await refundRepo.sumOtherCountedRefunds(trx, orderId);
 
       const maxRefundable = payment.amount - totalRefundedAlready;
       if (maxRefundable <= 0) {
-        throw CommerceErrors.REFUND_NOT_ALLOWED(
-          "This order has already been fully refunded.",
-        );
+        throw CommerceErrors.REFUND_NOT_ALLOWED("This order has already been fully refunded.");
       }
 
       // If orderItemId was provided without an explicit amount, default to target item final amount
       const requestedAmount =
-        amount ??
-        (targetItem
-          ? Math.min(targetItem.final_amount, maxRefundable)
-          : maxRefundable);
+        amount ?? (targetItem ? Math.min(targetItem.final_amount, maxRefundable) : maxRefundable);
       if (requestedAmount > maxRefundable) {
         throw CommerceErrors.REFUND_NOT_ALLOWED(
           `Requested refund amount (${requestedAmount}) exceeds remaining refundable amount (${maxRefundable}).`,
@@ -224,14 +182,8 @@ export function createRefundService({
       return toRefundContract(reservation.refund);
     }
 
-    const {
-      refundId,
-      order,
-      targetItem,
-      payment,
-      requestedAmount,
-      totalRefundedAlready,
-    } = reservation;
+    const { refundId, order, targetItem, payment, requestedAmount, totalRefundedAlready } =
+      reservation;
 
     // 2. Dispatch refund through the PaymentGateway abstraction (outside
     //    the reservation transaction/lock above).
@@ -241,10 +193,7 @@ export function createRefundService({
     //    hits the gateway's own dedupe instead of issuing a second refund.
     //    Hashed to stay within any header length limit.
     const gatewayIdempotencyKey = idempotencyKey
-      ? crypto
-          .createHash("sha256")
-          .update(`refund:${order.id}:${idempotencyKey}`)
-          .digest("hex")
+      ? crypto.createHash("sha256").update(`refund:${order.id}:${idempotencyKey}`).digest("hex")
       : refundId;
     let gatewayResult;
     try {

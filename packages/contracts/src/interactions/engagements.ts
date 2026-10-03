@@ -22,9 +22,7 @@ export const toggleBookmarkResponseSchema = z.object({
   noteId: z.uuid().optional(),
   bookmarked: z.boolean(),
 });
-export type ToggleBookmarkResponse = z.infer<
-  typeof toggleBookmarkResponseSchema
->;
+export type ToggleBookmarkResponse = z.infer<typeof toggleBookmarkResponseSchema>;
 
 export const toggleFollowResponseSchema = z.object({
   threadId: z.uuid(),
@@ -63,9 +61,7 @@ export type UserAutocompleteQuery = z.infer<typeof userAutocompleteQuerySchema>;
 export const userAutocompleteResponseSchema = z.object({
   users: z.array(userAutocompleteItemSchema),
 });
-export type UserAutocompleteResponse = z.infer<
-  typeof userAutocompleteResponseSchema
->;
+export type UserAutocompleteResponse = z.infer<typeof userAutocompleteResponseSchema>;
 
 // Backward compatibility alias for contracts
 export const userMentionSchema = userAutocompleteItemSchema;

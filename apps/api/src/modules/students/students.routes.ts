@@ -30,14 +30,10 @@ const studentsRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "listStudents",
         tags: ["Students"],
-        summary:
-          "List academy students with cursor-based pagination and filters",
+        summary: "List academy students with cursor-based pagination and filters",
         querystring: studentListQuerySchema,
         response: {
-          200: jsonResponse(
-            "List of students with cursor pagination",
-            studentListResponseSchema,
-          ),
+          200: jsonResponse("List of students with cursor pagination", studentListResponseSchema),
           401: errorResponse("Authentication required"),
           403: errorResponse("Forbidden"),
         },
@@ -56,10 +52,7 @@ const studentsRoutes: RoutePlugin = async (app, options) => {
         summary: "Get detailed profile and course progress of a student",
         params: studentUsernameParamsSchema,
         response: {
-          200: jsonResponse(
-            "Student profile and enrolled courses",
-            studentDetailResponseSchema,
-          ),
+          200: jsonResponse("Student profile and enrolled courses", studentDetailResponseSchema),
           401: errorResponse("Authentication required"),
           403: errorResponse("Forbidden"),
           404: errorResponse("Student not found"),

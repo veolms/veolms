@@ -23,10 +23,7 @@ import {
   revokeLocalAttachmentPreview,
   type LocalComposerAttachment,
 } from "../services/learning-interactions/attachment-model";
-import {
-  extractFirstUrl,
-  useLinkPreview,
-} from "../services/learning-interactions";
+import { extractFirstUrl, useLinkPreview } from "../services/learning-interactions";
 
 interface CommentComposerProps {
   draft: DiscussionDraft;
@@ -74,21 +71,14 @@ export function CommentComposer({
   avatar,
 }: CommentComposerProps) {
   const reviewHeadingRef = useRef<HTMLDivElement>(null);
-  const [editorController, setEditorController] =
-    useState<DiscussionEditorController | null>(null);
+  const [editorController, setEditorController] = useState<DiscussionEditorController | null>(null);
   const [editorResetToken, setEditorResetToken] = useState(0);
   const [formattingState, setFormattingState] =
     useState<DiscussionFormattingState>(EMPTY_FORMATTING_STATE);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [composerStep, setComposerStep] = useState<"compose" | "publish">(
-    "compose",
-  );
-  const [transitionDirection, setTransitionDirection] = useState<
-    "forward" | "back"
-  >("forward");
-  const [internalAttachments, setInternalAttachments] = useState<
-    LocalComposerAttachment[]
-  >([]);
+  const [composerStep, setComposerStep] = useState<"compose" | "publish">("compose");
+  const [transitionDirection, setTransitionDirection] = useState<"forward" | "back">("forward");
+  const [internalAttachments, setInternalAttachments] = useState<LocalComposerAttachment[]>([]);
   const internalAttachmentsRef = useRef(internalAttachments);
   useEffect(() => {
     internalAttachmentsRef.current = internalAttachments;
@@ -102,12 +92,10 @@ export function CommentComposer({
   const effectiveAttachments = attachmentsProp ?? internalAttachments;
   const setEffectiveAttachments = (
     next:
-      | LocalComposerAttachment[]
-      | ((prev: LocalComposerAttachment[]) => LocalComposerAttachment[]),
+      LocalComposerAttachment[] | ((prev: LocalComposerAttachment[]) => LocalComposerAttachment[]),
   ) => {
     if (onAttachmentsChangeProp) {
-      const resolved =
-        typeof next === "function" ? next(effectiveAttachments) : next;
+      const resolved = typeof next === "function" ? next(effectiveAttachments) : next;
       onAttachmentsChangeProp(resolved);
     } else {
       setInternalAttachments(next);
@@ -143,8 +131,7 @@ export function CommentComposer({
 
   const detectedUrl = extractFirstUrl(draft.markdown);
   const [dismissedUrl, setDismissedUrl] = useState<string | null>(null);
-  const activeUrl =
-    detectedUrl && detectedUrl !== dismissedUrl ? detectedUrl : null;
+  const activeUrl = detectedUrl && detectedUrl !== dismissedUrl ? detectedUrl : null;
   const { data: linkPreview } = useLinkPreview(activeUrl);
 
   const resetAfterLocalSubmit = () => {
@@ -180,7 +167,7 @@ export function CommentComposer({
       {composerStep === "compose" ? (
         <div
           key="compose"
-          className={`flex min-h-0 flex-col motion-safe:animate-in motion-safe:fade-in motion-safe:duration-250 ${transitionDirection === "back" ? "motion-safe:slide-in-from-left-4" : "motion-safe:slide-in-from-right-4"} ${presentation === "drawer" ? "flex-1" : ""}`}
+          className={`motion-safe:animate-in motion-safe:fade-in flex min-h-0 flex-col motion-safe:duration-250 ${transitionDirection === "back" ? "motion-safe:slide-in-from-left-4" : "motion-safe:slide-in-from-right-4"} ${presentation === "drawer" ? "flex-1" : ""}`}
         >
           <div
             className={`relative ${presentation === "drawer" ? "min-h-0 flex-1 overflow-y-auto overscroll-contain" : ""}`}
@@ -257,7 +244,7 @@ export function CommentComposer({
               title="Next"
               disabled={!canSubmit || isSubmitting}
               onClick={openPublishingOptions}
-              className="grid size-10 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,opacity] hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:size-11"
+              className="grid size-10 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,opacity] hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-45 sm:size-11"
             >
               <ArrowRight size={24} weight="bold" aria-hidden="true" />
             </button>
@@ -266,13 +253,9 @@ export function CommentComposer({
       ) : (
         <div
           key="publish"
-          className={`flex min-h-0 flex-col motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-250 ${presentation === "drawer" ? "flex-1 overflow-y-auto overscroll-contain" : ""}`}
+          className={`motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 flex min-h-0 flex-col motion-safe:duration-250 ${presentation === "drawer" ? "flex-1 overflow-y-auto overscroll-contain" : ""}`}
         >
-          <div
-            ref={reviewHeadingRef}
-            tabIndex={-1}
-            className="flex min-h-0 flex-1 outline-none"
-          >
+          <div ref={reviewHeadingRef} tabIndex={-1} className="flex min-h-0 flex-1 outline-none">
             <CommentPublishingOptions
               entryKind={entryKind}
               visibility={visibility}
@@ -306,7 +289,7 @@ export function CommentComposer({
               }
               disabled={!canSubmit || isSubmitting}
               onClick={() => onSubmit(resetAfterLocalSubmit)}
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-(--accent) px-4 text-sm font-semibold text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_55%,transparent)] transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-(--accent) px-4 text-sm font-semibold text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_55%,transparent)] transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-45"
             >
               {editing ? (
                 <Check size={19} weight="bold" aria-hidden="true" />

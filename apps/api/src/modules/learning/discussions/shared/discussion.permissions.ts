@@ -3,11 +3,7 @@ import {
   createAuthMiddleware,
   type AuthMiddleware,
 } from "../../../../middlewares/auth.middleware.ts";
-import {
-  ADMIN_ROLE,
-  INSTRUCTOR_ROLE,
-  createSessionService,
-} from "../../../auth/index.ts";
+import { ADMIN_ROLE, INSTRUCTOR_ROLE, createSessionService } from "../../../auth/index.ts";
 
 export interface DiscussionPermissionsContext {
   middleware: AuthMiddleware;
@@ -23,10 +19,7 @@ export function createDiscussionPermissions({
   const sessionService = createSessionService({ database });
   const middleware = createAuthMiddleware(sessionService);
 
-  const requireAuthenticated = [
-    middleware.authenticate,
-    middleware.requireAuthenticated,
-  ];
+  const requireAuthenticated = [middleware.authenticate, middleware.requireAuthenticated];
 
   const requireModerator = [
     middleware.authenticate,

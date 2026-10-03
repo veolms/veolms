@@ -31,9 +31,7 @@ export function readLearningMiniPlayerSession(
     return {
       ...session,
       volume:
-        typeof session.volume === "number" && Number.isFinite(session.volume)
-          ? session.volume
-          : 1,
+        typeof session.volume === "number" && Number.isFinite(session.volume) ? session.volume : 1,
     } as LearningMiniPlayerSession;
   } catch {
     storage.removeItem(LEARNING_MINI_PLAYER_STORAGE_KEY);
@@ -52,9 +50,7 @@ export function writeLearningMiniPlayerSession(
   }
 }
 
-export function clearLearningMiniPlayerSession(
-  storage: Storage | null = getStorage(),
-): void {
+export function clearLearningMiniPlayerSession(storage: Storage | null = getStorage()): void {
   try {
     storage?.removeItem(LEARNING_MINI_PLAYER_STORAGE_KEY);
   } catch {

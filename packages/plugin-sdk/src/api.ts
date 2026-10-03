@@ -14,10 +14,7 @@ export interface ApiPlugin<TDatabase = unknown> {
    * Called with the fully-configured Fastify app after all core setup
    * (middleware, autoloaded routes, background jobs) has completed.
    */
-  register(
-    app: FastifyInstance,
-    options: ApiPluginOptions<TDatabase>,
-  ): Promise<void>;
+  register(app: FastifyInstance, options: ApiPluginOptions<TDatabase>): Promise<void>;
 }
 
 export interface ApiPluginOptions<TDatabase = unknown> {

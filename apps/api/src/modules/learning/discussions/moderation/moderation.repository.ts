@@ -91,10 +91,7 @@ export interface ModerationRepository {
     options: ListReportsQuery & { pageCursor?: DiscussionListCursor },
   ): Promise<ReportRowWithReporter[]>;
 
-  countReports(
-    db: DatabaseExecutor,
-    options: ListReportsQuery,
-  ): Promise<number>;
+  countReports(db: DatabaseExecutor, options: ListReportsQuery): Promise<number>;
 
   updateReportStatus(
     db: DatabaseExecutor,
@@ -207,9 +204,7 @@ export function createModerationRepository(): ModerationRepository {
       let filtered = db.selectFrom("learning_reports as rep");
       filtered = applyReportFilters(filtered, options);
       if (options.pageCursor) {
-        filtered = filtered.where(
-          createdAtIdDescSql("rep", options.pageCursor),
-        );
+        filtered = filtered.where(createdAtIdDescSql("rep", options.pageCursor));
       }
 
       const rows = await filtered
@@ -251,13 +246,7 @@ export function createModerationRepository(): ModerationRepository {
       return Number(row?.count ?? 0);
     },
 
-    async updateReportStatus(
-      db,
-      reportId,
-      status,
-      reviewedByUserId,
-      actionTaken,
-    ) {
+    async updateReportStatus(db, reportId, status, reviewedByUserId, actionTaken) {
       await db
         .updateTable("learning_reports")
         .set({
@@ -311,20 +300,10 @@ export function createModerationRepository(): ModerationRepository {
         .selectAll()
         .where("user_id", "=", userId)
         .where("is_active", "=", true)
-        .where((eb) =>
-          eb.or([
-            eb("expires_at", "is", null),
-            eb("expires_at", ">", new Date()),
-          ]),
-        );
+        .where((eb) => eb.or([eb("expires_at", "is", null), eb("expires_at", ">", new Date())]));
 
       query = courseId
-        ? query.where((eb) =>
-            eb.or([
-              eb("course_id", "is", null),
-              eb("course_id", "=", courseId),
-            ]),
-          )
+        ? query.where((eb) => eb.or([eb("course_id", "is", null), eb("course_id", "=", courseId)]))
         : query.where("course_id", "is", null);
 
       const row = await query.executeTakeFirst();

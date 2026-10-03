@@ -37,9 +37,7 @@ function delay(milliseconds: number): Promise<void> {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Cloudflare course page deployment failed.";
+  return error instanceof Error ? error.message : "Cloudflare course page deployment failed.";
 }
 
 export function createCourseStaticPageRefreshService({
@@ -69,10 +67,7 @@ export function createCourseStaticPageRefreshService({
     );
   }
 
-  function updateStatus(
-    courseId: string,
-    updates: Partial<CourseStaticPageRefreshStatus>,
-  ) {
+  function updateStatus(courseId: string, updates: Partial<CourseStaticPageRefreshStatus>) {
     statuses.set(courseId, {
       ...getStatus(courseId),
       ...updates,
@@ -81,10 +76,7 @@ export function createCourseStaticPageRefreshService({
     });
   }
 
-  async function githubRequest<T>(
-    pathname: string,
-    init?: RequestInit,
-  ): Promise<T> {
+  async function githubRequest<T>(pathname: string, init?: RequestInit): Promise<T> {
     if (!githubToken) {
       throw new Error(
         "Course page refresh is not configured. Set COURSE_STATIC_REFRESH_GITHUB_TOKEN.",
@@ -121,19 +113,15 @@ export function createCourseStaticPageRefreshService({
     while (Date.now() < startDeadline) {
       const result = await githubRequest<{
         workflow_runs: GitHubWorkflowRun[];
-      }>(
-        `${basePath}/runs?event=workflow_dispatch&branch=${encodeURIComponent(ref)}&per_page=20`,
-      );
+      }>(`${basePath}/runs?event=workflow_dispatch&branch=${encodeURIComponent(ref)}&per_page=20`);
       run = result.workflow_runs.find(
-        (candidate) =>
-          candidate.display_title === `Public pages refresh ${requestId}`,
+        (candidate) => candidate.display_title === `Public pages refresh ${requestId}`,
       );
       if (run) break;
       await delay(RUN_POLL_INTERVAL_MS);
     }
 
-    if (!run)
-      throw new Error("The page refresh workflow did not start in time.");
+    if (!run) throw new Error("The page refresh workflow did not start in time.");
 
     const completeDeadline = Date.now() + RUN_COMPLETE_TIMEOUT_MS;
     while (Date.now() < completeDeadline) {
@@ -158,26 +146,21 @@ export function createCourseStaticPageRefreshService({
       );
     }
     const workflowPath = encodeURIComponent(workflow);
-    await githubRequest<void>(
-      `/repos/${repository}/actions/workflows/${workflowPath}/dispatches`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          ref,
-          inputs: {
-            course_id: courseId,
-            course_slug: courseSlugs.get(courseId) ?? "",
-            request_id: requestId,
-          },
-        }),
-      },
-    );
+    await githubRequest<void>(`/repos/${repository}/actions/workflows/${workflowPath}/dispatches`, {
+      method: "POST",
+      body: JSON.stringify({
+        ref,
+        inputs: {
+          course_id: courseId,
+          course_slug: courseSlugs.get(courseId) ?? "",
+          request_id: requestId,
+        },
+      }),
+    });
     return waitForWorkflow(requestId);
   }
 
-  async function serializeDeployment<T>(
-    operation: () => Promise<T>,
-  ): Promise<T> {
+  async function serializeDeployment<T>(operation: () => Promise<T>): Promise<T> {
     const previous = deploymentTail;
     let release!: () => void;
     deploymentTail = new Promise<void>((resolve) => {
@@ -193,10 +176,7 @@ export function createCourseStaticPageRefreshService({
 
   async function processCourse(courseId: string) {
     try {
-      while (
-        (completedRevision.get(courseId) ?? 0) <
-        (requestedRevision.get(courseId) ?? 0)
-      ) {
+      while ((completedRevision.get(courseId) ?? 0) < (requestedRevision.get(courseId) ?? 0)) {
         const revision = requestedRevision.get(courseId) ?? 0;
         const requestId = randomUUID();
         updateStatus(courseId, {
@@ -207,9 +187,7 @@ export function createCourseStaticPageRefreshService({
         });
 
         try {
-          const result = await serializeDeployment(() =>
-            dispatch(courseId, requestId),
-          );
+          const result = await serializeDeployment(() => dispatch(courseId, requestId));
           if (result.conclusion !== "success") {
             updateStatus(courseId, { runUrl: result.runUrl });
             throw new Error(
@@ -224,10 +202,7 @@ export function createCourseStaticPageRefreshService({
           });
         } catch (error) {
           completedRevision.set(courseId, revision);
-          logger.error(
-            { err: error, courseId, requestId },
-            "Course public page refresh failed",
-          );
+          logger.error({ err: error, courseId, requestId }, "Course public page refresh failed");
           updateStatus(courseId, {
             status: "failed",
             message: errorMessage(error),
@@ -236,10 +211,7 @@ export function createCourseStaticPageRefreshService({
       }
     } finally {
       activeCourses.delete(courseId);
-      if (
-        (completedRevision.get(courseId) ?? 0) <
-        (requestedRevision.get(courseId) ?? 0)
-      ) {
+      if ((completedRevision.get(courseId) ?? 0) < (requestedRevision.get(courseId) ?? 0)) {
         activeCourses.add(courseId);
         void processCourse(courseId);
       }
@@ -253,10 +225,7 @@ export function createCourseStaticPageRefreshService({
     if (input.courseSlug !== undefined) {
       courseSlugs.set(input.courseId, input.courseSlug);
     }
-    requestedRevision.set(
-      input.courseId,
-      (requestedRevision.get(input.courseId) ?? 0) + 1,
-    );
+    requestedRevision.set(input.courseId, (requestedRevision.get(input.courseId) ?? 0) + 1);
     updateStatus(input.courseId, {
       status: "queued",
       message: null,

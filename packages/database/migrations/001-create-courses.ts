@@ -15,14 +15,8 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("updated_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
-    .addCheckConstraint(
-      "courses_title_nonempty",
-      sql`char_length(trim(title)) > 0`,
-    )
-    .addCheckConstraint(
-      "courses_status_valid",
-      sql`status in ('draft', 'published', 'archived')`,
-    )
+    .addCheckConstraint("courses_title_nonempty", sql`char_length(trim(title)) > 0`)
+    .addCheckConstraint("courses_status_valid", sql`status in ('draft', 'published', 'archived')`)
     .execute();
 }
 

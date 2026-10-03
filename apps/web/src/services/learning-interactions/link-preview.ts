@@ -3,15 +3,10 @@ import type { LinkPreviewResponse } from "@veolms/contracts";
 import { learningInteractionsService } from "./learning-interactions.service";
 import { learningInteractionKeys } from "./learning-interactions.keys";
 
-export function useLinkPreview(
-  url?: string | null,
-  options?: { enabled?: boolean },
-) {
+export function useLinkPreview(url?: string | null, options?: { enabled?: boolean }) {
   const normalizedUrl = url?.trim();
   const isValidUrl = Boolean(
-    normalizedUrl &&
-    (normalizedUrl.startsWith("http://") ||
-      normalizedUrl.startsWith("https://")),
+    normalizedUrl && (normalizedUrl.startsWith("http://") || normalizedUrl.startsWith("https://")),
   );
 
   return useQuery<LinkPreviewResponse>({

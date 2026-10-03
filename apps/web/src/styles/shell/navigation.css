@@ -25,28 +25,13 @@
 }
 
 .courses-nav.has-scroll-top {
-  -webkit-mask-image: linear-gradient(
-    180deg,
-    transparent 0,
-    #000 26px,
-    #000 100%
-  );
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 26px, #000 100%);
   mask-image: linear-gradient(180deg, transparent 0, #000 26px, #000 100%);
 }
 
 .courses-nav.has-scroll-bottom {
-  -webkit-mask-image: linear-gradient(
-    180deg,
-    #000 0,
-    #000 calc(100% - 26px),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    180deg,
-    #000 0,
-    #000 calc(100% - 26px),
-    transparent 100%
-  );
+  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 calc(100% - 26px), transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0, #000 calc(100% - 26px), transparent 100%);
 }
 
 .courses-nav.has-scroll-top.has-scroll-bottom {
@@ -121,8 +106,7 @@
 .shortcut-keys {
   gap: 2px;
   color: inherit;
-  font-family:
-    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
   font-size: 0.65rem;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -326,11 +310,7 @@
     inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
 }
 
-:is(
-    .sidebar-appearance,
-    .mobile-menu-sheet__appearance
-  ).sidebar-appearance--mobile-dock
-  > button {
+:is(.sidebar-appearance, .mobile-menu-sheet__appearance).sidebar-appearance--mobile-dock > button {
   position: relative;
   display: inline-flex;
   min-width: 0;
@@ -349,18 +329,12 @@
 }
 
 :root[data-theme="dark"]
-  :is(
-    .sidebar-appearance,
-    .mobile-menu-sheet__appearance
-  ).sidebar-appearance--mobile-dock
+  :is(.sidebar-appearance, .mobile-menu-sheet__appearance).sidebar-appearance--mobile-dock
   > button:not(.is-active) {
   background: color-mix(in srgb, var(--canvas) 86%, black 14%);
 }
 
-:is(
-    .sidebar-appearance,
-    .mobile-menu-sheet__appearance
-  ).sidebar-appearance--mobile-dock
+:is(.sidebar-appearance, .mobile-menu-sheet__appearance).sidebar-appearance--mobile-dock
   > button
   > svg {
   filter: none;
@@ -428,15 +402,11 @@
   box-shadow: var(--sidebar-menu-active-shadow);
 }
 
-:root[data-reading-mode="true"]
-  .sidebar-appearance__reading-mode
-  > [data-reading-mode-icon="off"] {
+:root[data-reading-mode="true"] .sidebar-appearance__reading-mode > [data-reading-mode-icon="off"] {
   display: none;
 }
 
-:root[data-reading-mode="true"]
-  .sidebar-appearance__reading-mode
-  > [data-reading-mode-icon="on"] {
+:root[data-reading-mode="true"] .sidebar-appearance__reading-mode > [data-reading-mode-icon="on"] {
   display: block;
 }
 
@@ -445,8 +415,7 @@
 .mobile-menu-sheet__appearance > button > svg {
   color: var(--accent-ink, var(--accent));
   filter: drop-shadow(
-    0 2px 6px
-      color-mix(in srgb, var(--accent-ink, var(--accent)) 38%, transparent)
+    0 2px 6px color-mix(in srgb, var(--accent-ink, var(--accent)) 38%, transparent)
   );
   transition:
     color 160ms ease,
@@ -464,8 +433,7 @@
   flex: 1;
 }
 
-.sidebar-appearance
-  > .sidebar-palette-menu--dock-attached:not(.sidebar-palette-menu--collapsed) {
+.sidebar-appearance > .sidebar-palette-menu--dock-attached:not(.sidebar-palette-menu--collapsed) {
   right: auto;
   bottom: calc(100% + 2px);
   left: 5px;
@@ -500,11 +468,7 @@
   border: 0;
   border-radius: 13px;
   padding: 8px;
-  background-color: color-mix(
-    in srgb,
-    var(--surface-strong) 94%,
-    var(--canvas)
-  );
+  background-color: color-mix(in srgb, var(--surface-strong) 94%, var(--canvas));
   background-image: none;
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
@@ -532,8 +496,7 @@
   padding: 3px;
   color: white;
   background:
-    linear-gradient(var(--palette-slot-surface), var(--palette-slot-surface))
-      padding-box,
+    linear-gradient(var(--palette-slot-surface), var(--palette-slot-surface)) padding-box,
     var(--palette-slot-ring) border-box;
   box-shadow:
     inset 0 2px 5px rgb(0 0 0 / 64%),
@@ -559,11 +522,7 @@
 
 .sidebar-palette-menu > button[data-theme-swatch].is-selected {
   --palette-slot-surface: color-mix(in srgb, var(--theme-swatch) 24%, #171614);
-  --palette-selected-border: color-mix(
-    in srgb,
-    var(--theme-swatch) 72%,
-    white 28%
-  );
+  --palette-selected-border: color-mix(in srgb, var(--theme-swatch) 72%, white 28%);
   border-width: 3px;
   border-color: var(--palette-selected-border);
   padding: 2px;
@@ -625,11 +584,7 @@
 }
 
 :root[data-theme="light"] .sidebar-palette-menu {
-  background-color: color-mix(
-    in srgb,
-    var(--surface-strong) 94%,
-    var(--accent) 6%
-  );
+  background-color: color-mix(in srgb, var(--surface-strong) 94%, var(--accent) 6%);
   background-image: none;
   background-blend-mode: normal;
   box-shadow:
@@ -639,8 +594,7 @@
 }
 
 :root[data-theme="light"] .profile-menu {
-  --profile-menu-cast-shadow: 0 1px 5px
-    color-mix(in srgb, var(--text) 12%, transparent);
+  --profile-menu-cast-shadow: 0 1px 5px color-mix(in srgb, var(--text) 12%, transparent);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 96%),
     inset 1px 0 0 rgb(255 255 255 / 68%),
@@ -651,14 +605,8 @@
   --profile-menu-cast-shadow: none;
 }
 
-:root[data-theme="light"]
-  .sidebar-palette-menu
-  > button[data-theme-swatch]:not(.is-selected) {
-  --palette-slot-surface: color-mix(
-    in srgb,
-    var(--surface) 82%,
-    var(--surface-strong)
-  );
+:root[data-theme="light"] .sidebar-palette-menu > button[data-theme-swatch]:not(.is-selected) {
+  --palette-slot-surface: color-mix(in srgb, var(--surface) 82%, var(--surface-strong));
   --palette-slot-ring: linear-gradient(
     145deg,
     color-mix(in srgb, white 82%, var(--theme-swatch) 18%),
@@ -673,11 +621,7 @@
 :root[data-theme="light"]
   .sidebar-palette-menu
   > button[data-theme-swatch]:hover:not(.is-selected) {
-  --palette-slot-surface: color-mix(
-    in srgb,
-    var(--theme-swatch) 10%,
-    var(--surface)
-  );
+  --palette-slot-surface: color-mix(in srgb, var(--theme-swatch) 10%, var(--surface));
   --palette-slot-ring: linear-gradient(
     145deg,
     color-mix(in srgb, var(--theme-swatch) 52%, white 48%),
@@ -686,33 +630,17 @@
   );
 }
 
-:root[data-theme="light"]
-  .sidebar-palette-menu
-  > button[data-theme-swatch].is-selected {
-  --palette-slot-surface: color-mix(
-    in srgb,
-    var(--theme-swatch) 16%,
-    var(--surface)
-  );
-  --palette-selected-border: color-mix(
-    in srgb,
-    var(--theme-swatch) 72%,
-    var(--text) 28%
-  );
+:root[data-theme="light"] .sidebar-palette-menu > button[data-theme-swatch].is-selected {
+  --palette-slot-surface: color-mix(in srgb, var(--theme-swatch) 16%, var(--surface));
+  --palette-selected-border: color-mix(in srgb, var(--theme-swatch) 72%, var(--text) 28%);
   box-shadow:
     inset 0 2px 5px color-mix(in srgb, var(--text) 10%, transparent),
     0 0 0 1px color-mix(in srgb, var(--theme-swatch) 34%, transparent),
     0 0 6px color-mix(in srgb, var(--theme-swatch) 25%, transparent);
 }
 
-:root[data-theme="light"]
-  .sidebar-palette-menu
-  > button[data-theme-swatch].is-selected:hover {
-  --palette-slot-surface: color-mix(
-    in srgb,
-    var(--theme-swatch) 22%,
-    var(--surface)
-  );
+:root[data-theme="light"] .sidebar-palette-menu > button[data-theme-swatch].is-selected:hover {
+  --palette-slot-surface: color-mix(in srgb, var(--theme-swatch) 22%, var(--surface));
   border-color: color-mix(in srgb, var(--theme-swatch) 68%, var(--text) 32%);
 }
 
@@ -761,20 +689,12 @@
 :root[data-theme="light"] .courses-nav button > svg {
   /* Keep the per-item spectrum saturated on pale rails; the previous blend
      with the rail ink washed the icons out in every light palette. */
-  color: color-mix(
-    in srgb,
-    var(--nav-icon-color) 88%,
-    var(--sidebar-icon-ink) 12%
-  );
+  color: color-mix(in srgb, var(--nav-icon-color) 88%, var(--sidebar-icon-ink) 12%);
   filter: none;
 }
 
 :root[data-theme="light"] .courses-nav button.is-active > svg {
-  color: color-mix(
-    in srgb,
-    var(--nav-icon-color) 94%,
-    var(--sidebar-icon-ink) 6%
-  );
+  color: color-mix(in srgb, var(--nav-icon-color) 94%, var(--sidebar-icon-ink) 6%);
   filter: none;
 }
 
@@ -821,21 +741,15 @@
 /* In compact mode the optional brand mark occupies the rail by itself. The
    expand affordance stays quiet until the rail is hovered or focused, keeping
    the P readable without competing with the navigation icons. */
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .courses-sidebar__brand {
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .courses-sidebar__brand {
   position: relative;
 }
 
-:root[data-collapsed-sidebar-logo="false"]
-  .courses-app--collapsed
-  .courses-logo-clip {
+:root[data-collapsed-sidebar-logo="false"] .courses-app--collapsed .courses-logo-clip {
   display: none !important;
 }
 
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .courses-logo-clip {
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .courses-logo-clip {
   display: block;
   position: absolute;
   /* The visible P sits high and fractionally left inside the full wordmark's
@@ -854,18 +768,13 @@
   transition: none;
 }
 
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .courses-logo-clip
-  svg {
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .courses-logo-clip svg {
   width: 156px;
   max-width: none;
   height: 38px;
 }
 
-:root[data-collapsed-sidebar-logo="true"]
-  .courses-app--collapsed
-  .sidebar-collapse {
+:root[data-collapsed-sidebar-logo="true"] .courses-app--collapsed .sidebar-collapse {
   position: absolute;
   top: 0;
   left: 50%;
@@ -1017,9 +926,7 @@
 
 /* Switch the compact profile and dock to standard rounded corners on
    pointer-down so their silhouettes follow the sidebar during resizing. */
-.courses-app--resizing.courses-app--collapsed
-  .courses-profile
-  > .courses-profile__button,
+.courses-app--resizing.courses-app--collapsed .courses-profile > .courses-profile__button,
 :root[data-sidebar-state="collapsed"]
   .courses-app.courses-app--resizing:not(.courses-app--collapsed)
   .courses-profile
@@ -1044,13 +951,10 @@
   left: calc(100% + 2px);
 }
 
-.courses-app--collapsed
-  .sidebar-palette-menu--dock-attached.sidebar-palette-menu--collapsed {
+.courses-app--collapsed .sidebar-palette-menu--dock-attached.sidebar-palette-menu--collapsed {
   top: auto;
   bottom: calc(
-    -5px +
-      (var(--sidebar-dock-count, 1) - var(--palette-menu-dock-index, 0) - 1) *
-      42px
+    -5px + (var(--sidebar-dock-count, 1) - var(--palette-menu-dock-index, 0) - 1) * 42px
   );
 }
 
@@ -1058,9 +962,7 @@
    bootstrap before React can add courses-app--collapsed. Mirror the compact
    shell here so the narrow rail never briefly uses the expanded brand and
    toggle layout during hydration. */
-:root[data-sidebar-state="collapsed"]
-  .courses-app:not(.courses-app--collapsed)
-  .courses-sidebar {
+:root[data-sidebar-state="collapsed"] .courses-app:not(.courses-app--collapsed) .courses-sidebar {
   padding-inline: 10px;
   padding-bottom: 0;
 }
@@ -1078,9 +980,7 @@
   position: relative;
 }
 
-:root[data-sidebar-state="collapsed"]
-  .courses-app:not(.courses-app--collapsed)
-  .courses-logo-clip {
+:root[data-sidebar-state="collapsed"] .courses-app:not(.courses-app--collapsed) .courses-logo-clip {
   display: none !important;
 }
 
@@ -1122,9 +1022,7 @@
   }
 }
 
-:root[data-sidebar-state="collapsed"]
-  .courses-app:not(.courses-app--collapsed)
-  .sidebar-collapse {
+:root[data-sidebar-state="collapsed"] .courses-app:not(.courses-app--collapsed) .sidebar-collapse {
   position: absolute;
   top: 12px;
   left: 10px;
@@ -1171,9 +1069,7 @@
   pointer-events: auto;
 }
 
-:root[data-sidebar-state="collapsed"]
-  .courses-app:not(.courses-app--collapsed)
-  .courses-nav {
+:root[data-sidebar-state="collapsed"] .courses-app:not(.courses-app--collapsed) .courses-nav {
   align-items: stretch;
   margin: -4px -10px 0;
   min-height: 0;
@@ -1246,9 +1142,7 @@
   flex: 0 0 auto;
 }
 
-:root[data-sidebar-state="collapsed"]
-  .courses-app:not(.courses-app--collapsed)
-  .courses-profile,
+:root[data-sidebar-state="collapsed"] .courses-app:not(.courses-app--collapsed) .courses-profile,
 :root[data-sidebar-state="collapsed"]
   .courses-app:not(.courses-app--collapsed)
   .sidebar-appearance {
@@ -1256,9 +1150,7 @@
 }
 
 @media (min-width: 641px) {
-  :root[data-sidebar-state="collapsed"]
-    .courses-app:not(.courses-app--collapsed)
-    .courses-profile {
+  :root[data-sidebar-state="collapsed"] .courses-app:not(.courses-app--collapsed) .courses-profile {
     /* Match the settled compact rail's narrower dock wrapper before
        hydration, preventing the profile and appearance controls from
        stretching into the sidebar edges. */
@@ -1382,16 +1274,14 @@
     z-index: 0;
     background:
       radial-gradient(
-        ellipse var(--sidebar-glow-field-width)
-          var(--sidebar-glow-field-top-height) at 36px 24%,
+        ellipse var(--sidebar-glow-field-width) var(--sidebar-glow-field-top-height) at 36px 24%,
         color-mix(in srgb, var(--sidebar-glow-primary) 18%, transparent) 0 6%,
         color-mix(in srgb, var(--sidebar-glow-primary) 11%, transparent) 24%,
         color-mix(in srgb, var(--sidebar-glow-primary) 5%, transparent) 48%,
         transparent 76%
       ),
       radial-gradient(
-        ellipse var(--sidebar-glow-field-width)
-          var(--sidebar-glow-field-bottom-height) at 36px 75%,
+        ellipse var(--sidebar-glow-field-width) var(--sidebar-glow-field-bottom-height) at 36px 75%,
         color-mix(in srgb, var(--sidebar-glow-secondary) 16%, transparent) 0 7%,
         color-mix(in srgb, var(--sidebar-glow-secondary) 10%, transparent) 25%,
         color-mix(in srgb, var(--sidebar-glow-secondary) 4%, transparent) 49%,
@@ -1432,21 +1322,16 @@
         transparent 76%
       );
     -webkit-mask-image:
-      var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask),
-      var(--sidebar-bokeh-mask);
-    mask-image:
-      var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask),
-      var(--sidebar-bokeh-mask);
+      var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask);
+    mask-image: var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask);
     -webkit-mask-position:
-      calc(42px - var(--sidebar-bokeh-top-half-size))
-        calc(17% - var(--sidebar-bokeh-top-half-size)),
+      calc(42px - var(--sidebar-bokeh-top-half-size)) calc(17% - var(--sidebar-bokeh-top-half-size)),
       calc(178px - var(--sidebar-bokeh-center-half-size))
         calc(50% - var(--sidebar-bokeh-center-half-size)),
       calc(58px - var(--sidebar-bokeh-bottom-half-size))
         calc(83% - var(--sidebar-bokeh-bottom-half-size));
     mask-position:
-      calc(42px - var(--sidebar-bokeh-top-half-size))
-        calc(17% - var(--sidebar-bokeh-top-half-size)),
+      calc(42px - var(--sidebar-bokeh-top-half-size)) calc(17% - var(--sidebar-bokeh-top-half-size)),
       calc(178px - var(--sidebar-bokeh-center-half-size))
         calc(50% - var(--sidebar-bokeh-center-half-size)),
       calc(58px - var(--sidebar-bokeh-bottom-half-size))
@@ -1462,9 +1347,7 @@
       var(--sidebar-bokeh-center-size) var(--sidebar-bokeh-center-size),
       var(--sidebar-bokeh-bottom-size) var(--sidebar-bokeh-bottom-size);
     content: "";
-    opacity: calc(
-      var(--sidebar-glow-opacity) * var(--sidebar-glow-intensity) * 0.72
-    );
+    opacity: calc(var(--sidebar-glow-opacity) * var(--sidebar-glow-intensity) * 0.72);
     pointer-events: none;
     transition: opacity 180ms ease;
   }
@@ -1578,9 +1461,7 @@
   box-shadow: var(--sidebar-menu-active-shadow);
 }
 
-@supports not (
-  (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
-) {
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .courses-app--hidden .courses-sidebar {
     background: color-mix(in srgb, var(--app-shell) 94%, var(--surface));
   }

@@ -147,10 +147,8 @@
 .settings-learning-reminder-selects .themed-select__trigger:hover {
   background: color-mix(in srgb, var(--canvas) 66%, var(--accent-soft));
 }
-.settings-learning-select-row
-  .themed-select__trigger:focus-visible:not([data-state="open"]),
-.settings-learning-reminder-selects
-  .themed-select__trigger:focus-visible:not([data-state="open"]) {
+.settings-learning-select-row .themed-select__trigger:focus-visible:not([data-state="open"]),
+.settings-learning-reminder-selects .themed-select__trigger:focus-visible:not([data-state="open"]) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -234,8 +232,7 @@
 .settings-learning-days button[aria-pressed="true"] {
   color: var(--on-accent);
   background: var(--accent);
-  box-shadow: 0 6px 15px
-    color-mix(in srgb, var(--accent-shadow) 42%, transparent);
+  box-shadow: 0 6px 15px color-mix(in srgb, var(--accent-shadow) 42%, transparent);
 }
 .settings-learning-days button:focus-visible {
   outline: 2px solid var(--accent);

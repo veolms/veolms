@@ -12,10 +12,7 @@ export interface OrderExpirationWorkerOptions {
  * Safe to run repeatedly — the WHERE clause ensures only orders in
  * pending/payment_processing are eligible.
  */
-export function createOrderExpirationWorker({
-  database,
-  logger,
-}: OrderExpirationWorkerOptions) {
+export function createOrderExpirationWorker({ database, logger }: OrderExpirationWorkerOptions) {
   async function expireStaleOrders(): Promise<{ expiredCount: number }> {
     const log = logger?.child({ job: "order-expiration-worker" });
     const now = new Date();

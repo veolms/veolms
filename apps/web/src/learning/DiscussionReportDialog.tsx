@@ -86,8 +86,7 @@ export function isDuplicateReportError(err: unknown): boolean {
     anyErr.response?.data?.code === "DUPLICATE_REPORT" ||
     anyErr.message === "DUPLICATE_REPORT" ||
     anyErr.message === DUPLICATE_REPORT_MESSAGE ||
-    (typeof anyErr.message === "string" &&
-      anyErr.message.includes("DUPLICATE_REPORT"))
+    (typeof anyErr.message === "string" && anyErr.message.includes("DUPLICATE_REPORT"))
   );
 }
 
@@ -187,7 +186,7 @@ export function DiscussionReportDialog({
           <X size={18} weight="bold" />
         </button>
 
-        <div className="min-w-0 pr-8 pt-0.5">
+        <div className="min-w-0 pt-0.5 pr-8">
           <h2
             id="report-dialog-title"
             className="text-lg font-semibold tracking-[-0.01em] text-(--text)"
@@ -219,7 +218,7 @@ export function DiscussionReportDialog({
                 value={reason}
                 disabled={isSubmitting}
                 onChange={(e) => setReason(e.target.value as ReportReason)}
-                className="block h-11 w-full appearance-none rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5 pr-10 text-sm text-(--text) shadow-[inset_0_1px_2px_color-mix(in_srgb,black_8%,transparent)] transition-colors focus:border-(--accent) focus:outline-hidden focus:ring-2 focus:ring-(--accent)/20 disabled:opacity-60"
+                className="block h-11 w-full appearance-none rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5 pr-10 text-sm text-(--text) shadow-[inset_0_1px_2px_color-mix(in_srgb,black_8%,transparent)] transition-colors focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20 focus:outline-hidden disabled:opacity-60"
               >
                 <option value="" disabled>
                   Select a reason…
@@ -255,11 +254,9 @@ export function DiscussionReportDialog({
               rows={3}
               placeholder="Provide any additional context that will help our moderators…"
               onChange={(e) => setDetails(e.target.value)}
-              className="mt-2 block w-full resize-y rounded-xl border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_58%,var(--surface))] px-3.5 py-3 text-sm leading-5 text-(--text) placeholder:text-(--muted) shadow-[inset_0_1px_2px_color-mix(in_srgb,black_8%,transparent)] transition-colors focus:border-(--accent) focus:outline-hidden focus:ring-2 focus:ring-(--accent)/20 disabled:opacity-60"
+              className="mt-2 block w-full resize-y rounded-xl border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_58%,var(--surface))] px-3.5 py-3 text-sm leading-5 text-(--text) shadow-[inset_0_1px_2px_color-mix(in_srgb,black_8%,transparent)] transition-colors placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20 focus:outline-hidden disabled:opacity-60"
             />
-            <p className="mt-1 text-right text-[11px] text-(--muted)">
-              {details.length}/1000
-            </p>
+            <p className="mt-1 text-right text-[11px] text-(--muted)">{details.length}/1000</p>
           </div>
 
           {errorMessage && (

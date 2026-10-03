@@ -42,8 +42,7 @@ export interface RecentPaymentItem {
   formattedPrice: string;
 }
 
-export type OrderTabId =
-  "all" | "completed" | "pending" | "failed" | "refunded";
+export type OrderTabId = "all" | "completed" | "pending" | "failed" | "refunded";
 
 /*
 // LEGACY MOCK DATA REFERENCE:

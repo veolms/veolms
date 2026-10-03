@@ -19,9 +19,7 @@ export const errorResponseSchema = z.strictObject({
   success: z.literal(false),
   statusCode: z.number().int().min(100).max(599),
   error: z.strictObject({
-    code: z
-      .string()
-      .meta({ description: "Stable machine-readable error code." }),
+    code: z.string().meta({ description: "Stable machine-readable error code." }),
     message: z.string().meta({ description: "Human-readable explanation." }),
     issues: z
       .array(validationIssueSchema)

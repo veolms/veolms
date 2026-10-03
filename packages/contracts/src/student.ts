@@ -54,14 +54,8 @@ export const studentListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   search: z.string().trim().optional(),
   courseId: z.string().uuid().optional(),
-  status: z
-    .enum(["all", "active", "completed", "inactive"])
-    .default("all")
-    .optional(),
-  sortBy: z
-    .enum(["recent", "name", "courses", "progress"])
-    .default("recent")
-    .optional(),
+  status: z.enum(["all", "active", "completed", "inactive"]).default("all").optional(),
+  sortBy: z.enum(["recent", "name", "courses", "progress"]).default("recent").optional(),
 });
 export type StudentListQuery = z.infer<typeof studentListQuerySchema>;
 

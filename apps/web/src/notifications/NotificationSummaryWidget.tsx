@@ -56,7 +56,7 @@ export function NotificationSummaryWidget({
     >
       <h3
         id="notification-summary-heading"
-        className="font-bold text-base text-(--text) tracking-tight"
+        className="text-base font-bold tracking-tight text-(--text)"
       >
         Summary
       </h3>

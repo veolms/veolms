@@ -18,17 +18,10 @@ export async function createCart(
     updated_at?: Date;
   },
 ) {
-  return await database
-    .insertInto("carts")
-    .values(values)
-    .returningAll()
-    .executeTakeFirstOrThrow();
+  return await database.insertInto("carts").values(values).returningAll().executeTakeFirstOrThrow();
 }
 
-export async function listCartItemsByCartId(
-  database: Executor,
-  cartId: string,
-) {
+export async function listCartItemsByCartId(database: Executor, cartId: string) {
   return await database
     .selectFrom("cart_items")
     .selectAll()
@@ -80,11 +73,7 @@ export async function insertCartItem(
     .executeTakeFirstOrThrow();
 }
 
-export async function deleteCartItem(
-  database: Executor,
-  cartId: string,
-  itemId: string,
-) {
+export async function deleteCartItem(database: Executor, cartId: string, itemId: string) {
   return await database
     .deleteFrom("cart_items")
     .where("cart_id", "=", cartId)
@@ -93,10 +82,7 @@ export async function deleteCartItem(
 }
 
 export async function clearCartItems(database: Executor, cartId: string) {
-  return await database
-    .deleteFrom("cart_items")
-    .where("cart_id", "=", cartId)
-    .execute();
+  return await database.deleteFrom("cart_items").where("cart_id", "=", cartId).execute();
 }
 
 export async function removeItemsFromUserCart(
@@ -107,13 +93,9 @@ export async function removeItemsFromUserCart(
   const cart = await findCartByUserId(database, userId);
   if (!cart || items.length === 0) return;
 
-  const courseIds = items
-    .map((it) => it.course_id)
-    .filter((id): id is string => Boolean(id));
+  const courseIds = items.map((it) => it.course_id).filter((id): id is string => Boolean(id));
 
-  const bundleIds = items
-    .map((it) => it.bundle_id)
-    .filter((id): id is string => Boolean(id));
+  const bundleIds = items.map((it) => it.bundle_id).filter((id): id is string => Boolean(id));
 
   if (courseIds.length > 0) {
     await database

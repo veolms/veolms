@@ -48,15 +48,15 @@ function StatCard({
   const content = (
     <>
       <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-        <p className="truncate text-[0.7rem] sm:text-xs font-semibold tracking-wide text-(--muted) group-hover:text-(--text) transition-colors">
+        <p className="truncate text-[0.7rem] font-semibold tracking-wide text-(--muted) transition-colors group-hover:text-(--text) sm:text-xs">
           {label}
         </p>
-        <span className="flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent) group-hover:scale-105 transition-transform">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent) transition-transform group-hover:scale-105 sm:size-7">
           {icon}
         </span>
       </div>
       <p
-        className={`mt-1.5 sm:mt-2.5 text-xl sm:text-[1.75rem] font-bold tracking-tight ${
+        className={`mt-1.5 text-xl font-bold tracking-tight sm:mt-2.5 sm:text-[1.75rem] ${
           tone === "success"
             ? "text-emerald-500"
             : tone === "danger"
@@ -67,9 +67,7 @@ function StatCard({
         {value}
       </p>
       {detail ? (
-        <p className="mt-0.5 sm:mt-1 truncate text-[0.68rem] sm:text-xs text-(--muted)">
-          {detail}
-        </p>
+        <p className="mt-0.5 truncate text-[0.68rem] text-(--muted) sm:mt-1 sm:text-xs">{detail}</p>
       ) : null}
     </>
   );
@@ -95,11 +93,7 @@ function StatCard({
   );
 }
 
-export function CouponSummaryCards({
-  metrics,
-  activeTab,
-  onFilterTab,
-}: CouponSummaryCardsProps) {
+export function CouponSummaryCards({ metrics, activeTab, onFilterTab }: CouponSummaryCardsProps) {
   const activeShare =
     metrics.totalCoupons > 0
       ? `${Math.round((metrics.activeCoupons / metrics.totalCoupons) * 100)}% of library`

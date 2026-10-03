@@ -59,7 +59,7 @@ export function MiniSurface({
 
   return (
     <span
-      className={`settings-mini-surface settings-mini-surface--${variant} settings-mini-surface--${layout}${isDevicePreview ? " settings-mini-surface--device" : ""}${isThemePreviewLight ? " settings-mini-surface--forced-light" : ""}${isThemePreviewDark ? " settings-mini-surface--forced-dark" : ""}`}
+      className={`settings-mini-surface settings-mini-surface--${variant} settings-mini-surface--${layout}${isDevicePreview ? "settings-mini-surface--device" : ""}${isThemePreviewLight ? "settings-mini-surface--forced-light" : ""}${isThemePreviewDark ? "settings-mini-surface--forced-dark" : ""}`}
       aria-hidden="true"
     >
       {isDevicePreview ? (
@@ -82,13 +82,12 @@ export function MiniSurface({
   );
 }
 
-const PREVIEW_NAVIGATION: readonly (readonly [PreviewIcon, string, string])[] =
-  [
-    [House, "#2e9bff", "Dashboard"],
-    [Heart, "#ee4f72", "Wishlist"],
-    [BookOpen, "#a26bff", "Courses"],
-    [UsersThree, "#27c968", "Students"],
-  ];
+const PREVIEW_NAVIGATION: readonly (readonly [PreviewIcon, string, string])[] = [
+  [House, "#2e9bff", "Dashboard"],
+  [Heart, "#ee4f72", "Wishlist"],
+  [BookOpen, "#a26bff", "Courses"],
+  [UsersThree, "#27c968", "Students"],
+];
 
 export interface SidebarIconPreviewProps {
   monochrome?: boolean;
@@ -120,7 +119,7 @@ export function SidebarIconPreview({
         >
           <Icon className="size-5.25 shrink-0" size={15} weight="duotone" />
           <b
-            className={`min-w-0 truncate text-[0.78rem] font-[650] leading-[1.2] max-[900px]:text-[0.64rem] ${monochrome ? "text-(--text-secondary)" : "text-(--text)"}`}
+            className={`min-w-0 truncate text-[0.78rem] leading-[1.2] font-[650] max-[900px]:text-[0.64rem] ${monochrome ? "text-(--text-secondary)" : "text-(--text)"}`}
           >
             {label}
           </b>

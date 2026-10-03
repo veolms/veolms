@@ -53,10 +53,7 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
 
     let position = payload.position;
     if (position === undefined) {
-      const maxPos = await includesRepo.findMaxIncludePosition(
-        database,
-        courseId,
-      );
+      const maxPos = await includesRepo.findMaxIncludePosition(database, courseId);
       position = (maxPos?.max ?? -1) + 1;
     }
 
@@ -84,28 +81,15 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     };
   }
 
-  async function listCourseIncludes(
-    courseId: string,
-  ): Promise<CourseIncludeItem[]> {
+  async function listCourseIncludes(courseId: string): Promise<CourseIncludeItem[]> {
     const rows = await includesRepo.findIncludesByCourseId(database, courseId);
     return rows.map(formatInclude);
   }
 
-  async function getCourseInclude(
-    courseId: string,
-    includeId: string,
-  ): Promise<CourseIncludeItem> {
-    const row = await includesRepo.findIncludeById(
-      database,
-      includeId,
-      courseId,
-    );
+  async function getCourseInclude(courseId: string, includeId: string): Promise<CourseIncludeItem> {
+    const row = await includesRepo.findIncludeById(database, includeId, courseId);
     if (!row) {
-      throw new AppError(
-        404,
-        "INCLUDE_NOT_FOUND",
-        "Course include item not found.",
-      );
+      throw new AppError(404, "INCLUDE_NOT_FOUND", "Course include item not found.");
     }
     return formatInclude(row);
   }
@@ -119,17 +103,9 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
   ): Promise<CourseIncludeItem> {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const existing = await includesRepo.findIncludeById(
-      database,
-      includeId,
-      courseId,
-    );
+    const existing = await includesRepo.findIncludeById(database, includeId, courseId);
     if (!existing) {
-      throw new AppError(
-        404,
-        "INCLUDE_NOT_FOUND",
-        "Course include item not found.",
-      );
+      throw new AppError(404, "INCLUDE_NOT_FOUND", "Course include item not found.");
     }
 
     const now = new Date();
@@ -140,11 +116,7 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
       updated_at: now,
     });
 
-    const updated = await includesRepo.findIncludeById(
-      database,
-      includeId,
-      courseId,
-    );
+    const updated = await includesRepo.findIncludeById(database, includeId, courseId);
     return formatInclude(updated!);
   }
 
@@ -156,17 +128,9 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
   ): Promise<{ success: boolean }> {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const existing = await includesRepo.findIncludeById(
-      database,
-      includeId,
-      courseId,
-    );
+    const existing = await includesRepo.findIncludeById(database, includeId, courseId);
     if (!existing) {
-      throw new AppError(
-        404,
-        "INCLUDE_NOT_FOUND",
-        "Course include item not found.",
-      );
+      throw new AppError(404, "INCLUDE_NOT_FOUND", "Course include item not found.");
     }
 
     await includesRepo.deleteInclude(database, includeId, courseId);
@@ -181,10 +145,7 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
   ): Promise<{ success: boolean }> {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const currentItems = await includesRepo.findIncludesByCourseId(
-      database,
-      courseId,
-    );
+    const currentItems = await includesRepo.findIncludesByCourseId(database, courseId);
     const currentItemIds = new Set(currentItems.map((item) => item.id));
 
     if (
@@ -201,13 +162,7 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     await database.transaction().execute(async (trx) => {
       const now = new Date();
       for (let i = 0; i < orderedIds.length; i++) {
-        await includesRepo.updateIncludePosition(
-          trx,
-          orderedIds[i]!,
-          courseId,
-          i,
-          now,
-        );
+        await includesRepo.updateIncludePosition(trx, orderedIds[i]!, courseId, i, now);
       }
     });
 

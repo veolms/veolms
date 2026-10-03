@@ -31,13 +31,9 @@ export function DefaultControls({
 
   return (
     <div
-      className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-2 pb-2 pt-14 text-white transition-opacity duration-200 motion-reduce:transition-none sm:px-3 sm:pb-3 ${
+      className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-2 pt-14 pb-2 text-white transition-opacity duration-200 motion-reduce:transition-none sm:px-3 sm:pb-3 ${
         mobileInteraction ? "!px-2 !pb-2" : ""
-      } ${
-        controlsVisible
-          ? "visible opacity-100"
-          : "invisible pointer-events-none opacity-0"
-      }`}
+      } ${controlsVisible ? "visible opacity-100" : "pointer-events-none invisible opacity-0"}`}
       data-video-player-controls=""
       data-video-player-control-layer=""
       aria-hidden={!controlsVisible}
@@ -58,9 +54,7 @@ export function DefaultControls({
           includePictureInPicture={pictureInPicturePlacement === "settings"}
           mobilePresentation={settingsMobilePresentation}
         />
-        {pictureInPicturePlacement === "toolbar" ? (
-          <PictureInPictureButton />
-        ) : null}
+        {pictureInPicturePlacement === "toolbar" ? <PictureInPictureButton /> : null}
         {onToggleTheater ? <TheaterButton onToggle={onToggleTheater} /> : null}
         <FullscreenButton />
       </div>

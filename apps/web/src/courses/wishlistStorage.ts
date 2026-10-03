@@ -12,8 +12,7 @@ let cachedSnapshot: ReadonlySet<string> = EMPTY_WISHLIST;
 function parseWishlistIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter(
-    (courseId): courseId is string =>
-      typeof courseId === "string" && Boolean(courseId.trim()),
+    (courseId): courseId is string => typeof courseId === "string" && Boolean(courseId.trim()),
   );
 }
 
@@ -48,9 +47,7 @@ export function writeWishlistIds(ids: Iterable<string>) {
   }
 }
 
-export function toggleWishlistCourse(
-  course: Pick<Course, "id" | "slug">,
-): ReadonlySet<string> {
+export function toggleWishlistCourse(course: Pick<Course, "id" | "slug">): ReadonlySet<string> {
   const current = readWishlistIds();
   const next = new Set(current);
   const keys = [course.id, course.slug?.trim()].filter(Boolean) as string[];
@@ -89,16 +86,10 @@ export function subscribeToWishlist(onStoreChange: () => void) {
 }
 
 export function useWishlistIds(): ReadonlySet<string> {
-  return useSyncExternalStore(
-    subscribeToWishlist,
-    readWishlistIds,
-    () => EMPTY_WISHLIST,
-  );
+  return useSyncExternalStore(subscribeToWishlist, readWishlistIds, () => EMPTY_WISHLIST);
 }
 
-export function useCourseWishlisted(
-  course: Pick<Course, "id" | "slug">,
-): boolean {
+export function useCourseWishlisted(course: Pick<Course, "id" | "slug">): boolean {
   const wishlisted = useWishlistIds();
   return courseMatchesWishlist(course, wishlisted);
 }

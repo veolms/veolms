@@ -11,7 +11,4 @@ export interface NavigationOptions {
   replace?: boolean;
 }
 
-export type NavigateTo = (
-  destination: string,
-  options?: NavigationOptions,
-) => void;
+export type NavigateTo = (destination: string, options?: NavigationOptions) => void;

@@ -81,9 +81,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
           201: jsonResponse("Thread created", learningThreadSchema),
           400: errorResponse("Invalid input"),
           401: errorResponse("Unauthorized"),
-          403: errorResponse(
-            "Forbidden - No course access or participation suspended",
-          ),
+          403: errorResponse("Forbidden - No course access or participation suspended"),
         },
       },
     },
@@ -101,10 +99,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
         summary: "Global/course search across discussion threads",
         querystring: listLearningThreadsQuerySchema,
         response: {
-          200: jsonResponse(
-            "List of filtered threads",
-            learningThreadsListResponseSchema,
-          ),
+          200: jsonResponse("List of filtered threads", learningThreadsListResponseSchema),
           401: errorResponse("Unauthorized"),
         },
       },
@@ -189,10 +184,7 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
         summary: "Soft delete a thread (Author or Moderator)",
         params: z.object({ threadId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Thread deleted",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Thread deleted", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
           404: errorResponse("Thread not found"),

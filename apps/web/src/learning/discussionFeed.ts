@@ -34,9 +34,7 @@ export function getDiscussionCountForFilter(
 export function getEntryTimestamp(entry: Comment): number {
   if (entry.createdAt !== undefined) {
     const parsed =
-      typeof entry.createdAt === "number"
-        ? entry.createdAt
-        : Date.parse(entry.createdAt);
+      typeof entry.createdAt === "number" ? entry.createdAt : Date.parse(entry.createdAt);
     if (!Number.isNaN(parsed)) return parsed;
   }
   if (typeof entry.id === "number") return entry.id;
@@ -88,14 +86,10 @@ export function applyDiscussionFeed({
   const typedEntries =
     filter === "all"
       ? capabilityFiltered
-      : capabilityFiltered.filter(
-          (entry) => getDiscussionEntryKind(entry) === filter,
-        );
+      : capabilityFiltered.filter((entry) => getDiscussionEntryKind(entry) === filter);
   const visibleEntries = typedEntries;
 
   if (preserveOrder) return visibleEntries;
 
-  return [...visibleEntries].sort((left, right) =>
-    compareEntriesForSort(left, right, sort),
-  );
+  return [...visibleEntries].sort((left, right) => compareEntriesForSort(left, right, sort));
 }

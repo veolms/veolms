@@ -1,8 +1,5 @@
 import { api } from "../../lib/api-client";
-import {
-  analyticsOverviewResponseSchema,
-  dashboardSummaryResponseSchema,
-} from "@veolms/contracts";
+import { analyticsOverviewResponseSchema, dashboardSummaryResponseSchema } from "@veolms/contracts";
 import type { DashboardRange } from "@veolms/contracts";
 
 export interface AnalyticsFilterParams {

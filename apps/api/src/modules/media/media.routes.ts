@@ -48,10 +48,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           lessonNumber: z.coerce.number().int().positive(),
         }),
         response: {
-          200: jsonResponse(
-            "Authorized video playback bootstrap",
-            videoPlaybackBootstrapSchema,
-          ),
+          200: jsonResponse("Authorized video playback bootstrap", videoPlaybackBootstrapSchema),
           401: errorResponse("Authentication required"),
           403: errorResponse("Course access denied"),
           404: errorResponse("Lesson or media not found"),
@@ -59,10 +56,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           503: errorResponse("CDN delivery is not configured"),
         },
       },
-      preHandler: [
-        authMiddleware.authenticate,
-        authMiddleware.requireMfaVerifiedIfAuthenticated,
-      ],
+      preHandler: [authMiddleware.authenticate, authMiddleware.requireMfaVerifiedIfAuthenticated],
     },
     controller.getPlaybackBootstrap,
   );
@@ -81,10 +75,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           lessonNumber: z.coerce.number().int().positive(),
         }),
         response: {
-          200: jsonResponse(
-            "Protected video playback token",
-            videoPlaybackTokenSchema,
-          ),
+          200: jsonResponse("Protected video playback token", videoPlaybackTokenSchema),
           401: errorResponse("Authentication required"),
           403: errorResponse("Course access denied"),
           404: errorResponse("Lesson or media not found"),
@@ -92,10 +83,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           503: errorResponse("CDN delivery is not configured"),
         },
       },
-      preHandler: [
-        authMiddleware.authenticate,
-        authMiddleware.requireMfaVerifiedIfAuthenticated,
-      ],
+      preHandler: [authMiddleware.authenticate, authMiddleware.requireMfaVerifiedIfAuthenticated],
     },
     controller.getPlaybackToken,
   );
@@ -109,10 +97,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
         summary: "Obtain pre-signed upload URL for files",
         body: presignMediaRequestSchema,
         response: {
-          200: jsonResponse(
-            "Pre-signed upload response",
-            presignMediaResponseSchema,
-          ),
+          200: jsonResponse("Pre-signed upload response", presignMediaResponseSchema),
         },
       },
       preHandler: requireAuthenticated,
@@ -129,10 +114,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
         summary: "Confirm that a media asset upload is complete",
         params: z.object({ mediaId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Upload confirmed",
-            mediaUploadCompleteResponseSchema,
-          ),
+          200: jsonResponse("Upload confirmed", mediaUploadCompleteResponseSchema),
           400: errorResponse("File not found or size mismatch"),
           404: errorResponse("Media not found"),
           503: errorResponse("CDN delivery is not configured"),
@@ -152,10 +134,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
         summary: "Poll transcoding progress for a media asset",
         params: z.object({ mediaId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Polling progress response",
-            videoJobProgressResponseSchema,
-          ),
+          200: jsonResponse("Polling progress response", videoJobProgressResponseSchema),
           404: errorResponse("Media or job not found"),
         },
       },
@@ -209,10 +188,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           409: errorResponse("Video is not ready for playback"),
         },
       },
-      preHandler: [
-        authMiddleware.authenticate,
-        authMiddleware.requireMfaVerifiedIfAuthenticated,
-      ],
+      preHandler: [authMiddleware.authenticate, authMiddleware.requireMfaVerifiedIfAuthenticated],
     },
     controller.streamHlsResource,
   );
@@ -261,10 +237,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
         summary: "Stream media file content by media ID",
         params: z.object({ mediaId: z.string().uuid() }),
         response: {
-          200: jsonResponse(
-            "Direct media delivery URL",
-            mediaDeliveryResponseSchema,
-          ),
+          200: jsonResponse("Direct media delivery URL", mediaDeliveryResponseSchema),
           404: errorResponse("Media not found or access denied"),
           503: errorResponse("CDN delivery is not configured"),
         },

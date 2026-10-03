@@ -1,10 +1,7 @@
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { ThemedSelect } from "../ThemedSelect";
-import {
-  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
-  SearchShortcutHint,
-} from "../searchShortcut";
+import { SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS, SearchShortcutHint } from "../searchShortcut";
 
 export interface NotificationFiltersBarProps {
   searchQuery: string;
@@ -55,11 +52,7 @@ export function NotificationFiltersBar({
       <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
         {/* Search Input */}
         <label className="flex min-h-9.75 min-w-52.5 flex-1 cursor-text items-center gap-2.5 rounded-[9px] bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] px-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all focus-within:shadow-[inset_0_0_0_1px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]">
-          <MagnifyingGlass
-            size={17}
-            className="text-(--muted) shrink-0"
-            aria-hidden="true"
-          />
+          <MagnifyingGlass size={17} className="shrink-0 text-(--muted)" aria-hidden="true" />
           <input
             id="notifications-search-input"
             type="text"
@@ -69,7 +62,7 @@ export function NotificationFiltersBar({
             aria-label="Search notifications"
             aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
             data-search-shortcut-target
-            className="w-full border-0 bg-transparent p-0 text-xs md:text-sm text-(--text-secondary) placeholder-(--muted) outline-none"
+            className="w-full border-0 bg-transparent p-0 text-xs text-(--text-secondary) placeholder-(--muted) outline-none md:text-sm"
           />
           <SearchShortcutHint />
           {searchQuery && (
@@ -77,7 +70,7 @@ export function NotificationFiltersBar({
               type="button"
               onClick={() => onSearchChange("")}
               aria-label="Clear search"
-              className="text-(--muted) hover:text-(--text) cursor-pointer"
+              className="cursor-pointer text-(--muted) hover:text-(--text)"
             >
               <X size={14} />
             </button>

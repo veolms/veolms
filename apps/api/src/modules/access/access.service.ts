@@ -1,9 +1,5 @@
 import crypto from "node:crypto";
-import type {
-  AccessGrant,
-  AccessGrantSource,
-  AccessGrantStatus,
-} from "@veolms/contracts";
+import type { AccessGrant, AccessGrantSource, AccessGrantStatus } from "@veolms/contracts";
 import * as accessRepo from "./access.repository.ts";
 // access.repository.ts is the module's canonical source for this type — see
 // the comment there for the full history of it having been separately (and,
@@ -38,24 +34,13 @@ export interface AccessService {
 
   listUserGrants(database: Executor, userId: string): Promise<AccessGrant[]>;
 
-  hasActiveAccess(
-    database: Executor,
-    userId: string,
-    courseId: string,
-  ): Promise<boolean>;
+  hasActiveAccess(database: Executor, userId: string, courseId: string): Promise<boolean>;
 
-  listActiveUserIdsForCourse(
-    database: Executor,
-    courseId: string,
-  ): Promise<string[]>;
+  listActiveUserIdsForCourse(database: Executor, courseId: string): Promise<string[]>;
 
   revokeAccessForOrder(database: Executor, orderId: string): Promise<void>;
 
-  revokeAccessForOrderCourse(
-    database: Executor,
-    orderId: string,
-    courseId: string,
-  ): Promise<void>;
+  revokeAccessForOrderCourse(database: Executor, orderId: string, courseId: string): Promise<void>;
 }
 
 export function createAccessService(): AccessService {
@@ -145,10 +130,7 @@ export function createAccessService(): AccessService {
     return grant;
   }
 
-  async function revokeAccessGrantById(
-    database: Executor,
-    grantId: string,
-  ): Promise<void> {
+  async function revokeAccessGrantById(database: Executor, grantId: string): Promise<void> {
     const grant = await database
       .selectFrom("access_grants")
       .selectAll()
@@ -170,10 +152,7 @@ export function createAccessService(): AccessService {
       .execute();
   }
 
-  async function listUserGrants(
-    database: Executor,
-    userId: string,
-  ): Promise<AccessGrant[]> {
+  async function listUserGrants(database: Executor, userId: string): Promise<AccessGrant[]> {
     const rows = await accessRepo.listUserAccessGrants(database, userId);
     return rows.map((g) => ({
       id: g.id,
@@ -197,8 +176,7 @@ export function createAccessService(): AccessService {
     const grant = await accessRepo.findAccessGrant(database, userId, courseId);
     if (!grant) return false;
     if (grant.status !== "active") return false;
-    if (grant.valid_until && new Date() > new Date(grant.valid_until))
-      return false;
+    if (grant.valid_until && new Date() > new Date(grant.valid_until)) return false;
     return true;
   }
 
@@ -206,17 +184,11 @@ export function createAccessService(): AccessService {
     database: Executor,
     courseId: string,
   ): Promise<string[]> {
-    const rows = await accessRepo.listActiveUserIdsForCourse(
-      database,
-      courseId,
-    );
+    const rows = await accessRepo.listActiveUserIdsForCourse(database, courseId);
     return rows;
   }
 
-  async function revokeAccessForOrder(
-    database: Executor,
-    orderId: string,
-  ): Promise<void> {
+  async function revokeAccessForOrder(database: Executor, orderId: string): Promise<void> {
     await accessRepo.revokeAccessGrantsByOrderId(database, orderId);
   }
 
@@ -225,11 +197,7 @@ export function createAccessService(): AccessService {
     orderId: string,
     courseId: string,
   ): Promise<void> {
-    await accessRepo.revokeAccessGrantsForOrderCourse(
-      database,
-      orderId,
-      courseId,
-    );
+    await accessRepo.revokeAccessGrantsForOrderCourse(database, orderId, courseId);
   }
 
   return {

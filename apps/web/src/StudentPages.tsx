@@ -1,8 +1,5 @@
 import type { EnrolledCourse } from "@veolms/contracts";
-import {
-  getCourseThumbnail,
-  getCourseThumbnailSrcSet,
-} from "./learning/courseMetadata";
+import { getCourseThumbnail, getCourseThumbnailSrcSet } from "./learning/courseMetadata";
 
 export interface LearningCourse {
   id: string;
@@ -22,9 +19,7 @@ export interface LearningCourse {
   thumbnailSrcSet?: string;
 }
 
-export function adaptEnrolledCourseToLearningCourse(
-  ec: EnrolledCourse,
-): LearningCourse {
+export function adaptEnrolledCourseToLearningCourse(ec: EnrolledCourse): LearningCourse {
   const status: "in-progress" | "not-started" | "completed" =
     ec.progress === 100
       ? "completed"
@@ -52,8 +47,6 @@ export function adaptEnrolledCourseToLearningCourse(
     lastAccessedAt: ec.lastAccessedAt ?? null,
     enrolledOn: enrolledDateStr,
     thumbnail: ec.courseThumbnailUrl || getCourseThumbnail(ec.courseSlug),
-    thumbnailSrcSet: ec.courseThumbnailUrl
-      ? undefined
-      : getCourseThumbnailSrcSet(ec.courseSlug),
+    thumbnailSrcSet: ec.courseThumbnailUrl ? undefined : getCourseThumbnailSrcSet(ec.courseSlug),
   };
 }

@@ -50,10 +50,7 @@ export async function checkUserPermission(
 
     if (courseId) {
       conditions.push(
-        eb.and([
-          eb("ra.scope_type", "=", "course"),
-          eb("ra.course_id", "=", courseId),
-        ]),
+        eb.and([eb("ra.scope_type", "=", "course"), eb("ra.course_id", "=", courseId)]),
       );
     }
 
@@ -125,10 +122,7 @@ export async function getUserEffectivePermissions(
 
     if (courseId) {
       conditions.push(
-        eb.and([
-          eb("ra.scope_type", "=", "course"),
-          eb("ra.course_id", "=", courseId),
-        ]),
+        eb.and([eb("ra.scope_type", "=", "course"), eb("ra.course_id", "=", courseId)]),
       );
     }
 
@@ -142,10 +136,7 @@ export async function getUserEffectivePermissions(
     .select(["p.permission_key", "rp.effect"])
     .where("ur.user_id", "=", userId);
 
-  const [scopedRows, directRows] = await Promise.all([
-    query.execute(),
-    userRolesQuery.execute(),
-  ]);
+  const [scopedRows, directRows] = await Promise.all([query.execute(), userRolesQuery.execute()]);
 
   const rows = [...scopedRows, ...directRows];
 
@@ -164,10 +155,7 @@ export async function getUserEffectivePermissions(
   return Array.from(allowedKeys).filter((k) => !deniedKeys.has(k));
 }
 
-export async function isFeatureEnabled(
-  database: Executor,
-  featureKey: string,
-): Promise<boolean> {
+export async function isFeatureEnabled(database: Executor, featureKey: string): Promise<boolean> {
   const row = await database
     .selectFrom("features")
     .select("enabled")
@@ -177,9 +165,7 @@ export async function isFeatureEnabled(
   return Boolean(row?.enabled ?? true);
 }
 
-export async function getFeatureMap(
-  database: Executor,
-): Promise<Record<string, boolean>> {
+export async function getFeatureMap(database: Executor): Promise<Record<string, boolean>> {
   const allFeatures = await database
     .selectFrom("features")
     .select(["feature_key", "enabled"])
@@ -198,10 +184,9 @@ export async function resolveCourseScope(
   courseIdOrSlug: string,
 ): Promise<ResourceScope | null> {
   // Check UUID vs Slug
-  const isUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      courseIdOrSlug,
-    );
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    courseIdOrSlug,
+  );
 
   let query = database.selectFrom("courses").select(["id"]);
 

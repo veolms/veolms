@@ -39,10 +39,7 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
         summary: "List notifications for the authenticated user",
         querystring: notificationListQuerySchema,
         response: {
-          200: jsonResponse(
-            "Cursor-paginated notification feed",
-            notificationListResponseSchema,
-          ),
+          200: jsonResponse("Cursor-paginated notification feed", notificationListResponseSchema),
           401: errorResponse("Authentication required"),
         },
       },
@@ -114,10 +111,7 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
         tags: ["Notifications"],
         summary: "Mark every notification as read",
         response: {
-          200: jsonResponse(
-            "Notifications marked read",
-            markAllNotificationsReadResponseSchema,
-          ),
+          200: jsonResponse("Notifications marked read", markAllNotificationsReadResponseSchema),
           401: errorResponse("Authentication required"),
         },
       },
@@ -135,10 +129,7 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
         summary: "Archive one notification",
         params: notificationIdParamsSchema,
         response: {
-          200: jsonResponse(
-            "Notification archived",
-            archiveNotificationResponseSchema,
-          ),
+          200: jsonResponse("Notification archived", archiveNotificationResponseSchema),
           401: errorResponse("Authentication required"),
           404: errorResponse("Notification not found"),
         },

@@ -4,16 +4,8 @@
   --scrollbar-thumb-size: 5px;
   --scrollbar-firefox-width: thin;
   --scrollbar-track-color: transparent;
-  --scrollbar-thumb-color: color-mix(
-    in srgb,
-    var(--text-secondary) 58%,
-    transparent
-  );
-  --scrollbar-thumb-hover-color: color-mix(
-    in srgb,
-    var(--text-secondary) 82%,
-    transparent
-  );
+  --scrollbar-thumb-color: color-mix(in srgb, var(--text-secondary) 58%, transparent);
+  --scrollbar-thumb-hover-color: color-mix(in srgb, var(--text-secondary) 82%, transparent);
 }
 
 :root[data-scrollbar-style="theme"] {
@@ -27,11 +19,7 @@
 :root[data-scrollbar-style="thick"] {
   --scrollbar-thumb-size: 12px;
   --scrollbar-firefox-width: auto;
-  --scrollbar-track-color: color-mix(
-    in srgb,
-    var(--accent) 16%,
-    var(--surface-strong)
-  );
+  --scrollbar-track-color: color-mix(in srgb, var(--accent) 16%, var(--surface-strong));
   --scrollbar-thumb-color: color-mix(in srgb, var(--accent) 88%, var(--text));
   --scrollbar-thumb-hover-color: var(--accent-hover, var(--accent));
 }

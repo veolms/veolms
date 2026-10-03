@@ -6,10 +6,7 @@ import {
   type DiscussionEditorController,
 } from "../learning/discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "../learning/discussion-editor/commands";
-import {
-  createDiscussionDraft,
-  type DiscussionDraft,
-} from "../learning/discussion-editor/types";
+import { createDiscussionDraft, type DiscussionDraft } from "../learning/discussion-editor/types";
 
 export interface CourseDescriptionEditorProps {
   value: string;
@@ -43,8 +40,7 @@ export function CourseDescriptionEditor({
   disabled = false,
 }: CourseDescriptionEditorProps) {
   const [draft, setDraft] = useState(() => createDiscussionDraft(value));
-  const [controller, setController] =
-    useState<DiscussionEditorController | null>(null);
+  const [controller, setController] = useState<DiscussionEditorController | null>(null);
   const [formattingState, setFormattingState] =
     useState<DiscussionFormattingState>(EMPTY_FORMATTING_STATE);
 
@@ -63,8 +59,7 @@ export function CourseDescriptionEditor({
     lastReportedValueRef.current = value;
     setDraft(createDiscussionDraft(value));
 
-    const contentEl =
-      containerRef.current?.querySelector<HTMLElement>(".cm-content");
+    const contentEl = containerRef.current?.querySelector<HTMLElement>(".cm-content");
     if (contentEl) {
       const view = EditorView.findFromDOM(contentEl);
       if (view && view.state.doc.toString() !== value) {
@@ -90,7 +85,7 @@ export function CourseDescriptionEditor({
       data-base-ui-swipe-ignore=""
       data-tab-swipe-ignore=""
       className={`learning-comment-editor relative isolate flex flex-col overflow-hidden rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] shadow-[0_1px_0_color-mix(in_srgb,var(--text)_6%,transparent)] transition-[border-color,box-shadow] duration-150 focus-within:border-(--accent) focus-within:shadow-[0_0_0_2px_color-mix(in_srgb,var(--accent)_14%,transparent)] ${
-        disabled ? "cursor-not-allowed opacity-60 pointer-events-none" : ""
+        disabled ? "pointer-events-none cursor-not-allowed opacity-60" : ""
       } ${
         isOverLimit
           ? "border-(--danger) focus-within:border-(--danger) focus-within:shadow-[0_0_0_2px_color-mix(in_srgb,var(--danger)_42%,transparent)]"
@@ -135,10 +130,7 @@ export function CourseDescriptionEditor({
   );
 }
 
-export interface LessonDescriptionEditorProps extends Omit<
-  CourseDescriptionEditorProps,
-  "id"
-> {
+export interface LessonDescriptionEditorProps extends Omit<CourseDescriptionEditorProps, "id"> {
   id: string;
 }
 
@@ -149,12 +141,5 @@ export function LessonDescriptionEditor({
   placeholder = "Add a detailed description of what students will learn in this lesson...",
   ...props
 }: LessonDescriptionEditorProps) {
-  return (
-    <CourseDescriptionEditor
-      id={id}
-      label={label}
-      placeholder={placeholder}
-      {...props}
-    />
-  );
+  return <CourseDescriptionEditor id={id} label={label} placeholder={placeholder} {...props} />;
 }

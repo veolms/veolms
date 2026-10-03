@@ -23,9 +23,7 @@ const staticApplicationPages = [
 ];
 
 const learningPrerenderScope =
-  process.env.VEO_LEARNING_PRERENDER_SCOPE === "first-section"
-    ? "first-section"
-    : "all-lectures";
+  process.env.VEO_LEARNING_PRERENDER_SCOPE === "first-section" ? "first-section" : "all-lectures";
 
 // React Router evaluates this config through Vite's config runner, whose
 // environment is a dev server even during `react-router build`. The build
@@ -40,11 +38,8 @@ const staticLearningPages = createLearningPrerenderPaths({
 });
 
 function getStaticApiBaseUrl() {
-  const configured =
-    process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000/v1";
-  const normalized = configured
-    .replace(/\/+$/u, "")
-    .replace(/\/api\/v1$/u, "/v1");
+  const configured = process.env.STATIC_BUILD_API_URL || "http://127.0.0.1:4000/v1";
+  const normalized = configured.replace(/\/+$/u, "").replace(/\/api\/v1$/u, "/v1");
   return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`;
 }
 
@@ -60,18 +55,12 @@ async function getStaticCataloguePaths() {
   }
   const body: unknown = await response.json();
   const payload =
-    body && typeof body === "object" && "success" in body && "data" in body
-      ? body.data
-      : body;
+    body && typeof body === "object" && "success" in body && "data" in body ? body.data : body;
   const result = courseListResponseSchema.safeParse(payload);
   if (!result.success) {
-    throw new Error(
-      "The build API returned an invalid published course catalogue.",
-    );
+    throw new Error("The build API returned an invalid published course catalogue.");
   }
-  return result.data.courses.map(
-    ({ slug }) => `/courses/${encodeURIComponent(slug)}/overview`,
-  );
+  return result.data.courses.map(({ slug }) => `/courses/${encodeURIComponent(slug)}/overview`);
 }
 
 const prerenderConfig = {
@@ -93,9 +82,7 @@ export default {
   // Prerendering is a build-time feature. Enabling it in `react-router dev`
   // disables SPA mode and makes the first request build the full server route
   // graph before it can render. Keep dev on the configured SPA fallback.
-  prerender: isDevelopment
-    ? false
-    : (prerenderConfig as NonNullable<Config["prerender"]>),
+  prerender: isDevelopment ? false : (prerenderConfig as NonNullable<Config["prerender"]>),
   routeDiscovery: { mode: "initial" },
   ssr: false,
 } satisfies Config;

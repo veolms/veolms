@@ -1,8 +1,5 @@
 import { shouldIgnorePlayerShortcut } from "./guards.js";
-import {
-  resolvePlayerShortcut,
-  resolvePlayerShortcutBindings,
-} from "./keymap.js";
+import { resolvePlayerShortcut, resolvePlayerShortcutBindings } from "./keymap.js";
 import type {
   PlayerKeyboardActions,
   PlayerKeyboardController,

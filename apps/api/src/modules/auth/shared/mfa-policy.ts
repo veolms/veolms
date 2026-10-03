@@ -7,9 +7,7 @@ export function isMfaMandatoryAccount(
   roles: readonly string[] | null | undefined,
   options?: { skipAdminMfa?: boolean },
 ): boolean {
-  const isAdmin = Boolean(
-    roles?.some((role) => role.toLowerCase() === ADMIN_ROLE),
-  );
+  const isAdmin = Boolean(roles?.some((role) => role.toLowerCase() === ADMIN_ROLE));
   if (options?.skipAdminMfa && isAdmin) {
     return false;
   }
@@ -18,9 +16,7 @@ export function isMfaMandatoryAccount(
     return true;
   }
 
-  return Boolean(
-    roles?.some((role) => MANDATORY_MFA_ROLES.has(role.toLowerCase())),
-  );
+  return Boolean(roles?.some((role) => MANDATORY_MFA_ROLES.has(role.toLowerCase())));
 }
 
 export function sessionNeedsMfaChallenge(input: {

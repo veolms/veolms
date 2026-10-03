@@ -67,9 +67,7 @@ describe("normalizeBufferedRanges", () => {
 
   it("returns no ranges for a zero or invalid duration", () => {
     expect(normalizeBufferedRanges([{ start: 0, end: 1 }], 0)).toEqual([]);
-    expect(normalizeBufferedRanges([{ start: 0, end: 1 }], Number.NaN)).toEqual(
-      [],
-    );
+    expect(normalizeBufferedRanges([{ start: 0, end: 1 }], Number.NaN)).toEqual([]);
   });
 });
 

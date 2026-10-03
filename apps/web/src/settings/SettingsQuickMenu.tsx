@@ -20,9 +20,7 @@ export function SettingsQuickMenu({
 }: SettingsQuickMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLAnchorElement | null>>([]);
-  const activeIndex = SETTINGS_TABS.findIndex(
-    ({ id: tab }) => tab === activeTab,
-  );
+  const activeIndex = SETTINGS_TABS.findIndex(({ id: tab }) => tab === activeTab);
 
   useLayoutEffect(() => {
     if (!isOpen) return;
@@ -44,34 +42,24 @@ export function SettingsQuickMenu({
         return;
       }
 
-      const items = itemRefs.current.filter(
-        (item): item is HTMLAnchorElement => item !== null,
-      );
+      const items = itemRefs.current.filter((item): item is HTMLAnchorElement => item !== null);
       if (items.length === 0) return;
 
       event.preventDefault();
       event.stopPropagation();
 
-      const focusedIndex = items.indexOf(
-        document.activeElement as HTMLAnchorElement,
-      );
-      const currentIndex =
-        focusedIndex >= 0 ? focusedIndex : Math.max(activeIndex, 0);
+      const focusedIndex = items.indexOf(document.activeElement as HTMLAnchorElement);
+      const currentIndex = focusedIndex >= 0 ? focusedIndex : Math.max(activeIndex, 0);
       const direction = event.key === "ArrowDown" ? 1 : -1;
-      const nextIndex =
-        (currentIndex + direction + items.length) % items.length;
+      const nextIndex = (currentIndex + direction + items.length) % items.length;
       items[nextIndex]?.focus();
     };
 
     document.addEventListener("keydown", handleMenuKeyDown, true);
-    return () =>
-      document.removeEventListener("keydown", handleMenuKeyDown, true);
+    return () => document.removeEventListener("keydown", handleMenuKeyDown, true);
   }, [activeIndex, isOpen]);
 
-  const handleNavigate = (
-    event: MouseEvent<HTMLAnchorElement>,
-    tab: SettingsTab,
-  ) => {
+  const handleNavigate = (event: MouseEvent<HTMLAnchorElement>, tab: SettingsTab) => {
     if (
       event.button === 0 &&
       !event.metaKey &&
@@ -108,7 +96,7 @@ export function SettingsQuickMenu({
             role="menuitem"
             aria-current={activeTab === tab ? "page" : undefined}
             data-page-tab-tone={tone}
-            className={`profile-menu__item settings-quick-menu__item${activeTab === tab ? " is-active" : ""}`}
+            className={`profile-menu__item settings-quick-menu__item${activeTab === tab ? "is-active" : ""}`}
             onClick={(event) => handleNavigate(event, tab)}
           >
             <Icon

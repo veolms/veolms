@@ -18,9 +18,7 @@ import { RazorpayPaymentGateway } from "./razorpay/razorpay.gateway.ts";
 export function createPaymentGateway(config: ServerConfig): PaymentGateway {
   if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET) {
     if (config.NODE_ENV === "production") {
-      throw new Error(
-        "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required in production.",
-      );
+      throw new Error("RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required in production.");
     }
     // eslint-disable-next-line no-console
     console.warn(

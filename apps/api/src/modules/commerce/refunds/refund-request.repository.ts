@@ -1,10 +1,7 @@
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 import type { RefundRequestStatus } from "@veolms/database";
 
-export async function findRefundRequestById(
-  database: Executor,
-  requestId: string,
-) {
+export async function findRefundRequestById(database: Executor, requestId: string) {
   return await database
     .selectFrom("refund_requests")
     .selectAll()
@@ -12,10 +9,7 @@ export async function findRefundRequestById(
     .executeTakeFirst();
 }
 
-export async function findRefundRequestByOrderId(
-  database: Executor,
-  orderId: string,
-) {
+export async function findRefundRequestByOrderId(database: Executor, orderId: string) {
   return await database
     .selectFrom("refund_requests")
     .selectAll()
@@ -23,10 +17,7 @@ export async function findRefundRequestByOrderId(
     .executeTakeFirst();
 }
 
-export async function listRefundRequestsByUser(
-  database: Executor,
-  userId: string,
-) {
+export async function listRefundRequestsByUser(database: Executor, userId: string) {
   return await database
     .selectFrom("refund_requests")
     .selectAll()
@@ -35,10 +26,7 @@ export async function listRefundRequestsByUser(
     .execute();
 }
 
-export async function listAllRefundRequests(
-  database: Executor,
-  status?: RefundRequestStatus,
-) {
+export async function listAllRefundRequests(database: Executor, status?: RefundRequestStatus) {
   let query = database.selectFrom("refund_requests").selectAll();
   if (status) {
     query = query.where("status", "=", status);

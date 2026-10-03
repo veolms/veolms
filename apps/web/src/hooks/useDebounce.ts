@@ -79,10 +79,7 @@ export function debounce<TArgs extends unknown[], TReturn = void>(
     return result;
   }
 
-  function startTimer(
-    pendingFunc: () => void,
-    wait: number,
-  ): ReturnType<typeof setTimeout> {
+  function startTimer(pendingFunc: () => void, wait: number): ReturnType<typeof setTimeout> {
     return setTimeout(pendingFunc, wait);
   }
 
@@ -172,10 +169,7 @@ export function debounce<TArgs extends unknown[], TReturn = void>(
     return timeoutId !== null;
   }
 
-  const debounced = function (
-    this: unknown,
-    ...args: TArgs
-  ): TReturn | undefined {
+  const debounced = function (this: unknown, ...args: TArgs): TReturn | undefined {
     const time = Date.now();
     const isInvoking = shouldInvoke(time);
 
@@ -225,11 +219,11 @@ export function useDebouncedCallback<TArgs extends unknown[], TReturn = void>(
   const { leading, trailing, maxWait } = options;
 
   const debounced = useMemo(() => {
-    return debounce<TArgs, TReturn>(
-      (...args: TArgs) => callbackRef.current(...args),
-      delayMs,
-      { leading, trailing, maxWait },
-    );
+    return debounce<TArgs, TReturn>((...args: TArgs) => callbackRef.current(...args), delayMs, {
+      leading,
+      trailing,
+      maxWait,
+    });
   }, [delayMs, leading, trailing, maxWait]);
 
   useEffect(() => {
@@ -319,10 +313,12 @@ export function useDebounceValue<T>(
   );
 
   const controls: DebounceControl = useMemo(() => {
-    return Object.assign(
-      ((val: unknown) => setValueImmediately(val)) as DebounceControl,
-      { flush, cancel, isPending, setValueImmediately },
-    );
+    return Object.assign(((val: unknown) => setValueImmediately(val)) as DebounceControl, {
+      flush,
+      cancel,
+      isPending,
+      setValueImmediately,
+    });
   }, [flush, cancel, isPending, setValueImmediately]);
 
   return [debouncedValue, controls];

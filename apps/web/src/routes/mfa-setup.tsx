@@ -6,11 +6,7 @@ import { AUTH_CARD_HEADING_ID } from "../auth/authFlow";
 import { MfaEnrollmentSetup } from "../auth/MfaEnrollmentSetup";
 import { MfaStepUp } from "../auth/MfaStepUp";
 import { resolveMfaSetupView, type MfaSetupView } from "../auth/mfaGate";
-import {
-  APP_HOME_PATH,
-  resolveMfaBackPath,
-  sanitizeReturnTo,
-} from "../routing/routeAccess";
+import { APP_HOME_PATH, resolveMfaBackPath, sanitizeReturnTo } from "../routing/routeAccess";
 import { useCurrentUser } from "../services/auth";
 export default function MfaSetupRoute() {
   const navigate = useNavigate();
@@ -39,10 +35,7 @@ export default function MfaSetupRoute() {
   if (isLoading || view === null || view === "login" || view === "done") {
     return (
       <section aria-labelledby={AUTH_CARD_HEADING_ID} className="auth-card">
-        <AuthProgress
-          detail="Opening your security check."
-          title="Signing you in"
-        />
+        <AuthProgress detail="Opening your security check." title="Signing you in" />
       </section>
     );
   }

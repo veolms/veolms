@@ -53,10 +53,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         summary: "Report an inappropriate comment, question, reply, or note",
         body: createReportRequestSchema,
         response: {
-          201: jsonResponse(
-            "Report submitted",
-            z.object({ message: z.string() }),
-          ),
+          201: jsonResponse("Report submitted", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
         },
       },
@@ -80,10 +77,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ courseId: z.uuid() }),
         querystring: listReportsQuerySchema,
         response: {
-          200: jsonResponse(
-            "Course moderation reports",
-            reportsListResponseSchema,
-          ),
+          200: jsonResponse("Course moderation reports", reportsListResponseSchema),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Course owner or admin required"),
         },
@@ -100,18 +94,14 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "updateCourseReportStatus",
         tags: ["Course Moderation"],
-        summary:
-          "Update status of a report within a course (reviewed, dismissed, actioned)",
+        summary: "Update status of a report within a course (reviewed, dismissed, actioned)",
         params: z.object({
           courseId: z.uuid(),
           reportId: z.uuid(),
         }),
         body: updateReportRequestSchema,
         response: {
-          200: jsonResponse(
-            "Report status updated",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Report status updated", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Course owner or admin required"),
           404: errorResponse("Report not found"),
@@ -129,18 +119,14 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "moderateCourseThread",
         tags: ["Course Moderation"],
-        summary:
-          "Moderate a discussion thread within a course (Hide, Lock, Delete)",
+        summary: "Moderate a discussion thread within a course (Hide, Lock, Delete)",
         params: z.object({
           courseId: z.uuid(),
           threadId: z.uuid(),
         }),
         body: moderateThreadRequestSchema,
         response: {
-          200: jsonResponse(
-            "Action applied",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Action applied", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
           404: errorResponse("Thread not found"),
@@ -165,10 +151,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         }),
         body: moderateReplyRequestSchema,
         response: {
-          200: jsonResponse(
-            "Action applied",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Action applied", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
           404: errorResponse("Reply not found"),
@@ -215,14 +198,9 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
           courseId: z.uuid(),
           userId: z.uuid(),
         }),
-        body: unsuspendUserRequestSchema
-          .omit({ userId: true, courseId: true })
-          .optional(),
+        body: unsuspendUserRequestSchema.omit({ userId: true, courseId: true }).optional(),
         response: {
-          200: jsonResponse(
-            "Suspension lifted",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Suspension lifted", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Course owner or admin required"),
         },
@@ -267,10 +245,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         summary: "List global reported items across all courses",
         querystring: listReportsQuerySchema,
         response: {
-          200: jsonResponse(
-            "Global moderation reports",
-            reportsListResponseSchema,
-          ),
+          200: jsonResponse("Global moderation reports", reportsListResponseSchema),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
         },
@@ -287,15 +262,11 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "updatePlatformReportStatus",
         tags: ["Platform Moderation"],
-        summary:
-          "Update status of a report globally (reviewed, dismissed, actioned)",
+        summary: "Update status of a report globally (reviewed, dismissed, actioned)",
         params: z.object({ reportId: z.uuid() }),
         body: updateReportRequestSchema,
         response: {
-          200: jsonResponse(
-            "Report status updated",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Report status updated", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
           404: errorResponse("Report not found"),
@@ -317,10 +288,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ threadId: z.uuid() }),
         body: moderateThreadRequestSchema,
         response: {
-          200: jsonResponse(
-            "Moderation action applied",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Moderation action applied", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
           404: errorResponse("Thread not found"),
@@ -342,10 +310,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ replyId: z.uuid() }),
         body: moderateReplyRequestSchema,
         response: {
-          200: jsonResponse(
-            "Moderation action applied",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Moderation action applied", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
           404: errorResponse("Reply not found"),
@@ -388,10 +353,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ userId: z.uuid() }),
         body: unsuspendUserRequestSchema.omit({ userId: true }).optional(),
         response: {
-          200: jsonResponse(
-            "Global suspension lifted",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Global suspension lifted", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
         },

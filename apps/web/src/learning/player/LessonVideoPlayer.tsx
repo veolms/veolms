@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   VideoPlayer as VeoVideoPlayer,
@@ -16,20 +9,14 @@ import {
   type VideoEngine,
   type VideoSource,
 } from "@veolms/video-player";
-import type {
-  VideoPlaybackBootstrap,
-  VideoPlaybackToken,
-} from "@veolms/contracts";
+import type { VideoPlaybackBootstrap, VideoPlaybackToken } from "@veolms/contracts";
 import type { CourseVideo } from "../courseContent";
 import {
   LEARNING_SEEK_INTERVAL_DEFAULT,
   readLearningPreferences,
 } from "../../settings/settingsPreferences";
 import { LessonAmbientProjection } from "./LessonAmbientProjection";
-import {
-  LessonEndScreenOverlay,
-  type NextLessonInfo,
-} from "./LessonEndScreenOverlay";
+import { LessonEndScreenOverlay, type NextLessonInfo } from "./LessonEndScreenOverlay";
 import {
   LessonCentralControls,
   LessonPlayerControls,
@@ -129,9 +116,7 @@ export interface LessonVideoPlayerProps {
   onMobileLandscapeFullscreenChange?: (active: boolean) => void;
   onProgressChange?: (progress: number) => void;
   /** Registers a lifecycle-scoped bridge for inline Learning Space timestamps. */
-  onSeekToTimestampReady?: (
-    seekToTimestamp: (seconds: number) => void,
-  ) => void | (() => void);
+  onSeekToTimestampReady?: (seekToTimestamp: (seconds: number) => void) => void | (() => void);
   presentation?: "full" | "mini";
   resumePersistenceKey?: string;
   /** Runtime playback data returned by the authorized bootstrap endpoint. */
@@ -214,20 +199,15 @@ export function LessonVideoPlayer({
   const preferencesReadyRef = useRef(false);
   const captionsEnabledRef = useRef(false);
   const handoffMutingRef = useRef(false);
-  const [initialPlayerPreferences] = useState(
-    () => DEFAULT_LEARNING_PLAYER_PREFERENCES,
-  );
+  const [initialPlayerPreferences] = useState(() => DEFAULT_LEARNING_PLAYER_PREFERENCES);
   const playerPrefsRef = useRef({ ...initialPlayerPreferences });
   const playbackPrefsAppliedRef = useRef(false);
   const applyingPlaybackPrefsRef = useRef(false);
   const [muted, setMuted] = useState(initialPlayerPreferences.muted);
   const [ambientEnabled, setAmbientEnabled] = useState(false);
-  const [seekIntervalSeconds, setSeekIntervalSeconds] = useState(
-    LEARNING_SEEK_INTERVAL_DEFAULT,
-  );
+  const [seekIntervalSeconds, setSeekIntervalSeconds] = useState(LEARNING_SEEK_INTERVAL_DEFAULT);
   const [preferencesReady, setPreferencesReady] = useState(false);
-  const [mobileLandscapeFullscreen, setMobileLandscapeFullscreen] =
-    useState(false);
+  const [mobileLandscapeFullscreen, setMobileLandscapeFullscreen] = useState(false);
   const [showEndScreen, setShowEndScreen] = useState(false);
   const [autoplayCancelled, setAutoplayCancelled] = useState(false);
   const playerTheme = useLearningPlayerTheme();
@@ -284,8 +264,7 @@ export function LessonVideoPlayer({
   );
 
   const source = useMemo<VideoSource>(() => {
-    const resumeFromLastPosition =
-      readLearningPreferences().resumeFromLastPosition;
+    const resumeFromLastPosition = readLearningPreferences().resumeFromLastPosition;
     return createLearningLessonVideoSource({
       media: playbackMedia,
       lessonTitle,
@@ -297,9 +276,7 @@ export function LessonVideoPlayer({
       segmentToken: playbackBootstrap?.segmentToken,
       segmentTokenExpiresAt: playbackBootstrap?.segmentTokenExpiresAt,
       refreshSegmentToken:
-        playbackBootstrap?.segmentToken && refreshPlaybackToken
-          ? refreshPlaybackToken
-          : undefined,
+        playbackBootstrap?.segmentToken && refreshPlaybackToken ? refreshPlaybackToken : undefined,
     });
   }, [
     lessonTitle,
@@ -346,9 +323,7 @@ export function LessonVideoPlayer({
     if (restoreAutoplayRef.current === null) return;
     const livePlayback = getLearningMiniPlayerRuntimeSnapshot(mediaKey);
     playerRef.current?.setVolume(
-      livePlayback?.volume ??
-        playerRef.current?.getSnapshot().media.volume ??
-        1,
+      livePlayback?.volume ?? playerRef.current?.getSnapshot().media.volume ?? 1,
     );
     playerRef.current?.setMuted(livePlayback?.muted ?? muted);
     prepareLearningMiniPlayerPlaybackHandoff(mediaKey);
@@ -387,11 +362,7 @@ export function LessonVideoPlayer({
   const tryFinishPlayingMiniPlayerRestore = useCallback(() => {
     if (restoreAutoplayRef.current !== true) return;
     const playerSnapshot = playerRef.current?.getSnapshot().media;
-    if (
-      !playerSnapshot?.playing ||
-      playerSnapshot.buffering ||
-      playerSnapshot.seeking
-    ) {
+    if (!playerSnapshot?.playing || playerSnapshot.buffering || playerSnapshot.seeking) {
       return;
     }
 
@@ -412,11 +383,7 @@ export function LessonVideoPlayer({
   const handleEvent = useCallback(
     (event: VideoPlayerEvent) => {
       if (playbackSuspended) {
-        if (
-          event.type === "playing" ||
-          event.type === "play" ||
-          event.type === "loaded"
-        ) {
+        if (event.type === "playing" || event.type === "play" || event.type === "loaded") {
           playerRef.current?.pause();
         }
       }
@@ -425,8 +392,7 @@ export function LessonVideoPlayer({
         if (loadedMediaKey && loadedMediaKey !== requestedMediaKeyRef.current) {
           return;
         }
-        activeMediaKeyRef.current =
-          loadedMediaKey ?? requestedMediaKeyRef.current;
+        activeMediaKeyRef.current = loadedMediaKey ?? requestedMediaKeyRef.current;
         setShowEndScreen(false);
         setAutoplayCancelled(false);
         const snapshot = playerRef.current?.getSnapshot();
@@ -443,14 +409,10 @@ export function LessonVideoPlayer({
         lastPersistedAtRef.current = null;
         applyingPlaybackPrefsRef.current = true;
         try {
-          playerRef.current?.setPlaybackRate(
-            playerPrefsRef.current.playbackRate,
-          );
+          playerRef.current?.setPlaybackRate(playerPrefsRef.current.playbackRate);
           playerRef.current?.setVolume(playerPrefsRef.current.volume);
           playerRef.current?.setMuted(
-            restoreAutoplayRef.current !== null
-              ? true
-              : playerPrefsRef.current.muted,
+            restoreAutoplayRef.current !== null ? true : playerPrefsRef.current.muted,
           );
         } finally {
           applyingPlaybackPrefsRef.current = false;
@@ -468,19 +430,13 @@ export function LessonVideoPlayer({
           }
         }
         if (clampedPosition > 0 && actualDuration > 0) {
-          onProgressChange?.(
-            Math.max(
-              0,
-              Math.min(100, (clampedPosition / actualDuration) * 100),
-            ),
-          );
+          onProgressChange?.(Math.max(0, Math.min(100, (clampedPosition / actualDuration) * 100)));
         }
 
         if (captionsEnabledRef.current) {
           const preferredTrack =
-            snapshot?.media.textTracks.find(
-              (track) => track.language === "en",
-            ) ?? snapshot?.media.textTracks[0];
+            snapshot?.media.textTracks.find((track) => track.language === "en") ??
+            snapshot?.media.textTracks[0];
           if (preferredTrack) {
             playerRef.current?.selectTextTrack(preferredTrack.id);
           }
@@ -492,18 +448,9 @@ export function LessonVideoPlayer({
         tryFinishPlayingMiniPlayerRestore();
         if (event.detail.duration > 0) {
           onProgressChange?.(
-            Math.max(
-              0,
-              Math.min(
-                100,
-                (event.detail.currentTime / event.detail.duration) * 100,
-              ),
-            ),
+            Math.max(0, Math.min(100, (event.detail.currentTime / event.detail.duration) * 100)),
           );
-          if (
-            showEndScreen &&
-            event.detail.currentTime < event.detail.duration - 1
-          ) {
+          if (showEndScreen && event.detail.currentTime < event.detail.duration - 1) {
             setShowEndScreen(false);
           }
         }
@@ -598,8 +545,7 @@ export function LessonVideoPlayer({
     if (!onMinimize) return;
     const snapshot = playerRef.current?.getSnapshot();
     if (snapshot?.ui.fullscreen) return;
-    const currentTime =
-      snapshot?.media.currentTime ?? latestPositionRef.current;
+    const currentTime = snapshot?.media.currentTime ?? latestPositionRef.current;
     latestPositionRef.current = currentTime;
     persistResumePosition(true);
     onMinimize({
@@ -779,8 +725,7 @@ export function LessonVideoPlayer({
     };
 
     window.addEventListener("keydown", handleLessonNavigationShortcut);
-    return () =>
-      window.removeEventListener("keydown", handleLessonNavigationShortcut);
+    return () => window.removeEventListener("keydown", handleLessonNavigationShortcut);
   }, [canGoNext, canGoPrevious, onGoNext, onGoPrevious]);
 
   const fullscreenCoursePanelActive =
@@ -819,11 +764,11 @@ export function LessonVideoPlayer({
         ) : null}
         {presentation === "mini" && onMiniRestore ? (
           <>
-            <div className="min-[641px]:hidden absolute inset-0">
+            <div className="absolute inset-0 min-[641px]:hidden">
               <MiniPlayerRestoreControl mobile onRestore={onMiniRestore} />
             </div>
             <div
-              className="absolute inset-x-2 top-2 z-50 hidden min-[641px]:flex items-center justify-between pointer-events-none"
+              className="pointer-events-none absolute inset-x-2 top-2 z-50 hidden items-center justify-between min-[641px]:flex"
               data-learning-mini-player-gesture-ignore=""
             >
               <MiniPlayerRestoreControl onRestore={onMiniRestore} />
@@ -831,10 +776,7 @@ export function LessonVideoPlayer({
           </>
         ) : null}
         {presentation === "mini" && onMiniClose ? (
-          <VideoPlayerCloseButton
-            icon={<CloseIcon size={20} />}
-            onClose={onMiniClose}
-          />
+          <VideoPlayerCloseButton icon={<CloseIcon size={20} />} onClose={onMiniClose} />
         ) : null}
         <div className="pointer-events-none absolute inset-0 grid place-items-center p-6 text-center text-white">
           {isPending ? (
@@ -849,9 +791,7 @@ export function LessonVideoPlayer({
                       ? "Course access required"
                       : "Unable to play this video"}
                 </h2>
-                <p className="text-sm text-white/70">
-                  {playbackAccessError.message}
-                </p>
+                <p className="text-sm text-white/70">{playbackAccessError.message}</p>
               </div>
               {playbackAccessError.onAction ? (
                 <button
@@ -876,11 +816,7 @@ export function LessonVideoPlayer({
     return (
       <div
         role={playbackUnavailableMessage ? "alert" : "img"}
-        aria-label={
-          playbackUnavailableMessage
-            ? undefined
-            : `Preparing video for ${lessonTitle}`
-        }
+        aria-label={playbackUnavailableMessage ? undefined : `Preparing video for ${lessonTitle}`}
         className={cn(
           "relative aspect-video w-full overflow-hidden bg-black",
           presentation === "mini" ? "rounded-none" : "rounded-xl",
@@ -891,10 +827,7 @@ export function LessonVideoPlayer({
             src={media.thumbnailSrc}
             alt=""
             decoding="async"
-            className={cn(
-              "h-full w-full object-cover",
-              playbackUnavailableMessage && "opacity-30",
-            )}
+            className={cn("h-full w-full object-cover", playbackUnavailableMessage && "opacity-30")}
             onError={(event) => {
               event.currentTarget.hidden = true;
             }}
@@ -909,7 +842,7 @@ export function LessonVideoPlayer({
               <button
                 type="button"
                 onClick={onRetryPlayback}
-                className="inline-flex h-10 items-center justify-center rounded-[10px] border-none bg-(--accent) px-5 text-[0.82rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] cursor-pointer focus-visible:outline-2 focus-visible:outline-(--accent)"
+                className="inline-flex h-10 cursor-pointer items-center justify-center rounded-[10px] border-none bg-(--accent) px-5 text-[0.82rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) focus-visible:outline-2 focus-visible:outline-(--accent) active:scale-[0.98]"
               >
                 Retry
               </button>
@@ -929,16 +862,12 @@ export function LessonVideoPlayer({
       engine="shaka"
       engineFactory={engineFactory}
       autoPlay={
-        playbackSuspended
-          ? false
-          : autoPlayOnMediaChange || restoreAutoplayRef.current === true
+        playbackSuspended ? false : autoPlayOnMediaChange || restoreAutoplayRef.current === true
       }
       keyboardEnabled={presentation === "full" && !playbackSuspended}
       zoomEnabled={presentation === "full"}
       zoomOverflowBoundary={
-        presentation === "full" && mobileLandscapeFullscreen
-          ? "shell"
-          : "player"
+        presentation === "full" && mobileLandscapeFullscreen ? "shell" : "player"
       }
       ariaLabel={`Lesson video player for ${lessonTitle}`}
       theaterMode={theaterMode}
@@ -951,28 +880,21 @@ export function LessonVideoPlayer({
       keepPosterVisibleUntilFirstPlay
       onEvent={handleEvent}
       onErrorOverlayClose={
-        presentation === "mini"
-          ? onMiniClose
-          : onMinimize
-            ? minimizePlayerFromControl
-            : undefined
+        presentation === "mini" ? onMiniClose : onMinimize ? minimizePlayerFromControl : undefined
       }
       lockLandscapeOnFullscreen
       mediaProps={{
         muted: restoreAutoplayRef.current !== null ? true : muted,
       }}
       className={cn(
-        presentation === "full" &&
-          "touch-pan-x touch-pinch-zoom min-[641px]:touch-pan-y",
+        presentation === "full" && "touch-pan-x touch-pinch-zoom min-[641px]:touch-pan-y",
         presentation === "mini"
           ? "!rounded-none"
           : fullscreenCoursePanelActive
             ? "flex h-full items-center justify-start overflow-hidden bg-black"
             : undefined,
       )}
-      data-learning-player-controls-suppressed={
-        minimizeGesture.controlsSuppressed ? "" : undefined
-      }
+      data-learning-player-controls-suppressed={minimizeGesture.controlsSuppressed ? "" : undefined}
       data-learning-player-motion-surface=""
       style={playerShellStyle}
       {...(presentation === "full" ? minimizeGesture.handlers : {})}
@@ -1032,9 +954,7 @@ export function LessonVideoPlayer({
             onGoNext={onGoNext}
             onGoPrevious={onGoPrevious}
             onMinimize={onMinimize ? minimizePlayerFromControl : undefined}
-            onMobileLandscapeFullscreenChange={
-              handleMobileLandscapeFullscreenChange
-            }
+            onMobileLandscapeFullscreenChange={handleMobileLandscapeFullscreenChange}
           />
         )
       }
@@ -1045,9 +965,7 @@ export function LessonVideoPlayer({
             {showCompletionOverlay && showEndScreen ? (
               <LessonEndScreenOverlay
                 nextLesson={
-                  canGoNext
-                    ? (nextLessonInfo ?? { id: 0, title: "Next Lecture" })
-                    : undefined
+                  canGoNext ? (nextLessonInfo ?? { id: 0, title: "Next Lecture" }) : undefined
                 }
                 autoplayEnabled={autoplayEnabled && !autoplayCancelled}
                 onGoNext={handleGoNextFromEndScreen}
@@ -1060,14 +978,10 @@ export function LessonVideoPlayer({
         ) : undefined
       }
       playbackFeedback={
-        presentation === "mini" || minimizeGesture.controlsSuppressed
-          ? false
-          : undefined
+        presentation === "mini" || minimizeGesture.controlsSuppressed ? false : undefined
       }
       bufferingIndicator={
-        presentation === "mini" ? (
-          <LearningMiniPlayerBufferingIndicator />
-        ) : undefined
+        presentation === "mini" ? <LearningMiniPlayerBufferingIndicator /> : undefined
       }
     />
   );

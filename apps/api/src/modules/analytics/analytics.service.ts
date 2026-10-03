@@ -16,10 +16,7 @@ import type { EnrollmentService } from "../commerce/enrollments/enrollment.servi
 import type { StudentsService } from "../students/students.service.ts";
 import type { CourseService } from "../courses/course/course.service.ts";
 import type { LearningProgressService } from "../learning-progress/learning-progress.service.ts";
-import type {
-  AnalyticsActor,
-  AnalyticsDashboardScope,
-} from "./analytics.types.ts";
+import type { AnalyticsActor, AnalyticsDashboardScope } from "./analytics.types.ts";
 import { isAdmin } from "./analytics.types.ts";
 
 export interface AnalyticsServiceOptions {
@@ -66,12 +63,8 @@ interface EnrollmentActivityWindow {
 }
 
 function resolveDashboardDateRanges(now = new Date()) {
-  const currentMonthFrom = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  );
-  const previousMonthFrom = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1),
-  );
+  const currentMonthFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const previousMonthFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
   const previousMonthTo = new Date(currentMonthFrom.getTime() - 1);
 
   const activeCurrentFrom = new Date(now.getTime() - 7 * DAY_MS);
@@ -101,8 +94,7 @@ function kpi(value: number, previousValue: number): AnalyticsKpi {
 
 function resolveDateRange(query: AnalyticsFilterQuery) {
   const to = query.to ?? new Date();
-  const from =
-    query.from ?? new Date(to.getTime() - DEFAULT_RANGE_DAYS * DAY_MS);
+  const from = query.from ?? new Date(to.getTime() - DEFAULT_RANGE_DAYS * DAY_MS);
   const spanMs = Math.max(to.getTime() - from.getTime(), DAY_MS);
   const prevTo = from;
   const prevFrom = new Date(from.getTime() - spanMs);
@@ -111,11 +103,7 @@ function resolveDateRange(query: AnalyticsFilterQuery) {
 
 function resolveDashboardRevenueRange(range: DashboardRange, now = new Date()) {
   const days = DASHBOARD_RANGE_DAYS[range];
-  const currentDayStart = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-  );
+  const currentDayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const from = new Date(currentDayStart - (days - 1) * DAY_MS);
   const to = now;
   const prevTo = from;
@@ -123,16 +111,10 @@ function resolveDashboardRevenueRange(range: DashboardRange, now = new Date()) {
   return { from, to, prevFrom, prevTo, days };
 }
 
-function resolveEnrollmentActivityWindow(
-  now = new Date(),
-): EnrollmentActivityWindow {
-  const to = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
-  );
+function resolveEnrollmentActivityWindow(now = new Date()): EnrollmentActivityWindow {
+  const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
   const from = new Date(to.getTime() - ENROLLMENT_ACTIVITY_DAYS * DAY_MS);
-  const previousFrom = new Date(
-    from.getTime() - ENROLLMENT_ACTIVITY_DAYS * DAY_MS,
-  );
+  const previousFrom = new Date(from.getTime() - ENROLLMENT_ACTIVITY_DAYS * DAY_MS);
 
   return { from, to, previousFrom, previousTo: from };
 }
@@ -142,24 +124,16 @@ function resolveInclusiveEnd(exclusiveEnd: Date) {
 }
 
 function createEnrollmentActivityBucketWindow(from: Date) {
-  return Array.from(
-    { length: ENROLLMENT_ACTIVITY_BUCKET_COUNT },
-    (_, index) => {
-      const start = new Date(
-        from.getTime() +
-          index * ENROLLMENT_ACTIVITY_BUCKET_HOURS * 60 * 60 * 1000,
-      );
-      const end = new Date(
-        start.getTime() + ENROLLMENT_ACTIVITY_BUCKET_HOURS * 60 * 60 * 1000,
-      );
-      return { start, end };
-    },
-  );
+  return Array.from({ length: ENROLLMENT_ACTIVITY_BUCKET_COUNT }, (_, index) => {
+    const start = new Date(
+      from.getTime() + index * ENROLLMENT_ACTIVITY_BUCKET_HOURS * 60 * 60 * 1000,
+    );
+    const end = new Date(start.getTime() + ENROLLMENT_ACTIVITY_BUCKET_HOURS * 60 * 60 * 1000);
+    return { start, end };
+  });
 }
 
-function emptyLearningActivity(
-  window: EnrollmentActivityWindow,
-): DashboardLearningActivity {
+function emptyLearningActivity(window: EnrollmentActivityWindow): DashboardLearningActivity {
   return {
     averageCourseProgress: { value: 0 },
     courseCompletionRate: { value: 0 },
@@ -172,13 +146,11 @@ function emptyLearningActivity(
       to: window.to.toISOString(),
       bucketHours: ENROLLMENT_ACTIVITY_BUCKET_HOURS,
       timeZone: "UTC",
-      buckets: createEnrollmentActivityBucketWindow(window.from).map(
-        ({ start, end }) => ({
-          start: start.toISOString(),
-          end: end.toISOString(),
-          value: 0,
-        }),
-      ),
+      buckets: createEnrollmentActivityBucketWindow(window.from).map(({ start, end }) => ({
+        start: start.toISOString(),
+        end: end.toISOString(),
+        value: 0,
+      })),
     },
   };
 }
@@ -188,14 +160,8 @@ function normalizeRevenueTrend(
   from: Date,
   bucketCount: number,
 ) {
-  const valuesByDate = new Map(
-    points.map((point) => [point.date, point.value]),
-  );
-  const start = Date.UTC(
-    from.getUTCFullYear(),
-    from.getUTCMonth(),
-    from.getUTCDate(),
-  );
+  const valuesByDate = new Map(points.map((point) => [point.date, point.value]));
+  const start = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
   const trend: Array<{ date: string; value: number }> = [];
 
   for (let index = 0; index < bucketCount; index += 1) {
@@ -246,9 +212,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
             title: course.title,
             status: course.status,
             createdAt: course.created_at.toISOString(),
-            publishedAt: course.published_at
-              ? course.published_at.toISOString()
-              : null,
+            publishedAt: course.published_at ? course.published_at.toISOString() : null,
           },
         ],
         isPlatformWide: false,
@@ -284,14 +248,10 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     };
   }
 
-  async function resolveDashboardCourses(
-    actor: AnalyticsActor,
-  ): Promise<DashboardCourse[]> {
+  async function resolveDashboardCourses(actor: AnalyticsActor): Promise<DashboardCourse[]> {
     const mine = await courseService.listMyCourses(actor.id, actor.roles);
     return mine.courses
-      .filter(
-        (course) => course.status === "published" || course.status === "draft",
-      )
+      .filter((course) => course.status === "published" || course.status === "draft")
       .map((course) => ({
         id: course.id,
         title: course.title,
@@ -301,9 +261,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       }));
   }
 
-  async function resolveDashboardAnalyticsCourseIds(
-    actor: AnalyticsActor,
-  ): Promise<string[]> {
+  async function resolveDashboardAnalyticsCourseIds(actor: AnalyticsActor): Promise<string[]> {
     const scoped = await courseService.listMyCourseScope(actor.id, actor.roles);
 
     // Preserve the existing course-scoped analytics eligibility rule while
@@ -313,9 +271,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       .map((course) => course.id);
   }
 
-  async function buildYourCourses(
-    courses: DashboardCourse[],
-  ): Promise<DashboardYourCourse[]> {
+  async function buildYourCourses(courses: DashboardCourse[]): Promise<DashboardYourCourse[]> {
     if (courses.length === 0) return [];
 
     const courseIds = courses.map((course) => course.id);
@@ -356,9 +312,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const enrollmentByCourse = new Map(
       topByEnrollment.map((row) => [row.courseId, row.enrollmentCount]),
     );
-    const titleById = new Map(
-      courses.map((course) => [course.id, course.title]),
-    );
+    const titleById = new Map(courses.map((course) => [course.id, course.title]));
     const targetIds =
       topByEnrollment.length > 0
         ? topByEnrollment.map((row) => row.courseId)
@@ -491,10 +445,8 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     ]);
 
     const currency = rawStatsCurrent.currency;
-    const netRevenueCurrent =
-      rawStatsCurrent.grossPaid - rawStatsCurrent.refundedAgainstPaid;
-    const netRevenuePrev =
-      rawStatsPrev.grossPaid - rawStatsPrev.refundedAgainstPaid;
+    const netRevenueCurrent = rawStatsCurrent.grossPaid - rawStatsCurrent.refundedAgainstPaid;
+    const netRevenuePrev = rawStatsPrev.grossPaid - rawStatsPrev.refundedAgainstPaid;
 
     const [revenueTrend, coursePerformance] = await Promise.all([
       orderService.getRevenueTrend(scope, {
@@ -503,14 +455,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         to,
         currency,
       }),
-      buildCoursePerformance(
-        scope,
-        courses,
-        courseIdFilter,
-        from,
-        to,
-        currency,
-      ),
+      buildCoursePerformance(scope, courses, courseIdFilter, from, to, currency),
     ]);
 
     // `started` counts anyone active in the window regardless of when they
@@ -563,8 +508,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     courseIdFilter: string | string[] | undefined,
     range: DashboardRange,
   ) {
-    const { from, to, prevFrom, prevTo, days } =
-      resolveDashboardRevenueRange(range);
+    const { from, to, prevFrom, prevTo, days } = resolveDashboardRevenueRange(range);
     const current = await orderService.getRawStatsForCourses(scope, {
       courseId: courseIdFilter,
       from,
@@ -614,38 +558,35 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     courseIdFilter: string | string[] | undefined,
     window: EnrollmentActivityWindow,
   ): Promise<DashboardLearningActivity> {
-    const [progress, currentEnrollments, previousEnrollments, activityRows] =
-      await Promise.all([
-        learningProgressService.getAverageProgressAndCompletionRate({
-          courseId: courseIdFilter,
-        }),
-        enrollmentService.getEnrollmentStats({
-          courseId: courseIdFilter,
-          from: window.from,
-          to: resolveInclusiveEnd(window.to),
-        }),
-        enrollmentService.getEnrollmentStats({
-          courseId: courseIdFilter,
-          from: window.previousFrom,
-          to: resolveInclusiveEnd(window.previousTo),
-        }),
-        enrollmentService.getEnrollmentActivityBuckets({
-          courseId: courseIdFilter,
-          from: window.from,
-          to: window.to,
-        }),
-      ]);
+    const [progress, currentEnrollments, previousEnrollments, activityRows] = await Promise.all([
+      learningProgressService.getAverageProgressAndCompletionRate({
+        courseId: courseIdFilter,
+      }),
+      enrollmentService.getEnrollmentStats({
+        courseId: courseIdFilter,
+        from: window.from,
+        to: resolveInclusiveEnd(window.to),
+      }),
+      enrollmentService.getEnrollmentStats({
+        courseId: courseIdFilter,
+        from: window.previousFrom,
+        to: resolveInclusiveEnd(window.previousTo),
+      }),
+      enrollmentService.getEnrollmentActivityBuckets({
+        courseId: courseIdFilter,
+        from: window.from,
+        to: window.to,
+      }),
+    ]);
 
     const activityByStart = new Map(
       activityRows.map((row) => [row.start.toISOString(), row.value]),
     );
-    const buckets = createEnrollmentActivityBucketWindow(window.from).map(
-      ({ start, end }) => ({
-        start: start.toISOString(),
-        end: end.toISOString(),
-        value: activityByStart.get(start.toISOString()) ?? 0,
-      }),
-    );
+    const buckets = createEnrollmentActivityBucketWindow(window.from).map(({ start, end }) => ({
+      start: start.toISOString(),
+      end: end.toISOString(),
+      value: activityByStart.get(start.toISOString()) ?? 0,
+    }));
 
     return {
       averageCourseProgress: { value: progress.averageProgressPercent },
@@ -673,8 +614,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     range: DashboardRange = "30d",
   ): Promise<DashboardSummaryResponse> {
     const dashboardNow = new Date();
-    const enrollmentActivityWindow =
-      resolveEnrollmentActivityWindow(dashboardNow);
+    const enrollmentActivityWindow = resolveEnrollmentActivityWindow(dashboardNow);
     const dashboardCourses = await resolveDashboardCourses(actor);
     const { courseIds, isPlatformWide } =
       dashboardScope === "platform"
@@ -724,17 +664,16 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       activePreviousTo,
     } = resolveDashboardDateRanges(dashboardNow);
 
-    const [currentRevenue, revenueOverview, learningActivity, yourCourses] =
-      await Promise.all([
-        orderService.getRawStatsForCourses(scope, {
-          courseId: courseIdFilter,
-          from: currentMonthFrom,
-          to: now,
-        }),
-        buildRevenueOverview(scope, courseIdFilter, range),
-        buildLearningActivity(courseIdFilter, enrollmentActivityWindow),
-        buildYourCourses(dashboardCourses),
-      ]);
+    const [currentRevenue, revenueOverview, learningActivity, yourCourses] = await Promise.all([
+      orderService.getRawStatsForCourses(scope, {
+        courseId: courseIdFilter,
+        from: currentMonthFrom,
+        to: now,
+      }),
+      buildRevenueOverview(scope, courseIdFilter, range),
+      buildLearningActivity(courseIdFilter, enrollmentActivityWindow),
+      buildYourCourses(dashboardCourses),
+    ]);
 
     const [
       previousRevenue,
@@ -796,9 +735,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     };
   }
 
-  function buildEmptyResponse(
-    query: AnalyticsFilterQuery,
-  ): AnalyticsOverviewResponse {
+  function buildEmptyResponse(query: AnalyticsFilterQuery): AnalyticsOverviewResponse {
     const emptyKpi = kpi(0, 0);
     return {
       scope: {

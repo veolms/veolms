@@ -43,33 +43,26 @@ export function StudentDetailsPage({
     .toUpperCase();
 
   const handleCopyEmail = () => {
-    if (
-      student?.email &&
-      typeof navigator !== "undefined" &&
-      navigator.clipboard
-    ) {
+    if (student?.email && typeof navigator !== "undefined" && navigator.clipboard) {
       void navigator.clipboard.writeText(student.email);
       setNotice?.(`Email ${student.email} copied to clipboard.`);
     }
   };
 
   return (
-    <div
-      className="w-full min-w-0 flex flex-col font-sans"
-      aria-labelledby="student-details-title"
-    >
+    <div className="flex w-full min-w-0 flex-col font-sans" aria-labelledby="student-details-title">
       {/* Top back navigation bar */}
       <nav className="mb-6 flex items-center gap-3">
         <button
           type="button"
           onClick={() => onNavigatePage?.("/students")}
-          className="group inline-flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface) px-3.5 py-2 text-xs md:text-sm font-semibold text-(--text-secondary) hover:border-(--border) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+          className="group inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface) px-3.5 py-2 text-xs font-semibold text-(--text-secondary) transition-colors hover:border-(--border) hover:bg-(--hover) hover:text-(--text) md:text-sm"
           style={{ boxShadow: "var(--card-shadow)" }}
         >
           <ArrowLeft
             size={16}
             weight="bold"
-            className="transition-transform group-hover:-translate-x-0.5 text-(--muted) group-hover:text-(--text)"
+            className="text-(--muted) transition-transform group-hover:-translate-x-0.5 group-hover:text-(--text)"
           />
           <span>Back to Students</span>
         </button>
@@ -80,29 +73,27 @@ export function StudentDetailsPage({
       ) : isError || !student ? (
         // Error or Not Found state
         <div
-          className="flex flex-col items-center justify-center rounded-[18px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) p-10 sm:p-12 text-center"
+          className="flex flex-col items-center justify-center rounded-[18px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) p-10 text-center sm:p-12"
           style={{ boxShadow: "var(--card-shadow)" }}
         >
-          <WarningCircle size={40} className="text-rose-400 mb-3" />
-          <h2 className="text-lg font-bold text-(--text)">
-            Student Profile Not Found
-          </h2>
-          <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted)">
-            Could not load learner profile for @{username}. The student might
-            not exist or may have been removed.
+          <WarningCircle size={40} className="mb-3 text-rose-400" />
+          <h2 className="text-lg font-bold text-(--text)">Student Profile Not Found</h2>
+          <p className="mt-1 max-w-sm text-xs text-(--muted) md:text-sm">
+            Could not load learner profile for @{username}. The student might not exist or may have
+            been removed.
           </p>
           <div className="mt-5 flex gap-3">
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface) px-4 py-2 text-xs font-semibold text-(--text) hover:bg-(--hover) cursor-pointer"
+              className="cursor-pointer rounded-xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface) px-4 py-2 text-xs font-semibold text-(--text) hover:bg-(--hover)"
             >
               Retry
             </button>
             <button
               type="button"
               onClick={() => onNavigatePage?.("/students")}
-              className="rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-md hover:opacity-90 cursor-pointer"
+              className="cursor-pointer rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-md hover:opacity-90"
             >
               Back to Students List
             </button>
@@ -113,7 +104,7 @@ export function StudentDetailsPage({
         <div className="space-y-6">
           {/* Profile Card with Quiz-style Background Gradient */}
           <section
-            className="relative overflow-hidden rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[linear-gradient(120deg,color-mix(in_srgb,var(--accent)_18%,var(--surface)),var(--surface)_55%,color-mix(in_srgb,var(--canvas)_80%,var(--surface)))] p-4 sm:p-8"
+            className="relative overflow-hidden rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[linear-gradient(120deg,color-mix(in_srgb,var(--accent)_18%,var(--surface)),var(--surface)_55%,color-mix(in_srgb,var(--canvas)_80%,var(--surface)))] p-4 sm:rounded-[24px] sm:p-8"
             style={{ boxShadow: "var(--card-shadow)" }}
           >
             <div
@@ -121,19 +112,19 @@ export function StudentDetailsPage({
               aria-hidden="true"
             />
 
-            <div className="relative z-10 flex flex-col sm:flex-row sm:items-start justify-between gap-6">
+            <div className="relative z-10 flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
               {/* Left Identity Details */}
-              <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 min-w-0 flex-1">
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-4 sm:flex-row sm:gap-6">
                 {student.avatarUrl ? (
                   <img
                     src={student.avatarUrl}
                     alt={student.displayName}
                     referrerPolicy="no-referrer"
-                    className="h-20 w-20 sm:h-24 sm:w-24 shrink-0 rounded-2xl object-cover border border-[color-mix(in_srgb,var(--text)_12%,transparent)] shadow-sm"
+                    className="h-20 w-20 shrink-0 rounded-2xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] object-cover shadow-sm sm:h-24 sm:w-24"
                   />
                 ) : (
                   <div
-                    className="flex h-20 w-20 sm:h-24 sm:w-24 shrink-0 items-center justify-center rounded-2xl font-black text-2xl sm:text-3xl tracking-tight text-(--accent) bg-(--accent)/15 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] shadow-sm"
+                    className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--accent)/15 text-2xl font-black tracking-tight text-(--accent) shadow-sm sm:h-24 sm:w-24 sm:text-3xl"
                     aria-hidden="true"
                   >
                     {initials}
@@ -144,18 +135,18 @@ export function StudentDetailsPage({
                   <div className="flex flex-wrap items-center gap-2.5">
                     <h1
                       id="student-details-title"
-                      className="text-2xl sm:text-3xl font-bold text-(--text) tracking-tight leading-tight"
+                      className="text-2xl leading-tight font-bold tracking-tight text-(--text) sm:text-3xl"
                     >
                       {student.displayName}
                     </h1>
-                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold text-(--accent) bg-(--accent)/12 border border-(--accent)/20 uppercase tracking-wider">
+                    <span className="inline-flex items-center rounded-full border border-(--accent)/20 bg-(--accent)/12 px-2.5 py-0.5 text-[11px] font-bold tracking-wider text-(--accent) uppercase">
                       Learner
                     </span>
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold border ${
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
                         (metrics?.enrolledCoursesCount ?? 0) > 0
-                          ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                          : "bg-zinc-500/10 text-(--muted) border-zinc-500/20"
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-500"
+                          : "border-zinc-500/20 bg-zinc-500/10 text-(--muted)"
                       }`}
                     >
                       <span
@@ -166,43 +157,33 @@ export function StudentDetailsPage({
                         }`}
                       />
                       <span>
-                        {(metrics?.enrolledCoursesCount ?? 0) > 0
-                          ? "Active Learner"
-                          : "Inactive"}
+                        {(metrics?.enrolledCoursesCount ?? 0) > 0 ? "Active Learner" : "Inactive"}
                       </span>
                     </span>
                   </div>
 
-                  <p className="text-xs sm:text-sm text-(--muted) font-mono mt-1 font-medium">
+                  <p className="mt-1 font-mono text-xs font-medium text-(--muted) sm:text-sm">
                     @{student.username}
                   </p>
 
                   {student.bio ? (
-                    <p className="mt-3 text-xs sm:text-sm text-(--text-secondary) leading-relaxed max-w-2xl">
+                    <p className="mt-3 max-w-2xl text-xs leading-relaxed text-(--text-secondary) sm:text-sm">
                       {student.bio}
                     </p>
                   ) : (
-                    <p className="mt-2 text-xs text-(--muted) italic">
-                      No bio provided.
-                    </p>
+                    <p className="mt-2 text-xs text-(--muted) italic">No bio provided.</p>
                   )}
 
                   {/* Metadata Badges: Joined, Email, Phone */}
-                  <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs sm:gap-3">
                     <div className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--muted)">
-                      <CalendarBlank
-                        size={14}
-                        className="shrink-0 text-(--accent)"
-                      />
+                      <CalendarBlank size={14} className="shrink-0 text-(--accent)" />
                       <span>
                         Joined{" "}
-                        {new Date(student.joinedAt).toLocaleDateString(
-                          undefined,
-                          {
-                            month: "short",
-                            year: "numeric",
-                          },
-                        )}
+                        {new Date(student.joinedAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          year: "numeric",
+                        })}
                       </span>
                     </div>
 
@@ -210,25 +191,18 @@ export function StudentDetailsPage({
                       <button
                         type="button"
                         onClick={handleCopyEmail}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--text-secondary) hover:text-(--accent) hover:border-(--accent) transition-colors cursor-pointer"
+                        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--text-secondary) transition-colors hover:border-(--accent) hover:text-(--accent)"
                         title="Click to copy email"
                       >
-                        <EnvelopeSimple
-                          size={14}
-                          className="shrink-0 text-(--muted)"
-                        />
-                        <span className="font-mono text-[11.5px]">
-                          {student.email}
-                        </span>
+                        <EnvelopeSimple size={14} className="shrink-0 text-(--muted)" />
+                        <span className="font-mono text-[11.5px]">{student.email}</span>
                       </button>
                     )}
 
                     {student.phoneNo && (
                       <div className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_70%,transparent)] px-2.5 py-1 font-medium text-(--muted)">
                         <Phone size={14} className="shrink-0" />
-                        <span className="font-mono text-[11.5px]">
-                          {student.phoneNo}
-                        </span>
+                        <span className="font-mono text-[11.5px]">{student.phoneNo}</span>
                       </div>
                     )}
                   </div>
@@ -236,13 +210,13 @@ export function StudentDetailsPage({
               </div>
 
               {/* Right: Social links */}
-              <div className="flex items-center gap-2 sm:self-start shrink-0 pt-2 sm:pt-0">
+              <div className="flex shrink-0 items-center gap-2 pt-2 sm:self-start sm:pt-0">
                 {student.socials?.githubUrl && (
                   <a
                     href={student.socials.githubUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_75%,transparent)] text-(--muted) hover:text-(--accent) hover:border-(--accent) transition-colors"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_75%,transparent)] text-(--muted) transition-colors hover:border-(--accent) hover:text-(--accent)"
                     title="GitHub Profile"
                   >
                     <GithubLogo size={18} weight="duotone" />
@@ -253,7 +227,7 @@ export function StudentDetailsPage({
                     href={student.socials.linkedinUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_75%,transparent)] text-(--muted) hover:text-(--accent) hover:border-(--accent) transition-colors"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_75%,transparent)] text-(--muted) transition-colors hover:border-(--accent) hover:text-(--accent)"
                     title="LinkedIn Profile"
                   >
                     <LinkedinLogo size={18} weight="duotone" />
@@ -264,7 +238,7 @@ export function StudentDetailsPage({
                     href={student.socials.websiteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_75%,transparent)] text-(--muted) hover:text-(--accent) hover:border-(--accent) transition-colors"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_75%,transparent)] text-(--muted) transition-colors hover:border-(--accent) hover:text-(--accent)"
                     title="Personal Website"
                   >
                     <Globe size={18} weight="duotone" />
@@ -277,22 +251,22 @@ export function StudentDetailsPage({
           {/* Student Overview Metrics */}
           <section
             aria-label="Student Learning Overview"
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5"
+            className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3.5 lg:grid-cols-5"
           >
             {/* Card 1: Enrolled */}
             <div
-              className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-4.5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
+              className="rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 transition-all duration-200 hover:shadow-(--card-hover-shadow) sm:rounded-[16px] sm:p-4.5"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
               <div className="flex items-center justify-between gap-1.5">
-                <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+                <p className="truncate text-[0.7rem] font-semibold tracking-wide text-(--muted) sm:text-xs">
                   Enrolled
                 </p>
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
                   <GraduationCap size={16} weight="duotone" />
                 </span>
               </div>
-              <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+              <p className="mt-2 text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
                 {metrics?.enrolledCoursesCount ?? 0}
               </p>
               <p className="mt-0.5 text-[11px] text-(--muted)">Total courses</p>
@@ -300,95 +274,87 @@ export function StudentDetailsPage({
 
             {/* Card 2: Completed */}
             <div
-              className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-4.5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
+              className="rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 transition-all duration-200 hover:shadow-(--card-hover-shadow) sm:rounded-[16px] sm:p-4.5"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
               <div className="flex items-center justify-between gap-1.5">
-                <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+                <p className="truncate text-[0.7rem] font-semibold tracking-wide text-(--muted) sm:text-xs">
                   Completed
                 </p>
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-500">
                   <CheckCircle size={16} weight="duotone" />
                 </span>
               </div>
-              <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+              <p className="mt-2 text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
                 {metrics?.completedCoursesCount ?? 0}
               </p>
-              <p className="mt-0.5 text-[11px] text-(--muted)">
-                Finished courses
-              </p>
+              <p className="mt-0.5 text-[11px] text-(--muted)">Finished courses</p>
             </div>
 
             {/* Card 3: In Progress */}
             <div
-              className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-4.5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
+              className="rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 transition-all duration-200 hover:shadow-(--card-hover-shadow) sm:rounded-[16px] sm:p-4.5"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
               <div className="flex items-center justify-between gap-1.5">
-                <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+                <p className="truncate text-[0.7rem] font-semibold tracking-wide text-(--muted) sm:text-xs">
                   In Progress
                 </p>
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/12 text-amber-500">
                   <Clock size={16} weight="duotone" />
                 </span>
               </div>
-              <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+              <p className="mt-2 text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
                 {metrics?.inProgressCoursesCount ?? 0}
               </p>
-              <p className="mt-0.5 text-[11px] text-(--muted)">
-                Active progress
-              </p>
+              <p className="mt-0.5 text-[11px] text-(--muted)">Active progress</p>
             </div>
 
             {/* Card 4: Lessons Done */}
             <div
-              className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-4.5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
+              className="rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 transition-all duration-200 hover:shadow-(--card-hover-shadow) sm:rounded-[16px] sm:p-4.5"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
               <div className="flex items-center justify-between gap-1.5">
-                <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+                <p className="truncate text-[0.7rem] font-semibold tracking-wide text-(--muted) sm:text-xs">
                   Lessons Done
                 </p>
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
                   <BookOpen size={16} weight="duotone" />
                 </span>
               </div>
-              <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+              <p className="mt-2 text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
                 {metrics?.totalLessonsCompleted ?? 0}
               </p>
-              <p className="mt-0.5 text-[11px] text-(--muted)">
-                Total completed
-              </p>
+              <p className="mt-0.5 text-[11px] text-(--muted)">Total completed</p>
             </div>
 
             {/* Card 5: Avg Progress */}
             <div
-              className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 sm:p-4.5 col-span-2 sm:col-span-1 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
+              className="col-span-2 rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-3 transition-all duration-200 hover:shadow-(--card-hover-shadow) sm:col-span-1 sm:rounded-[16px] sm:p-4.5"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
               <div className="flex items-center justify-between gap-1.5">
-                <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+                <p className="truncate text-[0.7rem] font-semibold tracking-wide text-(--muted) sm:text-xs">
                   Avg Progress
                 </p>
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
                   <TrendUp size={16} weight="duotone" />
                 </span>
               </div>
-              <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+              <p className="mt-2 text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
                 {metrics?.averageProgressPercent ?? 0}%
               </p>
-              <p className="mt-0.5 text-[11px] text-(--muted)">
-                Overall learning rate
-              </p>
+              <p className="mt-0.5 text-[11px] text-(--muted)">Overall learning rate</p>
             </div>
           </section>
 
           {/* Enrolled courses list */}
           <section aria-labelledby="enrolled-courses-heading">
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex items-center justify-between">
               <h2
                 id="enrolled-courses-heading"
-                className="text-lg sm:text-xl font-bold text-(--text) tracking-tight"
+                className="text-lg font-bold tracking-tight text-(--text) sm:text-xl"
               >
                 Enrolled Courses ({courses.length})
               </h2>
@@ -407,19 +373,17 @@ export function StudentDetailsPage({
             ) : (
               /* Clean Empty State Card */
               <div
-                className="flex flex-col items-center justify-center rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-8 sm:p-10 text-center"
+                className="flex flex-col items-center justify-center rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-8 text-center sm:p-10"
                 style={{ boxShadow: "var(--card-shadow)" }}
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-(--accent)/12 text-(--accent) mb-3">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-(--accent)/12 text-(--accent)">
                   <GraduationCap size={26} weight="duotone" />
                 </div>
 
-                <h3 className="text-base font-bold text-(--text)">
-                  No courses enrolled yet
-                </h3>
-                <p className="mt-1 text-xs md:text-sm text-(--muted) max-w-sm leading-relaxed">
-                  This student has registered an account but has not yet
-                  enrolled in any academy courses.
+                <h3 className="text-base font-bold text-(--text)">No courses enrolled yet</h3>
+                <p className="mt-1 max-w-sm text-xs leading-relaxed text-(--muted) md:text-sm">
+                  This student has registered an account but has not yet enrolled in any academy
+                  courses.
                 </p>
               </div>
             )}
@@ -435,10 +399,7 @@ interface CourseProgressCardProps {
   onNavigatePage?: NavigateTo;
 }
 
-function CourseProgressCard({
-  course,
-  onNavigatePage,
-}: CourseProgressCardProps) {
+function CourseProgressCard({ course, onNavigatePage }: CourseProgressCardProps) {
   const isCompleted = course.progressPercent >= 100;
 
   const handleOpenCourse = () => {
@@ -447,12 +408,12 @@ function CourseProgressCard({
 
   return (
     <article
-      className="group rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-4 sm:p-5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
+      className="group rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-4 transition-all duration-200 hover:shadow-(--card-hover-shadow) sm:p-5"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         {/* Left: Thumbnail + Title + Meta */}
-        <div className="flex items-start gap-3.5 sm:gap-4 min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-start gap-3.5 sm:gap-4">
           {course.courseThumbnailUrl ? (
             <img
               src={course.courseThumbnailUrl}
@@ -461,10 +422,10 @@ function CourseProgressCard({
               height={64}
               loading="lazy"
               decoding="async"
-              className="h-16 w-24 shrink-0 rounded-xl object-cover border border-(--border) shadow-xs"
+              className="h-16 w-24 shrink-0 rounded-xl border border-(--border) object-cover shadow-xs"
             />
           ) : (
-            <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-xl font-bold text-xs text-(--accent) bg-(--accent)/10 border border-(--border) shadow-xs">
+            <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-xl border border-(--border) bg-(--accent)/10 text-xs font-bold text-(--accent) shadow-xs">
               <BookOpen size={24} weight="duotone" />
             </div>
           )}
@@ -472,22 +433,20 @@ function CourseProgressCard({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3
-                className="text-base font-bold text-(--text) hover:text-(--accent) transition-colors cursor-pointer"
+                className="cursor-pointer text-base font-bold text-(--text) transition-colors hover:text-(--accent)"
                 onClick={handleOpenCourse}
               >
                 {course.courseTitle}
               </h3>
               {course.difficulty && (
-                <span className="rounded-md bg-(--surface-strong) px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-(--muted) border border-(--border)">
+                <span className="rounded-md border border-(--border) bg-(--surface-strong) px-2 py-0.5 text-[10px] font-bold tracking-wider text-(--muted) uppercase">
                   {course.difficulty}
                 </span>
               )}
             </div>
 
             {course.courseDescription && (
-              <p className="mt-1 line-clamp-1 text-xs text-(--muted)">
-                {course.courseDescription}
-              </p>
+              <p className="mt-1 line-clamp-1 text-xs text-(--muted)">{course.courseDescription}</p>
             )}
 
             <div className="mt-2.5 flex flex-wrap items-center gap-3 text-xs text-(--muted)">
@@ -502,22 +461,17 @@ function CourseProgressCard({
               <span>•</span>
               <span>
                 Source:{" "}
-                <span className="capitalize">
-                  {course.enrollmentSource.replace("_", " ")}
-                </span>
+                <span className="capitalize">{course.enrollmentSource.replace("_", " ")}</span>
               </span>
               {course.lastAccessedAt && (
                 <>
                   <span>•</span>
                   <span>
                     Last active{" "}
-                    {new Date(course.lastAccessedAt).toLocaleDateString(
-                      undefined,
-                      {
-                        month: "short",
-                        day: "numeric",
-                      },
-                    )}
+                    {new Date(course.lastAccessedAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })}
                   </span>
                 </>
               )}
@@ -526,29 +480,26 @@ function CourseProgressCard({
         </div>
 
         {/* Right: Progress Meter & Action Button */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-(--border)/60">
+        <div className="flex shrink-0 flex-col items-start gap-4 border-t border-(--border)/60 pt-2 sm:flex-row sm:items-center md:border-t-0 md:pt-0">
           <div className="w-full sm:w-44">
-            <div className="flex items-center justify-between text-xs mb-1.5">
+            <div className="mb-1.5 flex items-center justify-between text-xs">
               <span className="text-[11px] text-(--muted)">
-                {course.completedLessonsCount} of {course.totalLessonsCount}{" "}
-                lessons
+                {course.completedLessonsCount} of {course.totalLessonsCount} lessons
               </span>
               <span
-                className={`font-bold font-mono text-xs ${
+                className={`font-mono text-xs font-bold ${
                   isCompleted ? "text-emerald-500" : "text-(--accent)"
                 }`}
               >
                 {course.progressPercent}%
               </span>
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-(--surface-strong) border border-(--border)/40">
+            <div className="h-2 w-full overflow-hidden rounded-full border border-(--border)/40 bg-(--surface-strong)">
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${Math.max(0, Math.min(100, course.progressPercent))}%`,
-                  background: isCompleted
-                    ? "var(--emerald-500, #10b981)"
-                    : "var(--accent)",
+                  background: isCompleted ? "var(--emerald-500, #10b981)" : "var(--accent)",
                 }}
               />
             </div>
@@ -557,7 +508,7 @@ function CourseProgressCard({
           <button
             type="button"
             onClick={handleOpenCourse}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface) px-3.5 py-2 text-xs font-semibold text-(--text-secondary) hover:bg-(--hover) hover:text-(--accent) hover:border-(--accent) transition-all cursor-pointer whitespace-nowrap shadow-xs"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface) px-3.5 py-2 text-xs font-semibold whitespace-nowrap text-(--text-secondary) shadow-xs transition-all hover:border-(--accent) hover:bg-(--hover) hover:text-(--accent)"
           >
             <span>View Course</span>
             <ArrowSquareOut size={14} weight="bold" />

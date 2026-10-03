@@ -13,12 +13,7 @@ export const MFA_CHALLENGE_PATH = "/mfa-setup?mfa=required";
 // Set this to false to restore authentication for learning routes.
 export const ALLOW_GUEST_LEARNING = true;
 
-const AUTH_FLOW_PATHS = new Set([
-  LOGIN_PATH,
-  "/register",
-  "/mfa-setup",
-  "/auth/callback",
-]);
+const AUTH_FLOW_PATHS = new Set([LOGIN_PATH, "/register", "/mfa-setup", "/auth/callback"]);
 
 const GUEST_LANDING_PATHS = new Set(["/"]);
 const RESERVED_PROFILE_PATHS = new Set([
@@ -74,14 +69,11 @@ export function isCourseAuthorPath(pathname: string): boolean {
     normalized === "/students" ||
     normalized.startsWith("/students/") ||
     normalized === "/quizzes/create" ||
-    (normalized.startsWith("/quizzes/") &&
-      !normalized.startsWith("/quizzes/attempt/"))
+    (normalized.startsWith("/quizzes/") && !normalized.startsWith("/quizzes/attempt/"))
   );
 }
 
-export function hasCourseAuthorRole(
-  roles: readonly string[] | null | undefined,
-): boolean {
+export function hasCourseAuthorRole(roles: readonly string[] | null | undefined): boolean {
   return normalizeRoles(roles).some((role) => CREATOR_ROLES.has(role));
 }
 
@@ -115,8 +107,7 @@ export function isPublicProfilePath(pathname: string): boolean {
   const match = /^\/([^/]+)$/.exec(path);
   return Boolean(
     match?.[1] &&
-    publicProfileUsernameParamsSchema.safeParse({ username: match[1] })
-      .success &&
+    publicProfileUsernameParamsSchema.safeParse({ username: match[1] }).success &&
     !RESERVED_PROFILE_PATHS.has(path.toLowerCase()),
   );
 }
@@ -156,9 +147,7 @@ export function requiresAcademyAuth(pathname: string): boolean {
   return !isPublicAcademyPath(path);
 }
 
-export function sanitizeReturnTo(
-  value: string | null | undefined,
-): string | null {
+export function sanitizeReturnTo(value: string | null | undefined): string | null {
   if (!value?.startsWith("/") || value.startsWith("//")) {
     return null;
   }
@@ -197,10 +186,7 @@ export interface SessionAccess {
   isSessionReady: boolean;
 }
 
-export function shouldBlockAcademyRender(
-  pathname: string,
-  access: SessionAccess,
-): boolean {
+export function shouldBlockAcademyRender(pathname: string, access: SessionAccess): boolean {
   const path = normalizeAppPath(pathname);
 
   if (isGuestLandingPath(path)) {
@@ -214,9 +200,7 @@ export function shouldBlockAcademyRender(
   return access.needsMfaChallenge && path !== "/logout";
 }
 
-export function resolveAcademyLandingDestination(
-  access: SessionAccess,
-): string {
+export function resolveAcademyLandingDestination(access: SessionAccess): string {
   if (access.needsMfaChallenge) return MFA_CHALLENGE_PATH;
   return APP_HOME_PATH;
 }
@@ -259,15 +243,11 @@ export function resolveSessionAccess(input: {
   };
 }
 
-export function resolveAuthenticatedDestination(
-  returnTo: string | null | undefined,
-): string {
+export function resolveAuthenticatedDestination(returnTo: string | null | undefined): string {
   return sanitizeReturnTo(returnTo) ?? APP_HOME_PATH;
 }
 
-export function resolveMfaBackPath(
-  returnTo: string | null | undefined,
-): string {
+export function resolveMfaBackPath(returnTo: string | null | undefined): string {
   return buildLoginPath(returnTo);
 }
 

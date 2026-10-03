@@ -3,10 +3,7 @@ import type { Database } from "@veolms/database";
 
 // --- Sections ---
 
-export async function findMaxSectionPosition(
-  database: Kysely<Database>,
-  courseId: string,
-) {
+export async function findMaxSectionPosition(database: Kysely<Database>, courseId: string) {
   return await database
     .selectFrom("course_sections")
     .select((eb) => eb.fn.max("position").as("max"))
@@ -71,10 +68,7 @@ export async function softDeleteSection(
     .execute();
 }
 
-export async function findSectionsByCourseId(
-  database: Kysely<Database>,
-  courseId: string,
-) {
+export async function findSectionsByCourseId(database: Kysely<Database>, courseId: string) {
   return await database
     .selectFrom("course_sections")
     .selectAll()
@@ -101,10 +95,7 @@ export async function updateSectionPosition(
 
 // --- Lessons ---
 
-export async function findMaxLessonPosition(
-  database: Kysely<Database>,
-  sectionId: string,
-) {
+export async function findMaxLessonPosition(database: Kysely<Database>, sectionId: string) {
   return await database
     .selectFrom("course_lessons")
     .select((eb) => eb.fn.max("position").as("max"))
@@ -182,10 +173,7 @@ export async function softDeleteLesson(
     .execute();
 }
 
-export async function findLessonsBySectionId(
-  database: Kysely<Database>,
-  sectionId: string,
-) {
+export async function findLessonsBySectionId(database: Kysely<Database>, sectionId: string) {
   return await database
     .selectFrom("course_lessons")
     .select("id")
@@ -206,10 +194,7 @@ export async function softDeleteLessonsBySectionId(
     .execute();
 }
 
-export async function findLessonsByCourseId(
-  database: Kysely<Database>,
-  courseId: string,
-) {
+export async function findLessonsByCourseId(database: Kysely<Database>, courseId: string) {
   return await database
     .selectFrom("course_lessons")
     .selectAll()
@@ -219,10 +204,7 @@ export async function findLessonsByCourseId(
     .execute();
 }
 
-export async function findLessonsBySection(
-  database: Kysely<Database>,
-  sectionId: string,
-) {
+export async function findLessonsBySection(database: Kysely<Database>, sectionId: string) {
   return await database
     .selectFrom("course_lessons")
     .selectAll()
@@ -249,10 +231,7 @@ export async function updateLessonPosition(
 
 // --- Resources ---
 
-export async function findMaxResourcePosition(
-  database: Kysely<Database>,
-  lessonId: string,
-) {
+export async function findMaxResourcePosition(database: Kysely<Database>, lessonId: string) {
   return await database
     .selectFrom("lesson_resources")
     .select((eb) => eb.fn.max("position").as("max"))
@@ -283,11 +262,7 @@ export async function findResourceById(
 ) {
   return await database
     .selectFrom("lesson_resources")
-    .innerJoin(
-      "course_lessons",
-      "course_lessons.id",
-      "lesson_resources.lesson_id",
-    )
+    .innerJoin("course_lessons", "course_lessons.id", "lesson_resources.lesson_id")
     .select([
       "lesson_resources.id",
       "lesson_resources.lesson_id",
@@ -344,10 +319,7 @@ export async function softDeleteResourcesByLessonIds(
     .execute();
 }
 
-export async function listResourcesForLessons(
-  database: Kysely<Database>,
-  lessonIds: string[],
-) {
+export async function listResourcesForLessons(database: Kysely<Database>, lessonIds: string[]) {
   if (lessonIds.length === 0) {
     return [];
   }

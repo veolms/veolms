@@ -1,13 +1,7 @@
 import type { AuthContext } from "../shared/auth.context.ts";
-import {
-  clearSessionCookie,
-  setSessionCookie,
-} from "../shared/auth.cookies.ts";
+import { clearSessionCookie, setSessionCookie } from "../shared/auth.cookies.ts";
 import { presentAvatar, presentLogin } from "../shared/auth.presenters.ts";
-import {
-  normalizePhoneIdentifier,
-  resolveIdentifier,
-} from "../shared/auth.utils.ts";
+import { normalizePhoneIdentifier, resolveIdentifier } from "../shared/auth.utils.ts";
 import type {
   AvatarUploadCompleteRequest,
   AvatarUploadPresignRequest,
@@ -22,10 +16,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 export function createAuthController(context: AuthContext) {
   const { authService, oauthService, sessionService } = context;
 
-  async function login(
-    request: FastifyRequest<{ Body: LoginRequest }>,
-    reply: FastifyReply,
-  ) {
+  async function login(request: FastifyRequest<{ Body: LoginRequest }>, reply: FastifyReply) {
     const { identifier, identifierType } = resolveIdentifier(request.body);
     const existingSessionToken = request.cookies["veolms-session"] ?? null;
     const result = await authService.login({
@@ -43,19 +34,8 @@ export function createAuthController(context: AuthContext) {
     return presentLogin(result.user, result.session.mfa);
   }
 
-  async function register(
-    request: FastifyRequest<{ Body: RegisterRequest }>,
-    reply: FastifyReply,
-  ) {
-    const {
-      email,
-      phoneNo,
-      code,
-      emailCode,
-      phoneCode,
-      username,
-      displayName,
-    } = request.body;
+  async function register(request: FastifyRequest<{ Body: RegisterRequest }>, reply: FastifyReply) {
+    const { email, phoneNo, code, emailCode, phoneCode, username, displayName } = request.body;
     const { identifier, identifierType } = resolveIdentifier(request.body);
     const existingSessionToken = request.cookies["veolms-session"] ?? null;
     const result = await authService.register({
@@ -84,9 +64,7 @@ export function createAuthController(context: AuthContext) {
     return oauthService.getPublicConfig();
   }
 
-  async function publicProfile(
-    request: FastifyRequest<{ Params: PublicProfileUsernameParams }>,
-  ) {
+  async function publicProfile(request: FastifyRequest<{ Params: PublicProfileUsernameParams }>) {
     const user = await authService.getPublicProfile(request.params.username);
 
     return {
@@ -94,14 +72,8 @@ export function createAuthController(context: AuthContext) {
       displayName: user.display_name,
       ...presentAvatar(user.avatar_data_url),
       bio: user.bio,
-      email:
-        user.email_public && user.email && user.email_verified_at
-          ? user.email
-          : null,
-      phoneNo:
-        user.mobile_public && user.phone_no && user.phone_verified_at
-          ? user.phone_no
-          : null,
+      email: user.email_public && user.email && user.email_verified_at ? user.email : null,
+      phoneNo: user.mobile_public && user.phone_no && user.phone_verified_at ? user.phone_no : null,
       linkedinUrl: user.linkedin_public ? user.linkedin_url : null,
       githubUrl: user.github_public ? user.github_url : null,
       websiteUrl: user.website_public ? user.website_url : null,
@@ -131,12 +103,8 @@ export function createAuthController(context: AuthContext) {
       displayName: user.displayName,
       ...presentAvatar(user.avatarDataUrl),
       bio: user.bio,
-      emailPublic: Boolean(
-        user.emailPublic && user.email && user.emailVerified,
-      ),
-      mobilePublic: Boolean(
-        user.mobilePublic && user.phoneNo && user.mobileVerified,
-      ),
+      emailPublic: Boolean(user.emailPublic && user.email && user.emailVerified),
+      mobilePublic: Boolean(user.mobilePublic && user.phoneNo && user.mobileVerified),
       linkedinUrl: user.linkedinUrl,
       linkedinPublic: Boolean(user.linkedinPublic && user.linkedinUrl),
       githubUrl: user.githubUrl,
@@ -155,9 +123,7 @@ export function createAuthController(context: AuthContext) {
     };
   }
 
-  async function updateProfile(
-    request: FastifyRequest<{ Body: ProfileUpdateRequest }>,
-  ) {
+  async function updateProfile(request: FastifyRequest<{ Body: ProfileUpdateRequest }>) {
     const user = request.user!;
 
     const updated = await authService.updateProfile(user.id, request.body);
@@ -167,12 +133,8 @@ export function createAuthController(context: AuthContext) {
       displayName: updated.display_name,
       ...presentAvatar(updated.avatar_data_url),
       bio: updated.bio,
-      emailPublic: Boolean(
-        updated.email_public && updated.email && updated.email_verified_at,
-      ),
-      mobilePublic: Boolean(
-        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
-      ),
+      emailPublic: Boolean(updated.email_public && updated.email && updated.email_verified_at),
+      mobilePublic: Boolean(updated.mobile_public && updated.phone_no && updated.phone_verified_at),
       linkedinUrl: updated.linkedin_url,
       linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
       githubUrl: updated.github_url,
@@ -202,10 +164,7 @@ export function createAuthController(context: AuthContext) {
     request: FastifyRequest<{ Body: AvatarUploadCompleteRequest }>,
   ) {
     const user = request.user!;
-    const updated = await authService.completeAvatarUpload(
-      user.id,
-      request.body,
-    );
+    const updated = await authService.completeAvatarUpload(user.id, request.body);
 
     return {
       id: updated.id,
@@ -213,12 +172,8 @@ export function createAuthController(context: AuthContext) {
       displayName: updated.display_name,
       ...presentAvatar(updated.avatar_data_url),
       bio: updated.bio,
-      emailPublic: Boolean(
-        updated.email_public && updated.email && updated.email_verified_at,
-      ),
-      mobilePublic: Boolean(
-        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
-      ),
+      emailPublic: Boolean(updated.email_public && updated.email && updated.email_verified_at),
+      mobilePublic: Boolean(updated.mobile_public && updated.phone_no && updated.phone_verified_at),
       linkedinUrl: updated.linkedin_url,
       linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
       githubUrl: updated.github_url,
@@ -241,14 +196,9 @@ export function createAuthController(context: AuthContext) {
     return authService.listAvatars(request.user!.id);
   }
 
-  async function selectAvatar(
-    request: FastifyRequest<{ Body: SelectAvatarRequest }>,
-  ) {
+  async function selectAvatar(request: FastifyRequest<{ Body: SelectAvatarRequest }>) {
     const user = request.user!;
-    const updated = await authService.selectAvatar(
-      user.id,
-      request.body.avatarId,
-    );
+    const updated = await authService.selectAvatar(user.id, request.body.avatarId);
 
     return {
       id: updated.id,
@@ -256,12 +206,8 @@ export function createAuthController(context: AuthContext) {
       displayName: updated.display_name,
       ...presentAvatar(updated.avatar_data_url),
       bio: updated.bio,
-      emailPublic: Boolean(
-        updated.email_public && updated.email && updated.email_verified_at,
-      ),
-      mobilePublic: Boolean(
-        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
-      ),
+      emailPublic: Boolean(updated.email_public && updated.email && updated.email_verified_at),
+      mobilePublic: Boolean(updated.mobile_public && updated.phone_no && updated.phone_verified_at),
       linkedinUrl: updated.linkedin_url,
       linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
       githubUrl: updated.github_url,
@@ -290,12 +236,8 @@ export function createAuthController(context: AuthContext) {
       displayName: updated.display_name,
       ...presentAvatar(updated.avatar_data_url),
       bio: updated.bio,
-      emailPublic: Boolean(
-        updated.email_public && updated.email && updated.email_verified_at,
-      ),
-      mobilePublic: Boolean(
-        updated.mobile_public && updated.phone_no && updated.phone_verified_at,
-      ),
+      emailPublic: Boolean(updated.email_public && updated.email && updated.email_verified_at),
+      mobilePublic: Boolean(updated.mobile_public && updated.phone_no && updated.phone_verified_at),
       linkedinUrl: updated.linkedin_url,
       linkedinPublic: Boolean(updated.linkedin_public && updated.linkedin_url),
       githubUrl: updated.github_url,
@@ -314,10 +256,7 @@ export function createAuthController(context: AuthContext) {
     };
   }
 
-  async function deactivateAccount(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) {
+  async function deactivateAccount(request: FastifyRequest, reply: FastifyReply) {
     await authService.deactivateAccount(request.user!.id);
     clearSessionCookie(reply);
     return { message: "Account deactivated successfully" };

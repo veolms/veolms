@@ -68,15 +68,10 @@ export interface OptimisticDiscussionsWorkspaceMembership {
 }
 
 function isDiscussionsWorkspaceQuery(queryKey: readonly unknown[]): boolean {
-  return (
-    queryKey[0] === learningInteractionKeys.all[0] &&
-    queryKey[1] === "discussions-workspace"
-  );
+  return queryKey[0] === learningInteractionKeys.all[0] && queryKey[1] === "discussions-workspace";
 }
 
-function getWorkspaceQueryFilters(
-  queryKey: readonly unknown[],
-): DiscussionsWorkspaceQueryFilters {
+function getWorkspaceQueryFilters(queryKey: readonly unknown[]): DiscussionsWorkspaceQueryFilters {
   return (queryKey[3] as DiscussionsWorkspaceQueryFilters | undefined) ?? {};
 }
 
@@ -86,15 +81,13 @@ function matchesWorkspaceFilters(
 ): boolean {
   if (filters.courseId && item.courseId !== filters.courseId) return false;
   if (filters.kind && filters.kind !== "all") {
-    const isQuestionFilter =
-      filters.kind === "qna" || filters.kind === "question";
+    const isQuestionFilter = filters.kind === "qna" || filters.kind === "question";
     const matchesKind = isQuestionFilter
       ? item.kind === "question" || item.kind === "qna"
       : item.kind === filters.kind;
     if (!matchesKind) return false;
   }
-  if (filters.visibility && item.visibility !== filters.visibility)
-    return false;
+  if (filters.visibility && item.visibility !== filters.visibility) return false;
   if (filters.search) {
     const searchableText = [item.title, item.plainText, item.content]
       .filter(Boolean)
@@ -123,10 +116,7 @@ function withWorkspaceMembership(
     membership.following !== undefined && item.itemType !== "note"
       ? membership.following
       : item.isFollowing;
-  if (
-    nextBookmarked === item.isBookmarked &&
-    nextFollowing === item.isFollowing
-  ) {
+  if (nextBookmarked === item.isBookmarked && nextFollowing === item.isFollowing) {
     return item;
   }
   return {
@@ -297,11 +287,7 @@ export function optimisticallyUpdateDiscussionsWorkspaceMembership(
       : cacheEntry.data;
     const sourcePresent = nextData.pages.some((page) =>
       page.items.some((item) =>
-        matchesDiscussionWorkspaceSource(
-          item,
-          membership.sourceType,
-          membership.sourceId,
-        ),
+        matchesDiscussionWorkspaceSource(item, membership.sourceType, membership.sourceId),
       ),
     );
 
@@ -389,27 +375,19 @@ function setThreadQueriesData(
   queryClient.setQueriesData<ThreadListCache>(filters, (old) =>
     old === undefined
       ? old
-      : mapPaginatedCache<LearningThreadsListResponse>(
-          old,
-          (page) => updater(page) ?? page,
-        ),
+      : mapPaginatedCache<LearningThreadsListResponse>(old, (page) => updater(page) ?? page),
   );
 }
 
 function setNoteQueriesData(
   queryClient: QueryClient,
   filters: { queryKey: readonly unknown[] },
-  updater: (
-    old: LearningNotesCacheResponse | undefined,
-  ) => LearningNotesCacheResponse | undefined,
+  updater: (old: LearningNotesCacheResponse | undefined) => LearningNotesCacheResponse | undefined,
 ): void {
   queryClient.setQueriesData<NoteListCache>(filters, (old) =>
     old === undefined
       ? old
-      : mapPaginatedCache<LearningNotesCacheResponse>(
-          old,
-          (page) => updater(page) ?? page,
-        ),
+      : mapPaginatedCache<LearningNotesCacheResponse>(old, (page) => updater(page) ?? page),
   );
 }
 
@@ -477,11 +455,7 @@ export function updateThreadLikeInCache(
         return {
           ...thread,
           isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            thread.likesCount ?? 0,
-            thread.isLiked,
-            desiredLiked,
-          ),
+          likesCount: calculateNextLikesCount(thread.likesCount ?? 0, thread.isLiked, desiredLiked),
         };
       });
       return hasChange ? { ...old, threads: nextThreads } : old;
@@ -498,11 +472,7 @@ export function updateThreadLikeInCache(
       return {
         ...old,
         isLiked: desiredLiked,
-        likesCount: calculateNextLikesCount(
-          old.likesCount ?? 0,
-          old.isLiked,
-          desiredLiked,
-        ),
+        likesCount: calculateNextLikesCount(old.likesCount ?? 0, old.isLiked, desiredLiked),
       };
     },
   );
@@ -522,11 +492,7 @@ export function updateThreadLikeInCache(
         return {
           ...thread,
           isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            thread.likesCount ?? 0,
-            thread.isLiked,
-            desiredLiked,
-          ),
+          likesCount: calculateNextLikesCount(thread.likesCount ?? 0, thread.isLiked, desiredLiked),
         };
       });
       return hasChange ? { ...old, threads: nextThreads } : old;
@@ -549,10 +515,7 @@ export function updateReplyLikeInCache(
       const updatePage = (page: LearningRepliesCacheResponse) => {
         let hasChange = false;
         const nextReplies = page.replies.map((reply) => {
-          if (
-            getClientEntityId(reply) !== replyId &&
-            getServerEntityId(reply) !== replyId
-          )
+          if (getClientEntityId(reply) !== replyId && getServerEntityId(reply) !== replyId)
             return reply;
           const currentLiked = Boolean(reply.isLiked);
           if (currentLiked === desiredLiked) return reply;
@@ -560,18 +523,13 @@ export function updateReplyLikeInCache(
           return {
             ...reply,
             isLiked: desiredLiked,
-            likesCount: calculateNextLikesCount(
-              reply.likesCount ?? 0,
-              reply.isLiked,
-              desiredLiked,
-            ),
+            likesCount: calculateNextLikesCount(reply.likesCount ?? 0, reply.isLiked, desiredLiked),
           };
         });
         return hasChange ? { ...page, replies: nextReplies } : page;
       };
       return isInfiniteCacheData<LearningRepliesCacheResponse>(old)
-        ? (mapPaginatedCache<LearningRepliesCacheResponse>(old, updatePage) ??
-            old)
+        ? (mapPaginatedCache<LearningRepliesCacheResponse>(old, updatePage) ?? old)
         : old
           ? updatePage(old)
           : old;
@@ -589,36 +547,28 @@ export function updateNoteLikeInCache(
   serverId?: string,
 ): void {
   // 1. Update notes list queries
-  setNoteQueriesData(
-    queryClient,
-    { queryKey: learningInteractionKeys.notesRoot() },
-    (old) => {
-      if (!old?.notes) return old;
-      let hasChange = false;
-      const nextNotes = old.notes.map((note) => {
-        if (
-          note.id !== noteId &&
-          getClientEntityId(note) !== noteId &&
-          getServerEntityId(note) !== noteId
-        ) {
-          return note;
-        }
-        const currentLiked = Boolean(note.isLiked);
-        if (currentLiked === desiredLiked) return note;
-        hasChange = true;
-        return {
-          ...note,
-          isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            note.likesCount ?? 0,
-            note.isLiked,
-            desiredLiked,
-          ),
-        };
-      });
-      return hasChange ? { ...old, notes: nextNotes } : old;
-    },
-  );
+  setNoteQueriesData(queryClient, { queryKey: learningInteractionKeys.notesRoot() }, (old) => {
+    if (!old?.notes) return old;
+    let hasChange = false;
+    const nextNotes = old.notes.map((note) => {
+      if (
+        note.id !== noteId &&
+        getClientEntityId(note) !== noteId &&
+        getServerEntityId(note) !== noteId
+      ) {
+        return note;
+      }
+      const currentLiked = Boolean(note.isLiked);
+      if (currentLiked === desiredLiked) return note;
+      hasChange = true;
+      return {
+        ...note,
+        isLiked: desiredLiked,
+        likesCount: calculateNextLikesCount(note.likesCount ?? 0, note.isLiked, desiredLiked),
+      };
+    });
+    return hasChange ? { ...old, notes: nextNotes } : old;
+  });
 
   // 2. Update note details query if cached
   for (const detailId of new Set([noteId, serverId].filter(Boolean))) {
@@ -641,11 +591,7 @@ export function updateNoteLikeInCache(
         return {
           ...old,
           isLiked: desiredLiked,
-          likesCount: calculateNextLikesCount(
-            old.likesCount ?? 0,
-            old.isLiked,
-            desiredLiked,
-          ),
+          likesCount: calculateNextLikesCount(old.likesCount ?? 0, old.isLiked, desiredLiked),
         };
       },
     );
@@ -662,31 +608,27 @@ export function updateNoteBookmarkInCache(
   serverId?: string,
 ): void {
   // 1. Update notes list queries
-  setNoteQueriesData(
-    queryClient,
-    { queryKey: learningInteractionKeys.notesRoot() },
-    (old) => {
-      if (!old?.notes) return old;
-      let hasChange = false;
-      const nextNotes = old.notes.map((note) => {
-        if (
-          note.id !== noteId &&
-          getClientEntityId(note) !== noteId &&
-          getServerEntityId(note) !== noteId
-        ) {
-          return note;
-        }
-        const currentBookmarked = Boolean(note.isBookmarked);
-        if (currentBookmarked === desiredBookmarked) return note;
-        hasChange = true;
-        return {
-          ...note,
-          isBookmarked: desiredBookmarked,
-        };
-      });
-      return hasChange ? { ...old, notes: nextNotes } : old;
-    },
-  );
+  setNoteQueriesData(queryClient, { queryKey: learningInteractionKeys.notesRoot() }, (old) => {
+    if (!old?.notes) return old;
+    let hasChange = false;
+    const nextNotes = old.notes.map((note) => {
+      if (
+        note.id !== noteId &&
+        getClientEntityId(note) !== noteId &&
+        getServerEntityId(note) !== noteId
+      ) {
+        return note;
+      }
+      const currentBookmarked = Boolean(note.isBookmarked);
+      if (currentBookmarked === desiredBookmarked) return note;
+      hasChange = true;
+      return {
+        ...note,
+        isBookmarked: desiredBookmarked,
+      };
+    });
+    return hasChange ? { ...old, notes: nextNotes } : old;
+  });
 
   // 2. Update note details query if cached
   for (const detailId of new Set([noteId, serverId].filter(Boolean))) {

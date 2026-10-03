@@ -53,10 +53,7 @@ const courseSummaryObjectSchema = z.strictObject({
     .max(500)
     .default("")
     .meta({ description: "One-line summary shown in catalogue listings." }),
-  difficulty: z
-    .enum(["beginner", "intermediate", "advanced"])
-    .nullable()
-    .optional(),
+  difficulty: z.enum(["beginner", "intermediate", "advanced"]).nullable().optional(),
   thumbnailUrl: z.string().nullable().optional(),
   thumbnailSrcSet: z
     .array(
@@ -76,8 +73,7 @@ const courseSummaryObjectSchema = z.strictObject({
   certificateEnabled: z.boolean().default(false),
 });
 
-export const courseSummarySchema: z.ZodType<CourseSummary> =
-  courseSummaryObjectSchema;
+export const courseSummarySchema: z.ZodType<CourseSummary> = courseSummaryObjectSchema;
 
 const publicCourseObjectSchema = z.strictObject({
   id: z.uuid().meta({ description: "Stable identifier of the course." }),
@@ -92,15 +88,10 @@ const publicCourseObjectSchema = z.strictObject({
     .max(500)
     .default("")
     .meta({ description: "One-line summary shown in catalogue listings." }),
-  description: z
-    .string()
-    .min(1)
-    .max(2000)
-    .meta({ description: "Full course description." }),
+  description: z.string().min(1).max(2000).meta({ description: "Full course description." }),
 });
 
-export const publicCourseSchema: z.ZodType<PublicCourse> =
-  publicCourseObjectSchema;
+export const publicCourseSchema: z.ZodType<PublicCourse> = publicCourseObjectSchema;
 
 export const courseListResponseSchema = z.strictObject({
   courses: z
@@ -153,11 +144,7 @@ export type Category = z.infer<typeof categorySchema>;
 export type CreateCategoryRequest = z.infer<typeof createCategoryRequestSchema>;
 
 export const accessTypeSchema = z.enum(["everyone", "restricted"]);
-export const accessDurationTypeSchema = z.enum([
-  "lifetime",
-  "fixed_duration",
-  "custom_expiration",
-]);
+export const accessDurationTypeSchema = z.enum(["lifetime", "fixed_duration", "custom_expiration"]);
 
 export const courseAccessRuleSchema = z.object({
   id: z.uuid(),
@@ -177,9 +164,7 @@ export const updateCourseAccessRuleRequestSchema = z
     (data) => {
       if (data.durationType === "fixed_duration") {
         return (
-          data.durationDays !== null &&
-          data.durationDays !== undefined &&
-          data.durationDays > 0
+          data.durationDays !== null && data.durationDays !== undefined && data.durationDays > 0
         );
       }
       return true;
@@ -191,9 +176,7 @@ export const updateCourseAccessRuleRequestSchema = z
   );
 
 export type CourseAccessRule = z.infer<typeof courseAccessRuleSchema>;
-export type UpdateCourseAccessRuleRequest = z.infer<
-  typeof updateCourseAccessRuleRequestSchema
->;
+export type UpdateCourseAccessRuleRequest = z.infer<typeof updateCourseAccessRuleRequestSchema>;
 
 export const pricingTypeSchema = z.enum(["free", "paid"]);
 
@@ -215,11 +198,7 @@ export const updateCoursePricingRequestSchema = z
   })
   .refine(
     (data) => {
-      if (
-        data.salePrice !== null &&
-        data.salePrice !== undefined &&
-        data.salePrice > data.price
-      ) {
+      if (data.salePrice !== null && data.salePrice !== undefined && data.salePrice > data.price) {
         return false;
       }
       return true;
@@ -231,9 +210,7 @@ export const updateCoursePricingRequestSchema = z
   );
 
 export type CoursePricing = z.infer<typeof coursePricingSchema>;
-export type UpdateCoursePricingRequest = z.infer<
-  typeof updateCoursePricingRequestSchema
->;
+export type UpdateCoursePricingRequest = z.infer<typeof updateCoursePricingRequestSchema>;
 
 export const courseSettingsSchema = z.object({
   id: z.uuid(),
@@ -260,9 +237,7 @@ export const updateCourseSettingsRequestSchema = z.object({
 });
 
 export type CourseSettings = z.infer<typeof courseSettingsSchema>;
-export type UpdateCourseSettingsRequest = z.infer<
-  typeof updateCourseSettingsRequestSchema
->;
+export type UpdateCourseSettingsRequest = z.infer<typeof updateCourseSettingsRequestSchema>;
 
 export const courseIncludeItemSchema = z.object({
   id: z.uuid(),
@@ -295,18 +270,10 @@ export const courseIncludesListResponseSchema = z.object({
 });
 
 export type CourseIncludeItem = z.infer<typeof courseIncludeItemSchema>;
-export type CreateCourseIncludeRequest = z.infer<
-  typeof createCourseIncludeRequestSchema
->;
-export type UpdateCourseIncludeRequest = z.infer<
-  typeof updateCourseIncludeRequestSchema
->;
-export type ReorderCourseIncludesRequest = z.infer<
-  typeof reorderCourseIncludesRequestSchema
->;
-export type CourseIncludesListResponse = z.infer<
-  typeof courseIncludesListResponseSchema
->;
+export type CreateCourseIncludeRequest = z.infer<typeof createCourseIncludeRequestSchema>;
+export type UpdateCourseIncludeRequest = z.infer<typeof updateCourseIncludeRequestSchema>;
+export type ReorderCourseIncludesRequest = z.infer<typeof reorderCourseIncludesRequestSchema>;
+export type CourseIncludesListResponse = z.infer<typeof courseIncludesListResponseSchema>;
 
 export const createLessonResourceRequestSchema = z.object({
   mediaAssetId: z.uuid(),
@@ -388,26 +355,14 @@ export const reorderLessonsRequestSchema = z.object({
   version: z.number().int().positive(),
 });
 
-export type CreateLessonResourceRequest = z.infer<
-  typeof createLessonResourceRequestSchema
->;
+export type CreateLessonResourceRequest = z.infer<typeof createLessonResourceRequestSchema>;
 export type CourseSection = z.infer<typeof courseSectionSchema>;
-export type CreateCourseSectionRequest = z.infer<
-  typeof createCourseSectionRequestSchema
->;
-export type UpdateCourseSectionRequest = z.infer<
-  typeof updateCourseSectionRequestSchema
->;
-export type ReorderSectionsRequest = z.infer<
-  typeof reorderSectionsRequestSchema
->;
+export type CreateCourseSectionRequest = z.infer<typeof createCourseSectionRequestSchema>;
+export type UpdateCourseSectionRequest = z.infer<typeof updateCourseSectionRequestSchema>;
+export type ReorderSectionsRequest = z.infer<typeof reorderSectionsRequestSchema>;
 export type CourseLesson = z.infer<typeof courseLessonSchema>;
-export type CreateCourseLessonRequest = z.infer<
-  typeof createCourseLessonRequestSchema
->;
-export type UpdateCourseLessonRequest = z.infer<
-  typeof updateCourseLessonRequestSchema
->;
+export type CreateCourseLessonRequest = z.infer<typeof createCourseLessonRequestSchema>;
+export type UpdateCourseLessonRequest = z.infer<typeof updateCourseLessonRequestSchema>;
 export type ReorderLessonsRequest = z.infer<typeof reorderLessonsRequestSchema>;
 export type LessonResource = z.infer<typeof lessonResourceSchema>;
 
@@ -419,10 +374,7 @@ export const courseSchema = z.object({
   title: z.string(),
   shortDescription: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
-  difficulty: z
-    .enum(["beginner", "intermediate", "advanced"])
-    .nullable()
-    .optional(),
+  difficulty: z.enum(["beginner", "intermediate", "advanced"]).nullable().optional(),
   status: courseStatusSchema,
   creatorId: z.uuid().nullable(),
   categoryId: z.uuid().nullable().optional(),
@@ -454,14 +406,8 @@ export const createCourseRequestSchema = z.object({
   shortDescription: z.string().max(500).nullable().optional(),
   description: z.string().max(1500).nullable().optional(),
   categoryId: z.uuid().nullable().optional(),
-  difficulty: z
-    .enum(["beginner", "intermediate", "advanced"])
-    .nullable()
-    .optional(),
-  difficultyLevel: z
-    .enum(["beginner", "intermediate", "advanced"])
-    .nullable()
-    .optional(),
+  difficulty: z.enum(["beginner", "intermediate", "advanced"]).nullable().optional(),
+  difficultyLevel: z.enum(["beginner", "intermediate", "advanced"]).nullable().optional(),
   thumbnailMediaId: z.uuid().nullable().optional(),
   trailerMediaId: z.uuid().nullable().optional(),
   instructorAlias: z.string().max(120).nullable().optional(),
@@ -473,14 +419,8 @@ export const updateCourseBasicsRequestSchema = z.object({
   description: z.string().max(1500).nullable().optional(),
   categoryId: z.uuid().nullable().optional(),
   category: z.uuid().nullable().optional(),
-  difficulty: z
-    .enum(["beginner", "intermediate", "advanced"])
-    .nullable()
-    .optional(),
-  difficultyLevel: z
-    .enum(["beginner", "intermediate", "advanced"])
-    .nullable()
-    .optional(),
+  difficulty: z.enum(["beginner", "intermediate", "advanced"]).nullable().optional(),
+  difficultyLevel: z.enum(["beginner", "intermediate", "advanced"]).nullable().optional(),
   thumbnailMediaId: z.uuid().nullable().optional(),
   trailerMediaId: z.uuid().nullable().optional(),
   instructorAlias: z.string().max(120).nullable().optional(),
@@ -513,15 +453,9 @@ export const courseStaticPageRefreshStatusSchema = z.object({
   requestId: z.string().nullable(),
   runUrl: z.string().url().nullable(),
 });
-export type CourseStaticPageRefreshStatus = z.infer<
-  typeof courseStaticPageRefreshStatusSchema
->;
+export type CourseStaticPageRefreshStatus = z.infer<typeof courseStaticPageRefreshStatusSchema>;
 
-export const courseDeletionPurgeStateSchema = z.enum([
-  "scheduled",
-  "processing",
-  "failed",
-]);
+export const courseDeletionPurgeStateSchema = z.enum(["scheduled", "processing", "failed"]);
 
 export const deletedCourseSchema = z.object({
   id: z.uuid(),
@@ -552,19 +486,13 @@ export const restoreCourseResponseSchema = z.object({
 
 export type Course = z.infer<typeof courseSchema>;
 export type CreateCourseRequest = z.infer<typeof createCourseRequestSchema>;
-export type UpdateCourseBasicsRequest = z.infer<
-  typeof updateCourseBasicsRequestSchema
->;
-export type CourseEditorDataResponse = z.infer<
-  typeof courseEditorDataResponseSchema
->;
+export type UpdateCourseBasicsRequest = z.infer<typeof updateCourseBasicsRequestSchema>;
+export type CourseEditorDataResponse = z.infer<typeof courseEditorDataResponseSchema>;
 export type MyCoursesListResponse = z.infer<typeof myCoursesListResponseSchema>;
 export type CourseDeleteResponse = z.infer<typeof courseDeleteResponseSchema>;
 export type DeletedCourse = z.infer<typeof deletedCourseSchema>;
 export type DeletedCoursesQuery = z.infer<typeof deletedCoursesQuerySchema>;
-export type DeletedCoursesListResponse = z.infer<
-  typeof deletedCoursesListResponseSchema
->;
+export type DeletedCoursesListResponse = z.infer<typeof deletedCoursesListResponseSchema>;
 export type RestoreCourseResponse = z.infer<typeof restoreCourseResponseSchema>;
 
 // --- Validation & Publishing ---
@@ -607,12 +535,8 @@ export const courseValidationResponseSchema = z.object({
 export type CourseValidationArea = z.infer<typeof courseValidationAreaSchema>;
 export type CourseValidationIssue = z.infer<typeof courseValidationIssueSchema>;
 export type ValidationItem = z.infer<typeof validationItemSchema>;
-export type CourseValidationSections = z.infer<
-  typeof courseValidationSectionsSchema
->;
-export type CourseValidationResponse = z.infer<
-  typeof courseValidationResponseSchema
->;
+export type CourseValidationSections = z.infer<typeof courseValidationSectionsSchema>;
+export type CourseValidationResponse = z.infer<typeof courseValidationResponseSchema>;
 
 export const courseOverviewSchema = z.object({
   course: courseSchema,

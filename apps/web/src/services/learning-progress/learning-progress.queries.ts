@@ -7,10 +7,7 @@ import type { ApiError } from "../../lib/api-error";
 import { learningProgressKeys } from "./learning-progress.keys";
 import { learningProgressService } from "./learning-progress.service";
 
-export function useLearningProgressSnapshot(
-  courseKey: string,
-  options?: { enabled?: boolean },
-) {
+export function useLearningProgressSnapshot(courseKey: string, options?: { enabled?: boolean }) {
   return useQuery<LearningProgressResponse, ApiError>({
     queryKey: learningProgressKeys.course(courseKey),
     queryFn: () => learningProgressService.get(courseKey),

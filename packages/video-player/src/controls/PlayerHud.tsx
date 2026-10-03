@@ -2,10 +2,7 @@ import { useEffect, type CSSProperties } from "react";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerTheme } from "../themes/PlayerThemeContext";
-import {
-  MOBILE_SEEK_IDLE_DELAY_MS,
-  PLAYER_FEEDBACK_DURATION_MS,
-} from "./feedbackTiming";
+import { MOBILE_SEEK_IDLE_DELAY_MS, PLAYER_FEEDBACK_DURATION_MS } from "./feedbackTiming";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 export function PlayerHud() {
@@ -17,9 +14,7 @@ export function PlayerHud() {
   useEffect(() => {
     if (!hud) return undefined;
     const durationMs =
-      hud.variant === "mobile-seek"
-        ? MOBILE_SEEK_IDLE_DELAY_MS
-        : PLAYER_FEEDBACK_DURATION_MS;
+      hud.variant === "mobile-seek" ? MOBILE_SEEK_IDLE_DELAY_MS : PLAYER_FEEDBACK_DURATION_MS;
     const timer = setTimeout(() => controller.clearHud(hud.id), durationMs);
     return () => clearTimeout(timer);
   }, [controller, hud]);
@@ -48,7 +43,7 @@ export function PlayerHud() {
           aria-hidden="true"
         >
           <span
-            className="flex animate-[video-player-hud_850ms_cubic-bezier(0.16,1,0.3,1)_forwards] items-center gap-4 text-2xl leading-none font-semibold tabular-nums text-(--video-player-control-text) drop-shadow-[0_2px_5px_rgb(0_0_0/0.9)] motion-reduce:animate-none"
+            className="flex animate-[video-player-hud_850ms_cubic-bezier(0.16,1,0.3,1)_forwards] items-center gap-4 text-2xl leading-none font-semibold text-(--video-player-control-text) tabular-nums drop-shadow-[0_2px_5px_rgb(0_0_0/0.9)] motion-reduce:animate-none"
             data-player-mobile-seek-feedback=""
             data-player-mobile-seek-total={hud.text}
           >
@@ -62,12 +57,7 @@ export function PlayerHud() {
             ) : null}
             <span>{hud.text}</span>
             {!backward ? (
-              <Icon
-                active
-                className="size-8"
-                data-player-mobile-seek-icon="forward"
-                size={32}
-              />
+              <Icon active className="size-8" data-player-mobile-seek-icon="forward" size={32} />
             ) : null}
           </span>
         </div>
@@ -92,7 +82,7 @@ export function PlayerHud() {
       >
         <div className="absolute top-[14%] left-1/2 -translate-x-1/2">
           <span
-            className="grid min-h-11 min-w-20 place-items-center rounded-lg border border-(--video-player-control-border) bg-(--video-player-control-surface) px-4 py-2 text-center text-xl leading-none font-medium tabular-nums text-(--video-player-control-text) shadow-(--video-player-control-shadow) backdrop-blur-sm lg:text-2xl"
+            className="grid min-h-11 min-w-20 place-items-center rounded-lg border border-(--video-player-control-border) bg-(--video-player-control-surface) px-4 py-2 text-center text-xl leading-none font-medium text-(--video-player-control-text) tabular-nums shadow-(--video-player-control-shadow) backdrop-blur-sm lg:text-2xl"
             data-playback-feedback-duration={PLAYER_FEEDBACK_DURATION_MS}
             data-playback-feedback-surface=""
             data-player-playback-rate={hud.text}
@@ -101,10 +91,7 @@ export function PlayerHud() {
             {hud.text}
           </span>
         </div>
-        <div
-          className="absolute inset-0 grid place-items-center"
-          aria-hidden="true"
-        >
+        <div className="absolute inset-0 grid place-items-center" aria-hidden="true">
           <span
             className="grid size-20 place-items-center rounded-full border border-(--video-player-control-border) bg-(--video-player-control-surface) text-(--video-player-control-text) shadow-(--video-player-control-shadow) backdrop-blur-sm lg:size-22"
             data-playback-feedback-duration={PLAYER_FEEDBACK_DURATION_MS}
@@ -115,9 +102,7 @@ export function PlayerHud() {
               active
               aria-hidden="true"
               className="size-10 lg:size-11"
-              data-player-playback-rate-icon={
-                hud.direction < 0 ? "decrease" : "increase"
-              }
+              data-player-playback-rate-icon={hud.direction < 0 ? "decrease" : "increase"}
               size={44}
             />
           </span>

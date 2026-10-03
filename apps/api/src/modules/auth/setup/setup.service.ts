@@ -21,11 +21,7 @@ export interface SetupServiceOptions {
   sessionService: SessionService;
 }
 
-export function createSetupService({
-  database,
-  authService,
-  sessionService,
-}: SetupServiceOptions) {
+export function createSetupService({ database, authService, sessionService }: SetupServiceOptions) {
   function isValidSetupToken(submitted: string): boolean {
     return secureCompare(submitted, config.SETUP_TOKEN);
   }
@@ -90,11 +86,7 @@ export function createSetupService({
     await assertSetupOpen();
 
     if (!isValidSetupToken(token)) {
-      throw new AppError(
-        401,
-        "INVALID_SETUP_TOKEN",
-        "The setup token provided is incorrect.",
-      );
+      throw new AppError(401, "INVALID_SETUP_TOKEN", "The setup token provided is incorrect.");
     }
   }
 
@@ -112,9 +104,7 @@ export function createSetupService({
       );
     }
 
-    const username = await authService.generateUniqueUsername(
-      input.email.split("@")[0] || "admin",
-    );
+    const username = await authService.generateUniqueUsername(input.email.split("@")[0] || "admin");
 
     const createInput: CreateUserInput = {
       email: input.email,
@@ -160,11 +150,7 @@ export function createSetupService({
 
     const academy = await academyRepository.findAcademy(database);
     if (!academy) {
-      throw new AppError(
-        400,
-        "ACADEMY_NOT_CONFIGURED",
-        "Configure academy details first.",
-      );
+      throw new AppError(400, "ACADEMY_NOT_CONFIGURED", "Configure academy details first.");
     }
 
     if (!(await authService.countUsers())) {

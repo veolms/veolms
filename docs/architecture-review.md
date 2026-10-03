@@ -137,15 +137,8 @@ Routes should NEVER touch database queries or transactions. Currently, routes ar
 2. **Direct DB Querying in `session.routes.ts` (L39–42 & L75–79):**
    ```typescript
    // In session.routes.ts - Route handler directly calls repository without any Service
-   const sessions = await repository.listUserSessions(
-     database,
-     request.user!.id,
-   );
-   await repository.deleteUserSession(
-     database,
-     request.user!.id,
-     request.params.id,
-   );
+   const sessions = await repository.listUserSessions(database, request.user!.id);
+   await repository.deleteUserSession(database, request.user!.id, request.params.id);
    ```
 3. **Direct DB Querying in `setup.routes.ts` (L233–242):**
    ```typescript

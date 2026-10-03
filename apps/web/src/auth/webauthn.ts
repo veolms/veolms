@@ -22,9 +22,8 @@ const toBrowserTransport = (
   }
 };
 
-export const toBrowserTransports = (
-  transports: PasskeyAuthenticatorTransport[] | undefined,
-) => transports?.flatMap((transport) => toBrowserTransport(transport) ?? []);
+export const toBrowserTransports = (transports: PasskeyAuthenticatorTransport[] | undefined) =>
+  transports?.flatMap((transport) => toBrowserTransport(transport) ?? []);
 
 export function bufferToBase64URL(buffer: ArrayBuffer | Uint8Array): string {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
@@ -183,9 +182,7 @@ export async function startPasskeyAuthentication(
         clientDataJSON: bufferToBase64URL(assertion.clientDataJSON),
         authenticatorData: bufferToBase64URL(assertion.authenticatorData),
         signature: bufferToBase64URL(assertion.signature),
-        userHandle: assertion.userHandle
-          ? bufferToBase64URL(assertion.userHandle)
-          : null,
+        userHandle: assertion.userHandle ? bufferToBase64URL(assertion.userHandle) : null,
       },
     },
   };

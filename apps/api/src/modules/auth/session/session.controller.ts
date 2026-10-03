@@ -27,10 +27,7 @@ export function createSessionController(context: AuthContext) {
   }
 
   async function revokeAll(request: FastifyRequest) {
-    await sessionService.revokeOtherSessions(
-      request.user!.id,
-      request.session!.id,
-    );
+    await sessionService.revokeOtherSessions(request.user!.id, request.session!.id);
     return { message: "All other sessions revoked" };
   }
 

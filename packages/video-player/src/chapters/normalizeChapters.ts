@@ -1,8 +1,4 @@
-import type {
-  Chapter,
-  ChapterInput,
-  NormalizeChaptersOptions,
-} from "./chapterTypes.ts";
+import type { Chapter, ChapterInput, NormalizeChaptersOptions } from "./chapterTypes.ts";
 
 interface IndexedChapter {
   chapter: ChapterInput;

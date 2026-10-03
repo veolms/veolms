@@ -46,8 +46,7 @@ export function useCreateCourse() {
 export function useRetryCourseStaticPageRefresh() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (courseId: string) =>
-      coursesService.retryStaticPageRefresh(courseId),
+    mutationFn: (courseId: string) => coursesService.retryStaticPageRefresh(courseId),
     onSuccess: (status, courseId) => {
       queryClient.setQueryData(courseKeys.staticPageRefresh(courseId), status);
     },
@@ -57,13 +56,8 @@ export function useRetryCourseStaticPageRefresh() {
 export function useUpdateCourseBasics() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    Course,
-    ApiError,
-    { id: string; payload: UpdateCourseBasicsRequest }
-  >({
-    mutationFn: ({ id, payload }) =>
-      coursesService.updateCourseBasics(id, payload),
+  return useMutation<Course, ApiError, { id: string; payload: UpdateCourseBasicsRequest }>({
+    mutationFn: ({ id, payload }) => coursesService.updateCourseBasics(id, payload),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.id),
@@ -137,8 +131,7 @@ export function useCreateSection() {
     ApiError,
     { courseId: string; payload: CreateCourseSectionRequest }
   >({
-    mutationFn: ({ courseId, payload }) =>
-      coursesService.createSection(courseId, payload),
+    mutationFn: ({ courseId, payload }) => coursesService.createSection(courseId, payload),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
@@ -185,13 +178,8 @@ export const useUpdateSection = useUpdateCourseSection;
 export function useDeleteCourseSection() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    { success: boolean },
-    ApiError,
-    { courseId: string; sectionId: string }
-  >({
-    mutationFn: ({ courseId, sectionId }) =>
-      coursesService.deleteSection(courseId, sectionId),
+  return useMutation<{ success: boolean }, ApiError, { courseId: string; sectionId: string }>({
+    mutationFn: ({ courseId, sectionId }) => coursesService.deleteSection(courseId, sectionId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
@@ -216,22 +204,18 @@ export function useReorderCourseSections() {
     { courseId: string; payload: ReorderSectionsRequest },
     { previousEditorData?: CourseEditorDataResponse }
   >({
-    mutationFn: ({ courseId, payload }) =>
-      coursesService.reorderSections(courseId, payload),
+    mutationFn: ({ courseId, payload }) => coursesService.reorderSections(courseId, payload),
     onMutate: async ({ courseId, payload }) => {
       await queryClient.cancelQueries({
         queryKey: courseKeys.editor(courseId),
       });
 
-      const previousEditorData =
-        queryClient.getQueryData<CourseEditorDataResponse>(
-          courseKeys.editor(courseId),
-        );
+      const previousEditorData = queryClient.getQueryData<CourseEditorDataResponse>(
+        courseKeys.editor(courseId),
+      );
 
       if (previousEditorData && previousEditorData.sections) {
-        const sectionOrderMap = new Map(
-          payload.orderedSectionIds.map((id, index) => [id, index]),
-        );
+        const sectionOrderMap = new Map(payload.orderedSectionIds.map((id, index) => [id, index]));
         const sortedSections = [...previousEditorData.sections]
           .sort((a, b) => {
             const posA = sectionOrderMap.get(a.id) ?? a.position;
@@ -243,27 +227,21 @@ export function useReorderCourseSections() {
             position: idx,
           }));
 
-        queryClient.setQueryData<CourseEditorDataResponse>(
-          courseKeys.editor(courseId),
-          {
-            ...previousEditorData,
-            course: {
-              ...previousEditorData.course,
-              version: (previousEditorData.course.version || 1) + 1,
-            },
-            sections: sortedSections,
+        queryClient.setQueryData<CourseEditorDataResponse>(courseKeys.editor(courseId), {
+          ...previousEditorData,
+          course: {
+            ...previousEditorData.course,
+            version: (previousEditorData.course.version || 1) + 1,
           },
-        );
+          sections: sortedSections,
+        });
       }
 
       return { previousEditorData };
     },
     onError: (_err, variables, context) => {
       if (context?.previousEditorData) {
-        queryClient.setQueryData(
-          courseKeys.editor(variables.courseId),
-          context.previousEditorData,
-        );
+        queryClient.setQueryData(courseKeys.editor(variables.courseId), context.previousEditorData);
       }
     },
     onSettled: (_, __, variables) => {
@@ -341,13 +319,8 @@ export const useUpdateLesson = useUpdateCourseLesson;
 export function useDeleteCourseLesson() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    { success: boolean },
-    ApiError,
-    { courseId: string; lessonId: string }
-  >({
-    mutationFn: ({ courseId, lessonId }) =>
-      coursesService.deleteLesson(courseId, lessonId),
+  return useMutation<{ success: boolean }, ApiError, { courseId: string; lessonId: string }>({
+    mutationFn: ({ courseId, lessonId }) => coursesService.deleteLesson(courseId, lessonId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
@@ -391,11 +364,7 @@ export function useCreateLessonResource() {
 export function useDeleteLessonResource() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    { success: boolean },
-    ApiError,
-    { courseId: string; resourceId: string }
-  >({
+  return useMutation<{ success: boolean }, ApiError, { courseId: string; resourceId: string }>({
     mutationFn: ({ courseId, resourceId }) =>
       coursesService.deleteLessonResource(courseId, resourceId),
     onSuccess: (_, variables) => {
@@ -429,15 +398,12 @@ export function useReorderSectionLessons() {
         queryKey: courseKeys.editor(courseId),
       });
 
-      const previousEditorData =
-        queryClient.getQueryData<CourseEditorDataResponse>(
-          courseKeys.editor(courseId),
-        );
+      const previousEditorData = queryClient.getQueryData<CourseEditorDataResponse>(
+        courseKeys.editor(courseId),
+      );
 
       if (previousEditorData && previousEditorData.sections) {
-        const lessonOrderMap = new Map(
-          payload.orderedLessonIds.map((id, index) => [id, index]),
-        );
+        const lessonOrderMap = new Map(payload.orderedLessonIds.map((id, index) => [id, index]));
         const updatedSections = previousEditorData.sections.map((sec) => {
           if (sec.id !== sectionId) return sec;
           const sortedLessons = [...(sec.lessons || [])].sort((a, b) => {
@@ -454,27 +420,21 @@ export function useReorderSectionLessons() {
           };
         });
 
-        queryClient.setQueryData<CourseEditorDataResponse>(
-          courseKeys.editor(courseId),
-          {
-            ...previousEditorData,
-            course: {
-              ...previousEditorData.course,
-              version: (previousEditorData.course.version || 1) + 1,
-            },
-            sections: updatedSections,
+        queryClient.setQueryData<CourseEditorDataResponse>(courseKeys.editor(courseId), {
+          ...previousEditorData,
+          course: {
+            ...previousEditorData.course,
+            version: (previousEditorData.course.version || 1) + 1,
           },
-        );
+          sections: updatedSections,
+        });
       }
 
       return { previousEditorData };
     },
     onError: (_err, variables, context) => {
       if (context?.previousEditorData) {
-        queryClient.setQueryData(
-          courseKeys.editor(variables.courseId),
-          context.previousEditorData,
-        );
+        queryClient.setQueryData(courseKeys.editor(variables.courseId), context.previousEditorData);
       }
     },
     onSettled: (_, __, variables) => {
@@ -500,8 +460,7 @@ export function useUpsertAccessRules() {
     ApiError,
     { courseId: string; payload: UpdateCourseAccessRuleRequest }
   >({
-    mutationFn: ({ courseId, payload }) =>
-      coursesService.upsertAccessRules(courseId, payload),
+    mutationFn: ({ courseId, payload }) => coursesService.upsertAccessRules(courseId, payload),
     onSuccess: (data, variables) => {
       queryClient.setQueryData<CourseEditorDataResponse>(
         courseKeys.editor(variables.courseId),
@@ -529,8 +488,7 @@ export function useUpsertSettings() {
     ApiError,
     { courseId: string; payload: UpdateCourseSettingsRequest }
   >({
-    mutationFn: ({ courseId, payload }) =>
-      coursesService.upsertSettings(courseId, payload),
+    mutationFn: ({ courseId, payload }) => coursesService.upsertSettings(courseId, payload),
     onSuccess: (data, variables) => {
       queryClient.setQueryData<CourseEditorDataResponse>(
         courseKeys.editor(variables.courseId),
@@ -561,8 +519,7 @@ export function useUpsertPricing() {
     ApiError,
     { courseId: string; payload: UpdateCoursePricingRequest }
   >({
-    mutationFn: ({ courseId, payload }) =>
-      coursesService.upsertPricing(courseId, payload),
+    mutationFn: ({ courseId, payload }) => coursesService.upsertPricing(courseId, payload),
     onSuccess: (data, variables) => {
       queryClient.setQueryData<CourseEditorDataResponse>(
         courseKeys.editor(variables.courseId),
@@ -634,8 +591,7 @@ export function useCreateCourseInclude() {
     ApiError,
     { courseId: string; payload: CreateCourseIncludeRequest }
   >({
-    mutationFn: ({ courseId, payload }) =>
-      coursesService.createInclude(courseId, payload),
+    mutationFn: ({ courseId, payload }) => coursesService.createInclude(courseId, payload),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
@@ -671,13 +627,8 @@ export function useUpdateCourseInclude() {
 export function useDeleteCourseInclude() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    { success: boolean },
-    ApiError,
-    { courseId: string; includeId: string }
-  >({
-    mutationFn: ({ courseId, includeId }) =>
-      coursesService.deleteInclude(courseId, includeId),
+  return useMutation<{ success: boolean }, ApiError, { courseId: string; includeId: string }>({
+    mutationFn: ({ courseId, includeId }) => coursesService.deleteInclude(courseId, includeId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),
@@ -697,8 +648,7 @@ export function useReorderCourseIncludes() {
     ApiError,
     { courseId: string; payload: ReorderCourseIncludesRequest }
   >({
-    mutationFn: ({ courseId, payload }) =>
-      coursesService.reorderIncludes(courseId, payload),
+    mutationFn: ({ courseId, payload }) => coursesService.reorderIncludes(courseId, payload),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(variables.courseId),

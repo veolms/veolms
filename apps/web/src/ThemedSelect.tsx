@@ -63,9 +63,8 @@ export interface ThemedSelectProps<Value extends string = string> {
   onClose?: () => void;
 }
 
-const joinClasses = (
-  ...classes: Array<string | false | null | undefined>
-): string => classes.filter(Boolean).join(" ");
+const joinClasses = (...classes: Array<string | false | null | undefined>): string =>
+  classes.filter(Boolean).join(" ");
 
 interface MenuPosition {
   left: number;
@@ -116,18 +115,12 @@ export function ThemedSelect<Value extends string>({
   // immediately; only active typing should wait for the debounce window.
   const effectiveSearchQuery = searchQuery.trim() ? debouncedSearchQuery : "";
 
-  const foundIndex = options.findIndex(
-    ([optionValue]) => optionValue === value,
-  );
+  const foundIndex = options.findIndex(([optionValue]) => optionValue === value);
   const selectedIndex = foundIndex >= 0 ? foundIndex : -1;
-  const selectedOption =
-    selectedIndex >= 0 ? options[selectedIndex] : undefined;
-  const selectedLabel =
-    selectedOption?.[1] ?? (value || searchPlaceholder || "Select...");
+  const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : undefined;
+  const selectedLabel = selectedOption?.[1] ?? (value || searchPlaceholder || "Select...");
   const selectedFlag = selectedOption?.[2]?.flag;
-  const triggerLabel = ariaLabel
-    ? `${ariaLabel}: ${selectedLabel}`
-    : selectedLabel;
+  const triggerLabel = ariaLabel ? `${ariaLabel}: ${selectedLabel}` : selectedLabel;
   const menuId = id ? `${id}-menu` : undefined;
 
   const filteredOptions = useMemo(() => {
@@ -156,16 +149,8 @@ export function ThemedSelect<Value extends string>({
       const matchVal = val.toLowerCase().includes(query);
       const matchExtraLabel = extra?.label?.toLowerCase().includes(query);
       const matchSubtitle = extra?.subtitle?.toLowerCase().includes(query);
-      const matchKeywords = extra?.searchKeywords
-        ?.toLowerCase()
-        .includes(query);
-      return Boolean(
-        matchLabel ||
-        matchVal ||
-        matchExtraLabel ||
-        matchSubtitle ||
-        matchKeywords,
-      );
+      const matchKeywords = extra?.searchKeywords?.toLowerCase().includes(query);
+      return Boolean(matchLabel || matchVal || matchExtraLabel || matchSubtitle || matchKeywords);
     });
   }, [options, searchable, effectiveSearchQuery, defaultLimit, value]);
 
@@ -181,18 +166,12 @@ export function ThemedSelect<Value extends string>({
         const visibleLabel = extra?.label ?? label;
         return Math.max(longest, context.measureText(visibleLabel).width);
       }, 0);
-      const searchWidth = searchable
-        ? context.measureText(searchPlaceholder).width + 88
-        : 0;
-      const actionWidth = action
-        ? context.measureText(action.label).width + 54
-        : 0;
+      const searchWidth = searchable ? context.measureText(searchPlaceholder).width + 88 : 0;
+      const actionWidth = action ? context.measureText(action.label).width + 54 : 0;
 
       // Include item padding, the selected indicator, and an optional flag so
       // labels have room to render before the viewport clamp is applied.
-      return Math.ceil(
-        Math.max(longestOptionWidth + 54, searchWidth, actionWidth),
-      );
+      return Math.ceil(Math.max(longestOptionWidth + 54, searchWidth, actionWidth));
     },
     [action, options, searchPlaceholder, searchable],
   );
@@ -206,13 +185,7 @@ export function ThemedSelect<Value extends string>({
     const gap = 6;
     const desiredHeight = Math.min(
       340,
-      Math.max(
-        48,
-        (searchable ? 44 : 0) +
-          filteredOptions.length * 38 +
-          (action ? 42 : 0) +
-          12,
-      ),
+      Math.max(48, (searchable ? 44 : 0) + filteredOptions.length * 38 + (action ? 42 : 0) + 12),
     );
     const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
     const spaceAbove = rect.top - viewportPadding;
@@ -227,11 +200,7 @@ export function ThemedSelect<Value extends string>({
       menuMinWidth ?? 0,
       measureNaturalMenuWidth(trigger),
     );
-    const width = Math.min(
-      desiredWidth,
-      menuMaxWidth,
-      window.innerWidth - viewportPadding * 2,
-    );
+    const width = Math.min(desiredWidth, menuMaxWidth, window.innerWidth - viewportPadding * 2);
     let left = rect.left;
     if (left + width > window.innerWidth - viewportPadding) {
       left = Math.max(viewportPadding, rect.right - width);
@@ -265,9 +234,7 @@ export function ThemedSelect<Value extends string>({
       if (searchable && searchInputRef.current) {
         searchInputRef.current.focus({ preventScroll: true });
       } else {
-        const selectedItem = itemRefs.current.find(
-          (item) => item?.dataset.value === value,
-        );
+        const selectedItem = itemRefs.current.find((item) => item?.dataset.value === value);
         (selectedItem ?? itemRefs.current[0])?.focus({
           preventScroll: true,
         });
@@ -299,11 +266,7 @@ export function ThemedSelect<Value extends string>({
     if (!open) return undefined;
     const closeFromOutside = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (
-        triggerRef.current?.contains(target) ||
-        contentRef.current?.contains(target)
-      )
-        return;
+      if (triggerRef.current?.contains(target) || contentRef.current?.contains(target)) return;
       closeMenu();
     };
     const reposition = () => {
@@ -337,9 +300,7 @@ export function ThemedSelect<Value extends string>({
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const isSearchFocused = document.activeElement === searchInputRef.current;
     const isActionFocused = document.activeElement === actionButtonRef.current;
-    const currentIndex = itemRefs.current.indexOf(
-      document.activeElement as HTMLButtonElement,
-    );
+    const currentIndex = itemRefs.current.indexOf(document.activeElement as HTMLButtonElement);
 
     if (event.key === "Escape" || event.key === "Tab") {
       event.preventDefault();
@@ -459,8 +420,7 @@ export function ThemedSelect<Value extends string>({
         }
         nextIndex = filteredOptions.length - 1;
       } else {
-        nextIndex =
-          (currentIndex - 1 + filteredOptions.length) % filteredOptions.length;
+        nextIndex = (currentIndex - 1 + filteredOptions.length) % filteredOptions.length;
       }
     }
     if (event.key === "Home") {
@@ -512,15 +472,10 @@ export function ThemedSelect<Value extends string>({
               {selectedFlag}
             </span>
           )}
-          <span className={compactOnMobile ? "max-sm:sr-only" : undefined}>
-            {selectedLabel}
-          </span>
+          <span className={compactOnMobile ? "max-sm:sr-only" : undefined}>{selectedLabel}</span>
         </span>
         <span
-          className={joinClasses(
-            "themed-select__caret",
-            compactOnMobile && "max-sm:hidden",
-          )}
+          className={joinClasses("themed-select__caret", compactOnMobile && "max-sm:hidden")}
           aria-hidden="true"
         >
           <CaretDown size={16} weight="bold" />
@@ -585,52 +540,42 @@ export function ThemedSelect<Value extends string>({
               {filteredOptions.length === 0 ? (
                 <div className="themed-select__empty">No results found</div>
               ) : (
-                filteredOptions.map(
-                  ([optionValue, optionLabel, extra], index) => {
-                    const isChecked = optionValue === value;
-                    const itemLabel = extra?.label ?? optionLabel;
-                    return (
-                      <button
-                        ref={(node) => {
-                          itemRefs.current[index] = node;
-                        }}
-                        type="button"
-                        role="option"
-                        aria-selected={isChecked}
-                        data-value={optionValue}
-                        data-state={isChecked ? "checked" : "unchecked"}
-                        className="themed-select__item"
-                        key={optionValue}
-                        onClick={() => {
-                          onValueChange(optionValue);
-                          closeMenu(true);
-                        }}
-                      >
-                        <span className="themed-select__item-content">
-                          {extra?.flag && (
-                            <span
-                              className="themed-select__item-flag"
-                              aria-hidden="true"
-                            >
-                              {extra.flag}
-                            </span>
-                          )}
-                          <span className="themed-select__item-label">
-                            {itemLabel}
-                          </span>
-                        </span>
-                        {isChecked && (
-                          <span
-                            className="themed-select__indicator"
-                            aria-hidden="true"
-                          >
-                            <Check size={15} weight="bold" />
+                filteredOptions.map(([optionValue, optionLabel, extra], index) => {
+                  const isChecked = optionValue === value;
+                  const itemLabel = extra?.label ?? optionLabel;
+                  return (
+                    <button
+                      ref={(node) => {
+                        itemRefs.current[index] = node;
+                      }}
+                      type="button"
+                      role="option"
+                      aria-selected={isChecked}
+                      data-value={optionValue}
+                      data-state={isChecked ? "checked" : "unchecked"}
+                      className="themed-select__item"
+                      key={optionValue}
+                      onClick={() => {
+                        onValueChange(optionValue);
+                        closeMenu(true);
+                      }}
+                    >
+                      <span className="themed-select__item-content">
+                        {extra?.flag && (
+                          <span className="themed-select__item-flag" aria-hidden="true">
+                            {extra.flag}
                           </span>
                         )}
-                      </button>
-                    );
-                  },
-                )
+                        <span className="themed-select__item-label">{itemLabel}</span>
+                      </span>
+                      {isChecked && (
+                        <span className="themed-select__indicator" aria-hidden="true">
+                          <Check size={15} weight="bold" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
               )}
             </div>
             {action && (

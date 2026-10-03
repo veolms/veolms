@@ -42,11 +42,7 @@ export function createRefundRequestController({
   ) {
     const userId = request.user!.id;
     const { orderId } = request.params;
-    const result = await service.submitStudentRefundRequest(
-      userId,
-      orderId,
-      request.body,
-    );
+    const result = await service.submitStudentRefundRequest(userId, orderId, request.body);
     reply.status(201).send(result);
   }
 
@@ -74,11 +70,7 @@ export function createRefundRequestController({
   ) {
     const adminUserId = request.user!.id;
     const { requestId } = request.params;
-    const result = await service.reviewRefundRequest(
-      adminUserId,
-      requestId,
-      request.body,
-    );
+    const result = await service.reviewRefundRequest(adminUserId, requestId, request.body);
     reply.status(200).send(result.refundRequest);
   }
 

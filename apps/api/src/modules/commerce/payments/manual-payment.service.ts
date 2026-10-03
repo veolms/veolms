@@ -1,8 +1,5 @@
 import crypto from "node:crypto";
-import type {
-  DatabaseExecutor as Executor,
-  ManualPaymentStatus,
-} from "@veolms/database";
+import type { DatabaseExecutor as Executor, ManualPaymentStatus } from "@veolms/database";
 import type {
   ManualPaymentRequest,
   SubmitManualPaymentRequest,
@@ -23,9 +20,7 @@ export interface ManualPaymentService {
     request: SubmitManualPaymentRequest,
   ): Promise<ManualPaymentRequest>;
   listUserManualPayments(userId: string): Promise<ManualPaymentRequest[]>;
-  listAllManualPayments(
-    status?: ManualPaymentStatus,
-  ): Promise<ManualPaymentRequest[]>;
+  listAllManualPayments(status?: ManualPaymentStatus): Promise<ManualPaymentRequest[]>;
   verifyManualPayment(
     adminUserId: string,
     requestId: string,
@@ -59,10 +54,7 @@ export function createManualPaymentService({
       );
     }
 
-    const existing = await manualPaymentRepo.findManualPaymentRequestByOrderId(
-      database,
-      orderId,
-    );
+    const existing = await manualPaymentRepo.findManualPaymentRequestByOrderId(database, orderId);
     if (existing && existing.status === "verified") {
       throw new AppError(
         409,
@@ -100,13 +92,8 @@ export function createManualPaymentService({
     };
   }
 
-  async function listUserManualPayments(
-    userId: string,
-  ): Promise<ManualPaymentRequest[]> {
-    const rows = await manualPaymentRepo.listManualPaymentRequestsByUser(
-      database,
-      userId,
-    );
+  async function listUserManualPayments(userId: string): Promise<ManualPaymentRequest[]> {
+    const rows = await manualPaymentRepo.listManualPaymentRequestsByUser(database, userId);
     return rows.map((r) => ({
       id: r.id,
       orderId: r.order_id,
@@ -126,10 +113,7 @@ export function createManualPaymentService({
   async function listAllManualPayments(
     status?: ManualPaymentStatus,
   ): Promise<ManualPaymentRequest[]> {
-    const rows = await manualPaymentRepo.listAllManualPaymentRequests(
-      database,
-      status,
-    );
+    const rows = await manualPaymentRepo.listAllManualPaymentRequests(database, status);
     return rows.map((r) => ({
       id: r.id,
       orderId: r.order_id,
@@ -151,16 +135,9 @@ export function createManualPaymentService({
     requestId: string,
     request: VerifyManualPaymentRequest,
   ): Promise<ManualPaymentRequest> {
-    const req = await manualPaymentRepo.findManualPaymentRequestById(
-      database,
-      requestId,
-    );
+    const req = await manualPaymentRepo.findManualPaymentRequestById(database, requestId);
     if (!req) {
-      throw new AppError(
-        404,
-        "MANUAL_PAYMENT_NOT_FOUND",
-        "Manual payment request not found.",
-      );
+      throw new AppError(404, "MANUAL_PAYMENT_NOT_FOUND", "Manual payment request not found.");
     }
 
     if (req.status !== "pending") {
@@ -177,18 +154,17 @@ export function createManualPaymentService({
       // Execute verified approval inside transaction
       await database.transaction().execute(async (trx) => {
         // 1. Update manual payment request to verified atomically (must be pending)
-        const updatedReq =
-          await manualPaymentRepo.updateManualPaymentRequestStatus(
-            trx,
-            requestId,
-            {
-              status: "verified",
-              admin_notes: request.adminNotes ?? null,
-              verified_by: adminUserId,
-              verified_at: now,
-            },
-            "pending",
-          );
+        const updatedReq = await manualPaymentRepo.updateManualPaymentRequestStatus(
+          trx,
+          requestId,
+          {
+            status: "verified",
+            admin_notes: request.adminNotes ?? null,
+            verified_by: adminUserId,
+            verified_at: now,
+          },
+          "pending",
+        );
         if (!updatedReq) {
           throw new AppError(
             400,
@@ -203,11 +179,7 @@ export function createManualPaymentService({
         }
 
         // 2. Mark order as paid
-        const markedPaid = await orderRepo.markOrderPaidIfPending(
-          trx,
-          order.id,
-          now,
-        );
+        const markedPaid = await orderRepo.markOrderPaidIfPending(trx, order.id, now);
         if (!markedPaid) {
           throw new AppError(
             400,
@@ -238,12 +210,7 @@ export function createManualPaymentService({
 
         // 4. Grant course access & active enrollment with admin_grant source (audited manual grant)
         const orderItems = await orderRepo.listOrderItems(trx, order.id);
-        await courseAccessService.grantAccessForOrder(
-          trx,
-          order,
-          orderItems,
-          now,
-        );
+        await courseAccessService.grantAccessForOrder(trx, order, orderItems, now);
         await outbox.publish(trx, {
           type: "payment.completed",
           version: 1,
@@ -261,18 +228,17 @@ export function createManualPaymentService({
         });
       });
     } else {
-      const updatedReq =
-        await manualPaymentRepo.updateManualPaymentRequestStatus(
-          database,
-          requestId,
-          {
-            status: "rejected",
-            admin_notes: request.adminNotes ?? null,
-            verified_by: adminUserId,
-            verified_at: now,
-          },
-          "pending",
-        );
+      const updatedReq = await manualPaymentRepo.updateManualPaymentRequestStatus(
+        database,
+        requestId,
+        {
+          status: "rejected",
+          admin_notes: request.adminNotes ?? null,
+          verified_by: adminUserId,
+          verified_at: now,
+        },
+        "pending",
+      );
       if (!updatedReq) {
         throw new AppError(
           400,
@@ -282,10 +248,7 @@ export function createManualPaymentService({
       }
     }
 
-    const updated = await manualPaymentRepo.findManualPaymentRequestById(
-      database,
-      requestId,
-    );
+    const updated = await manualPaymentRepo.findManualPaymentRequestById(database, requestId);
 
     return {
       id: updated!.id,

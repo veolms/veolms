@@ -36,15 +36,12 @@ export function useDiscussionWorkspaceCardActions({
     if (!sourceId) return;
 
     const desiredBookmarked = !Boolean(card.isBookmarked);
-    const snapshot = optimisticallyUpdateDiscussionsWorkspaceMembership(
-      queryClient,
-      {
-        sourceType: isNote ? "note" : "thread",
-        sourceId,
-        sourceItem: card.workspaceItem,
-        bookmarked: desiredBookmarked,
-      },
-    );
+    const snapshot = optimisticallyUpdateDiscussionsWorkspaceMembership(queryClient, {
+      sourceType: isNote ? "note" : "thread",
+      sourceId,
+      sourceItem: card.workspaceItem,
+      bookmarked: desiredBookmarked,
+    });
     if (isNote) {
       const revision = ++noteBookmarkRevision.current;
       void learningInteractionsService
@@ -52,9 +49,7 @@ export function useDiscussionWorkspaceCardActions({
         .then((response) => {
           if (revision !== noteBookmarkRevision.current) return;
           const bookmarked =
-            typeof response.bookmarked === "boolean"
-              ? response.bookmarked
-              : desiredBookmarked;
+            typeof response.bookmarked === "boolean" ? response.bookmarked : desiredBookmarked;
           if (bookmarked !== desiredBookmarked) {
             restoreDiscussionsWorkspaceCacheSnapshot(queryClient, snapshot);
             optimisticallyUpdateDiscussionsWorkspaceMembership(queryClient, {
@@ -64,9 +59,7 @@ export function useDiscussionWorkspaceCardActions({
               bookmarked,
             });
           }
-          setNotice?.(
-            bookmarked ? "Added to bookmarks" : "Removed from bookmarks",
-          );
+          setNotice?.(bookmarked ? "Added to bookmarks" : "Removed from bookmarks");
           void queryClient.invalidateQueries({
             queryKey: learningInteractionKeys.notesRoot(),
           });
@@ -89,9 +82,7 @@ export function useDiscussionWorkspaceCardActions({
           : undefined,
       queryClient,
       onSuccess: (bookmarked) => {
-        setNotice?.(
-          bookmarked ? "Added to bookmarks" : "Removed from bookmarks",
-        );
+        setNotice?.(bookmarked ? "Added to bookmarks" : "Removed from bookmarks");
       },
       onFailure: () => {
         restoreDiscussionsWorkspaceCacheSnapshot(queryClient, snapshot);
@@ -104,15 +95,12 @@ export function useDiscussionWorkspaceCardActions({
     if (!sourceId || !canFollow) return;
 
     const desiredFollowed = !Boolean(card.isFollowing);
-    const snapshot = optimisticallyUpdateDiscussionsWorkspaceMembership(
-      queryClient,
-      {
-        sourceType: "thread",
-        sourceId,
-        sourceItem: card.workspaceItem,
-        following: desiredFollowed,
-      },
-    );
+    const snapshot = optimisticallyUpdateDiscussionsWorkspaceMembership(queryClient, {
+      sourceType: "thread",
+      sourceId,
+      sourceItem: card.workspaceItem,
+      following: desiredFollowed,
+    });
     desiredStateCoordinator.setFollowed({
       threadId: sourceId,
       desiredFollowed,
@@ -123,9 +111,7 @@ export function useDiscussionWorkspaceCardActions({
           : undefined,
       queryClient,
       onSuccess: (followed) => {
-        setNotice?.(
-          followed ? "Following discussion" : "Unfollowed discussion",
-        );
+        setNotice?.(followed ? "Following discussion" : "Unfollowed discussion");
       },
       onFailure: () => {
         restoreDiscussionsWorkspaceCacheSnapshot(queryClient, snapshot);
@@ -138,11 +124,8 @@ export function useDiscussionWorkspaceCardActions({
     if (!destination || typeof window === "undefined") return;
 
     try {
-      if (!navigator.clipboard?.writeText)
-        throw new Error("Clipboard unavailable");
-      await navigator.clipboard.writeText(
-        new URL(destination, window.location.origin).toString(),
-      );
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(new URL(destination, window.location.origin).toString());
       setNotice?.("Link copied");
     } catch {
       setNotice?.("Couldn't copy link");

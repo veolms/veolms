@@ -40,16 +40,11 @@ export class RazorpayPaymentGateway implements PaymentGateway {
   }
 
   private getBasicAuthHeader(): string {
-    const credentials = Buffer.from(`${this.keyId}:${this.keySecret}`).toString(
-      "base64",
-    );
+    const credentials = Buffer.from(`${this.keyId}:${this.keySecret}`).toString("base64");
     return `Basic ${credentials}`;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {},
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = {
       Authorization: this.getBasicAuthHeader(),
@@ -63,8 +58,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
     });
 
     if (!response.ok) {
-      let errorBody:
-        { error?: { description?: string }; description?: string } | undefined;
+      let errorBody: { error?: { description?: string }; description?: string } | undefined;
       try {
         errorBody = (await response.json()) as {
           error?: { description?: string };
@@ -74,9 +68,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
         errorBody = { description: response.statusText };
       }
       const message =
-        errorBody?.error?.description ||
-        errorBody?.description ||
-        "Razorpay API error";
+        errorBody?.error?.description || errorBody?.description || "Razorpay API error";
       throw new AppError(response.status, "PAYMENT_GATEWAY_ERROR", message);
     }
 
@@ -86,9 +78,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
   /**
    * Creates an upstream Razorpay order (POST /v1/orders)
    */
-  async createOrder(
-    input: CreateGatewayOrderInput,
-  ): Promise<GatewayOrderOutput> {
+  async createOrder(input: CreateGatewayOrderInput): Promise<GatewayOrderOutput> {
     const payload = {
       amount: input.amount,
       currency: input.currency,
@@ -196,9 +186,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
    * Initiates a refund in Razorpay (POST /v1/payments/:id/refund)
    * Passes X-Refund-Idempotency header if idempotencyKey is provided to prevent duplicate refunds.
    */
-  async refundPayment(
-    input: CreateGatewayRefundInput,
-  ): Promise<GatewayRefundOutput> {
+  async refundPayment(input: CreateGatewayRefundInput): Promise<GatewayRefundOutput> {
     const payload = {
       amount: input.amount,
       notes: {
@@ -257,9 +245,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
   /**
    * Fetches payments associated with a Razorpay order (GET /v1/orders/:id/payments)
    */
-  async fetchOrderPayments(
-    gatewayOrderId: string,
-  ): Promise<GatewayPaymentDetails[]> {
+  async fetchOrderPayments(gatewayOrderId: string): Promise<GatewayPaymentDetails[]> {
     const response = await this.request<{
       entity: string;
       count: number;
@@ -341,18 +327,13 @@ export class RazorpayPaymentGateway implements PaymentGateway {
    * Verifies Razorpay webhook header signature:
    * HMAC_SHA256(raw_body, webhook_secret) == x-razorpay-signature
    */
-  verifyWebhookSignature(
-    rawBody: string | Uint8Array,
-    signature: string,
-  ): boolean {
+  verifyWebhookSignature(rawBody: string | Uint8Array, signature: string): boolean {
     if (!this.webhookSecret || !rawBody) {
       return false;
     }
 
     const payloadBuffer =
-      typeof rawBody === "string"
-        ? Buffer.from(rawBody, "utf-8")
-        : Buffer.from(rawBody);
+      typeof rawBody === "string" ? Buffer.from(rawBody, "utf-8") : Buffer.from(rawBody);
 
     const expectedSignature = crypto
       .createHmac("sha256", this.webhookSecret)
@@ -376,10 +357,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
    * flow through the normal store-and-enqueue path and land in
    * PaymentWorker's fallback branch (ack + mark processed, no fulfillment).
    */
-  normalizeWebhookEvent(
-    rawPayload: unknown,
-    eventId?: string,
-  ): NormalizedPaymentEvent {
+  normalizeWebhookEvent(rawPayload: unknown, eventId?: string): NormalizedPaymentEvent {
     const payloadObj = rawPayload as
       | {
           id?: string;
@@ -451,18 +429,13 @@ export class RazorpayPaymentGateway implements PaymentGateway {
     }
 
     const resolvedEventId =
-      eventId ||
-      payloadObj?.id ||
-      paymentEntity?.id ||
-      refundEntity?.id ||
-      crypto.randomUUID();
+      eventId || payloadObj?.id || paymentEntity?.id || refundEntity?.id || crypto.randomUUID();
 
     return {
       eventId: resolvedEventId,
       eventType,
       provider: this.providerName,
-      gatewayOrderId:
-        paymentEntity?.order_id ?? payloadObj?.payload?.order?.entity?.id,
+      gatewayOrderId: paymentEntity?.order_id ?? payloadObj?.payload?.order?.entity?.id,
       gatewayPaymentId: paymentEntity?.id ?? refundEntity?.payment_id,
       gatewayRefundId: refundEntity?.id,
       amount: paymentEntity?.amount ?? refundEntity?.amount,
@@ -480,9 +453,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       errorCode: paymentEntity?.error_code,
       errorDescription: paymentEntity?.error_description,
       rawPayload,
-      occurredAt: new Date(
-        payloadObj?.created_at ? payloadObj.created_at * 1000 : Date.now(),
-      ),
+      occurredAt: new Date(payloadObj?.created_at ? payloadObj.created_at * 1000 : Date.now()),
     };
   }
 }

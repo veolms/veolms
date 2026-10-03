@@ -21,18 +21,10 @@ type CourseAccessAliasedDB = Database & {
 // neither access-restricted nor paid. Shared by the single-course check in
 // `canAccessCourse` and the bulk listing in `listAccessibleCourseIds` so the
 // two can't drift apart.
-function isOpenCourseAccess(
-  eb: ExpressionBuilder<CourseAccessAliasedDB, "c" | "ar" | "p">,
-) {
+function isOpenCourseAccess(eb: ExpressionBuilder<CourseAccessAliasedDB, "c" | "ar" | "p">) {
   return eb.and([
-    eb.or([
-      eb("ar.access_type", "is", null),
-      eb("ar.access_type", "!=", "restricted"),
-    ]),
-    eb.or([
-      eb("p.pricing_type", "is", null),
-      eb("p.pricing_type", "!=", "paid"),
-    ]),
+    eb.or([eb("ar.access_type", "is", null), eb("ar.access_type", "!=", "restricted")]),
+    eb.or([eb("p.pricing_type", "is", null), eb("p.pricing_type", "!=", "paid")]),
   ]);
 }
 
@@ -56,11 +48,7 @@ export interface NoteAccessTarget {
 }
 
 export interface DiscussionAccess {
-  canAccessCourse(
-    db: DatabaseExecutor,
-    actor: DiscussionActor,
-    courseId: string,
-  ): Promise<boolean>;
+  canAccessCourse(db: DatabaseExecutor, actor: DiscussionActor, courseId: string): Promise<boolean>;
   assertCanAccessCourse(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -74,11 +62,7 @@ export interface DiscussionAccess {
   assertNotesEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
   assertCommentsEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
   assertQaEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
-  assertThreadKindEnabled(
-    db: DatabaseExecutor,
-    courseId: string,
-    kind: string,
-  ): Promise<void>;
+  assertThreadKindEnabled(db: DatabaseExecutor, courseId: string, kind: string): Promise<void>;
   assertCanAccessThreadCourse(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -311,22 +295,12 @@ export function createDiscussionAccess(): DiscussionAccess {
         .where("user_id", "=", userId)
         .where("is_active", "=", true)
         .where("scope", "in", scopesForKind(kind))
-        .where((eb) =>
-          eb.or([eb("course_id", "is", null), eb("course_id", "=", courseId)]),
-        )
-        .where((eb) =>
-          eb.or([
-            eb("expires_at", "is", null),
-            eb("expires_at", ">", new Date()),
-          ]),
-        )
+        .where((eb) => eb.or([eb("course_id", "is", null), eb("course_id", "=", courseId)]))
+        .where((eb) => eb.or([eb("expires_at", "is", null), eb("expires_at", ">", new Date())]))
         .executeTakeFirst();
 
       if (activeSuspension) {
-        throw DiscussionErrors.suspended(
-          activeSuspension.reason,
-          activeSuspension.scope,
-        );
+        throw DiscussionErrors.suspended(activeSuspension.reason, activeSuspension.scope);
       }
     },
 
@@ -369,12 +343,7 @@ export function createDiscussionAccess(): DiscussionAccess {
         .selectFrom("courses as c")
         .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
         .leftJoin("course_pricing as p", "p.course_id", "c.id")
-        .select((eb) => [
-          "c.id",
-          "c.creator_id",
-          "c.status",
-          isOpenCourseAccess(eb).as("isOpen"),
-        ])
+        .select((eb) => ["c.id", "c.creator_id", "c.status", isOpenCourseAccess(eb).as("isOpen")])
         .where("c.id", "=", courseId)
         .where("c.deleted_at", "is", null)
         .executeTakeFirst();
@@ -388,10 +357,7 @@ export function createDiscussionAccess(): DiscussionAccess {
         ids.add(course.creator_id);
       }
 
-      const grantMemberIds = await access.listActiveUserIdsForCourse(
-        db,
-        courseId,
-      );
+      const grantMemberIds = await access.listActiveUserIdsForCourse(db, courseId);
       for (const id of grantMemberIds) ids.add(id);
 
       const now = new Date();
@@ -401,10 +367,7 @@ export function createDiscussionAccess(): DiscussionAccess {
         .where("course_id", "=", courseId)
         .where("status", "=", "active")
         .where((eb) =>
-          eb.or([
-            eb("access_expires_at", "is", null),
-            eb("access_expires_at", ">", now),
-          ]),
+          eb.or([eb("access_expires_at", "is", null), eb("access_expires_at", ">", now)]),
         )
         .execute();
       for (const row of enrollments) ids.add(row.user_id);
@@ -412,12 +375,7 @@ export function createDiscussionAccess(): DiscussionAccess {
       const roles = await db
         .selectFrom("role_assignments")
         .select("user_id")
-        .where((eb) =>
-          eb.or([
-            eb("course_id", "=", courseId),
-            eb("scope_type", "=", "platform"),
-          ]),
-        )
+        .where((eb) => eb.or([eb("course_id", "=", courseId), eb("scope_type", "=", "platform")]))
         .execute();
       for (const row of roles) ids.add(row.user_id);
 
@@ -446,11 +404,7 @@ export function createDiscussionAccess(): DiscussionAccess {
       }
       const allowed = await canModerateCourse(db, actor, courseId);
       if (!allowed) {
-        throw httpError(
-          403,
-          "FORBIDDEN",
-          "You do not have permission to moderate this course.",
-        );
+        throw httpError(403, "FORBIDDEN", "You do not have permission to moderate this course.");
       }
     },
 
@@ -466,10 +420,7 @@ export function createDiscussionAccess(): DiscussionAccess {
   };
 }
 
-export function discussionActor(user: {
-  id: string;
-  roles: readonly string[];
-}): DiscussionActor {
+export function discussionActor(user: { id: string; roles: readonly string[] }): DiscussionActor {
   return { userId: user.id, roles: user.roles };
 }
 

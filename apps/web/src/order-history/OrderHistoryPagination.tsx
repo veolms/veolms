@@ -28,7 +28,7 @@ export function OrderHistoryPagination({
 
   return (
     <nav
-      className="flex flex-col items-center justify-between gap-3 py-4 text-xs sm:text-sm text-(--muted) sm:flex-row"
+      className="flex flex-col items-center justify-between gap-3 py-4 text-xs text-(--muted) sm:flex-row sm:text-sm"
       aria-label="Purchase history pages"
     >
       <p>
@@ -36,11 +36,7 @@ export function OrderHistoryPagination({
         <span className="font-semibold text-(--text)">
           {startItem}–{endItem}
         </span>{" "}
-        of{" "}
-        <span className="font-semibold text-(--text)">
-          {totalFilteredCount}
-        </span>{" "}
-        orders
+        of <span className="font-semibold text-(--text)">{totalFilteredCount}</span> orders
       </p>
       <div className="flex items-center gap-1.5">
         <button
@@ -48,7 +44,7 @@ export function OrderHistoryPagination({
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage <= 1}
           aria-label="Previous page"
-          className="grid size-9 place-items-center rounded-lg border border-(--border) bg-(--card-surface) text-(--muted) hover:bg-(--hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40 transition-colors cursor-pointer"
+          className="grid size-9 cursor-pointer place-items-center rounded-lg border border-(--border) bg-(--card-surface) text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40"
         >
           <CaretLeft size={16} />
         </button>
@@ -59,7 +55,7 @@ export function OrderHistoryPagination({
             onClick={() => onPageChange(page)}
             aria-current={page === currentPage ? "page" : undefined}
             aria-label={`Page ${page}`}
-            className={`grid size-9 place-items-center rounded-lg text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+            className={`grid size-9 cursor-pointer place-items-center rounded-lg text-xs font-semibold transition-colors sm:text-sm ${
               page === currentPage
                 ? "bg-(--accent) text-(--on-accent,#ffffff) shadow-xs"
                 : "border border-(--border) bg-(--card-surface) text-(--muted) hover:bg-(--hover) hover:text-(--text)"
@@ -73,7 +69,7 @@ export function OrderHistoryPagination({
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage >= totalPages}
           aria-label="Next page"
-          className="grid size-9 place-items-center rounded-lg border border-(--border) bg-(--card-surface) text-(--muted) hover:bg-(--hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40 transition-colors cursor-pointer"
+          className="grid size-9 cursor-pointer place-items-center rounded-lg border border-(--border) bg-(--card-surface) text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40"
         >
           <CaretRight size={16} />
         </button>

@@ -8,11 +8,7 @@ import {
 } from "./keymap.js";
 import type { PlayerKeyboardActions } from "./types.js";
 
-const keyEvent = (
-  type: "keydown" | "keyup",
-  code: string,
-  options: KeyboardEventInit = {},
-) =>
+const keyEvent = (type: "keydown" | "keyup", code: string, options: KeyboardEventInit = {}) =>
   new KeyboardEvent(type, {
     bubbles: true,
     cancelable: true,
@@ -54,12 +50,8 @@ describe("default player keyboard shortcuts", () => {
     const controller = createPlayerKeyboardController({ actions });
 
     controller.handleKeyDown(keyEvent("keydown", "KeyK", { key: "k" }));
-    controller.handleKeyDown(
-      keyEvent("keydown", "ArrowLeft", { key: "ArrowLeft" }),
-    );
-    controller.handleKeyDown(
-      keyEvent("keydown", "ArrowRight", { key: "ArrowRight" }),
-    );
+    controller.handleKeyDown(keyEvent("keydown", "ArrowLeft", { key: "ArrowLeft" }));
+    controller.handleKeyDown(keyEvent("keydown", "ArrowRight", { key: "ArrowRight" }));
     controller.handleKeyDown(keyEvent("keydown", "KeyJ", { key: "j" }));
     controller.handleKeyDown(keyEvent("keydown", "KeyL", { key: "l" }));
     controller.handleKeyDown(keyEvent("keydown", "KeyM", { key: "m" }));
@@ -69,12 +61,8 @@ describe("default player keyboard shortcuts", () => {
     controller.handleKeyDown(keyEvent("keydown", "KeyI", { key: "i" }));
     controller.handleKeyDown(keyEvent("keydown", "Home", { key: "Home" }));
     controller.handleKeyDown(keyEvent("keydown", "End", { key: "End" }));
-    controller.handleKeyDown(
-      keyEvent("keydown", "Digit5", { altKey: true, key: "5" }),
-    );
-    controller.handleKeyDown(
-      keyEvent("keydown", "Comma", { key: "<", shiftKey: true }),
-    );
+    controller.handleKeyDown(keyEvent("keydown", "Digit5", { altKey: true, key: "5" }));
+    controller.handleKeyDown(keyEvent("keydown", "Comma", { key: "<", shiftKey: true }));
     controller.handleKeyDown(
       keyEvent("keydown", "Period", {
         key: ">",
@@ -126,10 +114,7 @@ describe("default player keyboard shortcuts", () => {
 
   it("requires exact modifiers and does not steal unmodified number keys", () => {
     expect(
-      resolvePlayerShortcut(
-        keyEvent("keydown", "Digit5", { key: "5" }),
-        DEFAULT_PLAYER_SHORTCUTS,
-      ),
+      resolvePlayerShortcut(keyEvent("keydown", "Digit5", { key: "5" }), DEFAULT_PLAYER_SHORTCUTS),
     ).toBeNull();
     expect(
       resolvePlayerShortcut(
@@ -160,33 +145,23 @@ describe("shortcut guards and configuration", () => {
       getPlayerRoot: () => root,
     });
 
-    expect(
-      controller.handleKeyDown(
-        targetedKeyEvent("keydown", "KeyK", input, { key: "k" }),
-      ),
-    ).toBe(false);
+    expect(controller.handleKeyDown(targetedKeyEvent("keydown", "KeyK", input, { key: "k" }))).toBe(
+      false,
+    );
 
     expect(
-      controller.handleKeyDown(
-        targetedKeyEvent("keydown", "KeyK", button, { key: "k" }),
-      ),
+      controller.handleKeyDown(targetedKeyEvent("keydown", "KeyK", button, { key: "k" })),
     ).toBe(true);
     expect(
-      controller.handleKeyDown(
-        targetedKeyEvent("keydown", "Space", button, { key: " " }),
-      ),
+      controller.handleKeyDown(targetedKeyEvent("keydown", "Space", button, { key: " " })),
     ).toBe(false);
     button.dataset.playerShortcutSurface = "";
     expect(
-      controller.handleKeyDown(
-        targetedKeyEvent("keydown", "Space", button, { key: " " }),
-      ),
+      controller.handleKeyDown(targetedKeyEvent("keydown", "Space", button, { key: " " })),
     ).toBe(true);
-    expect(
-      controller.handleKeyDown(
-        targetedKeyEvent("keydown", "KeyK", root, { key: "k" }),
-      ),
-    ).toBe(true);
+    expect(controller.handleKeyDown(targetedKeyEvent("keydown", "KeyK", root, { key: "k" }))).toBe(
+      true,
+    );
     expect(actions.togglePlayPause).toHaveBeenCalledTimes(2);
     root.remove();
   });
@@ -215,14 +190,10 @@ describe("shortcut guards and configuration", () => {
     const controller = createPlayerKeyboardController({ actions });
 
     expect(
-      controller.handleKeyDown(
-        targetedKeyEvent("keydown", "Home", menuItem, { key: "Home" }),
-      ),
+      controller.handleKeyDown(targetedKeyEvent("keydown", "Home", menuItem, { key: "Home" })),
     ).toBe(false);
     expect(
-      controller.handleKeyDown(
-        targetedKeyEvent("keydown", "KeyM", menuItem, { key: "m" }),
-      ),
+      controller.handleKeyDown(targetedKeyEvent("keydown", "KeyM", menuItem, { key: "m" })),
     ).toBe(true);
     expect(actions.toggleMute).toHaveBeenCalledOnce();
     menuItem.remove();
@@ -233,27 +204,14 @@ describe("shortcut guards and configuration", () => {
       playPause: ["KeyP"],
       toggleMute: false,
     });
+    expect(resolvePlayerShortcut(keyEvent("keydown", "KeyK", { key: "k" }), bindings)).toBeNull();
+    expect(resolvePlayerShortcut(keyEvent("keydown", "KeyP", { key: "p" }), bindings)?.action).toBe(
+      "playPause",
+    );
+    expect(resolvePlayerShortcut(keyEvent("keydown", "KeyM", { key: "m" }), bindings)).toBeNull();
     expect(
-      resolvePlayerShortcut(
-        keyEvent("keydown", "KeyK", { key: "k" }),
-        bindings,
-      ),
-    ).toBeNull();
-    expect(
-      resolvePlayerShortcut(keyEvent("keydown", "KeyP", { key: "p" }), bindings)
+      resolvePlayerShortcut(keyEvent("keydown", "ArrowLeft", { key: "ArrowLeft" }), bindings)
         ?.action,
-    ).toBe("playPause");
-    expect(
-      resolvePlayerShortcut(
-        keyEvent("keydown", "KeyM", { key: "m" }),
-        bindings,
-      ),
-    ).toBeNull();
-    expect(
-      resolvePlayerShortcut(
-        keyEvent("keydown", "ArrowLeft", { key: "ArrowLeft" }),
-        bindings,
-      )?.action,
     ).toBe("seekBackward");
   });
 });

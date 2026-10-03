@@ -16,9 +16,7 @@ export interface QuizCharge {
  * A missing row means the quiz is free. A sale price only counts when it is
  * strictly lower than the catalog price.
  */
-export function resolveQuizCharge(
-  row: QuizPricingRow | null | undefined,
-): QuizCharge {
+export function resolveQuizCharge(row: QuizPricingRow | null | undefined): QuizCharge {
   if (!row || row.pricing_type !== "paid" || row.price <= 0) {
     return {
       isPaid: false,

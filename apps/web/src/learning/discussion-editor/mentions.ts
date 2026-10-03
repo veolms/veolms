@@ -21,8 +21,7 @@ const mentionLoadingTooltip = StateField.define<Tooltip | null>({
     }
     return value;
   },
-  provide: (field) =>
-    showTooltip.compute([field], (state) => state.field(field)),
+  provide: (field) => showTooltip.compute([field], (state) => state.field(field)),
 });
 
 interface MentionCompletion extends Completion {
@@ -40,9 +39,7 @@ export function createMentionCompletionSource(
   let debounceResolve: (() => void) | null = null;
   let currentRequestId = 0;
 
-  return async (
-    context: CompletionContext,
-  ): Promise<CompletionResult | null> => {
+  return async (context: CompletionContext): Promise<CompletionResult | null> => {
     const match = context.matchBefore(/@([A-Za-z0-9_]*)$/);
     if (!match) return null;
 
@@ -63,9 +60,7 @@ export function createMentionCompletionSource(
       setNativeAutocompleteLoading(view, false);
       view.dispatch({ effects: setMentionLoadingTooltip.of(null) });
       const cachedUsers = cache.get(cacheKey)!;
-      return cachedUsers.length > 0
-        ? buildCompletionResult(match.from, cachedUsers)
-        : null;
+      return cachedUsers.length > 0 ? buildCompletionResult(match.from, cachedUsers) : null;
     }
 
     const requestId = ++currentRequestId;
@@ -93,9 +88,7 @@ export function createMentionCompletionSource(
 
     setNativeAutocompleteLoading(view, true);
     view.dispatch({
-      effects: setMentionLoadingTooltip.of(
-        createMentionLoadingTooltip(match.to),
-      ),
+      effects: setMentionLoadingTooltip.of(createMentionLoadingTooltip(match.to)),
     });
 
     try {
@@ -130,14 +123,9 @@ export function createMentionCompletionSource(
 
 export const mentionCompletionLoadingExtension = mentionLoadingTooltip;
 
-function setNativeAutocompleteLoading(
-  view: EditorView,
-  loading: boolean,
-): void {
+function setNativeAutocompleteLoading(view: EditorView, loading: boolean): void {
   view.dom
-    .querySelector<HTMLElement>(
-      ".cm-tooltip-autocomplete:not(.cm-mention-loading-panel)",
-    )
+    .querySelector<HTMLElement>(".cm-tooltip-autocomplete:not(.cm-mention-loading-panel)")
     ?.classList.toggle("cm-mention-loading-source", loading);
 }
 
@@ -189,9 +177,7 @@ function buildCompletionResult(
 }
 
 function getAvatarInitials(displayName: string, username: string): string {
-  const words = (displayName.trim() || username.trim())
-    .split(/\s+/)
-    .filter(Boolean);
+  const words = (displayName.trim() || username.trim()).split(/\s+/).filter(Boolean);
   if (words.length > 1) {
     return `${words[0]?.[0] ?? ""}${words.at(-1)?.[0] ?? ""}`.toUpperCase();
   }
@@ -202,9 +188,7 @@ export function mentionCompletionOptionClass(): string {
   return "cm-mention-option";
 }
 
-export function renderMentionCompletionAddon(
-  completion: Completion,
-): Node | null {
+export function renderMentionCompletionAddon(completion: Completion): Node | null {
   const mention = completion as MentionCompletion;
   const avatar = document.createElement("span");
   avatar.className = "cm-mention-avatar";

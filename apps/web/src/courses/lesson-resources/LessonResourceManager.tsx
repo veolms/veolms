@@ -3,10 +3,7 @@ import { UploadSimple } from "@phosphor-icons/react/UploadSimple";
 import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { X } from "@phosphor-icons/react/X";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import type {
-  CreateLessonResourceRequest,
-  LessonResource,
-} from "@veolms/contracts";
+import type { CreateLessonResourceRequest, LessonResource } from "@veolms/contracts";
 import { mediaService } from "../../services/media";
 import { LessonResourceIcon } from "./LessonResourceIcon";
 
@@ -29,9 +26,7 @@ interface LessonResourceManagerProps {
   lessonId: string;
   resources: LessonResourceItem[];
   disabled?: boolean;
-  onCreateResource: (
-    payload: CreateLessonResourceRequest,
-  ) => Promise<LessonResource>;
+  onCreateResource: (payload: CreateLessonResourceRequest) => Promise<LessonResource>;
   onResourceAdded: (resource: LessonResourceItem) => void;
   onDeleteResource: (resourceId: string) => Promise<void>;
   onResourceRemoved: (resource: LessonResourceItem) => void;
@@ -51,9 +46,7 @@ export function LessonResourceManager({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadFileName, setUploadFileName] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [deletingResourceId, setDeletingResourceId] = useState<string | null>(
-    null,
-  );
+  const [deletingResourceId, setDeletingResourceId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
 
@@ -82,19 +75,12 @@ export function LessonResourceManager({
         visibility: "protected",
       });
 
-      await mediaService.uploadFileToPresignedUrl(
-        presigned.uploadUrl,
-        file,
-        ({ percent }) => setUploadProgress(percent),
+      await mediaService.uploadFileToPresignedUrl(presigned.uploadUrl, file, ({ percent }) =>
+        setUploadProgress(percent),
       );
 
-      const confirmation = await mediaService.confirmUpload(
-        presigned.mediaAssetId,
-      );
-      if (
-        confirmation.status !== "uploaded" &&
-        confirmation.status !== "ready"
-      ) {
+      const confirmation = await mediaService.confirmUpload(presigned.mediaAssetId);
+      if (confirmation.status !== "uploaded" && confirmation.status !== "ready") {
         throw new Error("The uploaded resource could not be verified.");
       }
 
@@ -105,9 +91,7 @@ export function LessonResourceManager({
       onResourceAdded(toLessonResourceItem(created, file));
     } catch (error: unknown) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "The resource could not be uploaded.",
+        error instanceof Error ? error.message : "The resource could not be uploaded.",
       );
     } finally {
       setUploadFileName(null);
@@ -171,9 +155,7 @@ export function LessonResourceManager({
       onResourceRemoved(resource);
     } catch (error: unknown) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "The resource could not be removed.",
+        error instanceof Error ? error.message : "The resource could not be removed.",
       );
     } finally {
       setDeletingResourceId(null);
@@ -214,9 +196,7 @@ export function LessonResourceManager({
                 : "Drag and drop a resource here"}
           </span>
           <span className="mt-0.5 block truncate text-[0.72rem] text-(--muted)">
-            {isUploading
-              ? "Your upload is in progress."
-              : "or click to browse · Any file type"}
+            {isUploading ? "Your upload is in progress." : "or click to browse · Any file type"}
           </span>
         </span>
       </button>
@@ -237,10 +217,8 @@ export function LessonResourceManager({
           aria-busy="true"
         >
           <div className="flex items-center justify-between gap-3 text-[0.74rem]">
-            <span className="min-w-0 truncate text-(--text)">
-              Uploading {uploadFileName}
-            </span>
-            <span className="shrink-0 font-semibold tabular-nums text-(--accent)">
+            <span className="min-w-0 truncate text-(--text)">Uploading {uploadFileName}</span>
+            <span className="shrink-0 font-semibold text-(--accent) tabular-nums">
               {uploadProgress}%
             </span>
           </div>
@@ -270,7 +248,7 @@ export function LessonResourceManager({
             return (
               <div
                 key={resource.id}
-                className="flex items-center gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 py-2 last:border-b-0 transition-colors hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]"
+                className="flex items-center gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 py-2 transition-colors last:border-b-0 hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)]"
               >
                 <LessonResourceIcon
                   name={resource.name}
@@ -283,16 +261,13 @@ export function LessonResourceManager({
                     {resource.name}
                   </div>
                   <div className="mt-0.5 text-[0.72rem] text-(--muted)">
-                    <span>{resource.type}</span>{" "}
-                    <span aria-hidden="true">·</span>{" "}
+                    <span>{resource.type}</span> <span aria-hidden="true">·</span>{" "}
                     <span>{resource.size}</span>
                   </div>
                 </div>
                 <button
                   type="button"
-                  disabled={
-                    disabled || isUploading || Boolean(deletingResourceId)
-                  }
+                  disabled={disabled || isUploading || Boolean(deletingResourceId)}
                   onClick={() => void handleRemove(resource)}
                   className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-[7px] border-0 bg-transparent p-0 text-(--muted) transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label={"Remove " + resource.name}
@@ -329,10 +304,7 @@ export function toLessonResourceItem(
   resource: LessonResource,
   fallbackFile?: File,
 ): LessonResourceItem {
-  const filename =
-    resource.mediaAsset?.originalFilename ||
-    fallbackFile?.name ||
-    resource.title;
+  const filename = resource.mediaAsset?.originalFilename || fallbackFile?.name || resource.title;
   const mimeType = resource.mediaAsset?.mimeType || fallbackFile?.type;
   const sizeBytes = resource.mediaAsset?.sizeBytes ?? fallbackFile?.size;
 
@@ -350,11 +322,7 @@ export function toLessonResourceItem(
 
 function getResourceType(filename: string, mimeType?: string): string {
   const extension = filename.split(".").pop()?.trim().toUpperCase();
-  if (
-    extension &&
-    extension !== filename.toUpperCase() &&
-    extension.length <= 8
-  ) {
+  if (extension && extension !== filename.toUpperCase() && extension.length <= 8) {
     return extension === "JPEG" ? "JPG" : extension;
   }
 

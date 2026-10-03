@@ -1,31 +1,17 @@
 import type { FastifyRequest } from "fastify";
-import type {
-  CreateCouponRequest,
-  ListCouponsQuery,
-  UpdateCouponRequest,
-} from "@veolms/contracts";
+import type { CreateCouponRequest, ListCouponsQuery, UpdateCouponRequest } from "@veolms/contracts";
 import type { CouponService } from "./coupon.service.ts";
 
-export function createCouponController({
-  service,
-}: {
-  service: CouponService;
-}) {
-  async function listCoupons(
-    request: FastifyRequest<{ Querystring: ListCouponsQuery }>,
-  ) {
+export function createCouponController({ service }: { service: CouponService }) {
+  async function listCoupons(request: FastifyRequest<{ Querystring: ListCouponsQuery }>) {
     return await service.listCoupons(request.query);
   }
 
-  async function getCoupon(
-    request: FastifyRequest<{ Params: { couponId: string } }>,
-  ) {
+  async function getCoupon(request: FastifyRequest<{ Params: { couponId: string } }>) {
     return await service.getCouponById(request.params.couponId);
   }
 
-  async function createCoupon(
-    request: FastifyRequest<{ Body: CreateCouponRequest }>,
-  ) {
+  async function createCoupon(request: FastifyRequest<{ Body: CreateCouponRequest }>) {
     return await service.createCoupon(request.body);
   }
 
@@ -38,9 +24,7 @@ export function createCouponController({
     return await service.updateCoupon(request.params.couponId, request.body);
   }
 
-  async function deleteCoupon(
-    request: FastifyRequest<{ Params: { couponId: string } }>,
-  ) {
+  async function deleteCoupon(request: FastifyRequest<{ Params: { couponId: string } }>) {
     await service.deleteCoupon(request.params.couponId);
     return { message: "Coupon deleted successfully." };
   }

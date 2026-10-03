@@ -2,19 +2,12 @@ export type MaybePromise<Value> = Value | Promise<Value>;
 
 export type VideoSourceKind = "auto" | "dash" | "hls" | "file";
 
-export type VideoRequestKind =
-  "manifest" | "segment" | "license" | "text" | "thumbnail" | "other";
+export type VideoRequestKind = "manifest" | "segment" | "license" | "text" | "thumbnail" | "other";
 
 export type VideoEngineName = "native" | "shaka" | (string & {});
 
 export type EngineLifecycleState =
-  | "idle"
-  | "attached"
-  | "loading"
-  | "ready"
-  | "unloading"
-  | "error"
-  | "destroyed";
+  "idle" | "attached" | "loading" | "ready" | "unloading" | "error" | "destroyed";
 
 export type VideoEngineErrorCategory =
   | "NETWORK"
@@ -104,13 +97,9 @@ export interface VideoNetworkResponse {
   status?: number;
 }
 
-export type VideoRequestFilter = (
-  request: VideoNetworkRequest,
-) => MaybePromise<void>;
+export type VideoRequestFilter = (request: VideoNetworkRequest) => MaybePromise<void>;
 
-export type VideoResponseFilter = (
-  response: VideoNetworkResponse,
-) => MaybePromise<void>;
+export type VideoResponseFilter = (response: VideoNetworkResponse) => MaybePromise<void>;
 
 export interface RetryParameters {
   maxAttempts?: number;

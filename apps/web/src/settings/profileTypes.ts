@@ -25,9 +25,7 @@ export interface ProfileIdentity extends ProfilePreferences {
   roleLabel: string;
 }
 
-export const getDefaultProfileIdentity = (
-  role: ProfileRole,
-): ProfileIdentity => ({
+export const getDefaultProfileIdentity = (role: ProfileRole): ProfileIdentity => ({
   displayName: "",
   email: "",
   avatarDataUrl: null,

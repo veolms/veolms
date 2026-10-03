@@ -15,14 +15,14 @@ export function RecentPaymentsWidget({
   return (
     <section
       aria-labelledby="recent-payments-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
+      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 transition-all md:p-6"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3
           id="recent-payments-heading"
-          className="font-bold text-base text-(--text) tracking-tight"
+          className="text-base font-bold tracking-tight text-(--text)"
         >
           Recent Payments
         </h3>
@@ -30,7 +30,7 @@ export function RecentPaymentsWidget({
           <button
             type="button"
             onClick={onViewAll}
-            className="text-xs font-semibold text-(--accent) hover:underline cursor-pointer"
+            className="cursor-pointer text-xs font-semibold text-(--accent) hover:underline"
           >
             View all
           </button>
@@ -44,9 +44,9 @@ export function RecentPaymentsWidget({
             key={payment.id}
             className="flex items-center justify-between gap-3 rounded-xl p-2 transition-colors hover:bg-(--hover)"
           >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-bold text-xs shadow-sm"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold shadow-sm"
                 style={{
                   backgroundColor: payment.badgeColor,
                   color: payment.badgeTextColor || "#ffffff",
@@ -56,19 +56,19 @@ export function RecentPaymentsWidget({
                 {payment.badgeText}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold text-xs md:text-sm text-(--text)">
+                <div className="truncate text-xs font-semibold text-(--text) md:text-sm">
                   {payment.courseTitle}
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-(--muted) mt-0.5">
+                <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-(--muted)">
                   <span>{payment.date}</span>
                   <span className="opacity-60">•</span>
                   <span
                     className={
                       payment.status === "completed"
-                        ? "text-emerald-400 font-medium"
+                        ? "font-medium text-emerald-400"
                         : payment.status === "pending"
-                          ? "text-indigo-400 font-medium"
-                          : "text-rose-400 font-medium"
+                          ? "font-medium text-indigo-400"
+                          : "font-medium text-rose-400"
                     }
                   >
                     {payment.statusLabel}
@@ -77,7 +77,7 @@ export function RecentPaymentsWidget({
               </div>
             </div>
 
-            <div className="text-right font-bold text-xs md:text-sm text-(--text) shrink-0">
+            <div className="shrink-0 text-right text-xs font-bold text-(--text) md:text-sm">
               {payment.formattedPrice}
             </div>
           </div>
@@ -85,11 +85,11 @@ export function RecentPaymentsWidget({
       </div>
 
       {/* Footer Link */}
-      <div className="mt-4 pt-2 border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)]">
+      <div className="mt-4 border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] pt-2">
         <button
           type="button"
           onClick={onOpenBillingHistory}
-          className="flex w-full items-center justify-between text-xs font-semibold text-(--muted) hover:text-(--text) transition-colors cursor-pointer py-1"
+          className="flex w-full cursor-pointer items-center justify-between py-1 text-xs font-semibold text-(--muted) transition-colors hover:text-(--text)"
         >
           <span>View full billing history</span>
           <CaretRight size={14} weight="bold" />

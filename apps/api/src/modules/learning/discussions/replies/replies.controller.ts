@@ -96,12 +96,7 @@ export function createRepliesController({
       const { replyId } = request.params;
       const body = request.body;
 
-      const updated = await service.updateReply(
-        database,
-        replyId,
-        discussionActor(user),
-        body,
-      );
+      const updated = await service.updateReply(database, replyId, discussionActor(user), body);
       reply.status(200).send(updated);
     },
 
@@ -116,15 +111,9 @@ export function createRepliesController({
     async acceptReply(request, reply) {
       const user = request.user!;
       const { replyId } = request.params;
-      const accepted =
-        request.body?.accepted !== undefined ? request.body.accepted : true;
+      const accepted = request.body?.accepted !== undefined ? request.body.accepted : true;
 
-      const result = await service.acceptReply(
-        database,
-        replyId,
-        accepted,
-        discussionActor(user),
-      );
+      const result = await service.acceptReply(database, replyId, accepted, discussionActor(user));
       reply.status(200).send(result);
     },
   };

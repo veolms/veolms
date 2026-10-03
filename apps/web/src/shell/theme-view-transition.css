@@ -36,8 +36,7 @@
  * fixed so center-origin reveals keep the corner-click pacing. */
 ::view-transition-new(root) {
   mask: radial-gradient(
-    circle var(--theme-reveal-radius) at var(--theme-reveal-x, left)
-      var(--theme-reveal-y, bottom),
+    circle var(--theme-reveal-radius) at var(--theme-reveal-x, left) var(--theme-reveal-y, bottom),
     #fff 64%,
     transparent 96%
   );
@@ -47,8 +46,7 @@
 
 :root[data-theme-transition="palette"]::view-transition-new(root) {
   mask: radial-gradient(
-    circle var(--theme-reveal-radius) at var(--theme-reveal-x, right)
-      var(--theme-reveal-y, top),
+    circle var(--theme-reveal-radius) at var(--theme-reveal-x, right) var(--theme-reveal-y, top),
     #fff 64%,
     transparent 96%
   );
@@ -68,8 +66,7 @@
 
 :root[data-theme-transition="mode"] [data-appearance-mode-icon] {
   transform-origin: center;
-  animation: appearance-mode-icon-arrive 280ms cubic-bezier(0.16, 1, 0.3, 1)
-    both;
+  animation: appearance-mode-icon-arrive 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes appearance-mode-icon-arrive {

@@ -121,10 +121,8 @@
   border-radius: 0;
   background: linear-gradient(
     to right,
-    var(--video-player-control-text, rgb(255 255 255 / 0.95))
-      var(--video-player-volume, 100%),
-    var(--video-player-timeline-track, rgb(255 255 255 / 0.3))
-      var(--video-player-volume, 100%)
+    var(--video-player-control-text, rgb(255 255 255 / 0.95)) var(--video-player-volume, 100%),
+    var(--video-player-timeline-track, rgb(255 255 255 / 0.3)) var(--video-player-volume, 100%)
   );
 }
 
@@ -133,10 +131,8 @@
   border-radius: 0;
   background: linear-gradient(
     to right,
-    var(--video-player-control-text, rgb(255 255 255 / 0.95))
-      var(--video-player-volume, 100%),
-    var(--video-player-timeline-track, rgb(255 255 255 / 0.3))
-      var(--video-player-volume, 100%)
+    var(--video-player-control-text, rgb(255 255 255 / 0.95)) var(--video-player-volume, 100%),
+    var(--video-player-timeline-track, rgb(255 255 255 / 0.3)) var(--video-player-volume, 100%)
   );
 }
 
@@ -173,8 +169,7 @@
   border-radius: 9999px;
   background: linear-gradient(
     to right,
-    var(--video-player-accent, #ff7a1a)
-      var(--video-player-playback-rate-progress, 0%),
+    var(--video-player-accent, #ff7a1a) var(--video-player-playback-rate-progress, 0%),
     color-mix(in srgb, var(--video-player-menu-text, #fff) 28%, transparent)
       var(--video-player-playback-rate-progress, 0%)
   );
@@ -183,11 +178,7 @@
 .player-playback-rate-slider::-moz-range-track {
   height: 0.25rem;
   border-radius: 9999px;
-  background: color-mix(
-    in srgb,
-    var(--video-player-menu-text, #fff) 28%,
-    transparent
-  );
+  background: color-mix(in srgb, var(--video-player-menu-text, #fff) 28%, transparent);
 }
 
 .player-playback-rate-slider::-moz-range-progress {

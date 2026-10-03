@@ -38,8 +38,7 @@ export function useLearningProgress({
   enabled = true,
 }: UseLearningProgressOptions) {
   const syncEnabled = Boolean(enabled && courseKey && userId);
-  const storageIdentity =
-    userId && courseKey ? `${userId}\u0000${courseKey}` : null;
+  const storageIdentity = userId && courseKey ? `${userId}\u0000${courseKey}` : null;
   const [localState, setLocalState] = useState<LocalLearningProgressState>(() =>
     readLearningProgress(userId, courseKey),
   );
@@ -48,10 +47,9 @@ export function useLearningProgress({
   const retryDelayRef = useRef(0);
   const retryAtRef = useRef(0);
 
-  const { data: serverProgress } = useLearningProgressSnapshot(
-    courseKey ?? "",
-    { enabled: syncEnabled },
-  );
+  const { data: serverProgress } = useLearningProgressSnapshot(courseKey ?? "", {
+    enabled: syncEnabled,
+  });
 
   useEffect(() => {
     localStateRef.current = localState;
@@ -59,9 +57,7 @@ export function useLearningProgress({
 
   useEffect(() => {
     setLocalState(
-      storageIdentity
-        ? readLearningProgress(userId, courseKey)
-        : EMPTY_LEARNING_PROGRESS_STATE,
+      storageIdentity ? readLearningProgress(userId, courseKey) : EMPTY_LEARNING_PROGRESS_STATE,
     );
   }, [courseKey, storageIdentity, userId]);
 
@@ -76,10 +72,7 @@ export function useLearningProgress({
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== storageKey) return;
       setLocalState((current) =>
-        mergeLocalLearningProgress(
-          current,
-          readLearningProgress(userId, courseKey),
-        ),
+        mergeLocalLearningProgress(current, readLearningProgress(userId, courseKey)),
       );
     };
     window.addEventListener("storage", handleStorage);
@@ -88,9 +81,7 @@ export function useLearningProgress({
 
   useEffect(() => {
     if (!serverProgress) return;
-    setLocalState((current) =>
-      mergeServerLearningProgress(current, serverProgress.lessons),
-    );
+    setLocalState((current) => mergeServerLearningProgress(current, serverProgress.lessons));
   }, [serverProgress]);
 
   // A lesson can emit progress before the course overview finishes loading.
@@ -134,9 +125,10 @@ export function useLearningProgress({
       if (!syncEnabled || !courseKey || isFlushingRef.current) return;
       if (!keepalive && Date.now() < retryAtRef.current) return;
 
-      const pendingItems = getPendingLearningProgress(
-        localStateRef.current,
-      ).slice(0, MAX_BATCH_ITEMS);
+      const pendingItems = getPendingLearningProgress(localStateRef.current).slice(
+        0,
+        MAX_BATCH_ITEMS,
+      );
       if (pendingItems.length === 0) return;
 
       const payload = {
@@ -158,9 +150,7 @@ export function useLearningProgress({
       }
 
       if (keepalive) {
-        void learningProgressService
-          .syncKeepalive(courseKey, payload)
-          .catch(() => undefined);
+        void learningProgressService.syncKeepalive(courseKey, payload).catch(() => undefined);
         return;
       }
 
@@ -168,19 +158,14 @@ export function useLearningProgress({
       try {
         const response = await learningProgressService.sync(courseKey, payload);
         if (response.synced) {
-          setLocalState((current) =>
-            markLearningProgressSynced(current, pendingItems),
-          );
+          setLocalState((current) => markLearningProgressSynced(current, pendingItems));
         }
         retryDelayRef.current = 0;
         retryAtRef.current = 0;
       } catch {
         // Keep the outbox dirty. The next interval/online event retries the
         // same compact idempotent batch without losing learner progress.
-        retryDelayRef.current = Math.min(
-          60_000,
-          Math.max(5_000, retryDelayRef.current * 2),
-        );
+        retryDelayRef.current = Math.min(60_000, Math.max(5_000, retryDelayRef.current * 2));
         retryAtRef.current = Date.now() + retryDelayRef.current;
       } finally {
         isFlushingRef.current = false;
@@ -212,10 +197,7 @@ export function useLearningProgress({
     };
   }, [flushProgress, syncEnabled]);
 
-  const lessonProgress = useMemo(
-    () => getLearningProgressMap(localState),
-    [localState],
-  );
+  const lessonProgress = useMemo(() => getLearningProgressMap(localState), [localState]);
   const pendingCount = localState.items.filter((item) => item.pending).length;
   useEffect(() => {
     if (pendingCount >= MAX_BATCH_ITEMS) void flushProgress();

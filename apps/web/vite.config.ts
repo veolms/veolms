@@ -57,9 +57,7 @@ const homePhosphorIcons = new Set([
 const settingsPhosphorIcons = new Set(["ShieldCheck", "UserCircle"]);
 
 const getPhosphorIconName = (id: string) =>
-  id
-    .replaceAll("\\", "/")
-    .match(/@phosphor-icons\/react\/dist\/csr\/([^/]+)\.es\.js$/)?.[1];
+  id.replaceAll("\\", "/").match(/@phosphor-icons\/react\/dist\/csr\/([^/]+)\.es\.js$/)?.[1];
 
 const EARLY_HLS_PRELOAD_PLACEHOLDER = "__VEO_EARLY_HLS_PRELOAD_URL__";
 const EARLY_HLS_PRELOAD_DEV_URL = "/src/learning/earlyHlsPreload.ts";
@@ -123,9 +121,10 @@ function earlyHlsPreloadPlugin(): Plugin {
           "../client/.vite/manifest.json",
         );
         try {
-          const manifest = JSON.parse(
-            fs.readFileSync(manifestPath, "utf8"),
-          ) as Record<string, { file?: string; name?: string; src?: string }>;
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<
+            string,
+            { file?: string; name?: string; src?: string }
+          >;
           const entry = Object.values(manifest).find(
             (item) =>
               item.name === "early-hls-preload" ||
@@ -143,10 +142,7 @@ function earlyHlsPreloadPlugin(): Plugin {
       if (!url) return;
 
       for (const item of Object.values(bundle)) {
-        if (
-          item.type === "chunk" &&
-          item.code.includes(EARLY_HLS_PRELOAD_PLACEHOLDER)
-        ) {
+        if (item.type === "chunk" && item.code.includes(EARLY_HLS_PRELOAD_PLACEHOLDER)) {
           item.code = replacePlaceholder(item.code, url);
         }
         if (
@@ -213,9 +209,7 @@ export default defineConfig(({ command, mode }) => {
       "process.env.VEO_REACT_ROUTER_BUILD": JSON.stringify(
         process.env.VEO_REACT_ROUTER_BUILD ?? "false",
       ),
-      "import.meta.env.STATIC_BUILD_API_URL": JSON.stringify(
-        config.STATIC_BUILD_API_URL,
-      ),
+      "import.meta.env.STATIC_BUILD_API_URL": JSON.stringify(config.STATIC_BUILD_API_URL),
       "import.meta.env.VITE_CDN_URL": JSON.stringify(config.VITE_CDN_URL),
     },
     plugins: [earlyHlsPreloadPlugin(), tailwindcss(), reactRouter()],
@@ -233,10 +227,7 @@ export default defineConfig(({ command, mode }) => {
         {
           find: /^use-sync-external-store\/shim(?:\/with-selector)?$/,
           replacement: fileURLToPath(
-            new URL(
-              "./src/compat/useSyncExternalStoreShim.ts",
-              import.meta.url,
-            ),
+            new URL("./src/compat/useSyncExternalStoreShim.ts", import.meta.url),
           ),
         },
         // Axios' package ESM entry currently resolves its Node platform in
@@ -258,9 +249,7 @@ export default defineConfig(({ command, mode }) => {
       // lets Vite resolve those imports for the build-time SSG renderer.
       noExternal: [
         "@atomic-editor/editor",
-        ...(command === "build"
-          ? ["@phosphor-icons/react", /^@phosphor-icons\/react\//]
-          : []),
+        ...(command === "build" ? ["@phosphor-icons/react", /^@phosphor-icons\/react\//] : []),
       ],
     },
     build: {
@@ -271,12 +260,9 @@ export default defineConfig(({ command, mode }) => {
               return "shaka-player";
             }
             const iconName = getPhosphorIconName(id);
-            if (iconName && shellPhosphorIcons.has(iconName))
-              return "shell-icons";
-            if (iconName && homePhosphorIcons.has(iconName))
-              return "home-icons";
-            if (iconName && settingsPhosphorIcons.has(iconName))
-              return "settings-icons";
+            if (iconName && shellPhosphorIcons.has(iconName)) return "shell-icons";
+            if (iconName && homePhosphorIcons.has(iconName)) return "home-icons";
+            if (iconName && settingsPhosphorIcons.has(iconName)) return "settings-icons";
             return undefined;
           },
         },

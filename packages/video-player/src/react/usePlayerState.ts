@@ -2,9 +2,7 @@ import { useCallback, useRef, useSyncExternalStore } from "react";
 import { usePlayerController } from "./context";
 import type { PlayerSnapshot } from "./playerState";
 
-export type PlayerStateSelector<Selected> = (
-  snapshot: PlayerSnapshot,
-) => Selected;
+export type PlayerStateSelector<Selected> = (snapshot: PlayerSnapshot) => Selected;
 
 export function usePlayerState<Selected>(
   selector: PlayerStateSelector<Selected>,
@@ -32,11 +30,7 @@ export function usePlayerState<Selected>(
     return next;
   }, [controller]);
 
-  return useSyncExternalStore(
-    controller.subscribe,
-    getSelectedSnapshot,
-    getSelectedSnapshot,
-  );
+  return useSyncExternalStore(controller.subscribe, getSelectedSnapshot, getSelectedSnapshot);
 }
 
 export const usePlaybackState = () =>
@@ -50,8 +44,7 @@ export const usePlaybackState = () =>
     shallowEqual,
   );
 
-export const useCurrentTime = () =>
-  usePlayerState(({ media }) => media.currentTime);
+export const useCurrentTime = () => usePlayerState(({ media }) => media.currentTime);
 
 export const useDuration = () => usePlayerState(({ media }) => media.duration);
 
@@ -97,10 +90,7 @@ export const useChapters = () =>
 export const usePlayerCapabilities = () =>
   usePlayerState(({ capabilities }) => capabilities, shallowEqual);
 
-function shallowEqual<Shape extends object>(
-  left: Shape,
-  right: Shape,
-): boolean {
+function shallowEqual<Shape extends object>(left: Shape, right: Shape): boolean {
   if (left === right) return true;
   const keys = Object.keys(left) as Array<keyof Shape>;
   if (keys.length !== Object.keys(right).length) return false;

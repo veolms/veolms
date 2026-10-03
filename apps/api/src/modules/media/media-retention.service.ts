@@ -17,36 +17,21 @@ export interface MediaRetentionServiceOptions {
  * workflow. The caller decides which assets are safe to purge; this service
  * owns locking, storage-key resolution, and media-row deletion.
  */
-export function createMediaRetentionService({
-  database,
-}: MediaRetentionServiceOptions) {
+export function createMediaRetentionService({ database }: MediaRetentionServiceOptions) {
   async function getMediaAssetsForDeletion(
     mediaIds: string[],
     databaseExecutor: Kysely<Database> = database,
   ) {
-    return await mediaRepo.findMediaAssetsByIds(
-      databaseExecutor,
-      mediaIds,
-      undefined,
-      true,
-    );
+    return await mediaRepo.findMediaAssetsByIds(databaseExecutor, mediaIds, undefined, true);
   }
 
   async function getStorageObjectsForMedia(
     mediaIds: string[],
     databaseExecutor: Kysely<Database> = database,
   ): Promise<MediaStorageObject[]> {
-    const media = await mediaRepo.findMediaAssetsByIds(
-      databaseExecutor,
-      mediaIds,
-    );
-    const videoIds = media
-      .filter((asset) => asset.type === "video")
-      .map((asset) => asset.id);
-    const outputs = await mediaRepo.findVideoOutputsByVideoIds(
-      databaseExecutor,
-      videoIds,
-    );
+    const media = await mediaRepo.findMediaAssetsByIds(databaseExecutor, mediaIds);
+    const videoIds = media.filter((asset) => asset.type === "video").map((asset) => asset.id);
+    const outputs = await mediaRepo.findVideoOutputsByVideoIds(databaseExecutor, videoIds);
 
     const objects: MediaStorageObject[] = media.map((asset) => ({
       mediaId: asset.id,
@@ -83,6 +68,4 @@ export function createMediaRetentionService({
   };
 }
 
-export type MediaRetentionService = ReturnType<
-  typeof createMediaRetentionService
->;
+export type MediaRetentionService = ReturnType<typeof createMediaRetentionService>;

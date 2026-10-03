@@ -668,8 +668,7 @@
     border-color 160ms ease;
 }
 
-.home-discussions-panel
-  .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
+.home-discussions-panel .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
   background: color-mix(
     in srgb,
     var(--creator-discussion-card-surface, var(--surface-strong)) 92%,
@@ -699,9 +698,7 @@
   position: absolute;
   top: 0;
   right: 3px;
-  left: calc(
-    3px + var(--home-update-thumb-column) + var(--home-update-column-gap)
-  );
+  left: calc(3px + var(--home-update-thumb-column) + var(--home-update-column-gap));
   height: 1px;
   background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
   content: "";
@@ -1183,10 +1180,7 @@
 
 .learning-filters {
   display: grid;
-  grid-template-columns: auto minmax(210px, 1fr) minmax(205px, 0.82fr) minmax(
-      120px,
-      0.42fr
-    );
+  grid-template-columns: auto minmax(210px, 1fr) minmax(205px, 0.82fr) minmax(120px, 0.42fr);
   align-items: center;
   gap: 12px;
   margin-top: 20px;
@@ -1270,8 +1264,7 @@
 .learning-select:focus-within {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 8px 20px
-    color-mix(in srgb, var(--accent-shadow) 34%, transparent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent-shadow) 34%, transparent);
 }
 
 .learning-course-grid {

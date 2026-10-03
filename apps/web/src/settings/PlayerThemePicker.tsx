@@ -39,7 +39,7 @@ function PlayerThemePreview({ theme }: { theme: PlayerThemeDefinition }) {
           }}
         />
       </span>
-      <span className="absolute right-2 top-2 size-1.5 rounded-full bg-(--video-player-accent)" />
+      <span className="absolute top-2 right-2 size-1.5 rounded-full bg-(--video-player-accent)" />
     </span>
   );
 }
@@ -47,9 +47,7 @@ function PlayerThemePreview({ theme }: { theme: PlayerThemeDefinition }) {
 export function PlayerThemePicker({ onChange, value }: PlayerThemePickerProps) {
   return (
     <fieldset className="settings-learning-player-theme mb-1 border-b border-[color-mix(in_srgb,var(--text)_5%,transparent)] pb-4">
-      <legend className="text-sm font-semibold text-(--text)">
-        Video player theme
-      </legend>
+      <legend className="text-sm font-semibold text-(--text)">Video player theme</legend>
       <p className="mt-1 text-xs leading-5 text-(--text-secondary)">
         Change only the lesson player’s controls, icons, and color treatment.
       </p>
@@ -76,22 +74,16 @@ export function PlayerThemePicker({ onChange, value }: PlayerThemePickerProps) {
             >
               <PlayerThemePreview theme={theme} />
               <span className="mt-2 flex items-center justify-between gap-2">
-                <span className="truncate text-sm font-semibold text-(--text)">
-                  {theme.label}
-                </span>
+                <span className="truncate text-sm font-semibold text-(--text)">{theme.label}</span>
                 {selected ? (
-                  <CheckCircle
-                    size={16}
-                    weight="fill"
-                    className="shrink-0 text-(--accent)"
-                  />
+                  <CheckCircle size={16} weight="fill" className="shrink-0 text-(--accent)" />
                 ) : null}
               </span>
               <span className="mt-0.5 block text-[11px] leading-4 text-(--text-secondary)">
                 {theme.description}
               </span>
               {theme.id === "youtube" ? (
-                <span className="mt-1.5 inline-flex text-[10px] font-semibold uppercase tracking-[0.08em] text-(--text-secondary)">
+                <span className="mt-1.5 inline-flex text-[10px] font-semibold tracking-[0.08em] text-(--text-secondary) uppercase">
                   Default
                 </span>
               ) : null}

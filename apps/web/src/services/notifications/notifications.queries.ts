@@ -1,10 +1,7 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import type { ApiError } from "../../lib/api-error";
-import {
-  notificationKeys,
-  type NotificationListFilters,
-} from "./notifications.keys";
+import { notificationKeys, type NotificationListFilters } from "./notifications.keys";
 import { notificationsService } from "./notifications.service";
 
 export function useNotifications(filters: NotificationListFilters) {

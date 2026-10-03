@@ -21,11 +21,7 @@ export function createCategoryService({ database }: CategoryServiceOptions) {
     }
     const existing = await categoryRepo.findCategoryBySlug(database, slug);
     if (existing) {
-      throw new AppError(
-        400,
-        "DUPLICATE_CATEGORY",
-        `Category slug "${slug}" already exists.`,
-      );
+      throw new AppError(400, "DUPLICATE_CATEGORY", `Category slug "${slug}" already exists.`);
     }
     const id = crypto.randomUUID();
     const now = new Date();
@@ -39,11 +35,7 @@ export function createCategoryService({ database }: CategoryServiceOptions) {
       });
     } catch (error: unknown) {
       if ((error as { code?: string })?.code === "23505") {
-        throw new AppError(
-          400,
-          "DUPLICATE_CATEGORY",
-          `Category slug "${slug}" already exists.`,
-        );
+        throw new AppError(400, "DUPLICATE_CATEGORY", `Category slug "${slug}" already exists.`);
       }
       throw error;
     }

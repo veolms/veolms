@@ -7,10 +7,7 @@ import type {
   LearningThreadAttachmentSummary,
   LearningThread,
 } from "@veolms/contracts";
-import {
-  createClientEntityId,
-  type InteractionAttachment,
-} from "./attachment-model";
+import { createClientEntityId, type InteractionAttachment } from "./attachment-model";
 
 export type ClientEntityCreationStatus = "pending" | "confirmed";
 
@@ -32,10 +29,7 @@ export type LearningThreadEntity = Omit<LearningThread, "id" | "attachments"> &
     attachments?: InteractionAttachment[];
   };
 
-export type LearningReplyEntity = Omit<
-  LearningReply,
-  "id" | "threadId" | "attachments"
-> &
+export type LearningReplyEntity = Omit<LearningReply, "id" | "threadId" | "attachments"> &
   ClientEntityIdentity & {
     id: string;
     threadId: string;
@@ -78,10 +72,7 @@ export type LearningThreadCacheResponse = {
 
 export type ThreadEntityLike = LearningThread | LearningThreadEntity;
 
-export function getClientEntityId(entity: {
-  id: string | number;
-  clientId?: string;
-}): string {
+export function getClientEntityId(entity: { id: string | number; clientId?: string }): string {
   return entity.clientId ?? String(entity.id);
 }
 
@@ -114,14 +105,8 @@ export function requireServerEntityId(value: string | undefined): string {
   return value;
 }
 
-export function isLearningThreadEntity(
-  thread: ThreadEntityLike,
-): thread is LearningThreadEntity {
-  return (
-    "clientId" in thread &&
-    typeof thread.clientId === "string" &&
-    "creationStatus" in thread
-  );
+export function isLearningThreadEntity(thread: ThreadEntityLike): thread is LearningThreadEntity {
+  return "clientId" in thread && typeof thread.clientId === "string" && "creationStatus" in thread;
 }
 
 export function toLearningThreadEntity(

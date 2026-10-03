@@ -3,10 +3,7 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import {
-  useCourseQuizPricing,
-  useSetQuizCoursePricing,
-} from "../services/quizzes";
+import { useCourseQuizPricing, useSetQuizCoursePricing } from "../services/quizzes";
 import { Button } from "../components/Button";
 
 function getCurrencySymbol(code: string): string {
@@ -17,8 +14,7 @@ function getCurrencySymbol(code: string): string {
         currency: code,
       })
         .formatToParts(0)
-        .find((part) => part.type === "currency")?.value ||
-      (code === "INR" ? "₹" : "$")
+        .find((part) => part.type === "currency")?.value || (code === "INR" ? "₹" : "$")
     );
   } catch {
     return code === "INR" ? "₹" : code === "USD" ? "$" : code;
@@ -39,23 +35,15 @@ export function CourseQuizPricingCard({
   const savedPricing = pricingQuery.data;
   const saveMutation = useSetQuizCoursePricing();
 
-  const initialPricingType =
-    savedPricing?.pricingType === "paid" ? "paid" : "free";
-  const initialPrice =
-    savedPricing && savedPricing.price > 0 ? String(savedPricing.price) : "";
+  const initialPricingType = savedPricing?.pricingType === "paid" ? "paid" : "free";
+  const initialPrice = savedPricing && savedPricing.price > 0 ? String(savedPricing.price) : "";
   const initialSalePrice =
-    savedPricing?.salePrice && savedPricing.salePrice > 0
-      ? String(savedPricing.salePrice)
-      : "";
+    savedPricing?.salePrice && savedPricing.salePrice > 0 ? String(savedPricing.salePrice) : "";
 
-  const [pricingType, setPricingType] = useState<"free" | "paid">(
-    initialPricingType,
-  );
+  const [pricingType, setPricingType] = useState<"free" | "paid">(initialPricingType);
   const [priceInput, setPriceInput] = useState(initialPrice);
   const [salePriceInput, setSalePriceInput] = useState(initialSalePrice);
-  const [saveStatus, setSaveStatus] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const timerRef = useRef<number | null>(null);
@@ -68,9 +56,7 @@ export function CourseQuizPricingCard({
       setPricingType(savedPricing.pricingType === "paid" ? "paid" : "free");
       setPriceInput(savedPricing.price > 0 ? String(savedPricing.price) : "");
       setSalePriceInput(
-        savedPricing.salePrice && savedPricing.salePrice > 0
-          ? String(savedPricing.salePrice)
-          : "",
+        savedPricing.salePrice && savedPricing.salePrice > 0 ? String(savedPricing.salePrice) : "",
       );
     }
   }, [savedPricing]);
@@ -79,12 +65,7 @@ export function CourseQuizPricingCard({
   const validationError = useMemo(() => {
     if (pricingType !== "paid") return null;
     const numPrice = Number(priceInput);
-    if (
-      !priceInput.trim() ||
-      isNaN(numPrice) ||
-      numPrice <= 0 ||
-      !Number.isInteger(numPrice)
-    ) {
+    if (!priceInput.trim() || isNaN(numPrice) || numPrice <= 0 || !Number.isInteger(numPrice)) {
       return "Price must be a whole number greater than 0.";
     }
     if (salePriceInput.trim()) {
@@ -105,22 +86,12 @@ export function CourseQuizPricingCard({
 
       if (nextType === "paid") {
         const numPrice = Number(nextPrice);
-        if (
-          !nextPrice.trim() ||
-          isNaN(numPrice) ||
-          numPrice <= 0 ||
-          !Number.isInteger(numPrice)
-        ) {
+        if (!nextPrice.trim() || isNaN(numPrice) || numPrice <= 0 || !Number.isInteger(numPrice)) {
           return;
         }
         if (nextSale.trim()) {
           const numSale = Number(nextSale);
-          if (
-            isNaN(numSale) ||
-            numSale <= 0 ||
-            numSale >= numPrice ||
-            !Number.isInteger(numSale)
-          ) {
+          if (isNaN(numSale) || numSale <= 0 || numSale >= numPrice || !Number.isInteger(numSale)) {
             return;
           }
         }
@@ -133,8 +104,7 @@ export function CourseQuizPricingCard({
         const payload = {
           pricingType: nextType,
           price: nextType === "paid" ? Number(nextPrice) : 0,
-          salePrice:
-            nextType === "paid" && nextSale.trim() ? Number(nextSale) : null,
+          salePrice: nextType === "paid" && nextSale.trim() ? Number(nextSale) : null,
         };
 
         // One course-level price covers every quiz in the course.
@@ -176,34 +146,27 @@ export function CourseQuizPricingCard({
     numPrice > 0 &&
     numSale > 0 &&
     numSale < numPrice;
-  const discountPercent = hasDiscount
-    ? Math.round(((numPrice - numSale) / numPrice) * 100)
-    : 0;
+  const discountPercent = hasDiscount ? Math.round(((numPrice - numSale) / numPrice) * 100) : 0;
 
   if (pricingQuery.isError) {
     return (
-      <div className="flex flex-col border border-red-500/20 rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
-        <div className="flex items-center justify-between mb-4.5">
+      <div className="flex flex-col rounded-[14px] border border-red-500/20 bg-(--surface) p-5 pb-6 shadow-(--card-shadow) transition-opacity duration-200">
+        <div className="mb-4.5 flex items-center justify-between">
           <div>
-            <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+            <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
               3. Course quiz pricing
             </h3>
-            <p className="m-0 text-(--muted) text-[0.83rem]">
-              Set the overall price for quizzes in this course. Paying once
-              gives learners access to all quizzes attached to this course.
+            <p className="m-0 text-[0.83rem] text-(--muted)">
+              Set the overall price for quizzes in this course. Paying once gives learners access to
+              all quizzes attached to this course.
             </p>
           </div>
         </div>
-        <p className="text-sm text-red-400 mb-3">
-          Unable to load quiz pricing.{" "}
-          {pricingQuery.error?.message ?? "Please try again."}
+        <p className="mb-3 text-sm text-red-400">
+          Unable to load quiz pricing. {pricingQuery.error?.message ?? "Please try again."}
         </p>
         <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            onClick={() => void pricingQuery.refetch()}
-            className="w-fit"
-          >
+          <Button type="button" onClick={() => void pricingQuery.refetch()} className="w-fit">
             Retry
           </Button>
         </div>
@@ -212,21 +175,21 @@ export function CourseQuizPricingCard({
   }
 
   return (
-    <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
+    <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow) transition-opacity duration-200">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4.5">
+      <div className="mb-4.5 flex items-center justify-between">
         <div>
-          <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
+          <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
             3. Course quiz pricing
           </h3>
-          <p className="m-0 text-(--muted) text-[0.83rem]">
-            Set the overall price for quizzes in this course. Paying once gives
-            learners access to all quizzes attached to this course.
+          <p className="m-0 text-[0.83rem] text-(--muted)">
+            Set the overall price for quizzes in this course. Paying once gives learners access to
+            all quizzes attached to this course.
           </p>
         </div>
 
         {/* Save Status Indicator */}
-        <div className="flex items-center gap-1.5 text-xs font-medium shrink-0">
+        <div className="flex shrink-0 items-center gap-1.5 text-xs font-medium">
           {saveStatus === "saving" && (
             <span className="inline-flex items-center gap-1 text-(--accent)">
               <CircleNotch size={13} className="animate-spin" />
@@ -255,10 +218,10 @@ export function CourseQuizPricingCard({
       ) : (
         <div className="flex flex-col gap-4">
           {/* Main Pricing Options Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {/* Free Option */}
             <label
-              className={`flex items-start gap-3 rounded-[12px] border p-3.5 px-4 cursor-pointer transition-all select-none ${
+              className={`flex cursor-pointer items-start gap-3 rounded-[12px] border p-3.5 px-4 transition-all select-none ${
                 pricingType === "free"
                   ? "border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
                   : "border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]"
@@ -274,22 +237,20 @@ export function CourseQuizPricingCard({
                   setPricingType("free");
                   void performSave("free", priceInput, salePriceInput);
                 }}
-                className="size-4.5 mt-0.5 accent-(--accent) cursor-pointer shrink-0"
+                className="mt-0.5 size-4.5 shrink-0 cursor-pointer accent-(--accent)"
               />
               <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-bold text-(--text)">
-                  Free (Included in Course)
-                </span>
-                <span className="text-xs text-(--muted) leading-relaxed">
-                  All quizzes in this course are included for free when learners
-                  enroll in the course.
+                <span className="text-sm font-bold text-(--text)">Free (Included in Course)</span>
+                <span className="text-xs leading-relaxed text-(--muted)">
+                  All quizzes in this course are included for free when learners enroll in the
+                  course.
                 </span>
               </div>
             </label>
 
             {/* Paid Option */}
             <label
-              className={`flex items-start gap-3 rounded-[12px] border p-3.5 px-4 cursor-pointer transition-all select-none ${
+              className={`flex cursor-pointer items-start gap-3 rounded-[12px] border p-3.5 px-4 transition-all select-none ${
                 pricingType === "paid"
                   ? "border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
                   : "border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]"
@@ -307,15 +268,13 @@ export function CourseQuizPricingCard({
                   setPriceInput(defaultPrice);
                   void performSave("paid", defaultPrice, salePriceInput);
                 }}
-                className="size-4.5 mt-0.5 accent-(--accent) cursor-pointer shrink-0"
+                className="mt-0.5 size-4.5 shrink-0 cursor-pointer accent-(--accent)"
               />
               <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-bold text-(--text)">
-                  Paid (Course Quiz Pass)
-                </span>
-                <span className="text-xs text-(--muted) leading-relaxed">
-                  Learners can purchase standalone quiz access to unlock and
-                  take all quizzes attached to this course.
+                <span className="text-sm font-bold text-(--text)">Paid (Course Quiz Pass)</span>
+                <span className="text-xs leading-relaxed text-(--muted)">
+                  Learners can purchase standalone quiz access to unlock and take all quizzes
+                  attached to this course.
                 </span>
               </div>
             </label>
@@ -323,16 +282,16 @@ export function CourseQuizPricingCard({
 
           {/* Paid Price Fields */}
           {pricingType === "paid" && (
-            <div className="rounded-[12px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_35%,var(--surface))] p-4 space-y-3 animate-in fade-in duration-150">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="animate-in fade-in space-y-3 rounded-[12px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_35%,var(--surface))] p-4 duration-150">
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                 {/* Regular Price */}
                 <div>
-                  <label className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                  <label className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                     Course Quiz Pass Price ({courseCurrency}){" "}
                     <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative flex items-center">
-                    <span className="absolute left-3 text-xs font-semibold text-(--muted) pointer-events-none">
+                    <span className="pointer-events-none absolute left-3 text-xs font-semibold text-(--muted)">
                       {getCurrencySymbol(courseCurrency)}
                     </span>
                     <input
@@ -347,13 +306,9 @@ export function CourseQuizPricingCard({
                         scheduleSave(pricingType, val, salePriceInput);
                       }}
                       onBlur={() => {
-                        void performSave(
-                          pricingType,
-                          priceInput,
-                          salePriceInput,
-                        );
+                        void performSave(pricingType, priceInput, salePriceInput);
                       }}
-                      className="w-full h-9.5 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pl-7 pr-3 text-xs sm:text-sm font-semibold text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent)"
+                      className="h-9.5 w-full rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pr-3 pl-7 text-xs font-semibold text-(--text) transition-all outline-none placeholder:text-(--muted) focus:border-(--accent) sm:text-sm"
                     />
                   </div>
                   <p className="m-0 mt-1 text-[0.74rem] text-(--muted)">
@@ -363,14 +318,12 @@ export function CourseQuizPricingCard({
 
                 {/* Sale Price */}
                 <div>
-                  <label className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
+                  <label className="mb-1.5 block text-xs font-semibold text-(--text-secondary)">
                     Sale Price ({courseCurrency}){" "}
-                    <span className="text-(--muted) font-normal">
-                      (optional)
-                    </span>
+                    <span className="font-normal text-(--muted)">(optional)</span>
                   </label>
                   <div className="relative flex items-center">
-                    <span className="absolute left-3 text-xs font-semibold text-(--muted) pointer-events-none">
+                    <span className="pointer-events-none absolute left-3 text-xs font-semibold text-(--muted)">
                       {getCurrencySymbol(courseCurrency)}
                     </span>
                     <input
@@ -385,13 +338,9 @@ export function CourseQuizPricingCard({
                         scheduleSave(pricingType, priceInput, val);
                       }}
                       onBlur={() => {
-                        void performSave(
-                          pricingType,
-                          priceInput,
-                          salePriceInput,
-                        );
+                        void performSave(pricingType, priceInput, salePriceInput);
                       }}
-                      className="w-full h-9.5 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pl-7 pr-3 text-xs sm:text-sm font-semibold text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent)"
+                      className="h-9.5 w-full rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pr-3 pl-7 text-xs font-semibold text-(--text) transition-all outline-none placeholder:text-(--muted) focus:border-(--accent) sm:text-sm"
                     />
                   </div>
                   <p className="m-0 mt-1 text-[0.74rem] text-(--muted)">
@@ -401,7 +350,7 @@ export function CourseQuizPricingCard({
               </div>
 
               {/* Discount / Error Feedback */}
-              <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                 {hasDiscount ? (
                   <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
                     <Tag size={13} weight="bold" />
@@ -410,13 +359,9 @@ export function CourseQuizPricingCard({
                 ) : null}
 
                 {validationError ? (
-                  <p className="m-0 text-xs font-medium text-rose-500">
-                    {validationError}
-                  </p>
+                  <p className="m-0 text-xs font-medium text-rose-500">{validationError}</p>
                 ) : errorMessage ? (
-                  <p className="m-0 text-xs font-medium text-rose-500">
-                    {errorMessage}
-                  </p>
+                  <p className="m-0 text-xs font-medium text-rose-500">{errorMessage}</p>
                 ) : null}
               </div>
             </div>

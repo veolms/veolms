@@ -15,10 +15,7 @@ export async function findBundleById(database: Executor, bundleId: string) {
  * of N sequential ones. Used by pricing.service.ts's calculatePricing, which
  * runs on every GET /cart, checkout preview, and order-creation call.
  */
-export async function findBundlesByIds(
-  database: Executor,
-  bundleIds: string[],
-) {
+export async function findBundlesByIds(database: Executor, bundleIds: string[]) {
   if (bundleIds.length === 0) return [];
   return await database
     .selectFrom("course_bundles")
@@ -37,10 +34,7 @@ export async function findBundleBySlug(database: Executor, slug: string) {
     .executeTakeFirst();
 }
 
-export async function findPublishedBundleById(
-  database: Executor,
-  bundleId: string,
-) {
+export async function findPublishedBundleById(database: Executor, bundleId: string) {
   return await database
     .selectFrom("course_bundles")
     .selectAll()
@@ -95,10 +89,7 @@ export async function listBundleCourses(database: Executor, bundleId: string) {
  * `bundle_id` themselves. Used by pricing.service.ts's calculatePricing,
  * which runs on every GET /cart, checkout preview, and order-creation call.
  */
-export async function listBundleCoursesForBundleIds(
-  database: Executor,
-  bundleIds: string[],
-) {
+export async function listBundleCoursesForBundleIds(database: Executor, bundleIds: string[]) {
   if (bundleIds.length === 0) return [];
   return await database
     .selectFrom("course_bundle_items")

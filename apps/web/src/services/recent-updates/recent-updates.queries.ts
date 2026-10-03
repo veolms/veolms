@@ -2,10 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { RecentUpdatesResponse } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { recentUpdatesKeys } from "./recent-updates.keys";
-import {
-  recentUpdatesService,
-  type RecentUpdatesRequest,
-} from "./recent-updates.service";
+import { recentUpdatesService, type RecentUpdatesRequest } from "./recent-updates.service";
 
 export const recentUpdatesHomeParams: RecentUpdatesRequest = {
   days: 14,

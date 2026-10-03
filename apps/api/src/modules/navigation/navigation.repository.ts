@@ -2,16 +2,9 @@ import { sql } from "kysely";
 import type { SidenavMenuNode, SidenavResponse } from "@veolms/contracts";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 
-async function getUserRoleIds(
-  database: Executor,
-  userId: string,
-): Promise<string[]> {
+async function getUserRoleIds(database: Executor, userId: string): Promise<string[]> {
   const [directRows, scopedRows] = await Promise.all([
-    database
-      .selectFrom("user_roles")
-      .select("role_id")
-      .where("user_id", "=", userId)
-      .execute(),
+    database.selectFrom("user_roles").select("role_id").where("user_id", "=", userId).execute(),
     database
       .selectFrom("role_assignments as ra")
       .select("ra.role_id")
@@ -26,10 +19,7 @@ async function getUserRoleIds(
   ]);
 
   return Array.from(
-    new Set([
-      ...directRows.map((r) => r.role_id),
-      ...scopedRows.map((r) => r.role_id),
-    ]),
+    new Set([...directRows.map((r) => r.role_id), ...scopedRows.map((r) => r.role_id)]),
   );
 }
 
@@ -98,21 +88,12 @@ async function listMenusByRoleIds(database: Executor, roleIds: string[]) {
   return buildMenuTree(rows);
 }
 
-export async function listUserRoleNames(
-  database: Executor,
-  userId: string,
-): Promise<string[]> {
+export async function listUserRoleNames(database: Executor, userId: string): Promise<string[]> {
   return listRoleNamesByIds(database, await getUserRoleIds(database, userId));
 }
 
-export async function listUserPermissions(
-  database: Executor,
-  userId: string,
-): Promise<string[]> {
-  return listPermissionsByRoleIds(
-    database,
-    await getUserRoleIds(database, userId),
-  );
+export async function listUserPermissions(database: Executor, userId: string): Promise<string[]> {
+  return listPermissionsByRoleIds(database, await getUserRoleIds(database, userId));
 }
 
 export async function listUserMenus(
@@ -122,10 +103,7 @@ export async function listUserMenus(
   return listMenusByRoleIds(database, await getUserRoleIds(database, userId));
 }
 
-export async function getUserSidenav(
-  database: Executor,
-  userId: string,
-): Promise<SidenavResponse> {
+export async function getUserSidenav(database: Executor, userId: string): Promise<SidenavResponse> {
   const roleIds = await getUserRoleIds(database, userId);
   if (roleIds.length === 0) {
     return { menus: [], permissions: [], roles: [] };
@@ -140,9 +118,7 @@ export async function getUserSidenav(
   return { menus, permissions, roles };
 }
 
-export async function listPublicMenus(
-  database: Executor,
-): Promise<SidenavMenuNode[]> {
+export async function listPublicMenus(database: Executor): Promise<SidenavMenuNode[]> {
   const studentRole = await database
     .selectFrom("roles")
     .select("id")
@@ -205,14 +181,10 @@ function buildMenuTree(rows: MenuRow[]): SidenavMenuNode[] {
     }
     const existing = menuMap.get(row.id);
     if (existing) {
-      existing.permissions.canCreate =
-        existing.permissions.canCreate || Boolean(row.can_create);
-      existing.permissions.canRead =
-        existing.permissions.canRead || Boolean(row.can_read);
-      existing.permissions.canUpdate =
-        existing.permissions.canUpdate || Boolean(row.can_update);
-      existing.permissions.canDelete =
-        existing.permissions.canDelete || Boolean(row.can_delete);
+      existing.permissions.canCreate = existing.permissions.canCreate || Boolean(row.can_create);
+      existing.permissions.canRead = existing.permissions.canRead || Boolean(row.can_read);
+      existing.permissions.canUpdate = existing.permissions.canUpdate || Boolean(row.can_update);
+      existing.permissions.canDelete = existing.permissions.canDelete || Boolean(row.can_delete);
     } else {
       menuMap.set(row.id, {
         id: row.id,

@@ -52,10 +52,7 @@ export function createMediaConvertDispatcher(options: {
       clientInstance = new MediaConvertClient({
         region,
         endpoint,
-        credentials:
-          accessKeyId && secretAccessKey
-            ? { accessKeyId, secretAccessKey }
-            : undefined,
+        credentials: accessKeyId && secretAccessKey ? { accessKeyId, secretAccessKey } : undefined,
       });
     }
     return clientInstance;
@@ -95,8 +92,7 @@ export function createMediaConvertDispatcher(options: {
     }
 
     const outputPrefix =
-      payload.outputPrefix ||
-      `transcoded/${payload.videoId || payload.jobId || "default"}/`;
+      payload.outputPrefix || `transcoded/${payload.videoId || payload.jobId || "default"}/`;
 
     const qualities: readonly VideoQualityLevel[] =
       payload.qualities && payload.qualities.length > 0
@@ -104,8 +100,7 @@ export function createMediaConvertDispatcher(options: {
         : (["1080p", "720p", "480p", "360p"] as const);
 
     const roleArn =
-      config.MEDIACONVERT_ROLE_ARN ||
-      "arn:aws:iam::123456789012:role/MediaConvertRole";
+      config.MEDIACONVERT_ROLE_ARN || "arn:aws:iam::123456789012:role/MediaConvertRole";
 
     const userMetadata: Record<string, string> = {
       jobId: payload.jobId || "",
@@ -116,21 +111,15 @@ export function createMediaConvertDispatcher(options: {
     };
 
     if (payload.videoMetadata) {
-      if (payload.videoMetadata.width)
-        userMetadata.width = String(payload.videoMetadata.width);
-      if (payload.videoMetadata.height)
-        userMetadata.height = String(payload.videoMetadata.height);
+      if (payload.videoMetadata.width) userMetadata.width = String(payload.videoMetadata.width);
+      if (payload.videoMetadata.height) userMetadata.height = String(payload.videoMetadata.height);
       if (payload.videoMetadata.durationSeconds) {
-        userMetadata.durationSeconds = String(
-          payload.videoMetadata.durationSeconds,
-        );
+        userMetadata.durationSeconds = String(payload.videoMetadata.durationSeconds);
       }
       if (payload.videoMetadata.bitrate)
         userMetadata.bitrate = String(payload.videoMetadata.bitrate);
-      if (payload.videoMetadata.codec)
-        userMetadata.codec = String(payload.videoMetadata.codec);
-      if (payload.videoMetadata.fps)
-        userMetadata.fps = String(payload.videoMetadata.fps);
+      if (payload.videoMetadata.codec) userMetadata.codec = String(payload.videoMetadata.codec);
+      if (payload.videoMetadata.fps) userMetadata.fps = String(payload.videoMetadata.fps);
     }
 
     if (payload.thumbnailDestination) {
@@ -154,13 +143,10 @@ export function createMediaConvertDispatcher(options: {
       ? outputPrefix
       : `s3://${bucket}/${outputPrefix}`;
 
-    const inputUri = videoKey.startsWith("s3://")
-      ? videoKey
-      : `s3://${bucket}/${videoKey}`;
+    const inputUri = videoKey.startsWith("s3://") ? videoKey : `s3://${bucket}/${videoKey}`;
 
     const outputs = qualities.map((q) => {
-      const profile: QualityProfile =
-        QUALITY_PROFILES[q] || QUALITY_PROFILES["720p"];
+      const profile: QualityProfile = QUALITY_PROFILES[q] || QUALITY_PROFILES["720p"];
 
       return {
         NameModifier: `_${q}`,
@@ -195,9 +181,7 @@ export function createMediaConvertDispatcher(options: {
     const baseDest = destination.replace(/\/+$/, "");
     const hlsDestination = baseDest;
 
-    const outputGroups: NonNullable<
-      CreateJobCommandInput["Settings"]
-    >["OutputGroups"] = [
+    const outputGroups: NonNullable<CreateJobCommandInput["Settings"]>["OutputGroups"] = [
       {
         Name: "HLS_Group",
         OutputGroupSettings: {

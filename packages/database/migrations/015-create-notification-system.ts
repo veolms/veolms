@@ -1,9 +1,7 @@
 import { sql, type Kysely } from "kysely";
 
 export async function up(database: Kysely<unknown>): Promise<void> {
-  await sql`drop index if exists idx_outbox_events_unprocessed`.execute(
-    database,
-  );
+  await sql`drop index if exists idx_outbox_events_unprocessed`.execute(database);
 
   await sql`
     alter table outbox_events
@@ -82,9 +80,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("status", "text", (column) => column.notNull())
     .addColumn("destination", "text")
     .addColumn("payload", "jsonb")
-    .addColumn("attempt_count", "integer", (column) =>
-      column.notNull().defaultTo(0),
-    )
+    .addColumn("attempt_count", "integer", (column) => column.notNull().defaultTo(0))
     .addColumn("next_attempt_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -98,10 +94,10 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("updated_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
-    .addUniqueConstraint(
-      "notification_deliveries_notification_channel_unique",
-      ["notification_id", "channel"],
-    )
+    .addUniqueConstraint("notification_deliveries_notification_channel_unique", [
+      "notification_id",
+      "channel",
+    ])
     .addCheckConstraint(
       "notification_deliveries_channel_valid",
       sql`channel in ('in_app', 'email')`,
@@ -162,14 +158,8 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(database: Kysely<unknown>): Promise<void> {
-  await database.schema
-    .dropTable("notification_preferences")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropTable("notification_deliveries")
-    .ifExists()
-    .execute();
+  await database.schema.dropTable("notification_preferences").ifExists().execute();
+  await database.schema.dropTable("notification_deliveries").ifExists().execute();
   await database.schema.dropTable("notifications").ifExists().execute();
 
   await sql`drop index if exists idx_outbox_events_due`.execute(database);

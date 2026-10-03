@@ -34,16 +34,11 @@ export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
     );
   }
   if (overview.orderFunnel.created > 0) {
-    const payRate =
-      (overview.orderFunnel.paid / overview.orderFunnel.created) * 100;
-    insights.push(
-      `${formatPercent(payRate)} of created orders convert to a paid order.`,
-    );
+    const payRate = (overview.orderFunnel.paid / overview.orderFunnel.created) * 100;
+    insights.push(`${formatPercent(payRate)} of created orders convert to a paid order.`);
   }
   if (overview.learningFunnel.enrolled > 0) {
-    const startRate =
-      (overview.learningFunnel.started / overview.learningFunnel.enrolled) *
-      100;
+    const startRate = (overview.learningFunnel.started / overview.learningFunnel.enrolled) * 100;
     insights.push(
       `${formatPercent(startRate)} of enrolled learners have started at least one lesson.`,
     );
@@ -158,14 +153,8 @@ export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
         </ChartSection>
       </div>
 
-      <ChartSection
-        title="Course Performance"
-        description="Top courses by enrollment"
-      >
-        <CoursePerformanceTable
-          rows={overview.coursePerformance}
-          currency={currency}
-        />
+      <ChartSection title="Course Performance" description="Top courses by enrollment">
+        <CoursePerformanceTable rows={overview.coursePerformance} currency={currency} />
       </ChartSection>
 
       <InsightsPanel insights={insights} />

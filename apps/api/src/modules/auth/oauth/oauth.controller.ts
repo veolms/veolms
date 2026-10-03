@@ -17,10 +17,7 @@ import { presentLogin } from "../shared/auth.presenters.ts";
 export function createOauthController(context: AuthContext) {
   const { oauthService } = context;
 
-  async function getUrl(
-    request: FastifyRequest<{ Body: OauthUrlRequest }>,
-    reply: FastifyReply,
-  ) {
+  async function getUrl(request: FastifyRequest<{ Body: OauthUrlRequest }>, reply: FastifyReply) {
     const result = oauthService.createAuthorizationUrl(
       request.body.provider,
       request.body.redirectUri,
@@ -55,14 +52,11 @@ export function createOauthController(context: AuthContext) {
     reply: FastifyReply,
   ) {
     const existingSessionToken = request.cookies["veolms-session"] ?? null;
-    const result = await oauthService.loginWithGoogleCredential(
-      request.body.credential,
-      {
-        ip: request.ip,
-        userAgent: request.headers["user-agent"] ?? null,
-        existingSessionToken,
-      },
-    );
+    const result = await oauthService.loginWithGoogleCredential(request.body.credential, {
+      ip: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+      existingSessionToken,
+    });
 
     setSessionCookie(reply, result.session.token);
     return presentLogin(result.user, result.session.mfa);

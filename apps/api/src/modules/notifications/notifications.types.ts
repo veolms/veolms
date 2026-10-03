@@ -1,7 +1,4 @@
-import type {
-  NotificationCategory,
-  NotificationChannel,
-} from "@veolms/contracts";
+import type { NotificationCategory, NotificationChannel } from "@veolms/contracts";
 
 export type NotificationTemplateKey =
   | "course.published"
@@ -26,10 +23,7 @@ export type NotificationTemplateKey =
   | "quiz.attempt_failed_final"
   | "quiz.assigned";
 
-export type NotificationTemplateData = Record<
-  string,
-  string | number | readonly string[]
->;
+export type NotificationTemplateData = Record<string, string | number | readonly string[]>;
 
 export interface NotificationIntent {
   recipientUserId: string;

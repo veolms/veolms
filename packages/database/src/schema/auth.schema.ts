@@ -1,8 +1,7 @@
 import type { Generated } from "kysely";
 
 export type OtpIdentifierType = "email" | "phone";
-export type OtpPurpose =
-  "login" | "registration" | "email_verification" | "phone_verification";
+export type OtpPurpose = "login" | "registration" | "email_verification" | "phone_verification";
 
 export interface AcademyTable {
   id: string;

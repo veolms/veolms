@@ -11,10 +11,7 @@ export interface OrderSummaryWidgetProps {
   onSelectStatusFilter?: (status: OrderTabId) => void;
 }
 
-export function OrderSummaryWidget({
-  summary,
-  onSelectStatusFilter,
-}: OrderSummaryWidgetProps) {
+export function OrderSummaryWidget({ summary, onSelectStatusFilter }: OrderSummaryWidgetProps) {
   const metricItems = [
     {
       id: "all" as OrderTabId,
@@ -56,15 +53,12 @@ export function OrderSummaryWidget({
   return (
     <section
       aria-labelledby="order-summary-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
+      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 transition-all md:p-6"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3
-          id="order-summary-heading"
-          className="font-bold text-base text-(--text) tracking-tight"
-        >
+        <h3 id="order-summary-heading" className="text-base font-bold tracking-tight text-(--text)">
           Order Summary
         </h3>
         <span className="text-(--accent)" aria-hidden="true">
@@ -81,7 +75,7 @@ export function OrderSummaryWidget({
               key={item.id}
               type="button"
               onClick={() => onSelectStatusFilter?.(item.id)}
-              className="flex items-center justify-between rounded-xl px-2.5 py-1.5 text-xs md:text-sm text-(--text-secondary) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer text-left"
+              className="flex cursor-pointer items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-xs text-(--text-secondary) transition-colors hover:bg-(--hover) hover:text-(--text) md:text-sm"
             >
               <div className="flex items-center gap-2.5">
                 <Icon size={16} weight="fill" className={item.iconColor} />
@@ -100,25 +94,17 @@ export function OrderSummaryWidget({
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-xs text-(--muted)">Total spent</div>
-          <div className="text-2xl font-extrabold tracking-tight text-(--text) mt-0.5">
+          <div className="mt-0.5 text-2xl font-extrabold tracking-tight text-(--text)">
             {summary.totalSpent}
           </div>
-          <div className="text-[11px] text-(--muted) mt-0.5">
-            Across all orders
-          </div>
+          <div className="mt-0.5 text-[11px] text-(--muted)">Across all orders</div>
         </div>
 
         {/* Sparkline Visual SVG */}
         <div className="h-10 w-24 shrink-0" aria-hidden="true">
           <svg viewBox="0 0 100 40" className="h-full w-full overflow-visible">
             <defs>
-              <linearGradient
-                id="orderSpentGradient"
-                x1="0"
-                y1="0"
-                x2="1"
-                y2="0"
-              >
+              <linearGradient id="orderSpentGradient" x1="0" y1="0" x2="1" y2="0">
                 <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.4" />
                 <stop offset="100%" stopColor="var(--accent)" stopOpacity="1" />
               </linearGradient>

@@ -1,9 +1,6 @@
 import { VideoEngineError, normalizeUnknownError } from "../../core/errors";
 import type { VideoEngineEventMap } from "../../core/events";
-import {
-  cloneVideoEngineSnapshot,
-  createInitialVideoEngineSnapshot,
-} from "../../core/snapshot";
+import { cloneVideoEngineSnapshot, createInitialVideoEngineSnapshot } from "../../core/snapshot";
 import type { VideoEngineSnapshot } from "../../core/snapshot";
 import { TypedEventEmitter } from "../../core/typed-emitter";
 import type { VideoEngine } from "../../core/VideoEngine";
@@ -41,12 +38,9 @@ function isExpectedPlayInterruption(error: unknown): boolean {
   );
 }
 
-function mediaErrorToVideoEngineError(
-  mediaError: MediaError | null,
-): VideoEngineError {
+function mediaErrorToVideoEngineError(mediaError: MediaError | null): VideoEngineError {
   const code = mediaError?.code ?? 0;
-  const message =
-    mediaError?.message || "The browser could not play this media.";
+  const message = mediaError?.message || "The browser could not play this media.";
 
   if (code === 1) {
     return new VideoEngineError({
@@ -132,8 +126,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
         throw new VideoEngineError({
           category: "ABORTED",
           code: "ATTACH_SUPERSEDED",
-          message:
-            "Media attachment was superseded by a newer lifecycle operation.",
+          message: "Media attachment was superseded by a newer lifecycle operation.",
           fatal: false,
           recoverable: true,
         });
@@ -245,10 +238,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     }
 
     const duration = finiteOrZero(media.duration);
-    media.currentTime = Math.max(
-      0,
-      duration > 0 ? Math.min(time, duration) : time,
-    );
+    media.currentTime = Math.max(0, duration > 0 ? Math.min(time, duration) : time);
     this.updateSnapshot({ currentTime: finiteOrZero(media.currentTime) });
     this.#events.emit("timeupdate", {
       currentTime: this.#snapshot.currentTime,
@@ -297,9 +287,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     return {
       browserSupported: typeof HTMLMediaElement !== "undefined",
       adaptiveStreaming: Boolean(nativeHls),
-      drm:
-        typeof navigator !== "undefined" &&
-        "requestMediaKeySystemAccess" in navigator,
+      drm: typeof navigator !== "undefined" && "requestMediaKeySystemAccess" in navigator,
       nativeHls: Boolean(nativeHls),
       pictureInPicture:
         typeof document !== "undefined" &&
@@ -426,16 +414,10 @@ export abstract class MediaElementEngineBase implements VideoEngine {
   }
 
   protected isCurrentOperation(generation: number): boolean {
-    return (
-      generation === this.#operationGeneration &&
-      this.#snapshot.lifecycle !== "destroyed"
-    );
+    return generation === this.#operationGeneration && this.#snapshot.lifecycle !== "destroyed";
   }
 
-  protected updateSnapshot(
-    update: Partial<VideoEngineSnapshot>,
-    emit = true,
-  ): void {
+  protected updateSnapshot(update: Partial<VideoEngineSnapshot>, emit = true): void {
     this.#snapshot = { ...this.#snapshot, ...update };
     if (emit) {
       this.emitSnapshot();
@@ -547,18 +529,13 @@ export abstract class MediaElementEngineBase implements VideoEngine {
 
   protected async onDetaching(_media: HTMLMediaElement): Promise<void> {}
 
-  protected async onDestroying(
-    _media: HTMLMediaElement | null,
-  ): Promise<void> {}
+  protected async onDestroying(_media: HTMLMediaElement | null): Promise<void> {}
 
   private emitSnapshot(): void {
     this.#events.emit("snapshotchange", this.getSnapshot());
   }
 
-  private normalizeNativeTextTrack(
-    track: TextTrack,
-    index: number,
-  ): VideoTextTrack {
+  private normalizeNativeTextTrack(track: TextTrack, index: number): VideoTextTrack {
     return {
       id: `native-text:${index}:${track.language}:${track.label}`,
       label: track.label || track.language || `Text track ${index + 1}`,
@@ -635,9 +612,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       this.syncMediaState();
       this.refreshNativeTextTracks();
     });
-    listen("error", () =>
-      this.emitError(mediaErrorToVideoEngineError(media.error)),
-    );
+    listen("error", () => this.emitError(mediaErrorToVideoEngineError(media.error)));
   }
 
   private unbindMediaEvents(media: HTMLMediaElement): void {

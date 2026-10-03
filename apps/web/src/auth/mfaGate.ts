@@ -17,14 +17,10 @@ export function accountRequiresMfaEnrollment(
     return user.mfaMandatory;
   }
 
-  return Boolean(
-    user.roles?.some((role) => MFA_MANDATORY_ROLES.has(role.toLowerCase())),
-  );
+  return Boolean(user.roles?.some((role) => MFA_MANDATORY_ROLES.has(role.toLowerCase())));
 }
 
-export function resolveMfaSetupView(
-  user: MfaGateUser | null | undefined,
-): MfaSetupView {
+export function resolveMfaSetupView(user: MfaGateUser | null | undefined): MfaSetupView {
   if (!user) {
     return "login";
   }

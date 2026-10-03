@@ -23,18 +23,12 @@ import type { RoutePlugin } from "../lib/route-plugin.ts";
 const lessonSchema = z.object({
   id: z.uuid().meta({ description: "Stable identifier for the lesson." }),
   title: z.string().min(1).meta({ description: "Lesson title." }),
-  content: z
-    .string()
-    .optional()
-    .meta({ description: "Lesson body (HTML or markdown)." }),
+  content: z.string().optional().meta({ description: "Lesson body (HTML or markdown)." }),
 });
 
 // Optionally register the schema so it becomes a reusable component in the
 // generated OpenAPI document. Not required for local/inline schemas.
-if (
-  (z as any).globalRegistry &&
-  typeof (z as any).globalRegistry.add === "function"
-) {
+if ((z as any).globalRegistry && typeof (z as any).globalRegistry.add === "function") {
   (z as any).globalRegistry.add(lessonSchema, {
     id: "Lesson",
     description: "A lesson returned by GET /lessons/:id",

@@ -5,9 +5,4 @@ import type {
   CourseOverviewResponse,
 } from "@veolms/contracts";
 
-export type {
-  CreateCourseRequest,
-  UpdateCourseBasicsRequest,
-  Course,
-  CourseOverviewResponse,
-};
+export type { CreateCourseRequest, UpdateCourseBasicsRequest, Course, CourseOverviewResponse };

@@ -7,24 +7,12 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { TargetIcon as Target } from "@phosphor-icons/react/Target";
-import type {
-  CourseSummary,
-  LearningProgressResumeContextResponse,
-} from "@veolms/contracts";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-  type ImgHTMLAttributes,
-} from "react";
+import type { CourseSummary, LearningProgressResumeContextResponse } from "@veolms/contracts";
+import { useEffect, useMemo, useState, type CSSProperties, type ImgHTMLAttributes } from "react";
 import { useNavigate } from "react-router";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
-import {
-  adaptEnrolledCourseToLearningCourse,
-  type LearningCourse,
-} from "./StudentPages";
+import { adaptEnrolledCourseToLearningCourse, type LearningCourse } from "./StudentPages";
 import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
 import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import { useCourses } from "./services/courses";
@@ -61,10 +49,7 @@ function getCourseTimestamp(value: string | Date | null | undefined) {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-function compareContinueLearningCourses(
-  left: LearningCourse,
-  right: LearningCourse,
-) {
+function compareContinueLearningCourses(left: LearningCourse, right: LearningCourse) {
   const leftAccessedAt = getCourseTimestamp(left.lastAccessedAt);
   const rightAccessedAt = getCourseTimestamp(right.lastAccessedAt);
 
@@ -89,12 +74,7 @@ function compareContinueLearningCourses(
   return left.id.localeCompare(right.id);
 }
 
-function SectionHeader({
-  icon: Icon,
-  title,
-  action,
-  onAction,
-}: SectionHeaderProps) {
+function SectionHeader({ icon: Icon, title, action, onAction }: SectionHeaderProps) {
   return (
     <div className="dashboard-section-heading">
       <h2>
@@ -149,9 +129,7 @@ function StudentHomeThumbnail({
           decoding={decoding}
           fetchPriority={fetchPriority}
           onError={() =>
-            setImageSourceIndex((current) =>
-              Math.min(current + 1, imageSources.length),
-            )
+            setImageSourceIndex((current) => Math.min(current + 1, imageSources.length))
           }
         />
       ) : (
@@ -162,9 +140,7 @@ function StudentHomeThumbnail({
 }
 
 function ProgressBar({ value }: { value: number }) {
-  const normalizedValue = Number.isFinite(value)
-    ? Math.min(100, Math.max(0, value))
-    : 0;
+  const normalizedValue = Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0;
 
   return (
     <span
@@ -221,9 +197,7 @@ function RecentUpdatesState({
   return (
     <div className="home-update-state" role="status">
       <strong>No recent updates</strong>
-      <small>
-        New lesson updates from your enrolled courses will appear here.
-      </small>
+      <small>New lesson updates from your enrolled courses will appear here.</small>
     </div>
   );
 }
@@ -277,9 +251,7 @@ function ContinueLearningState({
   return (
     <div className="home-continue-state" role="status">
       <strong>You&apos;re all caught up here</strong>
-      <small>
-        Your other courses will appear here as you start making progress.
-      </small>
+      <small>Your other courses will appear here as you start making progress.</small>
     </div>
   );
 }
@@ -313,9 +285,7 @@ function ResumeLessonContext({
           {previousLesson && (
             <button
               type="button"
-              onClick={() =>
-                onNavigate(lessonPath(previousLesson.lessonNumber))
-              }
+              onClick={() => onNavigate(lessonPath(previousLesson.lessonNumber))}
               aria-label={`Previous lesson: ${previousLesson.title}`}
             >
               <span>Previous</span>
@@ -356,11 +326,7 @@ function ProgressMetricSkeletons() {
   return (
     <>
       {[0, 1, 2, 3].map((item) => (
-        <article
-          key={item}
-          className="home-metric home-metric-skeleton"
-          aria-hidden="true"
-        >
+        <article key={item} className="home-metric home-metric-skeleton" aria-hidden="true">
           <div className="home-metric__lead">
             <span />
             <i className="home-metric-skeleton__value" />
@@ -372,15 +338,10 @@ function ProgressMetricSkeletons() {
   );
 }
 
-export function StudentHome({
-  onOpenCourse,
-  onNavigatePage,
-  studentName,
-}: StudentHomeProps) {
+export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: StudentHomeProps) {
   const navigate = useNavigate();
   const goalCompletion = 72;
-  const firstName =
-    (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
+  const firstName = (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
 
   const {
     data: enrolledData,
@@ -394,8 +355,7 @@ export function StudentHome({
     return (enrolledData?.courses || []).map((course) => ({
       ...adaptEnrolledCourseToLearningCourse(course),
       thumbnailUrl:
-        course.courseThumbnailUrl ||
-        getCourseThumbnailCdnUrl(course.courseThumbnailMediaId),
+        course.courseThumbnailUrl || getCourseThumbnailCdnUrl(course.courseThumbnailMediaId),
       thumbnailMediaId: course.courseThumbnailMediaId,
     }));
   }, [enrolledData?.courses]);
@@ -403,10 +363,7 @@ export function StudentHome({
   const progressMetrics = useMemo(() => {
     const courses = enrolledData?.courses ?? [];
     const progressValues = courses.map((course) => course.progress ?? 0);
-    const totalProgress = progressValues.reduce(
-      (total, progress) => total + progress,
-      0,
-    );
+    const totalProgress = progressValues.reduce((total, progress) => total + progress, 0);
 
     return [
       {
@@ -416,18 +373,13 @@ export function StudentHome({
         tone: "violet",
       },
       {
-        value: String(
-          progressValues.filter((progress) => progress > 0 && progress < 100)
-            .length,
-        ),
+        value: String(progressValues.filter((progress) => progress > 0 && progress < 100).length),
         label: "In Progress",
         icon: ChartLineUp,
         tone: "cyan",
       },
       {
-        value: String(
-          progressValues.filter((progress) => progress >= 100).length,
-        ),
+        value: String(progressValues.filter((progress) => progress >= 100).length),
         label: "Completed",
         icon: CheckCircle,
         tone: "green",
@@ -450,10 +402,7 @@ export function StudentHome({
   } = useDashboardRecentDiscussions({ mine: true });
   const hasDiscussionData = discussionsResponse !== undefined;
   const discussionCards = useMemo(
-    () =>
-      discussionsResponse?.items.map((item) =>
-        adaptDiscussionWorkspaceItem(item),
-      ) ?? [],
+    () => discussionsResponse?.items.map((item) => adaptDiscussionWorkspaceItem(item)) ?? [],
     [discussionsResponse?.items],
   );
 
@@ -480,19 +429,12 @@ export function StudentHome({
   const miniCourses = useMemo(() => {
     return continueLearningCourses.slice(1, 3);
   }, [continueLearningCourses]);
-  const initialEnrollmentLoading =
-    enrolledCoursesLoading && !hasEnrolledCourseData;
+  const initialEnrollmentLoading = enrolledCoursesLoading && !hasEnrolledCourseData;
   const initialEnrollmentError = enrolledCoursesError && !hasEnrolledCourseData;
-  const hasMeaningfulLearningProgress = enrolledCourses.some(
-    (course) => course.progress > 0,
-  );
-  const { data: publishedCoursesData, isLoading: publishedCoursesLoading } =
-    useCourses({
-      enabled:
-        hasEnrolledCourseData &&
-        !initialEnrollmentError &&
-        !hasMeaningfulLearningProgress,
-    });
+  const hasMeaningfulLearningProgress = enrolledCourses.some((course) => course.progress > 0);
+  const { data: publishedCoursesData, isLoading: publishedCoursesLoading } = useCourses({
+    enabled: hasEnrolledCourseData && !initialEnrollmentError && !hasMeaningfulLearningProgress,
+  });
   const discoveryCourse = useMemo<CourseSummary | null>(
     () => publishedCoursesData?.courses.at(-1) ?? null,
     [publishedCoursesData?.courses],
@@ -540,9 +482,7 @@ export function StudentHome({
             </span>
             <i
               className="home-goal-ring"
-              style={
-                { "--goal-progress": `${goalCompletion}%` } as CSSProperties
-              }
+              style={{ "--goal-progress": `${goalCompletion}%` } as CSSProperties}
               aria-hidden="true"
             >
               <span>{goalCompletion}%</span>
@@ -562,9 +502,7 @@ export function StudentHome({
         <section className="home-resume-card home-resume-card--state">
           <div className="home-resume-state" role="alert">
             <strong>Couldn&apos;t load your courses</strong>
-            <small>
-              Something went wrong while loading your learning courses.
-            </small>
+            <small>Something went wrong while loading your learning courses.</small>
             <button
               type="button"
               onClick={() => void refetchEnrolledCourses()}
@@ -575,17 +513,12 @@ export function StudentHome({
           </div>
         </section>
       ) : heroCourse ? (
-        <section
-          className="home-resume-card"
-          aria-labelledby="continue-learning-title"
-        >
+        <section className="home-resume-card" aria-labelledby="continue-learning-title">
           <div className="home-resume-layout">
             <div className="home-resume-visual">
               <StudentHomeThumbnail
                 src={heroCourse.thumbnailUrl}
-                fallbackSrcs={[
-                  getCourseThumbnailCdnUrl(heroCourse.thumbnailMediaId),
-                ]}
+                fallbackSrcs={[getCourseThumbnailCdnUrl(heroCourse.thumbnailMediaId)]}
                 alt=""
                 loading="eager"
                 decoding="async"
@@ -593,13 +526,10 @@ export function StudentHome({
               />
             </div>
             <div className="home-resume-copy">
-              <span className="learning-status in-progress">
-                Continue Learning
-              </span>
+              <span className="learning-status in-progress">Continue Learning</span>
               <h2 id="continue-learning-title">{heroCourse.title}</h2>
               <strong>
-                {heroCourse.sections} Sections <i /> {heroCourse.lectures}{" "}
-                Lectures
+                {heroCourse.sections} Sections <i /> {heroCourse.lectures} Lectures
               </strong>
               <p>
                 {heroCourse.enrolledOn
@@ -652,13 +582,11 @@ export function StudentHome({
               />
             </div>
             <div className="home-resume-copy">
-              <span className="learning-status not-started">
-                Explore courses
-              </span>
+              <span className="learning-status not-started">Explore courses</span>
               <h2 id="explore-course-title">{discoveryCourse.title}</h2>
               <strong>
-                {discoveryCourse.totalSections} Sections <i />{" "}
-                {discoveryCourse.totalLessons} Lessons
+                {discoveryCourse.totalSections} Sections <i /> {discoveryCourse.totalLessons}{" "}
+                Lessons
               </strong>
               <p>
                 {discoveryCourse.shortDescription ||
@@ -669,9 +597,7 @@ export function StudentHome({
                 className="primary-learning-action"
                 onClick={() =>
                   onNavigatePage(
-                    "/courses/" +
-                      encodeURIComponent(discoveryCourse.slug) +
-                      "/overview",
+                    "/courses/" + encodeURIComponent(discoveryCourse.slug) + "/overview",
                   )
                 }
               >
@@ -681,23 +607,15 @@ export function StudentHome({
           </div>
         </section>
       ) : (
-        <section
-          className="home-resume-card"
-          aria-labelledby="explore-courses-title"
-        >
+        <section className="home-resume-card" aria-labelledby="explore-courses-title">
           <div className="home-resume-layout">
             <div className="home-resume-visual">
               <CourseThumbnailPlaceholder />
             </div>
             <div className="home-resume-copy">
-              <span className="learning-status not-started">
-                Explore courses
-              </span>
+              <span className="learning-status not-started">Explore courses</span>
               <h2 id="explore-courses-title">What will you learn next?</h2>
-              <p>
-                Explore courses and find something you&apos;d like to learn
-                next.
-              </p>
+              <p>Explore courses and find something you&apos;d like to learn next.</p>
               <button
                 type="button"
                 className="primary-learning-action mt-4"
@@ -735,9 +653,7 @@ export function StudentHome({
                 <article key={course.id} className="home-mini-course">
                   <StudentHomeThumbnail
                     src={course.thumbnailUrl}
-                    fallbackSrcs={[
-                      getCourseThumbnailCdnUrl(course.thumbnailMediaId),
-                    ]}
+                    fallbackSrcs={[getCourseThumbnailCdnUrl(course.thumbnailMediaId)]}
                     alt=""
                     loading="lazy"
                     decoding="async"
@@ -794,10 +710,7 @@ export function StudentHome({
             ) : discussionCards.length === 0 ? (
               <div className="creator-discussion-state" role="status">
                 <strong>No discussions yet</strong>
-                <small>
-                  Questions and comments you create while learning will appear
-                  here.
-                </small>
+                <small>Questions and comments you create while learning will appear here.</small>
               </div>
             ) : (
               discussionCards.map((item) => (
@@ -824,9 +737,7 @@ export function StudentHome({
             ) : enrolledCoursesError && !hasEnrolledCourseData ? (
               <div className="home-progress-state" role="alert">
                 <strong>Couldn&apos;t load your progress</strong>
-                <small>
-                  Something went wrong while loading enrolled courses.
-                </small>
+                <small>Something went wrong while loading enrolled courses.</small>
                 <button
                   type="button"
                   onClick={() => void refetchEnrolledCourses()}
@@ -879,20 +790,14 @@ export function StudentHome({
                     <div className="home-update-course-header">
                       <StudentHomeThumbnail
                         src={course.courseThumbnailUrl}
-                        fallbackSrcs={[
-                          getCourseThumbnailCdnUrl(
-                            course.courseThumbnailMediaId,
-                          ),
-                        ]}
+                        fallbackSrcs={[getCourseThumbnailCdnUrl(course.courseThumbnailMediaId)]}
                         alt=""
                         loading="lazy"
                         decoding="async"
                       />
                       <span>
                         <strong>{course.courseTitle}</strong>
-                        <small>
-                          Updated {formatRelativeTime(course.latestUpdatedAt)}
-                        </small>
+                        <small>Updated {formatRelativeTime(course.latestUpdatedAt)}</small>
                       </span>
                     </div>
                     {course.lessons.length > 0 && (

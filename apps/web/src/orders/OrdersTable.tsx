@@ -13,11 +13,7 @@ import { useVirtualizer, useWindowVirtualizer } from "@tanstack/react-virtual";
 import type { Order, OrderSortOrder } from "@veolms/contracts";
 import { ArrowDownIcon as ArrowDown } from "@phosphor-icons/react/ArrowDown";
 import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/ArrowUp";
-import {
-  CourseActionMenu,
-  MenuAction,
-  MenuDivider,
-} from "../courses/CourseActionMenu";
+import { CourseActionMenu, MenuAction, MenuDivider } from "../courses/CourseActionMenu";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { UserIcon as User } from "@phosphor-icons/react/User";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
@@ -76,11 +72,7 @@ function getOrderListScrollMargin(
   if (!feed || typeof window === "undefined") return 0;
   const feedRect = feed.getBoundingClientRect();
   if (scrollport) {
-    return (
-      feedRect.top -
-      scrollport.getBoundingClientRect().top +
-      scrollport.scrollTop
-    );
+    return feedRect.top - scrollport.getBoundingClientRect().top + scrollport.scrollTop;
   }
   return feedRect.top + window.scrollY;
 }
@@ -113,9 +105,7 @@ function useOrderScrollMargin(
         feedRef.current,
         useWindowScroll ? null : getApplicationScrollElement(),
       );
-      setScrollMargin((current) =>
-        Math.abs(current - nextMargin) > 1 ? nextMargin : current,
-      );
+      setScrollMargin((current) => (Math.abs(current - nextMargin) > 1 ? nextMargin : current));
     };
     syncScrollMargin();
     window.addEventListener("resize", syncScrollMargin);
@@ -154,8 +144,7 @@ const OrderRow = memo(function OrderRow({
 }: OrderRowProps) {
   // Student info
   const student = order.admin?.student;
-  const studentName =
-    student?.name || student?.displayName || "Anonymous Student";
+  const studentName = student?.name || student?.displayName || "Anonymous Student";
   const studentEmail = student?.email || "—";
 
   // Course info
@@ -190,10 +179,7 @@ const OrderRow = memo(function OrderRow({
 
   const handleDownloadInvoice = () => {
     setNotice?.(`Downloading invoice for order ${order.orderNumber}...`);
-    window.open(
-      ordersService.getInvoiceDownloadUrl(order.id, "admin"),
-      "_blank",
-    );
+    window.open(ordersService.getInvoiceDownloadUrl(order.id, "admin"), "_blank");
   };
 
   const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -212,9 +198,9 @@ const OrderRow = memo(function OrderRow({
       aria-selected={isSelected}
       onClick={() => onSelectOrder(order.id)}
       onKeyDown={handleRowKeyDown}
-      className={`group absolute inset-x-0 top-0 w-auto flex cursor-pointer flex-col gap-2.5 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-3.5 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${orderListGridColumns} @3xl/orders:grid @3xl/orders:min-w-[1040px] @3xl/orders:items-center @3xl/orders:gap-0 @3xl/orders:p-0 ${
+      className={`group absolute inset-x-0 top-0 flex w-auto cursor-pointer flex-col gap-2.5 border-b border-[color-mix(in_srgb,var(--text)_6%,transparent)] p-3.5 transition-colors hover:bg-(--hover) focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--accent) ${orderListGridColumns} @3xl/orders:grid @3xl/orders:min-w-[1040px] @3xl/orders:items-center @3xl/orders:gap-0 @3xl/orders:p-0 ${
         isSelected
-          ? "bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] border-l-3 border-l-(--accent)"
+          ? "border-l-3 border-l-(--accent) bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))]"
           : ""
       }`}
       style={{ transform }}
@@ -222,16 +208,12 @@ const OrderRow = memo(function OrderRow({
       {/* Learner Cell */}
       <div
         role="cell"
-        className="min-w-0 pr-10 @3xl/orders:pr-0 @3xl/orders:px-5 @3xl/orders:py-3.5"
+        className="min-w-0 pr-10 @3xl/orders:px-5 @3xl/orders:py-3.5 @3xl/orders:pr-0"
       >
         <div className="flex items-center gap-3">
-          <StudentAvatar
-            name={studentName}
-            username={student?.username}
-            size="md"
-          />
+          <StudentAvatar name={studentName} username={student?.username} size="md" />
           <div className="min-w-0">
-            <span className="block truncate text-sm font-bold leading-snug text-(--text) transition-colors group-hover:text-(--accent)">
+            <span className="block truncate text-sm leading-snug font-bold text-(--text) transition-colors group-hover:text-(--accent)">
               {studentName}
             </span>
             <span className="mt-0.5 block truncate font-mono text-xs leading-tight text-(--muted)">
@@ -244,24 +226,20 @@ const OrderRow = memo(function OrderRow({
       {/* Course Cell */}
       <div
         role="cell"
-        className="flex items-center justify-between gap-2.5 min-w-0 @3xl/orders:px-4 @3xl/orders:py-3.5"
+        className="flex min-w-0 items-center justify-between gap-2.5 @3xl/orders:px-4 @3xl/orders:py-3.5"
       >
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex min-w-0 items-center gap-2.5">
           <span
             className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg text-[11px] font-extrabold tracking-tight shadow-xs"
             style={{
               backgroundColor: brand.bgColor,
               color: brand.textColor,
-              border: brand.borderColor
-                ? `1px solid ${brand.borderColor}`
-                : undefined,
+              border: brand.borderColor ? `1px solid ${brand.borderColor}` : undefined,
             }}
           >
             {brand.label}
           </span>
-          <span className="truncate text-sm font-semibold text-(--text)">
-            {courseTitle}
-          </span>
+          <span className="truncate text-sm font-semibold text-(--text)">{courseTitle}</span>
         </div>
         {/* Amount on mobile only */}
         <span
@@ -275,20 +253,17 @@ const OrderRow = memo(function OrderRow({
       {/* Amount Cell (Desktop Grid) */}
       <div
         role="cell"
-        className="hidden @3xl/orders:block px-4 py-3.5 font-mono text-sm font-bold text-(--text) whitespace-nowrap"
+        className="hidden px-4 py-3.5 font-mono text-sm font-bold whitespace-nowrap text-(--text) @3xl/orders:block"
         title={earningsTooltip}
       >
         {formattedPrice}
       </div>
 
       {/* Coupon Cell (Desktop Grid) */}
-      <div
-        role="cell"
-        className="hidden @3xl/orders:flex px-4 py-3.5 items-center gap-1.5 min-w-0"
-      >
+      <div role="cell" className="hidden min-w-0 items-center gap-1.5 px-4 py-3.5 @3xl/orders:flex">
         {coupon ? (
           <>
-            <span className="inline-flex items-center rounded-md bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-2 py-0.5 text-[11px] font-bold text-(--accent) border border-[color-mix(in_srgb,var(--accent)_30%,transparent)]">
+            <span className="inline-flex items-center rounded-md border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-2 py-0.5 text-[11px] font-bold text-(--accent)">
               {coupon.code}
             </span>
             {discountAmount > 0 && (
@@ -303,29 +278,17 @@ const OrderRow = memo(function OrderRow({
       </div>
 
       {/* Date Cell (Desktop Grid) */}
-      <div
-        role="cell"
-        className="hidden @3xl/orders:block px-4 py-3.5 whitespace-nowrap min-w-0"
-      >
-        <span className="block text-xs font-semibold text-(--text)">
-          {dateStr}
-        </span>
-        <span className="mt-0.5 block font-mono text-[11px] text-(--muted)">
-          {timeStr}
-        </span>
+      <div role="cell" className="hidden min-w-0 px-4 py-3.5 whitespace-nowrap @3xl/orders:block">
+        <span className="block text-xs font-semibold text-(--text)">{dateStr}</span>
+        <span className="mt-0.5 block font-mono text-[11px] text-(--muted)">{timeStr}</span>
       </div>
 
       {/* Status Cell (Desktop Grid) */}
-      <div
-        role="cell"
-        className="hidden @3xl/orders:block px-4 py-3.5 whitespace-nowrap"
-      >
+      <div role="cell" className="hidden px-4 py-3.5 whitespace-nowrap @3xl/orders:block">
         <span
           className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.75 text-[11px] font-semibold ${statusStyle.pillClass}`}
         >
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${statusStyle.dotColor}`}
-          />
+          <span className={`h-1.5 w-1.5 rounded-full ${statusStyle.dotColor}`} />
           <span>{statusStyle.label}</span>
         </span>
       </div>
@@ -333,7 +296,7 @@ const OrderRow = memo(function OrderRow({
       {/* Actions Cell */}
       <div
         role="cell"
-        className="absolute right-3.5 top-3.5 @3xl/orders:static @3xl/orders:flex @3xl/orders:items-center @3xl/orders:justify-end @3xl/orders:px-5 @3xl/orders:py-3.5 @3xl/orders:text-right"
+        className="absolute top-3.5 right-3.5 @3xl/orders:static @3xl/orders:flex @3xl/orders:items-center @3xl/orders:justify-end @3xl/orders:px-5 @3xl/orders:py-3.5 @3xl/orders:text-right"
         onClick={(e) => e.stopPropagation()}
       >
         <CourseActionMenu
@@ -344,11 +307,7 @@ const OrderRow = memo(function OrderRow({
           className="relative z-30 ml-auto shrink-0"
         >
           {/* 1. View details */}
-          <MenuAction
-            Icon={Eye}
-            label="View details"
-            onClick={() => onSelectOrder(order.id)}
-          />
+          <MenuAction Icon={Eye} label="View details" onClick={() => onSelectOrder(order.id)} />
 
           {/* 2. View student */}
           <MenuAction
@@ -356,9 +315,7 @@ const OrderRow = memo(function OrderRow({
             label="View student"
             onClick={() => {
               if (student?.username) {
-                onNavigatePage?.(
-                  `/students/${encodeURIComponent(student.username)}?from=orders`,
-                );
+                onNavigatePage?.(`/students/${encodeURIComponent(student.username)}?from=orders`);
               } else {
                 setNotice?.("Student profile not available for this order.");
               }
@@ -371,9 +328,7 @@ const OrderRow = memo(function OrderRow({
             label="View enrollment"
             onClick={() => {
               if (firstItem?.courseId) {
-                onNavigatePage?.(
-                  `/courses/${encodeURIComponent(firstItem.courseId)}`,
-                );
+                onNavigatePage?.(`/courses/${encodeURIComponent(firstItem.courseId)}`);
               } else {
                 setNotice?.("Course enrollment page not available.");
               }
@@ -422,10 +377,7 @@ const OrderRow = memo(function OrderRow({
             Icon={Copy}
             label="Copy payment ID"
             onClick={() =>
-              handleCopy(
-                order.admin?.payment?.gatewayPaymentId || order.id,
-                "Payment ID",
-              )
+              handleCopy(order.admin?.payment?.gatewayPaymentId || order.id, "Payment ID")
             }
           />
 
@@ -434,13 +386,11 @@ const OrderRow = memo(function OrderRow({
       </div>
 
       {/* Mobile Card Footer: Date + Coupon on left, Status Pill on right */}
-      <div className="flex min-w-0 items-center justify-between gap-2 pt-2 border-t border-[color-mix(in_srgb,var(--text)_5%,transparent)] text-xs @3xl/orders:hidden">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="font-mono text-[11.5px] text-(--muted)">
-            {dateStr}
-          </span>
+      <div className="flex min-w-0 items-center justify-between gap-2 border-t border-[color-mix(in_srgb,var(--text)_5%,transparent)] pt-2 text-xs @3xl/orders:hidden">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="font-mono text-[11.5px] text-(--muted)">{dateStr}</span>
           {coupon && (
-            <span className="inline-flex items-center rounded-md bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-1.5 py-0.5 text-[10px] font-bold text-(--accent) border border-[color-mix(in_srgb,var(--accent)_25%,transparent)]">
+            <span className="inline-flex items-center rounded-md border border-[color-mix(in_srgb,var(--accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-1.5 py-0.5 text-[10px] font-bold text-(--accent)">
               {coupon.code}
             </span>
           )}
@@ -449,9 +399,7 @@ const OrderRow = memo(function OrderRow({
         <span
           className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${statusStyle.pillClass}`}
         >
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${statusStyle.dotColor}`}
-          />
+          <span className={`h-1.5 w-1.5 rounded-full ${statusStyle.dotColor}`} />
           <span>{statusStyle.label}</span>
         </span>
       </div>
@@ -478,11 +426,7 @@ export const OrdersTable = memo(function OrdersTable({
   const [openMenuOrderId, setOpenMenuOrderId] = useState<string | null>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const useWindowScroll = useOrderScrollMode();
-  const scrollMargin = useOrderScrollMargin(
-    feedRef,
-    useWindowScroll,
-    orders.length,
-  );
+  const scrollMargin = useOrderScrollMargin(feedRef, useWindowScroll, orders.length);
 
   // TanStack Virtualizer
   const windowVirtualizer = useWindowVirtualizer({
@@ -496,8 +440,7 @@ export const OrdersTable = memo(function OrdersTable({
 
   const elementVirtualizer = useVirtualizer({
     count: orders.length,
-    getScrollElement: () =>
-      getApplicationScrollElement() ?? document.documentElement,
+    getScrollElement: () => getApplicationScrollElement() ?? document.documentElement,
     estimateSize: getOrderRowEstimate,
     getItemKey: (index) => orders[index]?.id ?? index,
     overscan: ORDER_ROW_OVERSCAN,
@@ -511,21 +454,11 @@ export const OrdersTable = memo(function OrdersTable({
 
   // Infinite Scroll Trigger
   useEffect(() => {
-    if (
-      !hasNextPage ||
-      isFetchingNextPage ||
-      lastVirtualIndex < orders.length - ORDER_LOAD_AHEAD
-    ) {
+    if (!hasNextPage || isFetchingNextPage || lastVirtualIndex < orders.length - ORDER_LOAD_AHEAD) {
       return;
     }
     fetchNextPage();
-  }, [
-    hasNextPage,
-    isFetchingNextPage,
-    lastVirtualIndex,
-    orders.length,
-    fetchNextPage,
-  ]);
+  }, [hasNextPage, isFetchingNextPage, lastVirtualIndex, orders.length, fetchNextPage]);
 
   // Loading Initial Skeleton
   if (isLoading && orders.length === 0) {
@@ -549,7 +482,7 @@ export const OrdersTable = memo(function OrdersTable({
   if (!isLoading && orders.length === 0) {
     return (
       <div
-        className="relative w-full overflow-hidden rounded-2xl sm:rounded-[22px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] p-8 sm:p-12 text-center shadow-(--card-shadow)"
+        className="relative w-full overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] p-8 text-center shadow-(--card-shadow) sm:rounded-[22px] sm:p-12"
         style={{
           background:
             "radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, color-mix(in srgb, var(--accent) 6%, transparent) 50%, transparent 75%), linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--card-surface)) 0%, var(--card-surface) 48%, var(--card-surface) 100%)",
@@ -557,15 +490,15 @@ export const OrdersTable = memo(function OrdersTable({
         }}
       >
         <div
-          className="mx-auto mb-4 flex size-14 sm:size-16 items-center justify-center rounded-2xl sm:rounded-[20px] border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))] text-(--accent) shadow-[0_12px_24px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)]"
+          className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))] text-(--accent) shadow-[0_12px_24px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)] sm:size-16 sm:rounded-[20px]"
           aria-hidden="true"
         >
           <ShoppingBag size={30} weight="duotone" />
         </div>
-        <h3 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
+        <h3 className="text-base font-bold tracking-tight text-(--text) sm:text-lg">
           No orders found
         </h3>
-        <p className="mt-1.5 text-xs sm:text-sm text-(--muted) max-w-sm mx-auto leading-relaxed">
+        <p className="mx-auto mt-1.5 max-w-sm text-xs leading-relaxed text-(--muted) sm:text-sm">
           {isFiltered
             ? "No orders match the selected filters. Try clearing some criteria to see more results."
             : "No order records are present in this academy."}
@@ -574,7 +507,7 @@ export const OrdersTable = memo(function OrdersTable({
           <button
             type="button"
             onClick={onResetFilters}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-(--accent) px-4 py-2 text-xs sm:text-sm font-semibold text-(--on-accent,#fff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] cursor-pointer"
+            className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#fff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] sm:text-sm"
           >
             <ArrowCounterClockwise size={15} />
             <span>Reset filters</span>
@@ -591,11 +524,11 @@ export const OrdersTable = memo(function OrdersTable({
         style={{ boxShadow: "var(--card-shadow)" }}
       >
         <div className="@container/orders overflow-x-auto">
-          <div role="table" aria-label="Orders list" className="min-w-0 w-full">
+          <div role="table" aria-label="Orders list" className="w-full min-w-0">
             {/* Table Header */}
             <div
               role="row"
-              className={`hidden @3xl/orders:grid min-w-[1040px] items-center border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)] text-[11px] font-bold uppercase tracking-wider text-(--muted) select-none ${orderListGridColumns}`}
+              className={`hidden min-w-[1040px] items-center border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_45%,transparent)] text-[11px] font-bold tracking-wider text-(--muted) uppercase select-none @3xl/orders:grid ${orderListGridColumns}`}
             >
               <div role="columnheader" className="px-5 py-3.5">
                 Learner
@@ -613,22 +546,14 @@ export const OrdersTable = memo(function OrdersTable({
                 <button
                   type="button"
                   onClick={onToggleSortOrder}
-                  className="inline-flex items-center gap-1.5 hover:text-(--text) transition-colors cursor-pointer uppercase tracking-wider"
+                  className="inline-flex cursor-pointer items-center gap-1.5 tracking-wider uppercase transition-colors hover:text-(--text)"
                   title={`Sorted by date ${sortOrder}. Click to reverse.`}
                 >
                   <span>Date</span>
                   {sortOrder === "desc" ? (
-                    <ArrowDown
-                      size={13}
-                      weight="bold"
-                      className="text-(--accent)"
-                    />
+                    <ArrowDown size={13} weight="bold" className="text-(--accent)" />
                   ) : (
-                    <ArrowUp
-                      size={13}
-                      weight="bold"
-                      className="text-(--accent)"
-                    />
+                    <ArrowUp size={13} weight="bold" className="text-(--accent)" />
                   )}
                 </button>
               </div>
@@ -645,7 +570,7 @@ export const OrdersTable = memo(function OrdersTable({
               ref={feedRef}
               role="rowgroup"
               aria-busy={isLoading || isFetchingNextPage}
-              className="relative min-w-0 w-full @3xl/orders:min-w-[1040px]"
+              className="relative w-full min-w-0 @3xl/orders:min-w-[1040px]"
               style={{
                 height: `${virtualizer.getTotalSize()}px`,
               }}
@@ -661,9 +586,7 @@ export const OrdersTable = memo(function OrdersTable({
                     dataIndex={virtualItem.index}
                     isSelected={order.id === selectedOrderId}
                     isMenuOpen={openMenuOrderId === order.id}
-                    onMenuOpenChange={(open) =>
-                      setOpenMenuOrderId(open ? order.id : null)
-                    }
+                    onMenuOpenChange={(open) => setOpenMenuOrderId(open ? order.id : null)}
                     measureElement={virtualizer.measureElement}
                     transform={`translateY(${virtualItem.start - scrollMargin}px)`}
                     onSelectOrder={onSelectOrder}
@@ -685,11 +608,7 @@ export const OrdersTable = memo(function OrdersTable({
           aria-label="Loading more orders"
           className="flex items-center justify-center py-6"
         >
-          <CircleNotch
-            size={18}
-            className="animate-spin text-(--accent)"
-            aria-hidden="true"
-          />
+          <CircleNotch size={18} className="animate-spin text-(--accent)" aria-hidden="true" />
         </div>
       )}
     </div>

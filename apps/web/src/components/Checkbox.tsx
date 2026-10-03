@@ -32,15 +32,13 @@ export function Checkbox({
         checked={checked}
         disabled={disabled}
         onChange={(event) => onCheckedChange(event.target.checked)}
-        aria-label={
-          ariaLabel ?? (typeof label === "string" ? label : undefined)
-        }
+        aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
         className="peer sr-only"
       />
       <span
         data-checkbox-indicator
         aria-hidden="true"
-        className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-[4px] border [border-color:color-mix(in_srgb,var(--text)_30%,transparent)] bg-(--canvas) text-transparent transition-[background-color,border-color,color] peer-checked:border-(--accent) peer-checked:bg-(--accent) peer-checked:text-(--on-accent) peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-(--accent) group-hover:[border-color:color-mix(in_srgb,var(--accent)_62%,var(--text-secondary))]"
+        className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-[4px] border [border-color:color-mix(in_srgb,var(--text)_30%,transparent)] bg-(--canvas) text-transparent transition-[background-color,border-color,color] group-hover:[border-color:color-mix(in_srgb,var(--accent)_62%,var(--text-secondary))] peer-checked:border-(--accent) peer-checked:bg-(--accent) peer-checked:text-(--on-accent) peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-(--accent)"
       >
         <Check size={11} weight="bold" />
       </span>

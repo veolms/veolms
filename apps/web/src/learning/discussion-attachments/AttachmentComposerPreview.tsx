@@ -33,10 +33,7 @@ export function AttachmentComposerPreview({
       className={`flex flex-wrap items-center gap-2 p-2.5 ${className}`}
     >
       {attachments.map((attachment) => {
-        const category = getAttachmentCategory(
-          attachment.mimeType,
-          attachment.kind,
-        );
+        const category = getAttachmentCategory(attachment.mimeType, attachment.kind);
         const visualUrl = getAttachmentVisualUrl(attachment);
         const isPdf =
           attachment.mimeType === "application/pdf" ||
@@ -46,7 +43,7 @@ export function AttachmentComposerPreview({
           <div
             key={attachment.id}
             data-testid="composer-attachment-item"
-            className="flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] py-1.5 pr-2 pl-2.5 text-xs text-(--text) shadow-xs transition-colors"
+            className="flex max-w-full min-w-0 items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] py-1.5 pr-2 pl-2.5 text-xs text-(--text) shadow-xs transition-colors"
           >
             {category === "image" && visualUrl ? (
               <img
@@ -81,9 +78,7 @@ export function AttachmentComposerPreview({
             >
               {attachment.fileName}
             </span>
-            <span className="text-(--muted)">
-              ({formatFileSize(attachment.fileSize)})
-            </span>
+            <span className="text-(--muted)">({formatFileSize(attachment.fileSize)})</span>
             <button
               type="button"
               onClick={() => onRemove(attachment.id)}

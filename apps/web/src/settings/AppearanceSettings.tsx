@@ -8,12 +8,7 @@ import { themeRevealOriginFromClick } from "../shell/themeViewTransition";
 import type { ThemeRevealOrigin } from "../shell/themeViewTransition";
 import AppearanceAdditionalSettings from "./AppearanceDeferredSettings";
 import type { PageTabColors } from "./settingsPreferences";
-import {
-  ChoiceCard,
-  RadioGroup,
-  SettingRow,
-  SettingsToggle,
-} from "./SettingsControls";
+import { ChoiceCard, RadioGroup, SettingRow, SettingsToggle } from "./SettingsControls";
 import { MiniSurface } from "./SettingsPreviews";
 
 export type DisplayMode = "light" | "dark" | "device";
@@ -45,10 +40,7 @@ export interface AppearanceSettingsProps {
   onToggleFullscreen: () => void;
   onThemeChange?: (theme: DisplayMode, origin?: ThemeRevealOrigin) => void;
   academyTheme: string;
-  onAcademyThemeChange?: (
-    themeId: AcademyTheme["id"],
-    origin?: ThemeRevealOrigin,
-  ) => void;
+  onAcademyThemeChange?: (themeId: AcademyTheme["id"], origin?: ThemeRevealOrigin) => void;
   pageTabColors: PageTabColors;
   onPageTabColorsChange: (colors: PageTabColors) => void;
 }
@@ -86,10 +78,7 @@ export function AppearanceSettings({
               key={id}
               checked={theme === id}
               onChange={(event) =>
-                onThemeChange?.(
-                  id,
-                  themeRevealOriginFromClick(event) ?? undefined,
-                )
+                onThemeChange?.(id, themeRevealOriginFromClick(event) ?? undefined)
               }
               label={label}
               note={note}
@@ -98,9 +87,7 @@ export function AppearanceSettings({
               preview={
                 <MiniSurface
                   variant={selectedColor}
-                  previewMode={
-                    id === "light" ? "light" : id === "dark" ? "dark" : "device"
-                  }
+                  previewMode={id === "light" ? "light" : id === "dark" ? "dark" : "device"}
                 />
               }
             />
@@ -119,10 +106,7 @@ export function AppearanceSettings({
               key={item.id}
               checked={selectedColor === item.id}
               onChange={(event) =>
-                onAcademyThemeChange?.(
-                  item.id,
-                  themeRevealOriginFromClick(event) ?? undefined,
-                )
+                onAcademyThemeChange?.(item.id, themeRevealOriginFromClick(event) ?? undefined)
               }
               label={item.name}
               note={item.note}

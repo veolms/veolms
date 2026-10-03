@@ -9,29 +9,16 @@ export interface IdentifierMethodSwitchProps {
   onMethodChange: (method: IdentifierMethod) => void;
 }
 
-const ALL_METHOD_TABS: readonly (readonly [
-  IdentifierMethod,
-  string,
-  IconName,
-])[] = [
+const ALL_METHOD_TABS: readonly (readonly [IdentifierMethod, string, IconName])[] = [
   ["mobile", "Mobile", "mobile"],
   ["email", "Email", "email"],
 ];
 
-export function IdentifierMethodSwitch({
-  method,
-  onMethodChange,
-}: IdentifierMethodSwitchProps) {
-  const visibleTabs = ALL_METHOD_TABS.filter(([value]) =>
-    isIdentifierMethodEnabled(value),
-  );
+export function IdentifierMethodSwitch({ method, onMethodChange }: IdentifierMethodSwitchProps) {
+  const visibleTabs = ALL_METHOD_TABS.filter(([value]) => isIdentifierMethodEnabled(value));
 
   return (
-    <div
-      aria-label="Sign-in method"
-      className="auth-method-switch"
-      role="tablist"
-    >
+    <div aria-label="Sign-in method" className="auth-method-switch" role="tablist">
       {visibleTabs.map(([value, label, glyph]) => (
         <button
           aria-selected={method === value}

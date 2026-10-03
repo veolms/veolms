@@ -52,8 +52,7 @@ export const OPENAPI_TAGS = [
   },
   {
     name: "Course Bin",
-    description:
-      "Administrator-only recovery and retention management for deleted courses.",
+    description: "Administrator-only recovery and retention management for deleted courses.",
   },
 ];
 
@@ -71,9 +70,7 @@ export function documentedServers(
   return [{ url: "/", description: "The origin serving this document" }];
 }
 
-export function pruneUnreferencedComponents(
-  document: OpenAPIV3_1.Document,
-): OpenAPIV3_1.Document {
+export function pruneUnreferencedComponents(document: OpenAPIV3_1.Document): OpenAPIV3_1.Document {
   const schemas = document.components?.schemas;
   if (!schemas) return document;
 
@@ -105,17 +102,13 @@ export function pruneUnreferencedComponents(
     ...document,
     components: {
       ...document.components,
-      schemas: Object.fromEntries(
-        Object.entries(schemas).filter(([name]) => referenced.has(name)),
-      ),
+      schemas: Object.fromEntries(Object.entries(schemas).filter(([name]) => referenced.has(name))),
     },
   };
 }
 
 export const transformObject: SwaggerTransformObject = (documentObject) =>
-  pruneUnreferencedComponents(
-    jsonSchemaTransformObject(documentObject) as OpenAPIV3_1.Document,
-  );
+  pruneUnreferencedComponents(jsonSchemaTransformObject(documentObject) as OpenAPIV3_1.Document);
 
 export async function registerOpenApi(
   app: FastifyInstance,

@@ -48,15 +48,11 @@ function toGatewayAmount(amount: number, currency: string): number {
     "XOF",
     "XPF",
   ]);
-  const multiplier = zeroDecimalCurrencies.has(currency.toUpperCase())
-    ? 1
-    : 100;
+  const multiplier = zeroDecimalCurrencies.has(currency.toUpperCase()) ? 1 : 100;
   const gatewayAmount = amount * multiplier;
 
   if (!Number.isSafeInteger(gatewayAmount)) {
-    throw new Error(
-      `Order amount is too large for gateway: ${amount} ${currency}`,
-    );
+    throw new Error(`Order amount is too large for gateway: ${amount} ${currency}`);
   }
 
   return gatewayAmount;
@@ -81,10 +77,7 @@ export interface PaymentService {
       keyId?: string;
     };
   }>;
-  verifyPayment(
-    userId: string,
-    input: VerifyPaymentRequest,
-  ): Promise<VerifyPaymentResponse>;
+  verifyPayment(userId: string, input: VerifyPaymentRequest): Promise<VerifyPaymentResponse>;
   getPaymentById(paymentId: string): Promise<Payment | undefined>;
   getPaymentByOrderId(orderId: string): Promise<Payment | undefined>;
 }
@@ -191,10 +184,7 @@ export function createPaymentService({
     }
 
     // Record initial payment attempt
-    const existingAttempts = await paymentRepo.listPaymentAttempts(
-      database,
-      payment.id,
-    );
+    const existingAttempts = await paymentRepo.listPaymentAttempts(database, payment.id);
     await paymentRepo.insertPaymentAttempt(database, {
       id: crypto.randomUUID(),
       payment_id: payment.id,
@@ -224,8 +214,7 @@ export function createPaymentService({
     userId: string,
     input: VerifyPaymentRequest,
   ): Promise<VerifyPaymentResponse> {
-    const { orderId, gatewayOrderId, gatewayPaymentId, gatewaySignature } =
-      input;
+    const { orderId, gatewayOrderId, gatewayPaymentId, gatewaySignature } = input;
 
     const order = await orderRepo.findOrderById(database, orderId);
     if (!order || order.user_id !== userId) {
@@ -233,10 +222,7 @@ export function createPaymentService({
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
     }
 
-    const payment = await paymentRepo.findPaymentByGatewayOrderId(
-      database,
-      gatewayOrderId,
-    );
+    const payment = await paymentRepo.findPaymentByGatewayOrderId(database, gatewayOrderId);
     if (!payment || payment.order_id !== order.id) {
       throw CommerceErrors.PAYMENT_NOT_FOUND(gatewayOrderId);
     }
@@ -262,10 +248,7 @@ export function createPaymentService({
 
     if (!isValid) {
       // Record the failed attempt outside a transaction — it is diagnostic only
-      const existingAttempts = await paymentRepo.listPaymentAttempts(
-        database,
-        payment.id,
-      );
+      const existingAttempts = await paymentRepo.listPaymentAttempts(database, payment.id);
       await paymentRepo.insertPaymentAttempt(database, {
         id: crypto.randomUUID(),
         payment_id: payment.id,
@@ -296,16 +279,11 @@ export function createPaymentService({
       throw CommerceErrors.PAYMENT_NOT_FOUND(gatewayOrderId);
     }
 
-    const expectedGatewayAmount = toGatewayAmount(
-      order.total_amount,
-      order.currency,
-    );
+    const expectedGatewayAmount = toGatewayAmount(order.total_amount, order.currency);
     if (paymentDetails.amount !== expectedGatewayAmount) {
       throw CommerceErrors.PAYMENT_AMOUNT_MISMATCH();
     }
-    if (
-      paymentDetails.currency.toUpperCase() !== order.currency.toUpperCase()
-    ) {
+    if (paymentDetails.currency.toUpperCase() !== order.currency.toUpperCase()) {
       throw CommerceErrors.PAYMENT_CURRENCY_MISMATCH();
     }
 

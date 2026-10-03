@@ -23,22 +23,15 @@ const checkoutRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/checkout/preview",
     {
-      preHandler: [
-        ctx.middleware.authenticate,
-        ctx.middleware.requireMfaVerifiedIfAuthenticated,
-      ],
+      preHandler: [ctx.middleware.authenticate, ctx.middleware.requireMfaVerifiedIfAuthenticated],
       schema: {
         operationId: "previewCheckout",
         tags: ["Commerce - Checkout"],
         summary: "Preview checkout calculations",
-        description:
-          "Calculates prices, taxes, and coupon discounts for course or bundle items.",
+        description: "Calculates prices, taxes, and coupon discounts for course or bundle items.",
         body: checkoutPreviewRequestSchema,
         response: {
-          200: jsonResponse(
-            "Calculated checkout preview",
-            checkoutPreviewResponseSchema,
-          ),
+          200: jsonResponse("Calculated checkout preview", checkoutPreviewResponseSchema),
           400: errorResponse("Invalid items or coupon"),
           404: errorResponse("Item not found"),
           409: errorResponse("Item already owned"),

@@ -32,9 +32,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     mfaMandatory: boolean,
     roles?: readonly string[] | null,
   ): Promise<MfaState> {
-    const isAdmin = Boolean(
-      roles?.some((role) => role.toLowerCase() === ADMIN_ROLE),
-    );
+    const isAdmin = Boolean(roles?.some((role) => role.toLowerCase() === ADMIN_ROLE));
     if (config.SKIP_ADMIN_MFA && isAdmin) {
       return {
         totpEnabled: false,
@@ -73,11 +71,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     },
   ): Promise<EstablishedSession> {
     if (user.is_deleted) {
-      throw new AppError(
-        403,
-        "ACCOUNT_DEACTIVATED",
-        "This account has been deactivated.",
-      );
+      throw new AppError(403, "ACCOUNT_DEACTIVATED", "This account has been deactivated.");
     }
 
     const roles = await userRepository.listUserRoleNames(database, user.id);
@@ -104,18 +98,14 @@ export function createSessionService({ database }: SessionServiceOptions) {
 
       if (existingSession && existingSession.user_id === user.id) {
         // Reuse the existing session record and rotate its token with optimistic concurrency check
-        const rotated = await sessionRepository.rotateSession(
-          database,
-          existingSession.id,
-          {
-            previousTokenHash: existingTokenHash,
-            tokenHash,
-            ipAddress: request.ip,
-            userAgent: request.userAgent,
-            mfaVerified,
-            expiresAt,
-          },
-        );
+        const rotated = await sessionRepository.rotateSession(database, existingSession.id, {
+          previousTokenHash: existingTokenHash,
+          tokenHash,
+          ipAddress: request.ip,
+          userAgent: request.userAgent,
+          mfaVerified,
+          expiresAt,
+        });
 
         if (rotated) {
           return { token, sessionId: existingSession.id, mfa };
@@ -138,16 +128,9 @@ export function createSessionService({ database }: SessionServiceOptions) {
     return { token, sessionId, mfa };
   }
 
-  async function completeMfaEnrolment(
-    userId: string,
-    sessionId: string,
-  ): Promise<void> {
+  async function completeMfaEnrolment(userId: string, sessionId: string): Promise<void> {
     await sessionRepository.markSessionMfaVerified(database, sessionId);
-    await sessionRepository.revokeOtherUserSessions(
-      database,
-      userId,
-      sessionId,
-    );
+    await sessionRepository.revokeOtherUserSessions(database, userId, sessionId);
   }
 
   async function logout(sessionId: string): Promise<void> {
@@ -158,16 +141,9 @@ export function createSessionService({ database }: SessionServiceOptions) {
     return sessionRepository.listUserSessions(database, userId);
   }
 
-  async function revokeSession(
-    userId: string,
-    sessionId: string,
-  ): Promise<void> {
+  async function revokeSession(userId: string, sessionId: string): Promise<void> {
     await database.transaction().execute(async (trx) => {
-      const revoked = await sessionRepository.revokeUserSession(
-        trx,
-        userId,
-        sessionId,
-      );
+      const revoked = await sessionRepository.revokeUserSession(trx, userId, sessionId);
       if (!revoked) return;
       await outbox.publish(trx, {
         type: "auth.session_revoked",
@@ -179,21 +155,11 @@ export function createSessionService({ database }: SessionServiceOptions) {
     });
   }
 
-  async function revokeOtherSessions(
-    userId: string,
-    currentSessionId: string,
-  ): Promise<void> {
-    await sessionRepository.revokeOtherUserSessions(
-      database,
-      userId,
-      currentSessionId,
-    );
+  async function revokeOtherSessions(userId: string, currentSessionId: string): Promise<void> {
+    await sessionRepository.revokeOtherUserSessions(database, userId, currentSessionId);
   }
 
-  async function revokeAllSessions(
-    userId: string,
-    executor: Executor = database,
-  ): Promise<void> {
+  async function revokeAllSessions(userId: string, executor: Executor = database): Promise<void> {
     await sessionRepository.deleteAllUserSessions(executor, userId);
   }
 
@@ -202,13 +168,8 @@ export function createSessionService({ database }: SessionServiceOptions) {
     return sessionRepository.purgeOldSessions(database, cutoffDate);
   }
 
-  async function authenticate(
-    token: string,
-  ): Promise<AuthenticatedRequestContext | null> {
-    const session = await sessionRepository.findActiveSession(
-      database,
-      hashToken(token),
-    );
+  async function authenticate(token: string): Promise<AuthenticatedRequestContext | null> {
+    const session = await sessionRepository.findActiveSession(database, hashToken(token));
     if (!session) {
       return null;
     }
@@ -240,12 +201,8 @@ export function createSessionService({ database }: SessionServiceOptions) {
         displayName: user.display_name,
         avatarDataUrl: user.avatar_data_url,
         bio: user.bio,
-        emailPublic: Boolean(
-          user.email_public && user.email && user.email_verified_at,
-        ),
-        mobilePublic: Boolean(
-          user.mobile_public && user.phone_no && user.phone_verified_at,
-        ),
+        emailPublic: Boolean(user.email_public && user.email && user.email_verified_at),
+        mobilePublic: Boolean(user.mobile_public && user.phone_no && user.phone_verified_at),
         linkedinUrl: user.linkedin_url,
         linkedinPublic: Boolean(user.linkedin_public && user.linkedin_url),
         githubUrl: user.github_url,

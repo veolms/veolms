@@ -129,30 +129,20 @@ export function LessonAudioPlayer({
 
   // Waveform heights for authentic audio visualizer animation
   const waveformBars = [
-    12, 18, 28, 42, 35, 60, 48, 75, 90, 85, 95, 80, 68, 55, 78, 88, 70, 92, 64,
-    45, 80, 65, 50, 40, 30, 20, 15,
+    12, 18, 28, 42, 35, 60, 48, 75, 90, 85, 95, 80, 68, 55, 78, 88, 70, 92, 64, 45, 80, 65, 50, 40,
+    30, 20, 15,
   ];
 
-  const progressPercent = Math.min(
-    100,
-    Math.max(0, (currentTime / effectiveDuration) * 100),
-  );
+  const progressPercent = Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100));
 
   return (
-    <div className="relative flex aspect-video w-full flex-col justify-between overflow-hidden rounded-[16px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[radial-gradient(ellipse_at_top,_color-mix(in_srgb,var(--accent)_22%,#050814)_0%,_#05070e_100%)] p-5 text-white shadow-(--card-shadow) sm:p-7 select-none">
-      {audioUrl && (
-        <audio
-          ref={audioRef}
-          src={audioUrl}
-          preload="metadata"
-          className="hidden"
-        />
-      )}
+    <div className="relative flex aspect-video w-full flex-col justify-between overflow-hidden rounded-[16px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[radial-gradient(ellipse_at_top,_color-mix(in_srgb,var(--accent)_22%,#050814)_0%,_#05070e_100%)] p-5 text-white shadow-(--card-shadow) select-none sm:p-7">
+      {audioUrl && <audio ref={audioRef} src={audioUrl} preload="metadata" className="hidden" />}
 
       {/* Main Content Row: Album Art + Meta + Soundwave */}
       <div className="flex flex-1 items-center gap-5 sm:gap-7">
         {/* Album Artwork Card */}
-        <div className="relative flex h-28 w-28 sm:h-36 sm:w-36 shrink-0 flex-col items-center justify-between overflow-hidden rounded-[14px] border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] bg-[radial-gradient(ellipse_at_top,_color-mix(in_srgb,var(--accent)_45%,#0c122c)_0%,_#0b0e1f_100%)] p-3 text-center shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+        <div className="relative flex h-28 w-28 shrink-0 flex-col items-center justify-between overflow-hidden rounded-[14px] border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] bg-[radial-gradient(ellipse_at_top,_color-mix(in_srgb,var(--accent)_45%,#0c122c)_0%,_#0b0e1f_100%)] p-3 text-center shadow-[0_8px_24px_rgba(0,0,0,0.5)] sm:h-36 sm:w-36">
           {thumbnailUrl ? (
             <img
               src={thumbnailUrl}
@@ -164,11 +154,7 @@ export function LessonAudioPlayer({
               {/* Glowing Headphones Artwork */}
               <div className="relative mt-2 flex items-center justify-center">
                 <div className="absolute h-14 w-14 rounded-full bg-(--accent) opacity-35 blur-md" />
-                <Headphones
-                  size={38}
-                  weight="fill"
-                  className="relative text-(--accent)"
-                />
+                <Headphones size={38} weight="fill" className="relative text-(--accent)" />
               </div>
 
               {/* Album Art Soundwave Graphic */}
@@ -184,10 +170,10 @@ export function LessonAudioPlayer({
 
               {/* Album Title */}
               <div className="mt-auto">
-                <p className="m-0 text-[0.58rem] sm:text-[0.62rem] font-bold tracking-[0.06em] text-white uppercase">
+                <p className="m-0 text-[0.58rem] font-bold tracking-[0.06em] text-white uppercase sm:text-[0.62rem]">
                   Web Development
                 </p>
-                <p className="m-0 text-[0.44rem] sm:text-[0.48rem] tracking-[0.1em] text-white/60 uppercase">
+                <p className="m-0 text-[0.44rem] tracking-[0.1em] text-white/60 uppercase sm:text-[0.48rem]">
                   Learn • Practice • Grow
                 </p>
               </div>
@@ -197,15 +183,15 @@ export function LessonAudioPlayer({
 
         {/* Audio Meta and Animated Visualizer */}
         <div className="flex min-w-0 flex-1 flex-col justify-center">
-          <h3 className="m-0 truncate text-[1.15rem] sm:text-[1.38rem] font-bold tracking-[-0.015em] text-white">
+          <h3 className="m-0 truncate text-[1.15rem] font-bold tracking-[-0.015em] text-white sm:text-[1.38rem]">
             {title}
           </h3>
-          <p className="m-0 mt-1 truncate text-[0.78rem] sm:text-[0.86rem] text-white/70">
+          <p className="m-0 mt-1 truncate text-[0.78rem] text-white/70 sm:text-[0.86rem]">
             {subtitle}
           </p>
 
           {/* Soundwave Bars Visualizer */}
-          <div className="mt-4 sm:mt-6 flex h-10 sm:h-12 items-center gap-[3px] sm:gap-1">
+          <div className="mt-4 flex h-10 items-center gap-[3px] sm:mt-6 sm:h-12 sm:gap-1">
             {waveformBars.map((baseHeight, idx) => {
               const activeRatio = (idx / waveformBars.length) * 100;
               const isPast = activeRatio <= progressPercent;
@@ -217,7 +203,7 @@ export function LessonAudioPlayer({
                 <div
                   key={idx}
                   style={{ height: `${dynamicHeight}%` }}
-                  className={`w-[3px] sm:w-[4px] rounded-full transition-all duration-200 ${
+                  className={`w-[3px] rounded-full transition-all duration-200 sm:w-[4px] ${
                     isPast
                       ? "bg-[linear-gradient(180deg,#8b5cf6_0%,#3b82f6_100%)] shadow-[0_0_8px_rgba(139,92,246,0.6)]"
                       : "bg-white/20 hover:bg-white/40"
@@ -245,7 +231,7 @@ export function LessonAudioPlayer({
             onMouseDown={() => setIsScrubbing(true)}
             onMouseUp={() => setIsScrubbing(false)}
             aria-label="Audio scrubber"
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0 z-10"
+            className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
           />
           {/* Track background */}
           <div className="relative h-1.5 w-full rounded-full bg-white/20 transition-all group-hover:h-2">
@@ -270,7 +256,7 @@ export function LessonAudioPlayer({
               type="button"
               onClick={togglePlay}
               aria-label={isPlaying ? "Pause audio" : "Play audio"}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white shadow-sm transition-all hover:scale-105 hover:bg-white/20 active:scale-95 cursor-pointer"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-white/10 text-white shadow-sm transition-all hover:scale-105 hover:bg-white/20 active:scale-95"
             >
               {isPlaying ? (
                 <Pause size={17} weight="fill" />
@@ -280,7 +266,7 @@ export function LessonAudioPlayer({
             </button>
 
             {/* Time Stamp */}
-            <span className="text-[0.8rem] font-medium tabular-nums text-white/90">
+            <span className="text-[0.8rem] font-medium text-white/90 tabular-nums">
               {formatTime(currentTime)} / {formatTime(effectiveDuration)}
             </span>
           </div>
@@ -292,13 +278,9 @@ export function LessonAudioPlayer({
                 type="button"
                 onClick={toggleMute}
                 aria-label={isMuted ? "Unmute" : "Mute"}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/10 hover:text-white"
               >
-                {isMuted || volume === 0 ? (
-                  <SpeakerSlash size={17} />
-                ) : (
-                  <SpeakerHigh size={17} />
-                )}
+                {isMuted || volume === 0 ? <SpeakerSlash size={17} /> : <SpeakerHigh size={17} />}
               </button>
               <input
                 type="range"
@@ -316,7 +298,7 @@ export function LessonAudioPlayer({
                   }
                 }}
                 aria-label="Volume slider"
-                className="h-1 w-14 sm:w-18 cursor-pointer accent-(--accent)"
+                className="h-1 w-14 cursor-pointer accent-(--accent) sm:w-18"
               />
             </div>
 
@@ -325,7 +307,7 @@ export function LessonAudioPlayer({
               type="button"
               onClick={handleCycleSpeed}
               title="Playback speed"
-              className="flex h-7 items-center justify-center rounded-[6px] border border-white/20 bg-white/10 px-2 text-[0.74rem] font-semibold text-white/90 hover:bg-white/20 transition-colors cursor-pointer"
+              className="flex h-7 cursor-pointer items-center justify-center rounded-[6px] border border-white/20 bg-white/10 px-2 text-[0.74rem] font-semibold text-white/90 transition-colors hover:bg-white/20"
             >
               {playbackRate}x
             </button>
@@ -334,7 +316,7 @@ export function LessonAudioPlayer({
             <button
               type="button"
               title="More options"
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
             >
               <DotsThree size={18} weight="bold" />
             </button>

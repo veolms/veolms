@@ -38,9 +38,7 @@ export function CaptionsMenu({
       trigger={
         trigger ?? (
           <MenuTriggerContent
-            icon={
-              <CaptionsIcon className="size-4" active={Boolean(activeTrack)} />
-            }
+            icon={<CaptionsIcon className="size-4" active={Boolean(activeTrack)} />}
             value={currentLabel}
           />
         )
@@ -68,10 +66,7 @@ export function CaptionsMenu({
           key={track.id}
           label={track.label || track.language || "Caption track"}
           description={formatCaptionDescription(track)}
-          selected={
-            track.id === selectedTextTrackId ||
-            (!selectedTextTrackId && track.active)
-          }
+          selected={track.id === selectedTextTrackId || (!selectedTextTrackId && track.active)}
           onClick={() => {
             controller.selectTextTrack(track.id);
             onTextTrackChange?.(track.id);

@@ -11,17 +11,10 @@ export async function findCouponByCode(database: Executor, code: string) {
 }
 
 export async function findCouponById(database: Executor, id: string) {
-  return await database
-    .selectFrom("coupons")
-    .selectAll()
-    .where("id", "=", id)
-    .executeTakeFirst();
+  return await database.selectFrom("coupons").selectAll().where("id", "=", id).executeTakeFirst();
 }
 
-export async function countCouponRedemptionsGlobal(
-  database: Executor,
-  couponId: string,
-) {
+export async function countCouponRedemptionsGlobal(database: Executor, couponId: string) {
   const result = await database
     .selectFrom("coupon_redemptions")
     .select((eb) => eb.fn.count("id").as("count"))
@@ -200,10 +193,7 @@ export async function insertCoupon(
     .executeTakeFirstOrThrow();
 }
 
-export async function listCouponRedemptionStats(
-  database: Executor,
-  couponIds?: string[],
-) {
+export async function listCouponRedemptionStats(database: Executor, couponIds?: string[]) {
   if (couponIds !== undefined && couponIds.length === 0) {
     return [];
   }
@@ -222,10 +212,7 @@ export async function listCouponRedemptionStats(
   return await query.groupBy("coupon_id").execute();
 }
 
-export async function getCouponRedemptionStats(
-  database: Executor,
-  couponId: string,
-) {
+export async function getCouponRedemptionStats(database: Executor, couponId: string) {
   const result = await database
     .selectFrom("coupon_redemptions")
     .select((eb) => [
@@ -250,10 +237,7 @@ export interface ListCouponsRepositoryOptions {
   limit?: number;
 }
 
-export async function listCoupons(
-  database: Executor,
-  options?: ListCouponsRepositoryOptions,
-) {
+export async function listCoupons(database: Executor, options?: ListCouponsRepositoryOptions) {
   let query = database.selectFrom("coupons").selectAll();
 
   if (options?.courseId) {
@@ -317,16 +301,10 @@ export async function updateCoupon(
 }
 
 export async function deleteCoupon(database: Executor, couponId: string) {
-  return await database
-    .deleteFrom("coupons")
-    .where("id", "=", couponId)
-    .executeTakeFirst();
+  return await database.deleteFrom("coupons").where("id", "=", couponId).executeTakeFirst();
 }
 
-export async function getCouponOverallSummary(
-  database: Executor,
-  options?: { courseId?: string },
-) {
+export async function getCouponOverallSummary(database: Executor, options?: { courseId?: string }) {
   let query = database.selectFrom("coupons");
   if (options?.courseId) {
     const courseId = options.courseId;
@@ -339,9 +317,7 @@ export async function getCouponOverallSummary(
     );
   }
 
-  const coupons = await query
-    .select(["id", "is_active", "starts_at", "expires_at"])
-    .execute();
+  const coupons = await query.select(["id", "is_active", "starts_at", "expires_at"]).execute();
 
   const totalCount = coupons.length;
   const now = Date.now();
@@ -375,9 +351,7 @@ export async function getCouponOverallSummary(
       .selectFrom("coupon_redemptions")
       .select([
         sql<number>`count(*)::int`.as("total_redemptions"),
-        sql<number>`coalesce(sum(discount_amount), 0)::int`.as(
-          "total_discount_given",
-        ),
+        sql<number>`coalesce(sum(discount_amount), 0)::int`.as("total_discount_given"),
       ])
       .where("coupon_id", "in", couponIds)
       .executeTakeFirst();

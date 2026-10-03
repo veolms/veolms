@@ -6,10 +6,7 @@ import type {
 } from "@veolms/contracts";
 import type { Selectable } from "kysely";
 import { sql } from "kysely";
-import {
-  authorRoleSql,
-  type DiscussionListCursor,
-} from "../shared/discussion.utils.ts";
+import { authorRoleSql, type DiscussionListCursor } from "../shared/discussion.utils.ts";
 
 export type LearningReplyRow = Selectable<LearningReplyTable>;
 
@@ -54,10 +51,7 @@ export interface RepliesRepository {
     },
   ): Promise<void>;
 
-  findReplyById(
-    db: DatabaseExecutor,
-    replyId: string,
-  ): Promise<ReplyRowWithAuthor | null>;
+  findReplyById(db: DatabaseExecutor, replyId: string): Promise<ReplyRowWithAuthor | null>;
 
   listRepliesByThreadId(
     db: DatabaseExecutor,
@@ -65,10 +59,7 @@ export interface RepliesRepository {
     options: ListLearningRepliesQuery & { pageCursor?: DiscussionListCursor },
   ): Promise<ReplyRowWithAuthor[]>;
 
-  countRepliesByThreadId(
-    db: DatabaseExecutor,
-    threadId: string,
-  ): Promise<number>;
+  countRepliesByThreadId(db: DatabaseExecutor, threadId: string): Promise<number>;
 
   updateReply(
     db: DatabaseExecutor,
@@ -78,23 +69,11 @@ export interface RepliesRepository {
 
   deleteReply(db: DatabaseExecutor, replyId: string): Promise<boolean>;
 
-  setStatus(
-    db: DatabaseExecutor,
-    replyId: string,
-    status: InteractionStatus,
-  ): Promise<void>;
+  setStatus(db: DatabaseExecutor, replyId: string, status: InteractionStatus): Promise<void>;
 
-  setAcceptedStatus(
-    db: DatabaseExecutor,
-    replyId: string,
-    isAccepted: boolean,
-  ): Promise<void>;
+  setAcceptedStatus(db: DatabaseExecutor, replyId: string, isAccepted: boolean): Promise<void>;
 
-  incrementLikesCount(
-    db: DatabaseExecutor,
-    replyId: string,
-    delta: number,
-  ): Promise<void>;
+  incrementLikesCount(db: DatabaseExecutor, replyId: string, delta: number): Promise<void>;
 }
 
 export function createRepliesRepository(): RepliesRepository {
@@ -238,16 +217,11 @@ export function createRepliesRepository(): RepliesRepository {
         updated_at: new Date(),
       };
       if (updates.content !== undefined) updateData.content = updates.content;
-      if (updates.plainText !== undefined)
-        updateData.plain_text = updates.plainText;
+      if (updates.plainText !== undefined) updateData.plain_text = updates.plainText;
       if (updates.timestampSeconds !== undefined)
         updateData.timestamp_seconds = updates.timestampSeconds;
 
-      await db
-        .updateTable("learning_replies")
-        .set(updateData)
-        .where("id", "=", replyId)
-        .execute();
+      await db.updateTable("learning_replies").set(updateData).where("id", "=", replyId).execute();
     },
 
     async deleteReply(db, replyId) {

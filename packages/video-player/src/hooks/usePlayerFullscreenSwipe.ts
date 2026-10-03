@@ -61,10 +61,7 @@ function getPlayerRoot(element: HTMLElement): HTMLElement {
 }
 
 function isFullscreenSwipeIgnored(target: EventTarget | null): boolean {
-  return (
-    target instanceof Element &&
-    Boolean(target.closest(FULLSCREEN_SWIPE_IGNORE_SELECTOR))
-  );
+  return target instanceof Element && Boolean(target.closest(FULLSCREEN_SWIPE_IGNORE_SELECTOR));
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -157,8 +154,7 @@ export function usePlayerFullscreenSwipe(
           return false;
         }
         const correctDirection = gesture.fullscreen ? deltaY > 0 : deltaY < 0;
-        const verticalIntent =
-          verticalDistance >= Math.abs(deltaX) * DIRECTION_DOMINANCE;
+        const verticalIntent = verticalDistance >= Math.abs(deltaX) * DIRECTION_DOMINANCE;
         if (!correctDirection || !verticalIntent) {
           swipeRef.current = null;
           return false;
@@ -182,8 +178,7 @@ export function usePlayerFullscreenSwipe(
         : 1 + ENTER_PREVIEW_SCALE_DELTA * progress;
       const scale = gesture.initialZoom.scale * scaleMultiplier;
       const panY =
-        gesture.initialZoom.panY +
-        ((gesture.initialZoom.scale - scale) * gesture.height) / 2;
+        gesture.initialZoom.panY + ((gesture.initialZoom.scale - scale) * gesture.height) / 2;
       controller.setZoomState({
         feedbackVisible: false,
         gestureActive: true,
@@ -208,9 +203,7 @@ export function usePlayerFullscreenSwipe(
       if (!cancelled) updateSwipe(gesture.pointerId, point);
       swipeRef.current = null;
 
-      const distance = gesture.fullscreen
-        ? point.y - gesture.startY
-        : gesture.startY - point.y;
+      const distance = gesture.fullscreen ? point.y - gesture.startY : gesture.startY - point.y;
       const commitDistance = clamp(
         gesture.height * SWIPE_COMMIT_DISTANCE_RATIO,
         SWIPE_COMMIT_MIN_PX,
@@ -297,8 +290,7 @@ export function usePlayerFullscreenSwipe(
     );
     if (handled) {
       event.preventDefault();
-      suppressLegacyTouchUntilRef.current =
-        Date.now() + POINTER_TOUCH_DEDUPE_MS;
+      suppressLegacyTouchUntilRef.current = Date.now() + POINTER_TOUCH_DEDUPE_MS;
     }
     return handled;
   };
@@ -375,7 +367,6 @@ export function usePlayerFullscreenSwipe(
     onTouchMove,
     onTouchStart,
     suppressLegacyTouch: () =>
-      Boolean(swipeRef.current?.active) ||
-      Date.now() < suppressLegacyTouchUntilRef.current,
+      Boolean(swipeRef.current?.active) || Date.now() < suppressLegacyTouchUntilRef.current,
   };
 }

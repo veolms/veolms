@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePlayerState } from "@veolms/video-player";
 
@@ -14,16 +8,12 @@ export interface LessonAmbientProjectionProps {
   enabled: boolean;
 }
 
-export function LessonAmbientProjection({
-  enabled,
-}: LessonAmbientProjectionProps) {
+export function LessonAmbientProjection({ enabled }: LessonAmbientProjectionProps) {
   const anchorRef = useRef<HTMLSpanElement>(null);
   const inlineCanvasRef = useRef<HTMLCanvasElement>(null);
   const shellCanvasRef = useRef<HTMLCanvasElement>(null);
   const [shellHost, setShellHost] = useState<HTMLElement | null>(null);
-  const [shellOverlayHost, setShellOverlayHost] = useState<HTMLElement | null>(
-    null,
-  );
+  const [shellOverlayHost, setShellOverlayHost] = useState<HTMLElement | null>(null);
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const { error, fullscreen, playing } = usePlayerState(
     ({ media, ui }) => ({
@@ -64,9 +54,7 @@ export function LessonAmbientProjection({
     const shell = getShell();
     setShellHost(shell);
     setShellOverlayHost(
-      shell?.querySelector<HTMLElement>(
-        '[data-video-player-shell-overlay-host=""]',
-      ) ?? null,
+      shell?.querySelector<HTMLElement>('[data-video-player-shell-overlay-host=""]') ?? null,
     );
     setPortalHost(shell?.closest<HTMLElement>(".courses-app") ?? null);
   }, [getShell]);

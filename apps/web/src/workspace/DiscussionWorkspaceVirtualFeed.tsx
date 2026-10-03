@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode, RefObject } from "react";
 import { useVirtualizer, useWindowVirtualizer } from "@tanstack/react-virtual";
 import { getApplicationScrollElement } from "../shell/applicationScroll";
@@ -25,8 +19,7 @@ const subscribeToWorkspaceMobileQuery = (listener: () => void) => {
 };
 
 const getWorkspaceMobileSnapshot = () =>
-  typeof window !== "undefined" &&
-  window.matchMedia(DISCUSSION_WORKSPACE_MOBILE_QUERY).matches;
+  typeof window !== "undefined" && window.matchMedia(DISCUSSION_WORKSPACE_MOBILE_QUERY).matches;
 
 const getWorkspaceMobileServerSnapshot = () => false;
 
@@ -62,11 +55,7 @@ function getWorkspaceScrollMargin(
 
   const feedRect = feed.getBoundingClientRect();
   if (scrollport) {
-    return (
-      feedRect.top -
-      scrollport.getBoundingClientRect().top +
-      scrollport.scrollTop
-    );
+    return feedRect.top - scrollport.getBoundingClientRect().top + scrollport.scrollTop;
   }
 
   return feedRect.top + window.scrollY;
@@ -148,9 +137,7 @@ function DiscussionWorkspaceVirtualRows({
             data-discussion-workspace-virtual-row
             data-index={virtualItem.index}
             data-item-key={itemKey}
-            className={
-              virtualItem.index < cards.length - 1 ? "pb-2.5" : undefined
-            }
+            className={virtualItem.index < cards.length - 1 ? "pb-2.5" : undefined}
             style={{
               position: "absolute",
               top: 0,
@@ -182,17 +169,11 @@ function DiscussionWorkspaceVirtualFeedSurface({
 }: DiscussionWorkspaceVirtualFeedSurfaceProps) {
   const feedRef = useRef<HTMLDivElement>(null);
   const isMobileLayout = useWorkspaceMobileLayout();
-  const scrollMargin = useWorkspaceScrollMargin(
-    feedRef,
-    useWindowScroll,
-    datasetKey,
-    cards.length,
-  );
+  const scrollMargin = useWorkspaceScrollMargin(feedRef, useWindowScroll, datasetKey, cards.length);
   const estimateSize =
     (isMobileLayout
       ? DISCUSSION_WORKSPACE_MOBILE_CARD_HEIGHT
-      : DISCUSSION_WORKSPACE_DESKTOP_CARD_HEIGHT) +
-    DISCUSSION_WORKSPACE_CARD_GAP;
+      : DISCUSSION_WORKSPACE_DESKTOP_CARD_HEIGHT) + DISCUSSION_WORKSPACE_CARD_GAP;
 
   if (useWindowScroll) {
     return (

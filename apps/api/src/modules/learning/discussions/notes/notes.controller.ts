@@ -68,11 +68,7 @@ export function createNotesController({
       const user = request.user!;
       const { noteId } = request.params;
 
-      const note = await service.getNote(
-        database,
-        noteId,
-        discussionActor(user),
-      );
+      const note = await service.getNote(database, noteId, discussionActor(user));
       reply.status(200).send(note);
     },
 
@@ -80,11 +76,7 @@ export function createNotesController({
       const user = request.user!;
       const query = request.query;
 
-      const result = await service.listNotes(
-        database,
-        discussionActor(user),
-        query,
-      );
+      const result = await service.listNotes(database, discussionActor(user), query);
       reply.status(200).send(result);
     },
 
@@ -105,12 +97,7 @@ export function createNotesController({
       const { noteId } = request.params;
       const body = request.body;
 
-      const updated = await service.updateNote(
-        database,
-        noteId,
-        discussionActor(user),
-        body,
-      );
+      const updated = await service.updateNote(database, noteId, discussionActor(user), body);
       reply.status(200).send(updated);
     },
 

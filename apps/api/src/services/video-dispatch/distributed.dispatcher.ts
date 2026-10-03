@@ -16,17 +16,13 @@ export function createDistributedDispatcher(options: {
   lambdaName?: string;
 }): VideoDispatchService {
   const { logger } = options;
-  const triggerUrl =
-    options.triggerUrl || options.config.FLEET_MANAGER_TRIGGER_URL;
+  const triggerUrl = options.triggerUrl || options.config.FLEET_MANAGER_TRIGGER_URL;
   const lambdaName =
     options.lambdaName ||
     options.config.PROBE_LAMBDA_NAME ||
     options.config.FLEET_MANAGER_LAMBDA_NAME;
 
-  async function triggerViaHttp(
-    url: string,
-    payload: VideoJobEvent,
-  ): Promise<void> {
+  async function triggerViaHttp(url: string, payload: VideoJobEvent): Promise<void> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
@@ -48,10 +44,7 @@ export function createDistributedDispatcher(options: {
     }
   }
 
-  async function triggerViaLambdaSdk(
-    funcName: string,
-    payload: VideoJobEvent,
-  ): Promise<void> {
+  async function triggerViaLambdaSdk(funcName: string, payload: VideoJobEvent): Promise<void> {
     const client = getLambdaClient();
     const command = new InvokeCommand({
       FunctionName: funcName,
@@ -60,10 +53,7 @@ export function createDistributedDispatcher(options: {
     });
 
     const response = await client.send(command);
-    if (
-      response.StatusCode &&
-      (response.StatusCode < 200 || response.StatusCode >= 300)
-    ) {
+    if (response.StatusCode && (response.StatusCode < 200 || response.StatusCode >= 300)) {
       throw new Error(
         `Lambda invocation returned status code ${response.StatusCode}: ${response.FunctionError ?? "unknown error"}`,
       );

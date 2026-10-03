@@ -51,8 +51,7 @@ export const getCourseBrandColor = (courseSlug: string | undefined) =>
 const courseTitlesBySlug: Record<string, string | undefined> = {
   "ui-ux-design-mastery": "UI/UX Design Mastery",
   "backend-nodejs": "Complete Backend with Node.js",
-  "complete-backend-development-with-nodejs":
-    "Complete Backend Development with Node.js",
+  "complete-backend-development-with-nodejs": "Complete Backend Development with Node.js",
   "typescript-course": "The Ultimate TypeScript Course",
   "ultimate-typescript-course": "The Ultimate TypeScript Course",
   "javascript-course": "The Complete JavaScript Course",
@@ -60,16 +59,14 @@ const courseTitlesBySlug: Record<string, string | undefined> = {
   "mongodb-database-design": "MongoDB & Database Design",
   "aws-cloud-practitioner": "AWS Cloud Practitioner Essentials",
   "building-veolms": "Building VeoLMS: Idea to Production",
-  "building-procodrr-idea-to-production":
-    "Building ProCodrr: Idea to Production",
+  "building-procodrr-idea-to-production": "Building ProCodrr: Idea to Production",
   "illustrator-designers": "Adobe Illustrator for UI Designers",
   "advanced-react": "Advanced React Development",
   "data-visualization-d3": "Data Visualization with D3.js",
 };
 
 export const getCourseTitle = (courseSlug: string | undefined) =>
-  (courseSlug ? courseTitlesBySlug[courseSlug] : undefined) ||
-  "UI/UX Design Mastery";
+  (courseSlug ? courseTitlesBySlug[courseSlug] : undefined) || "UI/UX Design Mastery";
 
 const courseThumbnailsBySlug: Record<string, string | undefined> = {
   "ui-ux-design-mastery": "/static/instructor-poster-960.webp",
@@ -105,8 +102,7 @@ const courseThumbnailSrcSetsBySlug: Record<string, string | undefined> = {
 };
 
 export const getCourseThumbnail = (courseSlug: string | undefined) =>
-  (courseSlug ? courseThumbnailsBySlug[courseSlug] : undefined) ||
-  typescriptCourseThumbnail;
+  (courseSlug ? courseThumbnailsBySlug[courseSlug] : undefined) || typescriptCourseThumbnail;
 
 export const getCourseThumbnailSrcSet = (courseSlug: string | undefined) =>
   (courseSlug ? courseThumbnailSrcSetsBySlug[courseSlug] : undefined) ||

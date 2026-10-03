@@ -13,7 +13,6 @@ export interface OutboxService {
 
 export function createOutboxService(): OutboxService {
   return {
-    publish: (transaction, event) =>
-      outboxRepository.createEvent(transaction, event),
+    publish: (transaction, event) => outboxRepository.createEvent(transaction, event),
   };
 }

@@ -78,9 +78,7 @@ export const ADMIN_USERS: readonly AdminUserSeed[] = [
   },
 ] as const;
 
-export async function seedAdminUsers(
-  database: Kysely<Database>,
-): Promise<void> {
+export async function seedAdminUsers(database: Kysely<Database>): Promise<void> {
   const adminRoleId = ROLES.admin.id;
 
   // 1. Ensure admin role exists in roles table
@@ -160,7 +158,5 @@ export async function seedAdminUsers(
     }
   }
 
-  console.info(
-    `Cleanly seeded ${ADMIN_USERS.length} admin accounts with exclusive Admin role.`,
-  );
+  console.info(`Cleanly seeded ${ADMIN_USERS.length} admin accounts with exclusive Admin role.`);
 }

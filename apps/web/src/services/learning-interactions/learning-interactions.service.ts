@@ -97,10 +97,7 @@ export const learningInteractionsService = {
     lessonId: string,
     payload: CreateLearningThreadRequest,
   ): Promise<LearningThread> {
-    return api.post<LearningThread>(
-      `/courses/${courseId}/lessons/${lessonId}/threads`,
-      payload,
-    );
+    return api.post<LearningThread>(`/courses/${courseId}/lessons/${lessonId}/threads`, payload);
   },
 
   createThread(
@@ -108,15 +105,10 @@ export const learningInteractionsService = {
     lessonId: string,
     payload: CreateLearningThreadRequest,
   ): Promise<LearningThread> {
-    return api.post<LearningThread>(
-      `/courses/${courseId}/lessons/${lessonId}/threads`,
-      payload,
-    );
+    return api.post<LearningThread>(`/courses/${courseId}/lessons/${lessonId}/threads`, payload);
   },
 
-  listHubThreads(
-    query?: ListLearningThreadsQuery,
-  ): Promise<LearningThreadsListResponse> {
+  listHubThreads(query?: ListLearningThreadsQuery): Promise<LearningThreadsListResponse> {
     return api.get<LearningThreadsListResponse>("/threads", {
       params: query,
     });
@@ -135,10 +127,7 @@ export const learningInteractionsService = {
     return api.get<LearningThread>(`/threads/${serverId}`);
   },
 
-  updateThread(
-    threadId: string,
-    payload: UpdateLearningThreadRequest,
-  ): Promise<LearningThread> {
+  updateThread(threadId: string, payload: UpdateLearningThreadRequest): Promise<LearningThread> {
     const serverId = requireServerEntityId(threadId);
     return api.patch<LearningThread>(`/threads/${serverId}`, payload);
   },
@@ -154,24 +143,15 @@ export const learningInteractionsService = {
     query?: ListLearningRepliesQuery,
   ): Promise<LearningRepliesListResponse> {
     const serverId = requireServerEntityId(threadId);
-    return api.get<LearningRepliesListResponse>(
-      `/threads/${serverId}/replies`,
-      { params: query },
-    );
+    return api.get<LearningRepliesListResponse>(`/threads/${serverId}/replies`, { params: query });
   },
 
-  createReply(
-    threadId: string,
-    payload: CreateLearningReplyRequest,
-  ): Promise<LearningReply> {
+  createReply(threadId: string, payload: CreateLearningReplyRequest): Promise<LearningReply> {
     const serverId = requireServerEntityId(threadId);
     return api.post<LearningReply>(`/threads/${serverId}/replies`, payload);
   },
 
-  updateReply(
-    replyId: string,
-    payload: UpdateLearningReplyRequest,
-  ): Promise<LearningReply> {
+  updateReply(replyId: string, payload: UpdateLearningReplyRequest): Promise<LearningReply> {
     const serverId = requireServerEntityId(replyId);
     return api.patch<LearningReply>(`/replies/${serverId}`, payload);
   },
@@ -181,15 +161,9 @@ export const learningInteractionsService = {
     return api.delete<{ message: string }>(`/replies/${serverId}`);
   },
 
-  acceptReply(
-    replyId: string,
-    payload?: AcceptReplyRequest,
-  ): Promise<AcceptReplyResponse> {
+  acceptReply(replyId: string, payload?: AcceptReplyRequest): Promise<AcceptReplyResponse> {
     const serverId = requireServerEntityId(replyId);
-    return api.post<AcceptReplyResponse>(
-      `/replies/${serverId}/accept`,
-      payload,
-    );
+    return api.post<AcceptReplyResponse>(`/replies/${serverId}/accept`, payload);
   },
 
   // Engagements
@@ -216,40 +190,26 @@ export const learningInteractionsService = {
     return api.post<ToggleFollowResponse>(`/threads/${serverId}/follow`);
   },
 
-  lockThread(
-    threadId: string,
-    payload: LockThreadRequest,
-  ): Promise<LockThreadResponse> {
+  lockThread(threadId: string, payload: LockThreadRequest): Promise<LockThreadResponse> {
     const serverId = requireServerEntityId(threadId);
     return api.post<LockThreadResponse>(`/threads/${serverId}/lock`, payload);
   },
 
-  autocompleteUsers(
-    query: UserAutocompleteQuery,
-  ): Promise<UserAutocompleteResponse> {
-    return api.get<UserAutocompleteResponse>(
-      "/interactions/users/autocomplete",
-      {
-        params: query,
-      },
-    );
+  autocompleteUsers(query: UserAutocompleteQuery): Promise<UserAutocompleteResponse> {
+    return api.get<UserAutocompleteResponse>("/interactions/users/autocomplete", {
+      params: query,
+    });
   },
 
   // Notes
-  listNotes(
-    query?: ListLearningNotesQuery,
-  ): Promise<LearningNotesListResponse> {
+  listNotes(query?: ListLearningNotesQuery): Promise<LearningNotesListResponse> {
     return api.get<LearningNotesListResponse>("/notes", {
       params: query,
     });
   },
 
-  getCourseNotesOverview(
-    courseId: string,
-  ): Promise<CourseNotesOverviewResponse> {
-    return api.get<CourseNotesOverviewResponse>(
-      `/courses/${courseId}/notes-overview`,
-    );
+  getCourseNotesOverview(courseId: string): Promise<CourseNotesOverviewResponse> {
+    return api.get<CourseNotesOverviewResponse>(`/courses/${courseId}/notes-overview`);
   },
 
   createNote(payload: CreateLearningNoteRequest): Promise<LearningNote> {
@@ -261,10 +221,7 @@ export const learningInteractionsService = {
     return api.get<LearningNote>(`/notes/${serverId}`);
   },
 
-  updateNote(
-    noteId: string,
-    payload: UpdateLearningNoteRequest,
-  ): Promise<LearningNote> {
+  updateNote(noteId: string, payload: UpdateLearningNoteRequest): Promise<LearningNote> {
     const serverId = requireServerEntityId(noteId);
     return api.patch<LearningNote>(`/notes/${serverId}`, payload);
   },
@@ -278,10 +235,7 @@ export const learningInteractionsService = {
   initiateUpload(
     payload: InitiateAttachmentUploadRequest,
   ): Promise<InitiateAttachmentUploadResponse> {
-    return api.post<InitiateAttachmentUploadResponse>(
-      "/attachments/initiate",
-      payload,
-    );
+    return api.post<InitiateAttachmentUploadResponse>("/attachments/initiate", payload);
   },
 
   uploadAttachmentFile(
@@ -292,15 +246,10 @@ export const learningInteractionsService = {
     const formData = new FormData();
     appendDimensions(formData, dimensions);
     formData.append("file", file, file.name);
-    return api.post<LearningAttachment>(
-      `/attachments/${attachmentId}/upload`,
-      formData,
-    );
+    return api.post<LearningAttachment>(`/attachments/${attachmentId}/upload`, formData);
   },
 
-  completeUpload(
-    payload: CompleteAttachmentUploadRequest,
-  ): Promise<LearningAttachment> {
+  completeUpload(payload: CompleteAttachmentUploadRequest): Promise<LearningAttachment> {
     return api.post<LearningAttachment>("/attachments/complete", payload);
   },
 
@@ -311,9 +260,7 @@ export const learningInteractionsService = {
     context?: DiscussionAttachmentUploadContext,
   ): Promise<LearningUploadResponse> {
     if (!context) {
-      return Promise.reject(
-        new Error("Course and lesson context are required for attachments."),
-      );
+      return Promise.reject(new Error("Course and lesson context are required for attachments."));
     }
     return this.initiateUpload({
       courseId: context.courseId,
@@ -322,18 +269,13 @@ export const learningInteractionsService = {
       mimeType: file.type || "application/octet-stream",
       fileSize: file.size,
       ...(dimensions?.width !== undefined ? { width: dimensions.width } : {}),
-      ...(dimensions?.height !== undefined
-        ? { height: dimensions.height }
-        : {}),
+      ...(dimensions?.height !== undefined ? { height: dimensions.height } : {}),
     }).then(async (initiated) => {
-      await mediaService.uploadFileToPresignedUrl(
-        initiated.uploadUrl,
-        file,
-        (progress) =>
-          onProgress?.({
-            loaded: progress.loadedBytes,
-            total: progress.totalBytes,
-          }),
+      await mediaService.uploadFileToPresignedUrl(initiated.uploadUrl, file, (progress) =>
+        onProgress?.({
+          loaded: progress.loadedBytes,
+          total: progress.totalBytes,
+        }),
       );
 
       const completed = await this.completeUpload({
@@ -377,16 +319,10 @@ export const learningInteractionsService = {
   },
 
   // Course Moderation
-  listCourseReports(
-    courseId: string,
-    query?: ListReportsQuery,
-  ): Promise<ReportsListResponse> {
-    return api.get<ReportsListResponse>(
-      `/courses/${courseId}/moderation/reports`,
-      {
-        params: query,
-      },
-    );
+  listCourseReports(courseId: string, query?: ListReportsQuery): Promise<ReportsListResponse> {
+    return api.get<ReportsListResponse>(`/courses/${courseId}/moderation/reports`, {
+      params: query,
+    });
   },
 
   moderateCourseThread(
@@ -453,10 +389,7 @@ export const learningInteractionsService = {
     payload: ModerateThreadRequest,
   ): Promise<{ message: string }> {
     const serverId = requireServerEntityId(threadId);
-    return api.post<{ message: string }>(
-      `/moderation/threads/${serverId}`,
-      payload,
-    );
+    return api.post<{ message: string }>(`/moderation/threads/${serverId}`, payload);
   },
 
   moderatePlatformReply(
@@ -464,30 +397,21 @@ export const learningInteractionsService = {
     payload: ModerateReplyRequest,
   ): Promise<{ message: string }> {
     const serverId = requireServerEntityId(replyId);
-    return api.post<{ message: string }>(
-      `/moderation/replies/${serverId}`,
-      payload,
-    );
+    return api.post<{ message: string }>(`/moderation/replies/${serverId}`, payload);
   },
 
   suspendPlatformUser(
     userId: string,
     payload: Omit<SuspendUserRequest, "userId">,
   ): Promise<UserSuspension> {
-    return api.post<UserSuspension>(
-      `/moderation/users/${userId}/suspend`,
-      payload,
-    );
+    return api.post<UserSuspension>(`/moderation/users/${userId}/suspend`, payload);
   },
 
   unsuspendPlatformUser(
     userId: string,
     payload?: Omit<UnsuspendUserRequest, "userId">,
   ): Promise<{ message: string }> {
-    return api.post<{ message: string }>(
-      `/moderation/users/${userId}/unsuspend`,
-      payload,
-    );
+    return api.post<{ message: string }>(`/moderation/users/${userId}/unsuspend`, payload);
   },
 };
 

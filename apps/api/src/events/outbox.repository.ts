@@ -1,11 +1,6 @@
 import crypto from "node:crypto";
 
-import type {
-  Database,
-  DatabaseExecutor,
-  Json,
-  OutboxEventTable,
-} from "@veolms/database";
+import type { Database, DatabaseExecutor, Json, OutboxEventTable } from "@veolms/database";
 import type { Kysely, Selectable, Transaction } from "kysely";
 
 import type { DomainEvent } from "./domain-event.types.ts";

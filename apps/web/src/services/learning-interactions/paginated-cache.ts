@@ -1,8 +1,6 @@
 import type { InfiniteData } from "@tanstack/react-query";
 
-export function isInfiniteCacheData<TPage>(
-  value: unknown,
-): value is InfiniteData<TPage> {
+export function isInfiniteCacheData<TPage>(value: unknown): value is InfiniteData<TPage> {
   return Boolean(
     value &&
     typeof value === "object" &&

@@ -17,15 +17,9 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .ifNotExists()
     .addColumn("id", "uuid", (column) => column.primaryKey())
     .addColumn("media_id", "uuid", (column) =>
-      column
-        .notNull()
-        .unique()
-        .references("media_assets.id")
-        .onDelete("cascade"),
+      column.notNull().unique().references("media_assets.id").onDelete("cascade"),
     )
-    .addColumn("status", "text", (column) =>
-      column.notNull().defaultTo("queued"),
-    )
+    .addColumn("status", "text", (column) => column.notNull().defaultTo("queued"))
     .addColumn("attempts", "integer", (column) => column.notNull().defaultTo(0))
     .addColumn("error_message", "text")
     .addColumn("started_at", "timestamptz")
@@ -51,7 +45,5 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 
 export async function down(database: Kysely<unknown>): Promise<void> {
   await database.schema.dropTable("image_jobs").ifExists().execute();
-  await sql`alter table media_assets drop column if exists metadata`.execute(
-    database,
-  );
+  await sql`alter table media_assets drop column if exists metadata`.execute(database);
 }

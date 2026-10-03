@@ -28,9 +28,7 @@ export function ReviewCard({
   const handleCopyLink = () => {
     setMenuOpen(false);
     if (typeof navigator !== "undefined" && navigator.clipboard) {
-      void navigator.clipboard.writeText(
-        `${window.location.origin}/reviews#${review.id}`,
-      );
+      void navigator.clipboard.writeText(`${window.location.origin}/reviews#${review.id}`);
       setNotice?.("Review link copied to clipboard.");
     }
   };
@@ -43,16 +41,16 @@ export function ReviewCard({
   return (
     <article
       id={review.id}
-      className="group relative rounded-[18px] border border-(--border) bg-(--card-surface-raised,var(--surface)) p-5 md:p-6 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover))"
+      className="group relative rounded-[18px] border border-(--border) bg-(--card-surface-raised,var(--surface)) p-5 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover)) md:p-6"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       {/* Header Row */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3.5 min-w-0">
+        <div className="flex min-w-0 items-center gap-3.5">
           <img
             src={review.avatarUrl}
             alt={review.authorName}
-            className="h-11 w-11 shrink-0 rounded-full object-cover border border-(--border) bg-(--surface-strong)"
+            className="h-11 w-11 shrink-0 rounded-full border border-(--border) bg-(--surface-strong) object-cover"
             loading="lazy"
             onError={(e) => {
               // Graceful avatar fallback
@@ -61,17 +59,17 @@ export function ReviewCard({
           />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate font-bold text-sm md:text-base text-(--text)">
+              <h3 className="truncate text-sm font-bold text-(--text) md:text-base">
                 {review.authorName}
               </h3>
               {review.isVerifiedLearner && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500">
                   <ShieldCheck size={14} weight="fill" />
                   <span>Verified learner</span>
                 </span>
               )}
             </div>
-            <p className="text-xs text-(--muted) mt-0.5">{review.timestamp}</p>
+            <p className="mt-0.5 text-xs text-(--muted)">{review.timestamp}</p>
           </div>
         </div>
 
@@ -82,26 +80,23 @@ export function ReviewCard({
             onClick={() => setMenuOpen((prev) => !prev)}
             aria-label={`Options for ${review.authorName}'s review`}
             aria-expanded={menuOpen}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text)"
           >
             <DotsThreeVertical size={18} weight="bold" />
           </button>
 
           {menuOpen && (
             <>
-              <div
-                className="fixed inset-0 z-20"
-                onClick={() => setMenuOpen(false)}
-              />
+              <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
               <div
                 role="menu"
-                className="absolute right-0 top-full mt-1 z-30 min-w-40 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+                className="animate-in fade-in zoom-in-95 absolute top-full right-0 z-30 mt-1 min-w-40 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md duration-100"
               >
                 <button
                   type="button"
                   role="menuitem"
                   onClick={handleCopyLink}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover)"
                 >
                   <LinkSimple size={14} />
                   <span>Copy link</span>
@@ -110,7 +105,7 @@ export function ReviewCard({
                   type="button"
                   role="menuitem"
                   onClick={handleReport}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-(--hover) cursor-pointer"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-(--hover)"
                 >
                   <Flag size={14} />
                   <span>Report review</span>
@@ -132,49 +127,41 @@ export function ReviewCard({
               key={idx}
               size={16}
               weight={idx < review.rating ? "fill" : "regular"}
-              className={
-                idx < review.rating
-                  ? "text-(--accent)"
-                  : "text-(--muted) opacity-30"
-              }
+              className={idx < review.rating ? "text-(--accent)" : "text-(--muted) opacity-30"}
             />
           ))}
         </div>
-        <h4 className="font-bold text-sm md:text-base text-(--text) tracking-tight">
+        <h4 className="text-sm font-bold tracking-tight text-(--text) md:text-base">
           {review.title}
         </h4>
       </div>
 
       {/* Review Content */}
-      <p className="mt-2 text-xs md:text-sm leading-relaxed text-(--text-secondary)">
+      <p className="mt-2 text-xs leading-relaxed text-(--text-secondary) md:text-sm">
         {review.content}
       </p>
 
       {/* Instructor Reply if present */}
       {review.reply && (
-        <div className="mt-4 rounded-[14px] p-3.5 md:p-4 bg-[color-mix(in_srgb,var(--surface-strong)_79%,var(--canvas))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)] border border-(--border) ml-2 md:ml-4">
+        <div className="mt-4 ml-2 rounded-[14px] border border-(--border) bg-[color-mix(in_srgb,var(--surface-strong)_79%,var(--canvas))] p-3.5 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)] md:ml-4 md:p-4">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex min-w-0 items-center gap-2.5">
               <img
                 src={review.reply.avatarUrl}
                 alt={review.reply.authorName}
-                className="h-7 w-7 rounded-full object-cover border border-(--border)"
+                className="h-7 w-7 rounded-full border border-(--border) object-cover"
                 loading="lazy"
               />
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="font-semibold text-(--text)">
-                  {review.reply.authorName}
-                </span>
-                <span className="rounded-full bg-(--accent-soft) px-2 py-0.5 text-[10px] font-medium text-(--accent) border border-(--accent-border)">
+                <span className="font-semibold text-(--text)">{review.reply.authorName}</span>
+                <span className="rounded-full border border-(--accent-border) bg-(--accent-soft) px-2 py-0.5 text-[10px] font-medium text-(--accent)">
                   {review.reply.authorRole}
                 </span>
-                <span className="text-(--muted) opacity-80">
-                  {review.reply.timestamp}
-                </span>
+                <span className="text-(--muted) opacity-80">{review.reply.timestamp}</span>
               </div>
             </div>
           </div>
-          <p className="mt-2 text-xs md:text-sm leading-relaxed text-(--text-secondary)">
+          <p className="mt-2 text-xs leading-relaxed text-(--text-secondary) md:text-sm">
             {review.reply.content}
           </p>
         </div>
@@ -187,23 +174,20 @@ export function ReviewCard({
           onClick={() => onToggleHelpful(review.id)}
           aria-label={`${review.helpfulCount} people found this helpful`}
           aria-pressed={review.isHelpfulByUser}
-          className={`inline-flex items-center gap-1.5 transition-colors hover:text-(--text) cursor-pointer ${
+          className={`inline-flex cursor-pointer items-center gap-1.5 transition-colors hover:text-(--text) ${
             review.isHelpfulByUser ? "font-semibold text-(--accent)" : ""
           }`}
         >
           <span className="opacity-60">•</span>
           <span>Helpful</span>
-          <ThumbsUp
-            size={14}
-            weight={review.isHelpfulByUser ? "fill" : "regular"}
-          />
+          <ThumbsUp size={14} weight={review.isHelpfulByUser ? "fill" : "regular"} />
           <span>{review.helpfulCount}</span>
         </button>
 
         <button
           type="button"
           onClick={() => onReportReview(review.id)}
-          className="inline-flex items-center gap-1 hover:text-(--text) transition-colors cursor-pointer"
+          className="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-(--text)"
         >
           <Flag size={13} />
           <span>Report</span>

@@ -15,15 +15,10 @@ function formatZoom(scale: number): string {
   return `${Number(scale.toFixed(2))}×`;
 }
 
-export function ZoomLevelIndicator({
-  className,
-  variant = "control",
-}: ZoomLevelIndicatorProps) {
+export function ZoomLevelIndicator({ className, variant = "control" }: ZoomLevelIndicatorProps) {
   const controller = usePlayerController();
   const mobileInteraction = usePlayerMobileInteraction();
-  const controlsRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const controlsRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { controlsVisible, feedbackVisible, scale } = usePlayerState(
     ({ ui }) => ({
       controlsVisible: ui.controlsVisible,
@@ -36,9 +31,7 @@ export function ZoomLevelIndicator({
       left.scale === right.scale,
   );
   const feedback = variant === "feedback";
-  const visible = feedback
-    ? feedbackVisible && !controlsVisible
-    : controlsVisible && scale > 1.001;
+  const visible = feedback ? feedbackVisible && !controlsVisible : controlsVisible && scale > 1.001;
 
   useEffect(
     () => () => {
@@ -73,7 +66,7 @@ export function ZoomLevelIndicator({
       <button
         type="button"
         className={classNames(
-          "pointer-events-auto inline-grid size-[34px] shrink-0 touch-manipulation place-items-center rounded-full bg-(--video-player-control-surface) text-[13px] leading-none font-medium tabular-nums text-(--video-player-control-text) shadow-(--video-player-control-shadow) transition-colors hover:bg-(--video-player-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) motion-reduce:transition-none sm:size-9",
+          "pointer-events-auto inline-grid size-[34px] shrink-0 touch-manipulation place-items-center rounded-full bg-(--video-player-control-surface) text-[13px] leading-none font-medium text-(--video-player-control-text) tabular-nums shadow-(--video-player-control-shadow) transition-colors hover:bg-(--video-player-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) motion-reduce:transition-none sm:size-9",
           mobileInteraction && "!size-[34px]",
           className,
         )}
@@ -90,7 +83,7 @@ export function ZoomLevelIndicator({
     <button
       type="button"
       className={classNames(
-        "pointer-events-auto absolute right-2 top-2 z-50 grid size-10 touch-manipulation place-items-center rounded-full bg-(--video-player-control-surface) text-[13px] leading-none font-medium tabular-nums text-(--video-player-control-text) shadow-(--video-player-control-shadow) transition-colors before:absolute before:-inset-0.5 before:rounded-full hover:bg-(--video-player-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) motion-reduce:transition-none",
+        "pointer-events-auto absolute top-2 right-2 z-50 grid size-10 touch-manipulation place-items-center rounded-full bg-(--video-player-control-surface) text-[13px] leading-none font-medium text-(--video-player-control-text) tabular-nums shadow-(--video-player-control-shadow) transition-colors before:absolute before:-inset-0.5 before:rounded-full hover:bg-(--video-player-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) motion-reduce:transition-none",
         className,
       )}
       aria-label={`Reset video zoom from ${label} to 1×`}

@@ -14,24 +14,16 @@ import * as outboxRepository from "../../events/outbox.repository.ts";
 import { AppError } from "../../lib/errors.ts";
 import * as notificationRepository from "./notifications.repository.ts";
 import { renderNotificationTemplate } from "./notifications.templates.ts";
-import type {
-  NotificationIntent,
-  NotificationRecipientDirectory,
-} from "./notifications.types.ts";
+import type { NotificationIntent, NotificationRecipientDirectory } from "./notifications.types.ts";
 
 export interface NotificationService {
-  list(
-    userId: string,
-    query: NotificationListQuery,
-  ): Promise<NotificationListResponse>;
+  list(userId: string, query: NotificationListQuery): Promise<NotificationListResponse>;
   getSummary(userId: string): Promise<NotificationSummary>;
   markRead(userId: string, notificationId: string): Promise<Notification>;
   markUnread(userId: string, notificationId: string): Promise<Notification>;
   markAllRead(userId: string): Promise<{ updatedCount: number }>;
   archive(userId: string, notificationId: string): Promise<{ archived: true }>;
-  getPreferences(
-    userId: string,
-  ): Promise<{ preferences: NotificationPreference[] }>;
+  getPreferences(userId: string): Promise<{ preferences: NotificationPreference[] }>;
   updatePreferences(
     userId: string,
     input: UpdateNotificationPreferences,
@@ -49,17 +41,14 @@ interface DecodedCursor {
 }
 
 function encodeCursor(cursor: DecodedCursor): string {
-  return Buffer.from(
-    JSON.stringify([cursor.createdAt.toISOString(), cursor.id]),
-    "utf8",
-  ).toString("base64url");
+  return Buffer.from(JSON.stringify([cursor.createdAt.toISOString(), cursor.id]), "utf8").toString(
+    "base64url",
+  );
 }
 
 function decodeCursor(value: string): DecodedCursor {
   try {
-    const decoded: unknown = JSON.parse(
-      Buffer.from(value, "base64url").toString("utf8"),
-    );
+    const decoded: unknown = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
     if (
       !Array.isArray(decoded) ||
       decoded.length !== 2 ||
@@ -130,9 +119,7 @@ export function createNotificationService({
     return {
       items: pageRows.map(presentNotification),
       nextCursor:
-        hasMore && last
-          ? encodeCursor({ createdAt: last.created_at, id: last.id })
-          : null,
+        hasMore && last ? encodeCursor({ createdAt: last.created_at, id: last.id }) : null,
     };
   }
 
@@ -147,40 +134,18 @@ export function createNotificationService({
     };
   }
 
-  async function markRead(
-    userId: string,
-    notificationId: string,
-  ): Promise<Notification> {
-    const row = await notificationRepository.markRead(
-      database,
-      userId,
-      notificationId,
-    );
+  async function markRead(userId: string, notificationId: string): Promise<Notification> {
+    const row = await notificationRepository.markRead(database, userId, notificationId);
     if (!row) {
-      throw new AppError(
-        404,
-        "NOTIFICATION_NOT_FOUND",
-        "Notification not found.",
-      );
+      throw new AppError(404, "NOTIFICATION_NOT_FOUND", "Notification not found.");
     }
     return presentNotification(row);
   }
 
-  async function markUnread(
-    userId: string,
-    notificationId: string,
-  ): Promise<Notification> {
-    const row = await notificationRepository.markUnread(
-      database,
-      userId,
-      notificationId,
-    );
+  async function markUnread(userId: string, notificationId: string): Promise<Notification> {
+    const row = await notificationRepository.markUnread(database, userId, notificationId);
     if (!row) {
-      throw new AppError(
-        404,
-        "NOTIFICATION_NOT_FOUND",
-        "Notification not found.",
-      );
+      throw new AppError(404, "NOTIFICATION_NOT_FOUND", "Notification not found.");
     }
     return presentNotification(row);
   }
@@ -192,14 +157,8 @@ export function createNotificationService({
   }
 
   async function archive(userId: string, notificationId: string) {
-    if (
-      !(await notificationRepository.archive(database, userId, notificationId))
-    ) {
-      throw new AppError(
-        404,
-        "NOTIFICATION_NOT_FOUND",
-        "Notification not found.",
-      );
+    if (!(await notificationRepository.archive(database, userId, notificationId))) {
+      throw new AppError(404, "NOTIFICATION_NOT_FOUND", "Notification not found.");
     }
     return { archived: true as const };
   }
@@ -215,10 +174,7 @@ export function createNotificationService({
     };
   }
 
-  async function updatePreferences(
-    userId: string,
-    input: UpdateNotificationPreferences,
-  ) {
+  async function updatePreferences(userId: string, input: UpdateNotificationPreferences) {
     await database.transaction().execute(async (transaction) => {
       for (const preference of input.preferences) {
         await notificationRepository.updatePreference(transaction, {
@@ -241,9 +197,7 @@ export function createNotificationService({
       string,
       Awaited<ReturnType<typeof recipients.findRecipient>>
     >();
-    for (const userId of new Set(
-      intents.map((intent) => intent.recipientUserId),
-    )) {
+    for (const userId of new Set(intents.map((intent) => intent.recipientUserId))) {
       recipientRecords.set(userId, await recipients.findRecipient(userId));
     }
 
@@ -281,18 +235,15 @@ export function createNotificationService({
           intent.templateData,
           intent.deepLink,
         );
-        const notificationId = await notificationRepository.createNotification(
-          transaction,
-          {
-            sourceEventId: event.id,
-            recipientUserId: intent.recipientUserId,
-            type: intent.type,
-            category: intent.category,
-            title: rendered.inApp.title,
-            body: rendered.inApp.body,
-            deepLink: intent.deepLink,
-          },
-        );
+        const notificationId = await notificationRepository.createNotification(transaction, {
+          sourceEventId: event.id,
+          recipientUserId: intent.recipientUserId,
+          type: intent.type,
+          category: intent.category,
+          title: rendered.inApp.title,
+          body: rendered.inApp.body,
+          deepLink: intent.deepLink,
+        });
 
         if (enabledChannels.includes("in_app")) {
           await notificationRepository.createDelivery(transaction, {

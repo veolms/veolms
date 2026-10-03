@@ -32,9 +32,7 @@ export const DISCUSSION_ALLOWED_MIME_TYPES = [
   "application/json",
 ] as const;
 
-export const DISCUSSION_ALLOWED_EXTENSIONS_BY_MIME: Readonly<
-  Record<string, readonly string[]>
-> = {
+export const DISCUSSION_ALLOWED_EXTENSIONS_BY_MIME: Readonly<Record<string, readonly string[]>> = {
   "image/gif": [".gif"],
   "image/jpeg": [".jpg", ".jpeg"],
   "image/png": [".png"],
@@ -44,26 +42,18 @@ export const DISCUSSION_ALLOWED_EXTENSIONS_BY_MIME: Readonly<
   "video/webm": [".webm"],
   "application/pdf": [".pdf"],
   "application/msword": [".doc"],
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
-    ".docx",
-  ],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
   "application/vnd.ms-excel": [".xls"],
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
-    ".xlsx",
-  ],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
   "application/vnd.ms-powerpoint": [".ppt"],
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation": [
-    ".pptx",
-  ],
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": [".pptx"],
   "text/plain": [".txt", ".text"],
   "text/markdown": [".md"],
   "text/csv": [".csv"],
   "application/json": [".json"],
 };
 
-export const DISCUSSION_DEFAULT_EXTENSION_FOR_MIME: Readonly<
-  Record<string, string>
-> = {
+export const DISCUSSION_DEFAULT_EXTENSION_FOR_MIME: Readonly<Record<string, string>> = {
   "image/gif": ".gif",
   "image/jpeg": ".jpg",
   "image/png": ".png",
@@ -73,13 +63,11 @@ export const DISCUSSION_DEFAULT_EXTENSION_FOR_MIME: Readonly<
   "video/webm": ".webm",
   "application/pdf": ".pdf",
   "application/msword": ".doc",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-    ".docx",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
   "application/vnd.ms-excel": ".xls",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
   "application/vnd.ms-powerpoint": ".ppt",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-    ".pptx",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
   "text/plain": ".txt",
   "text/markdown": ".md",
   "text/csv": ".csv",
@@ -88,25 +76,20 @@ export const DISCUSSION_DEFAULT_EXTENSION_FOR_MIME: Readonly<
 
 const EXTENSION_MIME_TYPES: Readonly<Record<string, string>> = {
   ...Object.fromEntries(
-    Object.entries(DISCUSSION_DEFAULT_EXTENSION_FOR_MIME).map(
-      ([mimeType, extension]) => [extension, mimeType],
-    ),
+    Object.entries(DISCUSSION_DEFAULT_EXTENSION_FOR_MIME).map(([mimeType, extension]) => [
+      extension,
+      mimeType,
+    ]),
   ),
   ".jpeg": "image/jpeg",
   ".text": "text/plain",
 };
 
 export function isSupportedDiscussionUploadMimeType(mimeType: string): boolean {
-  return Object.prototype.hasOwnProperty.call(
-    DISCUSSION_ALLOWED_EXTENSIONS_BY_MIME,
-    mimeType,
-  );
+  return Object.prototype.hasOwnProperty.call(DISCUSSION_ALLOWED_EXTENSIONS_BY_MIME, mimeType);
 }
 
-export function isAllowedExtensionForMimeType(
-  extension: string,
-  mimeType: string,
-): boolean {
+export function isAllowedExtensionForMimeType(extension: string, mimeType: string): boolean {
   const allowed = DISCUSSION_ALLOWED_EXTENSIONS_BY_MIME[mimeType];
   if (!allowed) return false;
   return allowed.includes(extension.toLowerCase());
@@ -116,11 +99,8 @@ export function getDiscussionAttachmentDisposition(
   mimeType: string,
   originalFileName?: string,
 ): string {
-  const safeName = (originalFileName || "attachment")
-    .replace(/["\r\n\\]/g, "_")
-    .trim();
-  const isInlineMedia =
-    mimeType.startsWith("image/") || mimeType.startsWith("video/");
+  const safeName = (originalFileName || "attachment").replace(/["\r\n\\]/g, "_").trim();
+  const isInlineMedia = mimeType.startsWith("image/") || mimeType.startsWith("video/");
   const dispositionType = isInlineMedia ? "inline" : "attachment";
   return `${dispositionType}; filename="${safeName}"`;
 }
@@ -169,17 +149,12 @@ function diskPath(fileName: string): string {
   return join(UPLOAD_DIRECTORY, fileName);
 }
 
-function mimeFromFileName(
-  fileName: string,
-  fallback = "application/octet-stream",
-): string {
+function mimeFromFileName(fileName: string, fallback = "application/octet-stream"): string {
   return EXTENSION_MIME_TYPES[extname(fileName).toLowerCase()] ?? fallback;
 }
 
 function shouldUseObjectStorage(): boolean {
-  return Boolean(
-    config.STORAGE_ACCESS_KEY_ID && config.STORAGE_SECRET_ACCESS_KEY,
-  );
+  return Boolean(config.STORAGE_ACCESS_KEY_ID && config.STORAGE_SECRET_ACCESS_KEY);
 }
 
 export function createDiscussionUploadStore(
@@ -198,11 +173,7 @@ export function createDiscussionUploadStore(
       await writer(filePath);
       const fileStats = await stat(filePath);
       if (s3) {
-        await s3.uploadFile(
-          discussionUploadStorageKey(fileName),
-          filePath,
-          mimeType,
-        );
+        await s3.uploadFile(discussionUploadStorageKey(fileName), filePath, mimeType);
       }
       return { fileName, mimeType, size: fileStats.size };
     } catch (error) {
@@ -237,12 +208,7 @@ export function createDiscussionUploadStore(
       }
 
       if (s3) {
-        await s3.putObject(
-          discussionUploadStorageKey(fileName),
-          data,
-          mimeType,
-          data.length,
-        );
+        await s3.putObject(discussionUploadStorageKey(fileName), data, mimeType, data.length);
         return { fileName, mimeType, size: data.length };
       }
 
@@ -283,9 +249,7 @@ export function createDiscussionUploadStore(
       if (!isSafeDiscussionUploadFileName(fileName)) return;
       await unlink(diskPath(fileName)).catch(() => undefined);
       if (s3) {
-        await s3
-          .deleteObject(discussionUploadStorageKey(fileName))
-          .catch(() => undefined);
+        await s3.deleteObject(discussionUploadStorageKey(fileName)).catch(() => undefined);
       }
     },
   };

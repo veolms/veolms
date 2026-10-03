@@ -30,10 +30,7 @@ const lifecycleRoutes: RoutePlugin = async (app, options) => {
         summary: "Check for configuration gaps before publishing",
         params: z.object({ id: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "List of validation gaps",
-            courseValidationResponseSchema,
-          ),
+          200: jsonResponse("List of validation gaps", courseValidationResponseSchema),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
         },
@@ -93,10 +90,7 @@ const lifecycleRoutes: RoutePlugin = async (app, options) => {
         summary: "Preview draft contents for creator's eye only",
         params: z.object({ id: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Course draft preview details",
-            courseEditorDataResponseSchema,
-          ),
+          200: jsonResponse("Course draft preview details", courseEditorDataResponseSchema),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
         },

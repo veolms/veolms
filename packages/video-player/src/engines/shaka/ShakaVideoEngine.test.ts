@@ -46,9 +46,7 @@ class FakeNetworkingEngine {
     this.responseFilters.push(filter);
   });
   unregisterResponseFilter = vi.fn((filter: ShakaResponseFilterLike) => {
-    this.responseFilters = this.responseFilters.filter(
-      (item) => item !== filter,
-    );
+    this.responseFilters = this.responseFilters.filter((item) => item !== filter);
   });
 }
 
@@ -161,8 +159,7 @@ class FakeShakaPlayer {
   }
 
   selectVariantTrack(track: (typeof this.variants)[number]): void {
-    for (const candidate of this.variants)
-      candidate.active = candidate === track;
+    for (const candidate of this.variants) candidate.active = candidate === track;
   }
 
   getAudioTracks(): typeof this.audios {
@@ -190,10 +187,7 @@ class FakeShakaPlayer {
   selectTextTrack(track: (typeof this.texts)[number] | null): void {
     // Shaka returns early when the HLS default text stream is already
     // selected, so visibility must be enabled separately.
-    if (
-      track &&
-      this.texts.some((candidate) => candidate === track && candidate.active)
-    ) {
+    if (track && this.texts.some((candidate) => candidate === track && candidate.active)) {
       return;
     }
     for (const candidate of this.texts) candidate.active = candidate === track;
@@ -272,11 +266,7 @@ describe("ShakaVideoEngine", () => {
       ],
     });
 
-    expect(player.load).toHaveBeenCalledWith(
-      "lesson.mpd",
-      12,
-      "application/dash+xml",
-    );
+    expect(player.load).toHaveBeenCalledWith("lesson.mpd", 12, "application/dash+xml");
     expect(player.addTextTrackAsync).toHaveBeenCalledWith(
       "captions.vtt",
       "en",
@@ -307,28 +297,16 @@ describe("ShakaVideoEngine", () => {
     await engine.attach(asMediaElement(new FakeMediaElement()));
 
     await engine.load({ src: "lesson.m3u8", kind: "hls" });
-    expect(player.load).toHaveBeenLastCalledWith(
-      "lesson.m3u8",
-      undefined,
-      "application/x-mpegurl",
-    );
+    expect(player.load).toHaveBeenLastCalledWith("lesson.m3u8", undefined, "application/x-mpegurl");
 
     await engine.load({ src: "lesson.mpd", kind: "dash" });
-    expect(player.load).toHaveBeenLastCalledWith(
-      "lesson.mpd",
-      undefined,
-      "application/dash+xml",
-    );
+    expect(player.load).toHaveBeenLastCalledWith("lesson.mpd", undefined, "application/dash+xml");
 
     await engine.load(
       { src: "custom.m3u8", kind: "hls", type: "custom/source-type" },
       { mimeType: "custom/load-type" },
     );
-    expect(player.load).toHaveBeenLastCalledWith(
-      "custom.m3u8",
-      undefined,
-      "custom/load-type",
-    );
+    expect(player.load).toHaveBeenLastCalledWith("custom.m3u8", undefined, "custom/load-type");
   });
 
   it("maps ABR and track selection without exposing Shaka tracks", async () => {
@@ -354,9 +332,7 @@ describe("ShakaVideoEngine", () => {
     expect(engine.getSnapshot().autoQuality).toBe(true);
     expect(player.configurations).toContainEqual({ abr: { enabled: true } });
 
-    const hindiTrack = engine
-      .getAudioTracks()
-      .find((track) => track.language === "hi");
+    const hindiTrack = engine.getAudioTracks().find((track) => track.language === "hi");
     expect(hindiTrack).toBeDefined();
     engine.selectAudioTrack(hindiTrack?.id ?? "");
     engine.selectTextTrack("shaka-text:20");
@@ -391,30 +367,25 @@ describe("ShakaVideoEngine", () => {
       ]),
     );
     expect(engine.getSnapshot().selectedTextTrackId).toBeNull();
-    expect(
-      engine.getTextTracks().find((track) => track.id === "shaka-text:20")
-        ?.active,
-    ).toBe(false);
+    expect(engine.getTextTracks().find((track) => track.id === "shaka-text:20")?.active).toBe(
+      false,
+    );
 
     engine.selectTextTrack("shaka-text:20");
     expect(player.textTrackVisible).toBe(true);
     expect(engine.getSnapshot()).toMatchObject({
       selectedTextTrackId: "shaka-text:20",
     });
-    expect(
-      engine.getTextTracks().find((track) => track.id === "shaka-text:20"),
-    ).toMatchObject({
+    expect(engine.getTextTracks().find((track) => track.id === "shaka-text:20")).toMatchObject({
       active: true,
     });
   });
 
   it("maps DRM, retry configuration, and mutable networking hooks", async () => {
     const player = new FakeShakaPlayer();
-    const requestFilter = vi.fn(
-      (request: { headers: Record<string, string> }) => {
-        request.headers.Authorization = "Bearer refreshed";
-      },
-    );
+    const requestFilter = vi.fn((request: { headers: Record<string, string> }) => {
+      request.headers.Authorization = "Bearer refreshed";
+    });
     const engine = new ShakaVideoEngine({
       runtimeLoader: async () => runtimeFor(player),
     });
@@ -456,8 +427,7 @@ describe("ShakaVideoEngine", () => {
       },
     });
     expect(
-      (player.configurations[0] as { streaming: Record<string, unknown> })
-        .streaming,
+      (player.configurations[0] as { streaming: Record<string, unknown> }).streaming,
     ).not.toHaveProperty("alwaysStreamText");
 
     const request: ShakaNetworkRequestLike = {
@@ -467,9 +437,7 @@ describe("ShakaVideoEngine", () => {
     };
     await player.networking.requestFilters[0]?.(2, request);
     expect(request.headers).toEqual({ Authorization: "Bearer refreshed" });
-    expect(requestFilter).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "license" }),
-    );
+    expect(requestFilter).toHaveBeenCalledWith(expect.objectContaining({ type: "license" }));
 
     await engine.unload();
     expect(player.networking.unregisterRequestFilter).toHaveBeenCalledOnce();
@@ -509,9 +477,7 @@ describe("ShakaVideoEngine", () => {
       };
     };
     const webmData = new Uint8Array([9, 8, 7]);
-    expect(configuration.drm.initDataTransform(webmData, "webm")).toStrictEqual(
-      webmData,
-    );
+    expect(configuration.drm.initDataTransform(webmData, "webm")).toStrictEqual(webmData);
     expect(transform).not.toHaveBeenCalled();
 
     const skdData = new TextEncoder().encode("skd://asset-id");
@@ -520,20 +486,14 @@ describe("ShakaVideoEngine", () => {
     });
     expect(getContentId).toHaveBeenCalledWith("skd://asset-id");
     expect(transform).toHaveBeenCalledOnce();
-    const [transformedData, contentId, transformedCertificate] =
-      transform.mock.calls[0] ?? [];
+    const [transformedData, contentId, transformedCertificate] = transform.mock.calls[0] ?? [];
     expect(Array.from(transformedData ?? [])).toEqual(Array.from(skdData));
     expect(contentId).toBe("asset-id");
-    expect(Array.from(transformedCertificate ?? [])).toEqual(
-      Array.from(certificate),
-    );
+    expect(Array.from(transformedCertificate ?? [])).toEqual(Array.from(certificate));
 
     getContentId.mockClear();
     const utf16SkdData = new Uint8Array(
-      Array.from("skd://utf16", (character) => [
-        character.charCodeAt(0),
-        0,
-      ]).flat(),
+      Array.from("skd://utf16", (character) => [character.charCodeAt(0), 0]).flat(),
     );
     configuration.drm.initDataTransform(utf16SkdData, "skd", {
       serverCertificate: certificate,
@@ -547,12 +507,10 @@ describe("ShakaVideoEngine", () => {
     let resolveSecond: (() => void) | undefined;
     player.load
       .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => (resolveFirst = () => resolve(undefined))),
+        () => new Promise((resolve) => (resolveFirst = () => resolve(undefined))),
       )
       .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => (resolveSecond = () => resolve(undefined))),
+        () => new Promise((resolve) => (resolveSecond = () => resolve(undefined))),
       );
     const engine = new ShakaVideoEngine({
       runtimeLoader: async () => runtimeFor(player),
@@ -640,11 +598,7 @@ describe("ShakaVideoEngine", () => {
     await engine.attach(asMediaElement(new FakeMediaElement()));
     await engine.load({ src: "lesson.m3u8", kind: "hls" });
 
-    expect(player.load).toHaveBeenCalledWith(
-      "lesson.m3u8",
-      undefined,
-      "application/x-mpegurl",
-    );
+    expect(player.load).toHaveBeenCalledWith("lesson.m3u8", undefined, "application/x-mpegurl");
   });
 
   it("does not consume a preload session for a different manifest", async () => {
@@ -663,11 +617,7 @@ describe("ShakaVideoEngine", () => {
     await engine.attach(asMediaElement(new FakeMediaElement()));
     await engine.load({ src: "second.m3u8", kind: "hls" });
 
-    expect(player.load).toHaveBeenCalledWith(
-      "second.m3u8",
-      undefined,
-      "application/x-mpegurl",
-    );
+    expect(player.load).toHaveBeenCalledWith("second.m3u8", undefined, "application/x-mpegurl");
     await vi.waitFor(() => expect(manager.destroy).toHaveBeenCalledOnce());
   });
 });

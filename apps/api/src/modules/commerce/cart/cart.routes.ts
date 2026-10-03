@@ -21,8 +21,7 @@ const cartRoutes: RoutePlugin = async (app, options) => {
         operationId: "getActiveCart",
         tags: ["Commerce - Cart"],
         summary: "Get active student cart",
-        description:
-          "Returns the authenticated student's current cart with updated live pricing.",
+        description: "Returns the authenticated student's current cart with updated live pricing.",
         response: {
           200: jsonResponse("The active student cart", cartResponseSchema),
           401: errorResponse("Unauthorized"),
@@ -45,10 +44,7 @@ const cartRoutes: RoutePlugin = async (app, options) => {
           "Adds a course or bundle to the student's cart after validating availability and ownership.",
         body: cartItemInputSchema,
         response: {
-          200: jsonResponse(
-            "Item successfully added to cart",
-            cartResponseSchema,
-          ),
+          200: jsonResponse("Item successfully added to cart", cartResponseSchema),
           400: errorResponse("Item not available or invalid"),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Item not found"),

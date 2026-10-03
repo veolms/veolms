@@ -2,8 +2,7 @@ import type { DatabaseExecutor } from "@veolms/database";
 import { sql } from "kysely";
 import { httpError } from "../../../../lib/errors.ts";
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export interface DiscussionListCursor {
   id: string;
@@ -39,9 +38,7 @@ export function encodeCursor(payload: Record<string, unknown>): string {
   return Buffer.from(JSON.stringify(payload)).toString("base64url");
 }
 
-export function decodeCursor<T = Record<string, unknown>>(
-  cursor: string,
-): T | null {
+export function decodeCursor<T = Record<string, unknown>>(cursor: string): T | null {
   try {
     const raw = Buffer.from(cursor, "base64url").toString("utf-8");
     return JSON.parse(raw) as T;
@@ -76,10 +73,7 @@ export function decodeDiscussionCursor(
   }
   const cursor: DiscussionListCursor = { id: parsed.id, createdAt };
   if (typeof parsed.sort === "string") cursor.sort = parsed.sort;
-  if (
-    typeof parsed.createdAt === "string" &&
-    typeof parsed.updatedAt === "string"
-  ) {
+  if (typeof parsed.createdAt === "string" && typeof parsed.updatedAt === "string") {
     const updatedAt = new Date(parsed.updatedAt);
     if (!Number.isNaN(updatedAt.getTime())) cursor.updatedAt = updatedAt;
   }
@@ -100,23 +94,14 @@ export function encodeDiscussionCursor(cursor: DiscussionListCursor): string {
     id: cursor.id,
     createdAt: cursor.createdAt.toISOString(),
     ...(cursor.updatedAt ? { updatedAt: cursor.updatedAt.toISOString() } : {}),
-    ...(cursor.repliesCount !== undefined
-      ? { repliesCount: cursor.repliesCount }
-      : {}),
-    ...(cursor.engagement !== undefined
-      ? { engagement: cursor.engagement }
-      : {}),
-    ...(cursor.isAccepted !== undefined
-      ? { isAccepted: cursor.isAccepted }
-      : {}),
+    ...(cursor.repliesCount !== undefined ? { repliesCount: cursor.repliesCount } : {}),
+    ...(cursor.engagement !== undefined ? { engagement: cursor.engagement } : {}),
+    ...(cursor.isAccepted !== undefined ? { isAccepted: cursor.isAccepted } : {}),
     ...(cursor.sort ? { sort: cursor.sort } : {}),
   });
 }
 
-export function takePage<T>(
-  rows: T[],
-  limit: number,
-): { page: T[]; hasMore: boolean } {
+export function takePage<T>(rows: T[], limit: number): { page: T[]; hasMore: boolean } {
   const hasMore = rows.length > limit;
   return { page: hasMore ? rows.slice(0, limit) : rows, hasMore };
 }
@@ -125,10 +110,7 @@ export function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-export function createdAtIdDescSql(
-  alias: string,
-  cursor: DiscussionListCursor,
-) {
+export function createdAtIdDescSql(alias: string, cursor: DiscussionListCursor) {
   return sql<boolean>`(
     ${sql.raw(`${alias}.created_at`)} < ${cursor.createdAt}
     or (
@@ -138,10 +120,7 @@ export function createdAtIdDescSql(
   )`;
 }
 
-export function updatedAtIdDescSql(
-  alias: string,
-  cursor: DiscussionListCursor,
-) {
+export function updatedAtIdDescSql(alias: string, cursor: DiscussionListCursor) {
   if (!cursor.updatedAt) {
     throw httpError(400, "INVALID_CURSOR", "The pagination cursor is invalid.");
   }
@@ -180,9 +159,7 @@ export function authorRoleSql(userIdColumn: string) {
   )`.as("authorRole");
 }
 
-export function mapAuthorRole(
-  roleName?: string | null,
-): "Student" | "Instructor" | "Admin" {
+export function mapAuthorRole(roleName?: string | null): "Student" | "Instructor" | "Admin" {
   const normalized = (roleName || "").toLowerCase();
   if (normalized === "admin") return "Admin";
   if (normalized === "instructor") return "Instructor";
@@ -190,16 +167,9 @@ export function mapAuthorRole(
 }
 
 export async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
-  const academy = await db
-    .selectFrom("academy")
-    .select("id")
-    .executeTakeFirst();
+  const academy = await db.selectFrom("academy").select("id").executeTakeFirst();
   if (!academy?.id) {
-    throw httpError(
-      500,
-      "ACADEMY_NOT_CONFIGURED",
-      "Academy is not configured.",
-    );
+    throw httpError(500, "ACADEMY_NOT_CONFIGURED", "Academy is not configured.");
   }
   return academy.id;
 }

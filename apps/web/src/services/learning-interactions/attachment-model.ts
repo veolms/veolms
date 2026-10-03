@@ -1,7 +1,6 @@
 import type { LearningThreadAttachmentSummary } from "@veolms/contracts";
 
-export type AttachmentUploadState =
-  "local" | "uploading" | "confirmed" | "failed";
+export type AttachmentUploadState = "local" | "uploading" | "confirmed" | "failed";
 
 const LOCAL_MEDIA_METADATA_TIMEOUT_MS = 250;
 
@@ -48,9 +47,7 @@ export type InteractionAttachmentPatch = Partial<
   >
 >;
 
-export function createClientEntityId(
-  kind: "thread" | "reply" | "note",
-): string {
+export function createClientEntityId(kind: "thread" | "reply" | "note"): string {
   const randomUuid =
     typeof globalThis.crypto?.randomUUID === "function"
       ? globalThis.crypto.randomUUID()
@@ -58,19 +55,14 @@ export function createClientEntityId(
   return `client-${kind}-${randomUuid}`;
 }
 
-export async function createLocalComposerAttachment(
-  file: File,
-): Promise<LocalComposerAttachment> {
+export async function createLocalComposerAttachment(file: File): Promise<LocalComposerAttachment> {
   const mediaType = getAttachmentMediaType(file.type, file.name);
   const localPreviewUrl =
     (mediaType === "image" || mediaType === "video") && canCreateObjectUrl()
       ? URL.createObjectURL(file)
       : undefined;
 
-  const dimensions = await readLocalVisualDimensions(
-    mediaType,
-    localPreviewUrl,
-  );
+  const dimensions = await readLocalVisualDimensions(mediaType, localPreviewUrl);
 
   return {
     id: `client-attachment-${
@@ -215,8 +207,7 @@ export function mergeConfirmedInteractionAttachments(
       serverAttachment,
       localAttachments?.find(
         (attachment) =>
-          attachment.serverId === serverAttachment.id ||
-          attachment.id === serverAttachment.id,
+          attachment.serverId === serverAttachment.id || attachment.id === serverAttachment.id,
       ),
     ),
   );
@@ -227,15 +218,11 @@ function getAttachmentKind(
   fileName: string,
 ): LearningThreadAttachmentSummary["kind"] {
   if (mimeType.startsWith("image/")) {
-    return fileName.toLowerCase().includes("screenshot")
-      ? "screenshot"
-      : "image";
+    return fileName.toLowerCase().includes("screenshot") ? "screenshot" : "image";
   }
   if (
     mimeType === "application/json" ||
-    /\.(?:ts|tsx|js|jsx|py|rs|go|java|cpp|c|html|css|json|sql|sh)$/i.test(
-      fileName,
-    )
+    /\.(?:ts|tsx|js|jsx|py|rs|go|java|cpp|c|html|css|json|sql|sh)$/i.test(fileName)
   ) {
     return "code";
   }

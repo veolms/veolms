@@ -180,8 +180,7 @@
   border-radius: 13px;
   color: var(--on-accent);
   background: var(--accent);
-  box-shadow: 0 10px 22px
-    color-mix(in srgb, var(--accent-shadow) 62%, transparent);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--accent-shadow) 62%, transparent);
   transition:
     transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
     background-color 150ms ease,
@@ -573,16 +572,14 @@
   min-width: 124px;
   color: var(--on-accent);
   background: var(--accent-hover);
-  box-shadow: 0 10px 22px
-    color-mix(in srgb, var(--accent-shadow) 48%, transparent);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--accent-shadow) 48%, transparent);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .settings-profile__camera:hover,
   .settings-profile__primary-action:hover {
     background: var(--accent-hover);
-    box-shadow: 0 12px 26px
-      color-mix(in srgb, var(--accent-shadow) 62%, transparent);
+    box-shadow: 0 12px 26px color-mix(in srgb, var(--accent-shadow) 62%, transparent);
   }
 
   .settings-profile__photo-actions button:hover:not(:disabled),
@@ -599,7 +596,6 @@
   }
 
   .settings-profile__verification-panel button:hover {
-    box-shadow: 0 8px 18px
-      color-mix(in srgb, var(--accent-shadow) 56%, transparent);
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--accent-shadow) 56%, transparent);
   }
 }

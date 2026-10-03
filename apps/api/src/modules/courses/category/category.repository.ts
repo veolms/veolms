@@ -1,10 +1,7 @@
 import { type Kysely } from "kysely";
 import type { Database } from "@veolms/database";
 
-export async function findCategoryBySlug(
-  database: Kysely<Database>,
-  slug: string,
-) {
+export async function findCategoryBySlug(database: Kysely<Database>, slug: string) {
   return await database
     .selectFrom("categories")
     .select("id")
@@ -26,10 +23,7 @@ export async function insertCategory(
   await database.insertInto("categories").values(values).execute();
 }
 
-export async function softDeleteCategory(
-  database: Kysely<Database>,
-  categoryId: string,
-) {
+export async function softDeleteCategory(database: Kysely<Database>, categoryId: string) {
   const now = new Date();
   return await database
     .updateTable("categories")
@@ -39,10 +33,7 @@ export async function softDeleteCategory(
     .executeTakeFirst();
 }
 
-export async function findCategoryById(
-  database: Kysely<Database>,
-  categoryId: string,
-) {
+export async function findCategoryById(database: Kysely<Database>, categoryId: string) {
   return await database
     .selectFrom("categories")
     .selectAll()

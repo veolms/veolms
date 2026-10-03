@@ -24,8 +24,7 @@ export const StudentAvatar = memo(function StudentAvatar({
     enabled: Boolean(username && !initialAvatarUrl),
   });
 
-  const effectiveAvatarUrl =
-    initialAvatarUrl || studentData?.student?.avatarUrl || null;
+  const effectiveAvatarUrl = initialAvatarUrl || studentData?.student?.avatarUrl || null;
 
   useEffect(() => {
     setImgFailed(false);
@@ -49,7 +48,7 @@ export const StudentAvatar = memo(function StudentAvatar({
         width={dim}
         height={dim}
         onError={() => setImgFailed(true)}
-        className={`${sizeClasses} shrink-0 rounded-full object-cover border border-(--border) shadow-xs ${className}`}
+        className={`${sizeClasses} shrink-0 rounded-full border border-(--border) object-cover shadow-xs ${className}`}
         loading="lazy"
         decoding="async"
       />
@@ -58,7 +57,7 @@ export const StudentAvatar = memo(function StudentAvatar({
 
   return (
     <div
-      className={`${sizeClasses} flex shrink-0 items-center justify-center rounded-full font-bold text-(--accent) border border-(--border) shadow-xs ${className}`}
+      className={`${sizeClasses} flex shrink-0 items-center justify-center rounded-full border border-(--border) font-bold text-(--accent) shadow-xs ${className}`}
       style={{
         background: "color-mix(in srgb, var(--accent) 15%, var(--surface))",
       }}

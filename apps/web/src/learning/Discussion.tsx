@@ -22,12 +22,7 @@ import {
 import { useInRouterContext, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-} from "../components/ui/drawer";
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "../components/ui/drawer";
 import { ThemedSelect } from "../ThemedSelect";
 import { ToastNotification, type ToastMessage } from "../ToastNotification";
 import { CommentCard } from "./CommentCard";
@@ -61,10 +56,7 @@ const DiscussionThreadPanel = lazy(() =>
     default: module.DiscussionThreadPanel,
   })),
 );
-import {
-  DESCRIPTION_SURFACE_BASE,
-  LessonDescription,
-} from "./LessonDescription";
+import { DESCRIPTION_SURFACE_BASE, LessonDescription } from "./LessonDescription";
 import {
   createDiscussionDraft,
   createEmptyDiscussionDraft,
@@ -76,10 +68,7 @@ import {
   type DiscussionEntryKind,
   type DiscussionVisibility,
 } from "./discussion-editor/types";
-import {
-  NO_LEGACY_KEYS,
-  useSessionStorageState,
-} from "./useSessionStorageState";
+import { NO_LEGACY_KEYS, useSessionStorageState } from "./useSessionStorageState";
 import { useCurrentUser } from "../services/auth";
 import {
   useCreateLessonThread,
@@ -135,10 +124,7 @@ import {
   type ReportSubmissionPayload,
 } from "./DiscussionReportDialog";
 import { adaptLearningNoteToComment } from "./learning-notes.adapter";
-import {
-  adaptLearningThreadToComment,
-  isCommentOrQaThread,
-} from "./learning-threads.adapter";
+import { adaptLearningThreadToComment, isCommentOrQaThread } from "./learning-threads.adapter";
 
 const CURRENT_USER = {
   name: "Ashi Singh",
@@ -147,10 +133,7 @@ const CURRENT_USER = {
 
 const EMPTY_MOBILE_COMPOSER_DRAFT = createEmptyDiscussionDraft();
 
-function getCachedInteractionItems<T>(
-  data: unknown,
-  key: "notes" | "threads",
-): T[] {
+function getCachedInteractionItems<T>(data: unknown, key: "notes" | "threads"): T[] {
   if (!data || typeof data !== "object") return [];
   const cache = data as Record<string, unknown>;
   const pages = Array.isArray(cache.pages) ? cache.pages : [cache];
@@ -164,30 +147,19 @@ function getCachedInteractionItems<T>(
 function getThreadIdentityValues(entry: Comment): string[] {
   return Array.from(
     new Set(
-      [
-        entry.clientId,
-        entry.serverId,
-        String(entry.id),
-        getServerEntityId(entry),
-      ].filter((value): value is string => Boolean(value)),
+      [entry.clientId, entry.serverId, String(entry.id), getServerEntityId(entry)].filter(
+        (value): value is string => Boolean(value),
+      ),
     ),
   );
 }
 
-export function threadEntriesShareIdentity(
-  first: Comment,
-  second: Comment,
-): boolean {
+export function threadEntriesShareIdentity(first: Comment, second: Comment): boolean {
   const secondIdentityValues = new Set(getThreadIdentityValues(second));
-  return getThreadIdentityValues(first).some((value) =>
-    secondIdentityValues.has(value),
-  );
+  return getThreadIdentityValues(first).some((value) => secondIdentityValues.has(value));
 }
 
-export function mergeDirectThreadCommentIdentity(
-  existing: Comment,
-  incoming: Comment,
-): Comment {
+export function mergeDirectThreadCommentIdentity(existing: Comment, incoming: Comment): Comment {
   const clientId = getClientEntityId(existing);
   return {
     ...incoming,
@@ -312,24 +284,14 @@ export const getDiscussionComposerViewportGeometry = (
     rawVisualViewportHeight,
   );
   const resolvedVisualViewportOffsetTop = Math.min(
-    Math.max(
-      0,
-      Number.isFinite(visualViewportOffsetTop) ? visualViewportOffsetTop : 0,
-    ),
+    Math.max(0, Number.isFinite(visualViewportOffsetTop) ? visualViewportOffsetTop : 0),
     Math.max(0, resolvedLayoutViewportHeight - resolvedVisualViewportHeight),
   );
-  const visualViewportBottom =
-    resolvedVisualViewportOffsetTop + resolvedVisualViewportHeight;
+  const visualViewportBottom = resolvedVisualViewportOffsetTop + resolvedVisualViewportHeight;
 
   return {
-    collapsedSnapPoint: getDiscussionComposerCollapsedSnapPoint(
-      visualViewportBottom,
-      playerBottom,
-    ),
-    keyboardInset: Math.max(
-      0,
-      Math.round(resolvedLayoutViewportHeight - visualViewportBottom),
-    ),
+    collapsedSnapPoint: getDiscussionComposerCollapsedSnapPoint(visualViewportBottom, playerBottom),
+    keyboardInset: Math.max(0, Math.round(resolvedLayoutViewportHeight - visualViewportBottom)),
     visualViewportHeight: Math.max(2, Math.round(resolvedVisualViewportHeight)),
   };
 };
@@ -387,9 +349,7 @@ interface OpenDiscussionThread {
 const isDiscussionEntryKind = (value: unknown): value is DiscussionEntryKind =>
   value === "comment" || value === "question" || value === "note";
 
-const isDiscussionVisibility = (
-  value: unknown,
-): value is DiscussionVisibility =>
+const isDiscussionVisibility = (value: unknown): value is DiscussionVisibility =>
   value === "public" || value === "private" || value === "unlisted";
 
 const getAllowedVisibility = (
@@ -411,8 +371,7 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
     (entry) =>
       Boolean(entry) &&
       typeof entry === "object" &&
-      (typeof (entry as Comment).id === "number" ||
-        typeof (entry as Comment).id === "string") &&
+      (typeof (entry as Comment).id === "number" || typeof (entry as Comment).id === "string") &&
       typeof (entry as Comment).name === "string" &&
       typeof (entry as Comment).time === "string" &&
       typeof (entry as Comment).avatar === "string" &&
@@ -477,40 +436,24 @@ function DiscussionInner({
     if (capabilities.allowNotes) kinds.push("note");
     if (capabilities.allowQa) kinds.push("question");
     return kinds;
-  }, [
-    capabilities.allowComments,
-    capabilities.allowNotes,
-    capabilities.allowQa,
-  ]);
+  }, [capabilities.allowComments, capabilities.allowNotes, capabilities.allowQa]);
 
   const isAllDisabled =
-    !isInteractionCapabilitiesLoading &&
-    enabledKinds.length === 0 &&
-    !hasNoteDeepLink;
+    !isInteractionCapabilitiesLoading && enabledKinds.length === 0 && !hasNoteDeepLink;
 
   const firstAvailableKind = useMemo<DiscussionEntryKind>(() => {
     if (capabilities.allowComments) return "comment";
     if (capabilities.allowQa) return "question";
     if (capabilities.allowNotes) return "note";
     return "comment";
-  }, [
-    capabilities.allowComments,
-    capabilities.allowNotes,
-    capabilities.allowQa,
-  ]);
+  }, [capabilities.allowComments, capabilities.allowNotes, capabilities.allowQa]);
 
-  const availableFilters = useMemo<
-    readonly (readonly [DiscussionEntryFilter, string])[]
-  >(() => {
+  const availableFilters = useMemo<readonly (readonly [DiscussionEntryFilter, string])[]>(() => {
     if (enabledKinds.length === 0 && !hasNoteDeepLink) return [];
     if (enabledKinds.length === 1 && !hasNoteDeepLink) {
       const singleKind = enabledKinds[0]!;
       const label =
-        singleKind === "comment"
-          ? "Comments"
-          : singleKind === "note"
-            ? "Notes"
-            : "Q&As";
+        singleKind === "comment" ? "Comments" : singleKind === "note" ? "Notes" : "Q&As";
       return [[singleKind, label]] as const;
     }
     const filters: (readonly [DiscussionEntryFilter, string])[] =
@@ -535,30 +478,23 @@ function DiscussionInner({
   const { data: currentUser } = useCurrentUser();
   const queryClient = React.useContext(QueryClientContext);
   const authorName =
-    currentUser?.displayName?.trim() ||
-    currentUser?.username?.trim() ||
-    CURRENT_USER.name;
+    currentUser?.displayName?.trim() || currentUser?.username?.trim() || CURRENT_USER.name;
   const authorAvatar = currentUser?.avatarDataUrl || CURRENT_USER.avatar;
   const deletionRevision = useOptimisticDeletionRevision();
 
-  const [entryKind, setEntryKind] =
-    useState<DiscussionEntryKind>(firstAvailableKind);
+  const [entryKind, setEntryKind] = useState<DiscussionEntryKind>(firstAvailableKind);
   const [visibility, setVisibility] = useState<DiscussionVisibility>("public");
   const [entryFilter, setEntryFilter] = useState<DiscussionEntryFilter>(
     enabledKinds.length === 1 ? enabledKinds[0]! : "all",
   );
   const [feedSort, setFeedSort] = useState<DiscussionFeedSort>("newest");
 
-  const { data: interactionCounts } = useLessonInteractionCounts(
-    courseId,
-    lessonId,
-    {
-      enabled:
-        lessonContentAccess === "granted" &&
-        !isInteractionCapabilitiesLoading &&
-        enabledKinds.length > 0,
-    },
-  );
+  const { data: interactionCounts } = useLessonInteractionCounts(courseId, lessonId, {
+    enabled:
+      lessonContentAccess === "granted" &&
+      !isInteractionCapabilitiesLoading &&
+      enabledKinds.length > 0,
+  });
   const discussionCount = interactionCounts
     ? getDiscussionCountForFilter(interactionCounts, entryFilter)
     : undefined;
@@ -566,9 +502,7 @@ function DiscussionInner({
   const threadQuery = useMemo(
     () => ({
       kind:
-        entryFilter === "comment" || entryFilter === "question"
-          ? entryFilter
-          : ("all" as const),
+        entryFilter === "comment" || entryFilter === "question" ? entryFilter : ("all" as const),
       status: "all" as const,
       sort: feedSort === "top" ? ("popular" as const) : ("latest" as const),
       limit: 20,
@@ -607,9 +541,7 @@ function DiscussionInner({
   });
 
   const shouldFetchThreads = Boolean(
-    courseId &&
-    lessonId &&
-    (capabilities.allowComments || capabilities.allowQa),
+    courseId && lessonId && (capabilities.allowComments || capabilities.allowQa),
   );
 
   const { data: threadsData } =
@@ -622,9 +554,7 @@ function DiscussionInner({
   const unifiedDiscussionQuery = useMemo(
     () => ({
       kind:
-        entryFilter === "comment" ||
-        entryFilter === "question" ||
-        entryFilter === "note"
+        entryFilter === "comment" || entryFilter === "question" || entryFilter === "note"
           ? entryFilter
           : ("all" as const),
       sort: feedSort === "top" ? ("top" as const) : ("newest" as const),
@@ -649,17 +579,12 @@ function DiscussionInner({
     () => unifiedDiscussions.data?.pages.flatMap((page) => page.items) ?? [],
     [unifiedDiscussions.data],
   );
-  const unifiedRemoteBaseRef = useRef<
-    Map<string, Readonly<Record<string, unknown>>>
-  >(new Map());
+  const unifiedRemoteBaseRef = useRef<Map<string, Readonly<Record<string, unknown>>>>(new Map());
   const visibleUnifiedDiscussionItems = useMemo(
     () =>
       unifiedDiscussionItems.filter((item) => {
         const entity = item.sourceType === "thread" ? item.thread : item.note;
-        return !optimisticDeletionCoordinator.isCommittedTombstoned(
-          item.sourceType,
-          entity,
-        );
+        return !optimisticDeletionCoordinator.isCommittedTombstoned(item.sourceType, entity);
       }),
     [deletionRevision, unifiedDiscussionItems],
   );
@@ -667,13 +592,10 @@ function DiscussionInner({
     unifiedRemoteBaseRef.current.clear();
   }, [courseId, currentUser?.id, lessonId]);
   const isNotesLoading =
-    unifiedDiscussions.isLoading &&
-    (entryFilter === "all" || entryFilter === "note");
-  const isThreadsLoading =
-    unifiedDiscussions.isLoading && entryFilter !== "note";
+    unifiedDiscussions.isLoading && (entryFilter === "all" || entryFilter === "note");
+  const isThreadsLoading = unifiedDiscussions.isLoading && entryFilter !== "note";
   const isNotesError =
-    unifiedDiscussions.isError &&
-    (entryFilter === "all" || entryFilter === "note");
+    unifiedDiscussions.isError && (entryFilter === "all" || entryFilter === "note");
   const isThreadsError = unifiedDiscussions.isError && entryFilter !== "note";
   const refetchNotes = unifiedDiscussions.refetch;
   const refetchThreads = unifiedDiscussions.refetch;
@@ -682,10 +604,7 @@ function DiscussionInner({
   const updateNoteMutation = useUpdateNote();
   const deleteNoteMutation = useDeleteNote(courseId, lessonId);
 
-  const createThreadMutation = useCreateLessonThread(
-    courseId ?? "",
-    lessonId ?? "",
-  );
+  const createThreadMutation = useCreateLessonThread(courseId ?? "", lessonId ?? "");
   const updateThreadMutation = useUpdateThread();
   const deleteThreadMutation = useDeleteThread(courseId, lessonId);
   const createReportMutation = useCreateReport();
@@ -712,8 +631,7 @@ function DiscussionInner({
         }
       | undefined;
     const pages =
-      legacyNotesData?.pages ??
-      (legacyNotesData?.notes ? [{ notes: legacyNotesData.notes }] : []);
+      legacyNotesData?.pages ?? (legacyNotesData?.notes ? [{ notes: legacyNotesData.notes }] : []);
     return pages.flatMap((page) => page.notes);
   }, [notesData]);
 
@@ -726,9 +644,7 @@ function DiscussionInner({
       | undefined;
     const pages =
       legacyThreadsData?.pages ??
-      (legacyThreadsData?.threads
-        ? [{ threads: legacyThreadsData.threads }]
-        : []);
+      (legacyThreadsData?.threads ? [{ threads: legacyThreadsData.threads }] : []);
     return pages.flatMap((page) => page.threads);
   }, [threadsData]);
 
@@ -742,15 +658,11 @@ function DiscussionInner({
 
     const threadIdentity = (thread: LearningThreadEntity) => {
       const serverId = getServerEntityId(thread);
-      return serverId
-        ? `thread:${serverId}`
-        : `thread:client:${getClientEntityId(thread)}`;
+      return serverId ? `thread:${serverId}` : `thread:client:${getClientEntityId(thread)}`;
     };
     const noteIdentity = (note: LearningNoteCacheItem) => {
       const serverId = getServerEntityId(note);
-      return serverId
-        ? `note:${serverId}`
-        : `note:client:${getClientEntityId(note)}`;
+      return serverId ? `note:${serverId}` : `note:client:${getClientEntityId(note)}`;
     };
 
     const existingThreads = getCachedInteractionItems<LearningThreadEntity>(
@@ -885,19 +797,15 @@ function DiscussionInner({
     };
 
     for (const item of unifiedDiscussionItems) {
-      if (
-        !visibleUnifiedDiscussionItems.some(
-          ({ identity }) => identity === item.identity,
-        )
-      ) {
+      if (!visibleUnifiedDiscussionItems.some(({ identity }) => identity === item.identity)) {
         unifiedRemoteBaseRef.current.delete(item.identity);
         continue;
       }
       unifiedRemoteBaseRef.current.set(
         item.identity,
-        (item.sourceType === "thread"
-          ? item.thread
-          : item.note) as unknown as Readonly<Record<string, unknown>>,
+        (item.sourceType === "thread" ? item.thread : item.note) as unknown as Readonly<
+          Record<string, unknown>
+        >,
       );
     }
 
@@ -946,31 +854,14 @@ function DiscussionInner({
         );
       })
       .map((note) => {
-        const adapted = adaptLearningNoteToComment(
-          note,
-          authorName,
-          authorAvatar,
-          currentUser?.id,
-        );
+        const adapted = adaptLearningNoteToComment(note, authorName, authorAvatar, currentUser?.id);
         const serverId = getServerEntityId(note);
-        return serverId
-          ? withSourceAwareIdentity(adapted, "note", serverId)
-          : adapted;
+        return serverId ? withSourceAwareIdentity(adapted, "note", serverId) : adapted;
       });
     const unifiedNotes = visibleUnifiedDiscussionItems
       .filter((item) => item.sourceType === "note")
-      .filter(
-        (item) =>
-          !notes.some((note) => getServerEntityId(note) === item.entityId),
-      )
-      .map((item) =>
-        adaptUnifiedDiscussionItem(
-          item,
-          authorName,
-          authorAvatar,
-          currentUser?.id,
-        ),
-      );
+      .filter((item) => !notes.some((note) => getServerEntityId(note) === item.entityId))
+      .map((item) => adaptUnifiedDiscussionItem(item, authorName, authorAvatar, currentUser?.id));
     const allNotes = [...notes, ...unifiedNotes];
 
     if (
@@ -984,16 +875,10 @@ function DiscussionInner({
         authorAvatar,
         currentUser?.id,
       );
-      const sourceAwareDirectNote = withSourceAwareIdentity(
-        directNote,
-        "note",
-        directNoteData.id,
-      );
+      const sourceAwareDirectNote = withSourceAwareIdentity(directNote, "note", directNoteData.id);
       return [
         sourceAwareDirectNote,
-        ...allNotes.filter(
-          (note) => getServerEntityId(note) !== directNoteData.id,
-        ),
+        ...allNotes.filter((note) => getServerEntityId(note) !== directNoteData.id),
       ];
     }
 
@@ -1012,16 +897,11 @@ function DiscussionInner({
     visibleUnifiedDiscussionItems,
   ]);
 
-  const isBackendMode = Boolean(
-    courseId || courseSlug || isInteractionCapabilitiesLoading,
-  );
+  const isBackendMode = Boolean(courseId || courseSlug || isInteractionCapabilitiesLoading);
 
   const rawThreadId = noteDeepLinkId ? null : searchParams.get("thread");
-  const threadIdFromUrl =
-    rawThreadId && rawThreadId.trim().length > 0 ? rawThreadId.trim() : null;
-  const initialThreadDeepLinkId = useState<string | null>(
-    () => threadIdFromUrl,
-  )[0];
+  const threadIdFromUrl = rawThreadId && rawThreadId.trim().length > 0 ? rawThreadId.trim() : null;
+  const initialThreadDeepLinkId = useState<string | null>(() => threadIdFromUrl)[0];
 
   const {
     data: directThreadData,
@@ -1039,8 +919,7 @@ function DiscussionInner({
   });
 
   const directThreadComment = useMemo<Comment | null>(() => {
-    if (!directThreadData || !isCommentOrQaThread(directThreadData))
-      return null;
+    if (!directThreadData || !isCommentOrQaThread(directThreadData)) return null;
     return withSourceAwareIdentity(
       adaptLearningThreadToComment(directThreadData, currentUser?.id),
       "thread",
@@ -1049,11 +928,7 @@ function DiscussionInner({
   }, [currentUser?.id, directThreadData]);
 
   const backendThreads = useMemo<Comment[]>(() => {
-    if (
-      !courseId ||
-      !lessonId ||
-      (!capabilities.allowComments && !capabilities.allowQa)
-    ) {
+    if (!courseId || !lessonId || (!capabilities.allowComments && !capabilities.allowQa)) {
       return [];
     }
 
@@ -1075,26 +950,12 @@ function DiscussionInner({
       .map((thread) => {
         const adapted = adaptLearningThreadToComment(thread, currentUser?.id);
         const serverId = getServerEntityId(thread);
-        return serverId
-          ? withSourceAwareIdentity(adapted, "thread", serverId)
-          : adapted;
+        return serverId ? withSourceAwareIdentity(adapted, "thread", serverId) : adapted;
       });
     const unifiedThreads = visibleUnifiedDiscussionItems
       .filter((item) => item.sourceType === "thread")
-      .filter(
-        (item) =>
-          !threads.some(
-            (thread) => getServerEntityId(thread) === item.entityId,
-          ),
-      )
-      .map((item) =>
-        adaptUnifiedDiscussionItem(
-          item,
-          authorName,
-          authorAvatar,
-          currentUser?.id,
-        ),
-      );
+      .filter((item) => !threads.some((thread) => getServerEntityId(thread) === item.entityId))
+      .map((item) => adaptUnifiedDiscussionItem(item, authorName, authorAvatar, currentUser?.id));
     return [...threads, ...unifiedThreads];
   }, [
     authorAvatar,
@@ -1124,9 +985,7 @@ function DiscussionInner({
     initialDraft,
     isStoredDiscussionDraft,
   );
-  const [composerAttachments, setComposerAttachments] = useState<
-    LocalComposerAttachment[]
-  >([]);
+  const [composerAttachments, setComposerAttachments] = useState<LocalComposerAttachment[]>([]);
   const composerAttachmentsRef = useRef(composerAttachments);
 
   useEffect(() => {
@@ -1162,28 +1021,21 @@ function DiscussionInner({
     setEntries((current) => [
       ...sanitizedEntries.map((entry) => ({ ...entry, isOwn: true })),
       ...current.filter(
-        (entry) =>
-          !sanitizedEntries.some((persisted) => persisted.id === entry.id),
+        (entry) => !sanitizedEntries.some((persisted) => persisted.id === entry.id),
       ),
     ]);
   }, [isBackendMode, postedEntries, setPostedEntries]);
 
   const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null);
-  const [openThread, setOpenThread] = useState<OpenDiscussionThread | null>(
-    null,
-  );
-  const [reportingTarget, setReportingTarget] = useState<ReportTarget | null>(
-    null,
-  );
+  const [openThread, setOpenThread] = useState<OpenDiscussionThread | null>(null);
+  const [reportingTarget, setReportingTarget] = useState<ReportTarget | null>(null);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [creationToast, setCreationToast] = useState<ToastMessage | null>(null);
   const activeDraft = editingEntry?.draft ?? draft;
   const activeEntryKind = editingEntry?.entryKind ?? entryKind;
   const activeVisibility = editingEntry?.visibility ?? visibility;
-  const draftAttachmentCount = getDiscussionAttachmentCount(
-    activeDraft.markdown,
-  );
+  const draftAttachmentCount = getDiscussionAttachmentCount(activeDraft.markdown);
   const draftHasContent = hasDiscussionDraftContent(activeDraft);
   const draftIsTooLong =
     countCharacters(activeDraft.plainText) > DISCUSSION_COMMENT_CHARACTER_LIMIT;
@@ -1198,19 +1050,13 @@ function DiscussionInner({
     const isCurrentFilterValid =
       (entryFilter === "all" && enabledKinds.length > 1) ||
       (entryFilter !== "all" &&
-        (enabledKinds.includes(entryFilter) ||
-          (entryFilter === "note" && hasNoteDeepLink)));
+        (enabledKinds.includes(entryFilter) || (entryFilter === "note" && hasNoteDeepLink)));
 
     if (!isCurrentFilterValid) {
       const fallback = enabledKinds.length > 1 ? "all" : enabledKinds[0]!;
       setEntryFilter(fallback);
     }
-  }, [
-    enabledKinds,
-    entryFilter,
-    hasNoteDeepLink,
-    isInteractionCapabilitiesLoading,
-  ]);
+  }, [enabledKinds, entryFilter, hasNoteDeepLink, isInteractionCapabilitiesLoading]);
 
   useEffect(() => {
     if (!hasNoteDeepLink || !isThreadDeepLinkReady || !courseId || !lessonId) {
@@ -1223,9 +1069,7 @@ function DiscussionInner({
     if (enabledKinds.length === 0) return;
     if (!enabledKinds.includes(entryKind)) {
       setEntryKind(firstAvailableKind);
-      setVisibility((current) =>
-        getAllowedVisibility(firstAvailableKind, current),
-      );
+      setVisibility((current) => getAllowedVisibility(firstAvailableKind, current));
     }
   }, [enabledKinds, entryKind, firstAvailableKind]);
 
@@ -1247,9 +1091,7 @@ function DiscussionInner({
   const dedupedBackendEntries = useMemo(
     () =>
       Array.from(
-        new Map(
-          combinedEntries.map((entry) => [getClientEntityId(entry), entry]),
-        ).values(),
+        new Map(combinedEntries.map((entry) => [getClientEntityId(entry), entry])).values(),
       ),
     [combinedEntries],
   );
@@ -1289,18 +1131,14 @@ function DiscussionInner({
   );
 
   const visibleEntries =
-    entryFilter === "all" &&
-    allFeedPagePendingRef.current &&
-    allFeedPageSnapshotRef.current
+    entryFilter === "all" && allFeedPagePendingRef.current && allFeedPageSnapshotRef.current
       ? allFeedPageSnapshotRef.current
       : filteredEntries;
 
   const noteDeepLinkTargetEntry = useMemo(
     () =>
       noteDeepLinkId
-        ? (backendNotes.find(
-            (entry) => getServerEntityId(entry) === noteDeepLinkId,
-          ) ?? null)
+        ? (backendNotes.find((entry) => getServerEntityId(entry) === noteDeepLinkId) ?? null)
         : null,
     [backendNotes, noteDeepLinkId],
   );
@@ -1315,9 +1153,7 @@ function DiscussionInner({
   }, [noteDeepLinkId]);
   const isNoteDeepLinkPending = Boolean(noteDeepLinkId && !noteDeepLinkHandled);
   const displayEntries = isNoteDeepLinkPending
-    ? visibleEntries.filter(
-        (entry) => getServerEntityId(entry) === noteDeepLinkId,
-      )
+    ? visibleEntries.filter((entry) => getServerEntityId(entry) === noteDeepLinkId)
     : visibleEntries;
   const noteDeepLinkReadyForFocus = Boolean(
     noteDeepLinkId &&
@@ -1329,10 +1165,7 @@ function DiscussionInner({
 
   const consumeNoteDeepLink = useCallback(
     (handledNoteId: string) => {
-      if (
-        handledNoteDeepLinkRef.current === handledNoteId ||
-        noteDeepLinkId !== handledNoteId
-      ) {
+      if (handledNoteDeepLinkRef.current === handledNoteId || noteDeepLinkId !== handledNoteId) {
         return;
       }
       handledNoteDeepLinkRef.current = handledNoteId;
@@ -1441,11 +1274,7 @@ function DiscussionInner({
   const threadEntries = useMemo(() => {
     const list = combinedEntries.filter((entry) => entry.entryKind !== "note");
     if (!directThreadComment) {
-      return Array.from(
-        new Map(
-          list.map((entry) => [getClientEntityId(entry), entry]),
-        ).values(),
-      );
+      return Array.from(new Map(list.map((entry) => [getClientEntityId(entry), entry])).values());
     }
     const previousEntry = list.find((entry) =>
       threadEntriesShareIdentity(entry, directThreadComment),
@@ -1453,13 +1282,8 @@ function DiscussionInner({
     if (!previousEntry) {
       return [directThreadComment, ...list];
     }
-    const mergedEntry = mergeDirectThreadCommentIdentity(
-      previousEntry,
-      directThreadComment,
-    );
-    const nextList = list.map((entry) =>
-      entry === previousEntry ? mergedEntry : entry,
-    );
+    const mergedEntry = mergeDirectThreadCommentIdentity(previousEntry, directThreadComment);
+    const nextList = list.map((entry) => (entry === previousEntry ? mergedEntry : entry));
     return nextList;
   }, [combinedEntries, directThreadComment]);
   const isInitialThreadDeepLink = Boolean(
@@ -1475,22 +1299,14 @@ function DiscussionInner({
     isInitialThreadListPending ||
     (threadIdFromUrl &&
       isThreadDeepLinkReady &&
-      !threadEntries.some(
-        (entry) => getServerEntityId(entry) === threadIdFromUrl,
-      ) &&
-      (isDirectThreadLoading ||
-        isThreadsLoading ||
-        isInteractionCapabilitiesLoading)),
+      !threadEntries.some((entry) => getServerEntityId(entry) === threadIdFromUrl) &&
+      (isDirectThreadLoading || isThreadsLoading || isInteractionCapabilitiesLoading)),
   );
   const lastHandledErrorThreadRef = useRef<string | null>(null);
   const suppressThreadUrlSyncRef = useRef(false);
 
   useEffect(() => {
-    if (
-      threadIdFromUrl &&
-      (!isThreadDeepLinkReady || isInitialThreadListPending)
-    )
-      return;
+    if (threadIdFromUrl && (!isThreadDeepLinkReady || isInitialThreadListPending)) return;
 
     if (suppressThreadUrlSyncRef.current) {
       if (!threadIdFromUrl) {
@@ -1501,13 +1317,9 @@ function DiscussionInner({
 
     if (!threadIdFromUrl) {
       const selectedEntry = openThread
-        ? threadEntries.find(
-            (entry) => getClientEntityId(entry) === String(openThread.id),
-          )
+        ? threadEntries.find((entry) => getClientEntityId(entry) === String(openThread.id))
         : undefined;
-      const selectedServerId = selectedEntry
-        ? getServerEntityId(selectedEntry)
-        : undefined;
+      const selectedServerId = selectedEntry ? getServerEntityId(selectedEntry) : undefined;
 
       if (selectedEntry && isBackendMode) {
         if (isPendingClientEntity(selectedEntry)) return;
@@ -1533,9 +1345,9 @@ function DiscussionInner({
     if (
       openThread &&
       getServerEntityId(
-        threadEntries.find(
-          (entry) => getClientEntityId(entry) === String(openThread.id),
-        ) ?? { id: openThread.id },
+        threadEntries.find((entry) => getClientEntityId(entry) === String(openThread.id)) ?? {
+          id: openThread.id,
+        },
       ) === threadIdFromUrl
     ) {
       return;
@@ -1589,14 +1401,10 @@ function DiscussionInner({
 
     const isDirectFetchFailed =
       isDirectThreadError ||
-      (!isDirectThreadLoading &&
-        directThreadData &&
-        !isCommentOrQaThread(directThreadData));
+      (!isDirectThreadLoading && directThreadData && !isCommentOrQaThread(directThreadData));
 
     const selectedEntry = openThread
-      ? threadEntries.find(
-          (entry) => getClientEntityId(entry) === String(openThread.id),
-        )
+      ? threadEntries.find((entry) => getClientEntityId(entry) === String(openThread.id))
       : undefined;
     const selectedEntryIsValid = Boolean(
       selectedEntry &&
@@ -1633,9 +1441,7 @@ function DiscussionInner({
     threadIdFromUrl,
   ]);
 
-  const submitEntry = async (
-    onLocallyAccepted?: () => void,
-  ): Promise<boolean> => {
+  const submitEntry = async (onLocallyAccepted?: () => void): Promise<boolean> => {
     if (draftIsTooLong) {
       setNotice(COMMENT_LENGTH_NOTICE);
       return false;
@@ -1660,9 +1466,7 @@ function DiscussionInner({
           setNotice("This note is still being posted.");
           return false;
         }
-        const noteClientId = note
-          ? getClientEntityId(note)
-          : String(editingEntry.id);
+        const noteClientId = note ? getClientEntityId(note) : String(editingEntry.id);
         if (optimisticEditCoordinator.isEditing("note", noteClientId)) {
           setNotice("This note is already being updated.");
           return false;
@@ -1740,12 +1544,8 @@ function DiscussionInner({
         return false;
       }
 
-      const submittedVisibility = getAllowedVisibility(
-        submittedEntryKind,
-        activeVisibility,
-      );
-      const threadVisibility =
-        submittedVisibility === "private" ? "public" : submittedVisibility;
+      const submittedVisibility = getAllowedVisibility(submittedEntryKind, activeVisibility);
+      const threadVisibility = submittedVisibility === "private" ? "public" : submittedVisibility;
 
       if (editingEntry) {
         const thread = combinedEntries.find(
@@ -1756,9 +1556,7 @@ function DiscussionInner({
           setNotice("This discussion entry is still being posted.");
           return false;
         }
-        const threadClientId = thread
-          ? getClientEntityId(thread)
-          : String(editingEntry.id);
+        const threadClientId = thread ? getClientEntityId(thread) : String(editingEntry.id);
         if (optimisticEditCoordinator.isEditing("thread", threadClientId)) {
           setNotice("This discussion entry is already being updated.");
           return false;
@@ -1839,15 +1637,10 @@ function DiscussionInner({
 
     // Standalone / offline mode
     const text = activeDraft.plainText.trim();
-    const submittedVisibility = getAllowedVisibility(
-      activeEntryKind,
-      activeVisibility,
-    );
+    const submittedVisibility = getAllowedVisibility(activeEntryKind, activeVisibility);
 
     if (editingEntry) {
-      const originalEntry = entries.find(
-        (entry) => entry.id === editingEntry.id,
-      );
+      const originalEntry = entries.find((entry) => entry.id === editingEntry.id);
       if (!originalEntry) {
         setEditingEntry(null);
         return false;
@@ -1863,9 +1656,7 @@ function DiscussionInner({
         time: "Just now (edited)",
       };
       const update = (current: Comment[]) =>
-        current.map((entry) =>
-          entry.id === updatedEntry.id ? updatedEntry : entry,
-        );
+        current.map((entry) => (entry.id === updatedEntry.id ? updatedEntry : entry));
 
       setEntries(update);
       setPostedEntries((current) =>
@@ -1874,9 +1665,7 @@ function DiscussionInner({
           : [updatedEntry, ...current],
       );
       setEditingEntry(null);
-      setEntryFilter(
-        enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
-      );
+      setEntryFilter(enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"));
       setNotice("");
       return true;
     }
@@ -1899,9 +1688,7 @@ function DiscussionInner({
     setPostedEntries((current) => [entry, ...current]);
     setEntries((current) => [entry, ...current]);
     setDraft(createEmptyDiscussionDraft());
-    setEntryFilter(
-      enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"),
-    );
+    setEntryFilter(enabledKinds.length > 1 ? "all" : (enabledKinds[0] ?? "all"));
 
     setNotice("");
     return true;
@@ -1917,8 +1704,7 @@ function DiscussionInner({
       const serverId = entry ? getServerEntityId(entry) : undefined;
       if (!entry) return;
       const isNote =
-        entry.entryKind === "note" ||
-        backendNotes.some((n) => getClientEntityId(n) === String(id));
+        entry.entryKind === "note" || backendNotes.some((n) => getClientEntityId(n) === String(id));
       const targetType: "note" | "thread" = isNote ? "note" : "thread";
       const currentLiked = Boolean(entry?.liked);
       const desiredLiked = typeof liked === "boolean" ? liked : !currentLiked;
@@ -1930,8 +1716,7 @@ function DiscussionInner({
           pendingTarget: true,
           desiredLiked,
           currentBaseline: currentLiked,
-          lessonContext:
-            courseId && lessonId ? { courseId, lessonId } : undefined,
+          lessonContext: courseId && lessonId ? { courseId, lessonId } : undefined,
           queryClient,
         });
         return;
@@ -1944,8 +1729,7 @@ function DiscussionInner({
           serverId,
           desiredLiked,
           currentBaseline: currentLiked,
-          lessonContext:
-            courseId && lessonId ? { courseId, lessonId } : undefined,
+          lessonContext: courseId && lessonId ? { courseId, lessonId } : undefined,
           queryClient,
         });
         return;
@@ -1957,8 +1741,7 @@ function DiscussionInner({
         serverId,
         desiredLiked,
         currentBaseline: currentLiked,
-        lessonContext:
-          courseId && lessonId ? { courseId, lessonId } : undefined,
+        lessonContext: courseId && lessonId ? { courseId, lessonId } : undefined,
         queryClient,
       });
       return;
@@ -1988,14 +1771,11 @@ function DiscussionInner({
       return;
     }
     const editKind = entry.entryKind === "note" ? "note" : "thread";
-    if (
-      optimisticEditCoordinator.isEditing(editKind, getClientEntityId(entry))
-    ) {
+    if (optimisticEditCoordinator.isEditing(editKind, getClientEntityId(entry))) {
       setNotice("This discussion entry is already being updated.");
       return;
     }
-    const entryKind =
-      entry.entryKind ?? (entry.isQuestion ? "question" : "comment");
+    const entryKind = entry.entryKind ?? (entry.isQuestion ? "question" : "comment");
     setEditingEntry({
       id: entry.id,
       draft: entry.content ?? createDiscussionDraft(entry.text),
@@ -2006,9 +1786,7 @@ function DiscussionInner({
   };
 
   const deleteEntry = (id: string | number) => {
-    const entry = combinedEntries.find(
-      (candidate) => getClientEntityId(candidate) === String(id),
-    );
+    const entry = combinedEntries.find((candidate) => getClientEntityId(candidate) === String(id));
     const serverId = entry ? getServerEntityId(entry) : undefined;
     if (isBackendMode && !serverId) {
       setNotice("This discussion entry is still being posted.");
@@ -2029,10 +1807,7 @@ function DiscussionInner({
           : "comment"
       : undefined;
     let countsChange: LessonInteractionCountChange | undefined;
-    if (
-      isBackendMode &&
-      optimisticEditCoordinator.isEditing(deletionKind, clientId)
-    ) {
+    if (isBackendMode && optimisticEditCoordinator.isEditing(deletionKind, clientId)) {
       setNotice("This discussion entry is already being updated.");
       return;
     }
@@ -2048,8 +1823,7 @@ function DiscussionInner({
             ? deleteNoteMutation.mutateAsync(serverId!)
             : deleteThreadMutation.mutateAsync(serverId!),
         onBegin: () => {
-          if (!queryClient || !courseId || !lessonId || !interactionCountKind)
-            return;
+          if (!queryClient || !courseId || !lessonId || !interactionCountKind) return;
           countsChange = applyLessonInteractionCountDelta(queryClient, {
             courseId,
             lessonId,
@@ -2059,12 +1833,7 @@ function DiscussionInner({
         },
         onRollback: () => {
           if (!queryClient || !courseId || !lessonId || !countsChange) return;
-          restoreLessonInteractionCounts(
-            queryClient,
-            courseId,
-            lessonId,
-            countsChange,
-          );
+          restoreLessonInteractionCounts(queryClient, courseId, lessonId, countsChange);
         },
         onFailure: () =>
           setNotice(
@@ -2094,8 +1863,7 @@ function DiscussionInner({
       return;
     }
 
-    const remove = (current: Comment[]) =>
-      current.filter((entry) => entry.id !== id);
+    const remove = (current: Comment[]) => current.filter((entry) => entry.id !== id);
     setEntries(remove);
     setPostedEntries(remove);
     setEditingEntry((current) => (current?.id === id ? null : current));
@@ -2151,9 +1919,7 @@ function DiscussionInner({
     const update = (current: Comment[]) =>
       current.map((entry) => {
         if (entry.id !== entryId) return entry;
-        const thread = (entry.thread ?? []).filter(
-          (reply) => reply.id !== replyId,
-        );
+        const thread = (entry.thread ?? []).filter((reply) => reply.id !== replyId);
         return {
           ...entry,
           thread,
@@ -2170,9 +1936,7 @@ function DiscussionInner({
     accepted: boolean,
     serverReplyId?: string,
   ) => {
-    const thread = combinedEntries.find(
-      (entry) => getClientEntityId(entry) === String(threadId),
-    );
+    const thread = combinedEntries.find((entry) => getClientEntityId(entry) === String(threadId));
     const threadIdStr = thread ? getServerEntityId(thread) : undefined;
     const replyIdStr = String(replyId);
     if (isBackendMode) {
@@ -2182,8 +1946,7 @@ function DiscussionInner({
         threadId: threadIdStr,
         desiredAcceptedReplyId: accepted ? authoritativeReplyId : null,
         currentBaselineReplyId: thread?.acceptedAnswerId ?? null,
-        lessonContext:
-          courseId && lessonId ? { courseId, lessonId } : undefined,
+        lessonContext: courseId && lessonId ? { courseId, lessonId } : undefined,
         queryClient: queryClient ?? undefined,
         onFailure: (err: any) => {
           setNotice(err?.message || "Failed to update accepted answer.");
@@ -2213,13 +1976,8 @@ function DiscussionInner({
     }
   };
 
-  const handleToggleLockThread = async (
-    threadId: string | number,
-    locked: boolean,
-  ) => {
-    const thread = combinedEntries.find(
-      (entry) => getClientEntityId(entry) === String(threadId),
-    );
+  const handleToggleLockThread = async (threadId: string | number, locked: boolean) => {
+    const thread = combinedEntries.find((entry) => getClientEntityId(entry) === String(threadId));
     const threadIdStr = thread ? getServerEntityId(thread) : undefined;
     if (isBackendMode) {
       if (!threadIdStr) return;
@@ -2227,8 +1985,7 @@ function DiscussionInner({
         threadId: threadIdStr,
         desiredLocked: locked,
         currentBaseline: !locked,
-        lessonContext:
-          courseId && lessonId ? { courseId, lessonId } : undefined,
+        lessonContext: courseId && lessonId ? { courseId, lessonId } : undefined,
         queryClient: queryClient ?? undefined,
         onFailure: (err: any) => {
           setNotice(err?.message || "Failed to update discussion lock status.");
@@ -2236,9 +1993,7 @@ function DiscussionInner({
       });
     } else {
       const update = (current: Comment[]) =>
-        current.map((entry) =>
-          entry.id === threadId ? { ...entry, isLocked: locked } : entry,
-        );
+        current.map((entry) => (entry.id === threadId ? { ...entry, isLocked: locked } : entry));
       setEntries(update);
       setPostedEntries(update);
     }
@@ -2248,21 +2003,14 @@ function DiscussionInner({
     threadId: string | number,
     bookmarked: boolean,
   ): Promise<boolean> => {
-    const thread = combinedEntries.find(
-      (entry) => getClientEntityId(entry) === String(threadId),
-    );
+    const thread = combinedEntries.find((entry) => getClientEntityId(entry) === String(threadId));
     const threadIdStr = thread ? getServerEntityId(thread) : undefined;
     if (isBackendMode) {
       if (!thread) return false;
       if (thread.entryKind === "note") {
         if (!threadIdStr) return false;
         if (queryClient) {
-          updateNoteBookmarkInCache(
-            queryClient,
-            threadIdStr,
-            bookmarked,
-            threadIdStr,
-          );
+          updateNoteBookmarkInCache(queryClient, threadIdStr, bookmarked, threadIdStr);
         }
         try {
           await learningInteractionsService.toggleNoteBookmark(threadIdStr);
@@ -2277,12 +2025,7 @@ function DiscussionInner({
           return bookmarked;
         } catch (err: any) {
           if (queryClient) {
-            updateNoteBookmarkInCache(
-              queryClient,
-              threadIdStr,
-              !bookmarked,
-              threadIdStr,
-            );
+            updateNoteBookmarkInCache(queryClient, threadIdStr, !bookmarked, threadIdStr);
           }
           setNotice(err?.message || "Failed to update note bookmark.");
           return !bookmarked;
@@ -2293,24 +2036,19 @@ function DiscussionInner({
         pendingTarget: !threadIdStr,
         desiredBookmarked: bookmarked,
         currentBaseline: !bookmarked,
-        lessonContext:
-          courseId && lessonId ? { courseId, lessonId } : undefined,
+        lessonContext: courseId && lessonId ? { courseId, lessonId } : undefined,
         queryClient: queryClient ?? undefined,
       });
       return bookmarked;
     } else {
       setEntries((current) =>
         current.map((entry) =>
-          entry.id === threadId
-            ? { ...entry, isBookmarked: bookmarked }
-            : entry,
+          entry.id === threadId ? { ...entry, isBookmarked: bookmarked } : entry,
         ),
       );
       setPostedEntries((current) =>
         current.map((entry) =>
-          entry.id === threadId
-            ? { ...entry, isBookmarked: bookmarked }
-            : entry,
+          entry.id === threadId ? { ...entry, isBookmarked: bookmarked } : entry,
         ),
       );
       return bookmarked;
@@ -2321,9 +2059,7 @@ function DiscussionInner({
     threadId: string | number,
     following: boolean,
   ): Promise<boolean> => {
-    const thread = combinedEntries.find(
-      (entry) => getClientEntityId(entry) === String(threadId),
-    );
+    const thread = combinedEntries.find((entry) => getClientEntityId(entry) === String(threadId));
     const threadIdStr = thread ? getServerEntityId(thread) : undefined;
     if (isBackendMode) {
       if (!thread) return false;
@@ -2332,8 +2068,7 @@ function DiscussionInner({
         pendingTarget: !threadIdStr,
         desiredFollowed: following,
         currentBaseline: !following,
-        lessonContext:
-          courseId && lessonId ? { courseId, lessonId } : undefined,
+        lessonContext: courseId && lessonId ? { courseId, lessonId } : undefined,
         queryClient: queryClient ?? undefined,
       });
       return following;
@@ -2398,9 +2133,7 @@ function DiscussionInner({
     }
   };
 
-  const handleSubmitReport = async (
-    payload: ReportSubmissionPayload,
-  ): Promise<boolean> => {
+  const handleSubmitReport = async (payload: ReportSubmissionPayload): Promise<boolean> => {
     if (isBackendMode) {
       try {
         await createReportMutation.mutateAsync({
@@ -2467,11 +2200,7 @@ function DiscussionInner({
         onRetryNextPage={loadMoreDiscussion}
         hasNextPage={isNoteDeepLinkPending ? false : hasNextDiscussionPage}
         isFetchingNextPage={isFetchingNextDiscussionPage}
-        isNextPageError={
-          isNoteDeepLinkPending
-            ? false
-            : unifiedDiscussions.isFetchNextPageError
-        }
+        isNextPageError={isNoteDeepLinkPending ? false : unifiedDiscussions.isFetchNextPageError}
         isThreadsLoading={isThreadsLoading}
         isThreadDeepLinkPending={isThreadDeepLinkPending}
         isAllInitialLoading={isAllInitialLoading}
@@ -2494,15 +2223,12 @@ function DiscussionInner({
         onParticipationAction={onParticipationAction}
         onDraftChange={(value) => {
           if (editingEntry) {
-            setEditingEntry((current) =>
-              current ? { ...current, draft: value } : current,
-            );
+            setEditingEntry((current) => (current ? { ...current, draft: value } : current));
           } else {
             setDraft(value);
           }
           setNotice(
-            countCharacters(value.plainText) >
-              DISCUSSION_COMMENT_CHARACTER_LIMIT
+            countCharacters(value.plainText) > DISCUSSION_COMMENT_CHARACTER_LIMIT
               ? COMMENT_LENGTH_NOTICE
               : "",
           );
@@ -2513,10 +2239,7 @@ function DiscussionInner({
           setVisibility((current) => getAllowedVisibility(value, current));
         }}
         onVisibilityChange={(value) => {
-          const allowedVisibility = getAllowedVisibility(
-            activeEntryKind,
-            value,
-          );
+          const allowedVisibility = getAllowedVisibility(activeEntryKind, value);
           if (editingEntry) {
             setEditingEntry((current) =>
               current ? { ...current, visibility: allowedVisibility } : current,
@@ -2564,16 +2287,12 @@ function DiscussionInner({
         onToggleFollow={handleToggleFollow}
         onSeekToTimestamp={onSeekToTimestamp}
         onCopyTextNotice={setNotice}
-        onReplyEditFailure={() =>
-          setNotice("Failed to update reply. Please try again.")
-        }
+        onReplyEditFailure={() => setNotice("Failed to update reply. Please try again.")}
         onDeleteFailure={setNotice}
         courseId={courseId}
       />
       {openThread !== null &&
-      threadEntries.some(
-        (entry) => getClientEntityId(entry) === String(openThread.id),
-      ) ? (
+      threadEntries.some((entry) => getClientEntityId(entry) === String(openThread.id)) ? (
         <Suspense fallback={null}>
           <DiscussionThreadPanel
             open={true}
@@ -2606,9 +2325,7 @@ function DiscussionInner({
               }
             }}
             onActiveEntryChange={(id) => {
-              setOpenThread((current) =>
-                current ? { id, focusComposer: false } : current,
-              );
+              setOpenThread((current) => (current ? { id, focusComposer: false } : current));
               setSearchParams(
                 (prev) => {
                   const next = new URLSearchParams(prev);
@@ -2642,12 +2359,8 @@ function DiscussionInner({
                 type: "error",
               })
             }
-            onReplyEditError={() =>
-              setNotice("Failed to update reply. Please try again.")
-            }
-            onReplyDeleteError={() =>
-              setNotice("Couldn't delete this reply. Please try again.")
-            }
+            onReplyEditError={() => setNotice("Failed to update reply. Please try again.")}
+            onReplyDeleteError={() => setNotice("Couldn't delete this reply. Please try again.")}
           />
         </Suspense>
       ) : null}
@@ -2666,11 +2379,7 @@ function DiscussionInner({
 function DiscussionRouterBridge(props: DiscussionProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   return (
-    <DiscussionInner
-      {...props}
-      searchParams={searchParams}
-      setSearchParams={setSearchParams}
-    />
+    <DiscussionInner {...props} searchParams={searchParams} setSearchParams={setSearchParams} />
   );
 }
 
@@ -2684,13 +2393,7 @@ function DiscussionFallbackBridge(props: DiscussionProps) {
       return nextInit ? new URLSearchParams(nextInit) : new URLSearchParams();
     });
   }, []);
-  return (
-    <DiscussionInner
-      {...props}
-      searchParams={searchParams}
-      setSearchParams={updateParams}
-    />
-  );
+  return <DiscussionInner {...props} searchParams={searchParams} setSearchParams={updateParams} />;
 }
 
 export function Discussion(props: DiscussionProps) {
@@ -2780,14 +2483,8 @@ interface ThreadSurfaceProps {
     accepted: boolean,
   ) => void;
   onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
-  onToggleBookmark?: (
-    threadId: string | number,
-    bookmarked: boolean,
-  ) => Promise<boolean> | void;
-  onToggleFollow?: (
-    threadId: string | number,
-    following: boolean,
-  ) => Promise<boolean> | void;
+  onToggleBookmark?: (threadId: string | number, bookmarked: boolean) => Promise<boolean> | void;
+  onToggleFollow?: (threadId: string | number, following: boolean) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
   onCopyTextNotice?: (message: string) => void;
   onReplyEditFailure?: () => void;
@@ -2911,15 +2608,9 @@ function DiscussionViewportVirtualFeed({
 }: DiscussionVirtualFeedProps & {
   viewportRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const rangeExtractor = useDiscussionRangeExtractor(
-    props.entries,
-    props.protectedEntryIndices,
-  );
+  const rangeExtractor = useDiscussionRangeExtractor(props.entries, props.protectedEntryIndices);
   const feedRef = useRef<HTMLDivElement>(null);
-  const phoneScrollMargin = useDiscussionPhoneVirtualFeedScrollMargin(
-    feedRef,
-    viewportRef,
-  );
+  const phoneScrollMargin = useDiscussionPhoneVirtualFeedScrollMargin(feedRef, viewportRef);
 
   const virtualizer = useVirtualizer({
     count: props.entries.length,
@@ -2955,11 +2646,7 @@ function getDiscussionVirtualFeedScrollMargin(
 
   const feedRect = feed.getBoundingClientRect();
   if (scrollport) {
-    return (
-      feedRect.top -
-      scrollport.getBoundingClientRect().top +
-      scrollport.scrollTop
-    );
+    return feedRect.top - scrollport.getBoundingClientRect().top + scrollport.scrollTop;
   }
 
   return feedRect.top + window.scrollY;
@@ -2973,16 +2660,11 @@ function useDiscussionPhoneVirtualFeedScrollMargin(
 
   useLayoutEffect(() => {
     const scrollport = viewportRef.current;
-    const header = scrollport?.querySelector<HTMLElement>(
-      "[data-discussion-scroll-header]",
-    );
+    const header = scrollport?.querySelector<HTMLElement>("[data-discussion-scroll-header]");
     if (!scrollport || !header) return undefined;
 
     const syncScrollMargin = () => {
-      const nextScrollMargin = getDiscussionVirtualFeedScrollMargin(
-        feedRef.current,
-        scrollport,
-      );
+      const nextScrollMargin = getDiscussionVirtualFeedScrollMargin(feedRef.current, scrollport);
       setPhoneScrollMargin((current) =>
         Math.abs(current - nextScrollMargin) > 1 ? nextScrollMargin : current,
       );
@@ -3062,10 +2744,7 @@ function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
     getItemKey: (index) => getClientEntityId(props.entries[index]!),
     initialRect: { width: 1024, height: 768 },
     overscan: DISCUSSION_VIRTUAL_OVERSCAN,
-    rangeExtractor: useDiscussionRangeExtractor(
-      props.entries,
-      props.protectedEntryIndices,
-    ),
+    rangeExtractor: useDiscussionRangeExtractor(props.entries, props.protectedEntryIndices),
     scrollMargin,
   });
 
@@ -3101,10 +2780,7 @@ function DiscussionScrollportVirtualFeed(props: DiscussionVirtualFeedProps) {
     getItemKey: (index) => getClientEntityId(props.entries[index]!),
     initialRect: { width: 1024, height: 768 },
     overscan: DISCUSSION_VIRTUAL_OVERSCAN,
-    rangeExtractor: useDiscussionRangeExtractor(
-      props.entries,
-      props.protectedEntryIndices,
-    ),
+    rangeExtractor: useDiscussionRangeExtractor(props.entries, props.protectedEntryIndices),
     scrollMargin,
   });
 
@@ -3141,9 +2817,7 @@ function DiscussionVirtualFeed({
   isPhone: boolean;
 }) {
   if (isPhone) {
-    return (
-      <DiscussionViewportVirtualFeed viewportRef={viewportRef} {...props} />
-    );
+    return <DiscussionViewportVirtualFeed viewportRef={viewportRef} {...props} />;
   }
 
   return <DiscussionDesktopVirtualFeed {...props} />;
@@ -3151,11 +2825,7 @@ function DiscussionVirtualFeed({
 
 type DiscussionLoadingRowVariant = "short" | "long";
 
-function DiscussionLoadingRow({
-  variant,
-}: {
-  variant: DiscussionLoadingRowVariant;
-}) {
+function DiscussionLoadingRow({ variant }: { variant: DiscussionLoadingRowVariant }) {
   const hasSecondTextLine = variant === "long";
 
   return (
@@ -3297,20 +2967,18 @@ function ThreadSurface({
   const discussionViewportRef = useRef<HTMLDivElement>(null);
   // Description expansion moves the feed origin; refresh virtual scroll margin.
   const [descriptionLayoutRevision, setDescriptionLayoutRevision] = useState(0);
-  const compactComposerScrollHidden =
-    mobileBottomNavigation && mobileBottomNavigationHidden;
+  const compactComposerScrollHidden = mobileBottomNavigation && mobileBottomNavigationHidden;
   const [composerMode, setComposerMode] = useState<ComposerMode>("collapsed");
-  const [
-    mobileComposerCollapsedSnapPoint,
-    setMobileComposerCollapsedSnapPoint,
-  ] = useState<number>(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
-  const [mobileComposerSnapPoint, setMobileComposerSnapPoint] = useState<
-    number | null
-  >(DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT);
-  const [mobileComposerKeyboardInset, setMobileComposerKeyboardInset] =
-    useState(0);
-  const [mobileComposerViewportHeight, setMobileComposerViewportHeight] =
-    useState<number | null>(null);
+  const [mobileComposerCollapsedSnapPoint, setMobileComposerCollapsedSnapPoint] = useState<number>(
+    DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT,
+  );
+  const [mobileComposerSnapPoint, setMobileComposerSnapPoint] = useState<number | null>(
+    DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT,
+  );
+  const [mobileComposerKeyboardInset, setMobileComposerKeyboardInset] = useState(0);
+  const [mobileComposerViewportHeight, setMobileComposerViewportHeight] = useState<number | null>(
+    null,
+  );
   const mobileComposerSnapPoints = useMemo(
     () => [mobileComposerCollapsedSnapPoint, 1],
     [mobileComposerCollapsedSnapPoint],
@@ -3369,9 +3037,7 @@ function ThreadSurface({
 
     setComposerMode("desktop");
     const frame = window.requestAnimationFrame(() => {
-      const reduceMotion = window.matchMedia(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       composerHostRef.current?.scrollIntoView?.({
         behavior: reduceMotion ? "auto" : "smooth",
         block: "start",
@@ -3411,14 +3077,8 @@ function ThreadSurface({
     return () => {
       window.cancelAnimationFrame(frameId);
       window.removeEventListener("resize", scheduleSnapPointSync);
-      window.visualViewport?.removeEventListener(
-        "resize",
-        scheduleSnapPointSync,
-      );
-      window.visualViewport?.removeEventListener(
-        "scroll",
-        scheduleSnapPointSync,
-      );
+      window.visualViewport?.removeEventListener("resize", scheduleSnapPointSync);
+      window.visualViewport?.removeEventListener("scroll", scheduleSnapPointSync);
     };
   }, [composerMode, getMobileComposerViewportGeometry, isPhone]);
 
@@ -3427,10 +3087,7 @@ function ThreadSurface({
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest("[data-comment-composer-container]")
-      ) {
+      if (target instanceof Element && target.closest("[data-comment-composer-container]")) {
         return;
       }
       if (document.querySelector('[role="listbox"]')) return;
@@ -3438,8 +3095,7 @@ function ThreadSurface({
     };
 
     document.addEventListener("pointerdown", closeOnOutsidePointer, true);
-    return () =>
-      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
   }, [closeComposer, composerMode]);
 
   const submitAndCollapse = async (onLocallyAccepted?: () => void) => {
@@ -3469,9 +3125,7 @@ function ThreadSurface({
         }
       },
       {
-        root: isPhone
-          ? discussionViewportRef.current
-          : getApplicationScrollElement(),
+        root: isPhone ? discussionViewportRef.current : getApplicationScrollElement(),
         rootMargin: "600px 0px",
       },
     );
@@ -3486,19 +3140,11 @@ function ThreadSurface({
       const clientId = getClientEntityId(entry);
       const serverId = getServerEntityId(entry);
       const deletionKind = entry.entryKind === "note" ? "note" : "thread";
-      const deletion = optimisticDeletionCoordinator.get(
-        deletionKind,
-        clientId,
-        serverId,
-      );
-      const isRootEditing =
-        editingEntryId !== null && String(editingEntryId) === clientId;
+      const deletion = optimisticDeletionCoordinator.get(deletionKind, clientId, serverId);
+      const isRootEditing = editingEntryId !== null && String(editingEntryId) === clientId;
       const hasUndoableChild =
         deletionKind === "thread" &&
-        optimisticDeletionCoordinator.hasUndoableReplyForParent(
-          clientId,
-          serverId,
-        );
+        optimisticDeletionCoordinator.hasUndoableReplyForParent(clientId, serverId);
 
       if (
         deletion?.phase === "undoable" ||
@@ -3524,15 +3170,13 @@ function ThreadSurface({
       return;
     }
 
-    const target = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-note-id]"),
-    ).find((element) => element.dataset.noteId === noteDeepLinkTargetId);
+    const target = Array.from(document.querySelectorAll<HTMLElement>("[data-note-id]")).find(
+      (element) => element.dataset.noteId === noteDeepLinkTargetId,
+    );
     if (!target) return;
 
     focusedNoteDeepLinkRef.current = noteDeepLinkTargetId;
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     target.scrollIntoView({
       behavior: reduceMotion ? "auto" : "smooth",
       block: "center",
@@ -3564,14 +3208,8 @@ function ThreadSurface({
         courseId={courseId}
         canParticipate={canParticipate}
         constrainToContainer
-        canEdit={
-          canParticipate &&
-          (entry.entryKind !== "note" || capabilities.allowNotes)
-        }
-        canDelete={
-          canParticipate &&
-          (entry.entryKind !== "note" || capabilities.allowNotes)
-        }
+        canEdit={canParticipate && (entry.entryKind !== "note" || capabilities.allowNotes)}
+        canDelete={canParticipate && (entry.entryKind !== "note" || capabilities.allowNotes)}
         isDeepLinkTarget={Boolean(
           noteDeepLinkTargetId &&
           entry.entryKind === "note" &&
@@ -3608,19 +3246,13 @@ function ThreadSurface({
       description={lessonDescription}
       isLoading={isLessonDescriptionLoading}
       onSeekToTimestamp={onSeekToTimestamp}
-      onExpandedChange={() =>
-        setDescriptionLayoutRevision((revision) => revision + 1)
-      }
+      onExpandedChange={() => setDescriptionLayoutRevision((revision) => revision + 1)}
     />
   );
-  const hasDescriptionSurface =
-    isLessonDescriptionLoading || Boolean(lessonDescription?.trim());
+  const hasDescriptionSurface = isLessonDescriptionLoading || Boolean(lessonDescription?.trim());
 
   const disabledMessage = (
-    <div
-      className="py-8 text-center"
-      data-testid="learner-interactions-disabled-message"
-    >
+    <div className="py-8 text-center" data-testid="learner-interactions-disabled-message">
       <p className="text-sm font-medium text-(--muted)">
         Learner interactions are disabled for this course.
       </p>
@@ -3640,8 +3272,7 @@ function ThreadSurface({
     </div>
   ) : null;
 
-  const showMobileParticipationPrompt =
-    isPhone && enabledKinds.length > 0 && !canParticipate;
+  const showMobileParticipationPrompt = isPhone && enabledKinds.length > 0 && !canParticipate;
 
   const lessonAccessMessage =
     lessonContentAccess === "denied"
@@ -3662,16 +3293,10 @@ function ThreadSurface({
             : "learning-discussion-access-pending"
         }
         role={lessonContentAccess === "pending" ? "status" : undefined}
-        aria-label={
-          lessonContentAccess === "pending" ? "Loading discussion" : undefined
-        }
+        aria-label={lessonContentAccess === "pending" ? "Loading discussion" : undefined}
       >
-        {lessonContentAccess === "pending" ? (
-          <LoadingSpinnerIcon size={24} />
-        ) : null}
-        <p className="mt-3 text-sm font-medium text-(--muted)">
-          {lessonAccessMessage}
-        </p>
+        {lessonContentAccess === "pending" ? <LoadingSpinnerIcon size={24} /> : null}
+        <p className="mt-3 text-sm font-medium text-(--muted)">{lessonAccessMessage}</p>
       </div>
     );
 
@@ -3681,12 +3306,9 @@ function ThreadSurface({
           <div
             ref={discussionViewportRef}
             data-discussion-scroll-viewport
-            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
+            className="flex min-h-0 max-w-full min-w-0 flex-1 touch-pan-y flex-col overflow-x-hidden overflow-y-auto"
           >
-            <div
-              data-discussion-scroll-header
-              className="min-w-0 max-w-full shrink-0"
-            >
+            <div data-discussion-scroll-header className="max-w-full min-w-0 shrink-0">
               {mobileLessonHeader}
               {discussionDescription}
             </div>
@@ -3711,7 +3333,7 @@ function ThreadSurface({
           <div
             ref={discussionViewportRef}
             data-discussion-scroll-viewport
-            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
+            className="flex min-h-0 max-w-full min-w-0 flex-1 touch-pan-y flex-col overflow-x-hidden overflow-y-auto"
             style={{
               minHeight: 0,
               maxWidth: "100%",
@@ -3722,10 +3344,7 @@ function ThreadSurface({
               touchAction: "pan-y",
             }}
           >
-            <div
-              data-discussion-scroll-header
-              className="min-w-0 max-w-full shrink-0"
-            >
+            <div data-discussion-scroll-header className="max-w-full min-w-0 shrink-0">
               {mobileLessonHeader}
               {discussionDescription}
             </div>
@@ -3752,7 +3371,7 @@ function ThreadSurface({
       <div
         role="group"
         aria-label="Filter discussion entries"
-        className="learning-discussion__filter-group mt-3 flex w-full min-w-0 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mt-5 [&::-webkit-scrollbar]:hidden"
+        className="learning-discussion__filter-group mt-3 flex w-full min-w-0 [scrollbar-width:none] gap-1.5 overflow-x-auto pb-1 sm:mt-5 [&::-webkit-scrollbar]:hidden"
       >
         {availableFilters.map(([value, label]) => (
           <button
@@ -3768,14 +3387,9 @@ function ThreadSurface({
       </div>
     ) : null;
   const discussionToolbar = (
-    <div
-      className="mt-3.5 flex min-w-0 items-end max-[640px]:mt-2.5"
-      data-discussion-feed-toolbar
-    >
+    <div className="mt-3.5 flex min-w-0 items-end max-[640px]:mt-2.5" data-discussion-feed-toolbar>
       <p className="min-w-0 truncate text-lg leading-none font-semibold tracking-[-0.02em] text-(--text)">
-        {discussionCount === undefined
-          ? "Discussions"
-          : `${discussionCount} Discussions`}
+        {discussionCount === undefined ? "Discussions" : `${discussionCount} Discussions`}
       </p>
       <span
         className="shrink-0 text-lg leading-none text-(--text-secondary)"
@@ -3833,7 +3447,7 @@ function ThreadSurface({
         <button
           type="button"
           onClick={onRetryNotes}
-          className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+          className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] ring-inset hover:bg-(--hover)"
         >
           Retry
         </button>
@@ -3854,7 +3468,7 @@ function ThreadSurface({
         <button
           type="button"
           onClick={onRetryThreads}
-          className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+          className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] ring-inset hover:bg-(--hover)"
         >
           Retry
         </button>
@@ -3888,15 +3502,13 @@ function ThreadSurface({
           className="flex flex-col items-center gap-2 py-4 text-center"
           data-testid="learning-feed-load-more-error"
         >
-          <p className="text-sm text-(--muted)">
-            There was a problem loading more discussions.
-          </p>
+          <p className="text-sm text-(--muted)">There was a problem loading more discussions.</p>
           {onRetryNextPage && (
             <button
               type="button"
               onClick={() => void onRetryNextPage()}
               disabled={isFetchingNextPage}
-              className="inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover) disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] ring-inset hover:bg-(--hover) disabled:cursor-not-allowed disabled:opacity-60"
             >
               Retry loading more
             </button>
@@ -3912,18 +3524,14 @@ function ThreadSurface({
         isNotesLoading,
         isThreadsLoading,
       }) && (
-        <p
-          className="py-4 text-center text-xs text-(--muted)"
-          data-testid="learning-feed-end"
-        >
+        <p className="py-4 text-center text-xs text-(--muted)" data-testid="learning-feed-end">
           You’ve reached the end.
         </p>
       )}
       {entries.length === 0 && (
         <div className="py-12 text-center">
           <p className="font-semibold text-(--text)">
-            No {entryFilter === "all" ? "entries" : getFilterName(entryFilter)}{" "}
-            yet
+            No {entryFilter === "all" ? "entries" : getFilterName(entryFilter)} yet
           </p>
           {availableFilters.some(([val]) => val === "all") && (
             <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-(--muted)">
@@ -3942,18 +3550,14 @@ function ThreadSurface({
         <div
           ref={composerHostRef}
           data-comment-composer-container
-          className={
-            hasDescriptionSurface ? "mt-3 scroll-mt-4 sm:mt-4" : "scroll-mt-4"
-          }
+          className={hasDescriptionSurface ? "mt-3 scroll-mt-4 sm:mt-4" : "scroll-mt-4"}
         >
           {canParticipate && composerMode === "desktop" ? (
             <CommentComposer
               draft={draft}
               avatar={authorAvatar}
               documentId={
-                editingEntryId === null
-                  ? "discussion-new"
-                  : `discussion-edit-${editingEntryId}`
+                editingEntryId === null ? "discussion-new" : `discussion-edit-${editingEntryId}`
               }
               entryKind={entryKind}
               visibility={visibility}
@@ -3995,9 +3599,7 @@ function ThreadSurface({
 
       <div
         className={
-          isPhone
-            ? "mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col"
-            : "mt-2.5 min-w-0 max-w-full"
+          isPhone ? "mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col" : "mt-2.5 max-w-full min-w-0"
         }
         data-discussion-feed-list
       >
@@ -4005,7 +3607,7 @@ function ThreadSurface({
           <div
             ref={discussionViewportRef}
             data-discussion-scroll-viewport
-            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
+            className="flex min-h-0 max-w-full min-w-0 flex-1 touch-pan-y flex-col overflow-x-hidden overflow-y-auto"
             style={{
               minHeight: 0,
               maxWidth: "100%",
@@ -4016,10 +3618,7 @@ function ThreadSurface({
               touchAction: "pan-y",
             }}
           >
-            <div
-              data-discussion-scroll-header
-              className="min-w-0 max-w-full shrink-0"
-            >
+            <div data-discussion-scroll-header className="max-w-full min-w-0 shrink-0">
               {mobileLessonHeader}
               {discussionDescription}
               {discussionFilters}
@@ -4029,7 +3628,7 @@ function ThreadSurface({
             {showMobileParticipationPrompt && (
               <div
                 aria-hidden="true"
-                className={`pointer-events-none invisible opacity-0 shrink-0 ${mobileBottomNavigation ? "pb-[calc(58px+var(--app-viewport-safe-area-bottom))]" : ""}`}
+                className={`pointer-events-none invisible shrink-0 opacity-0 ${mobileBottomNavigation ? "pb-[calc(58px+var(--app-viewport-safe-area-bottom))]" : ""}`}
               >
                 <MobileParticipationPromptSurface
                   participationState={participationState}
@@ -4040,24 +3639,21 @@ function ThreadSurface({
             )}
           </div>
         ) : (
-          <div className="min-w-0 max-w-full">{discussionContent}</div>
+          <div className="max-w-full min-w-0">{discussionContent}</div>
         )}
       </div>
 
-      {isPhone &&
-        enabledKinds.length > 0 &&
-        canParticipate &&
-        composerMode !== "mobile" && (
-          <MobileCompactComposerPortal
-            draft={draft}
-            attachmentCount={draftAttachmentCount}
-            promptText={promptText}
-            avatar={authorAvatar}
-            mobileBottomNavigation={mobileBottomNavigation}
-            scrollHidden={compactComposerScrollHidden}
-            onOpen={openMobileComposer}
-          />
-        )}
+      {isPhone && enabledKinds.length > 0 && canParticipate && composerMode !== "mobile" && (
+        <MobileCompactComposerPortal
+          draft={draft}
+          attachmentCount={draftAttachmentCount}
+          promptText={promptText}
+          avatar={authorAvatar}
+          mobileBottomNavigation={mobileBottomNavigation}
+          scrollHidden={compactComposerScrollHidden}
+          onOpen={openMobileComposer}
+        />
+      )}
 
       {isPhone && enabledKinds.length > 0 && canParticipate && (
         <Drawer
@@ -4091,22 +3687,16 @@ function ThreadSurface({
                   : "100dvh",
                 bottom: `${mobileComposerKeyboardInset}px`,
                 paddingBottom:
-                  mobileComposerKeyboardInset > 0
-                    ? "0px"
-                    : "var(--app-safe-area-bottom)",
+                  mobileComposerKeyboardInset > 0 ? "0px" : "var(--app-safe-area-bottom)",
               } as React.CSSProperties
             }
             aria-label={
-              editingEntryId === null
-                ? "Create a discussion entry"
-                : "Edit a discussion entry"
+              editingEntryId === null ? "Create a discussion entry" : "Edit a discussion entry"
             }
             className="learning-comment-composer-drawer overflow-hidden rounded-t-[22px]! bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] px-0 pt-0 shadow-[0_-20px_56px_rgba(0,0,0,0.42)] data-expanded:rounded-none!"
           >
             <DrawerTitle className="sr-only">
-              {editingEntryId === null
-                ? "Create a discussion entry"
-                : "Edit a discussion entry"}
+              {editingEntryId === null ? "Create a discussion entry" : "Edit a discussion entry"}
             </DrawerTitle>
             <DrawerDescription className="sr-only">
               Write a comment, Q&A, or note for this lesson.
@@ -4115,9 +3705,7 @@ function ThreadSurface({
               draft={draft}
               avatar={authorAvatar}
               documentId={
-                editingEntryId === null
-                  ? "discussion-new"
-                  : `discussion-edit-${editingEntryId}`
+                editingEntryId === null ? "discussion-new" : `discussion-edit-${editingEntryId}`
               }
               entryKind={entryKind}
               visibility={visibility}
@@ -4187,7 +3775,7 @@ function MobileParticipationPromptSurface({
       data-testid={testId}
       data-scroll-hidden={scrollHidden}
       aria-hidden={scrollHidden}
-      className={`${MOBILE_COMPOSER_SURFACE_BASE} w-full min-w-0 max-w-full transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
+      className={`${MOBILE_COMPOSER_SURFACE_BASE} w-full max-w-full min-w-0 transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
     >
       <div className="flex min-w-0 flex-col items-center gap-1.5 px-1 py-1 text-center">
         <ParticipationPromptContent
@@ -4212,16 +3800,14 @@ function MobileParticipationPromptPortal({
   participationActionLabel,
   onParticipationAction,
 }: MobileParticipationPromptPortalProps) {
-  const layerTarget = document.querySelector<HTMLElement>(
-    "[data-learning-motion-stage]",
-  );
+  const layerTarget = document.querySelector<HTMLElement>("[data-learning-motion-stage]");
 
   return createPortal(
     <div
       data-learning-mobile-participation-layer
-      className={`pointer-events-none fixed inset-x-0 z-130 box-border min-w-0 max-w-full overflow-x-clip ${mobileBottomNavigation ? MOBILE_BOTTOM_ACTION_OFFSET_CLASS : "bottom-0"}`}
+      className={`pointer-events-none fixed inset-x-0 z-130 box-border max-w-full min-w-0 overflow-x-clip ${mobileBottomNavigation ? MOBILE_BOTTOM_ACTION_OFFSET_CLASS : "bottom-0"}`}
     >
-      <div className="pointer-events-auto min-w-0 max-w-full">
+      <div className="pointer-events-auto max-w-full min-w-0">
         <MobileParticipationPromptSurface
           testId="learning-discussion-login-prompt"
           participationState={participationState}
@@ -4254,22 +3840,18 @@ function MobileCompactComposerPortal({
   scrollHidden,
   onOpen,
 }: MobileCompactComposerPortalProps) {
-  const layerTarget = document.querySelector<HTMLElement>(
-    "[data-learning-motion-stage]",
-  );
+  const layerTarget = document.querySelector<HTMLElement>("[data-learning-motion-stage]");
 
   return createPortal(
     <div
       data-learning-mobile-composer-layer
-      className={`pointer-events-none fixed inset-x-0 z-130 box-border min-w-0 max-w-full overflow-x-clip transition-[transform,opacity] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
+      className={`pointer-events-none fixed inset-x-0 z-130 box-border max-w-full min-w-0 overflow-x-clip transition-[transform,opacity] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
         mobileBottomNavigation ? MOBILE_BOTTOM_ACTION_OFFSET_CLASS : "bottom-0"
       }`}
       style={{
         opacity: "var(--learning-player-content-opacity, 1)",
-        transform:
-          "translate3d(0, var(--learning-player-content-offset-y, 0px), 0)",
-        transitionDuration:
-          "var(--learning-player-content-motion-duration, 0ms)",
+        transform: "translate3d(0, var(--learning-player-content-offset-y, 0px), 0)",
+        transitionDuration: "var(--learning-player-content-motion-duration, 0ms)",
       }}
     >
       <div
@@ -4277,7 +3859,7 @@ function MobileCompactComposerPortal({
         data-testid="mobile-discussion-composer"
         data-scroll-hidden={scrollHidden}
         aria-hidden={scrollHidden}
-        className={`pointer-events-auto relative box-border min-w-0 max-w-full overflow-x-clip ${MOBILE_COMPOSER_SURFACE_BASE} transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
+        className={`pointer-events-auto relative box-border max-w-full min-w-0 overflow-x-clip ${MOBILE_COMPOSER_SURFACE_BASE} transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
       >
         <CompactComposer
           draft={draft}
@@ -4297,10 +3879,10 @@ export function PrerenderedMobileCommentComposer() {
     <div
       data-learning-mobile-composer-prerender
       aria-hidden="true"
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(58px+var(--app-viewport-safe-area-bottom))] z-130 box-border hidden min-w-0 max-w-full overflow-x-clip [[data-navigation-layout=compact]_&]:block [[data-learning-mobile-composer-ready=true]_&]:hidden!"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(58px+var(--app-viewport-safe-area-bottom))] z-130 box-border hidden max-w-full min-w-0 overflow-x-clip [[data-learning-mobile-composer-ready=true]_&]:hidden! [[data-navigation-layout=compact]_&]:block"
     >
       <div
-        className={`relative box-border min-w-0 max-w-full overflow-x-clip ${MOBILE_COMPOSER_SURFACE_BASE}`}
+        className={`relative box-border max-w-full min-w-0 overflow-x-clip ${MOBILE_COMPOSER_SURFACE_BASE}`}
       >
         <CompactComposer
           draft={EMPTY_MOBILE_COMPOSER_DRAFT}
@@ -4344,7 +3926,7 @@ function CompactComposer({
           onOpen();
         }
       }}
-      className={`flex w-full cursor-pointer items-center gap-2 p-1.5 text-left ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? " pointer-events-none opacity-60" : ""}`}
+      className={`flex w-full cursor-pointer items-center gap-2 p-1.5 text-left ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? "pointer-events-none opacity-60" : ""}`}
     >
       <DiscussionAvatar src={avatar} className="pointer-events-none size-9" />
       <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">

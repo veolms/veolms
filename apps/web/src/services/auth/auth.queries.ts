@@ -1,8 +1,4 @@
-import {
-  useQuery,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type {
   AuthUser,
   AuthConfigResponse,
@@ -30,9 +26,7 @@ export function currentUserQueryOptions(queryClient: QueryClient) {
         // A logout/login write happened while this request was in flight.
         // Never let the old response restore a signed-out (or previous)
         // account. The mutation that changed auth state owns the cache now.
-        return (
-          queryClient.getQueryData<CurrentUserResponse>(authKeys.me()) ?? null
-        );
+        return queryClient.getQueryData<CurrentUserResponse>(authKeys.me()) ?? null;
       }
 
       if (profile) {
@@ -85,10 +79,7 @@ export function updatePublicProfileCacheFromUser(
     queryKey: authKeys.publicProfiles(),
   })) {
     const cachedUsername = queryKey[2];
-    if (
-      typeof cachedUsername === "string" &&
-      cachedUsername.toLowerCase() === username
-    ) {
+    if (typeof cachedUsername === "string" && cachedUsername.toLowerCase() === username) {
       queryClient.setQueryData(queryKey, publicProfile);
     }
   }
@@ -106,9 +97,7 @@ export function useAuthConfig() {
 export function useCurrentUser() {
   const queryClient = useQueryClient();
 
-  return useQuery<CurrentUserResponse, ApiError>(
-    currentUserQueryOptions(queryClient),
-  );
+  return useQuery<CurrentUserResponse, ApiError>(currentUserQueryOptions(queryClient));
 }
 
 export function usePublicProfile(username?: string) {

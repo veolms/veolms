@@ -1,10 +1,7 @@
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 import type { ManualPaymentStatus } from "@veolms/database";
 
-export async function findManualPaymentRequestById(
-  database: Executor,
-  requestId: string,
-) {
+export async function findManualPaymentRequestById(database: Executor, requestId: string) {
   return await database
     .selectFrom("manual_payment_requests")
     .selectAll()
@@ -12,10 +9,7 @@ export async function findManualPaymentRequestById(
     .executeTakeFirst();
 }
 
-export async function findManualPaymentRequestByOrderId(
-  database: Executor,
-  orderId: string,
-) {
+export async function findManualPaymentRequestByOrderId(database: Executor, orderId: string) {
   return await database
     .selectFrom("manual_payment_requests")
     .selectAll()
@@ -23,10 +17,7 @@ export async function findManualPaymentRequestByOrderId(
     .executeTakeFirst();
 }
 
-export async function listManualPaymentRequestsByUser(
-  database: Executor,
-  userId: string,
-) {
+export async function listManualPaymentRequestsByUser(database: Executor, userId: string) {
   return await database
     .selectFrom("manual_payment_requests")
     .selectAll()

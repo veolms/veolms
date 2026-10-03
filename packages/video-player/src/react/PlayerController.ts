@@ -4,11 +4,7 @@ import { VideoEngineError } from "../core/errors";
 import type { VideoEngineEvent, VideoEngineEventMap } from "../core/events";
 import type { VideoEngineSnapshot } from "../core/snapshot";
 import type { VideoEngine } from "../core/VideoEngine";
-import type {
-  VideoEngineCapabilities,
-  VideoLoadOptions,
-  VideoSource,
-} from "../core/types";
+import type { VideoEngineCapabilities, VideoLoadOptions, VideoSource } from "../core/types";
 import type { StoryboardFrame } from "../storyboard/storyboardTypes";
 import type { TimelineMarker } from "../timeline/timelineMath";
 import {
@@ -62,9 +58,7 @@ interface PictureInPictureVideo {
 const getFullscreenElement = () => {
   if (typeof document === "undefined") return null;
   const webkitDocument = document as WebkitFullscreenDocument;
-  return (
-    document.fullscreenElement ?? webkitDocument.webkitFullscreenElement ?? null
-  );
+  return document.fullscreenElement ?? webkitDocument.webkitFullscreenElement ?? null;
 };
 
 export interface PlayerLoadRequest {
@@ -125,10 +119,7 @@ export class PlayerController {
 
     this.#engineUnsubscribers.push(
       this.engine.on("snapshotchange", (media) => {
-        const activeChapter = getActiveChapter(
-          this.#snapshot.chapters,
-          media.currentTime,
-        );
+        const activeChapter = getActiveChapter(this.#snapshot.chapters, media.currentTime);
         this.#snapshot = {
           ...this.#snapshot,
           media,
@@ -143,21 +134,12 @@ export class PlayerController {
     }
 
     if (typeof document !== "undefined") {
-      document.addEventListener(
-        "fullscreenchange",
-        this.handleFullscreenChange,
-      );
-      document.addEventListener(
-        "webkitfullscreenchange",
-        this.handleFullscreenChange,
-      );
+      document.addEventListener("fullscreenchange", this.handleFullscreenChange);
+      document.addEventListener("webkitfullscreenchange", this.handleFullscreenChange);
     }
 
     const media = this.engine.getSnapshot();
-    const activeChapter = getActiveChapter(
-      this.#snapshot.chapters,
-      media.currentTime,
-    );
+    const activeChapter = getActiveChapter(this.#snapshot.chapters, media.currentTime);
     this.#snapshot = {
       ...this.#snapshot,
       media,
@@ -171,17 +153,10 @@ export class PlayerController {
   deactivate(): void {
     if (!this.#activated) return;
     this.#activated = false;
-    for (const unsubscribe of this.#engineUnsubscribers.splice(0))
-      unsubscribe();
+    for (const unsubscribe of this.#engineUnsubscribers.splice(0)) unsubscribe();
     if (typeof document !== "undefined") {
-      document.removeEventListener(
-        "fullscreenchange",
-        this.handleFullscreenChange,
-      );
-      document.removeEventListener(
-        "webkitfullscreenchange",
-        this.handleFullscreenChange,
-      );
+      document.removeEventListener("fullscreenchange", this.handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", this.handleFullscreenChange);
     }
   }
 
@@ -212,9 +187,7 @@ export class PlayerController {
     this.#presentationContainerResolver = null;
   }
 
-  setPresentationContainerResolver(
-    resolver: (() => HTMLElement | null) | null,
-  ): void {
+  setPresentationContainerResolver(resolver: (() => HTMLElement | null) | null): void {
     this.#presentationContainerResolver = resolver;
   }
 
@@ -228,9 +201,7 @@ export class PlayerController {
     this.#requestedMedia = media;
     const generation = ++this.#mediaRequestGeneration;
     this.syncCapabilities();
-    return this.enqueueMediaTransition(() =>
-      this.applyMediaRequest(media, generation),
-    );
+    return this.enqueueMediaTransition(() => this.applyMediaRequest(media, generation));
   }
 
   detachMedia(media?: HTMLVideoElement): Promise<void> {
@@ -243,24 +214,17 @@ export class PlayerController {
     this.#requestedMedia = null;
     const generation = ++this.#mediaRequestGeneration;
     this.syncCapabilities();
-    return this.enqueueMediaTransition(() =>
-      this.applyMediaRequest(null, generation),
-    );
+    return this.enqueueMediaTransition(() => this.applyMediaRequest(null, generation));
   }
 
-  async load({
-    source,
-    options,
-    autoPlay = false,
-  }: PlayerLoadRequest): Promise<void> {
+  async load({ source, options, autoPlay = false }: PlayerLoadRequest): Promise<void> {
     this.assertActive();
     this.resetZoom();
     const generation = ++this.#loadGeneration;
     await this.waitForMedia();
     if (generation !== this.#loadGeneration || this.#destroyed) return;
     await this.engine.load(source, options);
-    if (generation !== this.#loadGeneration || this.#destroyed || !autoPlay)
-      return;
+    if (generation !== this.#loadGeneration || this.#destroyed || !autoPlay) return;
     await this.engine.play();
   }
 
@@ -285,10 +249,7 @@ export class PlayerController {
       });
     }
 
-    if (
-      typeof window === "undefined" ||
-      typeof window.requestAnimationFrame !== "function"
-    ) {
+    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
       return Promise.resolve();
     }
 
@@ -335,8 +296,7 @@ export class PlayerController {
   }
 
   seekBy(delta: number): void {
-    const currentTime =
-      this.#pendingMediaProperties.seekTime ?? this.#snapshot.media.currentTime;
+    const currentTime = this.#pendingMediaProperties.seekTime ?? this.#snapshot.media.currentTime;
     this.seekTo(currentTime + delta);
   }
 
@@ -350,8 +310,7 @@ export class PlayerController {
     }
     if (!this.isMediaReady()) {
       this.#pendingMediaProperties.volume = volume;
-      const muted =
-        this.#pendingMediaProperties.muted ?? this.#snapshot.media.muted;
+      const muted = this.#pendingMediaProperties.muted ?? this.#snapshot.media.muted;
       if (volume > 0 && muted) this.#pendingMediaProperties.muted = false;
       return;
     }
@@ -368,8 +327,7 @@ export class PlayerController {
   }
 
   toggleMuted(): void {
-    const muted =
-      this.#pendingMediaProperties.muted ?? this.#snapshot.media.muted;
+    const muted = this.#pendingMediaProperties.muted ?? this.#snapshot.media.muted;
     this.setMuted(!muted);
   }
 
@@ -402,10 +360,7 @@ export class PlayerController {
   }
 
   setChapters(chapters: readonly Chapter[]): void {
-    const activeChapter = getActiveChapter(
-      chapters,
-      this.#snapshot.media.currentTime,
-    );
+    const activeChapter = getActiveChapter(chapters, this.#snapshot.media.currentTime);
     this.#snapshot = {
       ...this.#snapshot,
       chapters: [...chapters],
@@ -490,8 +445,7 @@ export class PlayerController {
   }
 
   async enterFullscreen(): Promise<void> {
-    const container =
-      this.getPresentationContainer() as WebkitFullscreenElement | null;
+    const container = this.getPresentationContainer() as WebkitFullscreenElement | null;
     if (!container) return;
     if (container.requestFullscreen) await container.requestFullscreen();
     else await container.webkitRequestFullscreen?.();
@@ -517,9 +471,7 @@ export class PlayerController {
 
   async enterPictureInPicture(): Promise<void> {
     if (!this.canUsePictureInPicture()) return;
-    await (
-      this.#media as unknown as PictureInPictureVideo
-    ).requestPictureInPicture?.();
+    await (this.#media as unknown as PictureInPictureVideo).requestPictureInPicture?.();
     this.syncPictureInPicture();
   }
 
@@ -533,9 +485,7 @@ export class PlayerController {
 
   async togglePictureInPicture(): Promise<void> {
     const pipDocument =
-      typeof document === "undefined"
-        ? null
-        : (document as unknown as PictureInPictureDocument);
+      typeof document === "undefined" ? null : (document as unknown as PictureInPictureDocument);
     if (pipDocument?.pictureInPictureElement) {
       await this.exitPictureInPicture();
     } else {
@@ -568,14 +518,8 @@ export class PlayerController {
     this.#listeners.clear();
     this.#eventListeners.clear();
     await this.#mediaTransition;
-    this.#media?.removeEventListener(
-      "enterpictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    this.#media?.removeEventListener(
-      "leavepictureinpicture",
-      this.handlePictureInPictureChange,
-    );
+    this.#media?.removeEventListener("enterpictureinpicture", this.handlePictureInPictureChange);
+    this.#media?.removeEventListener("leavepictureinpicture", this.handlePictureInPictureChange);
     this.#media = null;
     this.#mediaAttached = false;
     await this.engine.destroy();
@@ -583,12 +527,9 @@ export class PlayerController {
 
   private readonly handleFullscreenChange = (): void => this.syncFullscreen();
 
-  private readonly handlePictureInPictureChange = (): void =>
-    this.syncPictureInPicture();
+  private readonly handlePictureInPictureChange = (): void => this.syncPictureInPicture();
 
-  private forwardEngineEvent<Type extends keyof VideoEngineEventMap>(
-    type: Type,
-  ): void {
+  private forwardEngineEvent<Type extends keyof VideoEngineEventMap>(type: Type): void {
     this.#engineUnsubscribers.push(
       this.engine.on(type, (detail) => {
         this.emit({ type, detail } as VideoEngineEvent);
@@ -620,12 +561,8 @@ export class PlayerController {
 
   private syncPictureInPicture(): void {
     const pipDocument =
-      typeof document === "undefined"
-        ? null
-        : (document as unknown as PictureInPictureDocument);
-    const active = Boolean(
-      this.#media && pipDocument?.pictureInPictureElement === this.#media,
-    );
+      typeof document === "undefined" ? null : (document as unknown as PictureInPictureDocument);
+    const active = Boolean(this.#media && pipDocument?.pictureInPictureElement === this.#media);
     if (active === this.#snapshot.ui.pictureInPicture) return;
     this.updateUi({ pictureInPicture: active });
     this.emit({ type: "pictureinpicturechange", detail: { active } });
@@ -633,13 +570,9 @@ export class PlayerController {
 
   private readCapabilities(): VideoEngineCapabilities {
     const engineCapabilities = this.engine.getCapabilities();
-    const media = this.isMediaReady()
-      ? (this.#media as unknown as PictureInPictureVideo)
-      : null;
+    const media = this.isMediaReady() ? (this.#media as unknown as PictureInPictureVideo) : null;
     const pipDocument =
-      typeof document === "undefined"
-        ? null
-        : (document as unknown as PictureInPictureDocument);
+      typeof document === "undefined" ? null : (document as unknown as PictureInPictureDocument);
     return {
       ...engineCapabilities,
       pictureInPicture: Boolean(
@@ -668,14 +601,10 @@ export class PlayerController {
   }
 
   private getPresentationContainer(): HTMLElement | null {
-    return (
-      this.#presentationContainerResolver?.() ?? this.#presentationContainer
-    );
+    return this.#presentationContainerResolver?.() ?? this.#presentationContainer;
   }
 
-  private enqueueMediaTransition(
-    operation: () => Promise<void>,
-  ): Promise<void> {
+  private enqueueMediaTransition(operation: () => Promise<void>): Promise<void> {
     const transition = this.#mediaTransition.then(operation);
     this.#mediaTransition = transition.catch(() => undefined);
     return transition;
@@ -703,8 +632,7 @@ export class PlayerController {
 
     if (this.#media) {
       await this.detachAttachedMedia();
-      if (this.#destroyed || generation !== this.#mediaRequestGeneration)
-        return;
+      if (this.#destroyed || generation !== this.#mediaRequestGeneration) return;
     }
 
     try {
@@ -725,10 +653,7 @@ export class PlayerController {
     this.settleAttachedMedia(media, generation);
   }
 
-  private settleAttachedMedia(
-    media: HTMLVideoElement,
-    generation: number,
-  ): void {
+  private settleAttachedMedia(media: HTMLVideoElement, generation: number): void {
     if (
       this.#destroyed ||
       generation !== this.#mediaRequestGeneration ||
@@ -738,22 +663,10 @@ export class PlayerController {
     ) {
       return;
     }
-    media.removeEventListener(
-      "enterpictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    media.removeEventListener(
-      "leavepictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    media.addEventListener(
-      "enterpictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    media.addEventListener(
-      "leavepictureinpicture",
-      this.handlePictureInPictureChange,
-    );
+    media.removeEventListener("enterpictureinpicture", this.handlePictureInPictureChange);
+    media.removeEventListener("leavepictureinpicture", this.handlePictureInPictureChange);
+    media.addEventListener("enterpictureinpicture", this.handlePictureInPictureChange);
+    media.addEventListener("leavepictureinpicture", this.handlePictureInPictureChange);
     this.#settledMediaGeneration = generation;
     this.flushPendingMediaProperties();
     this.syncCapabilities();
@@ -764,14 +677,8 @@ export class PlayerController {
   private async detachAttachedMedia(): Promise<void> {
     const media = this.#media;
     if (!media || !this.#mediaAttached) return;
-    media.removeEventListener(
-      "enterpictureinpicture",
-      this.handlePictureInPictureChange,
-    );
-    media.removeEventListener(
-      "leavepictureinpicture",
-      this.handlePictureInPictureChange,
-    );
+    media.removeEventListener("enterpictureinpicture", this.handlePictureInPictureChange);
+    media.removeEventListener("leavepictureinpicture", this.handlePictureInPictureChange);
     this.#media = null;
     this.#mediaAttached = false;
     this.#settledMediaGeneration = 0;

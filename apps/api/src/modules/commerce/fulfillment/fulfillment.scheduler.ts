@@ -20,15 +20,9 @@ export interface FulfillmentSchedulerOptions {
  */
 export class CommerceFulfillmentScheduler {
   private readonly logger?: FastifyBaseLogger;
-  private readonly orderExpirationWorker: ReturnType<
-    typeof createOrderExpirationWorker
-  >;
-  private readonly paymentRecoveryWorker: ReturnType<
-    typeof createPaymentRecoveryWorker
-  >;
-  private readonly refundReconciliationWorker: ReturnType<
-    typeof createRefundReconciliationWorker
-  >;
+  private readonly orderExpirationWorker: ReturnType<typeof createOrderExpirationWorker>;
+  private readonly paymentRecoveryWorker: ReturnType<typeof createPaymentRecoveryWorker>;
+  private readonly refundReconciliationWorker: ReturnType<typeof createRefundReconciliationWorker>;
   private readonly intervalMs: number;
   private timer: NodeJS.Timeout | null = null;
   private initialTimer: NodeJS.Timeout | null = null;

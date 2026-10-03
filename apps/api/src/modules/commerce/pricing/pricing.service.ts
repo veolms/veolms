@@ -1,8 +1,4 @@
-import type {
-  CartItemInput,
-  PricingCalculation,
-  CouponValidationResult,
-} from "@veolms/contracts";
+import type { CartItemInput, PricingCalculation, CouponValidationResult } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as quizRepo from "../../quizzes/shared/quiz.repository.ts";
@@ -12,10 +8,7 @@ import * as courseConfigRepo from "../../courses/configuration/configuration.rep
 import * as bundleRepo from "../bundles/bundle.repository.ts";
 import * as couponRepo from "../coupons/coupon.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
-import {
-  computeCouponDiscount,
-  resolveCourseCharge,
-} from "./pricing.amount.ts";
+import { computeCouponDiscount, resolveCourseCharge } from "./pricing.amount.ts";
 import { resolveQuizCharge } from "./quiz-pricing.amount.ts";
 
 export interface CalculatePricingParams {
@@ -59,11 +52,7 @@ export interface PricingService {
   }): Promise<QuizPricingResult>;
 }
 
-export function createPricingService({
-  database,
-}: {
-  database: Executor;
-}): PricingService {
+export function createPricingService({ database }: { database: Executor }): PricingService {
   async function calculateQuizPricing(params: {
     userId?: string | null;
     quizAssignmentId: string;
@@ -76,10 +65,7 @@ export function createPricingService({
       database,
       params.quizAssignmentId,
     );
-    if (
-      !offering ||
-      (params.courseId && offering.course_id !== params.courseId)
-    ) {
+    if (!offering || (params.courseId && offering.course_id !== params.courseId)) {
       throw CommerceErrors.QUIZ_NOT_FOUND(params.quizAssignmentId);
     }
     // Unpublished courses are only visible to their creator and admins.
@@ -136,9 +122,7 @@ export function createPricingService({
 
     // 1. Fetch user enrollments if authenticated to prevent duplicate ownership
     const enrolledCourseIds = userId
-      ? new Set(
-          await enrollmentRepo.listUserEnrolledCourseIds(database, userId),
-        )
+      ? new Set(await enrollmentRepo.listUserEnrolledCourseIds(database, userId))
       : new Set<string>();
 
     const calculatedItems: Array<{
@@ -161,18 +145,10 @@ export function createPricingService({
 
     // 2. Authoritatively resolve every item from DB (courses / bundles / quizzes).
     const courseIds = [
-      ...new Set(
-        items
-          .filter((it) => it.itemType === "course")
-          .map((it) => it.courseId!),
-      ),
+      ...new Set(items.filter((it) => it.itemType === "course").map((it) => it.courseId!)),
     ];
     const bundleIds = [
-      ...new Set(
-        items
-          .filter((it) => it.itemType === "bundle")
-          .map((it) => it.bundleId!),
-      ),
+      ...new Set(items.filter((it) => it.itemType === "bundle").map((it) => it.bundleId!)),
     ];
     const quizPricingIds: string[] = [];
     const seenQuizPricingIds = new Set<string>();
@@ -188,14 +164,13 @@ export function createPricingService({
       }
     }
 
-    const [courseRows, pricingRows, bundleRows, bundleCourseRows, quizRows] =
-      await Promise.all([
-        courseRepo.findCoursesByIds(database, courseIds),
-        courseConfigRepo.findPricingByCourseIds(database, courseIds),
-        bundleRepo.findBundlesByIds(database, bundleIds),
-        bundleRepo.listBundleCoursesForBundleIds(database, bundleIds),
-        quizPricingRepo.listOfferingsByPricingIds(database, quizPricingIds),
-      ]);
+    const [courseRows, pricingRows, bundleRows, bundleCourseRows, quizRows] = await Promise.all([
+      courseRepo.findCoursesByIds(database, courseIds),
+      courseConfigRepo.findPricingByCourseIds(database, courseIds),
+      bundleRepo.findBundlesByIds(database, bundleIds),
+      bundleRepo.listBundleCoursesForBundleIds(database, bundleIds),
+      quizPricingRepo.listOfferingsByPricingIds(database, quizPricingIds),
+    ]);
 
     const coursesById = new Map(courseRows.map((c) => [c.id, c]));
     const pricingByCourseId = new Map(pricingRows.map((p) => [p.course_id, p]));
@@ -223,9 +198,7 @@ export function createPricingService({
         }
 
         const pricing = pricingByCourseId.get(courseId);
-        const isPaidCourse = Boolean(
-          pricing && pricing.pricing_type === "paid",
-        );
+        const isPaidCourse = Boolean(pricing && pricing.pricing_type === "paid");
         const catalogPrice =
           isPaidCourse && pricing
             ? pricing.sale_price !== null && pricing.sale_price !== undefined
@@ -276,8 +249,7 @@ export function createPricingService({
 
         // Check if student already owns ALL courses in bundle
         const allOwned =
-          bundleCourseIds.length > 0 &&
-          bundleCourseIds.every((cid) => enrolledCourseIds.has(cid));
+          bundleCourseIds.length > 0 && bundleCourseIds.every((cid) => enrolledCourseIds.has(cid));
 
         if (allOwned) {
           throw CommerceErrors.BUNDLE_ALL_COURSES_OWNED(bundle.title);
@@ -333,14 +305,9 @@ export function createPricingService({
           }
           const hasCourseAccess =
             enrolledCourseIds.has(offering.course_id) ||
-            (await quizRepo.isPublishedFreeCourse(
-              database,
-              offering.course_id,
-            ));
+            (await quizRepo.isPublishedFreeCourse(database, offering.course_id));
           if (!hasCourseAccess) {
-            throw CommerceErrors.QUIZ_COURSE_ACCESS_REQUIRED(
-              offering.course_title,
-            );
+            throw CommerceErrors.QUIZ_COURSE_ACCESS_REQUIRED(offering.course_title);
           }
         }
 
@@ -390,26 +357,14 @@ export function createPricingService({
       if (new Date(coupon.expires_at) < now) {
         throw CommerceErrors.COUPON_EXPIRED(codeUpper);
       }
-      const catalogSubtotal = calculatedItems.reduce(
-        (sum, it) => sum + it.couponBase,
-        0,
-      );
+      const catalogSubtotal = calculatedItems.reduce((sum, it) => sum + it.couponBase, 0);
       if (catalogSubtotal < coupon.min_order_amount) {
-        throw CommerceErrors.COUPON_MIN_ORDER_NOT_MET(
-          codeUpper,
-          coupon.min_order_amount,
-        );
+        throw CommerceErrors.COUPON_MIN_ORDER_NOT_MET(codeUpper, coupon.min_order_amount);
       }
 
       // Check global limit
-      if (
-        coupon.global_usage_limit !== null &&
-        coupon.global_usage_limit !== undefined
-      ) {
-        const globalUsed = await couponRepo.countCouponRedemptionsGlobal(
-          database,
-          coupon.id,
-        );
+      if (coupon.global_usage_limit !== null && coupon.global_usage_limit !== undefined) {
+        const globalUsed = await couponRepo.countCouponRedemptionsGlobal(database, coupon.id);
         if (globalUsed >= coupon.global_usage_limit) {
           throw CommerceErrors.COUPON_USAGE_LIMIT_REACHED(codeUpper);
         }
@@ -417,11 +372,7 @@ export function createPricingService({
 
       // Check per-user limit
       if (userId && coupon.per_user_limit) {
-        const userUsed = await couponRepo.countCouponRedemptionsByUser(
-          database,
-          coupon.id,
-          userId,
-        );
+        const userUsed = await couponRepo.countCouponRedemptionsByUser(database, coupon.id, userId);
         if (userUsed >= coupon.per_user_limit) {
           throw CommerceErrors.COUPON_USER_LIMIT_REACHED(codeUpper);
         }
@@ -441,19 +392,13 @@ export function createPricingService({
             isEligible = false;
           }
         }
-        if (
-          coupon.restricted_course_ids &&
-          coupon.restricted_course_ids.length > 0
-        ) {
+        if (coupon.restricted_course_ids && coupon.restricted_course_ids.length > 0) {
           const restricted = new Set(coupon.restricted_course_ids);
           if (item.itemType === "course" && !restricted.has(item.itemId)) {
             isEligible = false;
           }
         }
-        if (
-          coupon.restricted_bundle_ids &&
-          coupon.restricted_bundle_ids.length > 0
-        ) {
+        if (coupon.restricted_bundle_ids && coupon.restricted_bundle_ids.length > 0) {
           const restricted = new Set(coupon.restricted_bundle_ids);
           if (item.itemType === "bundle" && !restricted.has(item.itemId)) {
             isEligible = false;
@@ -485,9 +430,7 @@ export function createPricingService({
         if (i === eligibleItems.length - 1) {
           it.discountAmount = remainingDiscountToDistribute;
         } else {
-          const itemDiscount = Math.floor(
-            (it.couponBase / eligibleSubtotal) * totalDiscount,
-          );
+          const itemDiscount = Math.floor((it.couponBase / eligibleSubtotal) * totalDiscount);
           it.discountAmount = itemDiscount;
           remainingDiscountToDistribute -= itemDiscount;
         }

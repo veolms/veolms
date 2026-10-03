@@ -14,9 +14,7 @@ interface PendingSectionAnchor {
 
 function getTransitionTimeMs(element: HTMLElement) {
   const styles = window.getComputedStyle(element);
-  const durations = styles.transitionDuration
-    .split(",")
-    .map((value) => value.trim());
+  const durations = styles.transitionDuration.split(",").map((value) => value.trim());
   const delays = styles.transitionDelay.split(",").map((value) => value.trim());
   const toMilliseconds = (value: string) => {
     const parsed = Number.parseFloat(value);
@@ -60,8 +58,7 @@ export function useCurriculumSectionScrollAnchor(
     }
 
     const currentTop =
-      pending.header.getBoundingClientRect().top -
-      pending.scrollport.getBoundingClientRect().top;
+      pending.header.getBoundingClientRect().top - pending.scrollport.getBoundingClientRect().top;
     const offsetDelta = currentTop - pending.top;
     if (Math.abs(offsetDelta) > 1) {
       pending.scrollport.scrollTop += offsetDelta;
@@ -69,11 +66,7 @@ export function useCurriculumSectionScrollAnchor(
   }, [clearPendingAnchor, isSectionExpanded]);
 
   const prepareSectionChange = useCallback(
-    (
-      sectionId: number,
-      collapsingSectionIds: readonly number[],
-      header: HTMLElement | null,
-    ) => {
+    (sectionId: number, collapsingSectionIds: readonly number[], header: HTMLElement | null) => {
       clearPendingAnchor();
       const scrollport = scrollportRef.current;
       if (!header || !scrollport || collapsingSectionIds.length === 0) return;
@@ -83,9 +76,7 @@ export function useCurriculumSectionScrollAnchor(
         collapsingSectionIds: new Set(collapsingSectionIds),
         header,
         scrollport,
-        top:
-          header.getBoundingClientRect().top -
-          scrollport.getBoundingClientRect().top,
+        top: header.getBoundingClientRect().top - scrollport.getBoundingClientRect().top,
         animationFrameId: 0,
         timeoutId: 0,
         cleanup: () => {},
@@ -110,13 +101,9 @@ export function useCurriculumSectionScrollAnchor(
       pending.animationFrameId = window.requestAnimationFrame(() => {
         if (pendingAnchorRef.current !== pending) return;
         const collapsingPanels = Array.from(
-          scrollport.querySelectorAll<HTMLElement>(
-            "[data-curriculum-section-panel]",
-          ),
+          scrollport.querySelectorAll<HTMLElement>("[data-curriculum-section-panel]"),
         ).filter((panel) =>
-          pending.collapsingSectionIds.has(
-            Number(panel.dataset.curriculumSectionPanel),
-          ),
+          pending.collapsingSectionIds.has(Number(panel.dataset.curriculumSectionPanel)),
         );
         const transitionTime = collapsingPanels.reduce(
           (maximum, panel) => Math.max(maximum, getTransitionTimeMs(panel)),

@@ -12,10 +12,7 @@ export const inputClass =
 /**
  * Formats an amount in paise (smallest currency unit) to standard currency string (e.g. ₹1,24,500 or ₹2,999).
  */
-export function formatCurrency(
-  amountInSmallestUnit: number,
-  currency: string = "INR",
-): string {
+export function formatCurrency(amountInSmallestUnit: number, currency: string = "INR"): string {
   const value = Math.round(amountInSmallestUnit / 100);
   return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
     style: "currency",
@@ -63,9 +60,7 @@ export function formatOrderDate(dateValue: string | Date | null | undefined): {
 /**
  * Formats detailed placement timestamp (e.g. Placed on Jun 4, 2025 at 10:24 AM).
  */
-export function formatFullPlacedDate(
-  dateValue: string | Date | null | undefined,
-): string {
+export function formatFullPlacedDate(dateValue: string | Date | null | undefined): string {
   if (!dateValue) return "—";
   const d = typeof dateValue === "string" ? new Date(dateValue) : dateValue;
   if (Number.isNaN(d.getTime())) return "—";
@@ -194,11 +189,7 @@ export function getCourseBrandBadge(title: string = ""): BrandBadge {
       borderColor: "rgba(242, 78, 30, 0.3)",
     };
   }
-  if (
-    lower.includes("sql") ||
-    lower.includes("postgres") ||
-    lower.includes("database")
-  ) {
+  if (lower.includes("sql") || lower.includes("postgres") || lower.includes("database")) {
     return { label: "PG", bgColor: "#0284c7", textColor: "#ffffff" };
   }
 
@@ -218,10 +209,7 @@ export function getCourseBrandBadge(title: string = ""): BrandBadge {
   };
 }
 
-export function getStudentInitials(
-  name?: string | null,
-  username?: string | null,
-): string {
+export function getStudentInitials(name?: string | null, username?: string | null): string {
   const source = name || username || "S";
   return source
     .split(/\s+/)

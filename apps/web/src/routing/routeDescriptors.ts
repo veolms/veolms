@@ -6,10 +6,7 @@ import {
   readSettingsTab,
   resolveSessionTabPath,
 } from "./tabSessionState";
-import {
-  isCourseCreateEditorPath,
-  isCourseEditEditorPath,
-} from "../courses/courseEditorRouting";
+import { isCourseCreateEditorPath, isCourseEditEditorPath } from "../courses/courseEditorRouting";
 import { getCatalogueRouteIdFromPath } from "../courses/catalogueRoutes";
 
 export const productName = "ProCodrr";
@@ -63,9 +60,7 @@ export interface CourseOverviewRouteDescriptor {
 }
 
 export type RouteDescriptor =
-  | ShellRouteDescriptor
-  | LearningRouteDescriptor
-  | CourseOverviewRouteDescriptor;
+  ShellRouteDescriptor | LearningRouteDescriptor | CourseOverviewRouteDescriptor;
 
 const discussionsRouteBase = {
   kind: "shell",
@@ -86,15 +81,13 @@ export const routeDescriptors = {
     kind: "shell",
     page: "home",
     title: "Home",
-    description:
-      "Continue learning and review recent student activity in ProCodrr.",
+    description: "Continue learning and review recent student activity in ProCodrr.",
   },
   "home-alias": {
     kind: "shell",
     page: "home",
     title: "Home",
-    description:
-      "Continue learning and review recent student activity in ProCodrr.",
+    description: "Continue learning and review recent student activity in ProCodrr.",
   },
   dashboard: {
     kind: "shell",
@@ -245,8 +238,7 @@ export const routeDescriptors = {
     page: "analytics",
     section: "Analytics",
     title: "Analytics",
-    description:
-      "Understand learning activity, engagement, and academy performance.",
+    description: "Understand learning activity, engagement, and academy performance.",
   },
   orders: {
     kind: "shell",
@@ -373,8 +365,7 @@ export const routeDescriptors = {
     kind: "shell",
     page: "home",
     title: "Home",
-    description:
-      "Continue learning and review recent student activity in ProCodrr.",
+    description: "Continue learning and review recent student activity in ProCodrr.",
   },
 } as const satisfies Record<string, ShellRouteDescriptor>;
 
@@ -488,13 +479,9 @@ const hasOwn = <ObjectType extends object>(
   key: PropertyKey,
 ): key is keyof ObjectType => Object.prototype.hasOwnProperty.call(value, key);
 
-export const normalizeNavigationPath = (path: string) =>
-  String(path).replace(/\/+$/, "") || "/";
+export const normalizeNavigationPath = (path: string) => String(path).replace(/\/+$/, "") || "/";
 
-export const getEffectiveRouteId = (
-  routeId: string,
-  pathname: string,
-): string => {
+export const getEffectiveRouteId = (routeId: string, pathname: string): string => {
   const normalizedPath = normalizeNavigationPath(pathname);
   const catalogueRouteId = getCatalogueRouteIdFromPath(normalizedPath);
   if (catalogueRouteId) return catalogueRouteId;
@@ -510,9 +497,7 @@ export const getEffectiveRouteId = (
 
   if (routeId === "learning" || routeId === "legacy-learning") {
     const routePrefix = routeId === "learning" ? "learn" : "courses";
-    const match = new RegExp(`^/${routePrefix}/([^/]+)(?:/([^/]+))?$`).exec(
-      normalizedPath,
-    );
+    const match = new RegExp(`^/${routePrefix}/([^/]+)(?:/([^/]+))?$`).exec(normalizedPath);
     const encodedSlug = match?.[1];
     if (!encodedSlug) return "home-fallback";
     try {
@@ -537,27 +522,19 @@ export const getEffectiveRouteId = (
   }
 
   if (routeId === "quiz-edit") {
-    return /^\/quizzes\/[^/]+$/.test(normalizedPath)
-      ? routeId
-      : "home-fallback";
+    return /^\/quizzes\/[^/]+$/.test(normalizedPath) ? routeId : "home-fallback";
   }
 
   if (routeId === "coupon-edit") {
-    return /^\/coupons\/[^/]+$/.test(normalizedPath)
-      ? routeId
-      : "home-fallback";
+    return /^\/coupons\/[^/]+$/.test(normalizedPath) ? routeId : "home-fallback";
   }
 
   if (routeId === "quiz-attempt") {
-    return /^\/quizzes\/attempt\/[^/]+$/.test(normalizedPath)
-      ? routeId
-      : "home-fallback";
+    return /^\/quizzes\/attempt\/[^/]+$/.test(normalizedPath) ? routeId : "home-fallback";
   }
 
   if (routeId === "student-details") {
-    return /^\/students\/[^/]+$/.test(normalizedPath)
-      ? routeId
-      : "home-fallback";
+    return /^\/students\/[^/]+$/.test(normalizedPath) ? routeId : "home-fallback";
   }
 
   if (routeId === "public-profile") {
@@ -578,8 +555,7 @@ export const getEffectiveRouteId = (
   }
 
   if (routeId === "course-create-tab") {
-    return isCourseCreateEditorPath(normalizedPath) &&
-      normalizedPath !== "/courses/create"
+    return isCourseCreateEditorPath(normalizedPath) && normalizedPath !== "/courses/create"
       ? routeId
       : "home-fallback";
   }
@@ -595,12 +571,9 @@ export const getEffectiveRouteId = (
   return "home-fallback";
 };
 
-export const getRouteDescriptor = (
-  routeId: string,
-): RouteDescriptor | undefined => {
+export const getRouteDescriptor = (routeId: string): RouteDescriptor | undefined => {
   if (routeId === "course-overview") return courseOverviewDescriptor;
-  if (routeId === "learning" || routeId === "legacy-learning")
-    return learningDescriptor;
+  if (routeId === "learning" || routeId === "legacy-learning") return learningDescriptor;
   if (routeId === "settings") {
     return { ...routeDescriptors.settings, settingsTab: readSettingsTab() };
   }
@@ -610,9 +583,7 @@ export const getRouteDescriptor = (
       discussionTab: readDiscussionTab(),
     };
   }
-  return hasOwn(routeDescriptors, routeId)
-    ? routeDescriptors[routeId as StaticRouteId]
-    : undefined;
+  return hasOwn(routeDescriptors, routeId) ? routeDescriptors[routeId as StaticRouteId] : undefined;
 };
 
 interface MatchIdentity {
@@ -643,10 +614,7 @@ export const getMatchedRouteDescriptor = (
   for (let index = matches.length - 1; index >= 0; index -= 1) {
     const match = matches[index];
     if (!match) continue;
-    const routeId =
-      pathname === undefined
-        ? match.id
-        : getEffectiveRouteId(match.id, pathname);
+    const routeId = pathname === undefined ? match.id : getEffectiveRouteId(match.id, pathname);
     const descriptor = getRouteDescriptor(routeId);
     if (descriptor) return descriptor;
   }
@@ -666,10 +634,7 @@ export interface RouteMetadata {
   description: string;
 }
 
-export const getAuthRouteMeta = (
-  title: string,
-  description: string,
-): RouteMetadata => ({
+export const getAuthRouteMeta = (title: string, description: string): RouteMetadata => ({
   title: `${title} · ${productName}`,
   description,
 });
@@ -703,10 +668,7 @@ export const getRouteMeta = (
   const matchedDescriptor = effectiveRouteId
     ? (getRouteDescriptor(effectiveRouteId) ?? routeDescriptors.home)
     : routeDescriptors.home;
-  const descriptor =
-    matchedDescriptor.kind === "shell"
-      ? matchedDescriptor
-      : routeDescriptors.home;
+  const descriptor = matchedDescriptor.kind === "shell" ? matchedDescriptor : routeDescriptors.home;
   return {
     title: `${descriptor.title} \u00B7 ${productName}`,
     description: descriptor.description,

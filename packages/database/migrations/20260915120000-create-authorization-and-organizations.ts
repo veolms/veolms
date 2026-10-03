@@ -35,9 +35,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn("permission_key", "text", (c) => c.notNull().unique())
     .addColumn("domain", "text", (c) => c.notNull())
     .addColumn("description", "text", (c) => c.notNull())
-    .addColumn("created_at", "timestamptz", (c) =>
-      c.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
-    )
+    .addColumn("created_at", "timestamptz", (c) => c.notNull().defaultTo(sql`CURRENT_TIMESTAMP`))
     .execute();
 
   // 4. Extend roles table with is_system
@@ -57,21 +55,13 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
     .createTable("role_permissions")
     .ifNotExists()
-    .addColumn("role_id", "uuid", (c) =>
-      c.notNull().references("roles.id").onDelete("cascade"),
-    )
+    .addColumn("role_id", "uuid", (c) => c.notNull().references("roles.id").onDelete("cascade"))
     .addColumn("permission_id", "uuid", (c) =>
       c.notNull().references("permissions.id").onDelete("cascade"),
     )
     .addColumn("effect", "text", (c) => c.notNull().defaultTo("allow"))
-    .addPrimaryKeyConstraint("role_permissions_pkey", [
-      "role_id",
-      "permission_id",
-    ])
-    .addCheckConstraint(
-      "role_permissions_effect_check",
-      sql`effect IN ('allow', 'deny')`,
-    )
+    .addPrimaryKeyConstraint("role_permissions_pkey", ["role_id", "permission_id"])
+    .addCheckConstraint("role_permissions_effect_check", sql`effect IN ('allow', 'deny')`)
     .execute();
 
   // 6. Create scoped role_assignments table (Platform / Course scopes)
@@ -79,23 +69,13 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .createTable("role_assignments")
     .ifNotExists()
     .addColumn("id", "uuid", (c) => c.primaryKey())
-    .addColumn("user_id", "uuid", (c) =>
-      c.notNull().references("users.id").onDelete("cascade"),
-    )
-    .addColumn("role_id", "uuid", (c) =>
-      c.notNull().references("roles.id").onDelete("cascade"),
-    )
+    .addColumn("user_id", "uuid", (c) => c.notNull().references("users.id").onDelete("cascade"))
+    .addColumn("role_id", "uuid", (c) => c.notNull().references("roles.id").onDelete("cascade"))
     .addColumn("scope_type", "text", (c) => c.notNull())
-    .addColumn("course_id", "uuid", (c) =>
-      c.references("courses.id").onDelete("cascade"),
-    )
+    .addColumn("course_id", "uuid", (c) => c.references("courses.id").onDelete("cascade"))
     .addColumn("expires_at", "timestamptz")
-    .addColumn("created_by", "uuid", (c) =>
-      c.references("users.id").onDelete("set null"),
-    )
-    .addColumn("created_at", "timestamptz", (c) =>
-      c.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
-    )
+    .addColumn("created_by", "uuid", (c) => c.references("users.id").onDelete("set null"))
+    .addColumn("created_at", "timestamptz", (c) => c.notNull().defaultTo(sql`CURRENT_TIMESTAMP`))
     .addCheckConstraint(
       "role_assignments_scope_type_check",
       sql`scope_type IN ('platform', 'course')`,
@@ -130,9 +110,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn("feature_key", "text", (c) => c.primaryKey())
     .addColumn("description", "text", (c) => c.notNull())
     .addColumn("enabled", "boolean", (c) => c.notNull().defaultTo(true))
-    .addColumn("created_at", "timestamptz", (c) =>
-      c.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
-    )
+    .addColumn("created_at", "timestamptz", (c) => c.notNull().defaultTo(sql`CURRENT_TIMESTAMP`))
     .execute();
 }
 

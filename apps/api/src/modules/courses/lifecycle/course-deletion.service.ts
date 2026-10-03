@@ -6,17 +6,13 @@ import type { S3StorageService } from "@veolms/storage";
 import type { Course, DeletedCoursesQuery } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import * as courseRepo from "../course/course.repository.ts";
-import {
-  createMediaRetentionService,
-  type MediaRetentionService,
-} from "../../media/index.ts";
+import { createMediaRetentionService, type MediaRetentionService } from "../../media/index.ts";
 import { ADMIN_ROLE, INSTRUCTOR_ROLE } from "../../auth/index.ts";
 import * as deletionRepo from "./course-deletion.repository.ts";
 
 export const COURSE_DELETION_RETENTION_DAYS = 30;
 export const COURSE_DELETION_BATCH_SIZE = 100;
-const COURSE_DELETION_RETENTION_MS =
-  COURSE_DELETION_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const COURSE_DELETION_RETENTION_MS = COURSE_DELETION_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 const COURSE_DELETION_LEASE_MS = 15 * 60 * 1000;
 const COURSE_DELETION_MAX_BACKOFF_MS = 60 * 60 * 1000;
 
@@ -97,11 +93,7 @@ export function createCourseDeletionService({
     userRoles?: readonly string[],
   ) {
     const result = await database.transaction().execute(async (trx) => {
-      const course = await deletionRepo.findCourseIncludingDeleted(
-        trx,
-        courseId,
-        true,
-      );
+      const course = await deletionRepo.findCourseIncludingDeleted(trx, courseId, true);
 
       if (!course) {
         throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
@@ -120,11 +112,7 @@ export function createCourseDeletionService({
       const updated = await courseRepo.softDeleteCourse(trx, courseId, now);
 
       if (updated.numUpdatedRows === 0n) {
-        throw new AppError(
-          409,
-          "COURSE_STATE_CHANGED",
-          "Course was already deleted.",
-        );
+        throw new AppError(409, "COURSE_STATE_CHANGED", "Course was already deleted.");
       }
 
       await deletionRepo.insertCourseDeletionJob(trx, {
@@ -184,35 +172,20 @@ export function createCourseDeletionService({
       );
     }
     if (!result.course) {
-      throw new AppError(
-        404,
-        "DELETED_COURSE_NOT_FOUND",
-        "Deleted course not found.",
-      );
+      throw new AppError(404, "DELETED_COURSE_NOT_FOUND", "Deleted course not found.");
     }
 
     return { course: toCourseResponse(result.course) };
   }
 
-  async function prepareCoursePurge(
-    jobId: string,
-    courseId: string,
-    now: Date,
-  ) {
+  async function prepareCoursePurge(jobId: string, courseId: string, now: Date) {
     return await database.transaction().execute(async (trx) => {
-      const job = await deletionRepo.findCourseDeletionJobForUpdate(
-        trx,
-        courseId,
-      );
+      const job = await deletionRepo.findCourseDeletionJobForUpdate(trx, courseId);
       if (!job || job.id !== jobId || job.status !== "processing") {
         return false;
       }
 
-      const course = await deletionRepo.findCourseIncludingDeleted(
-        trx,
-        courseId,
-        true,
-      );
+      const course = await deletionRepo.findCourseIncludingDeleted(trx, courseId, true);
       if (!course || !course.deleted_at || job.scheduled_for > now) {
         return false;
       }
@@ -220,37 +193,21 @@ export function createCourseDeletionService({
       // Lock media rows before checking references. Existing foreign-key
       // writes that try to attach one of these assets will wait, then fail if
       // this transaction removes an unshared asset.
-      const mediaIds = await deletionRepo.listCourseMediaAssetIds(
-        trx,
-        courseId,
-      );
-      const lockedMedia = await mediaRetentionService.getMediaAssetsForDeletion(
-        mediaIds,
-        trx,
-      );
+      const mediaIds = await deletionRepo.listCourseMediaAssetIds(trx, courseId);
+      const lockedMedia = await mediaRetentionService.getMediaAssetsForDeletion(mediaIds, trx);
       const lockedMediaIds = lockedMedia.map((media) => media.id);
       const sharedMediaIds = new Set(
-        await deletionRepo.findMediaAssetIdsReferencedByOtherCourses(
-          trx,
-          lockedMediaIds,
-          courseId,
-        ),
+        await deletionRepo.findMediaAssetIdsReferencedByOtherCourses(trx, lockedMediaIds, courseId),
       );
-      const removableMediaIds = lockedMediaIds.filter(
-        (mediaId) => !sharedMediaIds.has(mediaId),
-      );
+      const removableMediaIds = lockedMediaIds.filter((mediaId) => !sharedMediaIds.has(mediaId));
 
       if (removableMediaIds.length > 0) {
-        const storageObjects =
-          await mediaRetentionService.getStorageObjectsForMedia(
-            removableMediaIds,
-            trx,
-          );
+        const storageObjects = await mediaRetentionService.getStorageObjectsForMedia(
+          removableMediaIds,
+          trx,
+        );
         const uniqueStorageObjects = new Map(
-          storageObjects.map((object) => [
-            `${object.deleteMode}:${object.storageKey}`,
-            object,
-          ]),
+          storageObjects.map((object) => [`${object.deleteMode}:${object.storageKey}`, object]),
         );
 
         await deletionRepo.insertCourseDeletionStorageItems(
@@ -272,13 +229,7 @@ export function createCourseDeletionService({
     });
   }
 
-  async function purgeStorageItems({
-    now,
-    batchSize,
-  }: {
-    now: Date;
-    batchSize: number;
-  }) {
+  async function purgeStorageItems({ now, batchSize }: { now: Date; batchSize: number }) {
     const claimedItems = await deletionRepo.claimDueCourseDeletionStorageItems(
       database,
       now,
@@ -341,9 +292,7 @@ export function createCourseDeletionService({
         }
       } catch (error) {
         failed++;
-        const nextAttemptAt = new Date(
-          now.getTime() + getRetryDelayMs(job.attempt_count),
-        );
+        const nextAttemptAt = new Date(now.getTime() + getRetryDelayMs(job.attempt_count));
         await deletionRepo.markCourseDeletionJobFailed(
           database,
           job.id,
@@ -372,6 +321,4 @@ export function createCourseDeletionService({
   };
 }
 
-export type CourseDeletionService = ReturnType<
-  typeof createCourseDeletionService
->;
+export type CourseDeletionService = ReturnType<typeof createCourseDeletionService>;

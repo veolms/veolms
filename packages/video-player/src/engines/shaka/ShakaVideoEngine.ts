@@ -71,18 +71,10 @@ function variantMatchesAudioTrack(
   variant: ShakaVariantTrackLike,
   audio: ShakaAudioTrackLike,
 ): boolean {
-  if (
-    variant.audioId != null &&
-    audio.id != null &&
-    String(variant.audioId) !== String(audio.id)
-  ) {
+  if (variant.audioId != null && audio.id != null && String(variant.audioId) !== String(audio.id)) {
     return false;
   }
-  if (
-    variant.language &&
-    audio.language &&
-    variant.language !== audio.language
-  ) {
+  if (variant.language && audio.language && variant.language !== audio.language) {
     return false;
   }
   if (!hasSameRoles(variant.audioRoles, audio.roles)) return false;
@@ -102,9 +94,7 @@ function variantsForSelectedAudio(
 ): ShakaVariantTrackLike[] {
   const activeAudio = audioTracks.find((track) => track.active);
   const matching = activeAudio
-    ? variants.filter((variant) =>
-        variantMatchesAudioTrack(variant, activeAudio),
-      )
+    ? variants.filter((variant) => variantMatchesAudioTrack(variant, activeAudio))
     : [...variants];
   const candidates = matching.length > 0 ? matching : [...variants];
   const byVisualQuality = new Map<string, ShakaVariantTrackLike>();
@@ -134,12 +124,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   readonly #textTracks = new Map<string, ShakaTextTrackLike>();
   #runtime: ShakaRuntimeLike | null = null;
   #player: ShakaPlayerLike | null = null;
-  #requestFilter: ReturnType<
-    typeof createShakaNetworkingFilters
-  >["requestFilter"] = null;
-  #responseFilter: ReturnType<
-    typeof createShakaNetworkingFilters
-  >["responseFilter"] = null;
+  #requestFilter: ReturnType<typeof createShakaNetworkingFilters>["requestFilter"] = null;
+  #responseFilter: ReturnType<typeof createShakaNetworkingFilters>["responseFilter"] = null;
   #adoptedPreloadSession: EarlyShakaPreloadSession | null = null;
   #autoQuality = true;
   #selectedTextTrackId: string | null = null;
@@ -156,16 +142,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       ...base,
       browserSupported: this.#browserSupported ?? base.browserSupported,
       adaptiveStreaming: true,
-      drm:
-        typeof navigator !== "undefined" &&
-        "requestMediaKeySystemAccess" in navigator,
+      drm: typeof navigator !== "undefined" && "requestMediaKeySystemAccess" in navigator,
     };
   }
 
-  async load(
-    source: VideoSource,
-    options: VideoLoadOptions = {},
-  ): Promise<void> {
+  async load(source: VideoSource, options: VideoLoadOptions = {}): Promise<void> {
     this.requireMedia();
     const player = this.requirePlayer();
     const runtime = this.requireRuntime();
@@ -225,9 +206,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       }
 
       const existing = this.getSnapshot().error;
-      const normalized =
-        existing ??
-        this.normalizeShakaError(error, "SHAKA_LOAD_FAILED", "SOURCE");
+      const normalized = existing ?? this.normalizeShakaError(error, "SHAKA_LOAD_FAILED", "SOURCE");
       if (!existing) {
         this.emitError(normalized, normalized.fatal);
       }
@@ -253,11 +232,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       if (!this.isCurrentOperation(generation)) {
         return;
       }
-      const normalized = this.normalizeShakaError(
-        error,
-        "SHAKA_UNLOAD_FAILED",
-        "PLAYER",
-      );
+      const normalized = this.normalizeShakaError(error, "SHAKA_UNLOAD_FAILED", "PLAYER");
       this.emitError(normalized);
       throw normalized;
     }
@@ -293,8 +268,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     player.configure({ abr: { enabled: true } });
     this.#autoQuality = true;
     this.refreshTracks(false);
-    const active =
-      this.getQualities().find((quality) => quality.active) ?? null;
+    const active = this.getQualities().find((quality) => quality.active) ?? null;
     this.setTrackState({
       autoQuality: true,
       selectedQualityId: active?.id ?? null,
@@ -315,8 +289,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
 
     player.selectAudioTrack(track);
     this.refreshTracks(false);
-    const selected =
-      this.getAudioTracks().find((item) => item.id === id) ?? null;
+    const selected = this.getAudioTracks().find((item) => item.id === id) ?? null;
     this.setTrackState({ selectedAudioTrackId: id });
     this.emit("audiotrackchange", { track: selected });
   }
@@ -346,16 +319,14 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     player.selectTextTrack(track);
     player.setTextTrackVisibility?.(true);
     this.refreshTracks(false);
-    const selected =
-      this.getTextTracks().find((item) => item.id === id) ?? null;
+    const selected = this.getTextTracks().find((item) => item.id === id) ?? null;
     this.setTrackState({ selectedTextTrackId: id });
     this.emit("texttrackchange", { track: selected });
   }
 
   protected override async onAttached(media: HTMLMediaElement): Promise<void> {
     const preloadSession = await waitForEarlyShakaPreloadSession();
-    const runtime =
-      this.#runtime ?? resolveShakaRuntime(await this.#runtimeLoader());
+    const runtime = this.#runtime ?? resolveShakaRuntime(await this.#runtimeLoader());
     this.#runtime = runtime;
     runtime.polyfill.installAll();
     this.#browserSupported = runtime.Player.isBrowserSupported();
@@ -389,18 +360,14 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     await this.#player.attach(media);
   }
 
-  protected override async onDetaching(
-    _media: HTMLMediaElement,
-  ): Promise<void> {
+  protected override async onDetaching(_media: HTMLMediaElement): Promise<void> {
     this.#selectedTextTrackId = null;
     this.clearNetworkingFilters();
     this.clearTrackMaps();
     await this.#player?.detach();
   }
 
-  protected override async onDestroying(
-    _media: HTMLMediaElement | null,
-  ): Promise<void> {
+  protected override async onDestroying(_media: HTMLMediaElement | null): Promise<void> {
     this.clearNetworkingFilters();
     const player = this.#player;
     const adoptedSession = this.#adoptedPreloadSession;
@@ -443,9 +410,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     return this.#runtime;
   }
 
-  private takeMatchingPreloadSession(
-    source: VideoSource,
-  ): EarlyShakaPreloadSession | null {
+  private takeMatchingPreloadSession(source: VideoSource): EarlyShakaPreloadSession | null {
     const session = this.#adoptedPreloadSession;
     if (!session || session.consumed) {
       this.#adoptedPreloadSession = null;
@@ -503,11 +468,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     };
 
     listen("error", (event) => {
-      const error = this.normalizeShakaError(
-        event.detail,
-        "SHAKA_ERROR",
-        "UNKNOWN",
-      );
+      const error = this.normalizeShakaError(event.detail, "SHAKA_ERROR", "UNKNOWN");
       this.emitError(error, error.fatal);
     });
     listen("buffering", (event) => {
@@ -520,14 +481,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     listen("texttrackvisibilitychanged", () => this.refreshTracks(true));
     listen("adaptation", () => {
       this.refreshTracks(false);
-      const active =
-        this.getQualities().find((quality) => quality.active) ?? null;
+      const active = this.getQualities().find((quality) => quality.active) ?? null;
       this.emit("qualitychange", { quality: active, auto: true });
     });
     listen("variantchanged", () => {
       this.refreshTracks(false);
-      const active =
-        this.getQualities().find((quality) => quality.active) ?? null;
+      const active = this.getQualities().find((quality) => quality.active) ?? null;
       this.emit("qualitychange", { quality: active, auto: this.#autoQuality });
     });
     listen("abrstatuschanged", (event) => {
@@ -558,10 +517,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.clearTrackMaps();
     const qualities: VideoQuality[] = [];
     const audioTrackCandidates = player.getAudioTracks();
-    for (const track of variantsForSelectedAudio(
-      player.getVariantTracks(),
-      audioTrackCandidates,
-    )) {
+    for (const track of variantsForSelectedAudio(player.getVariantTracks(), audioTrackCandidates)) {
       const normalized = normalizeShakaQuality(track);
       qualities.push(normalized);
       this.#qualityTracks.set(normalized.id, track);
@@ -663,9 +619,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
 
     const categories = this.#runtime?.util?.Error?.Category;
-    const categoryEntries: Array<
-      [string, import("../../core/types").VideoEngineErrorCategory]
-    > = [
+    const categoryEntries: Array<[string, import("../../core/types").VideoEngineErrorCategory]> = [
       ["NETWORK", "NETWORK"],
       ["TEXT", "TEXT"],
       ["MEDIA", "MEDIA"],
@@ -675,24 +629,16 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       ["PLAYER", "PLAYER"],
     ];
     const category =
-      categoryEntries.find(
-        ([name]) => categories?.[name] === shakaError.category,
-      )?.[1] ?? fallbackCategory;
+      categoryEntries.find(([name]) => categories?.[name] === shakaError.category)?.[1] ??
+      fallbackCategory;
     const critical = this.#runtime?.util?.Error?.Severity?.CRITICAL;
     const recoverable = this.#runtime?.util?.Error?.Severity?.RECOVERABLE;
-    const isRecoverable =
-      recoverable !== undefined && shakaError.severity === recoverable;
-    const isFatal =
-      critical !== undefined
-        ? shakaError.severity === critical
-        : !isRecoverable;
+    const isRecoverable = recoverable !== undefined && shakaError.severity === recoverable;
+    const isFatal = critical !== undefined ? shakaError.severity === critical : !isRecoverable;
 
     return new VideoEngineError({
       category,
-      code:
-        shakaError.code === undefined
-          ? fallbackCode
-          : `SHAKA_${String(shakaError.code)}`,
+      code: shakaError.code === undefined ? fallbackCode : `SHAKA_${String(shakaError.code)}`,
       message:
         shakaError.message ||
         `Shaka Player failed with code ${String(shakaError.code ?? fallbackCode)}.`,

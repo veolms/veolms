@@ -183,7 +183,7 @@ export function Timeline({
         >
           <div
             data-timeline-track=""
-            className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height] duration-150 group-hover/timeline:h-1.5 group-focus-within/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5"
+            className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height] duration-150 group-focus-within/timeline:h-1.5 group-hover/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5"
           >
             {bufferedRanges.map((range) => (
               <span
@@ -217,7 +217,7 @@ export function Timeline({
           <span
             aria-hidden="true"
             data-timeline-thumb=""
-            className="absolute top-1/2 z-80 size-3 scale-100 rounded-full bg-[var(--video-player-accent,#ff7a1a)] opacity-0 shadow-[0_2px_6px_rgb(0_0_0_/_0.4)] transition-[scale,opacity] duration-200 ease-out group-data-[controls-visible=true]/timeline:opacity-100 group-hover/timeline:scale-[2] max-sm:group-hover/timeline:scale-[1.5] group-hover/timeline:opacity-100 group-focus-within/timeline:scale-[2] max-sm:group-focus-within/timeline:scale-[1.5] group-focus-within/timeline:opacity-100 group-data-[scrubbing=true]/timeline:scale-[2] max-sm:group-data-[scrubbing=true]/timeline:scale-[1.5] group-data-[scrubbing=true]/timeline:opacity-100"
+            className="absolute top-1/2 z-80 size-3 scale-100 rounded-full bg-[var(--video-player-accent,#ff7a1a)] opacity-0 shadow-[0_2px_6px_rgb(0_0_0_/_0.4)] transition-[scale,opacity] duration-200 ease-out group-focus-within/timeline:scale-[2] group-focus-within/timeline:opacity-100 group-hover/timeline:scale-[2] group-hover/timeline:opacity-100 group-data-[controls-visible=true]/timeline:opacity-100 group-data-[scrubbing=true]/timeline:scale-[2] group-data-[scrubbing=true]/timeline:opacity-100 max-sm:group-focus-within/timeline:scale-[1.5] max-sm:group-hover/timeline:scale-[1.5] max-sm:group-data-[scrubbing=true]/timeline:scale-[1.5]"
             style={{
               left: `${progress}%`,
               transformOrigin: `${progress}% 50%`,
@@ -231,9 +231,7 @@ export function Timeline({
         <button
           key={marker.id}
           type="button"
-          aria-label={
-            marker.label ?? `${marker.type} at ${formatMediaTime(marker.time)}`
-          }
+          aria-label={marker.label ?? `${marker.type} at ${formatMediaTime(marker.time)}`}
           title={marker.label}
           className="absolute top-1/2 z-20 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black/50 bg-white shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           style={{ left: `${marker.positionPercent}%` }}

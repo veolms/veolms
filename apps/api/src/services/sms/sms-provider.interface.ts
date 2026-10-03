@@ -12,11 +12,7 @@ export interface SendOtpOptions {
 export interface ISmsProvider {
   readonly name: string;
   isConfigured(): boolean;
-  sendOtp(
-    phoneNo: string,
-    otp: string,
-    options?: SendOtpOptions,
-  ): Promise<SmsProviderResult>;
+  sendOtp(phoneNo: string, otp: string, options?: SendOtpOptions): Promise<SmsProviderResult>;
   sendText(phoneNo: string, text: string): Promise<SmsProviderResult>;
 }
 

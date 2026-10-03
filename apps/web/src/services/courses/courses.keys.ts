@@ -7,13 +7,11 @@ export const courseKeys = {
   details: () => [...courseKeys.all, "detail"] as const,
   detail: (slug: string) => [...courseKeys.details(), slug] as const,
   overviews: () => [...courseKeys.all, "overview"] as const,
-  overview: (idOrSlug: string) =>
-    [...courseKeys.overviews(), idOrSlug] as const,
+  overview: (idOrSlug: string) => [...courseKeys.overviews(), idOrSlug] as const,
   editor: (id: string) => [...courseKeys.all, "editor", id] as const,
   preview: (id: string) => [...courseKeys.all, "preview", id] as const,
   validation: (id: string) => [...courseKeys.all, "validation", id] as const,
-  staticPageRefresh: (id: string) =>
-    [...courseKeys.all, "static-page-refresh", id] as const,
+  staticPageRefresh: (id: string) => [...courseKeys.all, "static-page-refresh", id] as const,
   categories: () => [...courseKeys.all, "categories"] as const,
   options: () => [...courseKeys.lists(), "options"] as const,
   bin: () => [...courseKeys.all, "bin"] as const,

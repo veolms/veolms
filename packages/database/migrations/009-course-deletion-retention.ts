@@ -8,12 +8,8 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column.notNull().unique().references("courses.id").onDelete("cascade"),
     )
     .addColumn("scheduled_for", "timestamptz", (column) => column.notNull())
-    .addColumn("status", "text", (column) =>
-      column.notNull().defaultTo("scheduled"),
-    )
-    .addColumn("attempt_count", "integer", (column) =>
-      column.notNull().defaultTo(0),
-    )
+    .addColumn("status", "text", (column) => column.notNull().defaultTo("scheduled"))
+    .addColumn("attempt_count", "integer", (column) => column.notNull().defaultTo(0))
     .addColumn("next_attempt_at", "timestamptz")
     .addColumn("lease_until", "timestamptz")
     .addColumn("last_error", "text")
@@ -27,10 +23,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       "course_deletion_jobs_status_valid",
       sql`status in ('scheduled', 'processing', 'failed')`,
     )
-    .addCheckConstraint(
-      "course_deletion_jobs_attempt_count_nonnegative",
-      sql`attempt_count >= 0`,
-    )
+    .addCheckConstraint("course_deletion_jobs_attempt_count_nonnegative", sql`attempt_count >= 0`)
     .execute();
 
   await database.schema
@@ -41,15 +34,9 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("course_id", "uuid", (column) => column.notNull())
     .addColumn("deletion_job_id", "uuid", (column) => column.notNull())
     .addColumn("storage_key", "text", (column) => column.notNull())
-    .addColumn("delete_mode", "text", (column) =>
-      column.notNull().defaultTo("object"),
-    )
-    .addColumn("status", "text", (column) =>
-      column.notNull().defaultTo("scheduled"),
-    )
-    .addColumn("attempt_count", "integer", (column) =>
-      column.notNull().defaultTo(0),
-    )
+    .addColumn("delete_mode", "text", (column) => column.notNull().defaultTo("object"))
+    .addColumn("status", "text", (column) => column.notNull().defaultTo("scheduled"))
+    .addColumn("attempt_count", "integer", (column) => column.notNull().defaultTo(0))
     .addColumn("next_attempt_at", "timestamptz")
     .addColumn("lease_until", "timestamptz")
     .addColumn("last_error", "text")
@@ -136,41 +123,14 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(database: Kysely<unknown>): Promise<void> {
-  await database.schema
-    .dropIndex("idx_course_lessons_content_media_id")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropIndex("idx_courses_trailer_media_id")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropIndex("idx_courses_thumbnail_media_id")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropIndex("idx_courses_deleted_at")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropIndex("idx_course_deletion_storage_items_lease")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropIndex("idx_course_deletion_storage_items_due")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropIndex("idx_course_deletion_jobs_lease")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropIndex("idx_course_deletion_jobs_due")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropTable("course_deletion_storage_items")
-    .ifExists()
-    .execute();
+  await database.schema.dropIndex("idx_course_lessons_content_media_id").ifExists().execute();
+  await database.schema.dropIndex("idx_courses_trailer_media_id").ifExists().execute();
+  await database.schema.dropIndex("idx_courses_thumbnail_media_id").ifExists().execute();
+  await database.schema.dropIndex("idx_courses_deleted_at").ifExists().execute();
+  await database.schema.dropIndex("idx_course_deletion_storage_items_lease").ifExists().execute();
+  await database.schema.dropIndex("idx_course_deletion_storage_items_due").ifExists().execute();
+  await database.schema.dropIndex("idx_course_deletion_jobs_lease").ifExists().execute();
+  await database.schema.dropIndex("idx_course_deletion_jobs_due").ifExists().execute();
+  await database.schema.dropTable("course_deletion_storage_items").ifExists().execute();
   await database.schema.dropTable("course_deletion_jobs").execute();
 }

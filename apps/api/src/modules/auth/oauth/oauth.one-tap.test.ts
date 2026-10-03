@@ -6,10 +6,7 @@ import type { AuthService } from "../authentication/authentication.service.ts";
 import type { SessionService } from "../session/session.service.ts";
 import type { SessionUser } from "../shared/auth.types.ts";
 import { createOauthService } from "./oauth.service.ts";
-import {
-  googleIdTokenToProfile,
-  type GoogleIdTokenClaims,
-} from "./oauth.provider.ts";
+import { googleIdTokenToProfile, type GoogleIdTokenClaims } from "./oauth.provider.ts";
 
 const CLIENT_ID = "client-id.apps.googleusercontent.com";
 
@@ -50,15 +47,10 @@ const request = {
   userAgent: null,
 };
 
-function createService(
-  onLookup?: (provider: string, providerUserId: string) => void,
-) {
+function createService(onLookup?: (provider: string, providerUserId: string) => void) {
   return createOauthService({
     authService: {
-      findUserByOauthAccountIncludingDeleted: async (
-        provider: string,
-        providerUserId: string,
-      ) => {
+      findUserByOauthAccountIncludingDeleted: async (provider: string, providerUserId: string) => {
         onLookup?.(provider, providerUserId);
         return user;
       },
@@ -88,10 +80,8 @@ void describe("Google One Tap", () => {
       lookup = { provider, providerUserId };
     });
 
-    const result = await service.loginWithGoogleCredential(
-      "credential",
-      request,
-      async () => googleIdTokenToProfile(verifiedClaims, CLIENT_ID),
+    const result = await service.loginWithGoogleCredential("credential", request, async () =>
+      googleIdTokenToProfile(verifiedClaims, CLIENT_ID),
     );
 
     assert.deepEqual(lookup, {
@@ -112,10 +102,7 @@ void describe("Google One Tap", () => {
     await assert.rejects(
       () =>
         service.loginWithGoogleCredential("credential", request, async () =>
-          googleIdTokenToProfile(
-            { ...verifiedClaims, email_verified: false },
-            CLIENT_ID,
-          ),
+          googleIdTokenToProfile({ ...verifiedClaims, email_verified: false }, CLIENT_ID),
         ),
       (error: unknown) => {
         assert.ok(error instanceof AppError);

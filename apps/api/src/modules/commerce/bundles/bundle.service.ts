@@ -22,11 +22,7 @@ export interface BundleService {
   deleteBundle(id: string): Promise<void>;
 }
 
-export function createBundleService({
-  database,
-}: {
-  database: Kysely<Database>;
-}): BundleService {
+export function createBundleService({ database }: { database: Kysely<Database> }): BundleService {
   async function hydrateBundle(
     bundle: NonNullable<Awaited<ReturnType<typeof bundleRepo.findBundleById>>>,
   ): Promise<CourseBundle> {
@@ -82,14 +78,9 @@ export function createBundleService({
     return await hydrateBundle(bundle);
   }
 
-  async function createBundle(
-    request: CreateBundleRequest,
-  ): Promise<CourseBundle> {
+  async function createBundle(request: CreateBundleRequest): Promise<CourseBundle> {
     const normalizedSlug = request.slug.toLowerCase().trim();
-    const existing = await bundleRepo.findBundleBySlug(
-      database,
-      normalizedSlug,
-    );
+    const existing = await bundleRepo.findBundleBySlug(database, normalizedSlug);
     if (existing) {
       throw new AppError(
         409,
@@ -138,10 +129,7 @@ export function createBundleService({
     return await hydrateBundle(created);
   }
 
-  async function updateBundle(
-    id: string,
-    request: UpdateBundleRequest,
-  ): Promise<CourseBundle> {
+  async function updateBundle(id: string, request: UpdateBundleRequest): Promise<CourseBundle> {
     const existing = await bundleRepo.findBundleById(database, id);
     if (!existing) {
       throw CommerceErrors.BUNDLE_NOT_FOUND(id);
@@ -150,10 +138,7 @@ export function createBundleService({
     if (request.slug) {
       const normalizedSlug = request.slug.toLowerCase().trim();
       if (normalizedSlug !== existing.slug) {
-        const slugMatch = await bundleRepo.findBundleBySlug(
-          database,
-          normalizedSlug,
-        );
+        const slugMatch = await bundleRepo.findBundleBySlug(database, normalizedSlug);
         if (slugMatch && slugMatch.id !== id) {
           throw new AppError(
             409,

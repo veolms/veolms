@@ -1,6 +1,4 @@
-export function formatSessionDevice(
-  userAgent: string | null | undefined,
-): string {
+export function formatSessionDevice(userAgent: string | null | undefined): string {
   if (!userAgent?.trim()) {
     return "Unknown device";
   }
@@ -16,9 +14,7 @@ export function formatSessionDevice(
 }
 
 export function isMobileSession(userAgent: string | null | undefined): boolean {
-  return Boolean(
-    userAgent && /mobile|android|iphone|ipad|ipod/i.test(userAgent),
-  );
+  return Boolean(userAgent && /mobile|android|iphone|ipad|ipod/i.test(userAgent));
 }
 
 export function formatRelativeDate(dateStr: string | undefined): string {

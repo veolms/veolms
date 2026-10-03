@@ -5,10 +5,7 @@ import { fileURLToPath } from "node:url";
 export const FIRST_SECTION_FLAG = "--first-section";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const reactRouterCli = path.resolve(
-  scriptDirectory,
-  "../node_modules/@react-router/dev/bin.cjs",
-);
+const reactRouterCli = path.resolve(scriptDirectory, "../node_modules/@react-router/dev/bin.cjs");
 const workspaceRoot = path.resolve(scriptDirectory, "../..");
 
 for (const environmentFile of [".env.production", ".env"]) {
@@ -28,10 +25,7 @@ if (process.env.STATIC_BUILD_API_URL) {
   );
 }
 if (process.env.VITE_API_BASE_URL) {
-  process.env.VITE_API_BASE_URL = process.env.VITE_API_BASE_URL.replace(
-    "localhost",
-    "127.0.0.1",
-  );
+  process.env.VITE_API_BASE_URL = process.env.VITE_API_BASE_URL.replace("localhost", "127.0.0.1");
 }
 
 export const runPerformanceBuild = async (
@@ -39,27 +33,21 @@ export const runPerformanceBuild = async (
   environmentOverrides = {},
 ) => {
   const firstSectionOnly = args.includes(FIRST_SECTION_FLAG);
-  const reactRouterArgs = args.filter(
-    (argument) => argument !== FIRST_SECTION_FLAG,
-  );
+  const reactRouterArgs = args.filter((argument) => argument !== FIRST_SECTION_FLAG);
   const scope = firstSectionOnly ? "first-section" : "all-lectures";
 
   console.log(`Learning prerender scope: ${scope}`);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      [reactRouterCli, "build", ...reactRouterArgs],
-      {
-        env: {
-          ...process.env,
-          VEO_LEARNING_PRERENDER_SCOPE: scope,
-          VEO_REACT_ROUTER_BUILD: "true",
-          ...environmentOverrides,
-        },
-        stdio: "inherit",
+    const child = spawn(process.execPath, [reactRouterCli, "build", ...reactRouterArgs], {
+      env: {
+        ...process.env,
+        VEO_LEARNING_PRERENDER_SCOPE: scope,
+        VEO_REACT_ROUTER_BUILD: "true",
+        ...environmentOverrides,
       },
-    );
+      stdio: "inherit",
+    });
 
     child.once("error", reject);
     child.once("exit", (code, signal) => {
@@ -73,8 +61,7 @@ export const runPerformanceBuild = async (
 };
 
 const isDirectInvocation =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isDirectInvocation) {
   process.exitCode = await runPerformanceBuild();

@@ -17,10 +17,8 @@ export function formatRelativeTime(dateInput: string | Date): string {
   const diffDays = Math.floor(diffHours / 24);
 
   if (diffSec < 60) return "Just now";
-  if (diffMin < 60)
-    return `${diffMin} ${diffMin === 1 ? "minute" : "minutes"} ago`;
-  if (diffHours < 24)
-    return `${diffHours} ${diffHours === 1 ? "hour" : "hours"} ago`;
+  if (diffMin < 60) return `${diffMin} ${diffMin === 1 ? "minute" : "minutes"} ago`;
+  if (diffHours < 24) return `${diffHours} ${diffHours === 1 ? "hour" : "hours"} ago`;
   if (diffDays < 7) return `${diffDays} ${diffDays === 1 ? "day" : "days"} ago`;
   return date.toLocaleDateString();
 }
@@ -38,8 +36,7 @@ export function adaptLearningNoteToComment(
 
   // Derive ownership primarily from note.isOwn with userId comparison as fallback
   const isOwn =
-    note.isOwn ??
-    (currentUserId ? String(note.userId) === String(currentUserId) : false);
+    note.isOwn ?? (currentUserId ? String(note.userId) === String(currentUserId) : false);
 
   const name =
     note.authorName?.trim() ||
@@ -47,9 +44,7 @@ export function adaptLearningNoteToComment(
     (isOwn && currentUserName?.trim() ? currentUserName.trim() : "Learner");
 
   // Real note author avatar if DTO provides one, else current user avatar if own, else safe fallback
-  const avatar =
-    note.authorAvatarUrl ||
-    (isOwn && currentUserAvatar ? currentUserAvatar : "");
+  const avatar = note.authorAvatarUrl || (isOwn && currentUserAvatar ? currentUserAvatar : "");
 
   return {
     id: getClientEntityId(note),

@@ -103,10 +103,7 @@ export const STANDARD_FEATURES = [
   },
 ] as const;
 
-export const ROLE_CAPABILITY_MAPPINGS: Record<
-  keyof typeof SYSTEM_ROLES,
-  readonly Permission[]
-> = {
+export const ROLE_CAPABILITY_MAPPINGS: Record<keyof typeof SYSTEM_ROLES, readonly Permission[]> = {
   admin: permissions, // all platform capabilities
   course_manager: [
     "course.read",
@@ -216,18 +213,8 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "discussion.read",
     "discussion.moderate",
   ],
-  reviewer: [
-    "course.read",
-    "course.preview",
-    "lesson.read",
-    "quiz.read",
-    "assignment.read",
-  ],
-  analytics_viewer: [
-    "analytics.course.read",
-    "analytics.revenue.read",
-    "course.read",
-  ],
+  reviewer: ["course.read", "course.preview", "lesson.read", "quiz.read", "assignment.read"],
+  analytics_viewer: ["analytics.course.read", "analytics.revenue.read", "course.read"],
   student: [], // Student content access is governed by active course enrollments, not administrative roles
 };
 
@@ -657,9 +644,7 @@ export const ROLE_MENU_PERMISSIONS: Record<
   ],
 };
 
-export async function seedRolesAndPermissions(
-  database: Kysely<Database>,
-): Promise<void> {
+export async function seedRolesAndPermissions(database: Kysely<Database>): Promise<void> {
   // 1. Seed Features
   for (const feature of STANDARD_FEATURES) {
     await database
@@ -726,9 +711,7 @@ export async function seedRolesAndPermissions(
   }
 
   // 4. Seed Role Permissions
-  for (const [roleKey, rolePermissions] of Object.entries(
-    ROLE_CAPABILITY_MAPPINGS,
-  )) {
+  for (const [roleKey, rolePermissions] of Object.entries(ROLE_CAPABILITY_MAPPINGS)) {
     const role = SYSTEM_ROLES[roleKey as keyof typeof SYSTEM_ROLES];
     for (const permKey of rolePermissions) {
       const permId = permissionEntries.get(permKey);

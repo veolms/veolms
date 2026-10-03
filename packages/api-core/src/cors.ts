@@ -52,11 +52,7 @@ export function createCorsMatcher(config: ServerConfig): CorsMatcher {
       if (url.protocol !== "http:" || isIP(url.hostname) !== 4) return false;
 
       const octets = url.hostname.split(".").map(Number);
-      if (
-        octets.some(
-          (octet) => !Number.isInteger(octet) || octet < 0 || octet > 255,
-        )
-      ) {
+      if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
         return false;
       }
 

@@ -25,10 +25,7 @@ export interface DiscussionWorkspaceSkeletonListProps extends DiscussionWorkspac
   withinFeed?: boolean;
 }
 
-export function DiscussionWorkspaceSkeleton({
-  mode,
-  variant,
-}: DiscussionWorkspaceSkeletonProps) {
+export function DiscussionWorkspaceSkeleton({ mode, variant }: DiscussionWorkspaceSkeletonProps) {
   const isLoading = mode === "loading";
 
   return (
@@ -71,10 +68,7 @@ export function DiscussionWorkspaceSkeleton({
 
           <div className="discussion-thread__context">
             <span className="h-3 w-20 rounded bg-(--track)" />
-            <span
-              aria-hidden="true"
-              className="size-1 rounded-full bg-(--track)"
-            />
+            <span aria-hidden="true" className="size-1 rounded-full bg-(--track)" />
             <small className="h-3 w-14 rounded bg-(--track)" />
           </div>
         </div>
@@ -123,11 +117,7 @@ export function DiscussionWorkspaceSkeletonList({
     >
       {isLoading && <span className="sr-only">{label}</span>}
       {Array.from({ length: count }, (_, index) => (
-        <DiscussionWorkspaceSkeleton
-          key={`${mode}-${index}`}
-          mode={mode}
-          variant={variant}
-        />
+        <DiscussionWorkspaceSkeleton key={`${mode}-${index}`} mode={mode} variant={variant} />
       ))}
     </div>
   );

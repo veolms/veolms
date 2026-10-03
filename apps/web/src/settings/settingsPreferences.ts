@@ -1,7 +1,4 @@
-import {
-  isBuiltInPlayerThemeId,
-  type BuiltInPlayerThemeId,
-} from "@veolms/video-player/theme-ids";
+import { isBuiltInPlayerThemeId, type BuiltInPlayerThemeId } from "@veolms/video-player/theme-ids";
 
 export const SIDEBAR_MAX_WIDTH_MIN = 220;
 export const SIDEBAR_MAX_WIDTH_DEFAULT = 300;
@@ -54,8 +51,7 @@ const SIDEBAR_GLOW_SHAPE_BASE_LENGTHS = [
   ["--sidebar-bokeh-bottom-size", 126],
   ["--sidebar-bokeh-bottom-half-size", 63],
 ] as const;
-export type SidebarDockItem =
-  "appearance" | "theme" | "fullscreen" | "reading-mode" | "settings";
+export type SidebarDockItem = "appearance" | "theme" | "fullscreen" | "reading-mode" | "settings";
 
 export const SIDEBAR_DOCK_MAX_ITEMS = 5;
 export const SIDEBAR_DOCK_DEFAULT_ORDER: readonly SidebarDockItem[] = [
@@ -77,18 +73,12 @@ export const ELEVATED_SURFACES_KEY = "veolms-elevated-surfaces";
 export const HIDE_SCROLLBARS_KEY = "veolms-hide-scrollbars";
 export const HIDE_SCROLLBARS_DEFAULT = true;
 export const SCROLLBAR_STYLE_KEY = "veolms-scrollbar-style";
-export const SCROLLBAR_STYLE_VALUES = [
-  "default",
-  "custom",
-  "theme",
-  "thick",
-] as const;
+export const SCROLLBAR_STYLE_VALUES = ["default", "custom", "theme", "thick"] as const;
 export type ScrollbarStyle = (typeof SCROLLBAR_STYLE_VALUES)[number];
 export const SCROLLBAR_STYLE_DEFAULT: ScrollbarStyle = "theme";
 export const ELASTIC_SCROLL_APPEARANCE_KEY = "veolms-elastic-scroll-appearance";
 export const ELASTIC_SCROLL_APPEARANCE_VALUES = ["2d", "3d"] as const;
-export type ElasticScrollAppearance =
-  (typeof ELASTIC_SCROLL_APPEARANCE_VALUES)[number];
+export type ElasticScrollAppearance = (typeof ELASTIC_SCROLL_APPEARANCE_VALUES)[number];
 export const ELASTIC_SCROLL_APPEARANCE_DEFAULT: ElasticScrollAppearance = "2d";
 export const ELASTIC_SCROLL_ICON_KEY = "veolms-elastic-scroll-icon";
 export const ELASTIC_SCROLL_ICON_VALUES = [
@@ -100,21 +90,15 @@ export const ELASTIC_SCROLL_ICON_VALUES = [
 ] as const;
 export type ElasticScrollIcon = (typeof ELASTIC_SCROLL_ICON_VALUES)[number];
 export const ELASTIC_SCROLL_ICON_DEFAULT: ElasticScrollIcon = "arrow";
-export const ELASTIC_SCROLL_ICON_ANIMATION_KEY =
-  "veolms-elastic-scroll-icon-animation";
+export const ELASTIC_SCROLL_ICON_ANIMATION_KEY = "veolms-elastic-scroll-icon-animation";
 export const ELASTIC_SCROLL_ICON_ANIMATION_DEFAULT = false;
 export const ELASTIC_SCROLL_GESTURE_SIDE_VALUES = ["left", "right"] as const;
-export type ElasticScrollGestureSide =
-  (typeof ELASTIC_SCROLL_GESTURE_SIDE_VALUES)[number];
+export type ElasticScrollGestureSide = (typeof ELASTIC_SCROLL_GESTURE_SIDE_VALUES)[number];
 export const ELASTIC_SCROLL_LOCK_SIDE_KEY = "veolms-elastic-scroll-lock-side";
-export const ELASTIC_SCROLL_LOCK_SIDE_DEFAULT: ElasticScrollGestureSide =
-  "right";
-export const ELASTIC_SCROLL_UNLOCK_SIDE_KEY =
-  "veolms-elastic-scroll-unlock-side";
-export const ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT: ElasticScrollGestureSide =
-  "left";
-export const ELASTIC_SCROLL_PREFERENCES_EVENT =
-  "veolms:elastic-scroll-preferences";
+export const ELASTIC_SCROLL_LOCK_SIDE_DEFAULT: ElasticScrollGestureSide = "right";
+export const ELASTIC_SCROLL_UNLOCK_SIDE_KEY = "veolms-elastic-scroll-unlock-side";
+export const ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT: ElasticScrollGestureSide = "left";
+export const ELASTIC_SCROLL_PREFERENCES_EVENT = "veolms:elastic-scroll-preferences";
 
 export interface ElasticScrollPreferences {
   appearance: ElasticScrollAppearance;
@@ -135,8 +119,7 @@ export const CONTROL_RADIUS_KEY = "veolms-control-radius";
 export const CONTROL_RADIUS_CUSTOM_KEY = "veolms-control-radius-custom";
 export const SIDEBAR_HEADER_DEFAULT_VERSION = "inline-v1";
 
-export type ControlRadiusPreset =
-  "square" | "subtle" | "balanced" | "rounded" | "pill" | "custom";
+export type ControlRadiusPreset = "square" | "subtle" | "balanced" | "rounded" | "pill" | "custom";
 
 export interface ControlRadiusPreference {
   preset: ControlRadiusPreset;
@@ -177,18 +160,12 @@ export const normalizeControlRadiusCustom = (value: unknown): number => {
   );
 };
 
-export const normalizeControlRadiusPreset = (
-  value: unknown,
-): ControlRadiusPreset =>
-  typeof value === "string" &&
-  CONTROL_RADIUS_IDS.has(value as ControlRadiusPreset)
+export const normalizeControlRadiusPreset = (value: unknown): ControlRadiusPreset =>
+  typeof value === "string" && CONTROL_RADIUS_IDS.has(value as ControlRadiusPreset)
     ? (value as ControlRadiusPreset)
     : CONTROL_RADIUS_DEFAULT.preset;
 
-export const resolveControlRadius = ({
-  preset,
-  customPx,
-}: ControlRadiusPreference): number => {
+export const resolveControlRadius = ({ preset, customPx }: ControlRadiusPreference): number => {
   if (preset === "custom") return normalizeControlRadiusCustom(customPx);
   return (
     CONTROL_RADIUS_PRESETS.find(({ id }) => id === preset)?.radius ??
@@ -202,24 +179,19 @@ export const normalizePageTabColors = (value: unknown): PageTabColors =>
     : PAGE_TAB_COLORS_DEFAULT;
 
 export const normalizeSidebarGlow = (value: unknown): SidebarGlow =>
-  typeof value === "string" &&
-  SIDEBAR_GLOW_VALUES.includes(value as SidebarGlow)
+  typeof value === "string" && SIDEBAR_GLOW_VALUES.includes(value as SidebarGlow)
     ? (value as SidebarGlow)
     : SIDEBAR_GLOW_DEFAULT;
 
 export const normalizeSidebarGlowShape = (value: unknown): SidebarGlowShape =>
-  typeof value === "string" &&
-  SIDEBAR_GLOW_SHAPE_VALUES.includes(value as SidebarGlowShape)
+  typeof value === "string" && SIDEBAR_GLOW_SHAPE_VALUES.includes(value as SidebarGlowShape)
     ? (value as SidebarGlowShape)
     : SIDEBAR_GLOW_SHAPE_DEFAULT;
 
 export const normalizeSidebarGlowBlur = (value: unknown): number => {
   const numericValue = Number(value);
   return Number.isFinite(numericValue)
-    ? Math.min(
-        SIDEBAR_GLOW_BLUR_MAX,
-        Math.max(SIDEBAR_GLOW_BLUR_MIN, Math.round(numericValue)),
-      )
+    ? Math.min(SIDEBAR_GLOW_BLUR_MAX, Math.max(SIDEBAR_GLOW_BLUR_MIN, Math.round(numericValue)))
     : SIDEBAR_GLOW_BLUR_DEFAULT;
 };
 
@@ -267,9 +239,7 @@ const SIDEBAR_DOCK_ITEMS = new Set<SidebarDockItem>([
   "settings",
 ]);
 
-export const normalizeSidebarDockItems = (
-  value: unknown,
-): SidebarDockItem[] => {
+export const normalizeSidebarDockItems = (value: unknown): SidebarDockItem[] => {
   if (!Array.isArray(value)) return [...SIDEBAR_DOCK_DEFAULT_ITEMS];
 
   const items = value.filter(
@@ -281,9 +251,7 @@ export const normalizeSidebarDockItems = (
   return items.slice(0, SIDEBAR_DOCK_MAX_ITEMS);
 };
 
-export const normalizeSidebarDockOrder = (
-  value: unknown,
-): SidebarDockItem[] => {
+export const normalizeSidebarDockOrder = (value: unknown): SidebarDockItem[] => {
   const requestedOrder = Array.isArray(value) ? value : [];
   const validItems = requestedOrder.filter(
     (item, index): item is SidebarDockItem =>
@@ -363,9 +331,8 @@ export const normalizeLearningSeekInterval = (value: unknown): number => {
   );
 };
 
-export const normalizeVideoPlayerTheme = (
-  value: unknown,
-): BuiltInPlayerThemeId => (isBuiltInPlayerThemeId(value) ? value : "youtube");
+export const normalizeVideoPlayerTheme = (value: unknown): BuiltInPlayerThemeId =>
+  isBuiltInPlayerThemeId(value) ? value : "youtube";
 
 export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   videoQuality: "auto",
@@ -391,10 +358,7 @@ export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   keepCompletedLecturesVisible: true,
 };
 
-export const LEARNING_REMINDER_DAYS: readonly (readonly [
-  day: string,
-  label: string,
-])[] = [
+export const LEARNING_REMINDER_DAYS: readonly (readonly [day: string, label: string])[] = [
   ["mon", "Mon"],
   ["tue", "Tue"],
   ["wed", "Wed"],
@@ -404,15 +368,10 @@ export const LEARNING_REMINDER_DAYS: readonly (readonly [
   ["sun", "Sun"],
 ];
 
-export const normalizeSidebarMaxWidth = (
-  value: number | string | undefined,
-): number => {
+export const normalizeSidebarMaxWidth = (value: number | string | undefined): number => {
   const numericValue = Number(value);
   return Number.isFinite(numericValue)
-    ? Math.min(
-        SIDEBAR_MAX_WIDTH_LIMIT,
-        Math.max(SIDEBAR_MAX_WIDTH_MIN, numericValue),
-      )
+    ? Math.min(SIDEBAR_MAX_WIDTH_LIMIT, Math.max(SIDEBAR_MAX_WIDTH_MIN, numericValue))
     : SIDEBAR_MAX_WIDTH_DEFAULT;
 };
 
@@ -435,20 +394,14 @@ export const normalizeScrollbarStyle = (value: unknown): ScrollbarStyle =>
     : SCROLLBAR_STYLE_DEFAULT;
 
 export const readScrollbarStyle = (): ScrollbarStyle =>
-  normalizeScrollbarStyle(
-    readStored(SCROLLBAR_STYLE_KEY, SCROLLBAR_STYLE_DEFAULT),
-  );
+  normalizeScrollbarStyle(readStored(SCROLLBAR_STYLE_KEY, SCROLLBAR_STYLE_DEFAULT));
 
-export const normalizeElasticScrollAppearance = (
-  value: unknown,
-): ElasticScrollAppearance =>
+export const normalizeElasticScrollAppearance = (value: unknown): ElasticScrollAppearance =>
   ELASTIC_SCROLL_APPEARANCE_VALUES.includes(value as ElasticScrollAppearance)
     ? (value as ElasticScrollAppearance)
     : ELASTIC_SCROLL_APPEARANCE_DEFAULT;
 
-export const normalizeElasticScrollIcon = (
-  value: unknown,
-): ElasticScrollIcon =>
+export const normalizeElasticScrollIcon = (value: unknown): ElasticScrollIcon =>
   ELASTIC_SCROLL_ICON_VALUES.includes(value as ElasticScrollIcon)
     ? (value as ElasticScrollIcon)
     : ELASTIC_SCROLL_ICON_DEFAULT;
@@ -463,10 +416,7 @@ export const normalizeElasticScrollGestureSide = (
 
 export const readElasticScrollPreferences = (): ElasticScrollPreferences => ({
   appearance: normalizeElasticScrollAppearance(
-    readStored(
-      ELASTIC_SCROLL_APPEARANCE_KEY,
-      ELASTIC_SCROLL_APPEARANCE_DEFAULT,
-    ),
+    readStored(ELASTIC_SCROLL_APPEARANCE_KEY, ELASTIC_SCROLL_APPEARANCE_DEFAULT),
   ),
   icon: normalizeElasticScrollIcon(
     readStored(ELASTIC_SCROLL_ICON_KEY, ELASTIC_SCROLL_ICON_DEFAULT),
@@ -480,10 +430,7 @@ export const readElasticScrollPreferences = (): ElasticScrollPreferences => ({
     ELASTIC_SCROLL_LOCK_SIDE_DEFAULT,
   ),
   unlockSide: normalizeElasticScrollGestureSide(
-    readStored(
-      ELASTIC_SCROLL_UNLOCK_SIDE_KEY,
-      ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
-    ),
+    readStored(ELASTIC_SCROLL_UNLOCK_SIDE_KEY, ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT),
     ELASTIC_SCROLL_UNLOCK_SIDE_DEFAULT,
   ),
 });
@@ -508,17 +455,13 @@ export const applyElasticScrollPreferences = (
     ),
   };
   if (typeof document !== "undefined") {
-    document.documentElement.dataset.elasticScrollAppearance =
-      normalizedPreferences.appearance;
-    document.documentElement.dataset.elasticScrollIcon =
-      normalizedPreferences.icon;
+    document.documentElement.dataset.elasticScrollAppearance = normalizedPreferences.appearance;
+    document.documentElement.dataset.elasticScrollIcon = normalizedPreferences.icon;
     document.documentElement.dataset.elasticScrollIconAnimation = String(
       normalizedPreferences.animateIcon,
     );
-    document.documentElement.dataset.elasticScrollLockSide =
-      normalizedPreferences.lockSide;
-    document.documentElement.dataset.elasticScrollUnlockSide =
-      normalizedPreferences.unlockSide;
+    document.documentElement.dataset.elasticScrollLockSide = normalizedPreferences.lockSide;
+    document.documentElement.dataset.elasticScrollUnlockSide = normalizedPreferences.unlockSide;
   }
   return normalizedPreferences;
 };
@@ -529,34 +472,21 @@ export const persistElasticScrollPreferences = (
   const normalizedPreferences = applyElasticScrollPreferences(preferences);
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.setItem(
-        ELASTIC_SCROLL_APPEARANCE_KEY,
-        normalizedPreferences.appearance,
-      );
-      window.localStorage.setItem(
-        ELASTIC_SCROLL_ICON_KEY,
-        normalizedPreferences.icon,
-      );
+      window.localStorage.setItem(ELASTIC_SCROLL_APPEARANCE_KEY, normalizedPreferences.appearance);
+      window.localStorage.setItem(ELASTIC_SCROLL_ICON_KEY, normalizedPreferences.icon);
       window.localStorage.setItem(
         ELASTIC_SCROLL_ICON_ANIMATION_KEY,
         String(normalizedPreferences.animateIcon),
       );
-      window.localStorage.setItem(
-        ELASTIC_SCROLL_LOCK_SIDE_KEY,
-        normalizedPreferences.lockSide,
-      );
-      window.localStorage.setItem(
-        ELASTIC_SCROLL_UNLOCK_SIDE_KEY,
-        normalizedPreferences.unlockSide,
-      );
+      window.localStorage.setItem(ELASTIC_SCROLL_LOCK_SIDE_KEY, normalizedPreferences.lockSide);
+      window.localStorage.setItem(ELASTIC_SCROLL_UNLOCK_SIDE_KEY, normalizedPreferences.unlockSide);
     } catch {
       // Keep the preference active for this session when storage is blocked.
     }
     window.dispatchEvent(
-      new CustomEvent<ElasticScrollPreferences>(
-        ELASTIC_SCROLL_PREFERENCES_EVENT,
-        { detail: normalizedPreferences },
-      ),
+      new CustomEvent<ElasticScrollPreferences>(ELASTIC_SCROLL_PREFERENCES_EVENT, {
+        detail: normalizedPreferences,
+      }),
     );
   }
   return normalizedPreferences;
@@ -603,18 +533,14 @@ export const getScrollbarBootstrapScript = (): string =>
     LEARNING_PREFERENCES_KEY,
   )})||"{}");root.dataset.lessonPageScrollbar=learning.showLessonPageScrollbar===false?"hidden":"visible";root.dataset.curriculumScrollbar=learning.showCurriculumScrollbar===false?"hidden":"visible"}catch{root.dataset.lessonPageScrollbar="visible";root.dataset.curriculumScrollbar="visible"}})();`;
 
-export const readElevatedSurfaces = (): boolean =>
-  readStoredBoolean(ELEVATED_SURFACES_KEY, true);
+export const readElevatedSurfaces = (): boolean => readStoredBoolean(ELEVATED_SURFACES_KEY, true);
 
 export const readControlRadiusPreference = (): ControlRadiusPreference => ({
   preset: normalizeControlRadiusPreset(
     readStored(CONTROL_RADIUS_KEY, CONTROL_RADIUS_DEFAULT.preset),
   ),
   customPx: normalizeControlRadiusCustom(
-    readStored(
-      CONTROL_RADIUS_CUSTOM_KEY,
-      String(CONTROL_RADIUS_DEFAULT.customPx),
-    ),
+    readStored(CONTROL_RADIUS_CUSTOM_KEY, String(CONTROL_RADIUS_DEFAULT.customPx)),
   ),
 });
 
@@ -627,28 +553,15 @@ export const applyControlRadiusPreference = (
   };
   if (typeof document !== "undefined") {
     const resolvedRadius = resolveControlRadius(normalizedPreference);
-    const structuredRadius = Math.min(
-      resolvedRadius,
-      CONTROL_RADIUS_STRUCTURED_MAX,
-    );
-    document.documentElement.dataset.controlRadius =
-      normalizedPreference.preset;
-    document.documentElement.style.setProperty(
-      "--control-radius",
-      `${resolvedRadius}px`,
-    );
-    document.documentElement.style.setProperty(
-      "--control-radius-action",
-      `${resolvedRadius}px`,
-    );
+    const structuredRadius = Math.min(resolvedRadius, CONTROL_RADIUS_STRUCTURED_MAX);
+    document.documentElement.dataset.controlRadius = normalizedPreference.preset;
+    document.documentElement.style.setProperty("--control-radius", `${resolvedRadius}px`);
+    document.documentElement.style.setProperty("--control-radius-action", `${resolvedRadius}px`);
     document.documentElement.style.setProperty(
       "--control-radius-structured",
       `${structuredRadius}px`,
     );
-    document.documentElement.style.setProperty(
-      "--control-radius-menu",
-      `${structuredRadius}px`,
-    );
+    document.documentElement.style.setProperty("--control-radius-menu", `${structuredRadius}px`);
   }
   return normalizedPreference;
 };
@@ -659,14 +572,8 @@ export const persistControlRadiusPreference = (
   const normalizedPreference = applyControlRadiusPreference(preference);
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.setItem(
-        CONTROL_RADIUS_KEY,
-        normalizedPreference.preset,
-      );
-      window.localStorage.setItem(
-        CONTROL_RADIUS_CUSTOM_KEY,
-        String(normalizedPreference.customPx),
-      );
+      window.localStorage.setItem(CONTROL_RADIUS_KEY, normalizedPreference.preset);
+      window.localStorage.setItem(CONTROL_RADIUS_CUSTOM_KEY, String(normalizedPreference.customPx));
     } catch {
       // Keep the preference active for this session when storage is blocked.
     }
@@ -684,9 +591,7 @@ export const getControlRadiusBootstrapScript = (): string =>
   )}),raw=storedCustom===null?Number.NaN:Number(storedCustom),custom=Number.isFinite(raw)?Math.min(max,Math.max(min,Math.round(raw))):d.customPx,value=id==="custom"?custom:(p.find(({id:preset})=>preset===id)?.radius??d.customPx),structured=Math.min(value,structuredMax);r.dataset.controlRadius=id;r.style.setProperty("--control-radius",value+"px");r.style.setProperty("--control-radius-action",value+"px");r.style.setProperty("--control-radius-structured",structured+"px");r.style.setProperty("--control-radius-menu",structured+"px")}catch{r.dataset.controlRadius=d.preset;r.style.setProperty("--control-radius",d.customPx+"px");r.style.setProperty("--control-radius-action",d.customPx+"px");r.style.setProperty("--control-radius-structured",d.customPx+"px");r.style.setProperty("--control-radius-menu",d.customPx+"px")}})();`;
 
 export const getSurfaceDepthBootstrapScript = (): string => {
-  const sidebarGlowShapeLengths = JSON.stringify(
-    SIDEBAR_GLOW_SHAPE_BASE_LENGTHS,
-  );
+  const sidebarGlowShapeLengths = JSON.stringify(SIDEBAR_GLOW_SHAPE_BASE_LENGTHS);
   return `(()=>{const root=document.documentElement,sidebarGlows=${JSON.stringify(
     SIDEBAR_GLOW_VALUES,
   )},sidebarGlowShapes=${JSON.stringify(SIDEBAR_GLOW_SHAPE_VALUES)},defaultSidebarGlow=${JSON.stringify(SIDEBAR_GLOW_DEFAULT)},defaultSidebarGlowShape=${JSON.stringify(SIDEBAR_GLOW_SHAPE_DEFAULT)},defaultSidebarGlowBlur=${SIDEBAR_GLOW_BLUR_DEFAULT},defaultSidebarGlowIntensity=${SIDEBAR_GLOW_INTENSITY_DEFAULT},defaultSidebarGlowShapeSize=${SIDEBAR_GLOW_SHAPE_SIZE_DEFAULT},sidebarGlowShapeSizeMin=${SIDEBAR_GLOW_SHAPE_SIZE_MIN},sidebarGlowShapeSizeMax=${SIDEBAR_GLOW_SHAPE_SIZE_MAX},sidebarGlowShapeLengths=${sidebarGlowShapeLengths},applyGlowShapeSize=value=>{const scale=value/defaultSidebarGlowShapeSize;for(const [property,length] of sidebarGlowShapeLengths)root.style.setProperty(property,(length*scale).toFixed(2)+"px")};try{root.dataset.elevatedSurfaces=localStorage.getItem(${JSON.stringify(
@@ -701,9 +606,7 @@ export const getSurfaceDepthBootstrapScript = (): string => {
 };
 
 export const readPageTabColors = (): PageTabColors =>
-  normalizePageTabColors(
-    readStored(PAGE_TAB_COLORS_KEY, PAGE_TAB_COLORS_DEFAULT),
-  );
+  normalizePageTabColors(readStored(PAGE_TAB_COLORS_KEY, PAGE_TAB_COLORS_DEFAULT));
 
 export const readLearningPreferences = (): LearningPreferences => {
   try {
@@ -716,16 +619,12 @@ export const readLearningPreferences = (): LearningPreferences => {
     const preferences = {
       ...LEARNING_PREFERENCE_DEFAULTS,
       ...storedPreferences,
-      seekIntervalSeconds: normalizeLearningSeekInterval(
-        storedPreferences.seekIntervalSeconds,
-      ),
+      seekIntervalSeconds: normalizeLearningSeekInterval(storedPreferences.seekIntervalSeconds),
       resumeFromLastPosition:
         typeof storedPreferences.resumeFromLastPosition === "boolean"
           ? storedPreferences.resumeFromLastPosition
           : LEARNING_PREFERENCE_DEFAULTS.resumeFromLastPosition,
-      videoPlayerTheme: normalizeVideoPlayerTheme(
-        storedPreferences.videoPlayerTheme,
-      ),
+      videoPlayerTheme: normalizeVideoPlayerTheme(storedPreferences.videoPlayerTheme),
       reminderDays: Array.isArray(storedPreferences.reminderDays)
         ? storedPreferences.reminderDays
         : LEARNING_PREFERENCE_DEFAULTS.reminderDays,

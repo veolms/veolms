@@ -9,8 +9,7 @@ const courses = [
     id: "00000000-0000-4000-8000-000000000001",
     slug: "complete-backend-development-with-nodejs",
     title: "Complete Backend Development with Node.js",
-    short_description:
-      "Build reliable backend applications with Node.js, APIs, and PostgreSQL.",
+    short_description: "Build reliable backend applications with Node.js, APIs, and PostgreSQL.",
     description:
       "Learn how to design and build production-minded backend applications with Node.js. The course covers HTTP APIs, validation, PostgreSQL data access, error handling, and the practical decisions that keep a service maintainable as it grows.",
     status: "published" satisfies CourseStatus,
@@ -19,8 +18,7 @@ const courses = [
     id: "00000000-0000-4000-8000-000000000002",
     slug: "ultimate-typescript-course",
     title: "The Ultimate TypeScript Course",
-    short_description:
-      "Master TypeScript from fundamentals to advanced concepts.",
+    short_description: "Master TypeScript from fundamentals to advanced concepts.",
     description:
       "Develop a strong mental model for TypeScript, from everyday type annotations and narrowing to generics, structural typing, and safe API boundaries. Practical exercises focus on writing code that stays understandable and correct.",
     status: "published" satisfies CourseStatus,
@@ -29,8 +27,7 @@ const courses = [
     id: "00000000-0000-4000-8000-000000000003",
     slug: "building-procodrr-idea-to-production",
     title: "Building ProCodrr: Idea to Production",
-    short_description:
-      "Follow the practical journey of shaping and shipping a modern LMS.",
+    short_description: "Follow the practical journey of shaping and shipping a modern LMS.",
     description:
       "See how a product idea becomes a production-shaped learning platform. This course explores scope, architecture, incremental delivery, operational trade-offs, and the discipline of building only what a real product needs next.",
     status: "published" satisfies CourseStatus,
@@ -127,9 +124,7 @@ try {
       .execute();
   }
 
-  console.info(
-    `Seeded ${courses.length} published courses with Admin role assignment.`,
-  );
+  console.info(`Seeded ${courses.length} published courses with Admin role assignment.`);
 } finally {
   await database.destroy();
 }

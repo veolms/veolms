@@ -32,10 +32,7 @@ const creatorGatewayRoutes: RoutePlugin = async (app, options) => {
           "Stores and encrypts payment gateway API keys so course sales route funds into the merchant account.",
         body: saveCreatorPaymentConfigRequestSchema,
         response: {
-          200: jsonResponse(
-            "Payment configuration saved",
-            creatorPaymentConfigSchema,
-          ),
+          200: jsonResponse("Payment configuration saved", creatorPaymentConfigSchema),
           400: errorResponse("Invalid gateway keys"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
@@ -56,10 +53,7 @@ const creatorGatewayRoutes: RoutePlugin = async (app, options) => {
         summary: "Get payment gateway configuration",
         description: "Returns active payment provider and masked key ID.",
         response: {
-          200: jsonResponse(
-            "Payment config",
-            creatorPaymentConfigSchema.nullable(),
-          ),
+          200: jsonResponse("Payment config", creatorPaymentConfigSchema.nullable()),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
         },

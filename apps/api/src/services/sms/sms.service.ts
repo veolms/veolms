@@ -1,22 +1,9 @@
 import type { FastifyBaseLogger } from "fastify";
 
-import type {
-  ISmsProvider,
-  SendOtpOptions,
-  SmsProviderType,
-} from "./sms-provider.interface.ts";
-import {
-  Msg91Provider,
-  type Msg91ProviderConfig,
-} from "./providers/msg91.provider.ts";
-import {
-  VonageProvider,
-  type VonageProviderConfig,
-} from "./providers/vonage.provider.ts";
-import {
-  TwilioProvider,
-  type TwilioProviderConfig,
-} from "./providers/twilio.provider.ts";
+import type { ISmsProvider, SendOtpOptions, SmsProviderType } from "./sms-provider.interface.ts";
+import { Msg91Provider, type Msg91ProviderConfig } from "./providers/msg91.provider.ts";
+import { VonageProvider, type VonageProviderConfig } from "./providers/vonage.provider.ts";
+import { TwilioProvider, type TwilioProviderConfig } from "./providers/twilio.provider.ts";
 import { ConsoleProvider } from "./providers/console.provider.ts";
 import type { SmsContent } from "./sms.templates.ts";
 
@@ -66,17 +53,10 @@ export interface SmsService {
   /**
    * Directly dispatches an OTP verification code with optional template variables.
    */
-  sendOtp(
-    phoneNo: string,
-    otp: string,
-    options?: SendOtpOptions,
-  ): Promise<SmsDeliveryResult>;
+  sendOtp(phoneNo: string, otp: string, options?: SendOtpOptions): Promise<SmsDeliveryResult>;
 }
 
-export function createSmsService({
-  config,
-  logger,
-}: SmsServiceOptions): SmsService {
+export function createSmsService({ config, logger }: SmsServiceOptions): SmsService {
   const log = logger.child({ service: "sms" });
 
   // Instantiate available providers
@@ -182,8 +162,7 @@ export function createSmsService({
       }
     }
 
-    const failureError =
-      lastError ?? new Error("No configured SMS providers available");
+    const failureError = lastError ?? new Error("No configured SMS providers available");
     log.error(
       { err: failureError, to: phoneNo },
       "All SMS providers failed; OTP was not delivered",
@@ -191,10 +170,7 @@ export function createSmsService({
     return { status: "failed", error: failureError };
   }
 
-  async function send(
-    phoneNo: string,
-    content: SmsContent,
-  ): Promise<SmsDeliveryResult> {
+  async function send(phoneNo: string, content: SmsContent): Promise<SmsDeliveryResult> {
     // If an OTP code was supplied, use the dedicated sendOtp flow
     if (content.code) {
       return sendOtp(phoneNo, content.code, {
@@ -234,8 +210,7 @@ export function createSmsService({
       }
     }
 
-    const failureError =
-      lastError ?? new Error("No configured SMS providers available");
+    const failureError = lastError ?? new Error("No configured SMS providers available");
     log.error(
       { err: failureError, to: phoneNo },
       "All SMS providers failed; text message was not delivered",

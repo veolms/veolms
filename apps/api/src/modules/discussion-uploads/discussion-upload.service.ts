@@ -38,6 +38,4 @@ export function createDiscussionUploadService(store: DiscussionUploadStore) {
   };
 }
 
-export type DiscussionUploadService = ReturnType<
-  typeof createDiscussionUploadService
->;
+export type DiscussionUploadService = ReturnType<typeof createDiscussionUploadService>;

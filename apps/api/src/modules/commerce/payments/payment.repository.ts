@@ -1,9 +1,5 @@
 import { sql } from "kysely";
-import type {
-  PaymentStatus,
-  PaymentAttemptStatus,
-  Json,
-} from "@veolms/database";
+import type { PaymentStatus, PaymentAttemptStatus, Json } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 
 export async function findPaymentById(database: Executor, paymentId: string) {
@@ -14,10 +10,7 @@ export async function findPaymentById(database: Executor, paymentId: string) {
     .executeTakeFirst();
 }
 
-export async function findPaymentByOrderId(
-  database: Executor,
-  orderId: string,
-) {
+export async function findPaymentByOrderId(database: Executor, orderId: string) {
   return await database
     .selectFrom("payments")
     .selectAll()
@@ -30,10 +23,7 @@ export async function findPaymentByOrderId(
     .executeTakeFirst();
 }
 
-export async function findPaymentByGatewayOrderId(
-  database: Executor,
-  gatewayOrderId: string,
-) {
+export async function findPaymentByGatewayOrderId(database: Executor, gatewayOrderId: string) {
   return await database
     .selectFrom("payments")
     .selectAll()
@@ -41,10 +31,7 @@ export async function findPaymentByGatewayOrderId(
     .executeTakeFirst();
 }
 
-export async function findPaymentByGatewayPaymentId(
-  database: Executor,
-  gatewayPaymentId: string,
-) {
+export async function findPaymentByGatewayPaymentId(database: Executor, gatewayPaymentId: string) {
   return await database
     .selectFrom("payments")
     .selectAll()
@@ -167,10 +154,7 @@ export async function updatePayment(
     .executeTakeFirst();
 }
 
-export async function listPaymentAttempts(
-  database: Executor,
-  paymentId: string,
-) {
+export async function listPaymentAttempts(database: Executor, paymentId: string) {
   return await database
     .selectFrom("payment_attempts")
     .selectAll()

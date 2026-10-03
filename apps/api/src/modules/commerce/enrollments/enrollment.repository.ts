@@ -8,18 +8,13 @@ export interface EnrollmentAnalyticsFilters {
   to?: Date;
 }
 
-export async function listAcademyEnrollments(
-  database: Executor,
-  limit: number,
-) {
+export async function listAcademyEnrollments(database: Executor, limit: number) {
   return await database
     .selectFrom("enrollments as e")
     .innerJoin("users as u", "u.id", "e.user_id")
     .innerJoin("courses as c", "c.id", "e.course_id")
     .leftJoin("learning_progress as lp", (join) =>
-      join
-        .onRef("lp.user_id", "=", "e.user_id")
-        .onRef("lp.course_id", "=", "e.course_id"),
+      join.onRef("lp.user_id", "=", "e.user_id").onRef("lp.course_id", "=", "e.course_id"),
     )
     .select([
       "e.id as enrollment_id",
@@ -30,9 +25,7 @@ export async function listAcademyEnrollments(
       "u.avatar_data_url as student_avatar_data_url",
       "c.id as course_id",
       "c.title as course_title",
-      sql<number | null>`avg(lp.progress_percent)`.as(
-        "average_progress_percent",
-      ),
+      sql<number | null>`avg(lp.progress_percent)`.as("average_progress_percent"),
     ])
     .where("u.is_deleted", "=", false)
     .where("c.deleted_at", "is", null)
@@ -57,11 +50,7 @@ function toCourseIdList(courseId: string | string[] | undefined): string[] {
   return Array.isArray(courseId) ? courseId : [courseId];
 }
 
-export async function findEnrollment(
-  database: Executor,
-  userId: string,
-  courseId: string,
-) {
+export async function findEnrollment(database: Executor, userId: string, courseId: string) {
   return await database
     .selectFrom("enrollments")
     .selectAll()
@@ -75,10 +64,7 @@ export async function listUserEnrollments(
   userId: string,
   status?: EnrollmentStatus,
 ) {
-  let query = database
-    .selectFrom("enrollments")
-    .selectAll()
-    .where("user_id", "=", userId);
+  let query = database.selectFrom("enrollments").selectAll().where("user_id", "=", userId);
 
   if (status) {
     query = query.where("status", "=", status);
@@ -87,30 +73,21 @@ export async function listUserEnrollments(
   return await query.orderBy("created_at", "desc").execute();
 }
 
-export async function listUserEnrolledCourseIds(
-  database: Executor,
-  userId: string,
-) {
+export async function listUserEnrolledCourseIds(database: Executor, userId: string) {
   const rows = await database
     .selectFrom("enrollments")
     .select("course_id")
     .where("user_id", "=", userId)
     .where("status", "=", "active")
     .where((eb) =>
-      eb.or([
-        eb("access_expires_at", "is", null),
-        eb("access_expires_at", ">", new Date()),
-      ]),
+      eb.or([eb("access_expires_at", "is", null), eb("access_expires_at", ">", new Date())]),
     )
     .execute();
 
   return rows.map((r) => r.course_id);
 }
 
-export async function listActiveUserIdsByCourseId(
-  database: Executor,
-  courseId: string,
-) {
+export async function listActiveUserIdsByCourseId(database: Executor, courseId: string) {
   const rows = await database
     .selectFrom("enrollments")
     .select("user_id")
@@ -171,10 +148,7 @@ export async function getEnrollmentActivityBuckets(
 
   let query = database
     .selectFrom("enrollments")
-    .select([
-      bucketLabel.as("bucket_start"),
-      sql<number>`count(*)::int`.as("value"),
-    ])
+    .select([bucketLabel.as("bucket_start"), sql<number>`count(*)::int`.as("value")])
     .groupBy(bucketStart)
     .orderBy(bucketStart);
 
@@ -322,10 +296,7 @@ export async function updateEnrollmentStatus(
  * every enrollment for that (user, course) pair regardless of which order
  * granted it.
  */
-export async function revokeEnrollmentsByOrderId(
-  database: Executor,
-  orderId: string,
-) {
+export async function revokeEnrollmentsByOrderId(database: Executor, orderId: string) {
   return await database
     .updateTable("enrollments")
     .set({

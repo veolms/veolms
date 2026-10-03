@@ -20,9 +20,7 @@ export function SeekButton({ className, seconds }: SeekButtonProps) {
       icon={
         <span className="relative grid place-items-center">
           <Icon size={22} />
-          <span className="absolute text-[8px] font-bold leading-none">
-            {amount}
-          </span>
+          <span className="absolute text-[8px] leading-none font-bold">{amount}</span>
         </span>
       }
       onClick={() => controller.seekBy(seconds)}

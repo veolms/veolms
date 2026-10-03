@@ -1,12 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  appendFile,
-  mkdir,
-  readFile,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -30,12 +23,9 @@ function readArguments(argv) {
 }
 
 function apiBaseUrl() {
-  const configured =
-    process.env.VEO_PUBLIC_API_BASE_URL || process.env.VITE_API_BASE_URL;
+  const configured = process.env.VEO_PUBLIC_API_BASE_URL || process.env.VITE_API_BASE_URL;
   if (!configured) {
-    throw new Error(
-      "Set VEO_PUBLIC_API_BASE_URL to the public API URL, including /v1.",
-    );
+    throw new Error("Set VEO_PUBLIC_API_BASE_URL to the public API URL, including /v1.");
   }
   const result = new URL(configured);
   if (result.protocol !== "http:" && result.protocol !== "https:") {
@@ -49,9 +39,7 @@ function apiUrl(base, pathname) {
 }
 
 function unwrap(payload) {
-  return payload && typeof payload === "object" && "data" in payload
-    ? payload.data
-    : payload;
+  return payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
 }
 
 async function fetchPublishedCourses(base) {
@@ -79,13 +67,10 @@ async function fetchPublishedCourses(base) {
 }
 
 async function resolveCourseSlug(base, courseId) {
-  const response = await fetch(
-    apiUrl(base, `courses/${encodeURIComponent(courseId)}/overview`),
-    {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(30_000),
-    },
-  );
+  const response = await fetch(apiUrl(base, `courses/${encodeURIComponent(courseId)}/overview`), {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(30_000),
+  });
   if (response.status === 404) return null;
   if (!response.ok) {
     throw new Error(`Course overview request failed (${response.status}).`);
@@ -98,10 +83,7 @@ async function resolveCourseSlug(base, courseId) {
 }
 
 function validateSlug(slug) {
-  if (
-    typeof slug !== "string" ||
-    !/^[a-z0-9](?:[a-z0-9-]{0,158}[a-z0-9])?$/iu.test(slug)
-  ) {
+  if (typeof slug !== "string" || !/^[a-z0-9](?:[a-z0-9-]{0,158}[a-z0-9])?$/iu.test(slug)) {
     throw new Error(`Invalid course slug: ${String(slug)}`);
   }
 }
@@ -130,9 +112,7 @@ async function writePairAtomically(files) {
       await rename(temporary, destination);
     }
   } catch (error) {
-    await Promise.all(
-      staged.map(([temporary]) => rm(temporary, { force: true })),
-    );
+    await Promise.all(staged.map(([temporary]) => rm(temporary, { force: true })));
     throw error;
   }
 }
@@ -150,8 +130,7 @@ async function main() {
   const args = readArguments(process.argv.slice(2));
   const all = args.has("all");
   const courseId = process.env.COURSE_STATIC_COURSE_ID || args.get("course-id");
-  const requestedSlug =
-    process.env.COURSE_STATIC_COURSE_SLUG || args.get("course-slug");
+  const requestedSlug = process.env.COURSE_STATIC_COURSE_SLUG || args.get("course-slug");
   if (!all && typeof courseId !== "string") {
     throw new Error("Pass --course-id <id> or --all.");
   }
@@ -221,10 +200,7 @@ async function main() {
           readFileIfExists(htmlPath),
           readFileIfExists(dataPath),
         ]);
-        await Promise.all([
-          rm(htmlPath, { force: true }),
-          rm(dataPath, { force: true }),
-        ]);
+        await Promise.all([rm(htmlPath, { force: true }), rm(dataPath, { force: true })]);
         if (existingHtml !== null || existingData !== null) {
           changed = true;
           console.log(`Removed unpublished course page ${pathname}`);
@@ -234,24 +210,16 @@ async function main() {
         continue;
       }
       if (!dataResponse.ok) {
-        throw new Error(
-          `${pathname}.data render failed (${dataResponse.status}).`,
-        );
+        throw new Error(`${pathname}.data render failed (${dataResponse.status}).`);
       }
       const data = await dataResponse.text();
-      const htmlResponse = await handler(
-        new Request(new URL(`${pathname}/`, renderOrigin)),
-      );
+      const htmlResponse = await handler(new Request(new URL(`${pathname}/`, renderOrigin)));
       if (!htmlResponse.ok) {
-        throw new Error(
-          `${pathname} HTML render failed (${htmlResponse.status}).`,
-        );
+        throw new Error(`${pathname} HTML render failed (${htmlResponse.status}).`);
       }
       const html = await htmlResponse.text();
       if (!html.includes("window.__reactRouterContext =")) {
-        throw new Error(
-          `Rendered HTML for ${pathname} is missing router data.`,
-        );
+        throw new Error(`Rendered HTML for ${pathname} is missing router data.`);
       }
       const [existingHtml, existingData] = await Promise.all([
         readFileIfExists(htmlPath),

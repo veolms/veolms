@@ -1,10 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Permission } from "@veolms/contracts";
 import { httpError } from "../../lib/errors.ts";
-import type {
-  AuthorizationService,
-  AuthorizationDecision,
-} from "./authorization.service.ts";
+import type { AuthorizationService, AuthorizationDecision } from "./authorization.service.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -30,9 +27,7 @@ export interface AuthorizationGuard {
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
 
-export function createAuthorizationGuard(
-  service: AuthorizationService,
-): AuthorizationGuard {
+export function createAuthorizationGuard(service: AuthorizationService): AuthorizationGuard {
   function extractResourceId(
     request: FastifyRequest,
     resourceType: ResourceType,
@@ -53,19 +48,11 @@ export function createAuthorizationGuard(
     }
 
     if (resourceType === "lesson") {
-      return (
-        params["lessonId"] ??
-        params["id"] ??
-        (body["lessonId"] as string | undefined)
-      );
+      return params["lessonId"] ?? params["id"] ?? (body["lessonId"] as string | undefined);
     }
 
     if (resourceType === "section") {
-      return (
-        params["sectionId"] ??
-        params["id"] ??
-        (body["sectionId"] as string | undefined)
-      );
+      return params["sectionId"] ?? params["id"] ?? (body["sectionId"] as string | undefined);
     }
 
     return undefined;
@@ -81,9 +68,7 @@ export function createAuthorizationGuard(
       reply: FastifyReply,
     ): Promise<void> {
       if (!request.user) {
-        return reply
-          .code(401)
-          .send(httpError(401, "UNAUTHORIZED", "Authentication required"));
+        return reply.code(401).send(httpError(401, "UNAUTHORIZED", "Authentication required"));
       }
 
       const resourceId = extractResourceId(request, resourceType);
@@ -120,8 +105,7 @@ export function createAuthorizationGuard(
               httpError(
                 403,
                 "FEATURE_DISABLED",
-                decision.reason ??
-                  "This feature is not enabled on the platform",
+                decision.reason ?? "This feature is not enabled on the platform",
               ),
             );
         }
@@ -132,8 +116,7 @@ export function createAuthorizationGuard(
             httpError(
               403,
               "PERMISSION_DENIED",
-              decision.reason ??
-                "You do not have permission to perform this action",
+              decision.reason ?? "You do not have permission to perform this action",
             ),
           );
       }

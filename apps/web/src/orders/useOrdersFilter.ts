@@ -1,24 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import type {
-  Order,
-  OrderStatus,
-  OrderStatsResponse,
-  OrderSortOrder,
-} from "@veolms/contracts";
-import {
-  DEFAULT_DEBOUNCE_DELAY_MS,
-  useDebounceValue,
-} from "../hooks/useDebounce";
+import type { Order, OrderStatus, OrderStatsResponse, OrderSortOrder } from "@veolms/contracts";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounceValue } from "../hooks/useDebounce";
 import { useOrders, useOrderStats } from "../services/orders";
 
 export type DateRangePreset =
-  | "all_time"
-  | "today"
-  | "last_7_days"
-  | "last_30_days"
-  | "this_month"
-  | "last_month"
-  | "custom";
+  "all_time" | "today" | "last_7_days" | "last_30_days" | "this_month" | "last_month" | "custom";
 
 export interface DateRangeState {
   preset: DateRangePreset;
@@ -69,15 +55,7 @@ function resolveDateRange(
     }
     case "last_month": {
       const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const to = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        0,
-        23,
-        59,
-        59,
-        999,
-      );
+      const to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
       return { from, to, label: "Last Month" };
     }
     case "custom": {
@@ -156,9 +134,7 @@ export interface UseOrdersFilterReturn {
   resetFilters: () => void;
 }
 
-export function useOrdersFilter(options?: {
-  enabled?: boolean;
-}): UseOrdersFilterReturn {
+export function useOrdersFilter(options?: { enabled?: boolean }): UseOrdersFilterReturn {
   const enabled = options?.enabled ?? true;
 
   // Search with debounce (150ms for responsive server-side sync)
@@ -169,20 +145,13 @@ export function useOrdersFilter(options?: {
   );
 
   // Filters
-  const [courseFilter, setCourseFilter] = useState<string | undefined>(
-    undefined,
-  );
-  const [couponFilter, setCouponFilter] = useState<string | undefined>(
-    undefined,
-  );
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | undefined>(
-    undefined,
-  );
+  const [courseFilter, setCourseFilter] = useState<string | undefined>(undefined);
+  const [couponFilter, setCouponFilter] = useState<string | undefined>(undefined);
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<OrderSortOrder>("desc");
 
   // Date Range (default: last_30_days matching the mockup e.g. "May 6 - Jun 4, 2025")
-  const [datePreset, setDatePresetState] =
-    useState<DateRangePreset>("last_30_days");
+  const [datePreset, setDatePresetState] = useState<DateRangePreset>("last_30_days");
   const [customFrom, setCustomFrom] = useState<Date | undefined>(undefined);
   const [customTo, setCustomTo] = useState<Date | undefined>(undefined);
 
@@ -195,19 +164,16 @@ export function useOrdersFilter(options?: {
     [datePreset, customFrom, customTo],
   );
 
-  const setDatePreset = useCallback(
-    (preset: DateRangePreset, from?: Date, to?: Date) => {
-      setDatePresetState(preset);
-      if (preset === "custom") {
-        setCustomFrom(from);
-        setCustomTo(to);
-      } else {
-        setCustomFrom(undefined);
-        setCustomTo(undefined);
-      }
-    },
-    [],
-  );
+  const setDatePreset = useCallback((preset: DateRangePreset, from?: Date, to?: Date) => {
+    setDatePresetState(preset);
+    if (preset === "custom") {
+      setCustomFrom(from);
+      setCustomTo(to);
+    } else {
+      setCustomFrom(undefined);
+      setCustomTo(undefined);
+    }
+  }, []);
 
   const toggleSortOrder = useCallback(() => {
     setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
@@ -226,15 +192,7 @@ export function useOrdersFilter(options?: {
       sortOrder,
       limit: 30,
     };
-  }, [
-    debouncedSearch,
-    courseFilter,
-    couponFilter,
-    statusFilter,
-    filterFrom,
-    filterTo,
-    sortOrder,
-  ]);
+  }, [debouncedSearch, courseFilter, couponFilter, statusFilter, filterFrom, filterTo, sortOrder]);
 
   const {
     data,
@@ -257,10 +215,7 @@ export function useOrdersFilter(options?: {
     };
   }, [courseFilter, couponFilter, statusFilter, filterFrom, filterTo]);
 
-  const { data: stats, isLoading: isLoadingStats } = useOrderStats(
-    statsParams,
-    { enabled },
-  );
+  const { data: stats, isLoading: isLoadingStats } = useOrderStats(statsParams, { enabled });
 
   // Server-loaded orders
   const serverOrders = useMemo(() => {
@@ -307,8 +262,7 @@ export function useOrdersFilter(options?: {
   }, [orders, selectedOrderId]);
 
   const hasPrevOrder = selectedOrderIndex > 0;
-  const hasNextOrder =
-    selectedOrderIndex !== -1 && selectedOrderIndex < orders.length - 1;
+  const hasNextOrder = selectedOrderIndex !== -1 && selectedOrderIndex < orders.length - 1;
 
   const selectPrevOrder = useCallback(() => {
     if (hasPrevOrder) {
@@ -323,16 +277,10 @@ export function useOrdersFilter(options?: {
   }, [hasNextOrder, orders, selectedOrderIndex]);
 
   // Modal targets
-  const [refundTargetOrder, setRefundTargetOrder] = useState<Order | null>(
-    null,
-  );
+  const [refundTargetOrder, setRefundTargetOrder] = useState<Order | null>(null);
 
   const isFiltered = Boolean(
-    searchQuery ||
-    courseFilter ||
-    couponFilter ||
-    statusFilter ||
-    datePreset !== "last_30_days",
+    searchQuery || courseFilter || couponFilter || statusFilter || datePreset !== "last_30_days",
   );
 
   const resetFilters = useCallback(() => {

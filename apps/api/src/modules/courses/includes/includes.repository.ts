@@ -1,10 +1,7 @@
 import { type Kysely } from "kysely";
 import type { Database } from "@veolms/database";
 
-export async function findMaxIncludePosition(
-  database: Kysely<Database>,
-  courseId: string,
-) {
+export async function findMaxIncludePosition(database: Kysely<Database>, courseId: string) {
   return await database
     .selectFrom("course_includes")
     .select((eb) => eb.fn.max("position").as("max"))
@@ -40,10 +37,7 @@ export async function findIncludeById(
     .executeTakeFirst();
 }
 
-export async function findIncludesByCourseId(
-  database: Kysely<Database>,
-  courseId: string,
-) {
+export async function findIncludesByCourseId(database: Kysely<Database>, courseId: string) {
   return await database
     .selectFrom("course_includes")
     .selectAll()

@@ -72,15 +72,13 @@ export function useControlsVisibility({
       hasPlayedActiveSourceRef.current = false;
     }
     if (playing) hasPlayedActiveSourceRef.current = true;
-    const firstPlaybackPending =
-      keepVisibleUntilFirstPlay && !hasPlayedActiveSourceRef.current;
+    const firstPlaybackPending = keepVisibleUntilFirstPlay && !hasPlayedActiveSourceRef.current;
 
     const pointerQuery =
       typeof window !== "undefined" && typeof window.matchMedia === "function"
         ? window.matchMedia(FINE_POINTER_QUERY)
         : null;
-    const usesDesktopPointer = () =>
-      !mobileInteraction && (pointerQuery?.matches ?? false);
+    const usesDesktopPointer = () => !mobileInteraction && (pointerQuery?.matches ?? false);
     const isDesktopMousePointer = (event: PointerEvent) =>
       event.pointerType === "mouse" && !mobileInteraction;
     if (!initializedPointerModeRef.current || mobileInteraction) {
@@ -96,19 +94,13 @@ export function useControlsVisibility({
     };
 
     const hasKeyboardFocus = () =>
-      inputModeRef.current === "keyboard" &&
-      root.contains(document.activeElement);
+      inputModeRef.current === "keyboard" && root.contains(document.activeElement);
 
     const controlsMustRemainVisible = () =>
-      firstPlaybackPending ||
-      scrubbing ||
-      settingsOpen ||
-      controlsLocked ||
-      hasKeyboardFocus();
+      firstPlaybackPending || scrubbing || settingsOpen || controlsLocked || hasKeyboardFocus();
     const controlsTemporarilySuppressed = () =>
       !firstPlaybackPending &&
-      (temporarySpeedBoost ||
-        controller.getSnapshot().ui.hud?.variant === "mobile-seek");
+      (temporarySpeedBoost || controller.getSnapshot().ui.hud?.variant === "mobile-seek");
     const delaysControlsReveal = (target: EventTarget | null) =>
       target instanceof Element &&
       target.closest('[data-player-controls-reveal="delayed"]') !== null;
@@ -164,16 +156,11 @@ export function useControlsVisibility({
       if (delaysControlsReveal(event.target)) {
         deferredTouchPointers.delete(event.pointerId);
         inputModeRef.current = "pointer";
-        pointerModeRef.current = isDesktopMousePointer(event)
-          ? "mouse"
-          : "touch";
+        pointerModeRef.current = isDesktopMousePointer(event) ? "mouse" : "touch";
         pointerInsideRef.current = false;
         clearTimer();
         controller.setControlsVisible(false);
-      } else if (
-        event.pointerType === "touch" &&
-        !controller.getSnapshot().ui.controlsVisible
-      ) {
+      } else if (event.pointerType === "touch" && !controller.getSnapshot().ui.controlsVisible) {
         inputModeRef.current = "pointer";
         pointerModeRef.current = "touch";
         pointerInsideRef.current = false;
@@ -220,8 +207,7 @@ export function useControlsVisibility({
 
     const handleDocumentKeyDown = (event: KeyboardEvent) => {
       inputModeRef.current = "keyboard";
-      if (!(event.target instanceof Node) || !root.contains(event.target))
-        return;
+      if (!(event.target instanceof Node) || !root.contains(event.target)) return;
       if (controlsTemporarilySuppressed()) {
         controller.setControlsVisible(false);
         return;
@@ -314,10 +300,7 @@ export function useControlsVisibility({
       root.removeEventListener("focusin", handleFocusIn);
       root.removeEventListener("focusout", handleFocusOut);
       document.removeEventListener("keydown", handleDocumentKeyDown, true);
-      pointerQuery?.removeEventListener(
-        "change",
-        handlePointerCapabilityChange,
-      );
+      pointerQuery?.removeEventListener("change", handlePointerCapabilityChange);
     };
   }, [
     controller,

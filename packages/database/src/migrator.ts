@@ -3,11 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { Kysely } from "kysely";
-import {
-  FileMigrationProvider,
-  Migrator,
-  type MigrationResultSet,
-} from "kysely/migration";
+import { FileMigrationProvider, Migrator, type MigrationResultSet } from "kysely/migration";
 
 import type { Database } from "./schema.ts";
 
@@ -19,8 +15,7 @@ export function createMigrator(database: Kysely<Database>): Migrator {
       fs,
       path,
       migrationFolder: fileURLToPath(new URL("../migrations", import.meta.url)),
-      import: async (migrationPath) =>
-        import(pathToFileURL(migrationPath).href),
+      import: async (migrationPath) => import(pathToFileURL(migrationPath).href),
     }),
   });
 }

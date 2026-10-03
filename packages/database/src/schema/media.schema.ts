@@ -2,8 +2,7 @@ import type { Generated, JSONColumnType } from "kysely";
 import type { Json } from "./json.schema.ts";
 import type { VideoJobStatus, VideoQualityLevel } from "@veolms/contracts";
 
-export type MediaAssetStatus =
-  "uploading" | "uploaded" | "processing" | "ready" | "failed";
+export type MediaAssetStatus = "uploading" | "uploaded" | "processing" | "ready" | "failed";
 
 export interface ImageVariantMetadata {
   width: number;

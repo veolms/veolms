@@ -92,11 +92,7 @@ import type {
   LearningAuditLogTable,
 } from "./learning-interactions.schema.ts";
 
-import type {
-  WebhookEventTable,
-  CallbackInboxTable,
-  OutboxEventTable,
-} from "./webhooks.schema.ts";
+import type { WebhookEventTable, CallbackInboxTable, OutboxEventTable } from "./webhooks.schema.ts";
 import type {
   NotificationTable,
   NotificationDeliveryTable,

@@ -1,7 +1,4 @@
-import type {
-  DatabaseExecutor,
-  LearningAttachmentTable,
-} from "@veolms/database";
+import type { DatabaseExecutor, LearningAttachmentTable } from "@veolms/database";
 import type { Selectable } from "kysely";
 import { sql } from "kysely";
 import type {
@@ -75,16 +72,10 @@ export type ThreadsListQuery = ListLearningThreadsQuery & {
   skipCourseAccessCheck?: boolean;
 };
 
-function assertVisibilityAllowed(
-  kind: string,
-  visibility: string | undefined,
-): void {
+function assertVisibilityAllowed(kind: string, visibility: string | undefined): void {
   if (!visibility) return;
   const normalized = kind === "qna" ? "question" : kind;
-  if (
-    (normalized === "comment" || normalized === "question") &&
-    visibility === "private"
-  ) {
+  if ((normalized === "comment" || normalized === "question") && visibility === "private") {
     throw httpError(
       400,
       "INVALID_VISIBILITY",
@@ -116,10 +107,7 @@ export interface ThreadsService {
     actor: DiscussionActor | null,
   ): Promise<LearningThread>;
 
-  listThreads(
-    db: DatabaseExecutor,
-    query: ThreadsListQuery,
-  ): Promise<LearningThreadsListResponse>;
+  listThreads(db: DatabaseExecutor, query: ThreadsListQuery): Promise<LearningThreadsListResponse>;
 
   updateThread(
     db: DatabaseExecutor,
@@ -128,11 +116,7 @@ export interface ThreadsService {
     updates: UpdateLearningThreadRequest,
   ): Promise<LearningThread>;
 
-  deleteThread(
-    db: DatabaseExecutor,
-    threadId: string,
-    actor: DiscussionActor,
-  ): Promise<void>;
+  deleteThread(db: DatabaseExecutor, threadId: string, actor: DiscussionActor): Promise<void>;
 
   getDiscussionsWorkspace(
     db: DatabaseExecutor,
@@ -163,14 +147,10 @@ export function createThreadsService(
   const indexAttachmentSummaries = (
     summaries: readonly AttachmentSummaryRow[],
   ): Map<string, DiscussionAttachmentSummary> =>
-    new Map(
-      summaries.map((summary) => [summary.targetId, summary.attachmentSummary]),
-    );
+    new Map(summaries.map((summary) => [summary.targetId, summary.attachmentSummary]));
 
   function resolveAttachmentUrl(attachment: LearningAttachmentRow): string {
-    return storage
-      ? getCdnDeliveryUrl(storage, attachment.storage_key).url
-      : attachment.file_url;
+    return storage ? getCdnDeliveryUrl(storage, attachment.storage_key).url : attachment.file_url;
   }
 
   function mapBookmarkWorkspaceItem(
@@ -253,9 +233,7 @@ export function createThreadsService(
     },
   ): LearningThread {
     const isOwn = currentUserId ? row.userId === currentUserId : false;
-    const isLiked = engagements?.likedThreadIds
-      ? engagements.likedThreadIds.has(row.id)
-      : false;
+    const isLiked = engagements?.likedThreadIds ? engagements.likedThreadIds.has(row.id) : false;
     const isBookmarked = engagements?.bookmarkedThreadIds
       ? engagements.bookmarkedThreadIds.has(row.id)
       : false;
@@ -312,13 +290,9 @@ export function createThreadsService(
       isMentioned,
       isOwn,
       createdAt:
-        row.createdAt instanceof Date
-          ? row.createdAt.toISOString()
-          : String(row.createdAt),
+        row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
       updatedAt:
-        row.updatedAt instanceof Date
-          ? row.updatedAt.toISOString()
-          : String(row.updatedAt),
+        row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
     };
   }
 
@@ -346,14 +320,9 @@ export function createThreadsService(
         input.courseId,
       );
 
-      const threadKind =
-        input.kind === "qna" ? "question" : input.kind || "comment";
+      const threadKind = input.kind === "qna" ? "question" : input.kind || "comment";
 
-      await courseAccess.assertThreadKindEnabled(
-        db,
-        input.courseId,
-        threadKind,
-      );
+      await courseAccess.assertThreadKindEnabled(db, input.courseId, threadKind);
 
       // Validate lesson hierarchy
       if (input.lessonId) {
@@ -364,20 +333,11 @@ export function createThreadsService(
           .executeTakeFirst();
 
         if (!lesson || lesson.course_id !== input.courseId) {
-          throw httpError(
-            400,
-            "INVALID_LESSON",
-            "Lesson does not belong to this course",
-          );
+          throw httpError(400, "INVALID_LESSON", "Lesson does not belong to this course");
         }
       }
 
-      await courseAccess.assertNotSuspended(
-        db,
-        input.userId,
-        input.courseId,
-        threadKind,
-      );
+      await courseAccess.assertNotSuspended(db, input.userId, input.courseId, threadKind);
 
       const visibility = input.visibility || "public";
       assertVisibilityAllowed(threadKind, visibility);
@@ -438,11 +398,7 @@ export function createThreadsService(
 
         const created = await threadsRepo.findThreadById(trx, id);
         if (!created) {
-          throw httpError(
-            500,
-            "CREATE_FAILED",
-            "Failed to load created thread",
-          );
+          throw httpError(500, "CREATE_FAILED", "Failed to load created thread");
         }
 
         const attachments = await trx
@@ -474,11 +430,7 @@ export function createThreadsService(
       } else if (lessonReadAccess) {
         courseAccess.assertThreadIsActive(row);
         if (row.visibility !== "public") {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
       } else {
         if (!actor) {
@@ -600,9 +552,7 @@ export function createThreadsService(
         ...query,
         academyId,
         pageCursor,
-        ...(accessibleCourseIds && accessibleCourseIds !== "all"
-          ? { accessibleCourseIds }
-          : {}),
+        ...(accessibleCourseIds && accessibleCourseIds !== "all" ? { accessibleCourseIds } : {}),
       };
 
       const [rows, totalCount] = await Promise.all([
@@ -667,12 +617,9 @@ export function createThreadsService(
             .execute(),
         ]);
 
-        const [likes, bookmarks, follows, threadMentions, replyMentions] =
-          engagements;
+        const [likes, bookmarks, follows, threadMentions, replyMentions] = engagements;
         likedThreadIds = new Set(likes.map((l) => l.target_id));
-        bookmarkedThreadIds = new Set(
-          bookmarks.flatMap((b) => (b.thread_id ? [b.thread_id] : [])),
-        );
+        bookmarkedThreadIds = new Set(bookmarks.flatMap((b) => (b.thread_id ? [b.thread_id] : [])));
         followedThreadIds = new Set(follows.map((f) => f.thread_id));
         mentionedThreadIds = new Set([
           ...threadMentions.map((m) => m.source_id),
@@ -689,17 +636,12 @@ export function createThreadsService(
       }
 
       const threads = page.map((row) =>
-        mapThreadRow(
-          row,
-          query.currentUserId,
-          attachmentsByThreadId.get(row.id) ?? [],
-          {
-            likedThreadIds,
-            bookmarkedThreadIds,
-            followedThreadIds,
-            mentionedThreadIds,
-          },
-        ),
+        mapThreadRow(row, query.currentUserId, attachmentsByThreadId.get(row.id) ?? [], {
+          likedThreadIds,
+          bookmarkedThreadIds,
+          followedThreadIds,
+          mentionedThreadIds,
+        }),
       );
 
       const last = page.at(-1);
@@ -711,8 +653,7 @@ export function createThreadsService(
           sort,
           updatedAt: last.updatedAt ? toDate(last.updatedAt) : undefined,
           repliesCount: Number(last.repliesCount || 0),
-          engagement:
-            Number(last.likesCount || 0) + Number(last.repliesCount || 0),
+          engagement: Number(last.likesCount || 0) + Number(last.repliesCount || 0),
         });
       }
 
@@ -727,18 +668,10 @@ export function createThreadsService(
       return withWriteTransaction(db, async (trx) => {
         const row = await threadsRepo.findThreadById(trx, threadId);
         if (!row) {
-          throw httpError(
-            404,
-            "THREAD_NOT_FOUND",
-            "Discussion thread not found",
-          );
+          throw httpError(404, "THREAD_NOT_FOUND", "Discussion thread not found");
         }
 
-        await courseAccess.assertCanParticipateInCourse(
-          trx,
-          actor,
-          row.courseId,
-        );
+        await courseAccess.assertCanParticipateInCourse(trx, actor, row.courseId);
         await courseAccess.assertCanAccessThread(trx, actor, row);
         courseAccess.assertThreadIsActive(row);
 
@@ -751,27 +684,16 @@ export function createThreadsService(
         }
 
         if (row.isLocked) {
-          throw httpError(
-            400,
-            "THREAD_LOCKED",
-            "Cannot edit locked discussion thread",
-          );
+          throw httpError(400, "THREAD_LOCKED", "Cannot edit locked discussion thread");
         }
 
-        await courseAccess.assertNotSuspended(
-          trx,
-          actor.userId,
-          row.courseId,
-          row.kind,
-        );
+        await courseAccess.assertNotSuspended(trx, actor.userId, row.courseId, row.kind);
 
         if (updates.visibility) {
           assertVisibilityAllowed(row.kind, updates.visibility);
         }
 
-        const plainText = updates.content
-          ? extractPlainText(updates.content)
-          : undefined;
+        const plainText = updates.content ? extractPlainText(updates.content) : undefined;
 
         await threadsRepo.updateThread(trx, threadId, {
           ...updates,
@@ -792,11 +714,7 @@ export function createThreadsService(
 
         const updated = await threadsRepo.findThreadById(trx, threadId);
         if (!updated) {
-          throw httpError(
-            500,
-            "UPDATE_FAILED",
-            "Failed to load updated discussion thread",
-          );
+          throw httpError(500, "UPDATE_FAILED", "Failed to load updated discussion thread");
         }
         return mapThreadRow(updated, actor.userId);
       });
@@ -812,17 +730,9 @@ export function createThreadsService(
       await courseAccess.assertCanAccessThread(db, actor, row);
       courseAccess.assertThreadIsActive(row);
 
-      const canStaffModerate = await courseAccess.canModerateCourse(
-        db,
-        actor,
-        row.courseId,
-      );
+      const canStaffModerate = await courseAccess.canModerateCourse(db, actor, row.courseId);
       if (row.userId !== actor.userId && !canStaffModerate) {
-        throw httpError(
-          403,
-          "FORBIDDEN",
-          "You are not allowed to delete this discussion thread",
-        );
+        throw httpError(403, "FORBIDDEN", "You are not allowed to delete this discussion thread");
       }
 
       await withWriteTransaction(db, async (trx) => {
@@ -839,10 +749,8 @@ export function createThreadsService(
       const isStaff = actor.roles.some((r) =>
         ["admin", "instructor", "creator", "staff"].includes(r.toLowerCase()),
       );
-      const isAuthorRestrictedTab =
-        tab === "q-and-a" || tab === "comments" || tab === "notes";
-      const effectiveMine =
-        isAuthorRestrictedTab && !isStaff ? true : query.mine;
+      const isAuthorRestrictedTab = tab === "q-and-a" || tab === "comments" || tab === "notes";
+      const effectiveMine = isAuthorRestrictedTab && !isStaff ? true : query.mine;
 
       // Validate courseId if supplied
       if (query.courseId) {
@@ -867,19 +775,11 @@ export function createThreadsService(
       // broader staff shortcut remains unchanged for the existing thread and
       // report tabs below.
       const accessibleCourseIds =
-        tab === "saved" ||
-        tab === "following" ||
-        tab === "notes" ||
-        tab === "mentions" ||
-        !isStaff
+        tab === "saved" || tab === "following" || tab === "notes" || tab === "mentions" || !isStaff
           ? await courseAccess.listAccessibleCourseIds(db, actor)
           : "all";
 
-      if (
-        accessibleCourseIds !== "all" &&
-        accessibleCourseIds.length === 0 &&
-        tab !== "saved"
-      ) {
+      if (accessibleCourseIds !== "all" && accessibleCourseIds.length === 0 && tab !== "saved") {
         return { items: [], courses: [], nextCursor: null, totalCount: 0 };
       }
 
@@ -911,11 +811,7 @@ export function createThreadsService(
             : normalizeThreadSort(query.sort);
       const pageCursor = decodeDiscussionCursor(query.cursor);
 
-      if (
-        tab === "saved" &&
-        pageCursor &&
-        pageCursor.sort !== BOOKMARKS_WORKSPACE_SORT
-      ) {
+      if (tab === "saved" && pageCursor && pageCursor.sort !== BOOKMARKS_WORKSPACE_SORT) {
         throw httpError(
           400,
           "INVALID_CURSOR",
@@ -923,11 +819,7 @@ export function createThreadsService(
         );
       }
 
-      if (
-        tab === "mentions" &&
-        pageCursor?.sort &&
-        pageCursor.sort !== MENTIONS_WORKSPACE_SORT
-      ) {
+      if (tab === "mentions" && pageCursor?.sort && pageCursor.sort !== MENTIONS_WORKSPACE_SORT) {
         throw httpError(
           400,
           "INVALID_CURSOR",
@@ -988,53 +880,26 @@ export function createThreadsService(
 
         if (query.courseId) {
           notesQuery = notesQuery.where("n.course_id", "=", query.courseId);
-          notesCountQuery = notesCountQuery.where(
-            "n.course_id",
-            "=",
-            query.courseId,
-          );
+          notesCountQuery = notesCountQuery.where("n.course_id", "=", query.courseId);
         } else if (accessibleCourseIds !== "all") {
-          notesQuery = notesQuery.where("n.course_id", "in", [
-            ...accessibleCourseIds,
-          ]);
-          notesCountQuery = notesCountQuery.where("n.course_id", "in", [
-            ...accessibleCourseIds,
-          ]);
+          notesQuery = notesQuery.where("n.course_id", "in", [...accessibleCourseIds]);
+          notesCountQuery = notesCountQuery.where("n.course_id", "in", [...accessibleCourseIds]);
         }
 
         if (query.lessonId) {
           notesQuery = notesQuery.where("n.lesson_id", "=", query.lessonId);
-          notesCountQuery = notesCountQuery.where(
-            "n.lesson_id",
-            "=",
-            query.lessonId,
-          );
+          notesCountQuery = notesCountQuery.where("n.lesson_id", "=", query.lessonId);
         }
 
         if (effectiveMine === true) {
           // `mine=true` is an ownership constraint for every role.
           notesQuery = notesQuery.where("n.user_id", "=", actor.userId);
-          notesCountQuery = notesCountQuery.where(
-            "n.user_id",
-            "=",
-            actor.userId,
-          );
+          notesCountQuery = notesCountQuery.where("n.user_id", "=", actor.userId);
           if (query.visibility) {
-            notesQuery = notesQuery.where(
-              "n.visibility",
-              "=",
-              query.visibility,
-            );
-            notesCountQuery = notesCountQuery.where(
-              "n.visibility",
-              "=",
-              query.visibility,
-            );
+            notesQuery = notesQuery.where("n.visibility", "=", query.visibility);
+            notesCountQuery = notesCountQuery.where("n.visibility", "=", query.visibility);
           }
-        } else if (
-          query.visibility === "private" ||
-          query.visibility === "unlisted"
-        ) {
+        } else if (query.visibility === "private" || query.visibility === "unlisted") {
           // Canonical Note discovery does not list another user's private or
           // unlisted Notes. Preserve that rule for the workspace feed.
           notesQuery = notesQuery
@@ -1045,23 +910,13 @@ export function createThreadsService(
             .where("n.visibility", "=", query.visibility);
         } else if (query.visibility === "public") {
           notesQuery = notesQuery.where("n.visibility", "=", "public");
-          notesCountQuery = notesCountQuery.where(
-            "n.visibility",
-            "=",
-            "public",
-          );
+          notesCountQuery = notesCountQuery.where("n.visibility", "=", "public");
         } else {
           notesQuery = notesQuery.where((eb) =>
-            eb.or([
-              eb("n.user_id", "=", actor.userId),
-              eb("n.visibility", "=", "public"),
-            ]),
+            eb.or([eb("n.user_id", "=", actor.userId), eb("n.visibility", "=", "public")]),
           );
           notesCountQuery = notesCountQuery.where((eb) =>
-            eb.or([
-              eb("n.user_id", "=", actor.userId),
-              eb("n.visibility", "=", "public"),
-            ]),
+            eb.or([eb("n.user_id", "=", actor.userId), eb("n.visibility", "=", "public")]),
           );
         }
 
@@ -1110,10 +965,7 @@ export function createThreadsService(
 
         let likedNoteIds = new Set<string>();
         let bookmarkedNoteIds = new Set<string>();
-        let attachmentSummariesByNoteId = new Map<
-          string,
-          DiscussionAttachmentSummary
-        >();
+        let attachmentSummariesByNoteId = new Map<string, DiscussionAttachmentSummary>();
 
         if (page.length > 0 && actor.userId) {
           const noteIds = page.map((n) => n.id);
@@ -1134,12 +986,8 @@ export function createThreadsService(
             attachmentsRepo.listNoteAttachmentSummaries(db, noteIds),
           ]);
           likedNoteIds = new Set(likes.map((l) => l.target_id));
-          bookmarkedNoteIds = new Set(
-            bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])),
-          );
-          attachmentSummariesByNoteId = indexAttachmentSummaries(
-            attachmentSummaryRows,
-          );
+          bookmarkedNoteIds = new Set(bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])));
+          attachmentSummariesByNoteId = indexAttachmentSummaries(attachmentSummaryRows);
         }
 
         const items: WorkspaceDiscussionItem[] = page.map((row) => ({
@@ -1169,16 +1017,11 @@ export function createThreadsService(
           isFollowing: false,
           isMentioned: false,
           isOwn: row.userId === actor.userId,
-          attachmentSummary:
-            attachmentSummariesByNoteId.get(row.id) ?? emptyAttachmentSummary(),
+          attachmentSummary: attachmentSummariesByNoteId.get(row.id) ?? emptyAttachmentSummary(),
           createdAt:
-            row.createdAt instanceof Date
-              ? row.createdAt.toISOString()
-              : String(row.createdAt),
+            row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
           updatedAt:
-            row.updatedAt instanceof Date
-              ? row.updatedAt.toISOString()
-              : String(row.updatedAt),
+            row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
         }));
 
         let nextCursor: string | null = null;
@@ -1187,9 +1030,7 @@ export function createThreadsService(
           nextCursor = encodeDiscussionCursor({
             id: last.id,
             createdAt: toDate(last.createdAt),
-            ...(noteSort === "activity"
-              ? { updatedAt: toDate(last.updatedAt) }
-              : {}),
+            ...(noteSort === "activity" ? { updatedAt: toDate(last.updatedAt) } : {}),
             sort: noteSort,
           });
         }
@@ -1240,16 +1081,8 @@ export function createThreadsService(
           .select(sql<number>`count(*)::int`.as("count"));
 
         if (query.courseId) {
-          reportsQuery = reportsQuery.where(
-            "rep.course_id",
-            "=",
-            query.courseId,
-          );
-          reportsCountQuery = reportsCountQuery.where(
-            "rep.course_id",
-            "=",
-            query.courseId,
-          );
+          reportsQuery = reportsQuery.where("rep.course_id", "=", query.courseId);
+          reportsCountQuery = reportsCountQuery.where("rep.course_id", "=", query.courseId);
         }
 
         if (query.search) {
@@ -1269,9 +1102,7 @@ export function createThreadsService(
         }
 
         if (pageCursor) {
-          reportsQuery = reportsQuery.where(
-            createdAtIdDescSql("rep", pageCursor),
-          );
+          reportsQuery = reportsQuery.where(createdAtIdDescSql("rep", pageCursor));
         }
 
         reportsQuery = reportsQuery
@@ -1286,8 +1117,7 @@ export function createThreadsService(
 
         const { page, hasMore } = takePage(reportRows, limit);
         const totalCount = Number(countRow?.count ?? 0);
-        const fallbackCourseId =
-          courses[0]?.id || "00000000-0000-0000-0000-000000000000";
+        const fallbackCourseId = courses[0]?.id || "00000000-0000-0000-0000-000000000000";
 
         const items: WorkspaceDiscussionItem[] = page.map((row) => ({
           id: row.id,
@@ -1304,8 +1134,7 @@ export function createThreadsService(
           author: {
             id: row.reporterId,
             displayName: row.reporterName || "Anonymous Reporter",
-            username:
-              row.reporterUsername || `user-${row.reporterId.slice(0, 8)}`,
+            username: row.reporterUsername || `user-${row.reporterId.slice(0, 8)}`,
             avatarUrl: row.reporterAvatarUrl,
             role: mapAuthorRole(row.authorRole),
           },
@@ -1322,18 +1151,13 @@ export function createThreadsService(
             targetId: row.targetId,
             reason: row.reason,
             details: row.details ?? undefined,
-            status: row.status as
-              "pending" | "reviewed" | "dismissed" | "actioned",
+            status: row.status as "pending" | "reviewed" | "dismissed" | "actioned",
             actionTaken: row.actionTaken ?? undefined,
           },
           createdAt:
-            row.createdAt instanceof Date
-              ? row.createdAt.toISOString()
-              : String(row.createdAt),
+            row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
           updatedAt:
-            row.updatedAt instanceof Date
-              ? row.updatedAt.toISOString()
-              : String(row.updatedAt),
+            row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
         }));
 
         let nextCursor: string | null = null;
@@ -1377,12 +1201,8 @@ export function createThreadsService(
         const threadIds = page
           .filter((row) => row.itemType === "thread")
           .map((row) => row.sourceId);
-        const replyIds = page
-          .filter((row) => row.itemType === "reply")
-          .map((row) => row.sourceId);
-        const noteIds = page
-          .filter((row) => row.itemType === "note")
-          .map((row) => row.sourceId);
+        const replyIds = page.filter((row) => row.itemType === "reply").map((row) => row.sourceId);
+        const noteIds = page.filter((row) => row.itemType === "note").map((row) => row.sourceId);
         const sourceIds = [...threadIds, ...replyIds, ...noteIds];
 
         const [
@@ -1444,46 +1264,29 @@ export function createThreadsService(
         ]);
 
         const likedThreadIds = new Set(
-          likes
-            .filter((like) => like.target_type === "thread")
-            .map((like) => like.target_id),
+          likes.filter((like) => like.target_type === "thread").map((like) => like.target_id),
         );
         const likedReplyIds = new Set(
-          likes
-            .filter((like) => like.target_type === "reply")
-            .map((like) => like.target_id),
+          likes.filter((like) => like.target_type === "reply").map((like) => like.target_id),
         );
         const likedNoteIds = new Set(
-          likes
-            .filter((like) => like.target_type === "note")
-            .map((like) => like.target_id),
+          likes.filter((like) => like.target_type === "note").map((like) => like.target_id),
         );
         const bookmarkedThreadIds = new Set(
-          bookmarks.flatMap((bookmark) =>
-            bookmark.thread_id ? [bookmark.thread_id] : [],
-          ),
+          bookmarks.flatMap((bookmark) => (bookmark.thread_id ? [bookmark.thread_id] : [])),
         );
-        const followedThreadIds = new Set(
-          follows.map((follow) => follow.thread_id),
-        );
+        const followedThreadIds = new Set(follows.map((follow) => follow.thread_id));
         const bookmarkedNoteIds = new Set(
-          noteBookmarks.flatMap((bookmark) =>
-            bookmark.note_id ? [bookmark.note_id] : [],
-          ),
+          noteBookmarks.flatMap((bookmark) => (bookmark.note_id ? [bookmark.note_id] : [])),
         );
         const replyReplyCounts = new Map(
           replyCounts.flatMap((row) =>
-            row.parent_reply_id
-              ? [[row.parent_reply_id, Number(row.count)]]
-              : [],
+            row.parent_reply_id ? [[row.parent_reply_id, Number(row.count)]] : [],
           ),
         );
-        const threadAttachmentSummaries =
-          indexAttachmentSummaries(threadAttachmentRows);
-        const replyAttachmentSummaries =
-          indexAttachmentSummaries(replyAttachmentRows);
-        const noteAttachmentSummaries =
-          indexAttachmentSummaries(noteAttachmentRows);
+        const threadAttachmentSummaries = indexAttachmentSummaries(threadAttachmentRows);
+        const replyAttachmentSummaries = indexAttachmentSummaries(replyAttachmentRows);
+        const noteAttachmentSummaries = indexAttachmentSummaries(noteAttachmentRows);
 
         const items: WorkspaceDiscussionItem[] = page.map((row) => {
           const isThread = row.itemType === "thread";
@@ -1498,8 +1301,7 @@ export function createThreadsService(
                   : "open"
               : undefined;
           const authorName = row.authorName || "Anonymous Learner";
-          const authorUsername =
-            row.authorUsername || `user-${row.userId.slice(0, 8)}`;
+          const authorUsername = row.authorUsername || `user-${row.userId.slice(0, 8)}`;
 
           return {
             id: row.sourceId,
@@ -1537,8 +1339,7 @@ export function createThreadsService(
                   isBookmarked: bookmarkedThreadIds.has(row.sourceId),
                   isFollowing: followedThreadIds.has(row.sourceId),
                   attachmentSummary:
-                    threadAttachmentSummaries.get(row.sourceId) ??
-                    emptyAttachmentSummary(),
+                    threadAttachmentSummaries.get(row.sourceId) ?? emptyAttachmentSummary(),
                 }
               : isNote
                 ? {
@@ -1548,8 +1349,7 @@ export function createThreadsService(
                     isLiked: likedNoteIds.has(row.sourceId),
                     isBookmarked: bookmarkedNoteIds.has(row.sourceId),
                     attachmentSummary:
-                      noteAttachmentSummaries.get(row.sourceId) ??
-                      emptyAttachmentSummary(),
+                      noteAttachmentSummaries.get(row.sourceId) ?? emptyAttachmentSummary(),
                   }
                 : {
                     visibility: row.visibility ?? undefined,
@@ -1557,8 +1357,7 @@ export function createThreadsService(
                     likesCount: Number(row.likesCount || 0),
                     isLiked: likedReplyIds.has(row.sourceId),
                     attachmentSummary:
-                      replyAttachmentSummaries.get(row.sourceId) ??
-                      emptyAttachmentSummary(),
+                      replyAttachmentSummaries.get(row.sourceId) ?? emptyAttachmentSummary(),
                   }),
             isMentioned: true,
             isOwn: row.userId === actor.userId,
@@ -1610,12 +1409,8 @@ export function createThreadsService(
         ]);
 
         const { page, hasMore } = takePage(bookmarkRows, limit);
-        const threadIds = page
-          .filter((row) => row.itemType === "thread")
-          .map((row) => row.id);
-        const noteIds = page
-          .filter((row) => row.itemType === "note")
-          .map((row) => row.id);
+        const threadIds = page.filter((row) => row.itemType === "thread").map((row) => row.id);
+        const noteIds = page.filter((row) => row.itemType === "note").map((row) => row.id);
 
         const likedThreadsPromise = threadIds.length
           ? db
@@ -1682,16 +1477,12 @@ export function createThreadsService(
           attachmentsRepo.listNoteAttachmentSummaries(db, noteIds),
         ]);
 
-        const threadAttachmentSummaries =
-          indexAttachmentSummaries(threadAttachmentRows);
-        const noteAttachmentSummaries =
-          indexAttachmentSummaries(noteAttachmentRows);
+        const threadAttachmentSummaries = indexAttachmentSummaries(threadAttachmentRows);
+        const noteAttachmentSummaries = indexAttachmentSummaries(noteAttachmentRows);
         const engagementSets = {
           likedThreadIds: new Set(likedThreads.map((like) => like.target_id)),
           likedNoteIds: new Set(likedNotes.map((like) => like.target_id)),
-          followedThreadIds: new Set(
-            followedThreads.map((follow) => follow.thread_id),
-          ),
+          followedThreadIds: new Set(followedThreads.map((follow) => follow.thread_id)),
           mentionedThreadIds: new Set(mentionedThreads),
         };
 
@@ -1699,10 +1490,8 @@ export function createThreadsService(
           mapBookmarkWorkspaceItem(
             row,
             row.itemType === "thread"
-              ? (threadAttachmentSummaries.get(row.id) ??
-                  emptyAttachmentSummary())
-              : (noteAttachmentSummaries.get(row.id) ??
-                  emptyAttachmentSummary()),
+              ? (threadAttachmentSummaries.get(row.id) ?? emptyAttachmentSummary())
+              : (noteAttachmentSummaries.get(row.id) ?? emptyAttachmentSummary()),
             engagementSets,
             actor.userId,
           ),
@@ -1727,10 +1516,7 @@ export function createThreadsService(
       }
 
       if (
-        (tab === "all" ||
-          tab === "q-and-a" ||
-          tab === "comments" ||
-          tab === "following") &&
+        (tab === "all" || tab === "q-and-a" || tab === "comments" || tab === "following") &&
         pageCursor?.sort &&
         pageCursor.sort !== sort
       ) {
@@ -1769,10 +1555,7 @@ export function createThreadsService(
       let bookmarkedThreadIds = new Set<string>();
       let followedThreadIds = new Set<string>();
       let mentionedThreadIds = new Set<string>();
-      let attachmentSummariesByThreadId = new Map<
-        string,
-        DiscussionAttachmentSummary
-      >();
+      let attachmentSummariesByThreadId = new Map<string, DiscussionAttachmentSummary>();
 
       if (page.length > 0) {
         const threadIds = page.map((r) => r.id);
@@ -1818,21 +1601,16 @@ export function createThreadsService(
           attachmentsRepo.listThreadAttachmentSummaries(db, threadIds),
         ]);
 
-        const [likes, bookmarks, follows, threadMentions, replyMentions] =
-          engagements;
+        const [likes, bookmarks, follows, threadMentions, replyMentions] = engagements;
 
         likedThreadIds = new Set(likes.map((l) => l.target_id));
-        bookmarkedThreadIds = new Set(
-          bookmarks.flatMap((b) => (b.thread_id ? [b.thread_id] : [])),
-        );
+        bookmarkedThreadIds = new Set(bookmarks.flatMap((b) => (b.thread_id ? [b.thread_id] : [])));
         followedThreadIds = new Set(follows.map((f) => f.thread_id));
         mentionedThreadIds = new Set([
           ...threadMentions.map((m) => m.source_id),
           ...replyMentions.map((m) => m.threadId),
         ]);
-        attachmentSummariesByThreadId = indexAttachmentSummaries(
-          attachmentSummaryRows,
-        );
+        attachmentSummariesByThreadId = indexAttachmentSummaries(attachmentSummaryRows);
       }
 
       const items: WorkspaceDiscussionItem[] = page.map((row) => {
@@ -1874,17 +1652,11 @@ export function createThreadsService(
           isFollowing: followedThreadIds.has(row.id),
           isMentioned: mentionedThreadIds.has(row.id),
           isOwn: row.userId === actor.userId,
-          attachmentSummary:
-            attachmentSummariesByThreadId.get(row.id) ??
-            emptyAttachmentSummary(),
+          attachmentSummary: attachmentSummariesByThreadId.get(row.id) ?? emptyAttachmentSummary(),
           createdAt:
-            row.createdAt instanceof Date
-              ? row.createdAt.toISOString()
-              : String(row.createdAt),
+            row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
           updatedAt:
-            row.updatedAt instanceof Date
-              ? row.updatedAt.toISOString()
-              : String(row.updatedAt),
+            row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
         };
       });
 
@@ -1897,8 +1669,7 @@ export function createThreadsService(
           sort,
           updatedAt: last.updatedAt ? toDate(last.updatedAt) : undefined,
           repliesCount: Number(last.repliesCount || 0),
-          engagement:
-            Number(last.likesCount || 0) + Number(last.repliesCount || 0),
+          engagement: Number(last.likesCount || 0) + Number(last.repliesCount || 0),
         });
       }
 

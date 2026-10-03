@@ -5,10 +5,7 @@ type LoadingSpinnerIconProps = {
   size?: number;
 };
 
-export function LoadingSpinnerIcon({
-  className = "",
-  size = 24,
-}: LoadingSpinnerIconProps) {
+export function LoadingSpinnerIcon({ className = "", size = 24 }: LoadingSpinnerIconProps) {
   return (
     <CircleNotch
       aria-hidden="true"

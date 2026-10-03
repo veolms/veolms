@@ -1,10 +1,7 @@
 import type { Chapter } from "./chapterTypes.ts";
 
 /** Returns the latest chapter whose half-open time range contains `time`. */
-export function getChapterAtTime(
-  chapters: readonly Chapter[],
-  time: number,
-): Chapter | null {
+export function getChapterAtTime(chapters: readonly Chapter[], time: number): Chapter | null {
   if (!Number.isFinite(time) || time < 0) {
     return null;
   }
@@ -32,9 +29,6 @@ export function getChapterAtTime(
   return activeChapter;
 }
 
-export function getActiveChapter(
-  chapters: readonly Chapter[],
-  time: number,
-): Chapter | null {
+export function getActiveChapter(chapters: readonly Chapter[], time: number): Chapter | null {
   return getChapterAtTime(chapters, time);
 }

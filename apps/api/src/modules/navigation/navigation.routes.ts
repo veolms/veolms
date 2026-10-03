@@ -22,10 +22,7 @@ const navigationRoutes: RoutePlugin = async (app, options) => {
         description:
           "Returns accessible navigation menu nodes, capability permission keys, and assigned roles for the current user or guest.",
         response: {
-          200: jsonResponse(
-            "Sidenav menus, permissions, and roles.",
-            sidenavResponseSchema,
-          ),
+          200: jsonResponse("Sidenav menus, permissions, and roles.", sidenavResponseSchema),
         },
       },
       preHandler: [middleware.authenticate],

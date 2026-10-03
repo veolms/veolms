@@ -1,20 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { Course } from "./catalogue";
-import {
-  courseThumbnailSizes,
-  getCourseThumbnailSrcSet,
-} from "./courseThumbnail";
+import { courseThumbnailSizes, getCourseThumbnailSrcSet } from "./courseThumbnail";
 
 interface CourseCardThumbnailProps {
   course: Course;
   priority: boolean;
 }
 
-export function CourseCardThumbnail({
-  course,
-  priority,
-}: CourseCardThumbnailProps) {
+export function CourseCardThumbnail({ course, priority }: CourseCardThumbnailProps) {
   const placeholderRef = useRef<HTMLDivElement>(null);
   const [isNearViewport, setIsNearViewport] = useState(priority);
 

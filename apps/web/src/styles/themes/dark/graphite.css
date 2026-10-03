@@ -28,16 +28,8 @@
   --on-accent-glyph: #0b0b0d;
   --card-surface: var(--surface);
   --card-surface-raised: var(--surface-strong);
-  --card-surface-soft: color-mix(
-    in srgb,
-    var(--surface-strong) 70%,
-    var(--canvas)
-  );
-  --card-surface-hover: color-mix(
-    in srgb,
-    var(--surface) 94%,
-    var(--accent) 6%
-  );
+  --card-surface-soft: color-mix(in srgb, var(--surface-strong) 70%, var(--canvas));
+  --card-surface-hover: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
 
   /* Compact-rail tooltips intentionally invert the palette mode: dark shell
      surfaces get a luminous theme tint, while light shells get a deeper

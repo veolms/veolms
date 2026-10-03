@@ -50,22 +50,20 @@ export function PlaybackRateSlider({
         MAX_CUSTOM_PLAYBACK_RATE,
         Math.max(
           MIN_CUSTOM_PLAYBACK_RATE,
-          Math.round(
-            (sliderValue + direction * CUSTOM_PLAYBACK_RATE_STEP) * 100,
-          ) / 100,
+          Math.round((sliderValue + direction * CUSTOM_PLAYBACK_RATE_STEP) * 100) / 100,
         ),
       ),
     );
   };
 
   return (
-    <div role="none" className="px-2.5 pb-2 pt-1" data-playback-rate-control="">
+    <div role="none" className="px-2.5 pt-1 pb-2" data-playback-rate-control="">
       <label className="sr-only" htmlFor={sliderId}>
         Custom playback speed
       </label>
       <output
         htmlFor={sliderId}
-        className="mb-3 block text-center text-xl font-semibold tabular-nums text-(--video-player-menu-text)"
+        className="mb-3 block text-center text-xl font-semibold text-(--video-player-menu-text) tabular-nums"
         aria-live="polite"
       >
         {sliderValue.toFixed(2)}×
@@ -130,7 +128,7 @@ export function PlaybackRateSlider({
               aria-checked={playbackRatesMatch(rate, playbackRate)}
               aria-label={formatPlaybackRate(rate)}
               className={classNames(
-                "h-11 !min-h-11 w-full min-w-0 rounded-full px-1 text-xs font-semibold tabular-nums text-(--video-player-menu-text) transition-[background-color,color] duration-150 hover:bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_16%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-menu-text) sm:h-8 sm:!min-h-8",
+                "h-11 !min-h-11 w-full min-w-0 rounded-full px-1 text-xs font-semibold text-(--video-player-menu-text) tabular-nums transition-[background-color,color] duration-150 hover:bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_16%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-menu-text) sm:h-8 sm:!min-h-8",
                 mobileInteraction && "!h-11 !min-h-11",
                 playbackRatesMatch(rate, playbackRate)
                   ? "bg-(--video-player-accent) text-(--video-player-accent-contrast)"

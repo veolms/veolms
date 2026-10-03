@@ -1,7 +1,4 @@
-import type {
-  PlayerKeyboardRegistration,
-  PlayerKeyboardRegistrationHandle,
-} from "./types.js";
+import type { PlayerKeyboardRegistration, PlayerKeyboardRegistrationHandle } from "./types.js";
 
 interface StoredRegistration extends PlayerKeyboardRegistration {
   order: number;
@@ -20,9 +17,7 @@ export class PlayerKeyboardArbiter {
   private activeId: string | null = null;
   private nextOrder = 0;
 
-  register(
-    registration: PlayerKeyboardRegistration,
-  ): PlayerKeyboardRegistrationHandle {
+  register(registration: PlayerKeyboardRegistration): PlayerKeyboardRegistrationHandle {
     if (this.registrations.has(registration.id)) {
       throw new Error(
         `A player keyboard registration with id "${registration.id}" already exists.`,
@@ -65,15 +60,11 @@ export class PlayerKeyboardArbiter {
   }
 
   handleKeyDown(event: KeyboardEvent): boolean {
-    return (
-      this.registrationForEvent(event)?.controller.handleKeyDown(event) ?? false
-    );
+    return this.registrationForEvent(event)?.controller.handleKeyDown(event) ?? false;
   }
 
   handleKeyUp(event: KeyboardEvent): boolean {
-    return (
-      this.registrationForEvent(event)?.controller.handleKeyUp(event) ?? false
-    );
+    return this.registrationForEvent(event)?.controller.handleKeyUp(event) ?? false;
   }
 
   handleBlur(): void {
@@ -107,37 +98,28 @@ export class PlayerKeyboardArbiter {
     this.activeId = null;
   }
 
-  private registrationForEvent(
-    event: KeyboardEvent,
-  ): StoredRegistration | null {
+  private registrationForEvent(event: KeyboardEvent): StoredRegistration | null {
     const targetRegistration = this.registrationContaining(event.target);
     if (targetRegistration) this.activeId = targetRegistration.id;
     return targetRegistration ?? this.activeRegistration();
   }
 
-  private registrationContaining(
-    target: EventTarget | null,
-  ): StoredRegistration | null {
+  private registrationContaining(target: EventTarget | null): StoredRegistration | null {
     if (!(target instanceof Node)) return null;
     return (
       [...this.registrations.values()]
         .sort((left, right) => right.order - left.order)
-        .find((registration) => registration.getRoot()?.contains(target)) ??
-      null
+        .find((registration) => registration.getRoot()?.contains(target)) ?? null
     );
   }
 
   private activeRegistration(): StoredRegistration | null {
-    return this.activeId
-      ? (this.registrations.get(this.activeId) ?? null)
-      : null;
+    return this.activeId ? (this.registrations.get(this.activeId) ?? null) : null;
   }
 
   private mostRecentlyRegistered(): StoredRegistration | null {
     return (
-      [...this.registrations.values()].sort(
-        (left, right) => right.order - left.order,
-      )[0] ?? null
+      [...this.registrations.values()].sort((left, right) => right.order - left.order)[0] ?? null
     );
   }
 }

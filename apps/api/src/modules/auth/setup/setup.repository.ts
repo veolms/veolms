@@ -22,11 +22,7 @@ export async function upsertAcademy(
   };
 
   if (input.exists) {
-    await database
-      .updateTable("academy")
-      .set(values)
-      .where("id", "=", input.id)
-      .execute();
+    await database.updateTable("academy").set(values).where("id", "=", input.id).execute();
     return;
   }
 
@@ -36,10 +32,7 @@ export async function upsertAcademy(
     .execute();
 }
 
-export async function markSetupCompleted(
-  database: Executor,
-  academyId: string,
-): Promise<void> {
+export async function markSetupCompleted(database: Executor, academyId: string): Promise<void> {
   await database
     .updateTable("academy")
     .set({ setup_completed: true, updated_at: new Date() })

@@ -68,9 +68,7 @@ export const permissions = [
 
 export type Permission = (typeof permissions)[number];
 
-export const permissionSchema = z.enum(
-  permissions as unknown as [Permission, ...Permission[]],
-);
+export const permissionSchema = z.enum(permissions as unknown as [Permission, ...Permission[]]);
 
 /**
  * Standard system role keys
@@ -113,9 +111,7 @@ export const featureKeys = [
 ] as const;
 
 export type FeatureKey = (typeof featureKeys)[number];
-export const featureKeySchema = z.enum(
-  featureKeys as unknown as [FeatureKey, ...FeatureKey[]],
-);
+export const featureKeySchema = z.enum(featureKeys as unknown as [FeatureKey, ...FeatureKey[]]);
 
 // --- Capabilities Schemas (for UI & authorization context) ---
 
@@ -141,16 +137,12 @@ export const updateCourseDetailsSchema = z
     subtitle: z.string().max(500).optional().nullable(),
     description: z.string().max(20000).optional().nullable(),
     language: z.string().max(10).optional(),
-    level: z
-      .enum(["beginner", "intermediate", "advanced", "all_levels"])
-      .optional(),
+    level: z.enum(["beginner", "intermediate", "advanced", "all_levels"]).optional(),
     categoryId: z.string().uuid().optional().nullable(),
   })
   .strict();
 
-export type UpdateCourseDetailsRequest = z.infer<
-  typeof updateCourseDetailsSchema
->;
+export type UpdateCourseDetailsRequest = z.infer<typeof updateCourseDetailsSchema>;
 
 export const updateCourseThumbnailSchema = z
   .object({
@@ -159,9 +151,7 @@ export const updateCourseThumbnailSchema = z
   })
   .strict();
 
-export type UpdateCourseThumbnailRequest = z.infer<
-  typeof updateCourseThumbnailSchema
->;
+export type UpdateCourseThumbnailRequest = z.infer<typeof updateCourseThumbnailSchema>;
 
 // --- Granular Lesson Patch Schemas ---
 
@@ -173,9 +163,7 @@ export const updateLessonDetailsSchema = z
   })
   .strict();
 
-export type UpdateLessonDetailsRequest = z.infer<
-  typeof updateLessonDetailsSchema
->;
+export type UpdateLessonDetailsRequest = z.infer<typeof updateLessonDetailsSchema>;
 
 export const updateLessonVideoSchema = z
   .object({
@@ -193,9 +181,7 @@ export const updateLessonThumbnailSchema = z
   })
   .strict();
 
-export type UpdateLessonThumbnailRequest = z.infer<
-  typeof updateLessonThumbnailSchema
->;
+export type UpdateLessonThumbnailRequest = z.infer<typeof updateLessonThumbnailSchema>;
 
 export const updateLessonContentSchema = z
   .object({
@@ -204,9 +190,7 @@ export const updateLessonContentSchema = z
   })
   .strict();
 
-export type UpdateLessonContentRequest = z.infer<
-  typeof updateLessonContentSchema
->;
+export type UpdateLessonContentRequest = z.infer<typeof updateLessonContentSchema>;
 
 // --- Role Assignment Contract Schemas ---
 
@@ -243,11 +227,8 @@ export const createRoleAssignmentRequestSchema = z
       return false;
     },
     {
-      message:
-        "Invalid scope combination: platform requires no courseId; course requires courseId",
+      message: "Invalid scope combination: platform requires no courseId; course requires courseId",
     },
   );
 
-export type CreateRoleAssignmentRequest = z.infer<
-  typeof createRoleAssignmentRequestSchema
->;
+export type CreateRoleAssignmentRequest = z.infer<typeof createRoleAssignmentRequestSchema>;

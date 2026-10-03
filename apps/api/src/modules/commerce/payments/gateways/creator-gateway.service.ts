@@ -68,11 +68,7 @@ export function createCreatorGatewayService({
     creatorId: string,
     provider: PaymentProvider = "razorpay",
   ): Promise<CreatorPaymentConfig | null> {
-    const row = await creatorGatewayRepo.findCreatorPaymentConfig(
-      database,
-      creatorId,
-      provider,
-    );
+    const row = await creatorGatewayRepo.findCreatorPaymentConfig(database, creatorId, provider);
     if (!row) return null;
 
     let decryptedKeyId = "******";
@@ -94,18 +90,12 @@ export function createCreatorGatewayService({
     };
   }
 
-  async function resolveGatewayForCreator(
-    creatorId?: string | null,
-  ): Promise<PaymentGateway> {
+  async function resolveGatewayForCreator(creatorId?: string | null): Promise<PaymentGateway> {
     if (!creatorId) {
       return fallbackGateway;
     }
 
-    const row = await creatorGatewayRepo.findCreatorPaymentConfig(
-      database,
-      creatorId,
-      "razorpay",
-    );
+    const row = await creatorGatewayRepo.findCreatorPaymentConfig(database, creatorId, "razorpay");
 
     if (!row || !row.is_active) {
       return fallbackGateway;

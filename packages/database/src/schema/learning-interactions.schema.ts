@@ -9,12 +9,7 @@ export type AttachmentKind = "image" | "screenshot" | "code" | "document";
 export type AttachmentTargetType = "thread" | "reply" | "note";
 export type AttachmentStatus = "uploading" | "ready" | "rejected" | "deleted";
 export type ReportReason =
-  | "spam"
-  | "harassment"
-  | "inappropriate"
-  | "misinformation"
-  | "copyright"
-  | "other";
+  "spam" | "harassment" | "inappropriate" | "misinformation" | "copyright" | "other";
 export type ReportStatus = "pending" | "reviewed" | "dismissed" | "actioned";
 export type SuspensionScope = "commenting" | "qa" | "all";
 

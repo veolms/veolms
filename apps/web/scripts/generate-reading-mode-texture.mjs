@@ -53,22 +53,14 @@ function blurWrapped(source, radius, size) {
 
 function generatePixels(size, seed) {
   const random = mulberry32(seed);
-  const fine = Float64Array.from(
-    { length: size * size },
-    () => random() * 2 - 1,
-  );
+  const fine = Float64Array.from({ length: size * size }, () => random() * 2 - 1);
   const micro = blurWrapped(fine, 1, size);
-  const combined = Float64Array.from(
-    fine,
-    (value, index) => value * 1.08 + micro[index] * 0.12,
-  );
-  const mean =
-    combined.reduce((sum, value) => sum + value, 0) / combined.length;
+  const combined = Float64Array.from(fine, (value, index) => value * 1.08 + micro[index] * 0.12);
+  const mean = combined.reduce((sum, value) => sum + value, 0) / combined.length;
   const pixels = Uint8Array.from(combined, (value) =>
     Math.round(Math.min(186, Math.max(70, 128 + (value - mean) * 49))),
   );
-  const averageLuminance =
-    pixels.reduce((sum, value) => sum + value, 0) / pixels.length;
+  const averageLuminance = pixels.reduce((sum, value) => sum + value, 0) / pixels.length;
   if (Math.abs(averageLuminance - 128) > 0.5) {
     throw new Error(`Texture luminance drifted to ${averageLuminance}`);
   }
@@ -125,15 +117,9 @@ function createPng(size, pixels) {
 mkdirSync(OUTPUT_DIRECTORY, { recursive: true });
 for (const { scale, suffix } of VARIANTS) {
   const size = BASE_SIZE * scale;
-  const { pixels, averageLuminance } = generatePixels(
-    size,
-    SEED ^ (scale * 0x9e3779b9),
-  );
+  const { pixels, averageLuminance } = generatePixels(size, SEED ^ (scale * 0x9e3779b9));
   const png = createPng(size, pixels);
-  const outputPath = resolve(
-    OUTPUT_DIRECTORY,
-    `reading-mode-grain${suffix}.png`,
-  );
+  const outputPath = resolve(OUTPUT_DIRECTORY, `reading-mode-grain${suffix}.png`);
   writeFileSync(outputPath, png);
   console.log(
     `Generated ${outputPath} (${png.length} bytes, ${size}x${size}, seed ${SEED}, mean ${averageLuminance.toFixed(3)})`,

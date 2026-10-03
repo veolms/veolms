@@ -11,11 +11,7 @@ import type { S3StorageService } from "@veolms/storage";
 import { sql, type Kysely } from "kysely";
 
 import { AppError } from "../../../lib/errors.ts";
-import {
-  ADMIN_ROLE,
-  STUDENT_ROLE,
-  USERNAME_SUFFIX_ATTEMPTS,
-} from "../shared/auth.constants.ts";
+import { ADMIN_ROLE, STUDENT_ROLE, USERNAME_SUFFIX_ATTEMPTS } from "../shared/auth.constants.ts";
 import type { IdentifierType, SessionUser } from "../shared/auth.types.ts";
 import type { CreateUserInput } from "./authentication.types.ts";
 import * as oauthRepository from "../oauth/oauth.repository.ts";
@@ -96,23 +92,12 @@ export function createAuthService({
     return storage;
   }
 
-  function validateAvatarUpload(input: {
-    contentType: string;
-    fileSize: number;
-  }): void {
+  function validateAvatarUpload(input: { contentType: string; fileSize: number }): void {
     if (!AVATAR_CONTENT_TYPES.has(input.contentType)) {
-      throw new AppError(
-        400,
-        "INVALID_AVATAR_FILE",
-        "Choose a JPEG, PNG, WebP, or GIF image.",
-      );
+      throw new AppError(400, "INVALID_AVATAR_FILE", "Choose a JPEG, PNG, WebP, or GIF image.");
     }
     if (input.fileSize > AVATAR_UPLOAD_MAX_BYTES) {
-      throw new AppError(
-        413,
-        "AVATAR_FILE_TOO_LARGE",
-        "The avatar file must be 2 MB or smaller.",
-      );
+      throw new AppError(413, "AVATAR_FILE_TOO_LARGE", "The avatar file must be 2 MB or smaller.");
     }
   }
 
@@ -130,24 +115,13 @@ export function createAuthService({
       username.trim().toLowerCase(),
     );
     if (!user) {
-      throw new AppError(
-        404,
-        "USER_NOT_FOUND",
-        "This profile isn't available.",
-      );
+      throw new AppError(404, "USER_NOT_FOUND", "This profile isn't available.");
     }
     return user;
   }
 
-  function findUserByIdentifier(
-    identifier: string,
-    identifierType: IdentifierType,
-  ) {
-    return userRepository.findUserByIdentifier(
-      database,
-      identifier,
-      identifierType,
-    );
+  function findUserByIdentifier(identifier: string, identifierType: IdentifierType) {
+    return userRepository.findUserByIdentifier(database, identifier, identifierType);
   }
 
   function findUserByIdentifierIncludingDeleted(
@@ -166,17 +140,10 @@ export function createAuthService({
   }
 
   function findUserByOauthAccount(provider: string, providerUserId: string) {
-    return oauthRepository.findUserByOauthAccount(
-      database,
-      provider,
-      providerUserId,
-    );
+    return oauthRepository.findUserByOauthAccount(database, provider, providerUserId);
   }
 
-  function findUserByOauthAccountIncludingDeleted(
-    provider: string,
-    providerUserId: string,
-  ) {
+  function findUserByOauthAccountIncludingDeleted(provider: string, providerUserId: string) {
     return oauthRepository.findUserByOauthAccountIncludingDeleted(
       database,
       provider,
@@ -185,11 +152,7 @@ export function createAuthService({
   }
 
   function oauthAccountExists(provider: string, providerUserId: string) {
-    return oauthRepository.oauthAccountExists(
-      database,
-      provider,
-      providerUserId,
-    );
+    return oauthRepository.oauthAccountExists(database, provider, providerUserId);
   }
 
   function linkOauthAccount(input: {
@@ -213,10 +176,7 @@ export function createAuthService({
 
   const avatarMutationLocks = new Map<string, Promise<unknown>>();
 
-  async function withAvatarLock<T>(
-    userId: string,
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  async function withAvatarLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
     const previous = avatarMutationLocks.get(userId) ?? Promise.resolve();
     let resolveCurrent: () => void;
     const current = new Promise<void>((resolve) => {
@@ -254,21 +214,14 @@ export function createAuthService({
   async function updateProfile(userId: string, input: ProfileUpdateRequest) {
     const username = input.username?.trim().toLowerCase();
     const effectiveInput = input;
-    if (
-      username &&
-      (await userRepository.usernameExists(database, username, userId))
-    ) {
+    if (username && (await userRepository.usernameExists(database, username, userId))) {
       throw new AppError(400, "USERNAME_TAKEN", "Username is already taken.");
     }
 
     const performUpdate = async (executor: DatabaseExecutor = database) => {
       const currentUser = await userRepository.findUserById(executor, userId);
       if (!currentUser) {
-        throw new AppError(
-          404,
-          "USER_NOT_FOUND",
-          "User account was not found.",
-        );
+        throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
       }
 
       const linkedinUrl =
@@ -292,15 +245,11 @@ export function createAuthService({
         ...(effectiveInput.avatarDataUrl !== undefined
           ? { avatarDataUrl: effectiveInput.avatarDataUrl }
           : {}),
-        ...(effectiveInput.bio !== undefined
-          ? { bio: effectiveInput.bio?.trim() || null }
-          : {}),
+        ...(effectiveInput.bio !== undefined ? { bio: effectiveInput.bio?.trim() || null } : {}),
         ...(effectiveInput.emailPublic !== undefined
           ? {
               emailPublic: Boolean(
-                effectiveInput.emailPublic &&
-                currentUser.email &&
-                currentUser.email_verified_at,
+                effectiveInput.emailPublic && currentUser.email && currentUser.email_verified_at,
               ),
             }
           : {}),
@@ -316,44 +265,33 @@ export function createAuthService({
             }
           : {}),
         ...(effectiveInput.linkedinUrl !== undefined ? { linkedinUrl } : {}),
-        ...(effectiveInput.linkedinPublic !== undefined ||
-        effectiveInput.linkedinUrl !== undefined
+        ...(effectiveInput.linkedinPublic !== undefined || effectiveInput.linkedinUrl !== undefined
           ? {
               linkedinPublic: Boolean(
-                (effectiveInput.linkedinPublic ??
-                  currentUser.linkedin_public) &&
-                linkedinUrl,
+                (effectiveInput.linkedinPublic ?? currentUser.linkedin_public) && linkedinUrl,
               ),
             }
           : {}),
         ...(effectiveInput.githubUrl !== undefined ? { githubUrl } : {}),
-        ...(effectiveInput.githubPublic !== undefined ||
-        effectiveInput.githubUrl !== undefined
+        ...(effectiveInput.githubPublic !== undefined || effectiveInput.githubUrl !== undefined
           ? {
               githubPublic: Boolean(
-                (effectiveInput.githubPublic ?? currentUser.github_public) &&
-                githubUrl,
+                (effectiveInput.githubPublic ?? currentUser.github_public) && githubUrl,
               ),
             }
           : {}),
         ...(effectiveInput.websiteUrl !== undefined ? { websiteUrl } : {}),
-        ...(effectiveInput.websitePublic !== undefined ||
-        effectiveInput.websiteUrl !== undefined
+        ...(effectiveInput.websitePublic !== undefined || effectiveInput.websiteUrl !== undefined
           ? {
               websitePublic: Boolean(
-                (effectiveInput.websitePublic ?? currentUser.website_public) &&
-                websiteUrl,
+                (effectiveInput.websitePublic ?? currentUser.website_public) && websiteUrl,
               ),
             }
           : {}),
       });
 
       if (!user) {
-        throw new AppError(
-          404,
-          "USER_NOT_FOUND",
-          "User account was not found.",
-        );
+        throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
       }
 
       const roles = await getUserRoles(userId);
@@ -387,32 +325,18 @@ export function createAuthService({
       // object was later removed), and skipping an existing row would make
       // those photos impossible to recover. The active avatar is only changed
       // below when the user was already using that provider snapshot.
-      const avatarDataUrl = await storeAvatarFromUrl(
-        avatarStorage,
-        userId,
-        sourceUrl,
-        source,
-      );
+      const avatarDataUrl = await storeAvatarFromUrl(avatarStorage, userId, sourceUrl, source);
       if (!avatarDataUrl) return;
 
       await withAvatarDatabaseLock(userId, async (trx) => {
         const currentUser = await userRepository.findUserById(trx, userId);
         if (!currentUser) return;
 
-        const existingAvatar = await userRepository.findUserAvatarBySource(
-          trx,
-          userId,
-          source,
-        );
+        const existingAvatar = await userRepository.findUserAvatarBySource(trx, userId, source);
         const previousProviderUrl = existingAvatar?.avatar_data_url;
 
         if (existingAvatar) {
-          await userRepository.updateUserAvatar(
-            trx,
-            userId,
-            existingAvatar.id,
-            avatarDataUrl,
-          );
+          await userRepository.updateUserAvatar(trx, userId, existingAvatar.id, avatarDataUrl);
         } else {
           await userRepository.insertUserAvatar(trx, {
             id: crypto.randomUUID(),
@@ -434,17 +358,10 @@ export function createAuthService({
     });
   }
 
-  async function sendPhoneVerificationOtp(
-    userId: string,
-    phoneNo: string,
-  ): Promise<void> {
+  async function sendPhoneVerificationOtp(userId: string, phoneNo: string): Promise<void> {
     const normalizedPhoneNo = normalizePhoneNumber(phoneNo);
     if (normalizedPhoneNo.length < 8) {
-      throw new AppError(
-        400,
-        "INVALID_PHONE_NUMBER",
-        "Enter a valid mobile number.",
-      );
+      throw new AppError(400, "INVALID_PHONE_NUMBER", "Enter a valid mobile number.");
     }
 
     const currentUser = await userRepository.findUserById(database, userId);
@@ -482,11 +399,7 @@ export function createAuthService({
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
     if (!currentUser.email) {
-      throw new AppError(
-        400,
-        "EMAIL_NOT_FOUND",
-        "Add an email address before verifying it.",
-      );
+      throw new AppError(400, "EMAIL_NOT_FOUND", "Add an email address before verifying it.");
     }
     if (currentUser.email_verified_at) return;
     if (!otpService) {
@@ -506,11 +419,7 @@ export function createAuthService({
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
     if (!currentUser.email) {
-      throw new AppError(
-        400,
-        "EMAIL_NOT_FOUND",
-        "Add an email address before verifying it.",
-      );
+      throw new AppError(400, "EMAIL_NOT_FOUND", "Add an email address before verifying it.");
     }
     if (currentUser.email_verified_at) return;
     if (!otpService) {
@@ -521,34 +430,17 @@ export function createAuthService({
       );
     }
 
-    await otpService.verifyAndConsumeOtp(
-      currentUser.email,
-      "email",
-      "email_verification",
-      code,
-    );
-    const updatedUser = await userRepository.markUserEmailVerified(
-      database,
-      userId,
-      new Date(),
-    );
+    await otpService.verifyAndConsumeOtp(currentUser.email, "email", "email_verification", code);
+    const updatedUser = await userRepository.markUserEmailVerified(database, userId, new Date());
     if (!updatedUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
   }
 
-  async function verifyPhoneNumber(
-    userId: string,
-    phoneNo: string,
-    code: string,
-  ) {
+  async function verifyPhoneNumber(userId: string, phoneNo: string, code: string) {
     const normalizedPhoneNo = normalizePhoneNumber(phoneNo);
     if (normalizedPhoneNo.length < 8) {
-      throw new AppError(
-        400,
-        "INVALID_PHONE_NUMBER",
-        "Enter a valid mobile number.",
-      );
+      throw new AppError(400, "INVALID_PHONE_NUMBER", "Enter a valid mobile number.");
     }
 
     const currentUser = await userRepository.findUserById(database, userId);
@@ -577,12 +469,7 @@ export function createAuthService({
       );
     }
 
-    await otpService.verifyAndConsumeOtp(
-      normalizedPhoneNo,
-      "phone",
-      "phone_verification",
-      code,
-    );
+    await otpService.verifyAndConsumeOtp(normalizedPhoneNo, "phone", "phone_verification", code);
 
     const updatedUser = await userRepository.updateUserPhoneNumber(
       database,
@@ -643,10 +530,7 @@ export function createAuthService({
       existingSessionToken?: string | null;
     };
   }) {
-    const user = await findUserByIdentifierIncludingDeleted(
-      input.identifier,
-      input.identifierType,
-    );
+    const user = await findUserByIdentifierIncludingDeleted(input.identifier, input.identifierType);
 
     if (!user) {
       throw new AppError(
@@ -657,11 +541,7 @@ export function createAuthService({
     }
 
     if (user.is_deleted) {
-      throw new AppError(
-        403,
-        "ACCOUNT_DEACTIVATED",
-        "This account has been deactivated.",
-      );
+      throw new AppError(403, "ACCOUNT_DEACTIVATED", "This account has been deactivated.");
     }
 
     if (!otpService || !sessionService) {
@@ -706,12 +586,7 @@ export function createAuthService({
           findUserByIdentifierIncludingDeleted(input.email!, "email"),
           findUserByIdentifierIncludingDeleted(input.phoneNo!, "phone"),
         ])
-      : [
-          await findUserByIdentifierIncludingDeleted(
-            input.identifier,
-            input.identifierType,
-          ),
-        ];
+      : [await findUserByIdentifierIncludingDeleted(input.identifier, input.identifierType)];
 
     if (existingUsers.some(Boolean)) {
       throw new AppError(
@@ -756,19 +631,13 @@ export function createAuthService({
       );
     } else {
       if (!input.code) {
-        throw new AppError(
-          400,
-          "INVALID_REQUEST",
-          "A verification code is required.",
-        );
+        throw new AppError(400, "INVALID_REQUEST", "A verification code is required.");
       }
 
       await otpService.verifyAndConsumeOtp(
         input.identifier,
         input.identifierType,
-        input.identifierType === "email"
-          ? "email_verification"
-          : "phone_verification",
+        input.identifierType === "email" ? "email_verification" : "phone_verification",
         input.code,
       );
     }
@@ -828,39 +697,23 @@ export function createAuthService({
     // account — and its id — even exist.
     const providerAvatarDataUrl =
       input.avatarSourceUrl && storage && input.avatarSource
-        ? await storeAvatarFromUrl(
-            storage,
-            userId,
-            input.avatarSourceUrl,
-            input.avatarSource,
-          )
+        ? await storeAvatarFromUrl(storage, userId, input.avatarSourceUrl, input.avatarSource)
         : null;
     const avatarDataUrl =
-      providerAvatarDataUrl ??
-      defaultAvatarUrl(input.displayName.trim() || userId);
+      providerAvatarDataUrl ?? defaultAvatarUrl(input.displayName.trim() || userId);
     const providerAvatarStored = Boolean(
-      input.avatarSource &&
-      providerAvatarDataUrl &&
-      isStoredAvatarUrl(providerAvatarDataUrl),
+      input.avatarSource && providerAvatarDataUrl && isStoredAvatarUrl(providerAvatarDataUrl),
     );
 
-    if (
-      storage &&
-      input.avatarSource &&
-      input.avatarSourceUrl &&
-      !providerAvatarStored
-    ) {
-      await removeAvatarPrefix(
-        storage,
-        avatarStoragePrefix(userId, input.avatarSource),
-      ).catch(() => undefined);
+    if (storage && input.avatarSource && input.avatarSourceUrl && !providerAvatarStored) {
+      await removeAvatarPrefix(storage, avatarStoragePrefix(userId, input.avatarSource)).catch(
+        () => undefined,
+      );
     }
 
     try {
       await database.transaction().execute(async (trx) => {
-        await sql`select pg_advisory_xact_lock(hashtext('veolms:user-bootstrap'))`.execute(
-          trx,
-        );
+        await sql`select pg_advisory_xact_lock(hashtext('veolms:user-bootstrap'))`.execute(trx);
 
         const isFirstUser = (await userRepository.countUsers(trx)) === 0;
 
@@ -910,10 +763,9 @@ export function createAuthService({
       });
     } catch (error) {
       if (providerAvatarStored && storage && input.avatarSource) {
-        await removeAvatarPrefix(
-          storage,
-          avatarStoragePrefix(userId, input.avatarSource),
-        ).catch(() => undefined);
+        await removeAvatarPrefix(storage, avatarStoragePrefix(userId, input.avatarSource)).catch(
+          () => undefined,
+        );
       }
       throw error;
     }
@@ -936,10 +788,7 @@ export function createAuthService({
   }
 
   /** Issues a direct-to-storage upload URL for one immutable user avatar. */
-  async function presignAvatarUpload(
-    userId: string,
-    input: AvatarUploadPresignRequest,
-  ) {
+  async function presignAvatarUpload(userId: string, input: AvatarUploadPresignRequest) {
     validateAvatarUpload(input);
     const avatarStorage = requireAvatarStorage();
     const uploadId = crypto.randomUUID();
@@ -953,24 +802,15 @@ export function createAuthService({
   }
 
   /** Confirms the direct upload, then stores the canonical CDN variant URL. */
-  async function completeAvatarUpload(
-    userId: string,
-    input: AvatarUploadCompleteRequest,
-  ) {
+  async function completeAvatarUpload(userId: string, input: AvatarUploadCompleteRequest) {
     validateAvatarUpload(input);
     const avatarStorage = requireAvatarStorage();
 
     return withAvatarLock(userId, async () => {
       const avatarPrefix = avatarStoragePrefix(userId, input.uploadId);
-      const storageKey = avatarOriginalKey(
-        userId,
-        input.contentType,
-        input.uploadId,
-      );
+      const storageKey = avatarOriginalKey(userId, input.contentType, input.uploadId);
       const discardUploadedAvatar = async (): Promise<void> => {
-        await removeAvatarPrefix(avatarStorage, avatarPrefix).catch(
-          () => undefined,
-        );
+        await removeAvatarPrefix(avatarStorage, avatarPrefix).catch(() => undefined);
       };
       let evictedPrefixes: string[] = [];
       let user: Awaited<ReturnType<typeof userRepository.updateUserProfile>>;
@@ -978,26 +818,19 @@ export function createAuthService({
       try {
         // A completed upload is idempotent even after its source object has
         // been cleaned up. Check the durable record before touching storage.
-        const completedUser = await withAvatarDatabaseLock(
-          userId,
-          async (trx) => {
-            const currentUser = await userRepository.findUserById(trx, userId);
-            if (!currentUser) {
-              throw new AppError(
-                404,
-                "USER_NOT_FOUND",
-                "User account was not found.",
-              );
-            }
+        const completedUser = await withAvatarDatabaseLock(userId, async (trx) => {
+          const currentUser = await userRepository.findUserById(trx, userId);
+          if (!currentUser) {
+            throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
+          }
 
-            const completedAvatar = await userRepository.findUserAvatarById(
-              trx,
-              userId,
-              input.uploadId,
-            );
-            return completedAvatar ? currentUser : null;
-          },
-        );
+          const completedAvatar = await userRepository.findUserAvatarById(
+            trx,
+            userId,
+            input.uploadId,
+          );
+          return completedAvatar ? currentUser : null;
+        });
         if (completedUser) {
           uploadWasAlreadyCompleted = true;
           const roles = await getUserRoles(userId);
@@ -1006,17 +839,10 @@ export function createAuthService({
 
         const metadata = await avatarStorage.headObject(storageKey);
         if (!metadata) {
-          throw new AppError(
-            400,
-            "FILE_NOT_FOUND",
-            "File could not be found in storage.",
-          );
+          throw new AppError(400, "FILE_NOT_FOUND", "File could not be found in storage.");
         }
 
-        if (
-          metadata.contentLength !== undefined &&
-          metadata.contentLength !== input.fileSize
-        ) {
+        if (metadata.contentLength !== undefined && metadata.contentLength !== input.fileSize) {
           throw new AppError(
             400,
             "FILE_SIZE_MISMATCH",
@@ -1024,10 +850,7 @@ export function createAuthService({
           );
         }
 
-        if (
-          metadata.contentType !== undefined &&
-          metadata.contentType !== input.contentType
-        ) {
+        if (metadata.contentType !== undefined && metadata.contentType !== input.contentType) {
           throw new AppError(
             400,
             "INVALID_AVATAR_FILE",
@@ -1039,16 +862,10 @@ export function createAuthService({
           range: AVATAR_VALIDATION_RANGE,
         });
         if (!object) {
-          throw new AppError(
-            400,
-            "FILE_NOT_FOUND",
-            "File could not be found in storage.",
-          );
+          throw new AppError(400, "FILE_NOT_FOUND", "File could not be found in storage.");
         }
 
-        const detectedType = detectImageContentType(
-          await readObjectPrefix(object.body, 32),
-        );
+        const detectedType = detectImageContentType(await readObjectPrefix(object.body, 32));
         if (detectedType !== input.contentType) {
           throw new AppError(
             400,
@@ -1061,29 +878,16 @@ export function createAuthService({
           avatarCdnUrl(avatarStorage, userId, 160, input.uploadId) ??
           avatarStorage.getPublicObjectUrl(storageKey);
         if (!avatarDataUrl) {
-          throw new AppError(
-            503,
-            "CDN_NOT_CONFIGURED",
-            "Avatar CDN delivery is not configured.",
-          );
+          throw new AppError(503, "CDN_NOT_CONFIGURED", "Avatar CDN delivery is not configured.");
         }
 
         await removeAvatarVariants(avatarStorage, userId, input.uploadId);
-        await removeOtherAvatarOriginals(
-          avatarStorage,
-          userId,
-          input.contentType,
-          input.uploadId,
-        );
+        await removeOtherAvatarOriginals(avatarStorage, userId, input.contentType, input.uploadId);
 
         const result = await withAvatarDatabaseLock(userId, async (trx) => {
           const currentUser = await userRepository.findUserById(trx, userId);
           if (!currentUser) {
-            throw new AppError(
-              404,
-              "USER_NOT_FOUND",
-              "User account was not found.",
-            );
+            throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
           }
 
           const completedAvatar = await userRepository.findUserAvatarById(
@@ -1104,22 +908,16 @@ export function createAuthService({
             avatarDataUrl,
           });
 
-          const updatedUser = await userRepository.updateUserProfile(
-            trx,
-            userId,
-            { avatarDataUrl },
-          );
+          const updatedUser = await userRepository.updateUserProfile(trx, userId, {
+            avatarDataUrl,
+          });
           if (!updatedUser) {
-            throw new AppError(
-              404,
-              "USER_NOT_FOUND",
-              "User account was not found.",
-            );
+            throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
           }
 
-          const uploadedAvatars = (
-            await userRepository.listUserAvatars(trx, userId)
-          ).filter((avatar) => avatar.source === "upload");
+          const uploadedAvatars = (await userRepository.listUserAvatars(trx, userId)).filter(
+            (avatar) => avatar.source === "upload",
+          );
           const evicted = uploadedAvatars.slice(USER_AVATAR_RETENTION_LIMIT);
           evictedPrefixes = evicted.map((avatar) => avatar.storage_prefix);
           await userRepository.deleteUserAvatarsById(
@@ -1141,9 +939,7 @@ export function createAuthService({
       if (storage && evictedPrefixes.length > 0) {
         await Promise.all(
           evictedPrefixes.map(async (prefix) => {
-            await removeAvatarPrefix(avatarStorage, prefix).catch(
-              () => undefined,
-            );
+            await removeAvatarPrefix(avatarStorage, prefix).catch(() => undefined);
           }),
         );
       }
@@ -1173,10 +969,7 @@ export function createAuthService({
       .filter((avatar) => avatar.source === "upload")
       .slice(0, USER_AVATAR_RETENTION_LIMIT);
 
-    const effectiveAvatars = [
-      ...(googleAvatar ? [googleAvatar] : []),
-      ...uploadedAvatars,
-    ];
+    const effectiveAvatars = [...(googleAvatar ? [googleAvatar] : []), ...uploadedAvatars];
 
     return effectiveAvatars.map((avatar) => {
       let avatarDataUrl = avatar.avatar_data_url;
@@ -1190,8 +983,7 @@ export function createAuthService({
         source: avatar.source,
         createdAt: avatar.created_at.toISOString(),
         isCurrent:
-          avatar.avatar_data_url === user.avatar_data_url ||
-          avatarDataUrl === user.avatar_data_url,
+          avatar.avatar_data_url === user.avatar_data_url || avatarDataUrl === user.avatar_data_url,
         canDelete: avatar.source === "upload",
       };
     });
@@ -1200,28 +992,16 @@ export function createAuthService({
   async function selectAvatar(userId: string, avatarId: string) {
     return withAvatarLock(userId, async () => {
       const user = await withAvatarDatabaseLock(userId, async (trx) => {
-        const avatar = await userRepository.findUserAvatarById(
-          trx,
-          userId,
-          avatarId,
-        );
+        const avatar = await userRepository.findUserAvatarById(trx, userId, avatarId);
         if (!avatar) {
-          throw new AppError(
-            404,
-            "AVATAR_NOT_FOUND",
-            "That avatar is no longer available.",
-          );
+          throw new AppError(404, "AVATAR_NOT_FOUND", "That avatar is no longer available.");
         }
 
         const updated = await userRepository.updateUserProfile(trx, userId, {
           avatarDataUrl: avatar.avatar_data_url,
         });
         if (!updated) {
-          throw new AppError(
-            404,
-            "USER_NOT_FOUND",
-            "User account was not found.",
-          );
+          throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
         }
         await userRepository.touchUserAvatar(trx, userId, avatarId);
         return updated;
@@ -1238,11 +1018,7 @@ export function createAuthService({
       const user = await withAvatarDatabaseLock(userId, async (trx) => {
         const currentUser = await userRepository.findUserById(trx, userId);
         if (!currentUser) {
-          throw new AppError(
-            404,
-            "USER_NOT_FOUND",
-            "User account was not found.",
-          );
+          throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
         }
 
         const avatars = await userRepository.listUserAvatars(trx, userId);
@@ -1253,9 +1029,7 @@ export function createAuthService({
         let avatarDataUrl = currentUser.avatar_data_url;
 
         if (currentUpload) {
-          const providerAvatar = avatars.find(
-            (avatar) => avatar.source === "google",
-          );
+          const providerAvatar = avatars.find((avatar) => avatar.source === "google");
           avatarDataUrl =
             providerAvatar?.avatar_data_url ??
             defaultAvatarUrl(currentUser.display_name.trim() || userId);
@@ -1264,16 +1038,10 @@ export function createAuthService({
         const updated = await userRepository.updateUserProfile(
           trx,
           userId,
-          currentUser.avatar_data_url === avatarDataUrl
-            ? {}
-            : { avatarDataUrl },
+          currentUser.avatar_data_url === avatarDataUrl ? {} : { avatarDataUrl },
         );
         if (!updated) {
-          throw new AppError(
-            404,
-            "USER_NOT_FOUND",
-            "User account was not found.",
-          );
+          throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
         }
 
         deletedPrefixes = uploaded.map((avatar) => avatar.storage_prefix);

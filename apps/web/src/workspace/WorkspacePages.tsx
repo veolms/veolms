@@ -57,9 +57,8 @@ function LogoutWorkspace({
         <div className="workspace-signout__actions">
           {ready && (
             <p role="status">
-              This clears the local workspace session and returns you to the
-              home screen. Server-side sign-out will follow when account
-              sessions are connected.
+              This clears the local workspace session and returns you to the home screen.
+              Server-side sign-out will follow when account sessions are connected.
             </p>
           )}
           <button
@@ -78,9 +77,7 @@ function LogoutWorkspace({
                 return;
               }
               onSignOut?.();
-              setNotice?.(
-                "Local workspace session ended. You are back at home.",
-              );
+              setNotice?.("Local workspace session ended. You are back at home.");
               onNavigatePage("home");
             }}
           >

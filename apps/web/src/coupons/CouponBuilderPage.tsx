@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import type {
-  CreateCouponRequest,
-  UpdateCouponRequest,
-} from "@veolms/contracts";
+import type { CreateCouponRequest, UpdateCouponRequest } from "@veolms/contracts";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { DiceFiveIcon as DiceFive } from "@phosphor-icons/react/DiceFive";
@@ -14,11 +11,7 @@ import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { ThemedSelect } from "../ThemedSelect";
 import { ThemedDateTimePicker } from "../ThemedDateTimePicker";
 import { useMyCourses } from "../services/courses";
-import {
-  useCouponById,
-  useCreateCoupon,
-  useUpdateCoupon,
-} from "../services/coupons";
+import { useCouponById, useCreateCoupon, useUpdateCoupon } from "../services/coupons";
 import { getApiError } from "../lib/api-error";
 import type { NavigateTo } from "../routing/navigation";
 import { QuizRichTextField } from "../quizzes/QuizRichTextField";
@@ -48,17 +41,8 @@ const discountTypeOptions: readonly [string, string][] = [
 ];
 
 function generateRandomCode(): string {
-  const prefixes = [
-    "PROMO",
-    "SPECIAL",
-    "SUPER",
-    "SAVE",
-    "FLASH",
-    "MEGA",
-    "LEARN",
-  ];
-  const prefix =
-    prefixes[Math.floor(Math.random() * prefixes.length)] ?? "PROMO";
+  const prefixes = ["PROMO", "SPECIAL", "SUPER", "SAVE", "FLASH", "MEGA", "LEARN"];
+  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)] ?? "PROMO";
   return `${prefix}${Math.floor(10 + Math.random() * 89)}`;
 }
 
@@ -80,10 +64,7 @@ function FieldLabel({
   required?: boolean;
 }) {
   return (
-    <label
-      htmlFor={htmlFor}
-      className="mb-1.5 block text-[13px] font-medium text-(--text)"
-    >
+    <label htmlFor={htmlFor} className="mb-1.5 block text-[13px] font-medium text-(--text)">
       {children}
       {required ? <RequiredMark /> : null}
     </label>
@@ -108,10 +89,8 @@ function Switch({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${
-        checked
-          ? "bg-(--accent)"
-          : "bg-[color-mix(in_srgb,var(--text)_22%,transparent)]"
+      className={`relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${
+        checked ? "bg-(--accent)" : "bg-[color-mix(in_srgb,var(--text)_22%,transparent)]"
       }`}
     >
       <span
@@ -123,11 +102,7 @@ function Switch({
   );
 }
 
-export function CouponBuilderPage({
-  couponId,
-  onNavigatePage,
-  setNotice,
-}: CouponBuilderPageProps) {
+export function CouponBuilderPage({ couponId, onNavigatePage, setNotice }: CouponBuilderPageProps) {
   const isEditMode = Boolean(couponId && couponId !== "create");
   const [searchParams] = useSearchParams();
   const presetCourseId = searchParams.get("courseId");
@@ -141,25 +116,16 @@ export function CouponBuilderPage({
   const createMutation = useCreateCoupon();
   const updateMutation = useUpdateCoupon();
 
-  const defaultStart = useMemo(
-    () => toLocalDateTimeValue(new Date(), "start"),
-    [],
-  );
+  const defaultStart = useMemo(() => toLocalDateTimeValue(new Date(), "start"), []);
   const defaultEnd = useMemo(
-    () =>
-      toLocalDateTimeValue(
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        "end",
-      ),
+    () => toLocalDateTimeValue(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), "end"),
     [],
   );
 
   const [code, setCode] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [discountType, setDiscountType] = useState<"percentage" | "fixed">(
-    "percentage",
-  );
+  const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");
   const [discountValue, setDiscountValue] = useState<number | "">(20);
   const [startsAt, setStartsAt] = useState(defaultStart);
   const [expiresAt, setExpiresAt] = useState(defaultEnd);
@@ -173,36 +139,26 @@ export function CouponBuilderPage({
   const handleDiscountTypeChange = (value: string) => {
     const nextType = value as "percentage" | "fixed";
     setDiscountType(nextType);
-    if (
-      nextType === "percentage" &&
-      typeof discountValue === "number" &&
-      discountValue > 100
-    ) {
+    if (nextType === "percentage" && typeof discountValue === "number" && discountValue > 100) {
       setDiscountValue(100);
     }
   };
 
-  const handleDiscountValueChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleDiscountValueChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const sanitized = sanitizeNumberInput(event.target.value, {
       max: discountType === "percentage" ? 100 : 100000,
     });
     setDiscountValue(sanitized);
   };
 
-  const handleUsageLimitChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleUsageLimitChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const sanitized = sanitizeNumberInput(event.target.value, {
       max: 1000000,
     });
     setUsageLimit(sanitized);
   };
 
-  const handlePerUserLimitChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handlePerUserLimitChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const sanitized = sanitizeNumberInput(event.target.value, {
       max: 100000,
     });
@@ -218,12 +174,8 @@ export function CouponBuilderPage({
       setDescription(copy.description);
       setDiscountType(existingCoupon.discountType);
       setDiscountValue(money.discountValue);
-      setStartsAt(
-        isoToLocalDateTimeValue(existingCoupon.startsAt) || defaultStart,
-      );
-      setExpiresAt(
-        isoToLocalDateTimeValue(existingCoupon.expiresAt) || defaultEnd,
-      );
+      setStartsAt(isoToLocalDateTimeValue(existingCoupon.startsAt) || defaultStart);
+      setExpiresAt(isoToLocalDateTimeValue(existingCoupon.expiresAt) || defaultEnd);
       setHasUsageLimit(Boolean(existingCoupon.globalUsageLimit));
       setUsageLimit(existingCoupon.globalUsageLimit ?? 2000);
       setHasPerUserLimit(Boolean(existingCoupon.perUserLimit));
@@ -275,9 +227,7 @@ export function CouponBuilderPage({
   };
 
   const removeRestrictedCourse = (courseId: string) => {
-    setRestrictedCourseIds((current) =>
-      current.filter((id) => id !== courseId),
-    );
+    setRestrictedCourseIds((current) => current.filter((id) => id !== courseId));
   };
 
   const handleSubmit = async (event?: React.FormEvent) => {
@@ -335,13 +285,10 @@ export function CouponBuilderPage({
           minOrderAmount: money.minOrderAmount,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
-          globalUsageLimit:
-            hasUsageLimit && usageLimit ? Number(usageLimit) : null,
-          perUserLimit:
-            hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
+          globalUsageLimit: hasUsageLimit && usageLimit ? Number(usageLimit) : null,
+          perUserLimit: hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
           isActive: existingCoupon.isActive,
-          restrictedCourseIds:
-            restrictedCourseIds.length > 0 ? restrictedCourseIds : null,
+          restrictedCourseIds: restrictedCourseIds.length > 0 ? restrictedCourseIds : null,
         };
         await updateMutation.mutateAsync({ id: existingCoupon.id, payload });
         setNotice?.(`${existingCoupon.code} updated.`);
@@ -354,13 +301,10 @@ export function CouponBuilderPage({
           minOrderAmount: money.minOrderAmount,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
-          globalUsageLimit:
-            hasUsageLimit && usageLimit ? Number(usageLimit) : undefined,
-          perUserLimit:
-            hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
+          globalUsageLimit: hasUsageLimit && usageLimit ? Number(usageLimit) : undefined,
+          perUserLimit: hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
           isActive: true,
-          restrictedCourseIds:
-            restrictedCourseIds.length > 0 ? restrictedCourseIds : undefined,
+          restrictedCourseIds: restrictedCourseIds.length > 0 ? restrictedCourseIds : undefined,
         };
         await createMutation.mutateAsync(payload);
         setNotice?.(`${cleanCode} created.`);
@@ -374,10 +318,7 @@ export function CouponBuilderPage({
   if (isEditMode && isLoadingCoupon) {
     return (
       <main data-coupon-surface="" className="mx-auto w-full max-w-[1320px]">
-        <CenteredLoadingSpinner
-          label="Loading coupon"
-          className="min-h-52 py-24"
-        />
+        <CenteredLoadingSpinner label="Loading coupon" className="min-h-52 py-24" />
       </main>
     );
   }
@@ -385,20 +326,17 @@ export function CouponBuilderPage({
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <main
-      data-coupon-surface=""
-      className="mx-auto grid w-full max-w-[1800px] gap-6"
-    >
+    <main data-coupon-surface="" className="mx-auto grid w-full max-w-[1800px] gap-6">
       <header>
         <button
           type="button"
           onClick={() => onNavigatePage?.(afterSavePath)}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-(--muted) hover:text-(--text) cursor-pointer"
+          className="mb-4 inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-(--muted) hover:text-(--text)"
         >
           <ArrowLeft size={16} weight="bold" />
           {isSafeReturnPath(returnTo) ? "Back to course" : "Back to Coupons"}
         </button>
-        <h1 className="m-0 text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
+        <h1 className="m-0 text-[clamp(1.8rem,2.4vw,2.15rem)] leading-tight font-bold tracking-[-0.035em] text-(--text)">
           {isEditMode ? "Edit Coupon" : "Create Coupon"}
         </h1>
         <p className="mt-1.5 mb-0 text-[0.88rem] leading-6 text-(--muted)">
@@ -430,11 +368,7 @@ export function CouponBuilderPage({
                   value={code}
                   disabled={isEditMode}
                   onChange={(event) =>
-                    setCode(
-                      event.target.value
-                        .toUpperCase()
-                        .replace(/[^A-Z0-9_-]/g, ""),
-                    )
+                    setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))
                   }
                   placeholder="DIWALI50"
                   maxLength={30}
@@ -446,7 +380,7 @@ export function CouponBuilderPage({
                     type="button"
                     onClick={() => setCode(generateRandomCode())}
                     title="Generate code"
-                    className="shrink-0 text-(--muted) hover:text-(--text) cursor-pointer"
+                    className="shrink-0 cursor-pointer text-(--muted) hover:text-(--text)"
                   >
                     <DiceFive size={18} weight="bold" />
                   </button>
@@ -482,9 +416,7 @@ export function CouponBuilderPage({
               placeholder="Flat 50% off on all courses this Diwali!"
               minHeight="min-h-24"
             />
-            <p className="mt-1 text-right text-[12px] text-(--muted)">
-              {description.length}/500
-            </p>
+            <p className="mt-1 text-right text-[12px] text-(--muted)">{description.length}/500</p>
           </div>
 
           <div className="grid w-full gap-4 sm:grid-cols-2">
@@ -558,14 +490,8 @@ export function CouponBuilderPage({
 
           <div className="grid gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <Switch
-                checked={hasUsageLimit}
-                onChange={setHasUsageLimit}
-                label="Set usage limit"
-              />
-              <span className="text-sm text-(--text)">
-                Set usage limit (optional)
-              </span>
+              <Switch checked={hasUsageLimit} onChange={setHasUsageLimit} label="Set usage limit" />
+              <span className="text-sm text-(--text)">Set usage limit (optional)</span>
               <input
                 type="number"
                 min={1}
@@ -585,9 +511,7 @@ export function CouponBuilderPage({
                 onChange={setHasPerUserLimit}
                 label="Limit per user"
               />
-              <span className="text-sm text-(--text)">
-                Limit per user (optional)
-              </span>
+              <span className="text-sm text-(--text)">Limit per user (optional)</span>
               <input
                 type="number"
                 min={1}
@@ -597,17 +521,13 @@ export function CouponBuilderPage({
                 placeholder="1"
                 className={`${fieldClass} w-24 disabled:opacity-40`}
               />
-              <span className="text-[12px] text-(--muted)">
-                Maximum uses per individual user
-              </span>
+              <span className="text-[12px] text-(--muted)">Maximum uses per individual user</span>
             </div>
           </div>
 
           {courses.length > 0 || restrictedCourseIds.length > 0 ? (
             <div>
-              <FieldLabel htmlFor="coupon-restrict-courses">
-                Restrict to courses
-              </FieldLabel>
+              <FieldLabel htmlFor="coupon-restrict-courses">Restrict to courses</FieldLabel>
               <div className={`${fieldClass} flex w-full items-center`}>
                 <ThemedSelect
                   id="coupon-restrict-courses"
@@ -631,14 +551,14 @@ export function CouponBuilderPage({
                     return (
                       <span
                         key={courseId}
-                        className="inline-flex max-w-full items-center gap-1 rounded-full border border-(--accent)/40 bg-(--accent)/12 py-1 pl-3 pr-1.5 text-xs font-semibold text-(--accent)"
+                        className="inline-flex max-w-full items-center gap-1 rounded-full border border-(--accent)/40 bg-(--accent)/12 py-1 pr-1.5 pl-3 text-xs font-semibold text-(--accent)"
                       >
                         <span className="truncate">{label}</span>
                         <button
                           type="button"
                           aria-label={`Remove ${label}`}
                           onClick={() => removeRestrictedCourse(courseId)}
-                          className="flex size-5 shrink-0 items-center justify-center rounded-full hover:bg-(--accent)/20 cursor-pointer"
+                          className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-(--accent)/20"
                         >
                           <X size={11} weight="bold" />
                         </button>
@@ -658,23 +578,19 @@ export function CouponBuilderPage({
             <button
               type="button"
               onClick={() => onNavigatePage?.(afterSavePath)}
-              className="h-10 rounded-xl px-4 text-sm font-semibold text-(--muted) hover:text-(--text) cursor-pointer"
+              className="h-10 cursor-pointer rounded-xl px-4 text-sm font-semibold text-(--muted) hover:text-(--text)"
             >
               Cancel
             </button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <CircleNotch size={16} className="animate-spin" />
-              ) : null}
+              {isSubmitting ? <CircleNotch size={16} className="animate-spin" /> : null}
               {isEditMode ? "Save changes" : "Create Coupon"}
             </Button>
           </div>
         </form>
 
         <aside className={`${surfaceClass} sticky top-4 w-full p-5`}>
-          <h2 className="m-0 text-base font-semibold text-(--text)">
-            Coupon Preview
-          </h2>
+          <h2 className="m-0 text-base font-semibold text-(--text)">Coupon Preview</h2>
           <p className="mt-1 mb-4 text-sm text-(--muted)">
             This is how it will appear to learners.
           </p>

@@ -114,7 +114,7 @@ export function NotificationCard({
         {/* Middle: Content */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-bold text-sm sm:text-base text-(--text) tracking-tight">
+            <h3 className="text-sm font-bold tracking-tight text-(--text) sm:text-base">
               {notification.actionUrl ? (
                 <button
                   type="button"
@@ -131,21 +131,19 @@ export function NotificationCard({
               )}
             </h3>
           </div>
-          <p className="mt-1 text-xs sm:text-sm text-(--text-secondary) leading-relaxed">
+          <p className="mt-1 text-xs leading-relaxed text-(--text-secondary) sm:text-sm">
             {notification.body}
           </p>
         </div>
 
         {/* Right: Timestamp + Unread Dot + Context Menu */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0 pt-0.5">
-          <span className="text-xs text-(--muted) whitespace-nowrap">
-            {notification.timestamp}
-          </span>
+        <div className="flex shrink-0 items-center gap-2 pt-0.5 sm:gap-3">
+          <span className="text-xs whitespace-nowrap text-(--muted)">{notification.timestamp}</span>
 
           {/* Unread Accent Dot */}
           {!notification.isRead && (
             <span
-              className="h-2 w-2 rounded-full bg-(--accent) shrink-0 shadow-[0_0_8px_var(--accent)]"
+              className="h-2 w-2 shrink-0 rounded-full bg-(--accent) shadow-[0_0_8px_var(--accent)]"
               aria-label="Unread notification"
             />
           )}
@@ -157,27 +155,24 @@ export function NotificationCard({
               onClick={() => setMenuOpen((prev) => !prev)}
               aria-label={`Options for notification: ${notification.title}`}
               aria-expanded={menuOpen}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text)"
             >
               <DotsThreeVertical size={18} weight="bold" />
             </button>
 
             {menuOpen && (
               <>
-                <div
-                  className="fixed inset-0 z-20"
-                  onClick={() => setMenuOpen(false)}
-                />
+                <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-30 mt-1 min-w-42.5 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+                  className="animate-in fade-in zoom-in-95 absolute top-full right-0 z-30 mt-1 min-w-42.5 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md duration-100"
                 >
                   {!notification.isRead && (
                     <button
                       type="button"
                       role="menuitem"
                       onClick={handleMarkRead}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
+                      className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover)"
                     >
                       <Check size={14} />
                       <span>Mark as read</span>
@@ -188,7 +183,7 @@ export function NotificationCard({
                       type="button"
                       role="menuitem"
                       onClick={handleMarkUnread}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
+                      className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover)"
                     >
                       <EnvelopeSimple size={14} />
                       <span>Mark as unread</span>
@@ -198,7 +193,7 @@ export function NotificationCard({
                     type="button"
                     role="menuitem"
                     onClick={handleCopyLink}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover)"
                   >
                     <LinkSimple size={14} />
                     <span>Copy link</span>
@@ -207,7 +202,7 @@ export function NotificationCard({
                     type="button"
                     role="menuitem"
                     onClick={handleArchive}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-(--hover) cursor-pointer"
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-(--hover)"
                   >
                     <Trash size={14} />
                     <span>Archive</span>

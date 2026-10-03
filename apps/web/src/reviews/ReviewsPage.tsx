@@ -102,16 +102,13 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
   };
 
   return (
-    <div
-      className="w-full min-w-0 flex flex-col font-sans"
-      aria-labelledby="reviews-page-title"
-    >
+    <div className="flex w-full min-w-0 flex-col font-sans" aria-labelledby="reviews-page-title">
       {/* Top Header Row with Title, Description, and Header Icon Badge */}
-      <header className="flex items-start justify-between gap-5 mb-6">
+      <header className="mb-6 flex items-start justify-between gap-5">
         <div>
           <h1
             id="reviews-page-title"
-            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
+            className="text-[clamp(1.8rem,2.4vw,2.15rem)] leading-tight font-bold tracking-[-0.035em] text-(--text)"
           >
             Reviews
           </h1>
@@ -123,8 +120,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
           className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-[19px] text-(--accent) transition-transform hover:scale-105"
           style={{
             background: "color-mix(in srgb, var(--accent) 16%, var(--surface))",
-            boxShadow:
-              "0 14px 26px color-mix(in srgb, var(--accent-shadow) 40%, transparent)",
+            boxShadow: "0 14px 26px color-mix(in srgb, var(--accent-shadow) 40%, transparent)",
           }}
           aria-hidden="true"
         >
@@ -135,7 +131,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
       {/* Course Header Banner */}
       <section
         aria-label="Course details and actions"
-        className="mb-5 rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
+        className="mb-5 rounded-[18px] border border-(--border) bg-(--card-surface) p-5 transition-all md:p-6"
         style={{ boxShadow: "var(--card-shadow)" }}
       >
         <CourseReviewHeader
@@ -150,7 +146,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
       {/* Tab Navigation Bar with delicate thin bottom line and transparent background */}
       <nav
         aria-label="Review categories"
-        className="scrollbar-none mb-5 flex min-w-0 gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-transparent md:gap-3"
+        className="mb-5 flex min-w-0 scrollbar-none gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-transparent md:gap-3"
         role="tablist"
       >
         {tabsConfig.map((tab, idx) => {
@@ -166,10 +162,8 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               role="tab"
               aria-selected={isActive}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative inline-flex min-h-11.5 shrink-0 items-center gap-2 px-3.5 pb-2.5 pt-1 text-xs md:text-sm font-[650] transition-colors cursor-pointer select-none ${
-                isActive
-                  ? "text-(--text)"
-                  : "text-(--muted) hover:text-(--text)"
+              className={`relative inline-flex min-h-11.5 shrink-0 cursor-pointer items-center gap-2 px-3.5 pt-1 pb-2.5 text-xs font-[650] transition-colors select-none md:text-sm ${
+                isActive ? "text-(--text)" : "text-(--muted) hover:text-(--text)"
               }`}
             >
               <Icon
@@ -180,7 +174,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               <span>{tab.label}</span>
               {isActive && (
                 <span
-                  className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-t-full bg-(--accent)"
+                  className="absolute right-0 bottom-0 left-0 h-[2.5px] rounded-t-full bg-(--accent)"
                   aria-hidden="true"
                 />
               )}
@@ -218,7 +212,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
       {/* 2-Column Responsive Layout */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-start">
         {/* Left / Main Column: Reviews Feed (8 of 12 columns on desktop) */}
-        <main className="flex flex-col gap-4 lg:col-span-8 min-w-0">
+        <main className="flex min-w-0 flex-col gap-4 lg:col-span-8">
           {reviews.length > 0 ? (
             reviews.map((item) => (
               <ReviewCard
@@ -234,13 +228,11 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               className="flex flex-col items-center justify-center rounded-[18px] border border-(--border) bg-(--card-surface) p-12 text-center"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--hover) text-(--muted) mb-3">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-(--hover) text-(--muted)">
                 <Star size={24} />
               </div>
-              <h3 className="text-base font-semibold text-(--text)">
-                No reviews found
-              </h3>
-              <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted)">
+              <h3 className="text-base font-semibold text-(--text)">No reviews found</h3>
+              <p className="mt-1 max-w-sm text-xs text-(--muted) md:text-sm">
                 {searchQuery || ratingFilter !== "all" || verifiedOnly
                   ? "Try changing your search query or reset your active filters to view all reviews."
                   : "There are no reviews in this category yet."}
@@ -248,7 +240,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               <button
                 type="button"
                 onClick={resetFilters}
-                className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
+                className="mt-4 cursor-pointer rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90"
               >
                 Reset filters
               </button>
@@ -261,7 +253,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               <button
                 type="button"
                 onClick={() => setNotice?.("All reviews currently loaded.")}
-                className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+                className="cursor-pointer rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs font-medium text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) md:text-sm"
                 style={{ boxShadow: "var(--card-shadow)" }}
               >
                 Showing {totalFilteredCount} reviews
@@ -271,7 +263,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
         </main>
 
         {/* Right Column: Sidebar Widgets (4 of 12 columns on desktop) */}
-        <aside className="flex flex-col gap-5 lg:col-span-4 min-w-0">
+        <aside className="flex min-w-0 flex-col gap-5 lg:col-span-4">
           {/* Desktop Rating Summary */}
           <div className="hidden lg:block">
             <RatingSummaryWidget
@@ -307,22 +299,20 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
       {/* Contact Support Dialog Modal */}
       {isSupportModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-150"
+          className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm duration-150"
           role="dialog"
           aria-modal="true"
         >
           <div
-            className="w-full max-w-md rounded-[18px] border border-(--border) bg-(--card-surface) p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+            className="animate-in zoom-in-95 w-full max-w-md rounded-[18px] border border-(--border) bg-(--card-surface) p-6 shadow-2xl duration-150"
             style={{
               boxShadow: "var(--card-floating-shadow,var(--card-shadow))",
             }}
           >
-            <h2 className="text-lg font-bold text-(--text)">
-              Contact Learner Support
-            </h2>
-            <p className="mt-2 text-xs md:text-sm text-(--text-secondary)">
-              Have questions or feedback regarding this course&apos;s reviews?
-              Our support team is here to help 24/7.
+            <h2 className="text-lg font-bold text-(--text)">Contact Learner Support</h2>
+            <p className="mt-2 text-xs text-(--text-secondary) md:text-sm">
+              Have questions or feedback regarding this course&apos;s reviews? Our support team is
+              here to help 24/7.
             </p>
             <div className="mt-4 rounded-xl bg-(--card-surface-raised,var(--hover)) p-3.5 text-xs text-(--muted)">
               <span>Support email: </span>
@@ -332,7 +322,7 @@ export function ReviewsPage({ onNavigatePage, setNotice }: ReviewsPageProps) {
               <button
                 type="button"
                 onClick={() => setIsSupportModalOpen(false)}
-                className="rounded-xl bg-(--accent) px-4 py-2 text-xs md:text-sm font-semibold text-(--on-accent,#ffffff) hover:opacity-90 cursor-pointer"
+                className="cursor-pointer rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) hover:opacity-90 md:text-sm"
               >
                 Close
               </button>

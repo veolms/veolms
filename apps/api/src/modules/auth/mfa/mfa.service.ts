@@ -51,15 +51,9 @@ interface AuthenticatedMfaUser {
   mfaMandatory?: boolean;
 }
 
-export function createMfaService({
-  database,
-  sessionService,
-}: MfaServiceOptions) {
+export function createMfaService({ database, sessionService }: MfaServiceOptions) {
   const outbox = createOutboxService();
-  async function assertStepUpForFactorChange(
-    userId: string,
-    mfaVerified: boolean,
-  ): Promise<void> {
+  async function assertStepUpForFactorChange(userId: string, mfaVerified: boolean): Promise<void> {
     if ((await sessionService.userHasAnyMfaFactor(userId)) && !mfaVerified) {
       throw new AppError(
         403,
@@ -80,16 +74,11 @@ export function createMfaService({
   ): Promise<{ message: string }> {
     await assertStepUpForFactorChange(user.id, mfaVerified);
 
-    const isMandatory = isMfaMandatoryAccount(
-      Boolean(user.mfaMandatory),
-      user.roles,
-      { skipAdminMfa: config.SKIP_ADMIN_MFA },
-    );
+    const isMandatory = isMfaMandatoryAccount(Boolean(user.mfaMandatory), user.roles, {
+      skipAdminMfa: config.SKIP_ADMIN_MFA,
+    });
     if (isMandatory) {
-      const passkeyCount = await mfaRepository.countUserPasskeys(
-        database,
-        user.id,
-      );
+      const passkeyCount = await mfaRepository.countUserPasskeys(database, user.id);
       if (passkeyCount === 0) {
         throw new AppError(
           400,
@@ -109,11 +98,9 @@ export function createMfaService({
   ): Promise<{ message: string }> {
     await assertStepUpForFactorChange(user.id, mfaVerified);
 
-    const isMandatory = isMfaMandatoryAccount(
-      Boolean(user.mfaMandatory),
-      user.roles,
-      { skipAdminMfa: config.SKIP_ADMIN_MFA },
-    );
+    const isMandatory = isMfaMandatoryAccount(Boolean(user.mfaMandatory), user.roles, {
+      skipAdminMfa: config.SKIP_ADMIN_MFA,
+    });
     if (isMandatory) {
       const totpActive = await mfaRepository.isTotpEnabled(database, user.id);
       if (!totpActive) {
@@ -201,11 +188,7 @@ export function createMfaService({
 
     // Backup codes are checked before the TOTP-enabled gate so passkey-only
     // accounts can still redeem recovery codes.
-    const backupCode = await mfaRepository.findUnusedBackupCode(
-      database,
-      userId,
-      hashToken(code),
-    );
+    const backupCode = await mfaRepository.findUnusedBackupCode(database, userId, hashToken(code));
 
     if (backupCode) {
       if (await mfaRepository.redeemBackupCode(database, backupCode.id)) {
@@ -215,19 +198,11 @@ export function createMfaService({
     }
 
     if (!credential?.enabled) {
-      throw new AppError(
-        400,
-        "MFA_NOT_ENABLED",
-        "TOTP MFA is not enabled for this user.",
-      );
+      throw new AppError(400, "MFA_NOT_ENABLED", "TOTP MFA is not enabled for this user.");
     }
 
     if (credential.locked_until && credential.locked_until > new Date()) {
-      throw new AppError(
-        429,
-        "TOTP_LOCKED",
-        "Too many failed attempts. Try again later.",
-      );
+      throw new AppError(429, "TOTP_LOCKED", "Too many failed attempts. Try again later.");
     }
 
     const result = verifyTotp(
@@ -242,11 +217,7 @@ export function createMfaService({
     }
 
     if (!(await mfaRepository.advanceTotpStep(database, userId, result.step))) {
-      throw new AppError(
-        401,
-        "INVALID_CODE",
-        "TOTP code has already been used.",
-      );
+      throw new AppError(401, "INVALID_CODE", "TOTP code has already been used.");
     }
 
     await sessionRepository.markSessionMfaVerified(database, sessionId);
@@ -260,10 +231,7 @@ export function createMfaService({
         if (config.WEBAUTHN_RP_IDS.includes(hostname)) {
           return hostname;
         }
-        if (
-          hostname === config.RP_ID ||
-          (config.RP_ID && hostname.endsWith(`.${config.RP_ID}`))
-        ) {
+        if (hostname === config.RP_ID || (config.RP_ID && hostname.endsWith(`.${config.RP_ID}`))) {
           return config.RP_ID;
         }
       } catch {
@@ -319,11 +287,7 @@ export function createMfaService({
     sessionId: string;
     response: PasskeyRegisterVerifyRequest["response"];
   }): Promise<{ message: string }> {
-    const record = await mfaRepository.findActiveChallenge(
-      database,
-      userId,
-      "registration",
-    );
+    const record = await mfaRepository.findActiveChallenge(database, userId, "registration");
 
     if (!record) {
       throw new AppError(
@@ -334,11 +298,7 @@ export function createMfaService({
     }
 
     if (!(await mfaRepository.consumeChallenge(database, record.id))) {
-      throw new AppError(
-        400,
-        "VERIFICATION_FAILED",
-        "Challenge has already been used.",
-      );
+      throw new AppError(400, "VERIFICATION_FAILED", "Challenge has already been used.");
     }
 
     let verification;
@@ -354,18 +314,12 @@ export function createMfaService({
       throw new AppError(
         400,
         "REGISTRATION_VERIFICATION_FAILED",
-        `WebAuthn verification failed: ${
-          cause instanceof Error ? cause.message : String(cause)
-        }`,
+        `WebAuthn verification failed: ${cause instanceof Error ? cause.message : String(cause)}`,
       );
     }
 
     if (!verification.verified || !verification.registrationInfo) {
-      throw new AppError(
-        400,
-        "VERIFICATION_FAILED",
-        "Passkey verification failed.",
-      );
+      throw new AppError(400, "VERIFICATION_FAILED", "Passkey verification failed.");
     }
 
     const { credential } = verification.registrationInfo;
@@ -392,10 +346,7 @@ export function createMfaService({
     return { message: "Passkey registered successfully." };
   }
 
-  async function getPasskeyLoginOptions(
-    userId: string,
-    requestOrigin?: string,
-  ) {
+  async function getPasskeyLoginOptions(userId: string, requestOrigin?: string) {
     const rpId = resolveRpIdForOrigin(requestOrigin);
     const passkeys = await mfaRepository.listUserPasskeys(database, userId);
     const options = await generateAuthenticationOptions({
@@ -403,9 +354,7 @@ export function createMfaService({
       allowCredentials: passkeys.map((passkey) => ({
         id: passkey.credential_id,
         type: "public-key",
-        transports: passkey.transports
-          ? (passkey.transports.split(",") as never)
-          : undefined,
+        transports: passkey.transports ? (passkey.transports.split(",") as never) : undefined,
       })),
       userVerification: "required",
     });
@@ -430,11 +379,7 @@ export function createMfaService({
     sessionId: string;
     response: PasskeyLoginVerifyRequest["response"];
   }): Promise<{ message: string }> {
-    const record = await mfaRepository.findActiveChallenge(
-      database,
-      userId,
-      "authentication",
-    );
+    const record = await mfaRepository.findActiveChallenge(database, userId, "authentication");
 
     if (!record) {
       throw new AppError(
@@ -445,18 +390,10 @@ export function createMfaService({
     }
 
     if (!(await mfaRepository.consumeChallenge(database, record.id))) {
-      throw new AppError(
-        400,
-        "VERIFICATION_FAILED",
-        "Challenge has already been used.",
-      );
+      throw new AppError(400, "VERIFICATION_FAILED", "Challenge has already been used.");
     }
 
-    const passkey = await mfaRepository.findUserPasskey(
-      database,
-      userId,
-      response.id,
-    );
+    const passkey = await mfaRepository.findUserPasskey(database, userId, response.id);
 
     if (!passkey) {
       throw new AppError(
@@ -484,18 +421,12 @@ export function createMfaService({
       throw new AppError(
         401,
         "ASSERTION_FAILED",
-        `WebAuthn assertion failed: ${
-          cause instanceof Error ? cause.message : String(cause)
-        }`,
+        `WebAuthn assertion failed: ${cause instanceof Error ? cause.message : String(cause)}`,
       );
     }
 
     if (!verification.verified || !verification.authenticationInfo) {
-      throw new AppError(
-        401,
-        "VERIFICATION_FAILED",
-        "Assertion verification failed.",
-      );
+      throw new AppError(401, "VERIFICATION_FAILED", "Assertion verification failed.");
     }
 
     await database.transaction().execute(async (trx) => {

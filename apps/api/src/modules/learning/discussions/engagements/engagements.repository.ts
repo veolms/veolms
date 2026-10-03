@@ -34,17 +34,9 @@ export interface EngagementsRepository {
     threadId: string,
   ): Promise<EngagementExistenceRow | undefined>;
 
-  addBookmark(
-    db: DatabaseExecutor,
-    userId: string,
-    threadId: string,
-  ): Promise<void>;
+  addBookmark(db: DatabaseExecutor, userId: string, threadId: string): Promise<void>;
 
-  removeBookmark(
-    db: DatabaseExecutor,
-    userId: string,
-    threadId: string,
-  ): Promise<void>;
+  removeBookmark(db: DatabaseExecutor, userId: string, threadId: string): Promise<void>;
 
   findNoteBookmark(
     db: DatabaseExecutor,
@@ -52,17 +44,9 @@ export interface EngagementsRepository {
     noteId: string,
   ): Promise<EngagementExistenceRow | undefined>;
 
-  addNoteBookmark(
-    db: DatabaseExecutor,
-    userId: string,
-    noteId: string,
-  ): Promise<void>;
+  addNoteBookmark(db: DatabaseExecutor, userId: string, noteId: string): Promise<void>;
 
-  removeNoteBookmark(
-    db: DatabaseExecutor,
-    userId: string,
-    noteId: string,
-  ): Promise<void>;
+  removeNoteBookmark(db: DatabaseExecutor, userId: string, noteId: string): Promise<void>;
 
   findFollow(
     db: DatabaseExecutor,
@@ -70,17 +54,9 @@ export interface EngagementsRepository {
     threadId: string,
   ): Promise<EngagementExistenceRow | undefined>;
 
-  addFollow(
-    db: DatabaseExecutor,
-    userId: string,
-    threadId: string,
-  ): Promise<void>;
+  addFollow(db: DatabaseExecutor, userId: string, threadId: string): Promise<void>;
 
-  removeFollow(
-    db: DatabaseExecutor,
-    userId: string,
-    threadId: string,
-  ): Promise<void>;
+  removeFollow(db: DatabaseExecutor, userId: string, threadId: string): Promise<void>;
 
   searchUsersForMention(
     db: DatabaseExecutor,
@@ -113,9 +89,7 @@ export function createEngagementsRepository(): EngagementsRepository {
           target_type: targetType,
           target_id: targetId,
         })
-        .onConflict((oc) =>
-          oc.columns(["user_id", "target_type", "target_id"]).doNothing(),
-        )
+        .onConflict((oc) => oc.columns(["user_id", "target_type", "target_id"]).doNothing())
         .executeTakeFirst();
       return Number(result?.numInsertedOrUpdatedRows ?? 0) > 0;
     },

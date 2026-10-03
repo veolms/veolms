@@ -8,18 +8,11 @@ import { OtpForm } from "./OtpForm";
 import { AuthProgress } from "./AuthProgress";
 import { SocialLoginActions } from "./SocialLoginActions";
 import { MfaStepUp } from "./MfaStepUp";
-import {
-  AUTH_CARD_HEADING_ID,
-  authFlowReducer,
-  initialAuthFlowState,
-} from "./authFlow";
+import { AUTH_CARD_HEADING_ID, authFlowReducer, initialAuthFlowState } from "./authFlow";
 import type { AuthFlowState, AuthIdentifier } from "./authFlow";
 import { generateUniqueUsername } from "./username";
 import { getSecondaryVerificationMethodRequired } from "./authConfig";
-import {
-  resolveAuthenticatedDestination,
-  sanitizeReturnTo,
-} from "../routing/routeAccess";
+import { resolveAuthenticatedDestination, sanitizeReturnTo } from "../routing/routeAccess";
 import { productName } from "../routing/routeDescriptors";
 import { useLogin, useRegister, useSendOtp } from "../services/auth";
 import { authStore } from "../store/auth.store";
@@ -32,10 +25,7 @@ function resolvePayload(identifier: AuthIdentifier) {
     : { phoneNo: identifier.phoneNo };
 }
 
-type OtpStepState = Extract<
-  AuthFlowState,
-  { status: "otp" | "verifyingOtp" | "sendingOtp" }
->;
+type OtpStepState = Extract<AuthFlowState, { status: "otp" | "verifyingOtp" | "sendingOtp" }>;
 
 // Returns the flow narrowed to an OTP-entry step, or null. Not a type guard:
 // a first send (sendCount 0) is a sendingOtp state that is NOT an OTP step.
@@ -52,11 +42,12 @@ export function LoginView() {
   const [identifierError, setIdentifierError] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
-  const [primaryVerifiedIdentifier, setPrimaryVerifiedIdentifier] =
-    useState<AuthIdentifier | null>(null);
-  const [pendingSecondaryMethod, setPendingSecondaryMethod] = useState<
-    "email" | "mobile" | null
-  >(null);
+  const [primaryVerifiedIdentifier, setPrimaryVerifiedIdentifier] = useState<AuthIdentifier | null>(
+    null,
+  );
+  const [pendingSecondaryMethod, setPendingSecondaryMethod] = useState<"email" | "mobile" | null>(
+    null,
+  );
   const [mfaCapabilities, setMfaCapabilities] = useState<{
     allowPasskey: boolean;
     allowAuthenticator: boolean;
@@ -66,9 +57,7 @@ export function LoginView() {
   });
   const [oneTapPending, setOneTapPending] = useState(false);
 
-  const registrationOtpCodesRef = useRef<
-    Partial<Record<"email" | "mobile", string>>
-  >({});
+  const registrationOtpCodesRef = useRef<Partial<Record<"email" | "mobile", string>>>({});
   const otpSnapshotRef = useRef<{
     identifier: AuthIdentifier;
     code: string;
@@ -117,8 +106,7 @@ export function LoginView() {
       dispatch({ type: "OTP_SENT" });
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
-      const message =
-        errorObj?.message || "Something went wrong. Please try again.";
+      const message = errorObj?.message || "Something went wrong. Please try again.";
       setIdentifierError(message);
       dispatch({ type: "OTP_SEND_FAILED" });
     }
@@ -135,17 +123,13 @@ export function LoginView() {
       dispatch({ type: "OTP_SENT" });
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
-      const message =
-        errorObj?.message || "Something went wrong. Please try again.";
+      const message = errorObj?.message || "Something went wrong. Please try again.";
       setOtpError(message);
       dispatch({ type: "OTP_SEND_FAILED" });
     }
   };
 
-  const handleVerifyCode = async (
-    identifier: AuthIdentifier,
-    directCode?: string,
-  ) => {
+  const handleVerifyCode = async (identifier: AuthIdentifier, directCode?: string) => {
     if (loginMutation.isPending) return;
     const rawCode = directCode ?? ("code" in flow ? flow.code : "");
     const code = rawCode.trim();
@@ -189,8 +173,7 @@ export function LoginView() {
         errorObj.code === "REGISTRATION_REQUIRED" ||
         errorObj.code === "USER_NOT_FOUND" ||
         errorObj.code === "NO_USER" ||
-        (errorObj.message &&
-          errorObj.message.toLowerCase().includes("register"))
+        (errorObj.message && errorObj.message.toLowerCase().includes("register"))
       ) {
         const requiredSecondary =
           primaryVerifiedIdentifier === null
@@ -211,8 +194,7 @@ export function LoginView() {
         return;
       }
 
-      const message =
-        errorObj?.message || "Something went wrong. Please try again.";
+      const message = errorObj?.message || "Something went wrong. Please try again.";
       setOtpError(message);
       dispatch({ type: "OTP_REJECTED", reason: "verifyFailed" });
     }
@@ -233,9 +215,7 @@ export function LoginView() {
           }
         : { code: registrationOtpCodesRef.current[identifier.method] };
       const payload = {
-        ...(primaryVerifiedIdentifier
-          ? resolvePayload(primaryVerifiedIdentifier)
-          : {}),
+        ...(primaryVerifiedIdentifier ? resolvePayload(primaryVerifiedIdentifier) : {}),
         ...resolvePayload(identifier),
         ...codePayload,
         displayName: name,
@@ -258,8 +238,7 @@ export function LoginView() {
       dispatch({ type: "ACCOUNT_CREATED" });
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
-      const message =
-        errorObj?.message || "Something went wrong. Please try again.";
+      const message = errorObj?.message || "Something went wrong. Please try again.";
       setAccountError(message);
       dispatch({ type: "ACCOUNT_CREATION_FAILED", message });
     }
@@ -287,9 +266,7 @@ export function LoginView() {
         <AccountForm
           errorMessage={accountError ?? undefined}
           identifier={primaryVerifiedIdentifier ?? flow.identifier}
-          secondaryIdentifier={
-            primaryVerifiedIdentifier ? flow.identifier : undefined
-          }
+          secondaryIdentifier={primaryVerifiedIdentifier ? flow.identifier : undefined}
           name={"name" in flow ? flow.name : ""}
           onBackToOtp={() => {
             setAccountError(null);
@@ -308,9 +285,7 @@ export function LoginView() {
           }}
           onSubmit={handleCreateAccount}
           status={
-            flow.status === "creatingAccount" || registerMutation.isPending
-              ? "creating"
-              : "idle"
+            flow.status === "creatingAccount" || registerMutation.isPending ? "creating" : "idle"
           }
         />
       );
@@ -390,11 +365,7 @@ export function LoginView() {
 
       return (
         <AuthProgress
-          detail={
-            isReturningToDiscussions
-              ? "Opening Discussions."
-              : "Opening your courses."
-          }
+          detail={isReturningToDiscussions ? "Opening Discussions." : "Opening your courses."}
           title="Signing you in"
         />
       );
@@ -405,9 +376,7 @@ export function LoginView() {
         <>
           <AuthBrandMark />
           <h1 className="auth-card__heading" id={AUTH_CARD_HEADING_ID}>
-            {pendingSecondaryMethod === "email"
-              ? "Link your email"
-              : "Link your mobile"}
+            {pendingSecondaryMethod === "email" ? "Link your email" : "Link your mobile"}
           </h1>
           <p className="auth-card__subheading">
             {pendingSecondaryMethod === "email"
@@ -421,9 +390,7 @@ export function LoginView() {
               forcedMethod={pendingSecondaryMethod}
               onSubmit={(identifier) => handleSendCode(identifier)}
               status={
-                flow.status === "sendingOtp" || sendOtpMutation.isPending
-                  ? "sending"
-                  : "idle"
+                flow.status === "sendingOtp" || sendOtpMutation.isPending ? "sending" : "idle"
               }
             />
           </div>
@@ -437,20 +404,14 @@ export function LoginView() {
         <h1 className="auth-card__heading" id={AUTH_CARD_HEADING_ID}>
           Welcome to {productName}
         </h1>
-        <p className="auth-card__subheading">
-          Log in or create an account to continue.
-        </p>
+        <p className="auth-card__subheading">Log in or create an account to continue.</p>
 
         <div className="auth-card__form-slot">
           <IdentifierForm
             disabled={oneTapPending}
             errorMessage={identifierError ?? undefined}
             onSubmit={(identifier) => handleSendCode(identifier)}
-            status={
-              flow.status === "sendingOtp" || sendOtpMutation.isPending
-                ? "sending"
-                : "idle"
-            }
+            status={flow.status === "sendingOtp" || sendOtpMutation.isPending ? "sending" : "idle"}
           />
           <SocialLoginActions
             onError={setIdentifierError}

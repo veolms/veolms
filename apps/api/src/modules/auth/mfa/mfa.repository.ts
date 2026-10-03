@@ -1,9 +1,6 @@
 import { sql } from "kysely";
 
-import {
-  TOTP_LOCK_DURATION_MS,
-  TOTP_MAX_FAILED_ATTEMPTS,
-} from "../shared/auth.constants.ts";
+import { TOTP_LOCK_DURATION_MS, TOTP_MAX_FAILED_ATTEMPTS } from "../shared/auth.constants.ts";
 import type { ChallengeType } from "../shared/auth.types.ts";
 import type { Executor } from "../shared/repository.types.ts";
 
@@ -22,10 +19,7 @@ export function findTotpCredential(database: Executor, userId: string) {
     .executeTakeFirst();
 }
 
-export async function isTotpEnabled(
-  database: Executor,
-  userId: string,
-): Promise<boolean> {
+export async function isTotpEnabled(database: Executor, userId: string): Promise<boolean> {
   const row = await database
     .selectFrom("user_totp_credentials")
     .select("enabled")
@@ -44,10 +38,7 @@ export async function replaceTotpCredential(
     lastUsedStep: string;
   },
 ): Promise<void> {
-  await database
-    .deleteFrom("user_totp_credentials")
-    .where("user_id", "=", input.userId)
-    .execute();
+  await database.deleteFrom("user_totp_credentials").where("user_id", "=", input.userId).execute();
 
   await database
     .insertInto("user_totp_credentials")
@@ -61,19 +52,10 @@ export async function replaceTotpCredential(
     .execute();
 }
 
-export async function deleteTotpCredential(
-  database: Executor,
-  userId: string,
-): Promise<void> {
-  await database
-    .deleteFrom("user_totp_credentials")
-    .where("user_id", "=", userId)
-    .execute();
+export async function deleteTotpCredential(database: Executor, userId: string): Promise<void> {
+  await database.deleteFrom("user_totp_credentials").where("user_id", "=", userId).execute();
 
-  await database
-    .deleteFrom("mfa_backup_codes")
-    .where("user_id", "=", userId)
-    .execute();
+  await database.deleteFrom("mfa_backup_codes").where("user_id", "=", userId).execute();
 }
 
 export async function advanceTotpStep(
@@ -91,20 +73,14 @@ export async function advanceTotpStep(
     })
     .where("user_id", "=", userId)
     .where((eb) =>
-      eb.or([
-        eb("last_used_step", "is", null),
-        eb("last_used_step", "<", String(step)),
-      ]),
+      eb.or([eb("last_used_step", "is", null), eb("last_used_step", "<", String(step))]),
     )
     .executeTakeFirst();
 
   return Number(result.numUpdatedRows) > 0;
 }
 
-export async function recordTotpFailure(
-  database: Executor,
-  credentialId: string,
-): Promise<void> {
+export async function recordTotpFailure(database: Executor, credentialId: string): Promise<void> {
   const lockedUntil = new Date(Date.now() + TOTP_LOCK_DURATION_MS);
 
   await sql`
@@ -124,21 +100,14 @@ export async function replaceBackupCodes(
   userId: string,
   codes: { id: string; user_id: string; code_hash: string }[],
 ): Promise<void> {
-  await database
-    .deleteFrom("mfa_backup_codes")
-    .where("user_id", "=", userId)
-    .execute();
+  await database.deleteFrom("mfa_backup_codes").where("user_id", "=", userId).execute();
 
   if (codes.length > 0) {
     await database.insertInto("mfa_backup_codes").values(codes).execute();
   }
 }
 
-export function findUnusedBackupCode(
-  database: Executor,
-  userId: string,
-  codeHash: string,
-) {
+export function findUnusedBackupCode(database: Executor, userId: string, codeHash: string) {
   return database
     .selectFrom("mfa_backup_codes")
     .select("id")
@@ -148,10 +117,7 @@ export function findUnusedBackupCode(
     .executeTakeFirst();
 }
 
-export async function redeemBackupCode(
-  database: Executor,
-  codeId: string,
-): Promise<boolean> {
+export async function redeemBackupCode(database: Executor, codeId: string): Promise<boolean> {
   const result = await database
     .updateTable("mfa_backup_codes")
     .set({ used_at: new Date() })
@@ -170,10 +136,7 @@ export function listUserPasskeys(database: Executor, userId: string) {
     .execute();
 }
 
-export async function countUserPasskeys(
-  database: Executor,
-  userId: string,
-): Promise<number> {
+export async function countUserPasskeys(database: Executor, userId: string): Promise<number> {
   const row = await database
     .selectFrom("passkeys")
     .select((eb) => eb.fn.count<string>("id").as("count"))
@@ -183,18 +146,11 @@ export async function countUserPasskeys(
   return Number(row?.count ?? 0);
 }
 
-export async function deleteAllUserPasskeys(
-  database: Executor,
-  userId: string,
-): Promise<void> {
+export async function deleteAllUserPasskeys(database: Executor, userId: string): Promise<void> {
   await database.deleteFrom("passkeys").where("user_id", "=", userId).execute();
 }
 
-export function findUserPasskey(
-  database: Executor,
-  userId: string,
-  credentialId: string,
-) {
+export function findUserPasskey(database: Executor, userId: string, credentialId: string) {
   return database
     .selectFrom("passkeys")
     .selectAll()
@@ -232,11 +188,7 @@ export async function updatePasskeyCounter(
   passkeyId: string,
   counter: number,
 ): Promise<void> {
-  await database
-    .updateTable("passkeys")
-    .set({ counter })
-    .where("id", "=", passkeyId)
-    .execute();
+  await database.updateTable("passkeys").set({ counter }).where("id", "=", passkeyId).execute();
 }
 
 export async function replaceChallenge(
@@ -268,11 +220,7 @@ export async function replaceChallenge(
     .execute();
 }
 
-export function findActiveChallenge(
-  database: Executor,
-  userId: string,
-  type: ChallengeType,
-) {
+export function findActiveChallenge(database: Executor, userId: string, type: ChallengeType) {
   return database
     .selectFrom("webauthn_challenges")
     .selectAll()
@@ -283,10 +231,7 @@ export function findActiveChallenge(
     .executeTakeFirst();
 }
 
-export async function consumeChallenge(
-  database: Executor,
-  challengeId: string,
-): Promise<boolean> {
+export async function consumeChallenge(database: Executor, challengeId: string): Promise<boolean> {
   const result = await database
     .updateTable("webauthn_challenges")
     .set({ consumed_at: new Date() })

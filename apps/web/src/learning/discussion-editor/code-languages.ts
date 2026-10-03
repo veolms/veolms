@@ -17,16 +17,11 @@ export const DISCUSSION_CODE_LANGUAGES = [
     alias: ["csharp", "cs"],
     extensions: ["cs"],
     load: () =>
-      import("@codemirror/legacy-modes/mode/clike").then((module) =>
-        legacy(module.csharp),
-      ),
+      import("@codemirror/legacy-modes/mode/clike").then((module) => legacy(module.csharp)),
   }),
   LanguageDescription.of({
     name: "SCSS",
     extensions: ["scss"],
-    load: () =>
-      import("@codemirror/legacy-modes/mode/css").then((module) =>
-        legacy(module.sCSS),
-      ),
+    load: () => import("@codemirror/legacy-modes/mode/css").then((module) => legacy(module.sCSS)),
   }),
 ];

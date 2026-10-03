@@ -17,11 +17,9 @@ function getRotatedSize(width: number, height: number, rotation: number) {
   const rotationRadians = (rotation * Math.PI) / 180;
   return {
     width:
-      Math.abs(Math.cos(rotationRadians) * width) +
-      Math.abs(Math.sin(rotationRadians) * height),
+      Math.abs(Math.cos(rotationRadians) * width) + Math.abs(Math.sin(rotationRadians) * height),
     height:
-      Math.abs(Math.sin(rotationRadians) * width) +
-      Math.abs(Math.cos(rotationRadians) * height),
+      Math.abs(Math.sin(rotationRadians) * width) + Math.abs(Math.cos(rotationRadians) * height),
   };
 }
 
@@ -30,8 +28,7 @@ function loadImage(source: string): Promise<HTMLImageElement> {
     const image = new Image();
     image.decoding = "async";
     image.onload = () => resolve(image);
-    image.onerror = () =>
-      reject(new Error("The selected image could not be read."));
+    image.onerror = () => reject(new Error("The selected image could not be read."));
     image.src = source;
   });
 }
@@ -41,9 +38,7 @@ function canvasToWebpBlob(canvas: HTMLCanvasElement): Promise<Blob> {
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          reject(
-            new Error("This browser could not process the selected image."),
-          );
+          reject(new Error("This browser could not process the selected image."));
           return;
         }
         resolve(blob);
@@ -78,18 +73,11 @@ export async function createAvatarCropFile(
     throw new Error("The selected image has no usable dimensions.");
   }
 
-  const workingScale = Math.min(
-    1,
-    MAX_WORKING_IMAGE_SIZE / Math.max(sourceWidth, sourceHeight),
-  );
+  const workingScale = Math.min(1, MAX_WORKING_IMAGE_SIZE / Math.max(sourceWidth, sourceHeight));
   const workingWidth = Math.max(1, Math.round(sourceWidth * workingScale));
   const workingHeight = Math.max(1, Math.round(sourceHeight * workingScale));
   const normalizedRotation = normalizeRotation(rotation);
-  const rotatedSize = getRotatedSize(
-    workingWidth,
-    workingHeight,
-    normalizedRotation,
-  );
+  const rotatedSize = getRotatedSize(workingWidth, workingHeight, normalizedRotation);
   const rotatedCanvas = document.createElement("canvas");
   rotatedCanvas.width = Math.max(1, Math.ceil(rotatedSize.width));
   rotatedCanvas.height = Math.max(1, Math.ceil(rotatedSize.height));
@@ -116,23 +104,14 @@ export async function createAvatarCropFile(
       cropAreaPixels.width * workingScale,
       cropAreaPixels.height * workingScale,
     );
-    const boundedCropX = Math.max(
-      0,
-      Math.min(cropX, rotatedCanvas.width - cropSize),
-    );
-    const boundedCropY = Math.max(
-      0,
-      Math.min(cropY, rotatedCanvas.height - cropSize),
-    );
+    const boundedCropX = Math.max(0, Math.min(cropX, rotatedCanvas.width - cropSize));
+    const boundedCropY = Math.max(0, Math.min(cropY, rotatedCanvas.height - cropSize));
 
     if (!Number.isFinite(cropSize) || cropSize <= 0) {
       throw new Error("The selected image crop is invalid.");
     }
 
-    const outputSize = Math.max(
-      1,
-      Math.min(MAX_AVATAR_OUTPUT_SIZE, Math.round(cropSize)),
-    );
+    const outputSize = Math.max(1, Math.min(MAX_AVATAR_OUTPUT_SIZE, Math.round(cropSize)));
     const outputCanvas = document.createElement("canvas");
     outputCanvas.width = outputSize;
     outputCanvas.height = outputSize;

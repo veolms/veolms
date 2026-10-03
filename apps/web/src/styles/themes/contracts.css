@@ -5,27 +5,11 @@
      counterpart while allowing explicit light card tokens to win. */
   --card-surface: var(--surface);
   --card-surface-raised: var(--surface-strong);
-  --card-surface-soft: color-mix(
-    in srgb,
-    var(--surface) 82%,
-    var(--main-surface)
-  );
-  --card-surface-hover: color-mix(
-    in srgb,
-    var(--surface) 94%,
-    var(--accent) 6%
-  );
-  --sidebar-nav-text: color-mix(
-    in srgb,
-    var(--text) 84%,
-    var(--text-secondary)
-  );
+  --card-surface-soft: color-mix(in srgb, var(--surface) 82%, var(--main-surface));
+  --card-surface-hover: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+  --sidebar-nav-text: color-mix(in srgb, var(--text) 84%, var(--text-secondary));
   --sidebar-icon-ink: color-mix(in srgb, var(--text) 92%, #101312);
-  --sidebar-control-surface: color-mix(
-    in srgb,
-    var(--surface) 88%,
-    var(--app-shell)
-  );
+  --sidebar-control-surface: color-mix(in srgb, var(--surface) 88%, var(--app-shell));
   --sidebar-active-start: color-mix(in srgb, var(--accent) 25%, var(--surface));
   --sidebar-active-end: color-mix(in srgb, var(--accent) 10%, var(--surface));
   --sidebar-toggle-ink: color-mix(in srgb, var(--accent) 68%, var(--text));

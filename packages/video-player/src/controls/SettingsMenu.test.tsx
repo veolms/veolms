@@ -4,10 +4,7 @@ import { createInitialVideoEngineSnapshot } from "../core/snapshot";
 import type { PlayerController } from "../react/PlayerController";
 import { PlayerInteractionModeProvider } from "../react/PlayerInteractionMode";
 import { PlayerControllerContext } from "../react/context";
-import {
-  createInitialPlayerUiState,
-  type PlayerSnapshot,
-} from "../react/playerState";
+import { createInitialPlayerUiState, type PlayerSnapshot } from "../react/playerState";
 import { SettingsMenu } from "./SettingsMenu";
 
 afterEach(cleanup);
@@ -79,38 +76,27 @@ describe("SettingsMenu playback speed", () => {
   });
 
   it("keeps the mobile settings sheet open after choosing a playback speed", () => {
-    const { setPlaybackRate, setSettingsView } = renderPlaybackRateSettings(
-      "playback-rate",
-      true,
-    );
+    const { setPlaybackRate, setSettingsView } = renderPlaybackRateSettings("playback-rate", true);
 
     fireEvent.click(screen.getByRole("menuitemradio", { name: "3×" }));
 
     expect(setPlaybackRate).toHaveBeenCalledWith(3);
     expect(setSettingsView).not.toHaveBeenCalled();
-    expect(
-      screen.getByRole("dialog", { name: "Video settings" }),
-    ).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Video settings" })).toBeVisible();
   });
 
   it("keeps the mobile settings sheet open after choosing a quality", () => {
-    const { selectQuality, setSettingsView } = renderPlaybackRateSettings(
-      "quality",
-      true,
-    );
+    const { selectQuality, setSettingsView } = renderPlaybackRateSettings("quality", true);
 
     fireEvent.click(screen.getByRole("menuitemradio", { name: "1080p" }));
 
     expect(selectQuality).toHaveBeenCalledWith("1080");
     expect(setSettingsView).not.toHaveBeenCalled();
-    expect(
-      screen.getByRole("dialog", { name: "Video settings" }),
-    ).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Video settings" })).toBeVisible();
   });
 
   it("still dismisses desktop settings after choosing a quality", () => {
-    const { selectQuality, setSettingsView } =
-      renderPlaybackRateSettings("quality");
+    const { selectQuality, setSettingsView } = renderPlaybackRateSettings("quality");
 
     fireEvent.click(screen.getByRole("menuitemradio", { name: "1080p" }));
 
@@ -124,9 +110,7 @@ describe("SettingsMenu playback speed", () => {
       name: "Captions Off",
     });
 
-    expect(
-      captionsItem.querySelector('[data-caption-icon-state="outline"]'),
-    ).not.toBeNull();
+    expect(captionsItem.querySelector('[data-caption-icon-state="outline"]')).not.toBeNull();
 
     fireEvent.click(captionsItem);
 
@@ -149,28 +133,25 @@ describe("SettingsMenu playback speed", () => {
     ["quality", "Quality"],
     ["playback-rate", "Playback speed"],
     ["captions", "Captions"],
-  ] as const)(
-    "returns from the %s submenu without closing settings",
-    (settingsView, label) => {
-      const { setSettingsView } = renderPlaybackRateSettings(settingsView);
-      const backButton = screen.getByRole("menuitem", { name: label });
+  ] as const)("returns from the %s submenu without closing settings", (settingsView, label) => {
+    const { setSettingsView } = renderPlaybackRateSettings(settingsView);
+    const backButton = screen.getByRole("menuitem", { name: label });
 
-      expect(backButton).toHaveAttribute("data-menu-keep-open");
-      expect(backButton).toHaveAttribute("data-video-player-settings-back");
-      expect(backButton).toHaveClass(
-        "-mx-2",
-        "w-[calc(100%+1rem)]",
-        "rounded-none",
-        "sm:-mx-1.5",
-        "sm:w-[calc(100%+0.75rem)]",
-      );
+    expect(backButton).toHaveAttribute("data-menu-keep-open");
+    expect(backButton).toHaveAttribute("data-video-player-settings-back");
+    expect(backButton).toHaveClass(
+      "-mx-2",
+      "w-[calc(100%+1rem)]",
+      "rounded-none",
+      "sm:-mx-1.5",
+      "sm:w-[calc(100%+0.75rem)]",
+    );
 
-      fireEvent.click(backButton);
+    fireEvent.click(backButton);
 
-      expect(setSettingsView).toHaveBeenCalledOnce();
-      expect(setSettingsView).toHaveBeenCalledWith("main");
-    },
-  );
+    expect(setSettingsView).toHaveBeenCalledOnce();
+    expect(setSettingsView).toHaveBeenCalledWith("main");
+  });
 
   it("offers an accessible 0.25×–8× custom speed slider and step buttons", () => {
     const { setPlaybackRate } = renderPlaybackRateSettings();
@@ -235,9 +216,7 @@ describe("SettingsMenu playback speed", () => {
       </PlayerControllerContext.Provider>,
     );
 
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: /^Picture in picture/ }),
-    );
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Picture in picture/ }));
     expect(togglePictureInPicture).toHaveBeenCalledOnce();
   });
 });
@@ -291,8 +270,7 @@ function renderPlaybackRateSettings(
   const setPlaybackRate = vi.fn<(rate: number) => void>();
   const selectQuality = vi.fn<(qualityId: string | null) => void>();
   const selectTextTrack = vi.fn<(trackId: string | null) => void>();
-  const setSettingsView =
-    vi.fn<(view: PlayerSnapshot["ui"]["settingsView"]) => void>();
+  const setSettingsView = vi.fn<(view: PlayerSnapshot["ui"]["settingsView"]) => void>();
   const controller = {
     getSnapshot: () => snapshot,
     selectQuality,
@@ -305,10 +283,7 @@ function renderPlaybackRateSettings(
   const { unmount } = render(
     <PlayerControllerContext.Provider value={controller}>
       <PlayerInteractionModeProvider mobile={mobileSheet}>
-        <SettingsMenu
-          mobilePresentation={mobileSheet ? "sheet" : "popover"}
-          side={side}
-        />
+        <SettingsMenu mobilePresentation={mobileSheet ? "sheet" : "popover"} side={side} />
       </PlayerInteractionModeProvider>
     </PlayerControllerContext.Provider>,
   );

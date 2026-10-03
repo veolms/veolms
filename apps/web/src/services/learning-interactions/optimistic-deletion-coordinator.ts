@@ -66,15 +66,11 @@ function matchesEntity(
   record: OptimisticDeletionRecord,
 ): boolean {
   return (
-    getClientEntityId(entity) === record.clientId ||
-    getServerEntityId(entity) === record.serverId
+    getClientEntityId(entity) === record.clientId || getServerEntityId(entity) === record.serverId
   );
 }
 
-function withRemovedItem<T>(
-  items: readonly T[],
-  matches: (item: T) => boolean,
-): T[] | undefined {
+function withRemovedItem<T>(items: readonly T[], matches: (item: T) => boolean): T[] | undefined {
   const next = items.filter((item) => !matches(item));
   return next.length === items.length ? undefined : next;
 }
@@ -98,9 +94,7 @@ export class OptimisticDeletionCoordinator {
     return this.revision;
   }
 
-  begin(
-    args: BeginOptimisticDeletionArgs,
-  ): OptimisticDeletionRecord | undefined {
+  begin(args: BeginOptimisticDeletionArgs): OptimisticDeletionRecord | undefined {
     this.pruneStaleGenerations();
     if (!args.serverId) return undefined;
 
@@ -178,24 +172,18 @@ export class OptimisticDeletionCoordinator {
     this.pruneStaleGenerations();
     return Array.from(this.records.values()).some(
       (record) =>
-        record.kind === kind &&
-        record.phase !== "undoable" &&
-        matchesEntity(entity, record),
+        record.kind === kind && record.phase !== "undoable" && matchesEntity(entity, record),
     );
   }
 
-  hasUndoableReplyForParent(
-    parentClientId: string,
-    parentServerId?: string,
-  ): boolean {
+  hasUndoableReplyForParent(parentClientId: string, parentServerId?: string): boolean {
     this.pruneStaleGenerations();
     return Array.from(this.records.values()).some(
       (record) =>
         record.kind === "reply" &&
         record.phase === "undoable" &&
         (record.parentClientId === parentClientId ||
-          (parentServerId !== undefined &&
-            record.parentServerId === parentServerId)),
+          (parentServerId !== undefined && record.parentServerId === parentServerId)),
     );
   }
 
@@ -222,16 +210,13 @@ export class OptimisticDeletionCoordinator {
     const replyRecords = Array.from(this.records.values()).filter(
       (record) =>
         record.kind === "reply" &&
-        (record.parentClientId === clientId ||
-          record.parentServerId === serverId),
+        (record.parentClientId === clientId || record.parentServerId === serverId),
     );
     if (replyRecords.length === 0) return undefined;
 
     const rawCount = thread.repliesCount ?? 0;
     const countDelta = replyRecords.filter(
-      (record) =>
-        record.parentRepliesCount === undefined ||
-        rawCount >= record.parentRepliesCount,
+      (record) => record.parentRepliesCount === undefined || rawCount >= record.parentRepliesCount,
     ).length;
     const hidesAcceptedReply = replyRecords.some(
       (record) => record.serverId === thread.acceptedAnswerId,
@@ -305,35 +290,27 @@ export class OptimisticDeletionCoordinator {
 
   private finalizeInCaches(record: InternalDeletionRecord): void {
     if (record.kind === "thread") {
-      const removeThreadPage = (
-        old: LearningThreadCacheResponse | undefined,
-      ) => {
+      const removeThreadPage = (old: LearningThreadCacheResponse | undefined) => {
         if (!old) return old;
-        const threads = withRemovedItem(old.threads, (thread) =>
-          matchesEntity(thread, record),
-        );
+        const threads = withRemovedItem(old.threads, (thread) => matchesEntity(thread, record));
         if (!threads) return old;
         return {
           ...old,
           threads,
           totalCount:
-            old.totalCount === undefined
-              ? old.totalCount
-              : Math.max(0, old.totalCount - 1),
+            old.totalCount === undefined ? old.totalCount : Math.max(0, old.totalCount - 1),
         };
       };
       record.queryClient.setQueriesData<
         | LearningThreadCacheResponse
         | import("@tanstack/react-query").InfiniteData<LearningThreadCacheResponse>
-      >(
-        { queryKey: [...learningInteractionKeys.all, "lesson-threads"] },
-        (old) =>
-          old === undefined
-            ? old
-            : mapPaginatedCache<LearningThreadCacheResponse>(
-                old,
-                (page) => removeThreadPage(page) ?? page,
-              ),
+      >({ queryKey: [...learningInteractionKeys.all, "lesson-threads"] }, (old) =>
+        old === undefined
+          ? old
+          : mapPaginatedCache<LearningThreadCacheResponse>(
+              old,
+              (page) => removeThreadPage(page) ?? page,
+            ),
       );
       record.queryClient.setQueriesData<
         | LearningThreadCacheResponse
@@ -358,13 +335,8 @@ export class OptimisticDeletionCoordinator {
         | import("@tanstack/react-query").InfiniteData<LearningRepliesCacheResponse>
       >({ queryKey: [...learningInteractionKeys.all, "replies"] }, (old) => {
         if (!old) return old;
-        const removePage = (
-          page: LearningRepliesCacheResponse,
-          decrementTotalCount: boolean,
-        ) => {
-          const replies = withRemovedItem(page.replies, (reply) =>
-            matchesEntity(reply, record),
-          );
+        const removePage = (page: LearningRepliesCacheResponse, decrementTotalCount: boolean) => {
+          const replies = withRemovedItem(page.replies, (reply) => matchesEntity(reply, record));
           if (!replies) return page;
           return {
             ...page,
@@ -395,17 +367,13 @@ export class OptimisticDeletionCoordinator {
     >({ queryKey: learningInteractionKeys.notesRoot() }, (old) => {
       if (old === undefined) return old;
       return mapPaginatedCache<LearningNotesCacheResponse>(old, (page) => {
-        const notes = withRemovedItem(page.notes, (note) =>
-          matchesEntity(note, record),
-        );
+        const notes = withRemovedItem(page.notes, (note) => matchesEntity(note, record));
         if (!notes) return page;
         return {
           ...page,
           notes,
           totalCount:
-            page.totalCount === undefined
-              ? page.totalCount
-              : Math.max(0, page.totalCount - 1),
+            page.totalCount === undefined ? page.totalCount : Math.max(0, page.totalCount - 1),
         };
       });
     });
@@ -449,8 +417,7 @@ export class OptimisticDeletionCoordinator {
   }
 }
 
-export const optimisticDeletionCoordinator =
-  new OptimisticDeletionCoordinator();
+export const optimisticDeletionCoordinator = new OptimisticDeletionCoordinator();
 
 /** React bridge for projections and tombstone presentation. */
 export function useOptimisticDeletionRevision(): number {
@@ -473,9 +440,7 @@ export function useOptimisticDeletion(
     phase,
     hidden: phase !== undefined,
     pending: phase === "undoable",
-    seconds: record
-      ? Math.max(0, Math.ceil((record.deadline - Date.now()) / 1000))
-      : 0,
+    seconds: record ? Math.max(0, Math.ceil((record.deadline - Date.now()) / 1000)) : 0,
     undo: () => optimisticDeletionCoordinator.undo(kind, clientId),
   };
 }

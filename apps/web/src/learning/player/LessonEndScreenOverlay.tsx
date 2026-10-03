@@ -37,8 +37,7 @@ export function LessonEndScreenOverlay({
   const [secondsRemaining, setSecondsRemaining] = useState(countdownSeconds);
   const [imgError, setImgError] = useState(false);
   const hasNextLesson = Boolean(nextLesson);
-  const isCountdownActive =
-    autoplayEnabled && hasNextLesson && secondsRemaining > 0;
+  const isCountdownActive = autoplayEnabled && hasNextLesson && secondsRemaining > 0;
 
   useEffect(() => {
     setImgError(false);
@@ -60,29 +59,26 @@ export function LessonEndScreenOverlay({
   }, [autoplayEnabled, hasNextLesson, onGoNext, secondsRemaining]);
 
   const circleCircumference = 2 * Math.PI * 9;
-  const strokeDashoffset =
-    circleCircumference * (1 - secondsRemaining / countdownSeconds);
+  const strokeDashoffset = circleCircumference * (1 - secondsRemaining / countdownSeconds);
 
   return (
     <div
       data-lesson-end-screen=""
       role="dialog"
       aria-label="Lecture completed"
-      className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4 sm:p-6 backdrop-blur-[8px] transition-opacity duration-200 select-none pointer-events-auto"
+      className="pointer-events-auto absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-[8px] transition-opacity duration-200 select-none sm:p-6"
     >
-      <div className="relative flex w-full max-w-md sm:max-w-lg min-w-0 flex-col overflow-hidden rounded-[20px] sm:rounded-[24px] border-none bg-(--card-surface,var(--surface)) text-(--text) shadow-[var(--surface-frame-edge-shadow),var(--card-floating-shadow)] animate-in zoom-in-95 duration-150">
+      <div className="animate-in zoom-in-95 relative flex w-full max-w-md min-w-0 flex-col overflow-hidden rounded-[20px] border-none bg-(--card-surface,var(--surface)) text-(--text) shadow-[var(--surface-frame-edge-shadow),var(--card-floating-shadow)] duration-150 sm:max-w-lg sm:rounded-[24px]">
         {hasNextLesson && nextLesson ? (
           <>
             {/* Header Section */}
-            <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3.5 sm:px-6 sm:pt-6 sm:pb-4 border-b border-[color-mix(in_srgb,var(--text)_7%,transparent)]">
+            <div className="flex items-center justify-between gap-3 border-b border-[color-mix(in_srgb,var(--text)_7%,transparent)] px-5 pt-5 pb-3.5 sm:px-6 sm:pt-6 sm:pb-4">
               <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-none bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-(--accent) shadow-[inset_0_1px_0_color-mix(in_srgb,white_15%,transparent)]">
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-none bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] px-2.5 py-0.5 text-[11px] font-bold tracking-wider text-(--accent) uppercase shadow-[inset_0_1px_0_color-mix(in_srgb,white_15%,transparent)]">
                   Up Next
                 </span>
                 <span className="truncate text-xs font-semibold text-(--text-secondary)">
-                  {nextLesson.sectionTitle
-                    ? `${nextLesson.sectionTitle} • `
-                    : ""}
+                  {nextLesson.sectionTitle ? `${nextLesson.sectionTitle} • ` : ""}
                   {nextLesson.lectureNumber
                     ? `Lecture ${nextLesson.lectureNumber}${nextLesson.totalLessons ? ` of ${nextLesson.totalLessons}` : ""}`
                     : `Lecture ${nextLesson.id}`}
@@ -95,7 +91,7 @@ export function LessonEndScreenOverlay({
                   aria-label="Dismiss end screen"
                   title="Dismiss end screen"
                   onClick={onClose}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent),0_1px_2px_color-mix(in_srgb,var(--text)_8%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] hover:text-(--text) active:scale-95 cursor-pointer"
+                  className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent),0_1px_2px_color-mix(in_srgb,var(--text)_8%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] hover:text-(--text) active:scale-95"
                 >
                   <X size={16} weight="bold" />
                 </button>
@@ -103,7 +99,7 @@ export function LessonEndScreenOverlay({
             </div>
 
             {/* Body Section */}
-            <div className="flex flex-col gap-3.5 sm:gap-4 px-5 py-4.5 sm:px-6 sm:py-5">
+            <div className="flex flex-col gap-3.5 px-5 py-4.5 sm:gap-4 sm:px-6 sm:py-5">
               {/* Next Lecture Card: 3D raised card */}
               <div
                 role="button"
@@ -115,9 +111,9 @@ export function LessonEndScreenOverlay({
                     onGoNext();
                   }
                 }}
-                className="group flex cursor-pointer items-center gap-3.5 sm:gap-4.5 rounded-[14px] sm:rounded-[16px] border-none bg-(--card-surface-raised,color-mix(in_srgb,var(--surface-strong,var(--surface))_85%,var(--surface))) p-3.5 sm:p-4 shadow-(--card-shadow,var(--surface-depth-shadow)) transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-(--accent)"
+                className="group flex cursor-pointer items-center gap-3.5 rounded-[14px] border-none bg-(--card-surface-raised,color-mix(in_srgb,var(--surface-strong,var(--surface))_85%,var(--surface))) p-3.5 shadow-(--card-shadow,var(--surface-depth-shadow)) transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] focus-visible:outline-2 focus-visible:outline-(--accent) active:scale-[0.99] sm:gap-4.5 sm:rounded-[16px] sm:p-4"
               >
-                <div className="relative aspect-video w-28 sm:w-34 shrink-0 overflow-hidden rounded-[10px] sm:rounded-[12px] border-none bg-[linear-gradient(155deg,color-mix(in_srgb,var(--canvas)_85%,var(--surface))_0%,color-mix(in_srgb,var(--surface)_70%,var(--canvas))_100%)] shadow-[inset_0_2px_5px_color-mix(in_srgb,black_30%,transparent)]">
+                <div className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-[10px] border-none bg-[linear-gradient(155deg,color-mix(in_srgb,var(--canvas)_85%,var(--surface))_0%,color-mix(in_srgb,var(--surface)_70%,var(--canvas))_100%)] shadow-[inset_0_2px_5px_color-mix(in_srgb,black_30%,transparent)] sm:w-34 sm:rounded-[12px]">
                   {!imgError && nextLesson.thumbnailSrc ? (
                     <img
                       src={nextLesson.thumbnailSrc}
@@ -127,20 +123,20 @@ export function LessonEndScreenOverlay({
                     />
                   ) : (
                     <div className="flex size-full items-center justify-center">
-                      <div className="grid size-8 sm:size-9 place-items-center rounded-[10px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_24%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_12%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))] transition-transform duration-150 group-hover:scale-110">
+                      <div className="grid size-8 place-items-center rounded-[10px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_24%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_12%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))] transition-transform duration-150 group-hover:scale-110 sm:size-9">
                         <Play size={15} weight="fill" />
                       </div>
                     </div>
                   )}
                   {nextLesson.duration ? (
-                    <span className="absolute bottom-1.5 right-1.5 rounded-md border-none bg-black/80 px-1.5 py-0.5 text-[10px] font-bold tracking-tight text-white shadow-xs backdrop-blur-xs">
+                    <span className="absolute right-1.5 bottom-1.5 rounded-md border-none bg-black/80 px-1.5 py-0.5 text-[10px] font-bold tracking-tight text-white shadow-xs backdrop-blur-xs">
                       {nextLesson.duration}
                     </span>
                   ) : null}
                 </div>
 
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
-                  <h4 className="line-clamp-2 text-sm sm:text-[0.95rem] font-bold text-(--text) leading-snug transition-colors group-hover:text-(--accent)">
+                  <h4 className="line-clamp-2 text-sm leading-snug font-bold text-(--text) transition-colors group-hover:text-(--accent) sm:text-[0.95rem]">
                     {nextLesson.title}
                   </h4>
                   {nextLesson.duration ? (
@@ -154,10 +150,10 @@ export function LessonEndScreenOverlay({
 
               {/* Countdown bar: 3D inset well */}
               {isCountdownActive ? (
-                <div className="flex items-center justify-between gap-3 rounded-[14px] sm:rounded-[16px] border-none bg-[linear-gradient(155deg,color-mix(in_srgb,var(--canvas)_80%,var(--surface))_0%,color-mix(in_srgb,var(--surface)_65%,var(--canvas))_100%)] px-4 py-2.5 sm:px-4.5 sm:py-3 shadow-[inset_0_2px_6px_color-mix(in_srgb,black_28%,transparent),inset_0_1px_2px_color-mix(in_srgb,var(--text)_10%,transparent),inset_0_-1px_0_color-mix(in_srgb,var(--surface)_90%,transparent)]">
+                <div className="flex items-center justify-between gap-3 rounded-[14px] border-none bg-[linear-gradient(155deg,color-mix(in_srgb,var(--canvas)_80%,var(--surface))_0%,color-mix(in_srgb,var(--surface)_65%,var(--canvas))_100%)] px-4 py-2.5 shadow-[inset_0_2px_6px_color-mix(in_srgb,black_28%,transparent),inset_0_1px_2px_color-mix(in_srgb,var(--text)_10%,transparent),inset_0_-1px_0_color-mix(in_srgb,var(--surface)_90%,transparent)] sm:rounded-[16px] sm:px-4.5 sm:py-3">
                   <div className="flex items-center gap-2.5 sm:gap-3">
                     <svg
-                      className="size-5 -rotate-90 shrink-0"
+                      className="size-5 shrink-0 -rotate-90"
                       viewBox="0 0 24 24"
                       aria-hidden="true"
                     >
@@ -184,17 +180,15 @@ export function LessonEndScreenOverlay({
                         fill="none"
                       />
                     </svg>
-                    <span className="text-xs sm:text-sm font-medium text-(--text)">
+                    <span className="text-xs font-medium text-(--text) sm:text-sm">
                       Starting next lecture in{" "}
-                      <span className="font-bold text-(--accent)">
-                        {secondsRemaining}s
-                      </span>
+                      <span className="font-bold text-(--accent)">{secondsRemaining}s</span>
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={onCancelAutoplay}
-                    className="inline-flex h-7.5 items-center justify-center rounded-[8px] border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 text-xs font-semibold text-(--text) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent),0_1px_2px_color-mix(in_srgb,var(--text)_8%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] active:scale-95 cursor-pointer"
+                    className="inline-flex h-7.5 cursor-pointer items-center justify-center rounded-[8px] border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 text-xs font-semibold text-(--text) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent),0_1px_2px_color-mix(in_srgb,var(--text)_8%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] active:scale-95"
                   >
                     Cancel
                   </button>
@@ -203,11 +197,11 @@ export function LessonEndScreenOverlay({
             </div>
 
             {/* Footer Action Bar */}
-            <div className="flex items-center justify-end gap-3 px-5 pb-5 pt-3 sm:px-6 sm:pb-6 sm:pt-3.5 border-t border-[color-mix(in_srgb,var(--text)_6%,transparent)]">
+            <div className="flex items-center justify-end gap-3 border-t border-[color-mix(in_srgb,var(--text)_6%,transparent)] px-5 pt-3 pb-5 sm:px-6 sm:pt-3.5 sm:pb-6">
               <button
                 type="button"
                 onClick={onRestart}
-                className="inline-flex h-10 sm:h-10.5 min-w-28 items-center justify-center gap-2 rounded-[10px] border-none bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-5 text-[0.82rem] sm:text-[0.84rem] font-semibold text-(--text) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_10%,transparent))] transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_13%,var(--surface))] active:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] active:scale-[0.98] cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-(--accent)"
+                className="inline-flex h-10 min-w-28 cursor-pointer items-center justify-center gap-2 rounded-[10px] border-none bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-5 text-[0.82rem] font-semibold whitespace-nowrap text-(--text) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_10%,transparent))] transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_13%,var(--surface))] focus-visible:outline-2 focus-visible:outline-(--accent) active:scale-[0.98] active:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] sm:h-10.5 sm:text-[0.84rem]"
               >
                 <ArrowCounterClockwise size={16} weight="bold" />
                 <span>Restart</span>
@@ -215,7 +209,7 @@ export function LessonEndScreenOverlay({
               <button
                 type="button"
                 onClick={onGoNext}
-                className="inline-flex h-10 sm:h-10.5 flex-1 items-center justify-center gap-2 rounded-[10px] border-none bg-(--accent) px-5 text-[0.82rem] sm:text-[0.85rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-(--accent)"
+                className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-[10px] border-none bg-(--accent) px-5 text-[0.82rem] font-bold whitespace-nowrap text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) focus-visible:outline-2 focus-visible:outline-(--accent) active:scale-[0.98] sm:h-10.5 sm:text-[0.85rem]"
               >
                 <Play size={16} weight="fill" />
                 <span>Next Lecture</span>
@@ -225,8 +219,8 @@ export function LessonEndScreenOverlay({
         ) : (
           <>
             {/* Header Section for Course Completed */}
-            <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3.5 sm:px-6 sm:pt-6 sm:pb-4 border-b border-[color-mix(in_srgb,var(--text)_7%,transparent)]">
-              <span className="text-xs font-semibold uppercase tracking-wider text-(--text-secondary)">
+            <div className="flex items-center justify-between gap-3 border-b border-[color-mix(in_srgb,var(--text)_7%,transparent)] px-5 pt-5 pb-3.5 sm:px-6 sm:pt-6 sm:pb-4">
+              <span className="text-xs font-semibold tracking-wider text-(--text-secondary) uppercase">
                 Course Status
               </span>
               {onClose ? (
@@ -235,7 +229,7 @@ export function LessonEndScreenOverlay({
                   aria-label="Dismiss end screen"
                   title="Dismiss end screen"
                   onClick={onClose}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent),0_1px_2px_color-mix(in_srgb,var(--text)_8%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] hover:text-(--text) active:scale-95 cursor-pointer"
+                  className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent),0_1px_2px_color-mix(in_srgb,var(--text)_8%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] hover:text-(--text) active:scale-95"
                 >
                   <X size={16} weight="bold" />
                 </button>
@@ -243,24 +237,24 @@ export function LessonEndScreenOverlay({
             </div>
 
             {/* Body Section for Course Completed */}
-            <div className="flex flex-col items-center px-5 py-8 sm:px-6 sm:py-10 text-center">
-              <div className="mb-4 flex size-15 sm:size-16 items-center justify-center rounded-[16px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_24%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_12%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))]">
+            <div className="flex flex-col items-center px-5 py-8 text-center sm:px-6 sm:py-10">
+              <div className="mb-4 flex size-15 items-center justify-center rounded-[16px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_24%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_12%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))] sm:size-16">
                 <CheckCircle size={34} weight="duotone" />
               </div>
-              <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+              <h3 className="text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
                 Course Completed!
               </h3>
-              <p className="mt-2 text-sm sm:text-base text-(--text-secondary) max-w-sm leading-relaxed">
+              <p className="mt-2 max-w-sm text-sm leading-relaxed text-(--text-secondary) sm:text-base">
                 You've watched all available lectures in this course.
               </p>
             </div>
 
             {/* Footer Action Bar for Course Completed */}
-            <div className="flex items-center justify-center px-5 pb-5 pt-3.5 sm:px-6 sm:pb-6 sm:pt-4 border-t border-[color-mix(in_srgb,var(--text)_6%,transparent)]">
+            <div className="flex items-center justify-center border-t border-[color-mix(in_srgb,var(--text)_6%,transparent)] px-5 pt-3.5 pb-5 sm:px-6 sm:pt-4 sm:pb-6">
               <button
                 type="button"
                 onClick={onRestart}
-                className="inline-flex h-10.5 items-center justify-center gap-2 rounded-[10px] border-none bg-(--accent) px-7 text-[0.84rem] sm:text-[0.86rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-(--accent)"
+                className="inline-flex h-10.5 cursor-pointer items-center justify-center gap-2 rounded-[10px] border-none bg-(--accent) px-7 text-[0.84rem] font-bold whitespace-nowrap text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)] transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) focus-visible:outline-2 focus-visible:outline-(--accent) active:scale-[0.98] sm:text-[0.86rem]"
               >
                 <ArrowCounterClockwise size={16} weight="bold" />
                 <span>Restart Lecture</span>

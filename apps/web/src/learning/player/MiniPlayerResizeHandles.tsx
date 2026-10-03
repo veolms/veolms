@@ -57,19 +57,13 @@ const handles: ReadonlyArray<{
   },
 ];
 
-export function MiniPlayerResizeHandles({
-  expanded = false,
-}: {
-  expanded?: boolean;
-}) {
-  return handles.map(
-    ({ className, collapsedCursor, edges, expandedCursor }) => (
-      <span
-        key={edges}
-        aria-hidden="true"
-        className={`${HANDLE_CLASS} ${className} ${expanded && expandedCursor ? expandedCursor : collapsedCursor}`}
-        data-mini-player-resize-handle={edges}
-      />
-    ),
-  );
+export function MiniPlayerResizeHandles({ expanded = false }: { expanded?: boolean }) {
+  return handles.map(({ className, collapsedCursor, edges, expandedCursor }) => (
+    <span
+      key={edges}
+      aria-hidden="true"
+      className={`${HANDLE_CLASS} ${className} ${expanded && expandedCursor ? expandedCursor : collapsedCursor}`}
+      data-mini-player-resize-handle={edges}
+    />
+  ));
 }

@@ -137,12 +137,7 @@ export function createThreadsController({
       const { threadId } = request.params;
       const body = request.body;
 
-      const thread = await service.updateThread(
-        database,
-        threadId,
-        discussionActor(user),
-        body,
-      );
+      const thread = await service.updateThread(database, threadId, discussionActor(user), body);
       return reply.status(200).send(thread);
     },
 
@@ -151,9 +146,7 @@ export function createThreadsController({
       const { threadId } = request.params;
 
       await service.deleteThread(database, threadId, discussionActor(user));
-      return reply
-        .status(200)
-        .send({ message: "Discussion thread deleted successfully." });
+      return reply.status(200).send({ message: "Discussion thread deleted successfully." });
     },
 
     async getDiscussionsWorkspace(request, reply) {

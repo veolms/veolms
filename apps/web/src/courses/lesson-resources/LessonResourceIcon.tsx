@@ -33,40 +33,23 @@ export function LessonResourceIcon({
   const { Icon, colorClass } = getResourceIconMeta(name, type, mimeType);
 
   return (
-    <Icon
-      size={size}
-      weight="fill"
-      className={[colorClass, className].filter(Boolean).join(" ")}
-    />
+    <Icon size={size} weight="fill" className={[colorClass, className].filter(Boolean).join(" ")} />
   );
 }
 
-function getResourceIconMeta(
-  name?: string,
-  type?: string,
-  mimeType?: string,
-): ResourceIconMeta {
+function getResourceIconMeta(name?: string, type?: string, mimeType?: string): ResourceIconMeta {
   const normalizedType = normalizeType(type || getFileExtension(name));
   const normalizedMimeType = mimeType?.toLowerCase().trim() || "";
 
-  if (
-    normalizedMimeType.startsWith("image/") ||
-    IMAGE_TYPES.has(normalizedType)
-  ) {
+  if (normalizedMimeType.startsWith("image/") || IMAGE_TYPES.has(normalizedType)) {
     return { Icon: FileImage, colorClass: "text-emerald-400" };
   }
 
-  if (
-    normalizedMimeType.startsWith("audio/") ||
-    AUDIO_TYPES.has(normalizedType)
-  ) {
+  if (normalizedMimeType.startsWith("audio/") || AUDIO_TYPES.has(normalizedType)) {
     return { Icon: FileAudio, colorClass: "text-violet-400" };
   }
 
-  if (
-    normalizedMimeType.startsWith("video/") ||
-    VIDEO_TYPES.has(normalizedType)
-  ) {
+  if (normalizedMimeType.startsWith("video/") || VIDEO_TYPES.has(normalizedType)) {
     return { Icon: FileVideo, colorClass: "text-sky-400" };
   }
 
@@ -111,15 +94,4 @@ const VIDEO_TYPES = new Set(["mp4", "mov", "avi", "webm", "mkv"]);
 const ARCHIVE_TYPES = new Set(["zip", "rar", "7z", "tar", "gz"]);
 const SPREADSHEET_TYPES = new Set(["xls", "xlsx"]);
 const DOCUMENT_TYPES = new Set(["doc", "docx", "rtf"]);
-const CODE_TYPES = new Set([
-  "md",
-  "txt",
-  "json",
-  "js",
-  "jsx",
-  "ts",
-  "tsx",
-  "html",
-  "css",
-  "xml",
-]);
+const CODE_TYPES = new Set(["md", "txt", "json", "js", "jsx", "ts", "tsx", "html", "css", "xml"]);

@@ -17,23 +17,23 @@ export function StatCard({
 }) {
   return (
     <div
-      className={`rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) transition-all duration-200 hover:shadow-(--card-hover-shadow) ${
+      className={`rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) transition-all duration-200 hover:shadow-(--card-hover-shadow) sm:rounded-[16px] ${
         compact ? "p-2 sm:p-3.5" : "p-2.5 sm:p-5"
       }`}
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-        <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+        <p className="truncate text-[0.7rem] font-semibold tracking-wide text-(--muted) sm:text-xs">
           {label}
         </p>
         {icon ? (
-          <span className="flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent) sm:size-7">
             {icon}
           </span>
         ) : null}
       </div>
       <p
-        className={`mt-1.5 sm:mt-2.5 text-xl sm:text-[1.75rem] font-bold tracking-tight ${
+        className={`mt-1.5 text-xl font-bold tracking-tight sm:mt-2.5 sm:text-[1.75rem] ${
           tone === "success"
             ? "text-emerald-500"
             : tone === "danger"
@@ -44,21 +44,13 @@ export function StatCard({
         {value}
       </p>
       {detail ? (
-        <p className="mt-0.5 sm:mt-1 truncate text-[0.68rem] sm:text-xs text-(--muted)">
-          {detail}
-        </p>
+        <p className="mt-0.5 truncate text-[0.68rem] text-(--muted) sm:mt-1 sm:text-xs">{detail}</p>
       ) : null}
     </div>
   );
 }
 
-export function MetricTile({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | string;
-}) {
+export function MetricTile({ label, value }: { label: string; value: number | string }) {
   return (
     <div>
       <p className="text-xs text-(--muted)">{label}</p>
@@ -79,12 +71,8 @@ export function SectionHeading({
   return (
     <div className="flex items-start justify-between gap-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3 py-2.5 sm:p-7">
       <div>
-        <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
-          {title}
-        </h2>
-        {description ? (
-          <p className="mt-0.5 text-xs text-(--muted)">{description}</p>
-        ) : null}
+        <h2 className="text-base font-bold tracking-tight text-(--text) sm:text-lg">{title}</h2>
+        {description ? <p className="mt-0.5 text-xs text-(--muted)">{description}</p> : null}
       </div>
       {action}
     </div>
@@ -108,13 +96,11 @@ export function EmptyState({
     <div
       className={`grid place-items-center text-center ${compact ? "p-5 sm:p-7" : "p-6 sm:p-12"}`}
     >
-      <span className="flex size-10 sm:size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
+      <span className="flex size-10 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent) sm:size-11">
         {icon}
       </span>
-      <h3 className="mt-2.5 sm:mt-3 text-sm font-semibold">{title}</h3>
-      <p className="mt-1 max-w-sm text-xs leading-5 text-(--muted)">
-        {message}
-      </p>
+      <h3 className="mt-2.5 text-sm font-semibold sm:mt-3">{title}</h3>
+      <p className="mt-1 max-w-sm text-xs leading-5 text-(--muted)">{message}</p>
       {action ? <div className="mt-3.5 sm:mt-4">{action}</div> : null}
     </div>
   );
@@ -122,12 +108,9 @@ export function EmptyState({
 
 export function LoadingRows() {
   return (
-    <div className="grid gap-2.5 sm:gap-3 p-3 sm:p-7">
+    <div className="grid gap-2.5 p-3 sm:gap-3 sm:p-7">
       {[1, 2, 3].map((item) => (
-        <div
-          key={item}
-          className="h-16 animate-pulse rounded-xl bg-(--canvas)"
-        />
+        <div key={item} className="h-16 animate-pulse rounded-xl bg-(--canvas)" />
       ))}
     </div>
   );
@@ -137,10 +120,7 @@ export function LoadingCards() {
   return (
     <>
       {[1, 2, 3].map((item) => (
-        <div
-          key={item}
-          className="h-56 animate-pulse rounded-xl bg-(--canvas)"
-        />
+        <div key={item} className="h-56 animate-pulse rounded-xl bg-(--canvas)" />
       ))}
     </>
   );

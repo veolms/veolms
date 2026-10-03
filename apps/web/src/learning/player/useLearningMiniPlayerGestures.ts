@@ -66,8 +66,7 @@ interface PinchGesture {
   initialWidth: number;
 }
 
-type MiniPlayerGestureMode =
-  "idle" | "dragging" | "resizing" | "settling" | "dismissing";
+type MiniPlayerGestureMode = "idle" | "dragging" | "resizing" | "settling" | "dismissing";
 
 const clampLayout = (
   layout: MiniPlayerLayout,
@@ -78,22 +77,14 @@ const clampLayout = (
   const { maximumWidth, minimumWidth } = getWidthBounds(viewport);
   const width = clamp(layout.width, minimumWidth, maximumWidth);
   const playlistHeight = getPlaylistHeight(layout);
-  const height = getLearningMiniPlayerHeight(
-    width,
-    isDesktop,
-    isExpanded,
-    playlistHeight,
-  );
+  const height = getLearningMiniPlayerHeight(width, isDesktop, isExpanded, playlistHeight);
   const minimumLeft = viewport.left + MINI_PLAYER_MARGIN;
   const maximumLeft = Math.max(
     minimumLeft,
     viewport.left + viewport.width - MINI_PLAYER_MARGIN - width,
   );
   const minimumTop = viewport.top + MINI_PLAYER_MARGIN;
-  const maximumTop = Math.max(
-    minimumTop,
-    getSettledBottomEdge(viewport) - height,
-  );
+  const maximumTop = Math.max(minimumTop, getSettledBottomEdge(viewport) - height);
 
   return {
     left: clamp(layout.left, minimumLeft, maximumLeft),
@@ -112,22 +103,14 @@ const getNearestCornerLayout = (
   const { maximumWidth, minimumWidth } = getWidthBounds(viewport);
   const width = clamp(layout.width, minimumWidth, maximumWidth);
   const playlistHeight = getPlaylistHeight(layout);
-  const height = getLearningMiniPlayerHeight(
-    width,
-    isDesktop,
-    isExpanded,
-    playlistHeight,
-  );
+  const height = getLearningMiniPlayerHeight(width, isDesktop, isExpanded, playlistHeight);
   const minimumLeft = viewport.left + MINI_PLAYER_MARGIN;
   const maximumLeft = Math.max(
     minimumLeft,
     viewport.left + viewport.width - MINI_PLAYER_MARGIN - width,
   );
   const minimumTop = viewport.top + MINI_PLAYER_MARGIN;
-  const maximumTop = Math.max(
-    minimumTop,
-    getSettledBottomEdge(viewport) - height,
-  );
+  const maximumTop = Math.max(minimumTop, getSettledBottomEdge(viewport) - height);
 
   return {
     left:
@@ -160,22 +143,14 @@ const getFlickDirectedCornerLayout = (
   const { maximumWidth, minimumWidth } = getWidthBounds(viewport);
   const width = clamp(layout.width, minimumWidth, maximumWidth);
   const playlistHeight = getPlaylistHeight(layout);
-  const height = getLearningMiniPlayerHeight(
-    width,
-    isDesktop,
-    isExpanded,
-    playlistHeight,
-  );
+  const height = getLearningMiniPlayerHeight(width, isDesktop, isExpanded, playlistHeight);
   const minimumLeft = viewport.left + MINI_PLAYER_MARGIN;
   const maximumLeft = Math.max(
     minimumLeft,
     viewport.left + viewport.width - MINI_PLAYER_MARGIN - width,
   );
   const minimumTop = viewport.top + MINI_PLAYER_MARGIN;
-  const maximumTop = Math.max(
-    minimumTop,
-    getSettledBottomEdge(viewport) - height,
-  );
+  const maximumTop = Math.max(minimumTop, getSettledBottomEdge(viewport) - height);
   const horizontalFlick =
     Math.abs(deltaX) >= DOCK_FLICK_MIN_DISTANCE &&
     Math.abs(velocityX) >= DOCK_FLICK_VELOCITY &&
@@ -186,17 +161,9 @@ const getFlickDirectedCornerLayout = (
     Math.abs(velocityY) >= peakVelocity * DOCK_FLICK_AXIS_RATIO;
 
   return {
-    left: horizontalFlick
-      ? velocityX < 0
-        ? minimumLeft
-        : maximumLeft
-      : nearestCorner.left,
+    left: horizontalFlick ? (velocityX < 0 ? minimumLeft : maximumLeft) : nearestCorner.left,
     playlistHeight,
-    top: verticalFlick
-      ? velocityY < 0
-        ? minimumTop
-        : maximumTop
-      : nearestCorner.top,
+    top: verticalFlick ? (velocityY < 0 ? minimumTop : maximumTop) : nearestCorner.top,
     width,
   };
 };
@@ -219,10 +186,7 @@ const getDownmostLayout = (
   );
   return {
     ...settledLayout,
-    top: Math.max(
-      viewport.top + MINI_PLAYER_MARGIN,
-      getSettledBottomEdge(viewport) - height,
-    ),
+    top: Math.max(viewport.top + MINI_PLAYER_MARGIN, getSettledBottomEdge(viewport) - height),
   };
 };
 
@@ -242,9 +206,7 @@ const midpointBetween = (first: PointerSample, second: PointerSample) => ({
   y: (first.y + second.y) / 2,
 });
 
-const getEventSample = (
-  event: ReactPointerEvent<HTMLElement>,
-): PointerSample => ({
+const getEventSample = (event: ReactPointerEvent<HTMLElement>): PointerSample => ({
   id: event.pointerId,
   time: event.timeStamp > 0 ? event.timeStamp : performance.now(),
   x: event.clientX,
@@ -324,24 +286,12 @@ export function useLearningMiniPlayerGestures(
     };
 
     openPopover();
-    document.addEventListener(
-      "fullscreenchange",
-      restackPopoverAboveFullscreen,
-    );
-    document.addEventListener(
-      "webkitfullscreenchange",
-      restackPopoverAboveFullscreen,
-    );
+    document.addEventListener("fullscreenchange", restackPopoverAboveFullscreen);
+    document.addEventListener("webkitfullscreenchange", restackPopoverAboveFullscreen);
 
     return () => {
-      document.removeEventListener(
-        "fullscreenchange",
-        restackPopoverAboveFullscreen,
-      );
-      document.removeEventListener(
-        "webkitfullscreenchange",
-        restackPopoverAboveFullscreen,
-      );
+      document.removeEventListener("fullscreenchange", restackPopoverAboveFullscreen);
+      document.removeEventListener("webkitfullscreenchange", restackPopoverAboveFullscreen);
       if (typeof container.hidePopover !== "function") return;
       try {
         container.hidePopover();
@@ -390,10 +340,7 @@ export function useLearningMiniPlayerGestures(
       needsSettleRef.current = false;
       settleCandidateRef.current = null;
 
-      if (
-        shouldAnimate &&
-        !window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ) {
+      if (shouldAnimate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         updateMode("settling");
         settleTimerRef.current = window.setTimeout(() => {
           settleTimerRef.current = null;
@@ -417,9 +364,7 @@ export function useLearningMiniPlayerGestures(
     }
     const rect = container?.getBoundingClientRect();
     return commitLayout(
-      rect && rect.width > 0
-        ? { left: rect.left, top: rect.top, width: rect.width }
-        : fallback,
+      rect && rect.width > 0 ? { left: rect.left, top: rect.top, width: rect.width } : fallback,
     );
   }, [commitLayout, containerRef, getInitialLayout]);
 
@@ -497,21 +442,14 @@ export function useLearningMiniPlayerGestures(
       getPlaylistHeight(currentLayout),
     );
 
-    const wasAnchoredToBottom =
-      Math.abs(currentLayout.top + oldHeight - settledBottom) <= 8;
+    const wasAnchoredToBottom = Math.abs(currentLayout.top + oldHeight - settledBottom) <= 8;
 
     let targetTop = currentLayout.top;
     if (isExpanded) {
-      const maxTop = Math.max(
-        viewport.top + MINI_PLAYER_MARGIN,
-        settledBottom - newHeight,
-      );
+      const maxTop = Math.max(viewport.top + MINI_PLAYER_MARGIN, settledBottom - newHeight);
       targetTop = Math.min(targetTop, maxTop);
     } else if (wasAnchoredToBottom) {
-      targetTop = Math.max(
-        viewport.top + MINI_PLAYER_MARGIN,
-        settledBottom - newHeight,
-      );
+      targetTop = Math.max(viewport.top + MINI_PLAYER_MARGIN, settledBottom - newHeight);
     }
 
     const nextLayout: MiniPlayerLayout = {
@@ -571,11 +509,7 @@ export function useLearningMiniPlayerGestures(
       getPlaylistHeight(currentLayout),
     );
     pinchGestureRef.current = {
-      anchorX: clamp(
-        (midpoint.x - currentLayout.left) / currentLayout.width,
-        0,
-        1,
-      ),
+      anchorX: clamp((midpoint.x - currentLayout.left) / currentLayout.width, 0, 1),
       anchorY: clamp((midpoint.y - currentLayout.top) / height, 0, 1),
       initialDistance: Math.max(1, distanceBetween(first, second)),
       initialWidth: currentLayout.width,
@@ -602,9 +536,7 @@ export function useLearningMiniPlayerGestures(
   const dismiss = useCallback(() => {
     const currentLayout = measureLayout();
     const viewport = getViewportBounds();
-    setDismissDistance(
-      viewport.top + viewport.height - currentLayout.top + MINI_PLAYER_MARGIN,
-    );
+    setDismissDistance(viewport.top + viewport.height - currentLayout.top + MINI_PLAYER_MARGIN);
     updateMode("dismissing");
     dismissTimerRef.current = window.setTimeout(onDismiss, DISMISS_DURATION);
   }, [measureLayout, onDismiss, updateMode]);
@@ -616,8 +548,7 @@ export function useLearningMiniPlayerGestures(
       if (event.pointerType === "mouse" && event.button !== 0) return;
       if (
         event.target instanceof Element &&
-        event.target.closest("[data-learning-mini-player-gesture-ignore]") !==
-          null
+        event.target.closest("[data-learning-mini-player-gesture-ignore]") !== null
       ) {
         return;
       }
@@ -658,9 +589,7 @@ export function useLearningMiniPlayerGestures(
           event.target.closest("[data-learning-mini-player-restore]") !== null;
         const resizeHandle =
           event.pointerType === "mouse" && event.target instanceof Element
-            ? event.target.closest<HTMLElement>(
-                "[data-mini-player-resize-handle]",
-              )
+            ? event.target.closest<HTMLElement>("[data-mini-player-resize-handle]")
             : null;
         if (resizeHandle) {
           event.preventDefault();
@@ -678,14 +607,7 @@ export function useLearningMiniPlayerGestures(
         );
       }
     },
-    [
-      containerRef,
-      enabled,
-      showLiveLayout,
-      startPinchGesture,
-      startSingleGesture,
-      updateMode,
-    ],
+    [containerRef, enabled, showLiveLayout, startPinchGesture, startSingleGesture, updateMode],
   );
 
   const handlePointerMove = useCallback(
@@ -708,12 +630,7 @@ export function useLearningMiniPlayerGestures(
         const { maximumWidth, minimumWidth } = getWidthBounds(viewport);
         const width = Math.max(minimumWidth, pinch.initialWidth * scale);
         const playlistHeight = getPlaylistHeight(layoutRef.current);
-        const height = getLearningMiniPlayerHeight(
-          width,
-          isDesktop,
-          isExpanded,
-          playlistHeight,
-        );
+        const height = getLearningMiniPlayerHeight(width, isDesktop, isExpanded, playlistHeight);
         const midpoint = midpointBetween(first, second);
         const settledWidth = Math.min(width, maximumWidth);
         settleCandidateRef.current = {
@@ -722,12 +639,7 @@ export function useLearningMiniPlayerGestures(
           top:
             midpoint.y -
             pinch.anchorY *
-              getLearningMiniPlayerHeight(
-                settledWidth,
-                isDesktop,
-                isExpanded,
-                playlistHeight,
-              ),
+              getLearningMiniPlayerHeight(settledWidth, isDesktop, isExpanded, playlistHeight),
           width: settledWidth,
         };
         showLiveLayout({
@@ -795,14 +707,7 @@ export function useLearningMiniPlayerGestures(
       settleCandidateRef.current = nextLayout;
       showLiveLayout(nextLayout);
     },
-    [
-      enabled,
-      isExpanded,
-      showLiveLayout,
-      startPinchGesture,
-      startSingleGesture,
-      updateMode,
-    ],
+    [enabled, isExpanded, showLiveLayout, startPinchGesture, startSingleGesture, updateMode],
   );
 
   const finishPointer = useCallback(
@@ -812,8 +717,7 @@ export function useLearningMiniPlayerGestures(
       pointersRef.current.set(event.pointerId, sample);
       const single = singleGestureRef.current;
       const wasPinching = pinchGestureRef.current !== null;
-      const wasDragging =
-        modeRef.current === "dragging" && single?.pointerId === event.pointerId;
+      const wasDragging = modeRef.current === "dragging" && single?.pointerId === event.pointerId;
       const shouldRestoreFromDirectTap =
         !cancelled &&
         !wasPinching &&
@@ -828,33 +732,20 @@ export function useLearningMiniPlayerGestures(
         const duration = Math.max(1, sample.time - single.start.time);
         const averageVelocityX = deltaX / duration;
         const averageVelocityY = deltaY / duration;
-        const velocityX = getReleaseVelocity(
-          single.velocityX,
-          averageVelocityX,
-        );
-        const velocityY = getReleaseVelocity(
-          single.velocityY,
-          averageVelocityY,
-        );
+        const velocityX = getReleaseVelocity(single.velocityX, averageVelocityX);
+        const velocityY = getReleaseVelocity(single.velocityY, averageVelocityY);
         const nextLayout = {
           left: single.initialLayout.left + deltaX,
           playlistHeight: getPlaylistHeight(single.initialLayout),
           top: single.initialLayout.top + deltaY,
           width: single.initialLayout.width,
         };
-        const directPointer =
-          event.pointerType === "touch" || event.pointerType === "pen";
+        const directPointer = event.pointerType === "touch" || event.pointerType === "pen";
         const isDesktop = isDesktopLearningMinimizeViewport();
         settleCandidateRef.current =
           cancelled || isDesktop || !directPointer
             ? nextLayout
-            : getFlickDirectedCornerLayout(
-                nextLayout,
-                deltaX,
-                deltaY,
-                velocityX,
-                velocityY,
-              );
+            : getFlickDirectedCornerLayout(nextLayout, deltaX, deltaY, velocityX, velocityY);
         showLiveLayout(nextLayout);
 
         const downwardSwipe =
@@ -864,8 +755,7 @@ export function useLearningMiniPlayerGestures(
           Math.abs(deltaX) <= deltaY * 1.25 + 32 &&
           (deltaY >= DISMISS_DISTANCE ||
             (deltaY >= DRAG_START_DISTANCE &&
-              Math.max(single.velocityY, averageVelocityY) >=
-                DISMISS_VELOCITY));
+              Math.max(single.velocityY, averageVelocityY) >= DISMISS_VELOCITY));
         if (downwardSwipe) {
           if (single.startedAtBottom) {
             pointersRef.current.clear();
@@ -919,9 +809,7 @@ export function useLearningMiniPlayerGestures(
         const resizedDuringGesture = resizedDuringGestureRef.current;
         resizedDuringGestureRef.current = false;
         if (needsSettleRef.current && currentLayout) {
-          const settledLayout = settleLayout(
-            settleCandidateRef.current ?? currentLayout,
-          );
+          const settledLayout = settleLayout(settleCandidateRef.current ?? currentLayout);
           if (resizedDuringGesture && !cancelled) {
             preferredWidthRef.current = settledLayout.width;
             writeMiniPlayerWidthPreference(settledLayout.width);
@@ -932,14 +820,7 @@ export function useLearningMiniPlayerGestures(
         scheduleClickRelease();
       }
     },
-    [
-      dismiss,
-      scheduleClickRelease,
-      settleLayout,
-      showLiveLayout,
-      startSingleGesture,
-      updateMode,
-    ],
+    [dismiss, scheduleClickRelease, settleLayout, showLiveLayout, startSingleGesture, updateMode],
   );
 
   const handlePointerUp = useCallback(
@@ -950,19 +831,16 @@ export function useLearningMiniPlayerGestures(
     (event: ReactPointerEvent<HTMLElement>) => finishPointer(event, true),
     [finishPointer],
   );
-  const handleClickCapture = useCallback(
-    (event: ReactMouseEvent<HTMLElement>) => {
-      if (!suppressClickRef.current) return;
-      event.preventDefault();
-      event.stopPropagation();
-      suppressClickRef.current = false;
-      if (suppressClickTimerRef.current !== null) {
-        window.clearTimeout(suppressClickTimerRef.current);
-        suppressClickTimerRef.current = null;
-      }
-    },
-    [],
-  );
+  const handleClickCapture = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+    if (!suppressClickRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressClickRef.current = false;
+    if (suppressClickTimerRef.current !== null) {
+      window.clearTimeout(suppressClickTimerRef.current);
+      suppressClickTimerRef.current = null;
+    }
+  }, []);
 
   const visibleLayout = layout ?? (enabled ? getInitialLayout() : null);
   const style: CSSProperties = visibleLayout

@@ -22,10 +22,7 @@ import {
 } from "../../events/domain-event.schemas.ts";
 import type { Json } from "@veolms/database";
 
-import type {
-  NotificationHandlerDependencies,
-  NotificationIntent,
-} from "./notifications.types.ts";
+import type { NotificationHandlerDependencies, NotificationIntent } from "./notifications.types.ts";
 
 export class UnknownNotificationEventError extends Error {
   constructor(eventType: string) {
@@ -44,8 +41,7 @@ const commonChannels = ["in_app", "email"] as const;
 const notificationHandlers: Record<string, NotificationHandler> = {
   "course.published": async (payload, dependencies) => {
     const event = coursePublishedEventSchema.parse(payload);
-    const recipientUserIds =
-      await dependencies.listActiveCourseRecipientUserIds(event.courseId);
+    const recipientUserIds = await dependencies.listActiveCourseRecipientUserIds(event.courseId);
     return recipientUserIds.map((recipientUserId) => ({
       recipientUserId,
       type: "course.published",
@@ -389,8 +385,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
   },
   "quiz.assigned": async (payload, dependencies) => {
     const event = quizAssignedEventSchema.parse(payload);
-    const recipientUserIds =
-      await dependencies.listActiveCourseRecipientUserIds(event.courseId);
+    const recipientUserIds = await dependencies.listActiveCourseRecipientUserIds(event.courseId);
     return recipientUserIds.map((recipientUserId) => ({
       recipientUserId,
       type: "quiz.assigned",
@@ -418,6 +413,4 @@ export async function createNotificationIntents(
   return await handler(payload, dependencies);
 }
 
-export const registeredNotificationEventTypes = Object.freeze(
-  Object.keys(notificationHandlers),
-);
+export const registeredNotificationEventTypes = Object.freeze(Object.keys(notificationHandlers));

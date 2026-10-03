@@ -58,9 +58,7 @@ export function resolveStudentAvatar(
 
     // Priority 3: Uploaded avatar in user_avatars
     const uploadedAvatar = avatars.find(
-      (a) =>
-        typeof a.avatar_data_url === "string" &&
-        a.avatar_data_url.trim().length > 0,
+      (a) => typeof a.avatar_data_url === "string" && a.avatar_data_url.trim().length > 0,
     );
     if (uploadedAvatar) {
       return uploadedAvatar.avatar_data_url;
@@ -86,9 +84,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       avatarDataUrl: string | null;
     }[],
   ): Promise<Map<string, string | null>> {
-    const uniqueUsers = Array.from(
-      new Map(users.map((user) => [user.id, user])).values(),
-    );
+    const uniqueUsers = Array.from(new Map(users.map((user) => [user.id, user])).values());
     const allAvatars = await studentsRepo.listAvatarsForUserIds(
       database,
       uniqueUsers.map((user) => user.id),
@@ -104,17 +100,12 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     return new Map(
       uniqueUsers.map((user) => [
         user.id,
-        resolveStudentAvatar(
-          user.avatarDataUrl,
-          avatarsByUserId.get(user.id) ?? [],
-        ),
+        resolveStudentAvatar(user.avatarDataUrl, avatarsByUserId.get(user.id) ?? []),
       ]),
     );
   }
 
-  async function listStudents(
-    query: StudentListQuery,
-  ): Promise<StudentListResponse> {
+  async function listStudents(query: StudentListQuery): Promise<StudentListResponse> {
     const limit = query.limit || 50;
 
     const [rows, totalCount] = await Promise.all([
@@ -153,13 +144,8 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     ]);
 
     // Distinct course IDs across all returned students
-    const courseIds = Array.from(
-      new Set(allEnrollments.map((e) => e.course_id)),
-    );
-    const lessonCounts = await studentsRepo.listCourseLessonCounts(
-      database,
-      courseIds,
-    );
+    const courseIds = Array.from(new Set(allEnrollments.map((e) => e.course_id)));
+    const lessonCounts = await studentsRepo.listCourseLessonCounts(database, courseIds);
 
     // Group enrollments and progress by userId
     const enrollmentsByUserId = new Map<string, typeof allEnrollments>();
@@ -206,17 +192,14 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
         let courseProgressPercent = 0;
         if (courseLessonsCount > 0) {
-          const completedLessons = cProgressList.filter(
-            (p) => p.progress_percent >= 90,
-          ).length;
+          const completedLessons = cProgressList.filter((p) => p.progress_percent >= 90).length;
           courseProgressPercent = Math.min(
             100,
             Math.round((completedLessons / courseLessonsCount) * 100),
           );
         } else if (cProgressList.length > 0) {
           const avg =
-            cProgressList.reduce((acc, p) => acc + p.progress_percent, 0) /
-            cProgressList.length;
+            cProgressList.reduce((acc, p) => acc + p.progress_percent, 0) / cProgressList.length;
           courseProgressPercent = Math.min(100, Math.round(avg));
         }
 
@@ -229,9 +212,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
       const enrolledCoursesCount = userEnrollments.length;
       const averageProgressPercent =
-        enrolledCoursesCount > 0
-          ? Math.round(totalProgressSum / enrolledCoursesCount)
-          : 0;
+        enrolledCoursesCount > 0 ? Math.round(totalProgressSum / enrolledCoursesCount) : 0;
 
       // Determine last active timestamp
       let latestActive: Date | null = null;
@@ -278,20 +259,16 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
               : sortBy === "courses"
                 ? {
                     sortBy,
-                    courses: (enrollmentsByUserId.get(lastStudent.id) ?? [])
-                      .length,
+                    courses: (enrollmentsByUserId.get(lastStudent.id) ?? []).length,
                     id: lastStudent.id,
                   }
                 : {
                     sortBy,
                     progress: (() => {
-                      const progressRows =
-                        progressByUserId.get(lastStudent.id) ?? [];
+                      const progressRows = progressByUserId.get(lastStudent.id) ?? [];
                       return progressRows.length > 0
-                        ? progressRows.reduce(
-                            (sum, row) => sum + row.progress_percent,
-                            0,
-                          ) / progressRows.length
+                        ? progressRows.reduce((sum, row) => sum + row.progress_percent, 0) /
+                            progressRows.length
                         : 0;
                     })(),
                     id: lastStudent.id,
@@ -333,9 +310,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     return { total, newThisMonth };
   }
 
-  async function getStudentByUsername(
-    username: string,
-  ): Promise<StudentDetailResponse> {
+  async function getStudentByUsername(username: string): Promise<StudentDetailResponse> {
     const user = await studentsRepo.findStudentByUsername(database, username);
     if (!user) {
       throw new AppError(
@@ -352,10 +327,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     ]);
 
     const courseIds = enrolledCourses.map((c) => c.course_id);
-    const lessonCounts = await studentsRepo.listCourseLessonCounts(
-      database,
-      courseIds,
-    );
+    const lessonCounts = await studentsRepo.listCourseLessonCounts(database, courseIds);
 
     // Group user progress by courseId
     const progressByCourse = new Map<string, typeof userProgress>();
@@ -438,9 +410,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
     const enrolledCoursesCount = courses.length;
     const averageProgressPercent =
-      enrolledCoursesCount > 0
-        ? Math.round(totalProgressSum / enrolledCoursesCount)
-        : 0;
+      enrolledCoursesCount > 0 ? Math.round(totalProgressSum / enrolledCoursesCount) : 0;
 
     return {
       student: {

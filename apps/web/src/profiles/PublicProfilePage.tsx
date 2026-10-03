@@ -24,9 +24,7 @@ function safeExternalUrl(value: string | null) {
   if (!value) return null;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:"
-      ? url.href
-      : null;
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
   } catch {
     return null;
   }
@@ -40,10 +38,7 @@ function PublicProfileAvatar({ profile }: { profile: PublicProfileResponse }) {
   }, [profile.avatarDataUrl]);
 
   return (
-    <span
-      className="settings-profile__avatar settings-profile__avatar--large"
-      aria-hidden="true"
-    >
+    <span className="settings-profile__avatar settings-profile__avatar--large" aria-hidden="true">
       {profile.avatarDataUrl && !imageFailed ? (
         <ResponsiveAvatar
           src={profile.avatarDataUrl}
@@ -57,11 +52,7 @@ function PublicProfileAvatar({ profile }: { profile: PublicProfileResponse }) {
           onError={() => setImageFailed(true)}
         />
       ) : (
-        <User
-          className="settings-profile__avatar-fallback"
-          size={72}
-          weight="duotone"
-        />
+        <User className="settings-profile__avatar-fallback" size={72} weight="duotone" />
       )}
     </span>
   );
@@ -103,20 +94,12 @@ function PublicProfileLinks({ profile }: { profile: PublicProfileResponse }) {
   );
 }
 
-export function PublicProfilePage({
-  username,
-  onNavigateBack,
-}: PublicProfilePageProps) {
-  const {
-    data: profile,
-    isError,
-    isLoading,
-    refetch,
-  } = usePublicProfile(username);
+export function PublicProfilePage({ username, onNavigateBack }: PublicProfilePageProps) {
+  const { data: profile, isError, isLoading, refetch } = usePublicProfile(username);
 
   return (
     <main
-      className="mx-auto flex w-full min-w-0 max-w-4xl flex-col gap-5"
+      className="mx-auto flex w-full max-w-4xl min-w-0 flex-col gap-5"
       aria-labelledby="public-profile-title"
     >
       <PageHeading
@@ -142,15 +125,10 @@ export function PublicProfilePage({
           </div>
         </section>
       ) : isError || !profile ? (
-        <section
-          className="settings-profile__public-card"
-          aria-label="Public profile details"
-        >
+        <section className="settings-profile__public-card" aria-label="Public profile details">
           <div className="settings-profile__public-art" aria-hidden="true" />
           <div className="settings-profile__public-content">
-            <h2 className="text-lg font-semibold text-(--text)">
-              This profile is unavailable
-            </h2>
+            <h2 className="text-lg font-semibold text-(--text)">This profile is unavailable</h2>
             <p className="max-w-prose text-sm leading-6 text-(--muted)">
               Check the profile address or try loading it again.
             </p>
@@ -170,9 +148,7 @@ export function PublicProfilePage({
           avatar={<PublicProfileAvatar profile={profile} />}
           bio={profile.bio}
           links={<PublicProfileLinks profile={profile} />}
-          verifiedIcon={
-            <SealCheck size={21} weight="fill" aria-label="Verified profile" />
-          }
+          verifiedIcon={<SealCheck size={21} weight="fill" aria-label="Verified profile" />}
         />
       )}
     </main>

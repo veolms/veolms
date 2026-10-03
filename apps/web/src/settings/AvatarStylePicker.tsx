@@ -73,20 +73,14 @@ export function AvatarStylePicker({
       const cleanMatch = avatars.find(
         (a) =>
           (a.avatarDataUrl.split("?")[0] ?? a.avatarDataUrl) === cleanCurrent ||
-          a.avatarSrcSet?.some(
-            (v) => (v.url.split("?")[0] ?? v.url) === cleanCurrent,
-          ),
+          a.avatarSrcSet?.some((v) => (v.url.split("?")[0] ?? v.url) === cleanCurrent),
       );
       if (cleanMatch) return cleanMatch;
 
-      const currentPrefixMatch = cleanCurrent.match(
-        /\/public\/avatars\/[A-Za-z0-9_-]{1,200}/,
-      );
+      const currentPrefixMatch = cleanCurrent.match(/\/public\/avatars\/[A-Za-z0-9_-]{1,200}/);
       if (currentPrefixMatch) {
         const prefix = currentPrefixMatch[0];
-        const prefixMatch = avatars.find((a) =>
-          a.avatarDataUrl.includes(prefix),
-        );
+        const prefixMatch = avatars.find((a) => a.avatarDataUrl.includes(prefix));
         if (prefixMatch) return prefixMatch;
       }
     }
@@ -96,35 +90,23 @@ export function AvatarStylePicker({
 
   const matchedDicebearStyle = useMemo(() => {
     if (!currentAvatarUrl) return null;
-    return (
-      AVATAR_STYLES.find((style) => currentAvatarUrl.includes(`/${style}/`)) ??
-      null
-    );
+    return AVATAR_STYLES.find((style) => currentAvatarUrl.includes(`/${style}/`)) ?? null;
   }, [currentAvatarUrl]);
 
   const [activeTab, setActiveTab] = useState<"saved" | "generate">("saved");
-  const [userSelectedSavedId, setUserSelectedSavedId] = useState<string | null>(
-    null,
-  );
-  const [selectedStyle, setSelectedStyle] = useState<AvatarStyle>(
-    AVATAR_STYLES[0],
-  );
+  const [userSelectedSavedId, setUserSelectedSavedId] = useState<string | null>(null);
+  const [selectedStyle, setSelectedStyle] = useState<AvatarStyle>(AVATAR_STYLES[0]);
   const [shuffleCount, setShuffleCount] = useState(0);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [failedThumbnails, setFailedThumbnails] = useState<
-    Record<string, boolean>
-  >({});
+  const [failedThumbnails, setFailedThumbnails] = useState<Record<string, boolean>>({});
 
   const effectiveSeed = shuffleCount > 0 ? `${seed}-${shuffleCount}` : seed;
   const generatedPreviewUrl = buildDicebearSvgUrl(selectedStyle, effectiveSeed);
 
   // Guarantee that an avatar is selected when saved tab is active
   const effectiveSelectedSavedId = useMemo(() => {
-    if (
-      userSelectedSavedId &&
-      avatars.some((a) => a.id === userSelectedSavedId)
-    ) {
+    if (userSelectedSavedId && avatars.some((a) => a.id === userSelectedSavedId)) {
       return userSelectedSavedId;
     }
     if (activeSavedAvatar) {
@@ -137,13 +119,7 @@ export function AvatarStylePicker({
       return savedAvatars[0].id;
     }
     return null;
-  }, [
-    userSelectedSavedId,
-    avatars,
-    activeSavedAvatar,
-    googleAvatar,
-    savedAvatars,
-  ]);
+  }, [userSelectedSavedId, avatars, activeSavedAvatar, googleAvatar, savedAvatars]);
 
   const selectedSavedAvatar = useMemo(() => {
     if (effectiveSelectedSavedId) {
@@ -152,16 +128,13 @@ export function AvatarStylePicker({
     return activeSavedAvatar;
   }, [avatars, effectiveSelectedSavedId, activeSavedAvatar]);
 
-  const previewSrc =
-    selectedSavedAvatar?.avatarDataUrl ?? currentAvatarUrl ?? null;
+  const previewSrc = selectedSavedAvatar?.avatarDataUrl ?? currentAvatarUrl ?? null;
   const previewSrcSet = selectedSavedAvatar?.avatarSrcSet;
 
   const previewCaption = useMemo(() => {
     if (activeTab === "saved") {
       if (selectedSavedAvatar) {
-        return selectedSavedAvatar.source === "google"
-          ? "Google Account Photo"
-          : "Saved Photo";
+        return selectedSavedAvatar.source === "google" ? "Google Account Photo" : "Saved Photo";
       }
       return "Current Photo";
     }
@@ -326,9 +299,7 @@ export function AvatarStylePicker({
                   width={152}
                   height={152}
                   className={`settings-profile__avatar-preview-img${
-                    isPreviewLoading
-                      ? " opacity-40 transition-opacity duration-200"
-                      : ""
+                    isPreviewLoading ? "opacity-40 transition-opacity duration-200" : ""
                   }`}
                   onError={() => {
                     setPreviewFailed(true);
@@ -341,32 +312,23 @@ export function AvatarStylePicker({
                 />
                 {isPreviewLoading && (
                   <div
-                    className="absolute inset-0 flex items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--canvas)_60%,transparent)] backdrop-blur-[2px] z-10"
+                    className="absolute inset-0 z-10 flex items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--canvas)_60%,transparent)] backdrop-blur-[2px]"
                     aria-label="Generating avatar"
                   >
-                    <CircleNotch
-                      size={32}
-                      className="animate-spin text-(--accent)"
-                    />
+                    <CircleNotch size={32} className="animate-spin text-(--accent)" />
                   </div>
                 )}
               </>
             )}
           </div>
-          <span className="settings-profile__avatar-preview-caption">
-            {previewCaption}
-          </span>
+          <span className="settings-profile__avatar-preview-caption">{previewCaption}</span>
           {activeTab === "generate" && (
             <button
               type="button"
               className="settings-profile__avatar-style-shuffle"
               disabled={isSaving || isPreviewLoading}
               onClick={handleShuffle}
-              title={
-                isPreviewLoading
-                  ? "Generating avatar..."
-                  : "Shuffle avatar look"
-              }
+              title={isPreviewLoading ? "Generating avatar..." : "Shuffle avatar look"}
               aria-busy={isPreviewLoading}
             >
               {isPreviewLoading ? (
@@ -402,7 +364,7 @@ export function AvatarStylePicker({
               aria-selected={activeTab === "saved"}
               aria-controls="avatar-tabpanel-saved"
               className={`settings-profile__avatar-dialog-tab${
-                activeTab === "saved" ? " is-active" : ""
+                activeTab === "saved" ? "is-active" : ""
               }`}
               onClick={() => {
                 setActiveTab("saved");
@@ -418,7 +380,7 @@ export function AvatarStylePicker({
               aria-selected={activeTab === "generate"}
               aria-controls="avatar-tabpanel-generate"
               className={`settings-profile__avatar-dialog-tab${
-                activeTab === "generate" ? " is-active" : ""
+                activeTab === "generate" ? "is-active" : ""
               }`}
               onClick={() => setActiveTab("generate")}
             >
@@ -428,14 +390,8 @@ export function AvatarStylePicker({
 
           <div
             role="tabpanel"
-            id={
-              activeTab === "saved"
-                ? "avatar-tabpanel-saved"
-                : "avatar-tabpanel-generate"
-            }
-            aria-labelledby={
-              activeTab === "saved" ? "avatar-tab-saved" : "avatar-tab-generate"
-            }
+            id={activeTab === "saved" ? "avatar-tabpanel-saved" : "avatar-tabpanel-generate"}
+            aria-labelledby={activeTab === "saved" ? "avatar-tab-saved" : "avatar-tab-generate"}
             className="settings-profile__avatar-tabpanel"
           >
             {activeTab === "saved" ? (
@@ -445,20 +401,14 @@ export function AvatarStylePicker({
                     <button
                       type="button"
                       className={`settings-profile__avatar-saved-option${
-                        effectiveSelectedSavedId === googleAvatar.id
-                          ? " is-selected"
-                          : ""
+                        effectiveSelectedSavedId === googleAvatar.id ? "is-selected" : ""
                       }`}
                       disabled={isSaving}
                       onClick={() => setUserSelectedSavedId(googleAvatar.id)}
-                      onDoubleClick={() =>
-                        confirmSavedDirectly(googleAvatar.id)
-                      }
+                      onDoubleClick={() => confirmSavedDirectly(googleAvatar.id)}
                       title="Google Account Photo (Double-click to apply directly)"
                       aria-label="Google Account Photo"
-                      aria-pressed={
-                        effectiveSelectedSavedId === googleAvatar.id
-                      }
+                      aria-pressed={effectiveSelectedSavedId === googleAvatar.id}
                     >
                       {effectiveSelectedSavedId === googleAvatar.id && (
                         <span
@@ -496,10 +446,7 @@ export function AvatarStylePicker({
                             }
                           />
                         )}
-                        <span
-                          className="settings-profile__avatar-google-badge"
-                          aria-hidden="true"
-                        >
+                        <span className="settings-profile__avatar-google-badge" aria-hidden="true">
                           <GoogleBrandIcon size={13} />
                         </span>
                       </div>
@@ -513,7 +460,7 @@ export function AvatarStylePicker({
                         key={saved.id}
                         type="button"
                         className={`settings-profile__avatar-saved-option${
-                          isSelected ? " is-selected" : ""
+                          isSelected ? "is-selected" : ""
                         }`}
                         disabled={isSaving}
                         onClick={() => setUserSelectedSavedId(saved.id)}
@@ -565,8 +512,8 @@ export function AvatarStylePicker({
                 </div>
               ) : (
                 <p className="settings-profile__avatar-empty-hint">
-                  No synced or saved photos available. Choose the Generate
-                  avatar tab to customize a new look.
+                  No synced or saved photos available. Choose the Generate avatar tab to customize a
+                  new look.
                 </p>
               )
             ) : (
@@ -583,7 +530,7 @@ export function AvatarStylePicker({
                     aria-checked={selectedStyle === option}
                     disabled={isSaving}
                     className={`settings-profile__avatar-style-option${
-                      selectedStyle === option ? " is-selected" : ""
+                      selectedStyle === option ? "is-selected" : ""
                     }`}
                     onClick={() => {
                       if (selectedStyle !== option) {

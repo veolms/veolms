@@ -63,9 +63,8 @@ const DAY_HEADERS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 60 }, (_, i) => i);
 
-const joinClasses = (
-  ...classes: Array<string | false | null | undefined>
-): string => classes.filter(Boolean).join(" ");
+const joinClasses = (...classes: Array<string | false | null | undefined>): string =>
+  classes.filter(Boolean).join(" ");
 
 interface PopoverPosition {
   left: number;
@@ -83,8 +82,7 @@ function parseDateTime(value: string) {
   const year = Number(yearStr);
   const month = Number(monthStr);
   const day = Number(dayStr);
-  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day))
-    return null;
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
 
   let hour = 12;
   let minute = 0;
@@ -142,9 +140,7 @@ export function ThemedDateTimePicker({
   }, []);
 
   const [viewYear, setViewYear] = useState<number>(parsed?.year ?? today.year);
-  const [viewMonth, setViewMonth] = useState<number>(
-    parsed?.month ?? today.month,
-  );
+  const [viewMonth, setViewMonth] = useState<number>(parsed?.month ?? today.month);
 
   useEffect(() => {
     if (parsed) {
@@ -206,13 +202,9 @@ export function ThemedDateTimePicker({
     setOpen(true);
 
     requestAnimationFrame(() => {
-      const selectedHourEl = hourListRef.current?.querySelector(
-        '[data-selected="true"]',
-      );
+      const selectedHourEl = hourListRef.current?.querySelector('[data-selected="true"]');
       selectedHourEl?.scrollIntoView({ block: "center", behavior: "auto" });
-      const selectedMinEl = minuteListRef.current?.querySelector(
-        '[data-selected="true"]',
-      );
+      const selectedMinEl = minuteListRef.current?.querySelector('[data-selected="true"]');
       selectedMinEl?.scrollIntoView({ block: "center", behavior: "auto" });
     });
   };
@@ -241,10 +233,7 @@ export function ThemedDateTimePicker({
     if (!open) return undefined;
     const closeFromOutside = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (
-        triggerRef.current?.contains(target) ||
-        contentRef.current?.contains(target)
-      ) {
+      if (triggerRef.current?.contains(target) || contentRef.current?.contains(target)) {
         return;
       }
       closePicker();
@@ -337,15 +326,7 @@ export function ThemedDateTimePicker({
       setViewMonth(targetMonth);
     }
 
-    onChange(
-      formatToDateTimeLocal(
-        targetYear,
-        targetMonth,
-        targetDay,
-        activeHour,
-        activeMinute,
-      ),
-    );
+    onChange(formatToDateTimeLocal(targetYear, targetMonth, targetDay, activeHour, activeMinute));
   };
 
   const handleSelectHour = (h: number) => {
@@ -419,33 +400,26 @@ export function ThemedDateTimePicker({
         onClick={() => (open ? closePicker() : openPicker())}
         onKeyDown={handleTriggerKeyDown}
         aria-label={
-          ariaLabel
-            ? `${ariaLabel}: ${displayLabel || placeholder}`
-            : displayLabel || placeholder
+          ariaLabel ? `${ariaLabel}: ${displayLabel || placeholder}` : displayLabel || placeholder
         }
         aria-haspopup="dialog"
         aria-expanded={open}
         className={joinClasses(
           "flex w-full items-center justify-between gap-2 text-left transition-all",
-          "h-9.5 sm:h-10 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)]",
-          "bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 sm:px-3.5 text-xs sm:text-sm text-(--text)",
-          "outline-none cursor-pointer select-none",
+          "h-9.5 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] sm:h-10",
+          "bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 text-xs text-(--text) sm:px-3.5 sm:text-sm",
+          "cursor-pointer outline-none select-none",
           open
             ? "border-(--accent) ring-2 ring-(--accent)/20"
             : "hover:border-[color-mix(in_srgb,var(--text)_22%,transparent)] focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20",
-          disabled && "opacity-50 cursor-not-allowed",
+          disabled && "cursor-not-allowed opacity-50",
           triggerClassName,
         )}
       >
-        <span
-          className={joinClasses(
-            "truncate font-medium",
-            !displayLabel && "text-(--muted)",
-          )}
-        >
+        <span className={joinClasses("truncate font-medium", !displayLabel && "text-(--muted)")}>
           {displayLabel || placeholder}
         </span>
-        <div className="flex items-center gap-1.5 shrink-0 text-(--muted)">
+        <div className="flex shrink-0 items-center gap-1.5 text-(--muted)">
           {value && !disabled && (
             <span
               role="button"
@@ -461,16 +435,12 @@ export function ThemedDateTimePicker({
                   onChange("");
                 }
               }}
-              className="p-1 rounded-md hover:text-(--text) hover:bg-white/10 transition-colors cursor-pointer"
+              className="cursor-pointer rounded-md p-1 transition-colors hover:bg-white/10 hover:text-(--text)"
             >
               <X size={13} weight="bold" />
             </span>
           )}
-          <CalendarBlank
-            size={16}
-            weight="duotone"
-            className="text-(--accent) shrink-0"
-          />
+          <CalendarBlank size={16} weight="duotone" className="shrink-0 text-(--accent)" />
         </div>
       </button>
 
@@ -504,23 +474,23 @@ export function ThemedDateTimePicker({
           >
             <div className="flex flex-col gap-2.5">
               {/* Header: Month & Year navigation */}
-              <div className="flex items-center justify-between gap-1 pb-2 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
+              <div className="flex items-center justify-between gap-1 border-b border-[color-mix(in_srgb,var(--text)_10%,transparent)] pb-2">
                 <button
                   type="button"
                   onClick={handlePrevMonth}
                   aria-label="Previous month"
-                  className="flex size-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--text-secondary) hover:bg-(--accent)/15 hover:text-(--accent) active:scale-95 transition-all cursor-pointer"
+                  className="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--text-secondary) transition-all hover:bg-(--accent)/15 hover:text-(--accent) active:scale-95"
                 >
                   <CaretLeft size={14} weight="bold" />
                 </button>
-                <div className="text-xs sm:text-sm font-bold text-(--text) tracking-tight">
+                <div className="text-xs font-bold tracking-tight text-(--text) sm:text-sm">
                   {FULL_MONTH_NAMES[viewMonth]} {viewYear}
                 </div>
                 <button
                   type="button"
                   onClick={handleNextMonth}
                   aria-label="Next month"
-                  className="flex size-7 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--text-secondary) hover:bg-(--accent)/15 hover:text-(--accent) active:scale-95 transition-all cursor-pointer"
+                  className="flex size-7 cursor-pointer items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--text-secondary) transition-all hover:bg-(--accent)/15 hover:text-(--accent) active:scale-95"
                 >
                   <CaretRight size={14} weight="bold" />
                 </button>
@@ -529,13 +499,13 @@ export function ThemedDateTimePicker({
               {/* Main content: Calendar Grid on left, Time picker on right */}
               <div className="flex gap-2.5">
                 {/* Left: Day Grid */}
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   {/* Day headers */}
-                  <div className="grid grid-cols-7 gap-1 text-center mb-1">
+                  <div className="mb-1 grid grid-cols-7 gap-1 text-center">
                     {DAY_HEADERS.map((d) => (
                       <span
                         key={d}
-                        className="text-[10px] font-bold text-(--muted) uppercase tracking-wider"
+                        className="text-[10px] font-bold tracking-wider text-(--muted) uppercase"
                       >
                         {d}
                       </span>
@@ -545,31 +515,22 @@ export function ThemedDateTimePicker({
                   {/* Days grid */}
                   <div className="grid grid-cols-7 gap-1">
                     {calendarCells.map((cell, idx) => {
-                      const selected = isSelectedDate(
-                        cell.day,
-                        cell.monthOffset,
-                      );
+                      const selected = isSelectedDate(cell.day, cell.monthOffset);
                       const isToday = isTodayDate(cell.day, cell.monthOffset);
-                      const cellDate = new Date(
-                        viewYear,
-                        viewMonth + cell.monthOffset,
-                        cell.day,
-                      );
+                      const cellDate = new Date(viewYear, viewMonth + cell.monthOffset, cell.day);
                       const dateAriaLabel = `${cell.day} ${FULL_MONTH_NAMES[cellDate.getMonth()]} ${cellDate.getFullYear()}`;
                       return (
                         <button
                           type="button"
                           key={`${cell.monthOffset}-${cell.day}-${idx}`}
-                          onClick={() =>
-                            handleSelectDay(cell.day, cell.monthOffset)
-                          }
+                          onClick={() => handleSelectDay(cell.day, cell.monthOffset)}
                           aria-label={dateAriaLabel}
                           className={joinClasses(
-                            "relative flex size-7 sm:size-7.5 items-center justify-center rounded-lg text-xs transition-all cursor-pointer",
+                            "relative flex size-7 cursor-pointer items-center justify-center rounded-lg text-xs transition-all sm:size-7.5",
                             selected
-                              ? "bg-(--accent) text-(--on-accent-glyph,#000) font-bold shadow-xs scale-105 z-1"
+                              ? "z-1 scale-105 bg-(--accent) font-bold text-(--on-accent-glyph,#000) shadow-xs"
                               : isToday
-                                ? "border border-(--accent)/70 text-(--accent) font-semibold"
+                                ? "border border-(--accent)/70 font-semibold text-(--accent)"
                                 : cell.isCurrentMonth
                                   ? "font-medium text-(--text) hover:bg-(--accent)/15 hover:text-(--accent)"
                                   : "text-(--muted)/35 hover:text-(--muted)",
@@ -583,25 +544,21 @@ export function ThemedDateTimePicker({
                 </div>
 
                 {/* Vertical divider */}
-                <div className="w-px bg-[color-mix(in_srgb,var(--text)_10%,transparent)] shrink-0" />
+                <div className="w-px shrink-0 bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
 
                 {/* Right: Time picker */}
-                <div className="flex flex-col w-[88px] shrink-0">
-                  <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-(--text-secondary) mb-1.5">
-                    <Clock
-                      size={12}
-                      className="text-(--accent)"
-                      weight="bold"
-                    />
+                <div className="flex w-[88px] shrink-0 flex-col">
+                  <div className="mb-1.5 flex items-center justify-center gap-1 text-[11px] font-bold text-(--text-secondary)">
+                    <Clock size={12} className="text-(--accent)" weight="bold" />
                     <span>Time</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-1 h-[176px]">
+                  <div className="grid h-[176px] grid-cols-2 gap-1">
                     {/* Hours column */}
                     <div
                       ref={hourListRef}
                       style={{ scrollbarWidth: "none" }}
-                      className="flex flex-col gap-1 overflow-y-auto overscroll-contain pr-0.5 scroll-smooth"
+                      className="flex flex-col gap-1 overflow-y-auto overscroll-contain scroll-smooth pr-0.5"
                     >
                       {HOURS.map((h) => {
                         const isHourSelected = activeHour === h;
@@ -613,9 +570,9 @@ export function ThemedDateTimePicker({
                             onClick={() => handleSelectHour(h)}
                             aria-label={`Hour ${String(h).padStart(2, "0")}`}
                             className={joinClasses(
-                              "flex h-7 w-full items-center justify-center rounded-md text-xs font-semibold transition-all shrink-0 cursor-pointer",
+                              "flex h-7 w-full shrink-0 cursor-pointer items-center justify-center rounded-md text-xs font-semibold transition-all",
                               isHourSelected
-                                ? "bg-(--accent) text-(--on-accent-glyph,#000) font-bold shadow-xs"
+                                ? "bg-(--accent) font-bold text-(--on-accent-glyph,#000) shadow-xs"
                                 : "text-(--text-secondary) hover:bg-(--accent)/15 hover:text-(--accent)",
                             )}
                           >
@@ -629,7 +586,7 @@ export function ThemedDateTimePicker({
                     <div
                       ref={minuteListRef}
                       style={{ scrollbarWidth: "none" }}
-                      className="flex flex-col gap-1 overflow-y-auto overscroll-contain pr-0.5 scroll-smooth"
+                      className="flex flex-col gap-1 overflow-y-auto overscroll-contain scroll-smooth pr-0.5"
                     >
                       {MINUTES.map((m) => {
                         const isMinuteSelected = activeMinute === m;
@@ -637,15 +594,13 @@ export function ThemedDateTimePicker({
                           <button
                             type="button"
                             key={m}
-                            data-selected={
-                              isMinuteSelected ? "true" : undefined
-                            }
+                            data-selected={isMinuteSelected ? "true" : undefined}
                             onClick={() => handleSelectMinute(m)}
                             aria-label={`Minute ${String(m).padStart(2, "0")}`}
                             className={joinClasses(
-                              "flex h-7 w-full items-center justify-center rounded-md text-xs font-semibold transition-all shrink-0 cursor-pointer",
+                              "flex h-7 w-full shrink-0 cursor-pointer items-center justify-center rounded-md text-xs font-semibold transition-all",
                               isMinuteSelected
-                                ? "bg-(--accent) text-(--on-accent-glyph,#000) font-bold shadow-xs"
+                                ? "bg-(--accent) font-bold text-(--on-accent-glyph,#000) shadow-xs"
                                 : "text-(--text-secondary) hover:bg-(--accent)/15 hover:text-(--accent)",
                             )}
                           >
@@ -659,14 +614,14 @@ export function ThemedDateTimePicker({
               </div>
 
               {/* Footer actions */}
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)]">
+              <div className="flex items-center justify-between gap-2 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] pt-2">
                 <button
                   type="button"
                   onClick={() => {
                     onChange("");
                     closePicker();
                   }}
-                  className="text-xs font-semibold text-(--muted) hover:text-(--text) transition-colors px-1.5 py-1 cursor-pointer"
+                  className="cursor-pointer px-1.5 py-1 text-xs font-semibold text-(--muted) transition-colors hover:text-(--text)"
                 >
                   Clear
                 </button>
@@ -674,14 +629,14 @@ export function ThemedDateTimePicker({
                   <button
                     type="button"
                     onClick={handleSetNow}
-                    className="text-xs font-semibold text-(--accent) hover:underline px-1.5 py-1 transition-all cursor-pointer"
+                    className="cursor-pointer px-1.5 py-1 text-xs font-semibold text-(--accent) transition-all hover:underline"
                   >
                     Now
                   </button>
                   <button
                     type="button"
                     onClick={() => closePicker(true)}
-                    className="px-3 py-1 rounded-lg bg-(--accent) text-(--on-accent-glyph,#000) text-xs font-bold shadow-xs hover:brightness-105 active:scale-95 transition-all cursor-pointer"
+                    className="cursor-pointer rounded-lg bg-(--accent) px-3 py-1 text-xs font-bold text-(--on-accent-glyph,#000) shadow-xs transition-all hover:brightness-105 active:scale-95"
                   >
                     Done
                   </button>

@@ -1,9 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useSyncExternalStore, type ReactNode } from "react";
 
 export type PlayerInteractionMode = "desktop" | "mobile" | "responsive";
 
@@ -30,9 +25,7 @@ function getFullscreenActive(): boolean {
   const webkitDocument = document as Document & {
     webkitFullscreenElement?: Element | null;
   };
-  return Boolean(
-    document.fullscreenElement ?? webkitDocument.webkitFullscreenElement,
-  );
+  return Boolean(document.fullscreenElement ?? webkitDocument.webkitFullscreenElement);
 }
 
 function getResponsiveModeStoreSnapshot(): boolean {
@@ -60,40 +53,23 @@ function startResponsiveModeStore(): void {
   fullscreenModeActive = getFullscreenActive();
   fullscreenMobileMode = windowedMobileMode;
   responsiveModeMediaQuery =
-    typeof window.matchMedia === "function"
-      ? window.matchMedia(MOBILE_WIDTH_QUERY)
-      : null;
-  responsiveModeMediaQuery?.addEventListener?.(
-    "change",
-    updateResponsiveModeStore,
-  );
+    typeof window.matchMedia === "function" ? window.matchMedia(MOBILE_WIDTH_QUERY) : null;
+  responsiveModeMediaQuery?.addEventListener?.("change", updateResponsiveModeStore);
   window.visualViewport?.addEventListener("resize", updateResponsiveModeStore);
   window.addEventListener("resize", updateResponsiveModeStore);
   window.addEventListener("orientationchange", updateResponsiveModeStore);
   document.addEventListener("fullscreenchange", updateResponsiveModeStore);
-  document.addEventListener(
-    "webkitfullscreenchange",
-    updateResponsiveModeStore,
-  );
+  document.addEventListener("webkitfullscreenchange", updateResponsiveModeStore);
   responsiveModeListening = true;
 }
 
 function stopResponsiveModeStore(): void {
-  responsiveModeMediaQuery?.removeEventListener?.(
-    "change",
-    updateResponsiveModeStore,
-  );
-  window.visualViewport?.removeEventListener(
-    "resize",
-    updateResponsiveModeStore,
-  );
+  responsiveModeMediaQuery?.removeEventListener?.("change", updateResponsiveModeStore);
+  window.visualViewport?.removeEventListener("resize", updateResponsiveModeStore);
   window.removeEventListener("resize", updateResponsiveModeStore);
   window.removeEventListener("orientationchange", updateResponsiveModeStore);
   document.removeEventListener("fullscreenchange", updateResponsiveModeStore);
-  document.removeEventListener(
-    "webkitfullscreenchange",
-    updateResponsiveModeStore,
-  );
+  document.removeEventListener("webkitfullscreenchange", updateResponsiveModeStore);
   responsiveModeMediaQuery = null;
   responsiveModeListening = false;
 }
@@ -111,9 +87,7 @@ function subscribeToResponsiveMobileMode(onStoreChange: () => void) {
   };
 }
 
-export function useResolvedPlayerMobileInteraction(
-  mode: PlayerInteractionMode,
-): boolean {
+export function useResolvedPlayerMobileInteraction(mode: PlayerInteractionMode): boolean {
   const responsiveMobile = useSyncExternalStore(
     subscribeToResponsiveMobileMode,
     getResponsiveModeStoreSnapshot,

@@ -1,9 +1,5 @@
 import { VideoEngineError, normalizeUnknownError } from "../../core/errors";
-import type {
-  ExternalTextTrack,
-  VideoLoadOptions,
-  VideoSource,
-} from "../../core/types";
+import type { ExternalTextTrack, VideoLoadOptions, VideoSource } from "../../core/types";
 import { MediaElementEngineBase } from "../base/MediaElementEngineBase";
 
 function isElement(value: unknown): value is Element {
@@ -14,10 +10,7 @@ export class NativeVideoEngine extends MediaElementEngineBase {
   readonly name = "native";
   readonly #managedTracks = new Set<HTMLTrackElement>();
 
-  async load(
-    source: VideoSource,
-    options: VideoLoadOptions = {},
-  ): Promise<void> {
+  async load(source: VideoSource, options: VideoLoadOptions = {}): Promise<void> {
     const media = this.requireMedia();
     if (source.drm) {
       throw new VideoEngineError({
@@ -43,11 +36,7 @@ export class NativeVideoEngine extends MediaElementEngineBase {
       }
 
       const startTime = options.startTime ?? source.startTime;
-      if (
-        startTime !== undefined &&
-        Number.isFinite(startTime) &&
-        startTime >= 0
-      ) {
+      if (startTime !== undefined && Number.isFinite(startTime) && startTime >= 0) {
         this.seek(startTime);
       }
 
@@ -82,9 +71,7 @@ export class NativeVideoEngine extends MediaElementEngineBase {
     this.releaseMedia(media);
   }
 
-  protected override async onDestroying(
-    media: HTMLMediaElement | null,
-  ): Promise<void> {
+  protected override async onDestroying(media: HTMLMediaElement | null): Promise<void> {
     if (media) {
       this.releaseMedia(media);
     }
@@ -107,9 +94,7 @@ export class NativeVideoEngine extends MediaElementEngineBase {
       };
       const onError = (): void => {
         cleanup();
-        reject(
-          media.error ?? new Error("The browser failed to load the media."),
-        );
+        reject(media.error ?? new Error("The browser failed to load the media."));
       };
       const onAbort = (): void => {
         cleanup();
@@ -132,10 +117,7 @@ export class NativeVideoEngine extends MediaElementEngineBase {
     });
   }
 
-  private addTextTracks(
-    media: HTMLMediaElement,
-    tracks: readonly ExternalTextTrack[],
-  ): void {
+  private addTextTracks(media: HTMLMediaElement, tracks: readonly ExternalTextTrack[]): void {
     if (!isElement(media)) {
       return;
     }

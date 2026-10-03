@@ -6,10 +6,7 @@ import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { NotepadIcon as Notepad } from "@phosphor-icons/react/Notepad";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { useEffect, useId, type ReactNode } from "react";
-import type {
-  DiscussionEntryKind,
-  DiscussionVisibility,
-} from "./discussion-editor/types";
+import type { DiscussionEntryKind, DiscussionVisibility } from "./discussion-editor/types";
 import type { InteractionCapabilities } from "./discussionFeed";
 
 interface CommentPublishingOptionsProps {
@@ -103,9 +100,7 @@ export function CommentPublishingOptions({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 py-5 sm:px-5 sm:py-6">
       <fieldset className="space-y-2.5">
-        <legend className="text-base font-semibold text-(--text)">
-          Post as
-        </legend>
+        <legend className="text-base font-semibold text-(--text)">Post as</legend>
         <div
           className="overflow-hidden rounded-xl shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_9%,transparent)]"
           role="radiogroup"
@@ -126,9 +121,7 @@ export function CommentPublishingOptions({
       </fieldset>
 
       <fieldset className="space-y-2">
-        <legend className="text-base font-semibold text-(--text)">
-          Visibility
-        </legend>
+        <legend className="text-base font-semibold text-(--text)">Visibility</legend>
         <div
           className={`grid gap-1 rounded-xl bg-[color-mix(in_srgb,var(--canvas)_55%,transparent)] p-1 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_8%,transparent)] ${entryKind === "note" ? "grid-cols-3" : "grid-cols-2"}`}
           role="radiogroup"
@@ -189,7 +182,7 @@ function PublishingSegment<Value extends string>({
       <span
         id={tooltipId}
         role="tooltip"
-        className={`pointer-events-none invisible absolute top-[calc(100%+0.5rem)] z-30 w-max max-w-56 translate-y-1 rounded-lg bg-(--surface-elevated,var(--surface)) px-2.5 py-1.5 text-center text-xs font-medium leading-4 text-(--text) opacity-0 shadow-[0_10px_26px_color-mix(in_srgb,var(--canvas)_48%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] transition-[opacity,transform,visibility] duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 peer-focus-visible:visible peer-focus-visible:translate-y-0 peer-focus-visible:opacity-100 ${tooltipPosition}`}
+        className={`pointer-events-none invisible absolute top-[calc(100%+0.5rem)] z-30 w-max max-w-56 translate-y-1 rounded-lg bg-(--surface-elevated,var(--surface)) px-2.5 py-1.5 text-center text-xs leading-4 font-medium text-(--text) opacity-0 shadow-[0_10px_26px_color-mix(in_srgb,var(--canvas)_48%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] transition-[opacity,transform,visibility] duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 peer-focus-visible:visible peer-focus-visible:translate-y-0 peer-focus-visible:opacity-100 ${tooltipPosition}`}
       >
         {option.description}
       </span>
@@ -197,9 +190,7 @@ function PublishingSegment<Value extends string>({
   );
 }
 
-interface PublishingRowProps<
-  Value extends string,
-> extends PublishingControlProps<Value> {
+interface PublishingRowProps<Value extends string> extends PublishingControlProps<Value> {
   separated: boolean;
   disabled?: boolean;
 }
@@ -215,11 +206,7 @@ function PublishingRow<Value extends string>({
   return (
     <label
       aria-disabled={disabled || undefined}
-      title={
-        disabled
-          ? "Interaction type cannot be changed while editing."
-          : undefined
-      }
+      title={disabled ? "Interaction type cannot be changed while editing." : undefined}
       className={`group relative grid min-h-14 ${disabled ? "cursor-default opacity-80" : "cursor-pointer"} grid-cols-[auto_1fr_auto] items-center gap-3 px-3.5 py-2.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-(--accent) sm:px-4 ${separated ? "shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_8%,transparent)]" : ""} ${selected ? "bg-(--accent-soft)" : "hover:bg-(--hover)"}`}
     >
       <input
@@ -238,9 +225,7 @@ function PublishingRow<Value extends string>({
         {option.icon}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-(--text)">
-          {option.label}
-        </span>
+        <span className="block text-sm font-semibold text-(--text)">{option.label}</span>
         <span className="block text-xs leading-4 text-(--text-secondary)">
           {option.description}
         </span>

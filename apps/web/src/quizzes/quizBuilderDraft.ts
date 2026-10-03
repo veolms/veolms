@@ -1,7 +1,4 @@
-import type {
-  CreateQuizQuestionRequest,
-  QuizQuestionType,
-} from "@veolms/contracts";
+import type { CreateQuizQuestionRequest, QuizQuestionType } from "@veolms/contracts";
 
 export interface QuizBuilderOptionDraft {
   id?: string;
@@ -55,15 +52,11 @@ function asText(value: unknown) {
 }
 
 function asPositiveNumber(value: unknown, fallback: number) {
-  return typeof value === "number" && Number.isFinite(value) && value > 0
-    ? value
-    : fallback;
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 function asNonNegativeNumber(value: unknown, fallback: number) {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : fallback;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 export function browserDraftStorageKey({
@@ -76,17 +69,13 @@ export function browserDraftStorageKey({
   return `veolms:quiz-builder:draft:${courseId ?? "library"}:${lessonId ?? "standalone"}`;
 }
 
-export function parseQuizBuilderBrowserDraft(
-  value: string | null,
-): QuizBuilderBrowserDraft | null {
+export function parseQuizBuilderBrowserDraft(value: string | null): QuizBuilderBrowserDraft | null {
   if (!value) return null;
 
   try {
     const parsed: unknown = JSON.parse(value);
     if (!isRecord(parsed)) return null;
-    const rawQuestions = Array.isArray(parsed.questions)
-      ? parsed.questions
-      : [];
+    const rawQuestions = Array.isArray(parsed.questions) ? parsed.questions : [];
     const rawAssignment = isRecord(parsed.assignment) ? parsed.assignment : {};
     const feedbackMode = ["after_submit", "after_attempt", "never"].includes(
       rawAssignment.feedbackMode as string,
@@ -100,14 +89,10 @@ export function parseQuizBuilderBrowserDraft(
       instructions: asText(parsed.instructions),
       questions: rawQuestions.flatMap((rawQuestion, position) => {
         if (!isRecord(rawQuestion)) return [];
-        const questionType = questionTypes.includes(
-          rawQuestion.questionType as QuizQuestionType,
-        )
+        const questionType = questionTypes.includes(rawQuestion.questionType as QuizQuestionType)
           ? (rawQuestion.questionType as QuizQuestionType)
           : "single_choice";
-        const rawOptions = Array.isArray(rawQuestion.options)
-          ? rawQuestion.options
-          : [];
+        const rawOptions = Array.isArray(rawQuestion.options) ? rawQuestion.options : [];
         const options = rawOptions.flatMap((rawOption) => {
           if (!isRecord(rawOption)) return [];
           return [

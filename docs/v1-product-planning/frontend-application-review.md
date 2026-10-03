@@ -663,12 +663,7 @@ React Router v8 uses an **explicit route manifest** in `routes.ts` (already exis
 
 ```ts
 // app/routes.ts (extend existing)
-import {
-  index,
-  layout,
-  route,
-  type RouteConfig,
-} from "@react-router/dev/routes";
+import { index, layout, route, type RouteConfig } from "@react-router/dev/routes";
 
 export default [
   // ✅ Existing — keep
@@ -690,10 +685,7 @@ export default [
       route("learn/:id/lesson", "routes/dashboard.learn.$id.lesson.tsx"),
       route("learn/:id/quiz", "routes/dashboard.learn.$id.quiz.tsx"),
       route("learn/:id/notes", "routes/dashboard.learn.$id.notes.tsx"),
-      route(
-        "learn/:id/discussion",
-        "routes/dashboard.learn.$id.discussion.tsx",
-      ),
+      route("learn/:id/discussion", "routes/dashboard.learn.$id.discussion.tsx"),
     ]),
     route("profile", "routes/dashboard.profile.tsx"),
     route("certificates", "routes/dashboard.certificates.tsx"),
@@ -819,10 +811,8 @@ export const useAuthStore = create<AuthStore>()(
         user: null,
         accessToken: null,
         isAuthenticated: false,
-        setAuth: (user, token) =>
-          set({ user, accessToken: token, isAuthenticated: true }),
-        clearAuth: () =>
-          set({ user: null, accessToken: null, isAuthenticated: false }),
+        setAuth: (user, token) => set({ user, accessToken: token, isAuthenticated: true }),
+        clearAuth: () => set({ user: null, accessToken: null, isAuthenticated: false }),
       }),
       {
         name: "veolms-auth",

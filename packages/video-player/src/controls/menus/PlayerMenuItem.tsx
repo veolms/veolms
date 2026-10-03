@@ -67,7 +67,7 @@ export function PlayerMenuItem({
         ) : null}
       </span>
       {trailing ? (
-        <span className="shrink-0 text-xs tabular-nums text-(--video-player-menu-text-muted)">
+        <span className="shrink-0 text-xs text-(--video-player-menu-text-muted) tabular-nums">
           {trailing}
         </span>
       ) : null}
@@ -75,8 +75,7 @@ export function PlayerMenuItem({
         <span
           className={classNames(
             "size-1.5 shrink-0 rounded-full bg-transparent",
-            (selected || checked) &&
-              "bg-current text-(--video-player-menu-text)",
+            (selected || checked) && "bg-current text-(--video-player-menu-text)",
           )}
           aria-hidden="true"
         />

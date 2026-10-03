@@ -7,13 +7,7 @@ import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
 import { TextBIcon as TextB } from "@phosphor-icons/react/TextB";
 import { TextItalicIcon as TextItalic } from "@phosphor-icons/react/TextItalic";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import type { DiscussionEditorController } from "./discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
 import { DISCUSSION_ATTACHMENTS_ENABLED } from "./discussion-editor/image-storage";
@@ -24,10 +18,7 @@ interface CommentFormattingToolbarProps {
   attachmentsEnabled?: boolean;
 }
 
-export function hasCommentToolbarOverflow(
-  scrollWidth: number,
-  clientWidth: number,
-) {
+export function hasCommentToolbarOverflow(scrollWidth: number, clientWidth: number) {
   return scrollWidth > clientWidth + 1;
 }
 
@@ -74,18 +65,13 @@ export function CommentFormattingToolbar({
 
     const updateOverflow = () => {
       setHasHorizontalOverflow(
-        hasCommentToolbarOverflow(
-          scrollport.scrollWidth,
-          scrollport.clientWidth,
-        ),
+        hasCommentToolbarOverflow(scrollport.scrollWidth, scrollport.clientWidth),
       );
     };
 
     updateOverflow();
     const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(updateOverflow);
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateOverflow);
     resizeObserver?.observe(scrollport);
     window.addEventListener("resize", updateOverflow);
 
@@ -98,7 +84,7 @@ export function CommentFormattingToolbar({
   return (
     <div
       data-comment-formatting-toolbar
-      className="relative -my-2.5 flex min-w-0 flex-1 basis-0 self-stretch items-center overflow-hidden"
+      className="relative -my-2.5 flex min-w-0 flex-1 basis-0 items-center self-stretch overflow-hidden"
     >
       {linkOpen && (
         <form
@@ -123,7 +109,7 @@ export function CommentFormattingToolbar({
             aria-label="Link URL"
             value={linkUrl}
             placeholder="https://example.com"
-            className="h-9 min-w-0 flex-1 rounded-lg bg-[color-mix(in_srgb,var(--canvas)_72%,transparent)] px-3 text-sm text-(--text) outline-none shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] placeholder:text-(--muted) focus-visible:shadow-[inset_0_0_0_2px_var(--accent)]"
+            className="h-9 min-w-0 flex-1 rounded-lg bg-[color-mix(in_srgb,var(--canvas)_72%,transparent)] px-3 text-sm text-(--text) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] outline-none placeholder:text-(--muted) focus-visible:shadow-[inset_0_0_0_2px_var(--accent)]"
             onChange={(event) => setLinkUrl(event.target.value)}
           />
           {formattingState.link && (
@@ -189,10 +175,7 @@ export function CommentFormattingToolbar({
           <LinkSimple size={17} />
         </ToolbarButton>
         {attachmentsEnabled && DISCUSSION_ATTACHMENTS_ENABLED && (
-          <ToolbarButton
-            label="Attach file"
-            onClick={() => attachmentInputRef.current?.click()}
-          >
+          <ToolbarButton label="Attach file" onClick={() => attachmentInputRef.current?.click()}>
             <Paperclip size={17} />
           </ToolbarButton>
         )}

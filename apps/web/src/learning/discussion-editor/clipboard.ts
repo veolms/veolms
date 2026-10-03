@@ -17,9 +17,7 @@ interface ClipboardExtensionOptions {
   onFiles: (files: File[]) => void;
 }
 
-export function createDiscussionClipboardExtension({
-  onFiles,
-}: ClipboardExtensionOptions) {
+export function createDiscussionClipboardExtension({ onFiles }: ClipboardExtensionOptions) {
   return EditorView.domEventHandlers({
     paste(event, view) {
       const files = getClipboardMediaFiles(event.clipboardData);
@@ -39,8 +37,7 @@ export function createDiscussionClipboardExtension({
     },
     drop(event) {
       const files = Array.from(event.dataTransfer?.files ?? []).filter(
-        (file) =>
-          file.type.startsWith("image/") || file.type.startsWith("video/"),
+        (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
       );
       if (files.length === 0) return false;
       event.preventDefault();

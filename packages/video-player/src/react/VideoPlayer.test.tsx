@@ -1,11 +1,4 @@
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createRef, StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -23,10 +16,7 @@ afterEach(() => {
 });
 
 function installFinePointerMatchMedia() {
-  const previousMatchMedia = Object.getOwnPropertyDescriptor(
-    window,
-    "matchMedia",
-  );
+  const previousMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: (query: string) => ({
@@ -53,10 +43,7 @@ function installFinePointerMatchMedia() {
 }
 
 function installCompactViewportMatchMedia() {
-  const previousMatchMedia = Object.getOwnPropertyDescriptor(
-    window,
-    "matchMedia",
-  );
+  const previousMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: (query: string) => ({
@@ -83,10 +70,7 @@ function installCompactViewportMatchMedia() {
 }
 
 function installWideLandscapeTouchMatchMedia() {
-  const previousMatchMedia = Object.getOwnPropertyDescriptor(
-    window,
-    "matchMedia",
-  );
+  const previousMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: (query: string) => ({
@@ -113,10 +97,7 @@ function installWideLandscapeTouchMatchMedia() {
 }
 
 function installControllableWidthMatchMedia(initialMobile: boolean) {
-  const previousMatchMedia = Object.getOwnPropertyDescriptor(
-    window,
-    "matchMedia",
-  );
+  const previousMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
   const widthListeners = new Set<EventListenerOrEventListenerObject>();
   let mobile = initialMobile;
 
@@ -126,18 +107,12 @@ function installControllableWidthMatchMedia(initialMobile: boolean) {
       matches: query === "(max-width: 640px)" && mobile,
       media: query,
       onchange: null,
-      addEventListener(
-        type: string,
-        listener: EventListenerOrEventListenerObject,
-      ) {
+      addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
         if (type === "change" && query === "(max-width: 640px)") {
           widthListeners.add(listener);
         }
       },
-      removeEventListener(
-        type: string,
-        listener: EventListenerOrEventListenerObject,
-      ) {
+      removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
         if (type === "change" && query === "(max-width: 640px)") {
           widthListeners.delete(listener);
         }
@@ -217,27 +192,17 @@ describe("VideoPlayer integration", () => {
     });
     await act(async () => Promise.resolve());
     expect(engine.getSnapshot().lifecycle).toBe("loading");
-    expect(screen.getByRole("status", { name: "Loading video" })).toBe(
-      loadingIndicator,
-    );
+    expect(screen.getByRole("status", { name: "Loading video" })).toBe(loadingIndicator);
     expect(loadingIndicator).toHaveClass("z-40");
-    expect(
-      loadingIndicator.querySelector(
-        '[data-video-player-buffering-spinner=""]',
-      ),
-    ).toHaveClass(
+    expect(loadingIndicator.querySelector('[data-video-player-buffering-spinner=""]')).toHaveClass(
       "video-player-buffering-spinner",
       "size-12",
       "overflow-visible",
     );
-    expect(
-      loadingIndicator.querySelector(".video-player-buffering-spinner__arc"),
-    ).toBeTruthy();
+    expect(loadingIndicator.querySelector(".video-player-buffering-spinner__arc")).toBeTruthy();
 
     act(() => engine.finishLoadWhileBuffering());
-    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
-      loadingIndicator,
-    );
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(loadingIndicator);
 
     act(() => engine.finishBuffering());
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -247,9 +212,7 @@ describe("VideoPlayer integration", () => {
     act(() => vi.advanceTimersByTime(999));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
-    expect(
-      screen.getByRole("status", { name: "Buffering video" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBeInTheDocument();
   });
 
   it("delays startup and play waits when immediatePlayWaits is disabled", async () => {
@@ -270,9 +233,7 @@ describe("VideoPlayer integration", () => {
     act(() => vi.advanceTimersByTime(999));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
-    expect(
-      screen.getByRole("status", { name: "Loading video" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Loading video" })).toBeInTheDocument();
   });
 
   it("keeps the same spinner node across snapshot ticks and buffering flicker", async () => {
@@ -281,9 +242,7 @@ describe("VideoPlayer integration", () => {
     render(<VideoPlayer source={source} engineFactory={() => engine} />);
 
     const overlay = screen.getByRole("status", { name: "Loading video" });
-    const spinner = overlay.querySelector(
-      '[data-video-player-buffering-spinner=""]',
-    );
+    const spinner = overlay.querySelector('[data-video-player-buffering-spinner=""]');
     expect(spinner).not.toBeNull();
 
     act(() =>
@@ -298,14 +257,10 @@ describe("VideoPlayer integration", () => {
         currentTime: 0.8,
       }),
     );
-    expect(
-      overlay.querySelector('[data-video-player-buffering-spinner=""]'),
-    ).toBe(spinner);
+    expect(overlay.querySelector('[data-video-player-buffering-spinner=""]')).toBe(spinner);
 
     act(() => engine.finishLoadWhileBuffering());
-    expect(
-      document.querySelector('[data-video-player-buffering-spinner=""]'),
-    ).toBe(spinner);
+    expect(document.querySelector('[data-video-player-buffering-spinner=""]')).toBe(spinner);
 
     act(() =>
       engine.setSnapshot({
@@ -315,12 +270,8 @@ describe("VideoPlayer integration", () => {
         playing: false,
       }),
     );
-    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
-      overlay,
-    );
-    expect(
-      overlay.querySelector('[data-video-player-buffering-spinner=""]'),
-    ).toBe(spinner);
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(overlay);
+    expect(overlay.querySelector('[data-video-player-buffering-spinner=""]')).toBe(spinner);
 
     act(() =>
       engine.setSnapshot({
@@ -329,14 +280,10 @@ describe("VideoPlayer integration", () => {
         playing: true,
       }),
     );
-    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
-      overlay,
-    );
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(overlay);
     act(() => vi.advanceTimersByTime(800));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    expect(
-      document.querySelector('[data-video-player-buffering-spinner=""]'),
-    ).toBe(spinner);
+    expect(document.querySelector('[data-video-player-buffering-spinner=""]')).toBe(spinner);
 
     act(() =>
       engine.setSnapshot({
@@ -346,9 +293,7 @@ describe("VideoPlayer integration", () => {
       }),
     );
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    expect(
-      document.querySelector('[data-video-player-buffering-spinner=""]'),
-    ).toBe(spinner);
+    expect(document.querySelector('[data-video-player-buffering-spinner=""]')).toBe(spinner);
 
     act(() =>
       engine.setSnapshot({
@@ -372,12 +317,8 @@ describe("VideoPlayer integration", () => {
       }),
     );
     act(() => vi.advanceTimersByTime(1_000));
-    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(
-      overlay,
-    );
-    expect(
-      overlay.querySelector('[data-video-player-buffering-spinner=""]'),
-    ).toBe(spinner);
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBe(overlay);
+    expect(overlay.querySelector('[data-video-player-buffering-spinner=""]')).toBe(spinner);
   });
 
   it("waits until timeline scrubbing ends and skips buffered seeks", async () => {
@@ -421,9 +362,7 @@ describe("VideoPlayer integration", () => {
     act(() => vi.advanceTimersByTime(999));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
-    expect(
-      screen.getByRole("status", { name: "Buffering video" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Buffering video" })).toBeInTheDocument();
 
     act(() =>
       engine.setSnapshot({
@@ -455,12 +394,8 @@ describe("VideoPlayer integration", () => {
     vi.useFakeTimers();
     await act(async () => engine.play());
 
-    const playFeedback = container.querySelector(
-      '[data-video-player-playback-feedback="play"]',
-    );
-    const playSurface = playFeedback?.querySelector(
-      "[data-playback-feedback-surface]",
-    );
+    const playFeedback = container.querySelector('[data-video-player-playback-feedback="play"]');
+    const playSurface = playFeedback?.querySelector("[data-playback-feedback-surface]");
     expect(playFeedback).toHaveClass("hidden", "sm:grid");
     expect(playFeedback).toHaveAttribute("aria-hidden", "true");
     expect(playSurface).toHaveClass(
@@ -471,13 +406,12 @@ describe("VideoPlayer integration", () => {
       "shadow-none",
     );
     expect(playSurface).not.toHaveClass("backdrop-blur-sm");
-    expect(playSurface).toHaveAttribute(
-      "data-playback-feedback-duration",
-      "850",
+    expect(playSurface).toHaveAttribute("data-playback-feedback-duration", "850");
+    expect(playSurface?.querySelector('[data-playback-feedback-icon="play"]')).toHaveClass(
+      "size-10",
+      "lg:size-11",
+      "translate-x-0.5",
     );
-    expect(
-      playSurface?.querySelector('[data-playback-feedback-icon="play"]'),
-    ).toHaveClass("size-10", "lg:size-11", "translate-x-0.5");
 
     act(() => vi.advanceTimersByTime(849));
     expect(
@@ -519,9 +453,7 @@ describe("VideoPlayer integration", () => {
     const setVolume = vi.spyOn(engine, "setVolume");
     const handle = createRef<VideoPlayerHandle>();
 
-    render(
-      <VideoPlayer ref={handle} source={source} engineFactory={() => engine} />,
-    );
+    render(<VideoPlayer ref={handle} source={source} engineFactory={() => engine} />);
     await waitFor(() => expect(engine.getSnapshot().source).toEqual(source));
 
     const volumeSlider = screen.getByRole("slider", { name: "Volume" });
@@ -544,13 +476,9 @@ describe("VideoPlayer integration", () => {
     expect(setVolume).toHaveBeenCalledWith(0.75);
 
     act(() => handle.current?.setVolume(0.5));
-    await waitFor(() =>
-      expect(muteButton).toHaveAttribute("data-volume-level", "medium"),
-    );
+    await waitFor(() => expect(muteButton).toHaveAttribute("data-volume-level", "medium"));
     act(() => handle.current?.setVolume(0.2));
-    await waitFor(() =>
-      expect(muteButton).toHaveAttribute("data-volume-level", "quiet"),
-    );
+    await waitFor(() => expect(muteButton).toHaveAttribute("data-volume-level", "quiet"));
     fireEvent.click(muteButton);
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Unmute" })).toHaveAttribute(
@@ -603,11 +531,7 @@ describe("VideoPlayer integration", () => {
       "data-player-hud-variant",
       "temporary-speed",
     );
-    expect(screen.getByText("2× speed")).toHaveClass(
-      "top-[22%]",
-      "left-1/2",
-      "-translate-x-1/2",
-    );
+    expect(screen.getByText("2× speed")).toHaveClass("top-[22%]", "left-1/2", "-translate-x-1/2");
 
     act(() => vi.advanceTimersByTime(850));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -669,10 +593,7 @@ describe("VideoPlayer integration", () => {
 
     vi.spyOn(engine, "attach").mockImplementation(async (media) => {
       activeTransitions += 1;
-      maxConcurrentTransitions = Math.max(
-        maxConcurrentTransitions,
-        activeTransitions,
-      );
+      maxConcurrentTransitions = Math.max(maxConcurrentTransitions, activeTransitions);
       try {
         await delay();
         await originalAttach(media);
@@ -683,10 +604,7 @@ describe("VideoPlayer integration", () => {
     });
     vi.spyOn(engine, "detach").mockImplementation(async () => {
       activeTransitions += 1;
-      maxConcurrentTransitions = Math.max(
-        maxConcurrentTransitions,
-        activeTransitions,
-      );
+      maxConcurrentTransitions = Math.max(maxConcurrentTransitions, activeTransitions);
       try {
         await delay();
         await originalDetach();
@@ -695,13 +613,11 @@ describe("VideoPlayer integration", () => {
         activeTransitions -= 1;
       }
     });
-    const load = vi
-      .spyOn(engine, "load")
-      .mockImplementation(async (nextSource, options) => {
-        loadStartedDuringTransition = activeTransitions > 0;
-        loadedMedia = attachedMedia;
-        await originalLoad(nextSource, options);
-      });
+    const load = vi.spyOn(engine, "load").mockImplementation(async (nextSource, options) => {
+      loadStartedDuringTransition = activeTransitions > 0;
+      loadedMedia = attachedMedia;
+      await originalLoad(nextSource, options);
+    });
 
     const { container } = render(
       <StrictMode>
@@ -737,11 +653,7 @@ describe("VideoPlayer integration", () => {
         },
       ],
     });
-    const renderRoot = (
-      nextSource: VideoSource,
-      startTime: number,
-      autoPlay = false,
-    ) => (
+    const renderRoot = (nextSource: VideoSource, startTime: number, autoPlay = false) => (
       <PlayerRoot
         source={nextSource}
         loadOptions={{ startTime, mimeType: "video/mp4" }}
@@ -809,11 +721,7 @@ describe("VideoPlayer integration", () => {
 
     try {
       const { container } = render(
-        <VideoPlayer
-          source={source}
-          engineFactory={() => engine}
-          keyboardEnabled={false}
-        />,
+        <VideoPlayer source={source} engineFactory={() => engine} keyboardEnabled={false} />,
       );
       expect(
         screen.queryByRole("button", { name: "Toggle picture in picture" }),
@@ -834,11 +742,7 @@ describe("VideoPlayer integration", () => {
       ).toBeVisible();
     } finally {
       if (previousPictureInPictureEnabled) {
-        Object.defineProperty(
-          document,
-          "pictureInPictureEnabled",
-          previousPictureInPictureEnabled,
-        );
+        Object.defineProperty(document, "pictureInPictureEnabled", previousPictureInPictureEnabled);
       } else {
         Reflect.deleteProperty(document, "pictureInPictureEnabled");
       }
@@ -955,13 +859,7 @@ describe("VideoPlayer integration", () => {
     const play = vi.spyOn(engine, "play");
     const setMuted = vi.spyOn(engine, "setMuted");
 
-    render(
-      <VideoPlayer
-        source={source}
-        engineFactory={() => engine}
-        keyboardEnabled={false}
-      />,
-    );
+    render(<VideoPlayer source={source} engineFactory={() => engine} keyboardEnabled={false} />);
 
     await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
@@ -970,10 +868,7 @@ describe("VideoPlayer integration", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Mute" }));
     expect(setMuted).toHaveBeenCalledWith(true);
-    expect(screen.getByRole("button", { name: "Unmute" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(screen.getByRole("button", { name: "Unmute" })).toHaveAttribute("aria-pressed", "true");
 
     expect(
       screen.queryByRole("button", { name: /Seek (?:backward|forward)/ }),
@@ -1000,11 +895,7 @@ describe("VideoPlayer integration", () => {
     const engine = new FakeVideoEngine();
     const setPlaybackRate = vi.spyOn(engine, "setPlaybackRate");
     const { container } = render(
-      <VideoPlayer
-        source={source}
-        engineFactory={() => engine}
-        theme="aurora"
-      />,
+      <VideoPlayer source={source} engineFactory={() => engine} theme="aurora" />,
     );
 
     await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
@@ -1020,14 +911,8 @@ describe("VideoPlayer integration", () => {
 
     expect(setPlaybackRate).toHaveBeenLastCalledWith(0.75);
     const speedStatus = screen.getByRole("status");
-    expect(speedStatus).toHaveAttribute(
-      "data-player-hud-variant",
-      "playback-rate",
-    );
-    expect(screen.getByText("0.75×")).toHaveAttribute(
-      "data-playback-feedback-duration",
-      "850",
-    );
+    expect(speedStatus).toHaveAttribute("data-player-hud-variant", "playback-rate");
+    expect(screen.getByText("0.75×")).toHaveAttribute("data-playback-feedback-duration", "850");
     expect(
       container.querySelector('[data-player-playback-rate-icon="decrease"]'),
     ).toBeInTheDocument();
@@ -1065,9 +950,7 @@ describe("VideoPlayer integration", () => {
           />,
         );
 
-        await waitFor(() =>
-          expect(engine.getSnapshot().lifecycle).toBe("ready"),
-        );
+        await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
         engine.setSnapshot({ currentTime: 30 });
         const player = screen.getByRole("region", { name: "Video player" });
         const surface = screen.getByRole("button", {
@@ -1106,13 +989,8 @@ describe("VideoPlayer integration", () => {
         });
         expect(seek).toHaveBeenLastCalledWith(50);
         expect(player).toHaveAttribute("data-controls-visible", "false");
-        expect(screen.getByRole("status")).toHaveAttribute(
-          "data-player-hud-direction",
-          "forward",
-        );
-        expect(screen.getByRole("status")).toHaveAccessibleName(
-          "Seek forward 20 seconds",
-        );
+        expect(screen.getByRole("status")).toHaveAttribute("data-player-hud-direction", "forward");
+        expect(screen.getByRole("status")).toHaveAccessibleName("Seek forward 20 seconds");
         expect(screen.getByText("+20")).toBeVisible();
         expect(
           container.querySelector('[data-player-mobile-seek-icon="forward"]'),
@@ -1140,17 +1018,12 @@ describe("VideoPlayer integration", () => {
           tap(25);
         });
         expect(seek).toHaveBeenLastCalledWith(50);
-        expect(screen.getByRole("status")).toHaveAttribute(
-          "data-player-hud-direction",
-          "backward",
-        );
-        expect(screen.getByRole("status")).toHaveAccessibleName(
-          "Seek backward 20 seconds",
-        );
+        expect(screen.getByRole("status")).toHaveAttribute("data-player-hud-direction", "backward");
+        expect(screen.getByRole("status")).toHaveAccessibleName("Seek backward 20 seconds");
         expect(screen.getByText("−20")).toBeVisible();
-        expect(
-          container.querySelector('[data-player-mobile-seek-icon="backward"]'),
-        ).toHaveClass("rotate-180");
+        expect(container.querySelector('[data-player-mobile-seek-icon="backward"]')).toHaveClass(
+          "rotate-180",
+        );
 
         act(() => vi.advanceTimersByTime(849));
         expect(screen.getByText("−20")).toBeVisible();
@@ -1259,18 +1132,10 @@ describe("VideoPlayer integration", () => {
         name: "Play or pause video; tap to show controls",
       });
       const media = container.querySelector("video");
-      const zoomViewport = container.querySelector(
-        '[data-player-zoom-viewport=""]',
-      );
+      const zoomViewport = container.querySelector('[data-player-zoom-viewport=""]');
       expect(media).not.toBeNull();
-      expect(player).toHaveAttribute(
-        "data-player-zoom-overflow-boundary",
-        "shell",
-      );
-      expect(zoomViewport).toHaveAttribute(
-        "data-player-zoom-expanded",
-        "false",
-      );
+      expect(player).toHaveAttribute("data-player-zoom-overflow-boundary", "shell");
+      expect(zoomViewport).toHaveAttribute("data-player-zoom-expanded", "false");
       vi.spyOn(player, "getBoundingClientRect").mockReturnValue({
         bottom: 300,
         height: 300,
@@ -1335,9 +1200,7 @@ describe("VideoPlayer integration", () => {
       });
       expect(media).toHaveAttribute("data-player-zoom-scale", "1.333");
       expect(
-        container.querySelector<HTMLElement>(
-          '[data-player-zoom-media-plane=""]',
-        )?.style.transform,
+        container.querySelector<HTMLElement>('[data-player-zoom-media-plane=""]')?.style.transform,
       ).toContain("translate3d(50px, 0px, 0)");
       fireEvent.pointerUp(surface, {
         clientX: 190,
@@ -1377,16 +1240,8 @@ describe("VideoPlayer integration", () => {
       const zoomControl = screen.getByRole("button", {
         name: "Reset video zoom from 1.33× to 1×",
       });
-      expect(zoomControl).toHaveAttribute(
-        "data-player-zoom-indicator",
-        "control",
-      );
-      expect(zoomControl).toHaveClass(
-        "size-[34px]",
-        "sm:size-9",
-        "text-[13px]",
-        "leading-none",
-      );
+      expect(zoomControl).toHaveAttribute("data-player-zoom-indicator", "control");
+      expect(zoomControl).toHaveClass("size-[34px]", "sm:size-9", "text-[13px]", "leading-none");
 
       fireEvent.pointerDown(surface, {
         clientX: 200,
@@ -1412,10 +1267,7 @@ describe("VideoPlayer integration", () => {
       const feedbackReset = screen.getByRole("button", {
         name: "Reset video zoom from 1.33× to 1×",
       });
-      expect(feedbackReset).toHaveAttribute(
-        "data-player-controls-reveal",
-        "delayed",
-      );
+      expect(feedbackReset).toHaveAttribute("data-player-controls-reveal", "delayed");
       fireEvent.pointerDown(feedbackReset, {
         clientX: 380,
         clientY: 20,
@@ -1437,9 +1289,7 @@ describe("VideoPlayer integration", () => {
       expect(player).not.toHaveAttribute("data-player-zoom-expanded");
       expect(zoomViewport).toHaveClass("overflow-hidden");
       expect(
-        container.querySelector<HTMLElement>(
-          '[data-player-zoom-media-plane=""]',
-        )?.style.transform,
+        container.querySelector<HTMLElement>('[data-player-zoom-media-plane=""]')?.style.transform,
       ).toContain("translate3d(0px, 0px, 0)");
       expect(player).toHaveAttribute("data-controls-visible", "false");
       act(() => vi.advanceTimersByTime(999));
@@ -1457,10 +1307,7 @@ describe("VideoPlayer integration", () => {
       document,
       "fullscreenElement",
     );
-    const originalExitFullscreen = Object.getOwnPropertyDescriptor(
-      document,
-      "exitFullscreen",
-    );
+    const originalExitFullscreen = Object.getOwnPropertyDescriptor(document, "exitFullscreen");
     let fullscreenElement: Element | null = null;
     Object.defineProperty(document, "fullscreenElement", {
       configurable: true,
@@ -1488,9 +1335,7 @@ describe("VideoPlayer integration", () => {
           engineFactory={() => engine}
           emptyTapBehavior="responsive"
           keepPosterVisibleUntilFirstPlay
-          overlays={
-            <aside data-player-fullscreen-swipe-ignore="">Course lessons</aside>
-          }
+          overlays={<aside data-player-fullscreen-swipe-ignore="">Course lessons</aside>}
         />,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
@@ -1500,15 +1345,9 @@ describe("VideoPlayer integration", () => {
         name: "Play or pause video; tap to show controls",
       });
       const media = container.querySelector("video");
-      const poster = container.querySelector<HTMLElement>(
-        '[data-video-player-poster-overlay=""]',
-      );
-      const zoomViewport = container.querySelector<HTMLElement>(
-        '[data-player-zoom-viewport=""]',
-      );
-      const mediaPlane = container.querySelector<HTMLElement>(
-        '[data-player-zoom-media-plane=""]',
-      );
+      const poster = container.querySelector<HTMLElement>('[data-video-player-poster-overlay=""]');
+      const zoomViewport = container.querySelector<HTMLElement>('[data-player-zoom-viewport=""]');
+      const mediaPlane = container.querySelector<HTMLElement>('[data-player-zoom-media-plane=""]');
       expect(shell).not.toBeNull();
       expect(media).not.toBeNull();
       expect(media?.parentElement).toBe(mediaPlane);
@@ -1548,20 +1387,14 @@ describe("VideoPlayer integration", () => {
 
       const enterPreview = handle.current?.getSnapshot().ui.zoom;
       expect(enterPreview?.scale).toBeCloseTo(1.136, 2);
-      expect(
-        (enterPreview?.panY ?? 0) + ((enterPreview?.scale ?? 1) - 1) * 150,
-      ).toBeCloseTo(0, 5);
+      expect((enterPreview?.panY ?? 0) + ((enterPreview?.scale ?? 1) - 1) * 150).toBeCloseTo(0, 5);
       expect(enterPreview).toMatchObject({
         feedbackVisible: false,
         gestureActive: true,
       });
-      expect(mediaPlane?.style.transform).toContain(
-        `scale(${enterPreview?.scale})`,
-      );
+      expect(mediaPlane?.style.transform).toContain(`scale(${enterPreview?.scale})`);
       expect(player).toHaveAttribute("data-controls-visible", "false");
-      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(
-        null,
-      );
+      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(null);
 
       fireEvent.pointerUp(surface, {
         clientX: 200,
@@ -1617,19 +1450,13 @@ describe("VideoPlayer integration", () => {
 
       const exitPreview = handle.current?.getSnapshot().ui.zoom;
       expect(exitPreview?.scale).toBeCloseTo(0.864, 2);
-      expect(
-        (exitPreview?.panY ?? 0) + ((exitPreview?.scale ?? 1) - 1) * 150,
-      ).toBeCloseTo(0, 5);
+      expect((exitPreview?.panY ?? 0) + ((exitPreview?.scale ?? 1) - 1) * 150).toBeCloseTo(0, 5);
       expect(exitPreview).toMatchObject({
         feedbackVisible: false,
         gestureActive: true,
       });
-      expect(mediaPlane?.style.transform).toContain(
-        `scale(${exitPreview?.scale})`,
-      );
-      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(
-        null,
-      );
+      expect(mediaPlane?.style.transform).toContain(`scale(${exitPreview?.scale})`);
+      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(null);
 
       fireEvent.pointerUp(surface, {
         clientX: 200,
@@ -1644,20 +1471,12 @@ describe("VideoPlayer integration", () => {
     } finally {
       restoreMatchMedia();
       if (originalFullscreenElement) {
-        Object.defineProperty(
-          document,
-          "fullscreenElement",
-          originalFullscreenElement,
-        );
+        Object.defineProperty(document, "fullscreenElement", originalFullscreenElement);
       } else {
         Reflect.deleteProperty(document, "fullscreenElement");
       }
       if (originalExitFullscreen) {
-        Object.defineProperty(
-          document,
-          "exitFullscreen",
-          originalExitFullscreen,
-        );
+        Object.defineProperty(document, "exitFullscreen", originalExitFullscreen);
       } else {
         Reflect.deleteProperty(document, "exitFullscreen");
       }
@@ -1670,11 +1489,7 @@ describe("VideoPlayer integration", () => {
 
     try {
       const { container } = render(
-        <VideoPlayer
-          source={source}
-          engineFactory={() => engine}
-          emptyTapBehavior="responsive"
-        />,
+        <VideoPlayer source={source} engineFactory={() => engine} emptyTapBehavior="responsive" />,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
       const shell = container.querySelector<HTMLElement>(".video-shell");
@@ -1754,9 +1569,7 @@ describe("VideoPlayer integration", () => {
 
       expect(requestFullscreen).not.toHaveBeenCalled();
       expect(media).toHaveAttribute("data-player-zoom-active", "false");
-      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(
-        null,
-      );
+      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).toBe(null);
     } finally {
       restoreMatchMedia();
     }
@@ -1768,11 +1581,7 @@ describe("VideoPlayer integration", () => {
 
     try {
       const { container } = render(
-        <VideoPlayer
-          source={source}
-          engineFactory={() => engine}
-          emptyTapBehavior="responsive"
-        />,
+        <VideoPlayer source={source} engineFactory={() => engine} emptyTapBehavior="responsive" />,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
       const player = screen.getByRole("region", { name: "Video player" });
@@ -1807,9 +1616,7 @@ describe("VideoPlayer integration", () => {
       expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
       expect(media).toHaveAttribute("data-player-zoom-active", "false");
       expect(player).toHaveAttribute("data-controls-visible", "true");
-      expect(
-        screen.queryByRole("button", { name: /Reset video zoom/ }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).not.toBeInTheDocument();
     } finally {
       restoreMatchMedia();
     }
@@ -1823,11 +1630,7 @@ describe("VideoPlayer integration", () => {
     try {
       const { container } = render(
         <div onPointerMove={parentPointerMove}>
-          <VideoPlayer
-            source={source}
-            engineFactory={() => engine}
-            zoomEnabled={false}
-          />
+          <VideoPlayer source={source} engineFactory={() => engine} zoomEnabled={false} />
         </div>,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
@@ -1856,9 +1659,7 @@ describe("VideoPlayer integration", () => {
       expect(player).toHaveAttribute("data-player-zoom-enabled", "false");
       expect(media).toHaveAttribute("data-player-zoom-scale", "1.000");
       expect(parentPointerMove).toHaveBeenCalledOnce();
-      expect(
-        screen.queryByRole("button", { name: /Reset video zoom/ }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Reset video zoom/ })).not.toBeInTheDocument();
 
       fireEvent.pointerUp(player, {
         clientX: 300,
@@ -1883,11 +1684,7 @@ describe("VideoPlayer integration", () => {
 
     try {
       const { container } = render(
-        <VideoPlayer
-          source={source}
-          engineFactory={() => engine}
-          emptyTapBehavior="responsive"
-        />,
+        <VideoPlayer source={source} engineFactory={() => engine} emptyTapBehavior="responsive" />,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
       const player = screen.getByRole("region", { name: "Video player" });
@@ -1940,9 +1737,7 @@ describe("VideoPlayer integration", () => {
       });
       expect(media).toHaveAttribute("data-player-zoom-scale", "2.000");
       expect(
-        container.querySelector<HTMLElement>(
-          '[data-player-zoom-media-plane=""]',
-        )?.style.transform,
+        container.querySelector<HTMLElement>('[data-player-zoom-media-plane=""]')?.style.transform,
       ).toContain("translate3d(90px, 32.5px, 0)");
       fireEvent.touchEnd(surface, {
         changedTouches: [{ ...first, clientX: 190, clientY: 140 }],
@@ -1961,11 +1756,7 @@ describe("VideoPlayer integration", () => {
 
     try {
       const { container } = render(
-        <VideoPlayer
-          source={source}
-          engineFactory={() => engine}
-          emptyTapBehavior="responsive"
-        />,
+        <VideoPlayer source={source} engineFactory={() => engine} emptyTapBehavior="responsive" />,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
       const player = screen.getByRole("region", { name: "Video player" });
@@ -2045,11 +1836,7 @@ describe("VideoPlayer integration", () => {
     const seek = vi.spyOn(engine, "seek");
     const play = vi.spyOn(engine, "play");
     const { container } = render(
-      <VideoPlayer
-        source={source}
-        engineFactory={() => engine}
-        keyboardEnabled={false}
-      />,
+      <VideoPlayer source={source} engineFactory={() => engine} keyboardEnabled={false} />,
     );
 
     await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
@@ -2124,9 +1911,7 @@ describe("VideoPlayer integration", () => {
       expect(player).not.toHaveClass("touch-none");
       expect(gestureSurface).toHaveClass("touch-pan-y");
       expect(gestureSurface).not.toHaveClass("touch-none");
-      expect(screen.getByRole("button", { name: "Play video" })).toHaveClass(
-        "hidden",
-      );
+      expect(screen.getByRole("button", { name: "Play video" })).toHaveClass("hidden");
     } finally {
       restoreMatchMedia();
     }
@@ -2146,9 +1931,7 @@ describe("VideoPlayer integration", () => {
     const engine = new FakeVideoEngine();
 
     try {
-      const { container } = render(
-        <VideoPlayer source={source} engineFactory={() => engine} />,
-      );
+      const { container } = render(<VideoPlayer source={source} engineFactory={() => engine} />);
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
 
       const shell = container.querySelector<HTMLElement>(".video-shell");
@@ -2182,11 +1965,7 @@ describe("VideoPlayer integration", () => {
     } finally {
       viewport.restore();
       if (originalFullscreenElement) {
-        Object.defineProperty(
-          document,
-          "fullscreenElement",
-          originalFullscreenElement,
-        );
+        Object.defineProperty(document, "fullscreenElement", originalFullscreenElement);
       } else {
         Reflect.deleteProperty(document, "fullscreenElement");
       }
@@ -2200,11 +1979,7 @@ describe("VideoPlayer integration", () => {
 
     try {
       render(
-        <VideoPlayer
-          source={source}
-          engineFactory={() => engine}
-          emptyTapBehavior="responsive"
-        />,
+        <VideoPlayer source={source} engineFactory={() => engine} emptyTapBehavior="responsive" />,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
 
@@ -2213,9 +1988,7 @@ describe("VideoPlayer integration", () => {
         name: "Play or pause video; tap to show controls",
       });
       const playButton = screen.getByRole("button", { name: "Play" });
-      const controls = document.querySelector<HTMLElement>(
-        "[data-video-player-controls]",
-      );
+      const controls = document.querySelector<HTMLElement>("[data-video-player-controls]");
       expect(player).toHaveAttribute("data-player-mobile-interaction", "true");
       expect(surface).toHaveClass("touch-none");
       expect(surface).not.toHaveClass("touch-pan-y");
@@ -2279,11 +2052,7 @@ describe("VideoPlayer integration", () => {
 
     try {
       render(
-        <VideoPlayer
-          source={source}
-          engineFactory={() => engine}
-          emptyTapBehavior="responsive"
-        />,
+        <VideoPlayer source={source} engineFactory={() => engine} emptyTapBehavior="responsive" />,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
 
@@ -2362,11 +2131,7 @@ describe("VideoPlayer integration", () => {
 
     try {
       render(
-        <VideoPlayer
-          source={source}
-          engineFactory={() => engine}
-          emptyTapBehavior="responsive"
-        />,
+        <VideoPlayer source={source} engineFactory={() => engine} emptyTapBehavior="responsive" />,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
       await act(async () => {
@@ -2419,11 +2184,7 @@ describe("VideoPlayer integration", () => {
 
     try {
       render(
-        <VideoPlayer
-          source={source}
-          engineFactory={() => engine}
-          emptyTapBehavior="responsive"
-        />,
+        <VideoPlayer source={source} engineFactory={() => engine} emptyTapBehavior="responsive" />,
       );
       await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
       engine.emitTimeUpdate(60);
@@ -2569,9 +2330,7 @@ describe("VideoPlayer integration", () => {
         src: "/lesson-2.mp4",
       };
       rerender(renderPlayer(nextSource));
-      await waitFor(() =>
-        expect(engine.getSnapshot().source).toEqual(nextSource),
-      );
+      await waitFor(() => expect(engine.getSnapshot().source).toEqual(nextSource));
       expect(player).toHaveAttribute("data-controls-visible", "true");
       fireEvent.pointerLeave(playerPointerSurface!, { pointerType: "mouse" });
       expect(player).toHaveAttribute("data-controls-visible", "true");
@@ -2597,30 +2356,16 @@ describe("VideoPlayer integration", () => {
     const { container, rerender } = render(renderPlayer(firstSource));
     await waitFor(() => expect(engine.getSnapshot().lifecycle).toBe("ready"));
 
-    const poster = container.querySelector<HTMLElement>(
-      '[data-video-player-poster-overlay=""]',
-    );
-    const mediaPlane = container.querySelector<HTMLElement>(
-      '[data-player-zoom-media-plane=""]',
-    );
-    expect(poster).toHaveAttribute(
-      "data-video-player-poster-src",
-      "/lesson-1.webp",
-    );
+    const poster = container.querySelector<HTMLElement>('[data-video-player-poster-overlay=""]');
+    const mediaPlane = container.querySelector<HTMLElement>('[data-player-zoom-media-plane=""]');
+    expect(poster).toHaveAttribute("data-video-player-poster-src", "/lesson-1.webp");
     expect(poster?.parentElement).toBe(mediaPlane);
-    expect(mediaPlane?.parentElement).toHaveAttribute(
-      "data-player-zoom-viewport",
-      "",
-    );
+    expect(mediaPlane?.parentElement).toHaveAttribute("data-player-zoom-viewport", "");
     expect(mediaPlane?.parentElement).toHaveClass("z-0", "isolate");
     expect(container.querySelector("video")).toHaveClass("invisible");
     expect(container.querySelector("video")).not.toHaveAttribute("poster");
-    expect(screen.getByRole("button", { name: "Play video" })).toHaveClass(
-      "z-10",
-    );
-    expect(
-      container.querySelector('[data-video-player-controls=""]'),
-    ).toHaveClass("z-30");
+    expect(screen.getByRole("button", { name: "Play video" })).toHaveClass("z-10");
+    expect(container.querySelector('[data-video-player-controls=""]')).toHaveClass("z-30");
 
     await act(async () => engine.play());
     expect(
@@ -2640,12 +2385,11 @@ describe("VideoPlayer integration", () => {
       metadata: { ...source.metadata, poster: "/lesson-2.webp" },
     };
     rerender(renderPlayer(secondSource));
-    await waitFor(() =>
-      expect(engine.getSnapshot().source).toEqual(secondSource),
+    await waitFor(() => expect(engine.getSnapshot().source).toEqual(secondSource));
+    expect(container.querySelector('[data-video-player-poster-overlay=""]')).toHaveAttribute(
+      "data-video-player-poster-src",
+      "/lesson-2.webp",
     );
-    expect(
-      container.querySelector('[data-video-player-poster-overlay=""]'),
-    ).toHaveAttribute("data-video-player-poster-src", "/lesson-2.webp");
     expect(container.querySelector("video")).toHaveClass("invisible");
   });
 
@@ -2747,9 +2491,7 @@ describe("VideoPlayer integration", () => {
       "Your connection was interrupted while loading the video.",
     );
     expect(onPlayerError).toHaveBeenCalledWith(engine.getSnapshot().error);
-    expect(onEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "error" }),
-    );
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
   });
 
   it("shows an accessible close action for a closable error state", async () => {

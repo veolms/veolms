@@ -1,9 +1,7 @@
 import { useLayoutEffect, useState } from "react";
 import type { RefObject } from "react";
 
-export function useCurriculumLayoutRevision(
-  lessonListRef: RefObject<HTMLElement | null>,
-) {
+export function useCurriculumLayoutRevision(lessonListRef: RefObject<HTMLElement | null>) {
   const [revision, setRevision] = useState(0);
 
   useLayoutEffect(() => {

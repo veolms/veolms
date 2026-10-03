@@ -128,13 +128,10 @@ export function useSecondPressHold<T extends HTMLElement>({
 
   const onPointerMove: PointerEventHandler<T> = useCallback((event) => {
     const pointer = secondPointerRef.current;
-    if (!pointer || pointer.pointerId !== event.pointerId || pointer.completed)
-      return;
+    if (!pointer || pointer.pointerId !== event.pointerId || pointer.completed) return;
     if (
-      Math.hypot(
-        event.clientX - pointer.startX,
-        event.clientY - pointer.startY,
-      ) <= optionsRef.current.moveTolerance
+      Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) <=
+      optionsRef.current.moveTolerance
     ) {
       return;
     }
@@ -183,10 +180,8 @@ export function useSecondPressHold<T extends HTMLElement>({
   );
 
   const onClick: MouseEventHandler<T> = useCallback((event) => {
-    const {
-      deferFirstPress: deferFirstPressOption,
-      secondPressWindow: secondPressWindowOption,
-    } = optionsRef.current;
+    const { deferFirstPress: deferFirstPressOption, secondPressWindow: secondPressWindowOption } =
+      optionsRef.current;
     if (event.detail === 0) {
       disarm();
       callbacksRef.current.onPress?.();
@@ -229,14 +224,7 @@ export function useSecondPressHold<T extends HTMLElement>({
       onPointerMove,
       onPointerUp,
     }),
-    [
-      onClick,
-      onLostPointerCapture,
-      onPointerCancel,
-      onPointerDown,
-      onPointerMove,
-      onPointerUp,
-    ],
+    [onClick, onLostPointerCapture, onPointerCancel, onPointerDown, onPointerMove, onPointerUp],
   );
 
   return {

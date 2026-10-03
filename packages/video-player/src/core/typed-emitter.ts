@@ -1,10 +1,7 @@
 export type TypedEventListener<Event> = (event: Event) => void;
 
 export class TypedEventEmitter<Events extends object> {
-  readonly #listeners = new Map<
-    keyof Events,
-    Set<TypedEventListener<Events[keyof Events]>>
-  >();
+  readonly #listeners = new Map<keyof Events, Set<TypedEventListener<Events[keyof Events]>>>();
 
   on<Type extends keyof Events>(
     type: Type,
@@ -17,9 +14,7 @@ export class TypedEventEmitter<Events extends object> {
       this.#listeners.set(type, listeners);
     }
 
-    const normalizedListener = listener as TypedEventListener<
-      Events[keyof Events]
-    >;
+    const normalizedListener = listener as TypedEventListener<Events[keyof Events]>;
     listeners.add(normalizedListener);
 
     return () => {
@@ -39,10 +34,7 @@ export class TypedEventEmitter<Events extends object> {
     return unsubscribe;
   }
 
-  off<Type extends keyof Events>(
-    type: Type,
-    listener: TypedEventListener<Events[Type]>,
-  ): void {
+  off<Type extends keyof Events>(type: Type, listener: TypedEventListener<Events[Type]>): void {
     const listeners = this.#listeners.get(type);
     if (!listeners) {
       return;

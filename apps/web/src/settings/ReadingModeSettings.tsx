@@ -21,11 +21,7 @@ import {
   READING_MODE_COLOR_LABELS,
   READING_MODE_COLOR_OPTIONS,
 } from "../reading-mode/readingModeUi";
-import {
-  clickContainedSettingsToggle,
-  SettingRow,
-  SettingsToggle,
-} from "./SettingsControls";
+import { clickContainedSettingsToggle, SettingRow, SettingsToggle } from "./SettingsControls";
 
 type ReadingModePreviewStyle = CSSProperties & {
   "--reading-mode-preview-texture-opacity": string;
@@ -41,13 +37,7 @@ interface ReadingModeRangeProps {
   onChange: (value: number) => void;
 }
 
-function ReadingModeRange({
-  id,
-  label,
-  value,
-  kind,
-  onChange,
-}: ReadingModeRangeProps) {
+function ReadingModeRange({ id, label, value, kind, onChange }: ReadingModeRangeProps) {
   const valueText =
     kind === "temperature"
       ? getReadingModeTemperatureLabel(value)
@@ -65,9 +55,7 @@ function ReadingModeRange({
               ? "Paper grain"
               : "Grain scale"}
         </span>
-        <output htmlFor={id}>
-          {kind === "temperature" ? valueText : `${value}%`}
-        </output>
+        <output htmlFor={id}>{kind === "temperature" ? valueText : `${value}%`}</output>
       </div>
       <AppSlider
         id={id}
@@ -105,18 +93,12 @@ function ReadingModeRange({
   );
 }
 
-function ReadingModePreview({
-  preferences,
-}: {
-  preferences: ReadingModePreferences;
-}) {
+function ReadingModePreview({ preferences }: { preferences: ReadingModePreferences }) {
   const visuals = getReadingModeVisuals(preferences);
   const style = {
-    "--reading-mode-preview-texture-opacity":
-      visuals.textureOpacityDark.toFixed(5),
+    "--reading-mode-preview-texture-opacity": visuals.textureOpacityDark.toFixed(5),
     "--reading-mode-preview-temperature-color": visuals.temperatureColor,
-    "--reading-mode-preview-temperature-opacity":
-      visuals.temperatureOpacity.toFixed(5),
+    "--reading-mode-preview-temperature-opacity": visuals.temperatureOpacity.toFixed(5),
   } as ReadingModePreviewStyle;
 
   return (
@@ -132,10 +114,7 @@ function ReadingModePreview({
         role="img"
         aria-label={`Reading mode preview: ${getReadingModeTemperatureLabel(preferences.colorTemperature)}, ${preferences.texture}% texture, ${preferences.textureGrainSize}% grain size, ${READING_MODE_COLOR_LABELS[preferences.colors]}`}
       >
-        <div
-          className="settings-reading-mode__preview-scene"
-          aria-hidden="true"
-        >
+        <div className="settings-reading-mode__preview-scene" aria-hidden="true">
           <span className="settings-reading-mode__preview-rail">
             <i />
             <i />
@@ -152,18 +131,10 @@ function ReadingModePreview({
             </span>
           </span>
         </div>
-        <span
-          className="settings-reading-mode__preview-texture"
-          aria-hidden="true"
-        />
-        <span
-          className="settings-reading-mode__preview-temperature"
-          aria-hidden="true"
-        />
+        <span className="settings-reading-mode__preview-texture" aria-hidden="true" />
+        <span className="settings-reading-mode__preview-temperature" aria-hidden="true" />
       </div>
-      <p>
-        Tune the preview first, then enable reading mode when it feels right.
-      </p>
+      <p>Tune the preview first, then enable reading mode when it feels right.</p>
     </div>
   );
 }
@@ -190,9 +161,7 @@ export function ReadingModeSettings() {
   }, []);
 
   const updatePreferences = (updates: Partial<ReadingModePreferences>) => {
-    setPreferences(
-      persistReadingModePreferences({ ...preferences, ...updates }),
-    );
+    setPreferences(persistReadingModePreferences({ ...preferences, ...updates }));
   };
   const restoreDefaults = () => {
     setPreferences(
@@ -211,10 +180,7 @@ export function ReadingModeSettings() {
 
   return (
     <section className="settings-section settings-reading-mode">
-      <div
-        className="settings-reading-mode__heading"
-        onClick={clickContainedSettingsToggle}
-      >
+      <div className="settings-reading-mode__heading" onClick={clickContainedSettingsToggle}>
         <div>
           <h2>Reading mode</h2>
           <p>Shift the display tone and tune a paper-like grain.</p>
@@ -251,9 +217,7 @@ export function ReadingModeSettings() {
             label="Color temperature"
             value={preferences.colorTemperature}
             kind="temperature"
-            onChange={(colorTemperature) =>
-              updatePreferences({ colorTemperature })
-            }
+            onChange={(colorTemperature) => updatePreferences({ colorTemperature })}
           />
         </SettingRow>
         <SettingRow
@@ -281,9 +245,7 @@ export function ReadingModeSettings() {
             label="Grain size"
             value={preferences.textureGrainSize}
             kind="grain-size"
-            onChange={(textureGrainSize) =>
-              updatePreferences({ textureGrainSize })
-            }
+            onChange={(textureGrainSize) => updatePreferences({ textureGrainSize })}
           />
         </SettingRow>
       </div>

@@ -5,20 +5,12 @@ export interface AttachmentDimensionFields {
   height: number | null;
 }
 
-export function getAttachmentDimensionFields(
-  metadata: unknown,
-): AttachmentDimensionFields {
+export function getAttachmentDimensionFields(metadata: unknown): AttachmentDimensionFields {
   const parsed =
-    typeof metadata === "string"
-      ? parseMetadata(metadata)
-      : isRecord(metadata)
-        ? metadata
-        : null;
+    typeof metadata === "string" ? parseMetadata(metadata) : isRecord(metadata) ? metadata : null;
   const width = readDimension(parsed?.width);
   const height = readDimension(parsed?.height);
-  return width !== null && height !== null
-    ? { width, height }
-    : { width: null, height: null };
+  return width !== null && height !== null ? { width, height } : { width: null, height: null };
 }
 
 function parseMetadata(value: string): Record<string, unknown> | null {

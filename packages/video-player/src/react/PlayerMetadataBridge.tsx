@@ -2,30 +2,19 @@ import { useEffect, type RefObject } from "react";
 import type { ChapterInput } from "../chapters/chapterTypes";
 import { resolveChapters } from "../chapters/resolveChapters";
 import { parseStoryboard } from "../storyboard/parseStoryboard";
-import type {
-  StoryboardFrame,
-  StoryboardTrack,
-} from "../storyboard/storyboardTypes";
-import type {
-  VideoNetworkRequest,
-  VideoNetworkResponse,
-  VideoSource,
-} from "../core/types";
+import type { StoryboardFrame, StoryboardTrack } from "../storyboard/storyboardTypes";
+import type { VideoNetworkRequest, VideoNetworkResponse, VideoSource } from "../core/types";
 import { usePlayerController } from "./context";
 import { useDuration, usePlayerState } from "./usePlayerState";
 
-export type StoryboardSource =
-  string | readonly StoryboardFrame[] | StoryboardTrack;
+export type StoryboardSource = string | readonly StoryboardFrame[] | StoryboardTrack;
 
 export interface StoryboardLoaderContext {
   signal: AbortSignal;
   source: VideoSource | null;
 }
 
-export type StoryboardLoader = (
-  url: string,
-  context: StoryboardLoaderContext,
-) => Promise<string>;
+export type StoryboardLoader = (url: string, context: StoryboardLoaderContext) => Promise<string>;
 
 export interface PlayerMetadataBridgeProps {
   chapters?: readonly ChapterInput[];
@@ -69,10 +58,7 @@ function responseHeaders(response: Response): Record<string, string> {
   return headers;
 }
 
-export const defaultStoryboardLoader: StoryboardLoader = async (
-  url,
-  { signal, source },
-) => {
+export const defaultStoryboardLoader: StoryboardLoader = async (url, { signal, source }) => {
   const request: VideoNetworkRequest = {
     type: "thumbnail",
     uris: [url],
@@ -137,9 +123,7 @@ export function PlayerMetadataBridge({
     }
     if (typeof storyboard !== "string") {
       controller.setStoryboard(
-        Array.isArray(storyboard)
-          ? storyboard
-          : (storyboard as StoryboardTrack).frames,
+        Array.isArray(storyboard) ? storyboard : (storyboard as StoryboardTrack).frames,
       );
       return undefined;
     }
@@ -153,9 +137,7 @@ export function PlayerMetadataBridge({
     })
       .then((vtt) => {
         if (abortController.signal.aborted) return;
-        controller.setStoryboard(
-          resolveStoryboardImageUrls(parseStoryboard(vtt), storyboardUrl),
-        );
+        controller.setStoryboard(resolveStoryboardImageUrls(parseStoryboard(vtt), storyboardUrl));
       })
       .catch((error: unknown) => {
         if (abortController.signal.aborted) return;

@@ -1,9 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { DiscussionUploadService } from "./discussion-upload.service.ts";
 
-export function createDiscussionUploadController(
-  service: DiscussionUploadService,
-) {
+export function createDiscussionUploadController(service: DiscussionUploadService) {
   return {
     async upload(request: FastifyRequest, reply: FastifyReply) {
       try {
@@ -19,15 +17,12 @@ export function createDiscussionUploadController(
 
         return await service.save(file);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "DISCUSSION_UPLOAD_FAILED";
-        const statusCode =
-          message === "DISCUSSION_UPLOAD_TOO_LARGE" ? 413 : 415;
+        const message = error instanceof Error ? error.message : "DISCUSSION_UPLOAD_FAILED";
+        const statusCode = message === "DISCUSSION_UPLOAD_TOO_LARGE" ? 413 : 415;
         return reply.code(statusCode).send({
           success: false,
           statusCode,
-          error:
-            statusCode === 413 ? "Payload Too Large" : "Unsupported Media Type",
+          error: statusCode === 413 ? "Payload Too Large" : "Unsupported Media Type",
           message:
             statusCode === 413
               ? "The selected file is too large."
@@ -36,10 +31,7 @@ export function createDiscussionUploadController(
       }
     },
 
-    async read(
-      request: FastifyRequest<{ Params: { fileName: string } }>,
-      reply: FastifyReply,
-    ) {
+    async read(request: FastifyRequest<{ Params: { fileName: string } }>, reply: FastifyReply) {
       const file = await service.get(request.params.fileName);
       if (!file) {
         return reply.code(404).send({

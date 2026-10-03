@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ADMIN_ROLE, INSTRUCTOR_ROLE, STUDENT_ROLE } from "./auth.constants.ts";
-import {
-  isMfaMandatoryAccount,
-  sessionNeedsMfaChallenge,
-} from "./mfa-policy.ts";
+import { isMfaMandatoryAccount, sessionNeedsMfaChallenge } from "./mfa-policy.ts";
 
 describe("MFA Policy", () => {
   describe("isMfaMandatoryAccount", () => {
@@ -21,19 +18,10 @@ describe("MFA Policy", () => {
     });
 
     it("should skip MFA for admins when skipAdminMfa is true", () => {
-      assert.equal(
-        isMfaMandatoryAccount(false, [ADMIN_ROLE], { skipAdminMfa: true }),
-        false,
-      );
-      assert.equal(
-        isMfaMandatoryAccount(true, [ADMIN_ROLE], { skipAdminMfa: true }),
-        false,
-      );
+      assert.equal(isMfaMandatoryAccount(false, [ADMIN_ROLE], { skipAdminMfa: true }), false);
+      assert.equal(isMfaMandatoryAccount(true, [ADMIN_ROLE], { skipAdminMfa: true }), false);
       // Other mandatory roles like instructor must still require MFA
-      assert.equal(
-        isMfaMandatoryAccount(false, [INSTRUCTOR_ROLE], { skipAdminMfa: true }),
-        true,
-      );
+      assert.equal(isMfaMandatoryAccount(false, [INSTRUCTOR_ROLE], { skipAdminMfa: true }), true);
     });
   });
 

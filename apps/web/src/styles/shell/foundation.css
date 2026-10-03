@@ -51,8 +51,8 @@
   --application-page-block-end: 28px;
   min-height: calc(100vh - 22px);
   border-radius: 18px;
-  padding: var(--application-page-block-start)
-    var(--application-page-inline-gutter) var(--application-page-block-end);
+  padding: var(--application-page-block-start) var(--application-page-inline-gutter)
+    var(--application-page-block-end);
   background: var(--main-surface);
   box-shadow: var(--application-frame-shadow, var(--card-shadow));
 }
@@ -84,9 +84,7 @@
   .courses-main {
     --application-page-block-start: 20px;
     --application-page-inline-gutter: 15px;
-    --application-page-block-end: calc(
-      104px + var(--app-viewport-safe-area-max-bottom)
-    );
+    --application-page-block-end: calc(104px + var(--app-viewport-safe-area-max-bottom));
   }
 }
 
@@ -133,8 +131,7 @@
     --page-tabs-sticky-top: calc(-1 * var(--student-surface-block-start, 0px));
   }
 
-  :root[data-content-layout="framed"]:not([data-scrollbar-style="default"])
-    .courses-main {
+  :root[data-content-layout="framed"]:not([data-scrollbar-style="default"]) .courses-main {
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
@@ -155,15 +152,13 @@
   }
 
   :root[data-content-layout="framed"] .courses-app--collapsed,
-  :root[data-content-layout="framed"][data-sidebar-state="collapsed"]
-    .courses-app,
+  :root[data-content-layout="framed"][data-sidebar-state="collapsed"] .courses-app,
   :root[data-content-layout="framed"] .courses-app--resizing {
     --main-surface-inline-start: var(--sidebar-resize-preview-width, 76px);
   }
 
   :root[data-content-layout="framed"] .courses-app--hidden,
-  :root[data-content-layout="framed"][data-sidebar-state="hidden"]
-    .courses-app {
+  :root[data-content-layout="framed"][data-sidebar-state="hidden"] .courses-app {
     --main-surface-inline-start: 14px;
   }
 
@@ -177,10 +172,7 @@
     left: var(--main-surface-inline-start);
     border-radius: 18px;
     pointer-events: none;
-    box-shadow: var(
-      --application-frame-edge-shadow,
-      var(--surface-depth-edge-shadow, none)
-    );
+    box-shadow: var(--application-frame-edge-shadow, var(--surface-depth-edge-shadow, none));
   }
 }
 
@@ -243,10 +235,7 @@
   width: var(--scrollbar-thumb-size, 6px);
   height: var(--floating-scrollbar-thumb-height, 40px);
   border-radius: 999px;
-  background: var(
-    --scrollbar-thumb-color,
-    color-mix(in srgb, var(--accent) 96%, transparent)
-  );
+  background: var(--scrollbar-thumb-color, color-mix(in srgb, var(--accent) 96%, transparent));
   transform: translate3d(0, var(--floating-scrollbar-thumb-offset, 0), 0);
   transition: background-color 150ms ease-out;
 }
@@ -259,10 +248,7 @@
     )
     + .floating-scrollbar--learning-page {
     --learning-scrollbar-edge-offset: var(--scrollbar-thumb-size, 6px);
-    right: calc(
-      var(--floating-scrollbar-right, 0px) -
-        var(--learning-scrollbar-edge-offset)
-    );
+    right: calc(var(--floating-scrollbar-right, 0px) - var(--learning-scrollbar-edge-offset));
     width: var(--scrollbar-thumb-size, 6px);
     background: color-mix(in srgb, var(--accent) 36%, transparent);
     box-shadow: none;
@@ -272,10 +258,7 @@
 .floating-scrollbar:hover .floating-scrollbar__thumb,
 .floating-scrollbar.is-dragging .floating-scrollbar__thumb,
 .floating-scrollbar.is-resizing .floating-scrollbar__thumb {
-  background: var(
-    --scrollbar-thumb-hover-color,
-    var(--accent-hover, var(--accent))
-  );
+  background: var(--scrollbar-thumb-hover-color, var(--accent-hover, var(--accent)));
 }
 
 .floating-scrollbar:focus-visible {
@@ -291,9 +274,7 @@
 :root[data-scrollbar-style="default"] .floating-scrollbar,
 :root[data-hide-scrollbars="true"] .floating-scrollbar,
 :root:not([data-content-layout="framed"])
-  .floating-scrollbar:not(.floating-scrollbar--learning-page):not(
-    .floating-scrollbar--curriculum
-  ),
+  .floating-scrollbar:not(.floating-scrollbar--learning-page):not(.floating-scrollbar--curriculum),
 :root[data-lesson-page-scrollbar="hidden"] .floating-scrollbar--learning-page,
 :root[data-curriculum-scrollbar="hidden"] .floating-scrollbar--curriculum {
   display: none;
@@ -320,11 +301,7 @@
 }
 
 :root {
-  --sidebar-toggle-surface: color-mix(
-    in srgb,
-    var(--accent) 28%,
-    var(--surface)
-  );
+  --sidebar-toggle-surface: color-mix(in srgb, var(--accent) 28%, var(--surface));
   --sidebar-toggle-ink: color-mix(in srgb, var(--accent) 22%, var(--text));
 }
 
@@ -360,8 +337,7 @@
   border-color: transparent;
   color: var(--text);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
-  box-shadow: 0 8px 22px
-    color-mix(in srgb, var(--accent-shadow) 48%, transparent);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--accent-shadow) 48%, transparent);
 }
 
 .sidebar-resize-handle {

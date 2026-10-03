@@ -15,17 +15,10 @@ export const clampLearningCurriculumWidth = (value: number) =>
 
 export const applyLearningShellToDocument = (state: LearningShellState) => {
   const root = document.documentElement;
-  const width = state.curriculumCollapsed
-    ? CURRICULUM_COLLAPSED_WIDTH
-    : state.curriculumWidth;
-  root.dataset.learningCurriculumState = state.curriculumCollapsed
-    ? "collapsed"
-    : "expanded";
+  const width = state.curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : state.curriculumWidth;
+  root.dataset.learningCurriculumState = state.curriculumCollapsed ? "collapsed" : "expanded";
   root.style.setProperty("--learning-curriculum-width", `${width}px`);
-  root.style.setProperty(
-    "--learning-curriculum-expanded-width",
-    `${state.curriculumWidth}px`,
-  );
+  root.style.setProperty("--learning-curriculum-expanded-width", `${state.curriculumWidth}px`);
   window.__VEO_BOOTSTRAP__ = {
     ...window.__VEO_BOOTSTRAP__,
     learning: state,
@@ -48,26 +41,18 @@ export const getInitialLearningShellState = (): LearningShellState => {
   ) {
     return {
       curriculumCollapsed: bootstrapState.curriculumCollapsed,
-      curriculumWidth: clampLearningCurriculumWidth(
-        bootstrapState.curriculumWidth,
-      ),
+      curriculumWidth: clampLearningCurriculumWidth(bootstrapState.curriculumWidth),
     };
   }
 
   try {
-    const storedWidth = window.localStorage.getItem(
-      CURRICULUM_WIDTH_STORAGE_KEY,
-    );
+    const storedWidth = window.localStorage.getItem(CURRICULUM_WIDTH_STORAGE_KEY);
     const parsedWidth = Number(storedWidth);
 
     return {
-      curriculumCollapsed:
-        window.localStorage.getItem(CURRICULUM_COLLAPSED_STORAGE_KEY) ===
-        "true",
+      curriculumCollapsed: window.localStorage.getItem(CURRICULUM_COLLAPSED_STORAGE_KEY) === "true",
       curriculumWidth:
-        storedWidth !== null &&
-        storedWidth.trim() !== "" &&
-        Number.isFinite(parsedWidth)
+        storedWidth !== null && storedWidth.trim() !== "" && Number.isFinite(parsedWidth)
           ? clampLearningCurriculumWidth(parsedWidth)
           : CURRICULUM_DEFAULT_WIDTH,
     };

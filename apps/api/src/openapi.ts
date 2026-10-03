@@ -53,8 +53,7 @@ const OPENAPI_TAGS = [
   },
   {
     name: "Course Bin",
-    description:
-      "Administrator-only recovery and retention management for deleted courses.",
+    description: "Administrator-only recovery and retention management for deleted courses.",
   },
 ];
 
@@ -95,9 +94,7 @@ function documentedServers(): OpenAPIV3_1.ServerObject[] {
  * components the document never references, following `$ref`s transitively so
  * nested contracts survive.
  */
-function pruneUnreferencedComponents(
-  document: OpenAPIV3_1.Document,
-): OpenAPIV3_1.Document {
+function pruneUnreferencedComponents(document: OpenAPIV3_1.Document): OpenAPIV3_1.Document {
   const schemas = document.components?.schemas;
 
   if (!schemas) {
@@ -143,17 +140,13 @@ function pruneUnreferencedComponents(
     ...document,
     components: {
       ...document.components,
-      schemas: Object.fromEntries(
-        Object.entries(schemas).filter(([name]) => referenced.has(name)),
-      ),
+      schemas: Object.fromEntries(Object.entries(schemas).filter(([name]) => referenced.has(name))),
     },
   };
 }
 
 const transformObject: SwaggerTransformObject = (documentObject) =>
-  pruneUnreferencedComponents(
-    jsonSchemaTransformObject(documentObject) as OpenAPIV3_1.Document,
-  );
+  pruneUnreferencedComponents(jsonSchemaTransformObject(documentObject) as OpenAPIV3_1.Document);
 
 /**
  * Wires OpenAPI generation onto the root instance.

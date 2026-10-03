@@ -1,9 +1,5 @@
 import type { FastifyBaseLogger } from "fastify";
-import type {
-  ISmsProvider,
-  SendOtpOptions,
-  SmsProviderResult,
-} from "../sms-provider.interface.ts";
+import type { ISmsProvider, SendOtpOptions, SmsProviderResult } from "../sms-provider.interface.ts";
 
 export interface Msg91ProviderConfig {
   authKey?: string | undefined;
@@ -59,9 +55,7 @@ export class Msg91Provider implements ISmsProvider {
     options?: SendOtpOptions,
   ): Promise<SmsProviderResult> {
     if (!this.config.authKey || !this.config.templateId) {
-      throw new Error(
-        "MSG91 credentials (authKey, templateId) are not configured",
-      );
+      throw new Error("MSG91 credentials (authKey, templateId) are not configured");
     }
 
     const formattedMobile = formatPhoneForMsg91(phoneNo);
@@ -116,22 +110,14 @@ export class Msg91Provider implements ISmsProvider {
     }
 
     if (json && json.type === "error") {
-      const errorMsg =
-        typeof json.message === "string" ? json.message : JSON.stringify(json);
-      this.log?.error(
-        { json, to: formattedMobile },
-        "MSG91 responded with error status",
-      );
+      const errorMsg = typeof json.message === "string" ? json.message : JSON.stringify(json);
+      this.log?.error({ json, to: formattedMobile }, "MSG91 responded with error status");
       throw new Error(`MSG91 rejected delivery: ${errorMsg}`);
     }
 
-    const messageId =
-      json && typeof json.message === "string" ? json.message : undefined;
+    const messageId = json && typeof json.message === "string" ? json.message : undefined;
 
-    this.log?.info(
-      { to: formattedMobile, messageId },
-      "MSG91 OTP dispatched successfully",
-    );
+    this.log?.info({ to: formattedMobile, messageId }, "MSG91 OTP dispatched successfully");
 
     return {
       provider: this.name,

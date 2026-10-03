@@ -27,9 +27,7 @@ export const OrderSummaryCards = memo(function OrderSummaryCards({
     {
       id: "total-earnings",
       title: "Total Earnings",
-      value: stats
-        ? formatCurrency(stats.totalEarnings ?? 0, stats.currency)
-        : "₹0",
+      value: stats ? formatCurrency(stats.totalEarnings ?? 0, stats.currency) : "₹0",
       icon: <Wallet size={16} weight="bold" />,
       iconBg: "bg-amber-500/15 text-amber-400",
     },
@@ -50,9 +48,7 @@ export const OrderSummaryCards = memo(function OrderSummaryCards({
     {
       id: "refunded-amount",
       title: "Refunded Amount",
-      value: stats
-        ? formatCurrency(stats.refundedAmount, stats.currency)
-        : "₹0",
+      value: stats ? formatCurrency(stats.refundedAmount, stats.currency) : "₹0",
       icon: <ArrowCounterClockwise size={16} weight="bold" />,
       iconBg: "bg-rose-500/15 text-rose-400",
     },
@@ -66,15 +62,15 @@ export const OrderSummaryCards = memo(function OrderSummaryCards({
       {cards.map((card) => (
         <article
           key={card.id}
-          className="rounded-[12px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-2.5 sm:p-5 transition-all duration-200 hover:shadow-(--card-hover-shadow)"
+          className="rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface)) p-2.5 transition-all duration-200 hover:shadow-(--card-hover-shadow) sm:rounded-[16px] sm:p-5"
           style={{ boxShadow: "var(--card-shadow)" }}
         >
           <div className="flex items-center justify-between gap-1 sm:gap-2">
-            <p className="text-[0.68rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+            <p className="truncate text-[0.68rem] font-semibold tracking-wide text-(--muted) sm:text-xs">
               {card.title}
             </p>
             <span
-              className={`flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg ${card.iconBg}`}
+              className={`flex size-6 shrink-0 items-center justify-center rounded-lg sm:size-7 ${card.iconBg}`}
               aria-hidden="true"
             >
               {card.icon}
@@ -83,7 +79,7 @@ export const OrderSummaryCards = memo(function OrderSummaryCards({
           {isLoading ? (
             <div className="mt-2 h-6 w-16 animate-pulse rounded-md bg-(--border)" />
           ) : (
-            <p className="mt-1 sm:mt-2.5 text-lg sm:text-[1.75rem] font-bold tracking-tight text-(--text)">
+            <p className="mt-1 text-lg font-bold tracking-tight text-(--text) sm:mt-2.5 sm:text-[1.75rem]">
               {card.value}
             </p>
           )}

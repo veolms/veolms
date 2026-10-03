@@ -38,10 +38,7 @@ const learningProgressRoutes: RoutePlugin = async (app, options) => {
         summary: "Get the authenticated learner's course progress",
         params: learningProgressCourseParamsSchema,
         response: {
-          200: jsonResponse(
-            "The learner's course progress.",
-            learningProgressResponseSchema,
-          ),
+          200: jsonResponse("The learner's course progress.", learningProgressResponseSchema),
           401: errorResponse("Authentication required"),
           403: errorResponse("Course access required"),
           404: errorResponse("Course not found"),
@@ -58,8 +55,7 @@ const learningProgressRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "getLearningProgressResumeContext",
         tags: ["Learning Progress"],
-        summary:
-          "Resolve the authenticated learner's resume context for one course",
+        summary: "Resolve the authenticated learner's resume context for one course",
         params: learningProgressCourseParamsSchema,
         response: {
           200: jsonResponse(

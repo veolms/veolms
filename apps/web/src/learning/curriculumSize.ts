@@ -15,12 +15,7 @@ export const CURRICULUM_SIZE_DEFAULTS: CurriculumSize = {
   lectureCount: CURRICULUM_LECTURE_COUNT_DEFAULT,
 };
 
-const normalizeCount = (
-  value: unknown,
-  minimum: number,
-  maximum: number,
-  fallback: number,
-) => {
+const normalizeCount = (value: unknown, minimum: number, maximum: number, fallback: number) => {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return fallback;
   return Math.min(maximum, Math.max(minimum, Math.round(numericValue)));

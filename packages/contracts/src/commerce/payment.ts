@@ -15,21 +15,10 @@ export const paymentStatusSchema = z.enum([
 ]);
 export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
 
-export const paymentAttemptStatusSchema = z.enum([
-  "initiated",
-  "processing",
-  "captured",
-  "failed",
-]);
+export const paymentAttemptStatusSchema = z.enum(["initiated", "processing", "captured", "failed"]);
 export type PaymentAttemptStatus = z.infer<typeof paymentAttemptStatusSchema>;
 
-export const paymentProviderSchema = z.enum([
-  "razorpay",
-  "stripe",
-  "mock",
-  "free",
-  "manual",
-]);
+export const paymentProviderSchema = z.enum(["razorpay", "stripe", "mock", "free", "manual"]);
 export type PaymentProvider = z.infer<typeof paymentProviderSchema>;
 
 export const gatewayOrderDetailsSchema = z.strictObject({
@@ -55,9 +44,7 @@ export const createCheckoutOrderResponseSchema = z.strictObject({
     .nullable()
     .optional(),
 });
-export type CreateCheckoutOrderResponse = z.infer<
-  typeof createCheckoutOrderResponseSchema
->;
+export type CreateCheckoutOrderResponse = z.infer<typeof createCheckoutOrderResponseSchema>;
 export const createPurchaseResponseSchema = createCheckoutOrderResponseSchema;
 export type CreatePurchaseResponse = CreateCheckoutOrderResponse;
 
@@ -140,15 +127,9 @@ export const saveCreatorPaymentConfigRequestSchema = z.strictObject({
   keySecret: z.string().min(1),
   webhookSecret: z.string().optional(),
 });
-export type SaveCreatorPaymentConfigRequest = z.infer<
-  typeof saveCreatorPaymentConfigRequestSchema
->;
+export type SaveCreatorPaymentConfigRequest = z.infer<typeof saveCreatorPaymentConfigRequestSchema>;
 
-export const manualPaymentStatusSchema = z.enum([
-  "pending",
-  "verified",
-  "rejected",
-]);
+export const manualPaymentStatusSchema = z.enum(["pending", "verified", "rejected"]);
 export type ManualPaymentStatus = z.infer<typeof manualPaymentStatusSchema>;
 
 export const manualPaymentRequestSchema = z.strictObject({
@@ -172,17 +153,13 @@ export const submitManualPaymentRequestSchema = z.strictObject({
   transactionReference: z.string().min(4).max(100),
   proofMediaId: z.uuid().optional(),
 });
-export type SubmitManualPaymentRequest = z.infer<
-  typeof submitManualPaymentRequestSchema
->;
+export type SubmitManualPaymentRequest = z.infer<typeof submitManualPaymentRequestSchema>;
 
 export const verifyManualPaymentRequestSchema = z.strictObject({
   action: z.enum(["verify", "reject"]),
   adminNotes: z.string().max(500).optional(),
 });
-export type VerifyManualPaymentRequest = z.infer<
-  typeof verifyManualPaymentRequestSchema
->;
+export type VerifyManualPaymentRequest = z.infer<typeof verifyManualPaymentRequestSchema>;
 
 export interface GatewayCustomerInfo {
   id: string;
@@ -255,22 +232,11 @@ export interface PaymentGateway {
   getPayment(gatewayPaymentId: string): Promise<GatewayPaymentDetails>;
   refundPayment(input: CreateGatewayRefundInput): Promise<GatewayRefundOutput>;
   fetchRefund(gatewayRefundId: string): Promise<GatewayRefundDetails>;
-  verifyWebhookSignature(
-    rawBody: string | Uint8Array,
-    signature: string,
-  ): boolean;
-  normalizeWebhookEvent(
-    rawPayload: unknown,
-    eventId?: string,
-  ): NormalizedPaymentEvent;
+  verifyWebhookSignature(rawBody: string | Uint8Array, signature: string): boolean;
+  normalizeWebhookEvent(rawPayload: unknown, eventId?: string): NormalizedPaymentEvent;
 }
 
-export const webhookEventStatusSchema = z.enum([
-  "pending",
-  "processed",
-  "failed",
-  "ignored",
-]);
+export const webhookEventStatusSchema = z.enum(["pending", "processed", "failed", "ignored"]);
 export type WebhookEventStatus = z.infer<typeof webhookEventStatusSchema>;
 
 export const webhookEventRecordSchema = z.strictObject({
@@ -293,9 +259,7 @@ export const normalizedPaymentEventTypeSchema = z.enum([
   "refund.failed",
   "ignored",
 ]);
-export type NormalizedPaymentEventType = z.infer<
-  typeof normalizedPaymentEventTypeSchema
->;
+export type NormalizedPaymentEventType = z.infer<typeof normalizedPaymentEventTypeSchema>;
 
 export const normalizedPaymentEventSchema = z.strictObject({
   eventId: z.string(),
@@ -312,6 +276,4 @@ export const normalizedPaymentEventSchema = z.strictObject({
   rawPayload: z.unknown(),
   occurredAt: z.string().or(z.date()),
 });
-export type NormalizedPaymentEvent = z.infer<
-  typeof normalizedPaymentEventSchema
->;
+export type NormalizedPaymentEvent = z.infer<typeof normalizedPaymentEventSchema>;

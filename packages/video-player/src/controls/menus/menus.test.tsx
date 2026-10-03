@@ -1,20 +1,11 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createInitialVideoEngineSnapshot } from "../../core/snapshot";
 import type { PlayerController } from "../../react/PlayerController";
 import { PlayerControllerContext } from "../../react/context";
-import {
-  createInitialPlayerUiState,
-  type PlayerSnapshot,
-} from "../../react/playerState";
+import { createInitialPlayerUiState, type PlayerSnapshot } from "../../react/playerState";
 import { PlayerInteractionModeProvider } from "../../react/PlayerInteractionMode";
 import { AudioTrackMenu } from "./AudioTrackMenu";
 import { CaptionsMenu } from "./CaptionsMenu";
@@ -59,9 +50,7 @@ describe("PopoverMenu", () => {
     expect(second).toHaveFocus();
 
     fireEvent.keyDown(second, { key: "Escape" });
-    expect(
-      screen.queryByRole("menu", { name: "Options" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Options" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
 
@@ -89,12 +78,7 @@ describe("PopoverMenu", () => {
   });
 
   it("clamps the popover to the player and scrolls inside the menu", () => {
-    const rect = (values: {
-      top: number;
-      right: number;
-      bottom: number;
-      left: number;
-    }) =>
+    const rect = (values: { top: number; right: number; bottom: number; left: number }) =>
       ({
         ...values,
         width: values.right - values.left,
@@ -156,12 +140,7 @@ describe("PopoverMenu", () => {
   it("supports controlled state without maintaining a conflicting internal value", () => {
     const onOpenChange = vi.fn();
     const { rerender } = render(
-      <PopoverMenu
-        label="Options"
-        trigger="Options"
-        open={false}
-        onOpenChange={onOpenChange}
-      >
+      <PopoverMenu label="Options" trigger="Options" open={false} onOpenChange={onOpenChange}>
         <PlayerMenuItem label="First" />
       </PopoverMenu>,
     );
@@ -171,12 +150,7 @@ describe("PopoverMenu", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
     rerender(
-      <PopoverMenu
-        label="Options"
-        trigger="Options"
-        open
-        onOpenChange={onOpenChange}
-      >
+      <PopoverMenu label="Options" trigger="Options" open onOpenChange={onOpenChange}>
         <PlayerMenuItem label="First" />
       </PopoverMenu>,
     );
@@ -218,26 +192,22 @@ describe("PopoverMenu", () => {
       const sheet = screen.getByRole("dialog", { name: "Video settings" });
       expect(sheet).toHaveAttribute("data-video-player-mobile-sheet");
       expect(sheet).toHaveClass("border-0");
-      expect(
-        sheet.style.getPropertyValue("--video-player-menu-solid-surface"),
-      ).toBe("rgb(11 11 13)");
+      expect(sheet.style.getPropertyValue("--video-player-menu-solid-surface")).toBe(
+        "rgb(11 11 13)",
+      );
       expect(
         document.querySelector("[data-video-player-mobile-sheet-drag-handle]"),
       ).not.toHaveClass("border-b");
       expect(sheet.parentElement).toBe(document.body);
       expect(sheet).toHaveClass("fixed");
       expect(trigger).toHaveAttribute("data-player-control");
-      expect(
-        screen.getByRole("menu", { name: "Video settings" }),
-      ).toBeVisible();
+      expect(screen.getByRole("menu", { name: "Video settings" })).toBeVisible();
       expect(
         screen.queryByRole("button", { name: /close video settings/i }),
       ).not.toBeInTheDocument();
       expect(document.body.style.overflow).toBe("hidden");
 
-      const backdrop = document.querySelector(
-        "[data-video-player-mobile-sheet-backdrop]",
-      )!;
+      const backdrop = document.querySelector("[data-video-player-mobile-sheet-backdrop]")!;
       fireEvent.pointerDown(backdrop);
       expect(screen.getByRole("dialog")).toBeInTheDocument();
       expect(trigger).toHaveAttribute("aria-expanded", "true");
@@ -292,16 +262,9 @@ describe("PopoverMenu", () => {
       fireEvent.click(screen.getByRole("button", { name: "Settings" }));
 
       const sheet = screen.getByRole("dialog", { name: "Video settings" });
-      const backdrop = portalTarget.querySelector(
-        '[data-video-player-mobile-sheet-backdrop=""]',
-      );
+      const backdrop = portalTarget.querySelector('[data-video-player-mobile-sheet-backdrop=""]');
       expect(sheet.parentElement).toBe(portalTarget);
-      expect(sheet).toHaveClass(
-        "absolute",
-        "w-full",
-        "mx-auto",
-        "max-w-[100dvh]",
-      );
+      expect(sheet).toHaveClass("absolute", "w-full", "mx-auto", "max-w-[100dvh]");
       expect(sheet).not.toHaveClass("fixed");
       expect(backdrop?.parentElement).toBe(portalTarget);
       expect(backdrop).toHaveClass("absolute", "pointer-events-auto");
@@ -346,9 +309,7 @@ describe("PopoverMenu", () => {
 
       const trigger = screen.getByRole("button", { name: "Settings" });
       fireEvent.click(trigger);
-      const handle = document.querySelector(
-        "[data-video-player-mobile-sheet-drag-handle]",
-      )!;
+      const handle = document.querySelector("[data-video-player-mobile-sheet-drag-handle]")!;
 
       fireEvent.pointerDown(handle, {
         pointerId: 1,
@@ -358,9 +319,9 @@ describe("PopoverMenu", () => {
         pointerId: 1,
         clientY: 190,
       });
-      expect(
-        screen.getByRole("dialog", { name: "Video settings" }),
-      ).toHaveStyle({ transform: "translate3d(0, 90px, 0)" });
+      expect(screen.getByRole("dialog", { name: "Video settings" })).toHaveStyle({
+        transform: "translate3d(0, 90px, 0)",
+      });
       fireEvent.pointerUp(handle, {
         pointerId: 1,
         clientY: 190,
@@ -381,18 +342,14 @@ describe("PopoverMenu", () => {
 describe("controller-backed player menus", () => {
   it("selects a playback speed", () => {
     const { actions } = renderWithController(<PlaybackRateMenu />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Playback speed, 1.25×" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Playback speed, 1.25×" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "3×" }));
     expect(actions.setPlaybackRate).toHaveBeenCalledWith(3);
   });
 
   it("sets a custom playback speed without closing the menu", () => {
     const { actions } = renderWithController(<PlaybackRateMenu />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Playback speed, 1.25×" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Playback speed, 1.25×" }));
 
     const slider = screen.getByRole("slider", {
       name: "Custom playback speed",
@@ -408,15 +365,11 @@ describe("controller-backed player menus", () => {
 
   it("switches between automatic and fixed quality", () => {
     const { actions } = renderWithController(<QualityMenu />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Video quality, Auto" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Video quality, Auto" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: /^720p/ }));
     expect(actions.selectQuality).toHaveBeenCalledWith("720");
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Video quality, Auto" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Video quality, Auto" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: /^Auto/ }));
     expect(actions.selectQuality).toHaveBeenCalledWith(null);
   });
@@ -429,33 +382,23 @@ describe("controller-backed player menus", () => {
       </>,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Audio track, English" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Audio track, English" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: /^Spanish/ }));
     expect(actions.selectAudioTrack).toHaveBeenCalledWith("audio-es");
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Captions, English CC" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Captions, English CC" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Off" }));
     expect(actions.selectTextTrack).toHaveBeenCalledWith(null);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Captions, English CC" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Captions, English CC" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: /^Español/ }));
     expect(actions.selectTextTrack).toHaveBeenCalledWith("text-es");
   });
 
   it("seeks to a selected chapter", () => {
     const onChapterSelect = vi.fn();
-    const { actions } = renderWithController(
-      <ChaptersMenu onChapterSelect={onChapterSelect} />,
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Chapters, Introduction" }),
-    );
+    const { actions } = renderWithController(<ChaptersMenu onChapterSelect={onChapterSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: "Chapters, Introduction" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: /^Deep dive/ }));
     expect(actions.seekTo).toHaveBeenCalledWith(60);
     expect(onChapterSelect).toHaveBeenCalledWith("deep-dive", 60);
@@ -481,25 +424,14 @@ describe("controller-backed player menus", () => {
       },
     );
 
-    expect(
-      screen.getByRole("button", { name: "Video quality, Auto" }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Audio track, Audio" }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Captions, Off" }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Chapters, Chapters" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Video quality, Auto" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Audio track, Audio" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Captions, Off" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Chapters, Chapters" })).toBeDisabled();
   });
 });
 
-function renderWithController(
-  ui: ReactNode,
-  snapshotOverrides: Partial<PlayerSnapshot> = {},
-) {
+function renderWithController(ui: ReactNode, snapshotOverrides: Partial<PlayerSnapshot> = {}) {
   const snapshot = { ...createSnapshot(), ...snapshotOverrides };
   const actions = {
     setPlaybackRate: vi.fn<(rate: number) => void>(),
@@ -515,9 +447,7 @@ function renderWithController(
   } as unknown as PlayerController;
 
   const result = render(
-    <PlayerControllerContext.Provider value={controller}>
-      {ui}
-    </PlayerControllerContext.Provider>,
+    <PlayerControllerContext.Provider value={controller}>{ui}</PlayerControllerContext.Provider>,
   );
   return { ...result, controller, actions };
 }

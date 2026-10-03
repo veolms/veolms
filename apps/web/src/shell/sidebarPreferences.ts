@@ -13,10 +13,7 @@ import {
   SIDEBAR_GLOW_SHAPE_SIZE_DEFAULT,
   SIDEBAR_HEADER_DEFAULT_VERSION,
 } from "../settings/settingsPreferences";
-import type {
-  SidebarMode,
-  SidebarPreferences,
-} from "../settings/settingsPreferences";
+import type { SidebarMode, SidebarPreferences } from "../settings/settingsPreferences";
 import {
   COMPACT_NAVIGATION_QUERY,
   getResponsiveSidebarMode,
@@ -65,25 +62,16 @@ const isSidebarMode = (value: unknown): value is SidebarMode =>
 export const clampSidebarMaxWidth = (value: unknown): number => {
   const numericValue = Number(value);
   return Number.isFinite(numericValue)
-    ? Math.min(
-        SIDEBAR_MAX_WIDTH_LIMIT,
-        Math.max(SIDEBAR_MIN_WIDTH, numericValue),
-      )
+    ? Math.min(SIDEBAR_MAX_WIDTH_LIMIT, Math.max(SIDEBAR_MIN_WIDTH, numericValue))
     : SIDEBAR_MAX_WIDTH;
 };
 
 export const clampSidebarWidth = (
   value: number | string,
   maxWidth: unknown = SIDEBAR_MAX_WIDTH,
-): number =>
-  Math.min(
-    clampSidebarMaxWidth(maxWidth),
-    Math.max(SIDEBAR_MIN_WIDTH, Number(value)),
-  );
+): number => Math.min(clampSidebarMaxWidth(maxWidth), Math.max(SIDEBAR_MIN_WIDTH, Number(value)));
 
-export const getInitialSidebarWidth = (
-  maxWidth: unknown = SIDEBAR_MAX_WIDTH,
-): number => {
+export const getInitialSidebarWidth = (maxWidth: unknown = SIDEBAR_MAX_WIDTH): number => {
   if (typeof window === "undefined") return SIDEBAR_DEFAULT_WIDTH;
 
   const rawSavedWidth = localStorage.getItem("veolms-sidebar-width");
@@ -123,9 +111,7 @@ const getStoredSidebarMaxWidth = (): number => {
   }
 
   try {
-    const stored: unknown = JSON.parse(
-      localStorage.getItem("veolms-sidebar-preferences") || "{}",
-    );
+    const stored: unknown = JSON.parse(localStorage.getItem("veolms-sidebar-preferences") || "{}");
     return clampSidebarMaxWidth(
       stored && typeof stored === "object"
         ? (stored as Record<string, unknown>).sidebarMaxWidth
@@ -165,9 +151,7 @@ export const getInitialSidebarShellState = (): SidebarShellState => {
   // already applied the same value to the document, so preserve that geometry
   // before consulting storage or falling back to the default width.
   const root = document.documentElement;
-  const rootWidth = Number.parseFloat(
-    root.style.getPropertyValue("--sidebar-width"),
-  );
+  const rootWidth = Number.parseFloat(root.style.getPropertyValue("--sidebar-width"));
   if (Number.isFinite(rootWidth) && isSidebarMode(root.dataset.sidebarState)) {
     return {
       mode: root.dataset.sidebarState,
@@ -214,13 +198,9 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
   if (typeof window === "undefined") return fallback;
 
   try {
-    const saved: unknown = JSON.parse(
-      localStorage.getItem("veolms-sidebar-preferences") || "{}",
-    );
+    const saved: unknown = JSON.parse(localStorage.getItem("veolms-sidebar-preferences") || "{}");
     const storedPreferences =
-      saved && typeof saved === "object"
-        ? (saved as Record<string, unknown>)
-        : {};
+      saved && typeof saved === "object" ? (saved as Record<string, unknown>) : {};
     const preferences = {
       ...fallback,
       ...storedPreferences,
@@ -234,49 +214,30 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
     // missing preference to the new fallback.
     const needsHeaderDefaultMigration =
       !hasCurrentHeaderDefault && storedPreferences.headerLayout === undefined;
-    preferences.headerLayout =
-      storedPreferences.headerLayout === "fixed" ? "fixed" : "inline";
-    preferences.glowPalette = normalizeSidebarGlow(
-      storedPreferences.glowPalette,
-    );
-    preferences.glowShape = normalizeSidebarGlowShape(
-      storedPreferences.glowShape,
-    );
-    preferences.glowShapeSize = normalizeSidebarGlowShapeSize(
-      storedPreferences.glowShapeSize,
-    );
+    preferences.headerLayout = storedPreferences.headerLayout === "fixed" ? "fixed" : "inline";
+    preferences.glowPalette = normalizeSidebarGlow(storedPreferences.glowPalette);
+    preferences.glowShape = normalizeSidebarGlowShape(storedPreferences.glowShape);
+    preferences.glowShapeSize = normalizeSidebarGlowShapeSize(storedPreferences.glowShapeSize);
     preferences.glowBlur = normalizeSidebarGlowBlur(storedPreferences.glowBlur);
-    preferences.glowIntensity = normalizeSidebarGlowIntensity(
-      storedPreferences.glowIntensity,
-    );
+    preferences.glowIntensity = normalizeSidebarGlowIntensity(storedPreferences.glowIntensity);
     preferences.elevateMenus =
       typeof storedPreferences.elevateMenus === "boolean"
         ? storedPreferences.elevateMenus
         : typeof storedPreferences.alwaysElevateMenus === "boolean"
           ? storedPreferences.alwaysElevateMenus
           : true;
-    preferences.showSidebarOnMobile =
-      storedPreferences.showSidebarOnMobile === true;
+    preferences.showSidebarOnMobile = storedPreferences.showSidebarOnMobile === true;
     delete preferences.alwaysElevateMenus;
     const hasCurrentDockDefault =
-      localStorage.getItem("veolms-sidebar-dock-default-version") ===
-      SIDEBAR_DOCK_DEFAULT_VERSION;
+      localStorage.getItem("veolms-sidebar-dock-default-version") === SIDEBAR_DOCK_DEFAULT_VERSION;
     preferences.dockItems = [...SIDEBAR_DOCK_DEFAULT_ITEMS];
     preferences.dockOrder = [...SIDEBAR_DOCK_DEFAULT_ORDER];
     const needsStructureMigration =
       storedPreferences.headerLayout !== preferences.headerLayout ||
-      JSON.stringify(storedPreferences.dockItems) !==
-        JSON.stringify(preferences.dockItems) ||
-      JSON.stringify(storedPreferences.dockOrder) !==
-        JSON.stringify(preferences.dockOrder) ||
-      Object.prototype.hasOwnProperty.call(
-        storedPreferences,
-        "showThemeIcon",
-      ) ||
-      Object.prototype.hasOwnProperty.call(
-        storedPreferences,
-        "alwaysElevateMenus",
-      ) ||
+      JSON.stringify(storedPreferences.dockItems) !== JSON.stringify(preferences.dockItems) ||
+      JSON.stringify(storedPreferences.dockOrder) !== JSON.stringify(preferences.dockOrder) ||
+      Object.prototype.hasOwnProperty.call(storedPreferences, "showThemeIcon") ||
+      Object.prototype.hasOwnProperty.call(storedPreferences, "alwaysElevateMenus") ||
       storedPreferences.showSidebarOnMobile !== preferences.showSidebarOnMobile;
     delete preferences.showThemeIcon;
     const hasCurrentMaxWidthDefault =
@@ -289,8 +250,7 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
     }
 
     const hasCurrentIconDefault =
-      localStorage.getItem("veolms-sidebar-icon-default-version") ===
-      SIDEBAR_ICON_DEFAULT_VERSION;
+      localStorage.getItem("veolms-sidebar-icon-default-version") === SIDEBAR_ICON_DEFAULT_VERSION;
     const needsIconMigration = !hasCurrentIconDefault;
     if (needsIconMigration) {
       preferences.iconStyle = "monochrome";
@@ -304,10 +264,7 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
       !hasCurrentDockDefault ||
       !hasCurrentHeaderDefault
     ) {
-      localStorage.setItem(
-        "veolms-sidebar-preferences",
-        JSON.stringify(preferences),
-      );
+      localStorage.setItem("veolms-sidebar-preferences", JSON.stringify(preferences));
 
       if (needsMaxWidthMigration) {
         localStorage.setItem(
@@ -317,17 +274,11 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
       }
 
       if (needsIconMigration) {
-        localStorage.setItem(
-          "veolms-sidebar-icon-default-version",
-          SIDEBAR_ICON_DEFAULT_VERSION,
-        );
+        localStorage.setItem("veolms-sidebar-icon-default-version", SIDEBAR_ICON_DEFAULT_VERSION);
       }
 
       if (!hasCurrentDockDefault) {
-        localStorage.setItem(
-          "veolms-sidebar-dock-default-version",
-          SIDEBAR_DOCK_DEFAULT_VERSION,
-        );
+        localStorage.setItem("veolms-sidebar-dock-default-version", SIDEBAR_DOCK_DEFAULT_VERSION);
       }
 
       if (!hasCurrentHeaderDefault) {

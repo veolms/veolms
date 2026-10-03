@@ -13,22 +13,12 @@ import { CommerceErrors } from "../shared/commerce.errors.ts";
 import { AppError } from "../../../lib/errors.ts";
 import * as orderRepo from "./order.repository.ts";
 import * as setupRepo from "../../auth/setup/setup.repository.ts";
-import {
-  toOrderAdminDetails,
-  toOrderContract,
-  toOrderPaymentSummary,
-} from "./order.mapper.ts";
+import { toOrderAdminDetails, toOrderContract, toOrderPaymentSummary } from "./order.mapper.ts";
 
 export interface OrderService {
   getOrderById(scope: OrderScope, orderId: string): Promise<Order>;
-  listOrders(
-    scope: OrderScope,
-    options: OrdersListQuery,
-  ): Promise<OrdersListResponse>;
-  getOrderStats(
-    scope: OrderScope,
-    filters: OrderStatsQuery,
-  ): Promise<OrderStatsResponse>;
+  listOrders(scope: OrderScope, options: OrdersListQuery): Promise<OrdersListResponse>;
+  getOrderStats(scope: OrderScope, filters: OrderStatsQuery): Promise<OrderStatsResponse>;
   /**
    * Day-bucketed net revenue for the currency `getOrderStats` would resolve
    * for the same filters — callers needing both a trend and its totals
@@ -68,20 +58,10 @@ export interface OrderService {
 const STATS_CACHE_TTL_MS = 30_000;
 const STATS_CACHE_MAX_ENTRIES = 200;
 
-export function createOrderService({
-  database,
-}: {
-  database: Executor;
-}): OrderService {
-  const statsCache = new Map<
-    string,
-    { expiresAt: number; value: Promise<OrderStatsResponse> }
-  >();
+export function createOrderService({ database }: { database: Executor }): OrderService {
+  const statsCache = new Map<string, { expiresAt: number; value: Promise<OrderStatsResponse> }>();
 
-  async function getOrderById(
-    scope: OrderScope,
-    orderId: string,
-  ): Promise<Order> {
+  async function getOrderById(scope: OrderScope, orderId: string): Promise<Order> {
     const order = await orderRepo.findOrderById(database, orderId, scope);
     if (!order) {
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
@@ -132,9 +112,7 @@ export function createOrderService({
         throw new AppError(
           400,
           "INVALID_CURSOR",
-          err instanceof Error
-            ? err.message
-            : "The pagination cursor is invalid.",
+          err instanceof Error ? err.message : "The pagination cursor is invalid.",
         );
       }
     }
@@ -161,33 +139,26 @@ export function createOrderService({
     const orderIds = pageRows.map((o) => o.id);
     const userIds = [...new Set(pageRows.map((o) => o.user_id))];
     const couponIds = [
-      ...new Set(
-        pageRows
-          .map((o) => o.coupon_id)
-          .filter((id): id is string => Boolean(id)),
-      ),
+      ...new Set(pageRows.map((o) => o.coupon_id).filter((id): id is string => Boolean(id))),
     ];
 
     // Batch load relations in parallel
-    const [allItems, users, coupons, payments, refunds, userPaymentSummaries] =
-      await Promise.all([
-        orderRepo.listOrderItemsByOrderIds(database, orderIds),
-        scope.type === "academy"
-          ? orderRepo.listUsersByIds(database, userIds)
-          : Promise.resolve([]),
-        scope.type === "academy" && couponIds.length > 0
-          ? orderRepo.listCouponsByIds(database, couponIds)
-          : Promise.resolve([]),
-        scope.type === "academy"
-          ? orderRepo.listPaymentsByOrderIds(database, orderIds)
-          : Promise.resolve([]),
-        scope.type === "academy"
-          ? orderRepo.listRefundsByOrderIds(database, orderIds)
-          : Promise.resolve([]),
-        scope.type === "user"
-          ? orderRepo.listPaymentSummariesByOrderIds(database, orderIds)
-          : Promise.resolve([]),
-      ]);
+    const [allItems, users, coupons, payments, refunds, userPaymentSummaries] = await Promise.all([
+      orderRepo.listOrderItemsByOrderIds(database, orderIds),
+      scope.type === "academy" ? orderRepo.listUsersByIds(database, userIds) : Promise.resolve([]),
+      scope.type === "academy" && couponIds.length > 0
+        ? orderRepo.listCouponsByIds(database, couponIds)
+        : Promise.resolve([]),
+      scope.type === "academy"
+        ? orderRepo.listPaymentsByOrderIds(database, orderIds)
+        : Promise.resolve([]),
+      scope.type === "academy"
+        ? orderRepo.listRefundsByOrderIds(database, orderIds)
+        : Promise.resolve([]),
+      scope.type === "user"
+        ? orderRepo.listPaymentSummariesByOrderIds(database, orderIds)
+        : Promise.resolve([]),
+    ]);
 
     // Index batch loaded relations
     const itemsByOrderId = new Map<string, typeof allItems>();
@@ -216,24 +187,15 @@ export function createOrderService({
       }
     }
 
-    const paymentSummariesByOrderId = new Map<
-      string,
-      ReturnType<typeof toOrderPaymentSummary>
-    >();
+    const paymentSummariesByOrderId = new Map<string, ReturnType<typeof toOrderPaymentSummary>>();
     for (const payment of payments) {
       if (!paymentSummariesByOrderId.has(payment.order_id)) {
-        paymentSummariesByOrderId.set(
-          payment.order_id,
-          toOrderPaymentSummary(payment),
-        );
+        paymentSummariesByOrderId.set(payment.order_id, toOrderPaymentSummary(payment));
       }
     }
     for (const payment of userPaymentSummaries) {
       if (!paymentSummariesByOrderId.has(payment.order_id)) {
-        paymentSummariesByOrderId.set(
-          payment.order_id,
-          toOrderPaymentSummary(payment),
-        );
+        paymentSummariesByOrderId.set(payment.order_id, toOrderPaymentSummary(payment));
       }
     }
 
@@ -252,9 +214,7 @@ export function createOrderService({
           ? toOrderAdminDetails({
               order,
               user: usersById.get(order.user_id),
-              coupon: order.coupon_id
-                ? couponsById.get(order.coupon_id)
-                : undefined,
+              coupon: order.coupon_id ? couponsById.get(order.coupon_id) : undefined,
               payment: paymentsByOrderId.get(order.id),
               refunds: refundsByOrderId.get(order.id) ?? [],
             })
@@ -329,24 +289,16 @@ export function createOrderService({
     filters: orderRepo.OrderStatsFilters,
     requestedCurrency: string | undefined,
   ): Promise<OrderStatsResponse> {
-    const rows = await orderRepo.getOrderStatsByCurrency(
-      database,
-      scope,
-      filters,
-    );
+    const rows = await orderRepo.getOrderStatsByCurrency(database, scope, filters);
     const selected = requestedCurrency
       ? rows.find((row) => row.currency === requestedCurrency)
       : [...rows].sort(
-          (a, b) =>
-            b.totalOrders - a.totalOrders ||
-            a.currency.localeCompare(b.currency),
+          (a, b) => b.totalOrders - a.totalOrders || a.currency.localeCompare(b.currency),
         )[0];
 
     return {
       // Successful orders only: gross paid − partial refunds on those orders.
-      netRevenue: selected
-        ? selected.grossPaid - selected.refundedAgainstPaid
-        : 0,
+      netRevenue: selected ? selected.grossPaid - selected.refundedAgainstPaid : 0,
       totalEarnings: selected?.totalEarnings ?? 0,
       totalOrders: selected?.totalOrders ?? 0,
       uniqueBuyers: selected?.uniqueBuyers ?? 0,
@@ -388,9 +340,7 @@ export function createOrderService({
     const selected = requestedCurrency
       ? rows.find((row) => row.currency === requestedCurrency)
       : [...rows].sort(
-          (a, b) =>
-            b.totalOrders - a.totalOrders ||
-            a.currency.localeCompare(b.currency),
+          (a, b) => b.totalOrders - a.totalOrders || a.currency.localeCompare(b.currency),
         )[0];
     return (
       selected ?? {
@@ -427,11 +377,7 @@ export function createOrderService({
   async function getAcademyScope(): Promise<OrderScope> {
     const academy = await setupRepo.findAcademy(database);
     if (!academy) {
-      throw new AppError(
-        500,
-        "ACADEMY_NOT_FOUND",
-        "Academy is not configured.",
-      );
+      throw new AppError(500, "ACADEMY_NOT_FOUND", "Academy is not configured.");
     }
     return { type: "academy", id: academy.id };
   }

@@ -58,11 +58,7 @@ export function createOrderController({
     const hasAdminRole = user.roles?.includes(ADMIN_ROLE) ?? false;
 
     if (!decision.allowed && !hasAdminRole) {
-      throw httpError(
-        403,
-        "PERMISSION_DENIED",
-        `You do not have permission to ${action}.`,
-      );
+      throw httpError(403, "PERMISSION_DENIED", `You do not have permission to ${action}.`);
     }
 
     return user;
@@ -73,27 +69,19 @@ export function createOrderController({
     view?: "admin" | "student",
   ): Promise<OrderScope> {
     if (view === "admin") {
-      await requireBillingPermission(
-        request,
-        "billing.read",
-        "view admin orders",
-      );
+      await requireBillingPermission(request, "billing.read", "view admin orders");
       return await service.getAcademyScope();
     }
 
     return { type: "user", id: requireUser(request).id };
   }
 
-  async function listOrders(
-    request: FastifyRequest<{ Querystring: OrdersListQuery }>,
-  ) {
+  async function listOrders(request: FastifyRequest<{ Querystring: OrdersListQuery }>) {
     const scope = await resolveScope(request, request.query.view);
     return await service.listOrders(scope, request.query);
   }
 
-  async function getOrderStats(
-    request: FastifyRequest<{ Querystring: OrderStatsQuery }>,
-  ) {
+  async function getOrderStats(request: FastifyRequest<{ Querystring: OrderStatsQuery }>) {
     await requireBillingPermission(request, "billing.read", "view order stats");
     const scope = await service.getAcademyScope();
     return await service.getOrderStats(scope, request.query);
@@ -116,10 +104,7 @@ export function createOrderController({
     }>,
   ) {
     const scope = await resolveScope(request, request.query?.view);
-    return await invoiceService.generateInvoiceData(
-      scope,
-      request.params.orderId,
-    );
+    return await invoiceService.generateInvoiceData(scope, request.params.orderId);
   }
 
   async function downloadInvoice(
@@ -130,10 +115,7 @@ export function createOrderController({
     reply: FastifyReply,
   ) {
     const scope = await resolveScope(request, request.query?.view);
-    const html = await invoiceService.generateInvoiceHtml(
-      scope,
-      request.params.orderId,
-    );
+    const html = await invoiceService.generateInvoiceHtml(scope, request.params.orderId);
     reply
       .header("Content-Type", "text/html; charset=utf-8")
       .header(
@@ -150,11 +132,7 @@ export function createOrderController({
       Headers: { "idempotency-key"?: string };
     }>,
   ) {
-    const user = await requireBillingPermission(
-      request,
-      "billing.manage",
-      "refund orders",
-    );
+    const user = await requireBillingPermission(request, "billing.manage", "refund orders");
 
     // The key may arrive as the standard `Idempotency-Key` header or in the
     // body. Both present must agree, otherwise which one wins is ambiguous.

@@ -68,8 +68,8 @@ function BackupCodesScreen({ codes, onContinue }: BackupCodesScreenProps) {
         Save your backup codes
       </h1>
       <p className="auth-card__subheading">
-        Store these codes somewhere safe. Each code can be used once if you ever
-        lose access to your authenticator app.
+        Store these codes somewhere safe. Each code can be used once if you ever lose access to your
+        authenticator app.
       </p>
 
       <div className="auth-card__form-slot">
@@ -82,33 +82,19 @@ function BackupCodesScreen({ codes, onContinue }: BackupCodesScreenProps) {
         </ul>
 
         <div className="auth-mfa-setup__backup-actions">
-          <button
-            className="auth-mfa-setup__copy-button"
-            onClick={copyAll}
-            type="button"
-          >
+          <button className="auth-mfa-setup__copy-button" onClick={copyAll} type="button">
             <Icon aria-hidden name="copy" size={16} />
             {copied ? "Copied!" : "Copy all codes"}
           </button>
 
-          <button
-            className="auth-mfa-setup__copy-button"
-            onClick={handleDownload}
-            type="button"
-          >
+          <button className="auth-mfa-setup__copy-button" onClick={handleDownload} type="button">
             <Icon aria-hidden name="download" size={16} />
             {downloaded ? "Downloaded!" : "Download .txt"}
           </button>
         </div>
 
-        <button
-          className="auth-form__submit"
-          onClick={onContinue}
-          type="button"
-        >
-          <span className="auth-form__submit-label">
-            I&apos;ve saved my codes — Continue
-          </span>
+        <button className="auth-form__submit" onClick={onContinue} type="button">
+          <span className="auth-form__submit-label">I&apos;ve saved my codes — Continue</span>
           <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
         </button>
       </div>
@@ -116,14 +102,9 @@ function BackupCodesScreen({ codes, onContinue }: BackupCodesScreenProps) {
   );
 }
 
-type Screen =
-  "chooseMethod" | "totpQr" | "totpVerify" | "backupCodes" | "passkeyPending";
+type Screen = "chooseMethod" | "totpQr" | "totpVerify" | "backupCodes" | "passkeyPending";
 
-export function AdminMfaSetup({
-  onDone,
-  onError,
-  onClearError,
-}: AdminMfaSetupProps) {
+export function AdminMfaSetup({ onDone, onError, onClearError }: AdminMfaSetupProps) {
   const [screen, setScreen] = useState<Screen>("chooseMethod");
   const [totpSecret, setTotpSecret] = useState("");
   const [totpUri, setTotpUri] = useState("");
@@ -188,10 +169,7 @@ export function AdminMfaSetup({
       setScreen("totpQr");
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
-      onError(
-        errorObj?.message ||
-          "Could not start authenticator setup. Please try again.",
-      );
+      onError(errorObj?.message || "Could not start authenticator setup. Please try again.");
     }
   };
 
@@ -213,8 +191,7 @@ export function AdminMfaSetup({
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
       setCodeError(
-        errorObj?.message ||
-          "Invalid code. Check your authenticator app and try again.",
+        errorObj?.message || "Invalid code. Check your authenticator app and try again.",
       );
     }
   };
@@ -233,12 +210,7 @@ export function AdminMfaSetup({
   };
 
   if (screen === "backupCodes") {
-    return (
-      <BackupCodesScreen
-        codes={backupCodes}
-        onContinue={handleBackupCodesContinue}
-      />
-    );
+    return <BackupCodesScreen codes={backupCodes} onContinue={handleBackupCodesContinue} />;
   }
 
   if (screen === "passkeyPending") {
@@ -249,17 +221,14 @@ export function AdminMfaSetup({
           {STEP_LABELS.passkeyPending}
         </h1>
         <p className="auth-card__subheading">
-          Follow the prompt from your browser or device to register your
-          passkey.
+          Follow the prompt from your browser or device to register your passkey.
         </p>
         <div className="auth-card__form-slot">
           <div className="auth-mfa-setup__pending">
             <span className="auth-two-factor__mark">
               <Icon aria-hidden name="passkey" size={24} />
             </span>
-            <p className="auth-two-factor__body">
-              Waiting for passkey confirmation…
-            </p>
+            <p className="auth-two-factor__body">Waiting for passkey confirmation…</p>
           </div>
 
           <button
@@ -286,8 +255,8 @@ export function AdminMfaSetup({
           {STEP_LABELS.scanQr}
         </h1>
         <p className="auth-card__subheading">
-          Open Google Authenticator, Authy, or any TOTP app and scan the QR
-          code, or enter the key manually.
+          Open Google Authenticator, Authy, or any TOTP app and scan the QR code, or enter the key
+          manually.
         </p>
 
         <div className="auth-card__form-slot">
@@ -306,9 +275,7 @@ export function AdminMfaSetup({
             onClick={() => setScreen("totpVerify")}
             type="button"
           >
-            <span className="auth-form__submit-label">
-              I&apos;ve scanned the code
-            </span>
+            <span className="auth-form__submit-label">I&apos;ve scanned the code</span>
             <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
           </button>
 
@@ -332,8 +299,7 @@ export function AdminMfaSetup({
           {STEP_LABELS.enterCode}
         </h1>
         <p className="auth-card__subheading">
-          Enter the 6-digit code shown in your authenticator app to confirm it
-          is working.
+          Enter the 6-digit code shown in your authenticator app to confirm it is working.
         </p>
 
         <div className="auth-card__form-slot">
@@ -360,11 +326,7 @@ export function AdminMfaSetup({
               />
 
               {codeError ? (
-                <p
-                  className="auth-form__error"
-                  id="admin-mfa-code-error"
-                  role="alert"
-                >
+                <p className="auth-form__error" id="admin-mfa-code-error" role="alert">
                   {codeError}
                 </p>
               ) : null}
@@ -377,9 +339,7 @@ export function AdminMfaSetup({
               type="submit"
             >
               <span className="auth-form__submit-label">
-                {enableTotpMutation.isPending
-                  ? "Verifying…"
-                  : "Verify & activate"}
+                {enableTotpMutation.isPending ? "Verifying…" : "Verify & activate"}
               </span>
               <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
             </button>
@@ -404,8 +364,7 @@ export function AdminMfaSetup({
         {STEP_LABELS.chooseMethod}
       </h1>
       <p className="auth-card__subheading">
-        Set up a passkey or authenticator app before you continue to your
-        account.
+        Set up a passkey or authenticator app before you continue to your account.
       </p>
 
       <div className="auth-card__form-slot">
@@ -414,12 +373,7 @@ export function AdminMfaSetup({
             <div className="auth-two-factor__panel">
               <div className="auth-two-factor__panel-body">
                 <p className="auth-two-factor__badge">
-                  <Icon
-                    aria-hidden
-                    emphasis="fill"
-                    name="recommended"
-                    size={11}
-                  />
+                  <Icon aria-hidden emphasis="fill" name="recommended" size={11} />
                   Recommended
                 </p>
 
@@ -431,8 +385,8 @@ export function AdminMfaSetup({
                   <div className="auth-two-factor__copy">
                     <p className="auth-two-factor__title">Register a passkey</p>
                     <p className="auth-two-factor__body">
-                      Use your device fingerprint, face, or PIN. No code to type
-                      — secure and phishing-resistant.
+                      Use your device fingerprint, face, or PIN. No code to type — secure and
+                      phishing-resistant.
                     </p>
                   </div>
                 </div>
@@ -440,21 +394,14 @@ export function AdminMfaSetup({
             </div>
 
             <button
-              aria-busy={
-                passkeyOptionsMutation.isPending ||
-                passkeyVerifyMutation.isPending
-              }
+              aria-busy={passkeyOptionsMutation.isPending || passkeyVerifyMutation.isPending}
               className="auth-form__submit"
-              disabled={
-                passkeyOptionsMutation.isPending ||
-                passkeyVerifyMutation.isPending
-              }
+              disabled={passkeyOptionsMutation.isPending || passkeyVerifyMutation.isPending}
               onClick={handleSetupPasskey}
               type="button"
             >
               <span className="auth-form__submit-label">
-                {passkeyOptionsMutation.isPending ||
-                passkeyVerifyMutation.isPending
+                {passkeyOptionsMutation.isPending || passkeyVerifyMutation.isPending
                   ? "Setting up passkey…"
                   : "Set up passkey"}
               </span>
@@ -472,11 +419,7 @@ export function AdminMfaSetup({
             )}
 
             <button
-              aria-label={
-                setupTotpMutation.isPending
-                  ? "Setting up authenticator app"
-                  : undefined
-              }
+              aria-label={setupTotpMutation.isPending ? "Setting up authenticator app" : undefined}
               aria-busy={setupTotpMutation.isPending}
               className="auth-secondary-btn"
               disabled={setupTotpMutation.isPending}

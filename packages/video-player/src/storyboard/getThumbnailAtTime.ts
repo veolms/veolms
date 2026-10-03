@@ -3,9 +3,7 @@ import type { StoryboardFrame, StoryboardTrack } from "./storyboardTypes.ts";
 function framesFrom(
   storyboard: readonly StoryboardFrame[] | StoryboardTrack,
 ): readonly StoryboardFrame[] {
-  return Array.isArray(storyboard)
-    ? storyboard
-    : (storyboard as StoryboardTrack).frames;
+  return Array.isArray(storyboard) ? storyboard : (storyboard as StoryboardTrack).frames;
 }
 
 const normalizedFrames = new WeakMap<object, readonly StoryboardFrame[]>();
@@ -29,8 +27,7 @@ function searchableFrames(
     .map((frame, inputIndex) => ({ frame, inputIndex }))
     .sort(
       (left, right) =>
-        left.frame.startTime - right.frame.startTime ||
-        left.inputIndex - right.inputIndex,
+        left.frame.startTime - right.frame.startTime || left.inputIndex - right.inputIndex,
     )
     .map(({ frame }) => frame);
   normalizedFrames.set(key, result);

@@ -15,10 +15,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import type {
-  MyQuizAssignment,
-  VideoPlaybackBootstrap,
-} from "@veolms/contracts";
+import type { MyQuizAssignment, VideoPlaybackBootstrap } from "@veolms/contracts";
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import {
   DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS,
@@ -56,26 +53,15 @@ import {
   publishLearningPlayerBootstrap,
 } from "./learningPlayerPreferences";
 import { writeAutoplayPreference } from "./player/lessonPlayerPersistence";
-import {
-  type Lesson,
-  createLessonVideo,
-  createLessonsById,
-} from "./courseContent";
+import { type Lesson, createLessonVideo, createLessonsById } from "./courseContent";
 import { mediaService } from "../services/media";
 import { Curriculum } from "./Curriculum";
 import {
   FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
   FullscreenLandscapeCurriculumPanel,
 } from "./FullscreenLandscapeCurriculumPanel";
-import {
-  getCourseThumbnail,
-  getCourseThumbnailSrcSet,
-  getCourseTitle,
-} from "./courseMetadata";
-import {
-  canPlayCourseLesson,
-  getPublicPreviewLessonNumbers,
-} from "./coursePlayerAccess";
+import { getCourseThumbnail, getCourseThumbnailSrcSet, getCourseTitle } from "./courseMetadata";
+import { canPlayCourseLesson, getPublicPreviewLessonNumbers } from "./coursePlayerAccess";
 import { useAuthStore } from "../store/auth.store";
 import { QuizAttemptPanel } from "../quizzes/QuizAttemptPanel";
 import { useCourseOverview } from "../services/courses";
@@ -118,12 +104,7 @@ import {
   useLessonDrawerHeroControl,
 } from "./useLessonDrawerHeroControl";
 import type { LessonDrawerViewportBounds } from "./useLessonDrawerHeroControl";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
 const CURRICULUM_SNAP_WIDTH = CURRICULUM_MIN_WIDTH / 2;
 const FLOATING_LESSON_DRAWER_SNAP_WIDTH = LESSON_DRAWER_MIN_FLOATING_WIDTH / 2;
@@ -165,9 +146,7 @@ const getPhoneLessonDrawerViewportSnapshot = () =>
 
 const getPhoneLessonDrawerViewportServerSnapshot = () => false;
 
-const subscribeToDesktopLearningMinimizeViewport = (
-  onStoreChange: () => void,
-) => {
+const subscribeToDesktopLearningMinimizeViewport = (onStoreChange: () => void) => {
   const media = window.matchMedia(LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY);
   media.addEventListener("change", onStoreChange);
   return () => media.removeEventListener("change", onStoreChange);
@@ -221,13 +200,10 @@ const isCurriculumSwipeExcludedTarget = (
 ) => target instanceof Element && Boolean(target.closest(selector));
 
 const getInitialFloatingLessonDrawerWidth = () => {
-  if (typeof window === "undefined")
-    return LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
+  if (typeof window === "undefined") return LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
 
   try {
-    const storedWidth = window.localStorage.getItem(
-      FLOATING_LESSON_DRAWER_WIDTH_KEY,
-    );
+    const storedWidth = window.localStorage.getItem(FLOATING_LESSON_DRAWER_WIDTH_KEY);
     if (storedWidth === null) return LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
 
     const savedWidth = Number(storedWidth);
@@ -355,10 +331,8 @@ export function LearningWorkspace({
 }: LearningWorkspaceProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const storedAuthUser = useAuthStore((state) => state.user);
-  const { data: currentUser, isFetched: isCurrentUserFetched } =
-    useCurrentUser();
-  const resolvedAuthUser =
-    currentUser === undefined ? storedAuthUser : currentUser;
+  const { data: currentUser, isFetched: isCurrentUserFetched } = useCurrentUser();
+  const resolvedAuthUser = currentUser === undefined ? storedAuthUser : currentUser;
   const isAuthResolutionPending = !isCurrentUserFetched && !storedAuthUser;
   const enrolledCoursesQuery = useEnrolledCourses({
     enabled: isAuthenticated,
@@ -373,8 +347,7 @@ export function LearningWorkspace({
   } = useCourseOverview(courseSlug, {
     enabled: isApiRoute,
   });
-  const isInteractionCapabilitiesLoading =
-    isApiRoute && isCourseOverviewLoading && !courseOverview;
+  const isInteractionCapabilitiesLoading = isApiRoute && isCourseOverviewLoading && !courseOverview;
   const allowComments = courseOverview?.settings?.allowComments ?? true;
   const allowNotes = courseOverview?.settings?.allowNotes ?? true;
   const allowQa = courseOverview?.settings?.allowQa ?? true;
@@ -407,12 +380,11 @@ export function LearningWorkspace({
   const lessonStorageKey = `veolms-last-lesson-${encodeURIComponent(courseSlug || "default")}`;
   const shortcutPlatform = useShortcutPlatform();
   const [selectedLesson, setSelectedLesson] = useState(lessonId);
-  const [deepLinkInitializationPending, setDeepLinkInitializationPending] =
-    useState(Boolean(deepLinkLessonUuid));
+  const [deepLinkInitializationPending, setDeepLinkInitializationPending] = useState(
+    Boolean(deepLinkLessonUuid),
+  );
   const pendingLessonSelectionRef = useRef<number | null>(null);
-  const [localLessonProgress, setLocalLessonProgress] = useState<
-    Record<number, number>
-  >({});
+  const [localLessonProgress, setLocalLessonProgress] = useState<Record<number, number>>({});
   const [autoPlayOnLessonChange, setAutoPlayOnLessonChange] = useState(false);
   const [autoplayEnabled, setAutoplayEnabled] = useState(
     DEFAULT_LEARNING_PLAYER_PREFERENCES.autoplay,
@@ -425,43 +397,32 @@ export function LearningWorkspace({
       return courseSlug || "";
     }
     return isApiRoute ? courseSlug || "" : getCourseTitle(courseSlug);
-  }, [
-    courseOverview?.course.title,
-    courseSlug,
-    isApiRoute,
-    isCourseOverviewError,
-  ]);
+  }, [courseOverview?.course.title, courseSlug, isApiRoute, isCourseOverviewError]);
   const coursePersistenceKey = encodeURIComponent(courseSlug || "default");
   const discussionPersistenceKey = `${coursePersistenceKey}-lesson-${selectedLesson}`;
   const [lessonDrawer, setLessonDrawer] = useState(false);
-  const [mobileLandscapeFullscreen, setMobileLandscapeFullscreen] =
-    useState(false);
-  const [fullscreenLessonPanelOpen, setFullscreenLessonPanelOpen] =
-    useState(false);
-  const [fullscreenVideoWidthPercent, setFullscreenVideoWidthPercent] =
-    useState(FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT);
-  const [
-    fullscreenVideoWidthPreviewPercent,
-    setFullscreenVideoWidthPreviewPercent,
-  ] = useState<number | null>(null);
-  const [
-    fullscreenCurriculumFocusRequest,
-    setFullscreenCurriculumFocusRequest,
-  ] = useState(0);
-  const [lessonDrawerForcedFloating, setLessonDrawerForcedFloating] =
-    useState(false);
-  const [lessonDrawerSnapPoint, setLessonDrawerSnapPoint] = useState<
-    number | string | null
-  >(LESSON_DRAWER_FALLBACK_SNAP_POINT);
-  const [lessonDrawerCollapsedSnapPoint, setLessonDrawerCollapsedSnapPoint] =
-    useState(LESSON_DRAWER_FALLBACK_SNAP_POINT);
+  const [mobileLandscapeFullscreen, setMobileLandscapeFullscreen] = useState(false);
+  const [fullscreenLessonPanelOpen, setFullscreenLessonPanelOpen] = useState(false);
+  const [fullscreenVideoWidthPercent, setFullscreenVideoWidthPercent] = useState(
+    FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
+  );
+  const [fullscreenVideoWidthPreviewPercent, setFullscreenVideoWidthPreviewPercent] = useState<
+    number | null
+  >(null);
+  const [fullscreenCurriculumFocusRequest, setFullscreenCurriculumFocusRequest] = useState(0);
+  const [lessonDrawerForcedFloating, setLessonDrawerForcedFloating] = useState(false);
+  const [lessonDrawerSnapPoint, setLessonDrawerSnapPoint] = useState<number | string | null>(
+    LESSON_DRAWER_FALLBACK_SNAP_POINT,
+  );
+  const [lessonDrawerCollapsedSnapPoint, setLessonDrawerCollapsedSnapPoint] = useState(
+    LESSON_DRAWER_FALLBACK_SNAP_POINT,
+  );
   const [lessonDrawerViewportBounds, setLessonDrawerViewportBounds] =
     useState<LessonDrawerViewportBounds | null>(null);
   const [floatingLessonDrawerWidth, setFloatingLessonDrawerWidth] = useState(
     getInitialFloatingLessonDrawerWidth,
   );
-  const [floatingLessonDrawerResizing, setFloatingLessonDrawerResizing] =
-    useState(false);
+  const [floatingLessonDrawerResizing, setFloatingLessonDrawerResizing] = useState(false);
   const courseContentDrawerViewport = useSyncExternalStore(
     subscribeToCourseContentDrawerViewport,
     getCourseContentDrawerViewportSnapshot,
@@ -485,9 +446,9 @@ export function LearningWorkspace({
   const [curriculumFocusRequest, setCurriculumFocusRequest] = useState(0);
   const [lessonDrawerFocusRequest, setLessonDrawerFocusRequest] = useState(0);
   const [lessonDrawerTopRequest, setLessonDrawerTopRequest] = useState(0);
-  const [lessonDrawerScrollTarget, setLessonDrawerScrollTarget] = useState<
-    "current" | "top"
-  >("current");
+  const [lessonDrawerScrollTarget, setLessonDrawerScrollTarget] = useState<"current" | "top">(
+    "current",
+  );
   const [curriculumWidth, setCurriculumWidth] = useState(
     () => getInitialLearningShellState().curriculumWidth,
   );
@@ -496,8 +457,9 @@ export function LearningWorkspace({
   );
   const learningShellHydratedRef = useRef(false);
   const [curriculumResizing, setCurriculumResizing] = useState(false);
-  const [curriculumResizePreviewWidth, setCurriculumResizePreviewWidth] =
-    useState<number | null>(null);
+  const [curriculumResizePreviewWidth, setCurriculumResizePreviewWidth] = useState<number | null>(
+    null,
+  );
 
   useLayoutEffect(() => {
     let shellState = {
@@ -527,10 +489,7 @@ export function LearningWorkspace({
       curriculumWidth: shellState.curriculumWidth,
     });
     if (rootWidth !== shellState.curriculumWidth) {
-      document.documentElement.style.setProperty(
-        "--learning-curriculum-width",
-        `${rootWidth}px`,
-      );
+      document.documentElement.style.setProperty("--learning-curriculum-width", `${rootWidth}px`);
     }
   }, [curriculumCollapsed, curriculumResizePreviewWidth, curriculumWidth]);
 
@@ -545,10 +504,7 @@ export function LearningWorkspace({
       return;
     }
     try {
-      window.localStorage.setItem(
-        CURRICULUM_COLLAPSED_STORAGE_KEY,
-        String(curriculumCollapsed),
-      );
+      window.localStorage.setItem(CURRICULUM_COLLAPSED_STORAGE_KEY, String(curriculumCollapsed));
     } catch {
       // Course-content toggling remains available without browser storage.
     }
@@ -616,11 +572,8 @@ export function LearningWorkspace({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const lessonDrawerSkipFinalFocusRef = useRef(false);
   const curriculumResizeRef = useRef<CurriculumResize | null>(null);
-  const floatingLessonDrawerResizeRef =
-    useRef<FloatingLessonDrawerResize | null>(null);
-  const curriculumResizeMoveRef = useRef<
-    ((event: PointerEvent) => void) | null
-  >(null);
+  const floatingLessonDrawerResizeRef = useRef<FloatingLessonDrawerResize | null>(null);
+  const curriculumResizeMoveRef = useRef<((event: PointerEvent) => void) | null>(null);
   const curriculumResizeFinishRef = useRef<
     ((event: PointerEvent, cancelled?: boolean) => void) | null
   >(null);
@@ -639,9 +592,7 @@ export function LearningWorkspace({
       }),
     [],
   );
-  const curriculumScreenSwipeMoveRef = useRef<
-    ((event: PointerEvent) => void) | null
-  >(null);
+  const curriculumScreenSwipeMoveRef = useRef<((event: PointerEvent) => void) | null>(null);
   const curriculumScreenSwipeFinishRef = useRef<
     ((event: PointerEvent, cancelled?: boolean) => void) | null
   >(null);
@@ -656,10 +607,7 @@ export function LearningWorkspace({
     return adaptCourseOverviewToCurriculum(courseOverview);
   }, [courseOverview]);
 
-  const curriculumSections = useMemo(
-    () => adaptedCurriculum?.sections ?? [],
-    [adaptedCurriculum],
-  );
+  const curriculumSections = useMemo(() => adaptedCurriculum?.sections ?? [], [adaptedCurriculum]);
   const curriculumLessonsById = useMemo(
     () => createLessonsById(curriculumSections),
     [curriculumSections],
@@ -675,16 +623,11 @@ export function LearningWorkspace({
     [selectedLesson],
   );
   const currentLesson =
-    curriculumLessonsById.get(selectedLesson) ||
-    firstCurriculumLesson ||
-    fallbackEmptyLesson;
-  const courseQuizAssignments = useCourseQuizAssignments(
-    courseOverview?.course.id,
-    { enabled: isAuthenticated },
-  );
-  const [activeLessonView, setActiveLessonView] = useState<"video" | "quiz">(
-    initialLessonView,
-  );
+    curriculumLessonsById.get(selectedLesson) || firstCurriculumLesson || fallbackEmptyLesson;
+  const courseQuizAssignments = useCourseQuizAssignments(courseOverview?.course.id, {
+    enabled: isAuthenticated,
+  });
+  const [activeLessonView, setActiveLessonView] = useState<"video" | "quiz">(initialLessonView);
 
   useEffect(() => {
     setActiveLessonView((currentView) =>
@@ -707,9 +650,7 @@ export function LearningWorkspace({
       if (lesson?.[5] === "quiz") return true;
       const uuid = getLessonUuid(lessonNumber);
       if (!uuid) {
-        return lessonNumber === selectedLesson
-          ? Boolean(quizAssignment)
-          : false;
+        return lessonNumber === selectedLesson ? Boolean(quizAssignment) : false;
       }
       return Boolean(
         quizAssignments?.some((a) => a.lessonId === uuid) ||
@@ -732,15 +673,11 @@ export function LearningWorkspace({
   const currentLessonUuid = getLessonUuid(selectedLesson);
   const currentQuizAssignment = useMemo(() => {
     if (currentLessonUuid && quizAssignments) {
-      const found = quizAssignments.find(
-        (a) => a.lessonId === currentLessonUuid,
-      );
+      const found = quizAssignments.find((a) => a.lessonId === currentLessonUuid);
       if (found) return found;
     }
     if (currentLessonUuid && courseQuizAssignments.data) {
-      const foundCourse = courseQuizAssignments.data.find(
-        (a) => a.lessonId === currentLessonUuid,
-      );
+      const foundCourse = courseQuizAssignments.data.find((a) => a.lessonId === currentLessonUuid);
       if (foundCourse) {
         return {
           id: foundCourse.id,
@@ -769,10 +706,7 @@ export function LearningWorkspace({
         };
       }
     }
-    if (
-      quizAssignment &&
-      (!currentLessonUuid || quizAssignment.lessonId === currentLessonUuid)
-    ) {
+    if (quizAssignment && (!currentLessonUuid || quizAssignment.lessonId === currentLessonUuid)) {
       return quizAssignment;
     }
     return null;
@@ -787,8 +721,7 @@ export function LearningWorkspace({
 
   const isDedicatedQuizLesson = currentLesson[5] === "quiz";
   const hasQuizContent =
-    Boolean(currentQuizAssignment) ||
-    (isDedicatedQuizLesson && !currentLessonUuid);
+    Boolean(currentQuizAssignment) || (isDedicatedQuizLesson && !currentLessonUuid);
   const showingQuiz = activeLessonView === "quiz";
   const isQuizLesson = showingQuiz;
 
@@ -818,8 +751,7 @@ export function LearningWorkspace({
 
     const pauseAllMedia = () => {
       if (typeof document === "undefined") return;
-      const mediaElements =
-        document.querySelectorAll<HTMLMediaElement>("video, audio");
+      const mediaElements = document.querySelectorAll<HTMLMediaElement>("video, audio");
       for (const el of mediaElements) {
         if (!el.paused && typeof el.pause === "function") {
           try {
@@ -835,10 +767,7 @@ export function LearningWorkspace({
 
     const handlePlayCapture = (event: Event) => {
       const target = event.target;
-      if (
-        target instanceof HTMLMediaElement &&
-        typeof target.pause === "function"
-      ) {
+      if (target instanceof HTMLMediaElement && typeof target.pause === "function") {
         try {
           target.pause();
         } catch {
@@ -857,14 +786,13 @@ export function LearningWorkspace({
   }, [showingQuiz]);
   const protectedPlayback = Boolean(courseSlug);
   const playbackRequestKey = `${courseSlug ?? ""}\u0000${selectedLesson}\u0000${isAuthenticated ? "authenticated" : "guest"}`;
-  const [playbackBootstrap, setPlaybackBootstrap] =
-    useState<VideoPlaybackBootstrap | null>(() => {
-      if (!courseSlug) return null;
-      return getCachedVideoPlaybackBootstrap({
-        courseSlug,
-        lessonNumber: selectedLesson,
-      });
+  const [playbackBootstrap, setPlaybackBootstrap] = useState<VideoPlaybackBootstrap | null>(() => {
+    if (!courseSlug) return null;
+    return getCachedVideoPlaybackBootstrap({
+      courseSlug,
+      lessonNumber: selectedLesson,
     });
+  });
   const [playbackBootstrapError, setPlaybackBootstrapError] =
     useState<VideoPlaybackBootstrapError | null>(null);
   const [playbackBootstrapAttempt, setPlaybackBootstrapAttempt] = useState(0);
@@ -937,16 +865,8 @@ export function LearningWorkspace({
     return () => {
       active = false;
     };
-  }, [
-    courseSlug,
-    isAuthenticated,
-    playbackRequestKey,
-    playbackBootstrapAttempt,
-    selectedLesson,
-  ]);
-  const playbackAccessError = useMemo<
-    LessonVideoPlayerProps["playbackAccessError"]
-  >(() => {
+  }, [courseSlug, isAuthenticated, playbackRequestKey, playbackBootstrapAttempt, selectedLesson]);
+  const playbackAccessError = useMemo<LessonVideoPlayerProps["playbackAccessError"]>(() => {
     if (!playbackBootstrapError) return null;
 
     if (
@@ -977,12 +897,7 @@ export function LearningWorkspace({
       actionLabel: "Retry",
       onAction: retryPlaybackBootstrap,
     };
-  }, [
-    onOpenCourseOverview,
-    onOpenLogin,
-    playbackBootstrapError,
-    retryPlaybackBootstrap,
-  ]);
+  }, [onOpenCourseOverview, onOpenLogin, playbackBootstrapError, retryPlaybackBootstrap]);
   const playbackBootstrapPending = Boolean(
     protectedPlayback && !playbackBootstrap && !playbackBootstrapError,
   );
@@ -1001,11 +916,8 @@ export function LearningWorkspace({
     if (isPublicLesson) return "granted";
     if (!isAuthenticated) return "denied";
 
-    const isCourseOwner =
-      resolvedAuthUser?.id === courseOverview.course.creatorId;
-    const isAdmin = resolvedAuthUser?.roles?.some(
-      (role) => role.trim().toLowerCase() === "admin",
-    );
+    const isCourseOwner = resolvedAuthUser?.id === courseOverview.course.creatorId;
+    const isAdmin = resolvedAuthUser?.roles?.some((role) => role.trim().toLowerCase() === "admin");
     if (isCourseOwner || isAdmin) return "granted";
     if (!enrolledCoursesQuery.isFetched) return "pending";
 
@@ -1026,11 +938,7 @@ export function LearningWorkspace({
     selectedLesson,
   ]);
   const lessonContentAccessReason =
-    lessonContentAccess === "denied"
-      ? isAuthenticated
-        ? "access"
-        : "login"
-      : null;
+    lessonContentAccess === "denied" ? (isAuthenticated ? "access" : "login") : null;
   const lessonParticipationState = useMemo<LessonParticipationState>(() => {
     if (isAuthResolutionPending || !courseOverview || !adaptedCurriculum) {
       return "pending";
@@ -1038,11 +946,8 @@ export function LearningWorkspace({
 
     if (!isAuthenticated) return "denied";
 
-    const isCourseOwner =
-      resolvedAuthUser?.id === courseOverview.course.creatorId;
-    const isAdmin = resolvedAuthUser?.roles?.some(
-      (role) => role.trim().toLowerCase() === "admin",
-    );
+    const isCourseOwner = resolvedAuthUser?.id === courseOverview.course.creatorId;
+    const isAdmin = resolvedAuthUser?.roles?.some((role) => role.trim().toLowerCase() === "admin");
     if (isCourseOwner || isAdmin) return "granted";
     if (!enrolledCoursesQuery.isFetched) return "pending";
 
@@ -1064,8 +969,7 @@ export function LearningWorkspace({
   const canParticipateInLessonDiscussion =
     lessonContentAccess === "granted" && lessonParticipationState === "granted";
   const lessonSequence = useMemo(
-    () =>
-      curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
+    () => curriculumSections.flatMap(({ lessons }) => lessons.map(([id]) => id)),
     [curriculumSections],
   );
   const lessonIdsByNumber = useMemo<ReadonlyMap<number, string> | undefined>(
@@ -1079,21 +983,18 @@ export function LearningWorkspace({
         : undefined,
     [adaptedCurriculum],
   );
-  const { lessonProgress: persistedLessonProgress, recordProgress } =
-    useLearningProgress({
-      courseKey: courseOverview?.course.slug,
-      userId,
-      lessonIdsByNumber,
-      enabled: Boolean(courseOverview?.course.slug),
-    });
+  const { lessonProgress: persistedLessonProgress, recordProgress } = useLearningProgress({
+    courseKey: courseOverview?.course.slug,
+    userId,
+    lessonIdsByNumber,
+    enabled: Boolean(courseOverview?.course.slug),
+  });
   const lessonProgress = useMemo(() => {
     if (Object.keys(localLessonProgress).length === 0) {
       return persistedLessonProgress;
     }
     const merged = { ...persistedLessonProgress };
-    for (const [lessonNumber, progress] of Object.entries(
-      localLessonProgress,
-    )) {
+    for (const [lessonNumber, progress] of Object.entries(localLessonProgress)) {
       const number = Number(lessonNumber);
       merged[number] = Math.max(merged[number] ?? 0, progress);
     }
@@ -1119,9 +1020,7 @@ export function LearningWorkspace({
     courseOverview?.course.thumbnailSrcSet
       ?.map(({ url, width }) => `${url} ${width}w`)
       .join(", ") ||
-    (!isApiRoute && !isCourseOverviewError
-      ? getCourseThumbnailSrcSet(courseSlug)
-      : undefined);
+    (!isApiRoute && !isCourseOverviewError ? getCourseThumbnailSrcSet(courseSlug) : undefined);
   const nextLessonInfo = useMemo<NextLessonInfo | undefined>(() => {
     if (nextLessonId === undefined) return undefined;
     const lesson = curriculumLessonsById.get(nextLessonId);
@@ -1129,8 +1028,7 @@ export function LearningWorkspace({
     const section = curriculumSections.find(({ lessons }) =>
       lessons.some(([id]) => id === nextLessonId),
     );
-    const nextLessonMediaId =
-      adaptedCurriculum?.lessonsByNumber.get(nextLessonId)?.contentMediaId;
+    const nextLessonMediaId = adaptedCurriculum?.lessonsByNumber.get(nextLessonId)?.contentMediaId;
     const nextIndex = lessonSequence.indexOf(nextLessonId);
     return {
       id: nextLessonId,
@@ -1169,13 +1067,9 @@ export function LearningWorkspace({
       selectedLesson === lessonId,
     );
   const isLearningDeepLinkError =
-    isDiscussionDeepLink &&
-    isCourseOverviewError &&
-    !isCourseOverviewFetching &&
-    !courseOverview;
+    isDiscussionDeepLink && isCourseOverviewError && !isCourseOverviewFetching && !courseOverview;
   const isLearningBootstrapLoading =
-    isInteractionCapabilitiesLoading ||
-    (!isLearningDeepLinkReady && !isLearningDeepLinkError);
+    isInteractionCapabilitiesLoading || (!isLearningDeepLinkReady && !isLearningDeepLinkError);
   useEffect(() => {
     if (deepLinkLessonUuid) {
       setDeepLinkInitializationPending(true);
@@ -1208,9 +1102,7 @@ export function LearningWorkspace({
     const playerWrap = playerWrapRef.current;
     if (!main || !playerWrap) return undefined;
 
-    const stickyCompactLayout = window.matchMedia(
-      "(max-width: 640px) and (orientation: portrait)",
-    );
+    const stickyCompactLayout = window.matchMedia("(max-width: 640px) and (orientation: portrait)");
     let frame: number | null = null;
     const observer =
       typeof ResizeObserver === "undefined"
@@ -1280,16 +1172,12 @@ export function LearningWorkspace({
         return null;
       }
 
-      const mainSurface =
-        playerWrapRef.current?.closest<HTMLElement>(".courses-main");
+      const mainSurface = playerWrapRef.current?.closest<HTMLElement>(".courses-main");
       const frameSurface =
-        playerWrapRef.current?.closest<HTMLElement>(".courses-main-frame") ??
-        mainSurface;
+        playerWrapRef.current?.closest<HTMLElement>(".courses-main-frame") ?? mainSurface;
       const mainSurfaceBounds = mainSurface?.getBoundingClientRect();
       const horizontalSurfaceBounds =
-        mainSurfaceBounds && mainSurfaceBounds.width > 0
-          ? mainSurfaceBounds
-          : playerBounds;
+        mainSurfaceBounds && mainSurfaceBounds.width > 0 ? mainSurfaceBounds : playerBounds;
       const sideBounds = getSideLessonDrawerBounds(
         horizontalSurfaceBounds,
         window.innerWidth,
@@ -1309,10 +1197,7 @@ export function LearningWorkspace({
         ...sideBounds,
         top: Math.max(0, verticalSurfaceBounds.top),
         bottom: Math.max(0, window.innerHeight - verticalSurfaceBounds.bottom),
-        borderRadius:
-          readVisibleRadius(frameSurface) ??
-          readVisibleRadius(mainSurface) ??
-          "18px",
+        borderRadius: readVisibleRadius(frameSurface) ?? readVisibleRadius(mainSurface) ?? "18px",
       };
     },
     [phoneLessonDrawer],
@@ -1324,11 +1209,7 @@ export function LearningWorkspace({
       const url = new URL(window.location.href);
       if (url.searchParams.has("view")) {
         url.searchParams.delete("view");
-        window.history.replaceState(
-          null,
-          "",
-          `${url.pathname}${url.search}${url.hash}`,
-        );
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
       }
     }
     setAutoPlayOnLessonChange(true);
@@ -1344,19 +1225,12 @@ export function LearningWorkspace({
       const isTargetDedicatedQuiz = targetLesson?.[5] === "quiz";
       const targetHasQuiz = hasLessonQuiz(lessonNumber);
 
-      if (
-        view === "quiz" ||
-        (view === undefined && isTargetDedicatedQuiz && targetHasQuiz)
-      ) {
+      if (view === "quiz" || (view === undefined && isTargetDedicatedQuiz && targetHasQuiz)) {
         setActiveLessonView("quiz");
         if (typeof window !== "undefined") {
           const url = new URL(window.location.href);
           url.searchParams.set("view", "quiz");
-          window.history.replaceState(
-            null,
-            "",
-            `${url.pathname}${url.search}${url.hash}`,
-          );
+          window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
         }
       } else {
         resumeLessonVideoPlayback();
@@ -1385,11 +1259,7 @@ export function LearningWorkspace({
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
         url.searchParams.set("view", "quiz");
-        window.history.replaceState(
-          null,
-          "",
-          `${url.pathname}${url.search}${url.hash}`,
-        );
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
       }
       if (lessonNumber !== selectedLesson) {
         selectLesson(lessonNumber, "quiz");
@@ -1419,9 +1289,7 @@ export function LearningWorkspace({
     (progress: number) => {
       const roundedProgress = Math.max(0, Math.min(100, Math.round(progress)));
       const nextProgress =
-        roundedProgress >= LESSON_PROGRESS_COMPLETE_THRESHOLD
-          ? 100
-          : roundedProgress;
+        roundedProgress >= LESSON_PROGRESS_COMPLETE_THRESHOLD ? 100 : roundedProgress;
       setLocalLessonProgress((current) => {
         if (current[selectedLesson] === nextProgress) return current;
         const updated = { ...current, [selectedLesson]: nextProgress };
@@ -1479,13 +1347,7 @@ export function LearningWorkspace({
     setAutoPlayOnLessonChange(true);
     setSelectedLesson(nextLessonId);
     if (nextLessonId !== lessonId) onSelectLesson(nextLessonId);
-  }, [
-    curriculumLessonsById,
-    firstCurriculumLessonId,
-    lessonId,
-    onSelectLesson,
-    selectedLesson,
-  ]);
+  }, [curriculumLessonsById, firstCurriculumLessonId, lessonId, onSelectLesson, selectedLesson]);
 
   const toggleTheaterMode = useCallback(() => {
     setLessonDrawer(false);
@@ -1498,8 +1360,7 @@ export function LearningWorkspace({
       window.requestAnimationFrame(() => {
         scrollApplicationTo({
           top: 0,
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
-            .matches
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
             ? "auto"
             : "smooth",
         });
@@ -1531,9 +1392,7 @@ export function LearningWorkspace({
         setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
         setLessonDrawerSnapPoint(collapsedSnapPoint);
       }
-      setLessonDrawerViewportBounds(
-        getLessonDrawerViewportBounds(floatingLessonDrawerWidth),
-      );
+      setLessonDrawerViewportBounds(getLessonDrawerViewportBounds(floatingLessonDrawerWidth));
       setLessonDrawer(true);
     },
     [
@@ -1545,15 +1404,9 @@ export function LearningWorkspace({
     ],
   );
 
-  const openLessonDrawer = useCallback(
-    () => showLessonDrawer("current"),
-    [showLessonDrawer],
-  );
+  const openLessonDrawer = useCallback(() => showLessonDrawer("current"), [showLessonDrawer]);
 
-  const openLessonDrawerAtTop = useCallback(
-    () => showLessonDrawer("top"),
-    [showLessonDrawer],
-  );
+  const openLessonDrawerAtTop = useCallback(() => showLessonDrawer("top"), [showLessonDrawer]);
 
   const closeLessonDrawer = useCallback(() => {
     setLessonDrawer(false);
@@ -1600,13 +1453,10 @@ export function LearningWorkspace({
     ],
   );
 
-  const handleMobileLandscapeFullscreenChange = useCallback(
-    (active: boolean) => {
-      setMobileLandscapeFullscreen(active);
-      if (!active) setFullscreenLessonPanelOpen(false);
-    },
-    [],
-  );
+  const handleMobileLandscapeFullscreenChange = useCallback((active: boolean) => {
+    setMobileLandscapeFullscreen(active);
+    if (!active) setFullscreenLessonPanelOpen(false);
+  }, []);
 
   const closeFullscreenLessonPanel = useCallback(() => {
     setFullscreenVideoWidthPreviewPercent(null);
@@ -1624,9 +1474,7 @@ export function LearningWorkspace({
       setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
       setLessonDrawerSnapPoint(collapsedSnapPoint);
     }
-    setLessonDrawerViewportBounds(
-      getLessonDrawerViewportBounds(floatingLessonDrawerWidth),
-    );
+    setLessonDrawerViewportBounds(getLessonDrawerViewportBounds(floatingLessonDrawerWidth));
     setLessonDrawer(true);
   }, [
     getLessonDrawerCollapsedSnapPoint,
@@ -1647,8 +1495,7 @@ export function LearningWorkspace({
     if (!lessonDrawer) return undefined;
     const compactWorkspace = window.matchMedia(COURSE_CONTENT_DRAWER_QUERY);
     const appShell =
-      playerWrapRef.current?.closest(".courses-app") ??
-      document.querySelector(".courses-app");
+      playerWrapRef.current?.closest(".courses-app") ?? document.querySelector(".courses-app");
     let resizeTimer: number | null = null;
 
     const syncDrawerGeometry = () => {
@@ -1657,9 +1504,7 @@ export function LearningWorkspace({
         return;
       }
 
-      setLessonDrawerViewportBounds(
-        getLessonDrawerViewportBounds(floatingLessonDrawerWidth),
-      );
+      setLessonDrawerViewportBounds(getLessonDrawerViewportBounds(floatingLessonDrawerWidth));
       if (!phoneLessonDrawer) return;
       const collapsedSnapPoint = getLessonDrawerCollapsedSnapPoint();
       setLessonDrawerCollapsedSnapPoint(collapsedSnapPoint);
@@ -1689,11 +1534,8 @@ export function LearningWorkspace({
 
     syncDrawerGeometry();
     const playerResizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(scheduleCollapsedSnapPoint);
-    if (playerWrapRef.current)
-      playerResizeObserver?.observe(playerWrapRef.current);
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleCollapsedSnapPoint);
+    if (playerWrapRef.current) playerResizeObserver?.observe(playerWrapRef.current);
 
     compactWorkspace.addEventListener("change", syncWorkspaceLayout);
     const appShellObserver =
@@ -1707,20 +1549,14 @@ export function LearningWorkspace({
       });
     }
     window.addEventListener("resize", scheduleCollapsedSnapPoint);
-    window.visualViewport?.addEventListener(
-      "resize",
-      scheduleCollapsedSnapPoint,
-    );
+    window.visualViewport?.addEventListener("resize", scheduleCollapsedSnapPoint);
     return () => {
       if (resizeTimer !== null) window.clearTimeout(resizeTimer);
       playerResizeObserver?.disconnect();
       compactWorkspace.removeEventListener("change", syncWorkspaceLayout);
       appShellObserver?.disconnect();
       window.removeEventListener("resize", scheduleCollapsedSnapPoint);
-      window.visualViewport?.removeEventListener(
-        "resize",
-        scheduleCollapsedSnapPoint,
-      );
+      window.visualViewport?.removeEventListener("resize", scheduleCollapsedSnapPoint);
     };
   }, [
     getLessonDrawerCollapsedSnapPoint,
@@ -1732,9 +1568,7 @@ export function LearningWorkspace({
     phoneLessonDrawer,
   ]);
 
-  const startCurriculumScreenSwipe = (
-    event: CurriculumScreenSwipeStartEvent,
-  ) => {
+  const startCurriculumScreenSwipe = (event: CurriculumScreenSwipeStartEvent) => {
     const drawerLayout = isCourseContentDrawerLayout();
     const revealsTabletDrawer = drawerLayout && !phoneLessonDrawer;
     const target = revealsTabletDrawer ? "lesson-drawer" : "curriculum";
@@ -1763,8 +1597,7 @@ export function LearningWorkspace({
       lastX: event.clientX,
       lastTimestamp: event.timeStamp,
       velocityX: 0,
-      closedAtStart:
-        target === "lesson-drawer" ? !lessonDrawer : curriculumCollapsed,
+      closedAtStart: target === "lesson-drawer" ? !lessonDrawer : curriculumCollapsed,
       expandedWidthAtStart: curriculumWidth,
       target,
       handle: event.handle,
@@ -1788,11 +1621,7 @@ export function LearningWorkspace({
         return;
       }
       if (horizontalDistance < CURRICULUM_SWIPE_ACTIVATION_DISTANCE) return;
-      if (
-        horizontalDistance <=
-        verticalDistance * CURRICULUM_SWIPE_DIRECTION_RATIO
-      )
-        return;
+      if (horizontalDistance <= verticalDistance * CURRICULUM_SWIPE_DIRECTION_RATIO) return;
 
       const opensClosedCurriculum = swipe.closedAtStart && deltaX < 0;
       const closesOpenCurriculum = !swipe.closedAtStart && deltaX > 0;
@@ -1866,14 +1695,12 @@ export function LearningWorkspace({
 
     const totalDistance = swipe.lastX - swipe.startX;
     const finishedAt = event.timeStamp || performance.now();
-    const averageVelocity =
-      totalDistance / Math.max(1, finishedAt - swipe.startedAt);
+    const averageVelocity = totalDistance / Math.max(1, finishedAt - swipe.startedAt);
     const fastFling =
       Math.abs(totalDistance) >= CURRICULUM_SWIPE_FLING_DISTANCE &&
       Math.max(Math.abs(swipe.velocityX), Math.abs(averageVelocity)) >=
         CURRICULUM_SWIPE_FLING_VELOCITY;
-    const shouldCommit =
-      fastFling || Math.abs(totalDistance) >= CURRICULUM_SWIPE_COMMIT_DISTANCE;
+    const shouldCommit = fastFling || Math.abs(totalDistance) >= CURRICULUM_SWIPE_COMMIT_DISTANCE;
     if (!shouldCommit) return;
 
     if (swipe.target === "lesson-drawer") {
@@ -1912,10 +1739,8 @@ export function LearningWorkspace({
         splitX: getLearningPlayerSwipeSplitX(playerAnchor),
       });
     };
-    const continueSwipe = (event: PointerEvent) =>
-      curriculumScreenSwipeMoveRef.current?.(event);
-    const finishSwipe = (event: PointerEvent) =>
-      curriculumScreenSwipeFinishRef.current?.(event);
+    const continueSwipe = (event: PointerEvent) => curriculumScreenSwipeMoveRef.current?.(event);
+    const finishSwipe = (event: PointerEvent) => curriculumScreenSwipeFinishRef.current?.(event);
     const cancelSwipe = (event: PointerEvent) =>
       curriculumScreenSwipeFinishRef.current?.(event, true);
     window.addEventListener("pointerdown", startSwipeFromHostedPlayer, true);
@@ -1926,22 +1751,15 @@ export function LearningWorkspace({
     window.addEventListener("pointerup", finishSwipe, true);
     window.addEventListener("pointercancel", cancelSwipe, true);
     return () => {
-      window.removeEventListener(
-        "pointerdown",
-        startSwipeFromHostedPlayer,
-        true,
-      );
+      window.removeEventListener("pointerdown", startSwipeFromHostedPlayer, true);
       window.removeEventListener("pointermove", continueSwipe, true);
       window.removeEventListener("pointerup", finishSwipe, true);
       window.removeEventListener("pointercancel", cancelSwipe, true);
     };
   }, []);
 
-  const suppressCurriculumSwipeClick = (
-    event: ReactMouseEvent<HTMLDivElement>,
-  ) => {
-    if (performance.now() > curriculumScreenSwipeConsumedUntilRef.current)
-      return;
+  const suppressCurriculumSwipeClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (performance.now() > curriculumScreenSwipeConsumedUntilRef.current) return;
     curriculumScreenSwipeConsumedUntilRef.current = 0;
     event.preventDefault();
     event.stopPropagation();
@@ -1972,23 +1790,14 @@ export function LearningWorkspace({
     };
 
     window.addEventListener("keydown", handleCurriculumShortcut, true);
-    return () =>
-      window.removeEventListener("keydown", handleCurriculumShortcut, true);
-  }, [
-    closeLessonDrawer,
-    isCourseContentDrawerLayout,
-    lessonDrawer,
-    openLessonDrawer,
-  ]);
+    return () => window.removeEventListener("keydown", handleCurriculumShortcut, true);
+  }, [closeLessonDrawer, isCourseContentDrawerLayout, lessonDrawer, openLessonDrawer]);
 
   const commitCurriculumWidth = useCallback((value: number) => {
     const nextWidth = clampLearningCurriculumWidth(value);
     setCurriculumWidth(nextWidth);
     try {
-      localStorage.setItem(
-        CURRICULUM_WIDTH_STORAGE_KEY,
-        String(Math.round(nextWidth)),
-      );
+      localStorage.setItem(CURRICULUM_WIDTH_STORAGE_KEY, String(Math.round(nextWidth)));
     } catch {
       // Resizing remains available when browser storage is unavailable.
     }
@@ -2036,15 +1845,12 @@ export function LearningWorkspace({
     [previewFloatingLessonDrawerWidth],
   );
 
-  const startFloatingLessonDrawerResize = (
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) => {
+  const startFloatingLessonDrawerResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (phoneLessonDrawer) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    const startWidth =
-      lessonDrawerViewportBounds?.width ?? floatingLessonDrawerWidth;
+    const startWidth = lessonDrawerViewportBounds?.width ?? floatingLessonDrawerWidth;
     floatingLessonDrawerResizeRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -2066,8 +1872,7 @@ export function LearningWorkspace({
       const nextWidth = previewFloatingLessonDrawerWidth(requestedWidth, true);
       if (nextWidth !== null) {
         resize.previewWidth = nextWidth;
-        resize.dismissOnEnd =
-          requestedWidth <= FLOATING_LESSON_DRAWER_SNAP_WIDTH;
+        resize.dismissOnEnd = requestedWidth <= FLOATING_LESSON_DRAWER_SNAP_WIDTH;
       }
     },
     [previewFloatingLessonDrawerWidth],
@@ -2090,21 +1895,14 @@ export function LearningWorkspace({
       }
       commitFloatingLessonDrawerWidth(resize.previewWidth);
     },
-    [
-      closeLessonDrawer,
-      commitFloatingLessonDrawerWidth,
-      previewFloatingLessonDrawerWidth,
-    ],
+    [closeLessonDrawer, commitFloatingLessonDrawerWidth, previewFloatingLessonDrawerWidth],
   );
 
   useEffect(() => {
     if (!floatingLessonDrawerResizing) return undefined;
-    const continueResize = (event: PointerEvent) =>
-      moveFloatingLessonDrawerResize(event);
-    const finishResize = (event: PointerEvent) =>
-      endFloatingLessonDrawerResize(event);
-    const cancelResize = (event: PointerEvent) =>
-      endFloatingLessonDrawerResize(event, true);
+    const continueResize = (event: PointerEvent) => moveFloatingLessonDrawerResize(event);
+    const finishResize = (event: PointerEvent) => endFloatingLessonDrawerResize(event);
+    const cancelResize = (event: PointerEvent) => endFloatingLessonDrawerResize(event, true);
     window.addEventListener("pointermove", continueResize);
     window.addEventListener("pointerup", finishResize);
     window.addEventListener("pointercancel", cancelResize);
@@ -2113,15 +1911,9 @@ export function LearningWorkspace({
       window.removeEventListener("pointerup", finishResize);
       window.removeEventListener("pointercancel", cancelResize);
     };
-  }, [
-    endFloatingLessonDrawerResize,
-    floatingLessonDrawerResizing,
-    moveFloatingLessonDrawerResize,
-  ]);
+  }, [endFloatingLessonDrawerResize, floatingLessonDrawerResizing, moveFloatingLessonDrawerResize]);
 
-  const handleFloatingLessonDrawerResizeKeyDown = (
-    event: ReactKeyboardEvent<HTMLDivElement>,
-  ) => {
+  const handleFloatingLessonDrawerResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
       const direction = event.key === "ArrowLeft" ? 20 : -20;
@@ -2141,20 +1933,14 @@ export function LearningWorkspace({
       curriculumResizeRef.current = {
         pointerId,
         startX: clientX,
-        startWidth: curriculumCollapsed
-          ? CURRICULUM_COLLAPSED_WIDTH
-          : curriculumWidth,
+        startWidth: curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth,
         expandedWidthAtStart: curriculumWidth,
         collapsedAtStart: curriculumCollapsed,
         collapsed: curriculumCollapsed,
         collapsedAnchorX: clientX,
-        collapsedAnchorWidth: curriculumCollapsed
-          ? CURRICULUM_COLLAPSED_WIDTH
-          : curriculumWidth,
+        collapsedAnchorWidth: curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth,
         expandedAnchorX: null,
-        previewWidth: curriculumCollapsed
-          ? CURRICULUM_COLLAPSED_WIDTH
-          : curriculumWidth,
+        previewWidth: curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth,
         handle,
       };
       setCurriculumResizePreviewWidth(
@@ -2250,8 +2036,7 @@ export function LearningWorkspace({
 
   useEffect(() => {
     const handleScrollbarHorizontalDrag = (event: Event) => {
-      const { detail } =
-        event as CustomEvent<FloatingScrollbarHorizontalDragDetail>;
+      const { detail } = event as CustomEvent<FloatingScrollbarHorizontalDragDetail>;
       if (detail.ariaControls !== "courses-main-scrollport") return;
 
       if (detail.phase === "start") {
@@ -2290,12 +2075,9 @@ export function LearningWorkspace({
 
   useEffect(() => {
     if (!curriculumResizing) return undefined;
-    const continueResize = (event: PointerEvent) =>
-      curriculumResizeMoveRef.current?.(event);
-    const finishResize = (event: PointerEvent) =>
-      curriculumResizeFinishRef.current?.(event);
-    const cancelResize = (event: PointerEvent) =>
-      curriculumResizeFinishRef.current?.(event, true);
+    const continueResize = (event: PointerEvent) => curriculumResizeMoveRef.current?.(event);
+    const finishResize = (event: PointerEvent) => curriculumResizeFinishRef.current?.(event);
+    const cancelResize = (event: PointerEvent) => curriculumResizeFinishRef.current?.(event, true);
     window.addEventListener("pointermove", continueResize);
     window.addEventListener("pointerup", finishResize);
     window.addEventListener("pointercancel", cancelResize);
@@ -2306,9 +2088,7 @@ export function LearningWorkspace({
     };
   }, [curriculumResizing]);
 
-  const handleCurriculumResizeKeyDown = (
-    event: ReactKeyboardEvent<HTMLDivElement>,
-  ) => {
+  const handleCurriculumResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       event.preventDefault();
       if (curriculumCollapsed && event.key === "ArrowLeft") {
@@ -2442,17 +2222,14 @@ export function LearningWorkspace({
     ],
   );
   const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(null);
-  const registerLessonPlayerSeek = useCallback(
-    (seekToTimestamp: (seconds: number) => void) => {
-      lessonPlayerSeekRef.current = seekToTimestamp;
-      return () => {
-        if (lessonPlayerSeekRef.current === seekToTimestamp) {
-          lessonPlayerSeekRef.current = null;
-        }
-      };
-    },
-    [],
-  );
+  const registerLessonPlayerSeek = useCallback((seekToTimestamp: (seconds: number) => void) => {
+    lessonPlayerSeekRef.current = seekToTimestamp;
+    return () => {
+      if (lessonPlayerSeekRef.current === seekToTimestamp) {
+        lessonPlayerSeekRef.current = null;
+      }
+    };
+  }, []);
   const seekCurrentLessonToTimestamp = useCallback((seconds: number) => {
     if (!Number.isFinite(seconds) || seconds < 0) return;
     lessonPlayerSeekRef.current?.(seconds);
@@ -2469,12 +2246,7 @@ export function LearningWorkspace({
           ? mediaService.getVideoThumbnailUrl(selectedLessonMediaId)
           : courseThumbnail,
       }),
-    [
-      courseThumbnail,
-      currentLessonTitle,
-      selectedLessonDurationSeconds,
-      selectedLessonMediaId,
-    ],
+    [courseThumbnail, currentLessonTitle, selectedLessonDurationSeconds, selectedLessonMediaId],
   );
 
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
@@ -2590,9 +2362,7 @@ export function LearningWorkspace({
       anchor,
       courseRouteKey: persistentPlayerCourseRouteKey,
       lessonPath: persistentPlayerLessonPath,
-      mediaKey:
-        lessonPlayerProps.resumePersistenceKey ??
-        lessonPlayerProps.media.fileName,
+      mediaKey: lessonPlayerProps.resumePersistenceKey ?? lessonPlayerProps.media.fileName,
       playerProps: lessonPlayerProps,
       returnPath: persistentPlayerReturnPath,
       courseSlug,
@@ -2661,17 +2431,13 @@ export function LearningWorkspace({
               handleOpenLessonQuiz(selectedLesson);
             }
           }}
-          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
+          className={`inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold shadow-(--card-compact-shadow) transition-all ${
             activeLessonView === "quiz"
               ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_15%,var(--surface))] text-(--accent)"
               : "border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
           }`}
           aria-label={`Open quiz for lesson ${selectedLesson}: ${currentLesson[1]}`}
-          title={
-            activeLessonView === "quiz"
-              ? "Return to video lesson"
-              : "Open lesson quiz"
-          }
+          title={activeLessonView === "quiz" ? "Return to video lesson" : "Open lesson quiz"}
         >
           <Exam size={12} weight="bold" className="text-(--accent)" />
           <span>{activeLessonView === "quiz" ? "Back to video" : "Quiz"}</span>
@@ -2713,7 +2479,7 @@ export function LearningWorkspace({
             data-learning-player-motion-target=""
           >
             {showingQuiz ? (
-              <div className="w-full max-w-4xl mx-auto p-3 sm:p-5 md:p-6 lg:p-7">
+              <div className="mx-auto w-full max-w-4xl p-3 sm:p-5 md:p-6 lg:p-7">
                 {currentQuizAssignment ? (
                   <QuizAttemptPanel
                     key={`${currentQuizAssignment.id}-${currentLessonUuid ?? selectedLesson}`}
@@ -2736,24 +2502,20 @@ export function LearningWorkspace({
                   />
                 ) : (
                   <section
-                    className="mx-auto w-full max-w-3xl rounded-[16px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-6 text-(--text)"
+                    className="mx-auto w-full max-w-3xl rounded-[16px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 text-(--text) sm:rounded-[20px] sm:p-6"
                     style={{ boxShadow: "var(--card-shadow)" }}
                   >
-                    <div className="flex items-center justify-between gap-3 mb-4">
+                    <div className="mb-4 flex items-center justify-between gap-3">
                       <button
                         type="button"
                         onClick={resumeLessonVideoPlayback}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95"
+                        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) transition-all hover:border-(--accent) hover:text-(--text) active:scale-95"
                       >
                         <ArrowLeft size={14} weight="bold" />
                         <span>Back to video</span>
                       </button>
                       <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-                        <Exam
-                          size={14}
-                          className="text-(--accent)"
-                          weight="bold"
-                        />
+                        <Exam size={14} className="text-(--accent)" weight="bold" />
                         <span>Lesson {selectedLesson} Quiz</span>
                       </div>
                     </div>
@@ -2768,10 +2530,9 @@ export function LearningWorkspace({
                           ? "Loading quiz assignment"
                           : undefined
                       }
-                      className={`text-sm sm:text-base text-(--muted) ${quizAssignmentLoading || courseQuizAssignments.isLoading ? "grid min-h-12 place-items-center" : ""}`}
+                      className={`text-sm text-(--muted) sm:text-base ${quizAssignmentLoading || courseQuizAssignments.isLoading ? "grid min-h-12 place-items-center" : ""}`}
                     >
-                      {quizAssignmentLoading ||
-                      courseQuizAssignments.isLoading ? (
+                      {quizAssignmentLoading || courseQuizAssignments.isLoading ? (
                         <LoadingSpinnerIcon size={20} />
                       ) : (
                         "This Quiz is not currently assigned to your course access."
@@ -2781,16 +2542,15 @@ export function LearningWorkspace({
                 )}
               </div>
             ) : isDedicatedQuizLesson && !hasLessonQuiz(selectedLesson) ? (
-              <div className="w-full max-w-4xl mx-auto p-8 sm:p-12 text-center">
+              <div className="mx-auto w-full max-w-4xl p-8 text-center sm:p-12">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--accent)">
                   <Exam size={28} weight="duotone" />
                 </div>
                 <h2 className="text-base font-semibold text-(--text)">
                   Quiz Assessment Not Available
                 </h2>
-                <p className="mt-1.5 text-xs sm:text-sm text-(--muted) max-w-md mx-auto">
-                  This lesson does not currently have an active quiz assessment
-                  assigned.
+                <p className="mx-auto mt-1.5 max-w-md text-xs text-(--muted) sm:text-sm">
+                  This lesson does not currently have an active quiz assessment assigned.
                 </p>
               </div>
             ) : registerPersistentPlayer ? (
@@ -2825,15 +2585,13 @@ export function LearningWorkspace({
                   ? undefined
                   : {
                       opacity: "var(--learning-player-content-opacity, 1)",
-                      transform:
-                        "translate3d(0, var(--learning-player-content-offset-y, 0px), 0)",
+                      transform: "translate3d(0, var(--learning-player-content-offset-y, 0px), 0)",
                       transition:
                         "transform var(--learning-player-content-motion-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--learning-player-content-motion-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1)",
                     }
               }
             >
-              {!phoneLessonDrawerViewport &&
-                lessonHeader(false, isLearningBootstrapLoading)}
+              {!phoneLessonDrawerViewport && lessonHeader(false, isLearningBootstrapLoading)}
               {isLearningDeepLinkReady || isLearningBootstrapLoading ? (
                 <Discussion
                   key={discussionPersistenceKey}
@@ -2845,14 +2603,10 @@ export function LearningWorkspace({
                   isThreadDeepLinkReady={isLearningDeepLinkReady}
                   mobileBottomNavigation={mobileBottomNavigation}
                   mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-                  mobileLessonHeader={lessonHeader(
-                    true,
-                    isLearningBootstrapLoading,
-                  )}
+                  mobileLessonHeader={lessonHeader(true, isLearningBootstrapLoading)}
                   lessonDescription={selectedLessonDescription}
                   isLessonDescriptionLoading={
-                    (isApiRoute && isCourseOverviewLoading) ||
-                    isLearningBootstrapLoading
+                    (isApiRoute && isCourseOverviewLoading) || isLearningBootstrapLoading
                   }
                   interactionCapabilities={interactionCapabilities}
                   isInteractionCapabilitiesLoading={isLearningBootstrapLoading}
@@ -2860,33 +2614,22 @@ export function LearningWorkspace({
                   lessonContentAccessReason={lessonContentAccessReason}
                   canParticipate={canParticipateInLessonDiscussion}
                   participationState={lessonParticipationState}
-                  participationActionLabel={
-                    isAuthenticated ? "Get access" : "Log in"
-                  }
-                  onParticipationAction={
-                    isAuthenticated ? onOpenCourseOverview : onOpenLogin
-                  }
+                  participationActionLabel={isAuthenticated ? "Get access" : "Log in"}
+                  onParticipationAction={isAuthenticated ? onOpenCourseOverview : onOpenLogin}
                   onSeekToTimestamp={seekCurrentLessonToTimestamp}
                 />
               ) : isLearningDeepLinkError ? (
                 <div>
-                  {phoneLessonDrawerViewport &&
-                    lessonHeader(true, isLearningBootstrapLoading)}
-                  <div
-                    className="py-12 text-center"
-                    data-testid="learning-discussion-error"
-                  >
-                    <p className="font-semibold text-(--text)">
-                      Failed to load discussion
-                    </p>
+                  {phoneLessonDrawerViewport && lessonHeader(true, isLearningBootstrapLoading)}
+                  <div className="py-12 text-center" data-testid="learning-discussion-error">
+                    <p className="font-semibold text-(--text)">Failed to load discussion</p>
                     <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
-                      There was a problem loading the course for this
-                      discussion.
+                      There was a problem loading the course for this discussion.
                     </p>
                     <button
                       type="button"
                       onClick={() => void refetchCourseOverview()}
-                      className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                      className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] ring-inset hover:bg-(--hover)"
                     >
                       Retry
                     </button>
@@ -2894,8 +2637,7 @@ export function LearningWorkspace({
                 </div>
               ) : (
                 <div>
-                  {phoneLessonDrawerViewport &&
-                    lessonHeader(true, isLearningBootstrapLoading)}
+                  {phoneLessonDrawerViewport && lessonHeader(true, isLearningBootstrapLoading)}
                   <div
                     className="flex min-h-48 flex-col items-center justify-center py-12 text-sm text-(--text-secondary)"
                     data-testid="learning-discussion-loading"
@@ -2924,9 +2666,7 @@ export function LearningWorkspace({
               aria-valuemin={CURRICULUM_MIN_WIDTH}
               aria-valuemax={CURRICULUM_MAX_WIDTH}
               aria-valuenow={
-                curriculumCollapsed
-                  ? undefined
-                  : Math.round(curriculumAccessibleWidth)
+                curriculumCollapsed ? undefined : Math.round(curriculumAccessibleWidth)
               }
               aria-valuetext={
                 curriculumCollapsed
@@ -2934,9 +2674,8 @@ export function LearningWorkspace({
                   : `${Math.round(curriculumAccessibleWidth)} pixels wide${
                       curriculumResizing &&
                       (curriculumResizePreviewWidth ??
-                        (curriculumCollapsed
-                          ? CURRICULUM_COLLAPSED_WIDTH
-                          : curriculumWidth)) < CURRICULUM_MIN_WIDTH
+                        (curriculumCollapsed ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth)) <
+                        CURRICULUM_MIN_WIDTH
                         ? ", sliding closed"
                         : ""
                     }`
@@ -2949,10 +2688,7 @@ export function LearningWorkspace({
               onPointerUp={endCurriculumResize}
               onPointerCancel={(event) => endCurriculumResize(event, true)}
             />
-            <div
-              id="learning-course-content"
-              className="learning-curriculum__viewport"
-            >
+            <div id="learning-course-content" className="learning-curriculum__viewport">
               <Curriculum
                 sections={curriculumSections}
                 lessonsById={curriculumLessonsById}
@@ -2994,15 +2730,12 @@ export function LearningWorkspace({
         onOpenChangeComplete={(open) => {
           if (!open) {
             setLessonDrawerViewportBounds(null);
-            if (phoneLessonDrawer)
-              setLessonDrawerSnapPoint(lessonDrawerCollapsedSnapPoint);
+            if (phoneLessonDrawer) setLessonDrawerSnapPoint(lessonDrawerCollapsedSnapPoint);
           }
         }}
         snapPoints={phoneLessonDrawer ? lessonDrawerSnapPoints : undefined}
         snapPoint={phoneLessonDrawer ? lessonDrawerSnapPoint : undefined}
-        onSnapPointChange={
-          phoneLessonDrawer ? setLessonDrawerSnapPoint : undefined
-        }
+        onSnapPointChange={phoneLessonDrawer ? setLessonDrawerSnapPoint : undefined}
         snapToSequentialPoints={phoneLessonDrawer}
         showSwipeHandle={phoneLessonDrawer}
         swipeDirection={phoneLessonDrawer ? "down" : "right"}
@@ -3055,8 +2788,8 @@ export function LearningWorkspace({
           className={[
             "learning-course-content-drawer overflow-hidden",
             phoneLessonDrawer
-              ? "[--drawer-bleed-background:var(--canvas)] bg-(--canvas) data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] shadow-[0_-18px_48px_rgba(0,0,0,0.32)]"
-              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_74%,transparent)] overflow-hidden rounded-l-[12px]! rounded-r-(--learning-floating-curriculum-radius)! bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)] shadow-(--sidebar-menu-active-shadow) backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] data-[swipe-direction=right]:rounded-l-[12px]! data-[swipe-direction=right]:rounded-r-(--learning-floating-curriculum-radius)! [&_.learning-curriculum]:rounded-none! [&_.learning-curriculum]:bg-transparent!",
+              ? "bg-(--canvas) shadow-[0_-18px_48px_rgba(0,0,0,0.32)] [--drawer-bleed-background:var(--canvas)] data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh]"
+              : "overflow-hidden rounded-l-[12px]! rounded-r-(--learning-floating-curriculum-radius)! border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)] shadow-(--sidebar-menu-active-shadow) backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_74%,transparent)] data-[swipe-direction=right]:rounded-l-[12px]! data-[swipe-direction=right]:rounded-r-(--learning-floating-curriculum-radius)! [&_.learning-curriculum]:rounded-none! [&_.learning-curriculum]:bg-transparent!",
           ].join(" ")}
         >
           {!phoneLessonDrawer && (
@@ -3071,19 +2804,11 @@ export function LearningWorkspace({
               aria-valuemin={LESSON_DRAWER_MIN_FLOATING_WIDTH}
               aria-valuemax={LESSON_DRAWER_MAX_FLOATING_WIDTH}
               aria-valuenow={Math.round(
-                Math.max(
-                  LESSON_DRAWER_MIN_FLOATING_WIDTH,
-                  floatingLessonDrawerViewportWidth,
-                ),
+                Math.max(LESSON_DRAWER_MIN_FLOATING_WIDTH, floatingLessonDrawerViewportWidth),
               )}
               aria-valuetext={`${Math.round(
-                Math.max(
-                  LESSON_DRAWER_MIN_FLOATING_WIDTH,
-                  floatingLessonDrawerViewportWidth,
-                ),
-              )} pixels wide${
-                floatingLessonDrawerSlidingClosed ? ", sliding closed" : ""
-              }`}
+                Math.max(LESSON_DRAWER_MIN_FLOATING_WIDTH, floatingLessonDrawerViewportWidth),
+              )} pixels wide${floatingLessonDrawerSlidingClosed ? ", sliding closed" : ""}`}
               title="Resize or close floating course content"
               tabIndex={0}
               onKeyDown={handleFloatingLessonDrawerResizeKeyDown}
@@ -3113,25 +2838,13 @@ export function LearningWorkspace({
               courseTitle={courseTitle}
               courseThumbnail={courseThumbnail}
               courseThumbnailSrcSet={courseThumbnailSrcSet}
-              focusRequest={
-                lessonDrawerScrollTarget === "current"
-                  ? lessonDrawerFocusRequest
-                  : 0
-              }
-              topRequest={
-                lessonDrawerScrollTarget === "top" ? lessonDrawerTopRequest : 0
-              }
+              focusRequest={lessonDrawerScrollTarget === "current" ? lessonDrawerFocusRequest : 0}
+              topRequest={lessonDrawerScrollTarget === "top" ? lessonDrawerTopRequest : 0}
               persistenceKey={coursePersistenceKey}
               isLoading={isApiRoute && isCourseOverviewLoading}
               onClose={closeLessonDrawer}
-              onLessonSearchOpen={
-                phoneLessonDrawer
-                  ? () => setLessonDrawerSnapPoint(1)
-                  : undefined
-              }
-              drawerHeroControlProps={
-                phoneLessonDrawer ? lessonDrawerHeroControlProps : undefined
-              }
+              onLessonSearchOpen={phoneLessonDrawer ? () => setLessonDrawerSnapPoint(1) : undefined}
+              drawerHeroControlProps={phoneLessonDrawer ? lessonDrawerHeroControlProps : undefined}
             />
           </div>
         </DrawerContent>

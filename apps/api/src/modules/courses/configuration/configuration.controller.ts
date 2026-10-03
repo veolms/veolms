@@ -6,11 +6,7 @@ import type {
 } from "@veolms/contracts";
 import type { ConfigurationService } from "./configuration.service.ts";
 
-export function createConfigurationController({
-  service,
-}: {
-  service: ConfigurationService;
-}) {
+export function createConfigurationController({ service }: { service: ConfigurationService }) {
   async function upsertCourseAccessRules(
     request: FastifyRequest<{
       Params: { id: string };
@@ -19,12 +15,7 @@ export function createConfigurationController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.upsertCourseAccessRules(
-      id,
-      creatorId,
-      request.body,
-      request.user?.roles,
-    );
+    return await service.upsertCourseAccessRules(id, creatorId, request.body, request.user?.roles);
   }
 
   async function upsertCoursePricing(
@@ -35,12 +26,7 @@ export function createConfigurationController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.upsertCoursePricing(
-      id,
-      creatorId,
-      request.body,
-      request.user?.roles,
-    );
+    return await service.upsertCoursePricing(id, creatorId, request.body, request.user?.roles);
   }
 
   async function upsertCourseSettings(
@@ -51,12 +37,7 @@ export function createConfigurationController({
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.upsertCourseSettings(
-      id,
-      creatorId,
-      request.body,
-      request.user?.roles,
-    );
+    return await service.upsertCourseSettings(id, creatorId, request.body, request.user?.roles);
   }
 
   return {
@@ -66,6 +47,4 @@ export function createConfigurationController({
   };
 }
 
-export type ConfigurationController = ReturnType<
-  typeof createConfigurationController
->;
+export type ConfigurationController = ReturnType<typeof createConfigurationController>;

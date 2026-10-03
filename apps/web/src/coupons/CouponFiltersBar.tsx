@@ -1,15 +1,8 @@
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { ThemedSelect } from "../ThemedSelect";
-import {
-  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
-  SearchShortcutHint,
-} from "../searchShortcut";
-import {
-  inputClass,
-  type CouponSortOption,
-  type CouponTabFilter,
-} from "./couponHelpers";
+import { SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS, SearchShortcutHint } from "../searchShortcut";
+import { inputClass, type CouponSortOption, type CouponTabFilter } from "./couponHelpers";
 
 export interface CouponFiltersBarProps {
   activeTab: CouponTabFilter;
@@ -36,12 +29,11 @@ const sortOptions: readonly [CouponSortOption, string][] = [
   ["expiring_soon", "Expiring soon"],
 ];
 
-const discountTypeOptions: readonly ["all" | "percentage" | "fixed", string][] =
-  [
-    ["all", "All types"],
-    ["percentage", "Percentage"],
-    ["fixed", "Fixed amount"],
-  ];
+const discountTypeOptions: readonly ["all" | "percentage" | "fixed", string][] = [
+  ["all", "All types"],
+  ["percentage", "Percentage"],
+  ["fixed", "Fixed amount"],
+];
 
 export function CouponFiltersBar({
   activeTab,
@@ -63,9 +55,9 @@ export function CouponFiltersBar({
   ];
 
   return (
-    <div className="flex flex-col gap-3 px-3 pb-3 mt-4 sm:px-7 sm:pb-5">
+    <div className="mt-4 flex flex-col gap-3 px-3 pb-3 sm:px-7 sm:pb-5">
       <div
-        className="flex items-center gap-1 overflow-x-auto no-scrollbar rounded-[10px] sm:rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_80%,var(--surface))] p-1 shadow-[inset_0_1px_2px_color-mix(in_srgb,black_10%,transparent)]"
+        className="no-scrollbar flex items-center gap-1 overflow-x-auto rounded-[10px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_80%,var(--surface))] p-1 shadow-[inset_0_1px_2px_color-mix(in_srgb,black_10%,transparent)] sm:rounded-[12px]"
         role="tablist"
         aria-label="Coupon status"
       >
@@ -78,10 +70,10 @@ export function CouponFiltersBar({
               role="tab"
               aria-selected={isActive}
               onClick={() => onTabChange(tab.id)}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-md sm:rounded-[8px] px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+              className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all sm:rounded-[8px] ${
                 isActive
                   ? "bg-(--card-surface,var(--surface)) text-(--text) shadow-(--card-compact-shadow)"
-                  : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+                  : "text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] hover:text-(--text)"
               }`}
             >
               <span>{tab.label}</span>
@@ -93,13 +85,9 @@ export function CouponFiltersBar({
 
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
         <label
-          className={`${inputClass} flex min-h-10 min-w-0 flex-1 items-center gap-2.5 cursor-text`}
+          className={`${inputClass} flex min-h-10 min-w-0 flex-1 cursor-text items-center gap-2.5`}
         >
-          <MagnifyingGlass
-            size={16}
-            className="shrink-0 text-(--muted)"
-            aria-hidden="true"
-          />
+          <MagnifyingGlass size={16} className="shrink-0 text-(--muted)" aria-hidden="true" />
           <input
             id="coupons-search-input"
             type="text"
@@ -109,7 +97,7 @@ export function CouponFiltersBar({
             aria-label="Search coupons"
             aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
             data-search-shortcut-target
-            className="w-full border-0 bg-transparent p-0 text-xs sm:text-sm text-(--text) placeholder:text-(--muted) outline-none"
+            className="w-full border-0 bg-transparent p-0 text-xs text-(--text) outline-none placeholder:text-(--muted) sm:text-sm"
           />
           <SearchShortcutHint />
           {searchQuery ? (
@@ -117,23 +105,19 @@ export function CouponFiltersBar({
               type="button"
               onClick={() => onSearchChange("")}
               aria-label="Clear search"
-              className="text-(--muted) hover:text-(--text) cursor-pointer"
+              className="cursor-pointer text-(--muted) hover:text-(--text)"
             >
               <X size={14} />
             </button>
           ) : null}
         </label>
 
-        <div
-          className={`${inputClass} flex min-h-10 w-full items-center sm:w-44`}
-        >
+        <div className={`${inputClass} flex min-h-10 w-full items-center sm:w-44`}>
           <ThemedSelect
             id="coupons-type-filter"
             value={discountTypeFilter}
             onValueChange={(value) =>
-              onDiscountTypeFilterChange(
-                value as "all" | "percentage" | "fixed",
-              )
+              onDiscountTypeFilterChange(value as "all" | "percentage" | "fixed")
             }
             options={discountTypeOptions}
             ariaLabel="Filter by discount type"
@@ -141,9 +125,7 @@ export function CouponFiltersBar({
           />
         </div>
 
-        <div
-          className={`${inputClass} flex min-h-10 w-full items-center sm:w-40`}
-        >
+        <div className={`${inputClass} flex min-h-10 w-full items-center sm:w-40`}>
           <ThemedSelect
             id="coupons-sort-filter"
             value={sortBy}

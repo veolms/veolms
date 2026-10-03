@@ -66,10 +66,7 @@ first.jpg#xywh=0,0,0,90\r
 middle.jpg\r
 `);
 
-    expect(frames.map((frame) => frame.imageUrl)).toEqual([
-      "middle.jpg",
-      "last.jpg",
-    ]);
+    expect(frames.map((frame) => frame.imageUrl)).toEqual(["middle.jpg", "last.jpg"]);
   });
 });
 

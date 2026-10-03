@@ -1,11 +1,9 @@
 import type { Generated } from "kysely";
 import type { Json } from "./json.schema.ts";
 
-export type NotificationCategory =
-  "transactional" | "social" | "learning" | "system";
+export type NotificationCategory = "transactional" | "social" | "learning" | "system";
 export type NotificationChannel = "in_app" | "email";
-export type NotificationDeliveryStatus =
-  "pending" | "processing" | "sent" | "failed" | "skipped";
+export type NotificationDeliveryStatus = "pending" | "processing" | "sent" | "failed" | "skipped";
 
 export interface NotificationTable {
   id: string;

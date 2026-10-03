@@ -6,24 +6,17 @@ import {
   type PlayerThemeDefinition,
 } from "./playerThemes";
 
-const PlayerThemeContext = createContext<PlayerThemeDefinition>(
-  BUILT_IN_PLAYER_THEMES.youtube,
-);
+const PlayerThemeContext = createContext<PlayerThemeDefinition>(BUILT_IN_PLAYER_THEMES.youtube);
 
 export interface PlayerThemeProviderProps {
   children: ReactNode;
   theme?: PlayerTheme;
 }
 
-export function PlayerThemeProvider({
-  children,
-  theme = "youtube",
-}: PlayerThemeProviderProps) {
+export function PlayerThemeProvider({ children, theme = "youtube" }: PlayerThemeProviderProps) {
   const resolvedTheme = useMemo(() => resolvePlayerTheme(theme), [theme]);
   return (
-    <PlayerThemeContext.Provider value={resolvedTheme}>
-      {children}
-    </PlayerThemeContext.Provider>
+    <PlayerThemeContext.Provider value={resolvedTheme}>{children}</PlayerThemeContext.Provider>
   );
 }
 

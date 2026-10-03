@@ -21,14 +21,12 @@ export function PageHeading({
         {onNavigateBack ? <PageBackButton onClick={onNavigateBack} /> : null}
         <h1
           id={id}
-          className="flex min-h-9 items-center text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
+          className="flex min-h-9 items-center text-[clamp(1.8rem,2.4vw,2.15rem)] leading-tight font-bold tracking-[-0.035em] text-(--text)"
         >
           {title}
         </h1>
       </div>
-      <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
-        {description}
-      </p>
+      <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">{description}</p>
     </div>
   );
 }

@@ -61,8 +61,7 @@ export function OrderHistoryPage({
         (document.activeElement as HTMLElement)?.isContentEditable;
       if (
         !isInput &&
-        (event.key === "/" ||
-          ((event.metaKey || event.ctrlKey) && event.key === "k"))
+        (event.key === "/" || ((event.metaKey || event.ctrlKey) && event.key === "k"))
       ) {
         event.preventDefault();
         document.getElementById("order-history-search-input")?.focus();
@@ -91,7 +90,7 @@ export function OrderHistoryPage({
 
   return (
     <main
-      className="mx-auto flex w-full min-w-0 max-w-[1800px] flex-col gap-6 font-sans"
+      className="mx-auto flex w-full max-w-[1800px] min-w-0 flex-col gap-6 font-sans"
       aria-labelledby="order-history-page-title"
     >
       {/* Page Header */}
@@ -104,7 +103,7 @@ export function OrderHistoryPage({
         />
 
         <span
-          className="inline-flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent)"
+          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent) sm:h-14 sm:w-14"
           aria-hidden="true"
         >
           <Receipt size={26} weight="duotone" />
@@ -132,11 +131,7 @@ export function OrderHistoryPage({
             className="grid min-h-72 place-items-center rounded-2xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface) shadow-(--card-shadow)"
             style={{ boxShadow: "var(--card-shadow)" }}
           >
-            <CircleNotch
-              size={32}
-              className="animate-spin text-(--accent)"
-              aria-label="Loading"
-            />
+            <CircleNotch size={32} className="animate-spin text-(--accent)" aria-label="Loading" />
           </div>
         ) : isError ? (
           <div
@@ -144,13 +139,11 @@ export function OrderHistoryPage({
             style={{ boxShadow: "var(--card-shadow)" }}
           >
             <WarningCircle size={30} className="mb-3 text-rose-400" />
-            <h2 className="font-semibold text-(--text)">
-              Unable to load purchase history
-            </h2>
+            <h2 className="font-semibold text-(--text)">Unable to load purchase history</h2>
             <button
               type="button"
               onClick={() => void refetch()}
-              className="mt-4 rounded-xl bg-(--accent) px-4 py-2 text-xs sm:text-sm font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
+              className="mt-4 cursor-pointer rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] sm:text-sm"
             >
               Try again
             </button>
@@ -172,11 +165,9 @@ export function OrderHistoryPage({
                   type="button"
                   onClick={() => void fetchNextPage()}
                   aria-busy={isFetchingNextPage}
-                  aria-label={
-                    isFetchingNextPage ? "Loading more orders" : undefined
-                  }
+                  aria-label={isFetchingNextPage ? "Loading more orders" : undefined}
                   disabled={isFetchingNextPage}
-                  className="rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs md:text-sm font-semibold text-(--text) hover:bg-(--hover) transition-colors cursor-pointer disabled:cursor-wait disabled:opacity-60"
+                  className="cursor-pointer rounded-xl border border-(--border) bg-(--card-surface) px-5 py-2.5 text-xs font-semibold text-(--text) transition-colors hover:bg-(--hover) disabled:cursor-wait disabled:opacity-60 md:text-sm"
                   style={{ boxShadow: "var(--card-shadow)" }}
                 >
                   {isFetchingNextPage ? (
@@ -203,14 +194,13 @@ export function OrderHistoryPage({
               />
             )}
             <p className="mt-3 text-center text-xs text-(--muted)">
-              Showing {paginatedOrders.length} of {totalFilteredCount} loaded
-              orders
+              Showing {paginatedOrders.length} of {totalFilteredCount} loaded orders
               {hasNextPage ? ` · ${totalLoadedCount} loaded` : ""}
             </p>
           </>
         ) : (
           <div
-            className="relative flex min-h-85 sm:min-h-96 flex-col items-center justify-center overflow-hidden rounded-2xl sm:rounded-[22px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] p-8 sm:p-12 text-center shadow-(--card-shadow)"
+            className="relative flex min-h-85 flex-col items-center justify-center overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] p-8 text-center shadow-(--card-shadow) sm:min-h-96 sm:rounded-[22px] sm:p-12"
             style={{
               background:
                 "radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, color-mix(in srgb, var(--accent) 6%, transparent) 50%, transparent 75%), linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--card-surface)) 0%, var(--card-surface) 48%, var(--card-surface) 100%)",
@@ -218,17 +208,15 @@ export function OrderHistoryPage({
             }}
           >
             <div
-              className="mb-4 flex size-14 sm:size-16 items-center justify-center rounded-2xl sm:rounded-[20px] border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))] text-(--accent) shadow-[0_12px_24px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)]"
+              className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--surface-strong))] text-(--accent) shadow-[0_12px_24px_color-mix(in_srgb,var(--accent-shadow)_22%,transparent)] sm:size-16 sm:rounded-[20px]"
               aria-hidden="true"
             >
               <Receipt size={30} weight="duotone" />
             </div>
-            <h2 className="text-base sm:text-lg font-bold tracking-tight text-(--text)">
-              {hasFilters
-                ? "No purchases match these filters"
-                : "No purchases yet"}
+            <h2 className="text-base font-bold tracking-tight text-(--text) sm:text-lg">
+              {hasFilters ? "No purchases match these filters" : "No purchases yet"}
             </h2>
-            <p className="mt-1.5 max-w-sm text-xs sm:text-sm text-(--muted) leading-relaxed">
+            <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-(--muted) sm:text-sm">
               {hasFilters
                 ? "Try changing your search query or reset your active filters to view all orders."
                 : "Your completed purchases, invoices, and payment history will appear here."}
@@ -237,7 +225,7 @@ export function OrderHistoryPage({
               <button
                 type="button"
                 onClick={resetFilters}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-(--accent) px-4 py-2 text-xs sm:text-sm font-semibold text-(--on-accent,#ffffff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] cursor-pointer"
+                className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] sm:text-sm"
               >
                 Reset filters
               </button>

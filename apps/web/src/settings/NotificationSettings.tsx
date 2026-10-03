@@ -1,7 +1,4 @@
-import type {
-  NotificationChannel,
-  NotificationPreference,
-} from "@veolms/contracts";
+import type { NotificationChannel, NotificationPreference } from "@veolms/contracts";
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { BellRingingIcon as BellRinging } from "@phosphor-icons/react/BellRinging";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
@@ -37,11 +34,7 @@ const courseUpdateTypes = [
   "video.processing_completed",
   "video.processing_failed",
 ] as const;
-const discussionTypes = [
-  "user.mentioned",
-  "comment.replied",
-  "qa.answered",
-] as const;
+const discussionTypes = ["user.mentioned", "comment.replied", "qa.answered"] as const;
 const reminderTypes = ["assignment.reminder", "learning.reminder"] as const;
 const achievementTypes = ["certificate.generated"] as const;
 const channels = ["in_app", "email"] as const;
@@ -59,11 +52,7 @@ function buildPreferenceMap(preferences: readonly NotificationPreference[]) {
   );
 }
 
-export function NotificationSettings({
-  isAuthenticated = true,
-}: {
-  isAuthenticated?: boolean;
-}) {
+export function NotificationSettings({ isAuthenticated = true }: { isAuthenticated?: boolean }) {
   const query = useNotificationPreferences({ enabled: isAuthenticated });
   const update = useUpdateNotificationPreferences();
   const preferenceMap = buildPreferenceMap(query.data?.preferences ?? []);
@@ -105,19 +94,9 @@ export function NotificationSettings({
           role={hasSaveError ? "alert" : "status"}
         >
           {hasSaveError ? (
-            <WarningCircle
-              size={17}
-              weight="fill"
-              aria-hidden="true"
-              data-status-icon="error"
-            />
+            <WarningCircle size={17} weight="fill" aria-hidden="true" data-status-icon="error" />
           ) : (
-            <CheckCircle
-              size={17}
-              weight="fill"
-              aria-hidden="true"
-              data-status-icon="success"
-            />
+            <CheckCircle size={17} weight="fill" aria-hidden="true" data-status-icon="success" />
           )}
           {!isAuthenticated
             ? "Sign in to manage notifications"
@@ -147,9 +126,7 @@ export function NotificationSettings({
           >
             <SettingsToggle
               checked={isChannelEnabled("in_app")}
-              onChange={(enabled) =>
-                save(optionalNotificationTypes, ["in_app"], enabled)
-              }
+              onChange={(enabled) => save(optionalNotificationTypes, ["in_app"], enabled)}
               label="In-app notifications"
               disabled={!isAuthenticated || query.isPending || isSaving}
             />
@@ -161,9 +138,7 @@ export function NotificationSettings({
           >
             <SettingsToggle
               checked={isChannelEnabled("email")}
-              onChange={(enabled) =>
-                save(optionalNotificationTypes, ["email"], enabled)
-              }
+              onChange={(enabled) => save(optionalNotificationTypes, ["email"], enabled)}
               label="Email notifications"
               disabled={!isAuthenticated || query.isPending || isSaving}
             />
@@ -176,9 +151,7 @@ export function NotificationSettings({
           <ChatCircleDots size={20} weight="duotone" />
           <div>
             <h3 id="activity-heading">Course activity</h3>
-            <p>
-              Fine-tune updates from the courses and communities you follow.
-            </p>
+            <p>Fine-tune updates from the courses and communities you follow.</p>
           </div>
         </header>
         <div className="settings-row-list">

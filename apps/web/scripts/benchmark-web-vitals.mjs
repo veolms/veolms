@@ -38,9 +38,7 @@ const routes = [
 const median = (values) => {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2
-    ? sorted[middle]
-    : (sorted[middle - 1] + sorted[middle]) / 2;
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 };
 
 const round = (value) => Math.round(value * 10) / 10;
@@ -119,28 +117,19 @@ for (const route of routes) {
             if (!entry.interactionId) continue;
             const previous = interactionEntries.get(entry.interactionId);
             interactionEntries.set(entry.interactionId, {
-              startTime: Math.min(
-                previous?.startTime ?? entry.startTime,
-                entry.startTime,
-              ),
+              startTime: Math.min(previous?.startTime ?? entry.startTime, entry.startTime),
               duration: Math.max(previous?.duration ?? 0, entry.duration),
             });
             if (
               pendingInteractionStart > 0 &&
               entry.startTime >= pendingInteractionStart - 50 &&
-              (pendingInteractionEnd === 0 ||
-                entry.startTime <= pendingInteractionEnd + 500)
+              (pendingInteractionEnd === 0 || entry.startTime <= pendingInteractionEnd + 500)
             ) {
               const currentId = window.__veolmsVitals.interactionId;
-              const current = currentId
-                ? interactionEntries.get(currentId)
-                : undefined;
+              const current = currentId ? interactionEntries.get(currentId) : undefined;
               if (!current || entry.startTime >= current.startTime) {
                 window.__veolmsVitals.interactionId = entry.interactionId;
-                window.__veolmsVitals.interactionLatency = Math.max(
-                  0,
-                  entry.duration,
-                );
+                window.__veolmsVitals.interactionLatency = Math.max(0, entry.duration);
               }
             }
           }
@@ -170,16 +159,11 @@ for (const route of routes) {
                     value.startTime >= pendingInteractionStart - 50 &&
                     value.startTime <= performance.now() + 500,
                 )
-                .sort(
-                  ([, left], [, right]) => right.startTime - left.startTime,
-                )[0];
+                .sort(([, left], [, right]) => right.startTime - left.startTime)[0];
               if (candidate) {
                 const [interactionId, value] = candidate;
                 window.__veolmsVitals.interactionId = interactionId;
-                window.__veolmsVitals.interactionLatency = Math.max(
-                  0,
-                  value.duration,
-                );
+                window.__veolmsVitals.interactionLatency = Math.max(0, value.duration);
               }
             });
           });
@@ -228,10 +212,7 @@ for (const route of routes) {
         fcp: firstContentfulPaint?.startTime ?? 0,
         interactionLatency: window.__veolmsVitals.interactionLatency,
         jsRequests: jsResources.length,
-        jsTransferBytes: jsResources.reduce(
-          (total, entry) => total + entry.transferSize,
-          0,
-        ),
+        jsTransferBytes: jsResources.reduce((total, entry) => total + entry.transferSize, 0),
         lcp: window.__veolmsVitals.lcp,
         load: navigation.loadEventEnd,
         longTaskCount: window.__veolmsVitals.longTaskCount,
@@ -245,9 +226,7 @@ for (const route of routes) {
     });
 
     samples.push({
-      ...Object.fromEntries(
-        Object.entries(metrics).map(([key, value]) => [key, round(value)]),
-      ),
+      ...Object.fromEntries(Object.entries(metrics).map(([key, value]) => [key, round(value)])),
       wallTime: Date.now() - startedAt,
     });
     await context.close();
@@ -255,10 +234,7 @@ for (const route of routes) {
 
   const numericKeys = Object.keys(samples[0]);
   const medians = Object.fromEntries(
-    numericKeys.map((key) => [
-      key,
-      round(median(samples.map((item) => item[key]))),
-    ]),
+    numericKeys.map((key) => [key, round(median(samples.map((item) => item[key])))]),
   );
   results.push({ ...route, medians, samples });
 }
@@ -271,9 +247,7 @@ const report = {
   profile: {
     cpuSlowdown,
     device: "412x915 @2x, Android mobile emulation",
-    network: throttleNetwork
-      ? "1.6 Mbps down, 750 Kbps up, 150 ms RTT"
-      : "unthrottled",
+    network: throttleNetwork ? "1.6 Mbps down, 750 Kbps up, 150 ms RTT" : "unthrottled",
     samplesPerRoute,
   },
   routes: results,

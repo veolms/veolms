@@ -54,24 +54,22 @@ export function MiniPlayerRestoreControl({
   }
 
   return (
-    <div className="relative z-50 group/expand pointer-events-auto">
+    <div className="group/expand pointer-events-auto relative z-50">
       <PlayerIconButton
         label="Expand [I]"
         title=""
         aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
         data-learning-mini-player-restore=""
-        className="!size-9 !rounded-none !bg-transparent hover:!bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+        className="!size-9 !rounded-none !bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)] hover:!bg-transparent"
         icon={<AppIcon name="miniPlayerExpand" className="size-5" />}
         onClick={(event) => {
           event.stopPropagation();
           onRestore();
         }}
       />
-      <div className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 hidden group-hover/expand:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
+      <div className="pointer-events-none absolute top-full left-0 z-50 mt-1.5 hidden items-center gap-1.5 rounded bg-black/90 px-2 py-1 text-xs font-medium whitespace-nowrap text-white shadow-lg group-hover/expand:flex">
         <span>Expand</span>
-        <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">
-          I
-        </kbd>
+        <kbd className="py-0.2 rounded bg-white/20 px-1 text-[10px] font-semibold">I</kbd>
       </div>
     </div>
   );
@@ -101,7 +99,7 @@ export function MiniPlayerControls({
       data-learning-mini-player-controls-ready={ready ? "true" : "false"}
     >
       {/* Mobile Controls (<= 640px) */}
-      <div className="min-[641px]:hidden absolute inset-0">
+      <div className="absolute inset-0 min-[641px]:hidden">
         <MiniPlayerRestoreControl mobile onRestore={onRestore} />
         <div
           className={cn(
@@ -112,7 +110,7 @@ export function MiniPlayerControls({
         />
         <div
           className={cn(
-            "absolute left-1 top-1 z-30",
+            "absolute top-1 left-1 z-30",
             ready ? undefined : "pointer-events-none invisible",
           )}
           inert={ready ? undefined : true}
@@ -125,7 +123,7 @@ export function MiniPlayerControls({
         </div>
         <div
           className={cn(
-            "absolute right-1 top-1 z-30",
+            "absolute top-1 right-1 z-30",
             ready ? undefined : "pointer-events-none invisible",
           )}
           inert={ready ? undefined : true}
@@ -177,9 +175,7 @@ export function MiniPlayerControls({
             }}
             className={cn(
               "pointer-events-auto flex size-10 items-center justify-center rounded-full text-white transition-colors",
-              canGoPrevious
-                ? "cursor-pointer hover:bg-white/15"
-                : "opacity-35 cursor-not-allowed",
+              canGoPrevious ? "cursor-pointer hover:bg-white/15" : "cursor-not-allowed opacity-35",
             )}
           >
             <SkipBack size={24} weight="fill" />
@@ -192,7 +188,7 @@ export function MiniPlayerControls({
               event.stopPropagation();
               void controller.togglePlayback();
             }}
-            className="pointer-events-auto flex size-14 items-center justify-center rounded-full text-white cursor-pointer transition-colors hover:bg-white/15 drop-shadow-md"
+            className="pointer-events-auto flex size-14 cursor-pointer items-center justify-center rounded-full text-white drop-shadow-md transition-colors hover:bg-white/15"
           >
             {paused ? (
               <Play size={38} weight="fill" className="-translate-x-px" />
@@ -211,9 +207,7 @@ export function MiniPlayerControls({
             }}
             className={cn(
               "pointer-events-auto flex size-10 items-center justify-center rounded-full text-white transition-colors",
-              canGoNext
-                ? "cursor-pointer hover:bg-white/15"
-                : "opacity-35 cursor-not-allowed",
+              canGoNext ? "cursor-pointer hover:bg-white/15" : "cursor-not-allowed opacity-35",
             )}
           >
             <SkipForward size={24} weight="fill" />
@@ -227,22 +221,20 @@ export function MiniPlayerControls({
         >
           <MiniPlayerRestoreControl onRestore={onRestore} />
 
-          <div className="relative z-50 group/close pointer-events-auto">
+          <div className="group/close pointer-events-auto relative z-50">
             <PlayerIconButton
               label="Close"
               title=""
-              className="!size-9 !rounded-none !bg-transparent hover:!bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+              className="!size-9 !rounded-none !bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)] hover:!bg-transparent"
               icon={<CloseIcon size={20} />}
               onClick={(event) => {
                 event.stopPropagation();
                 onClose();
               }}
             />
-            <div className="pointer-events-none absolute right-0 top-full z-50 mt-1.5 hidden group-hover/close:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
+            <div className="pointer-events-none absolute top-full right-0 z-50 mt-1.5 hidden items-center gap-1.5 rounded bg-black/90 px-2 py-1 text-xs font-medium whitespace-nowrap text-white shadow-lg group-hover/close:flex">
               <span>Close</span>
-              <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">
-                Esc
-              </kbd>
+              <kbd className="py-0.2 rounded bg-white/20 px-1 text-[10px] font-semibold">Esc</kbd>
             </div>
           </div>
         </div>
@@ -250,7 +242,7 @@ export function MiniPlayerControls({
         {/* Bottom-left Time Display — hidden while the timeline tooltip is showing */}
         <div
           className={cn(
-            "absolute left-3 bottom-3 z-20 pointer-events-none transition-opacity duration-150",
+            "pointer-events-none absolute bottom-3 left-3 z-20 transition-opacity duration-150",
             "group-has-[[data-learning-mini-player-timeline]:hover]/mini-player:opacity-0",
             "group-has-[[data-learning-mini-player-timeline]:focus-within]/mini-player:opacity-0",
             "group-has-[[data-learning-mini-player-timeline]_[data-scrubbing=true]]/mini-player:opacity-0",
@@ -259,7 +251,7 @@ export function MiniPlayerControls({
         >
           <TimeDisplay
             interactive={false}
-            className="!text-xs !font-medium !text-white !drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] tabular-nums px-0"
+            className="px-0 !text-xs !font-medium !text-white tabular-nums !drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]"
           />
         </div>
       </div>
@@ -273,7 +265,7 @@ export function MiniPlayerControls({
         <Timeline
           ariaLabel="Mini player timeline"
           showPreview={true}
-          className="pointer-events-none [&_[role=slider]]:pointer-events-auto [&_[data-timeline-buffered-range]]:rounded-none [&_[data-timeline-progress]]:rounded-none [&_[data-timeline-track]]:bottom-0 [&_[data-timeline-track]]:top-auto [&_[data-timeline-track]]:h-0.5 [&_[data-timeline-track]]:translate-y-0 [&_[data-timeline-track]]:rounded-none [&_[data-timeline-thumb]]:!hidden"
+          className="pointer-events-none [&_[data-timeline-buffered-range]]:rounded-none [&_[data-timeline-progress]]:rounded-none [&_[data-timeline-thumb]]:!hidden [&_[data-timeline-track]]:top-auto [&_[data-timeline-track]]:bottom-0 [&_[data-timeline-track]]:h-0.5 [&_[data-timeline-track]]:translate-y-0 [&_[data-timeline-track]]:rounded-none [&_[role=slider]]:pointer-events-auto"
         />
       </div>
     </div>

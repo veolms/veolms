@@ -20,11 +20,7 @@ interface IndexedDbRecord {
 interface AsyncStorage<TStorageValue = string> {
   getItem: (
     key: string,
-  ) =>
-    | TStorageValue
-    | null
-    | undefined
-    | Promise<TStorageValue | null | undefined>;
+  ) => TStorageValue | null | undefined | Promise<TStorageValue | null | undefined>;
   setItem: (key: string, value: TStorageValue) => unknown | Promise<unknown>;
   removeItem: (key: string) => void | Promise<void>;
 }
@@ -138,9 +134,7 @@ const removeIndexedDb = async (key: string): Promise<void> => {
   });
 };
 
-const parseDraft = <TValue>(
-  serialized: string | null,
-): DraftEnvelope<TValue> | null => {
+const parseDraft = <TValue>(serialized: string | null): DraftEnvelope<TValue> | null => {
   if (!serialized) return null;
   try {
     const parsed: unknown = JSON.parse(serialized);
@@ -158,10 +152,7 @@ const parseDraft = <TValue>(
   }
 };
 
-export const saveAutosyncDraft = <TValue>(
-  key: AutosyncKey,
-  value: TValue,
-): void => {
+export const saveAutosyncDraft = <TValue>(key: AutosyncKey, value: TValue): void => {
   const storageKey = getAutosyncDraftKey(key);
   let serialized: string;
   try {
@@ -199,9 +190,7 @@ export const readAutosyncDraft = async <TValue>(
   return parseDraft<TValue>(await readIndexedDb(storageKey));
 };
 
-export const readAutosyncDraftSync = <TValue>(
-  key: AutosyncKey,
-): DraftEnvelope<TValue> | null =>
+export const readAutosyncDraftSync = <TValue>(key: AutosyncKey): DraftEnvelope<TValue> | null =>
   parseDraft<TValue>(readLocal(getAutosyncDraftKey(key)));
 
 export const removeAutosyncDraft = (key: AutosyncKey): void => {

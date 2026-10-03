@@ -44,9 +44,7 @@ export async function upsertUserCourseProgress(
     .execute();
 }
 
-export type LearningProgressRow = Awaited<
-  ReturnType<typeof listUserCourseProgress>
->[number];
+export type LearningProgressRow = Awaited<ReturnType<typeof listUserCourseProgress>>[number];
 
 function toIdList(courseId: string | string[] | undefined): string[] {
   if (!courseId) return [];
@@ -65,11 +63,7 @@ export async function getAverageProgressAndCompletionRate(
   const courseIds = toIdList(filters.courseId);
   let query = database
     .selectFrom("learning_progress")
-    .select([
-      "user_id",
-      "course_id",
-      sql<number>`avg(progress_percent)`.as("avg_percent"),
-    ])
+    .select(["user_id", "course_id", sql<number>`avg(progress_percent)`.as("avg_percent")])
     .groupBy(["user_id", "course_id"]);
   if (courseIds.length > 0) {
     query = query.where("course_id", "in", courseIds);
@@ -99,11 +93,7 @@ export async function getAverageProgressByCourse(
 
   const rows = await database
     .selectFrom("learning_progress")
-    .select([
-      "course_id",
-      "user_id",
-      sql<number>`avg(progress_percent)`.as("avg_percent"),
-    ])
+    .select(["course_id", "user_id", sql<number>`avg(progress_percent)`.as("avg_percent")])
     .where("course_id", "in", courseIds)
     .groupBy(["course_id", "user_id"])
     .execute();
@@ -136,9 +126,7 @@ export async function getStartedAndCompletedCounts(
   let query = database
     .selectFrom("learning_progress")
     .select([
-      sql<number>`count(distinct user_id) filter (where progress_percent > 0)::int`.as(
-        "started",
-      ),
+      sql<number>`count(distinct user_id) filter (where progress_percent > 0)::int`.as("started"),
       sql<number>`count(distinct user_id) filter (where progress_percent >= 100)::int`.as(
         "completed",
       ),

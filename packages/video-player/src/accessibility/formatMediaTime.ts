@@ -26,9 +26,7 @@ export function formatTimeForScreenReader(seconds: number): string {
     parts.push(`${minutes} ${minutes === 1 ? "minute" : "minutes"}`);
   }
   if (remainingSeconds > 0 || parts.length === 0) {
-    parts.push(
-      `${remainingSeconds} ${remainingSeconds === 1 ? "second" : "seconds"}`,
-    );
+    parts.push(`${remainingSeconds} ${remainingSeconds === 1 ? "second" : "seconds"}`);
   }
 
   return parts.join(", ");

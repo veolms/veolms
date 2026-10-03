@@ -25,8 +25,7 @@ export function getCurriculumSectionForLesson(
   selectedLesson: number,
 ) {
   return (
-    sections.find((section) =>
-      section.lessons.some(([number]) => number === selectedLesson),
-    ) ?? sections[0]
+    sections.find((section) => section.lessons.some(([number]) => number === selectedLesson)) ??
+    sections[0]
   );
 }

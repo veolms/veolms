@@ -9,11 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type {
-  CSSProperties,
-  KeyboardEvent as ReactKeyboardEvent,
-  ReactNode,
-} from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 
@@ -75,8 +71,7 @@ export function MenuAction({
         else onClick();
       }}
     >
-      {icon ??
-        (Icon ? <Icon size={17} weight="regular" aria-hidden="true" /> : null)}
+      {icon ?? (Icon ? <Icon size={17} weight="regular" aria-hidden="true" /> : null)}
       <span>{label}</span>
     </button>
   );
@@ -123,9 +118,7 @@ export function CourseActionMenu({
     useState<CourseMenuHorizontalPlacement>("right");
   const [menuVerticalPlacement, setMenuVerticalPlacement] =
     useState<CourseMenuVerticalPlacement>("below");
-  const [menuPosition, setMenuPosition] = useState<CourseMenuPosition | null>(
-    null,
-  );
+  const [menuPosition, setMenuPosition] = useState<CourseMenuPosition | null>(null);
   const [menuPressPulse, setMenuPressPulse] = useState(0);
   const [menuKeyboardFocus, setMenuKeyboardFocus] = useState(false);
 
@@ -141,23 +134,17 @@ export function CourseActionMenu({
 
     const buttonBounds = button.getBoundingClientRect();
     const menuBounds = menu.getBoundingClientRect();
-    const maxHeight = Math.max(
-      80,
-      window.innerHeight - courseMenuViewportPadding * 2,
-    );
+    const maxHeight = Math.max(80, window.innerHeight - courseMenuViewportPadding * 2);
     const width = Math.min(
       menu.offsetWidth || menuBounds.width || courseMenuWidth,
       window.innerWidth - courseMenuViewportPadding * 2,
     );
-    const measuredHeight =
-      menu.scrollHeight || menu.offsetHeight || menuBounds.height;
+    const measuredHeight = menu.scrollHeight || menu.offsetHeight || menuBounds.height;
     const height = Math.min(measuredHeight || maxHeight, maxHeight);
 
     if (anchorPoint) {
-      const roomOnRight =
-        window.innerWidth - courseMenuViewportPadding - anchorPoint.x;
-      const roomBelow =
-        window.innerHeight - courseMenuViewportPadding - anchorPoint.y;
+      const roomOnRight = window.innerWidth - courseMenuViewportPadding - anchorPoint.x;
+      const roomBelow = window.innerHeight - courseMenuViewportPadding - anchorPoint.y;
       const horizontalPlacement: CourseMenuHorizontalPlacement =
         roomOnRight >= width + courseMenuGap ? "right" : "left";
       const verticalPlacement: CourseMenuVerticalPlacement =
@@ -182,22 +169,16 @@ export function CourseActionMenu({
       setMenuHorizontalPlacement(horizontalPlacement);
       setMenuVerticalPlacement(verticalPlacement);
       setMenuPosition((current) => {
-        if (
-          current?.left === left &&
-          current.top === top &&
-          current.maxHeight === maxHeight
-        )
+        if (current?.left === left && current.top === top && current.maxHeight === maxHeight)
           return current;
         return { left, top, maxHeight };
       });
       return;
     }
 
-    const roomOnRight =
-      window.innerWidth - courseMenuViewportPadding - buttonBounds.right;
+    const roomOnRight = window.innerWidth - courseMenuViewportPadding - buttonBounds.right;
     const roomOnLeft = buttonBounds.left - courseMenuViewportPadding;
-    const roomBelow =
-      window.innerHeight - courseMenuViewportPadding - buttonBounds.bottom;
+    const roomBelow = window.innerHeight - courseMenuViewportPadding - buttonBounds.bottom;
     const roomAbove = buttonBounds.top - courseMenuViewportPadding;
     const horizontalPlacement: CourseMenuHorizontalPlacement =
       roomOnRight >= width + courseMenuGap
@@ -234,11 +215,7 @@ export function CourseActionMenu({
     setMenuHorizontalPlacement(horizontalPlacement);
     setMenuVerticalPlacement(verticalPlacement);
     setMenuPosition((current) => {
-      if (
-        current?.left === left &&
-        current.top === top &&
-        current.maxHeight === maxHeight
-      )
+      if (current?.left === left && current.top === top && current.maxHeight === maxHeight)
         return current;
       return { left, top, maxHeight };
     });
@@ -269,11 +246,7 @@ export function CourseActionMenu({
     const closeFromOutside = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
-      if (
-        menuButtonRef.current?.contains(target) ||
-        menuRef.current?.contains(target)
-      )
-        return;
+      if (menuButtonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       dismissMenuThen(() => {});
     };
     const closeFromKeyboard = (event: KeyboardEvent) => {
@@ -334,9 +307,7 @@ export function CourseActionMenu({
         ? 0
         : event.key === "End"
           ? items.length - 1
-          : (Math.max(0, activeIndex) +
-              (event.key === "ArrowDown" ? 1 : -1) +
-              items.length) %
+          : (Math.max(0, activeIndex) + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
             items.length;
     event.preventDefault();
     items[nextIndex]?.focus({ preventScroll: true });
@@ -394,11 +365,7 @@ export function CourseActionMenu({
               aria-hidden="true"
               onAnimationEnd={() => setMenuPressPulse(0)}
             />
-            <DotsThreeVertical
-              className="relative z-10"
-              size={24}
-              weight="bold"
-            />
+            <DotsThreeVertical className="relative z-10" size={24} weight="bold" />
           </span>
         </button>
       </div>
@@ -421,8 +388,7 @@ export function CourseActionMenu({
                   left: menuPosition?.left ?? courseMenuViewportPadding,
                   top: menuPosition?.top ?? courseMenuViewportPadding,
                   maxHeight:
-                    menuPosition?.maxHeight ??
-                    `calc(100vh - ${courseMenuViewportPadding * 2}px)`,
+                    menuPosition?.maxHeight ?? `calc(100vh - ${courseMenuViewportPadding * 2}px)`,
                   visibility: menuPosition ? "visible" : "hidden",
                   pointerEvents: menuPosition ? undefined : "none",
                 } as CSSProperties

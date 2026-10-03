@@ -65,18 +65,12 @@ export function AccountSettings({
         </div>
       </header>
 
-      <section
-        className="settings-section"
-        aria-labelledby="membership-heading"
-      >
+      <section className="settings-section" aria-labelledby="membership-heading">
         <header className="settings-section__heading">
           <CreditCard size={20} weight="duotone" />
           <div>
             <h3 id="membership-heading">Membership</h3>
-            <p>
-              Your {role === "creator" ? "academy" : "learner"} account is ready
-              to use.
-            </p>
+            <p>Your {role === "creator" ? "academy" : "learner"} account is ready to use.</p>
           </div>
         </header>
         <div className="settings-account-plan">
@@ -87,19 +81,13 @@ export function AccountSettings({
                 ? `${getRoleDisplayName("creator", userRoles)} workspace`
                 : "Learning workspace"}
             </strong>
-            <small>
-              Manage purchases and receipts from your order history.
-            </small>
+            <small>Manage purchases and receipts from your order history.</small>
           </div>
           <button
             type="button"
             className="settings-action"
             disabled={!isAuthenticated}
-            onClick={() =>
-              onNavigatePage?.(
-                role === "creator" ? "orders" : "purchase-history",
-              )
-            }
+            onClick={() => onNavigatePage?.(role === "creator" ? "orders" : "purchase-history")}
           >
             <CreditCard size={16} /> View orders
           </button>
@@ -111,17 +99,15 @@ export function AccountSettings({
           <Archive size={20} weight="duotone" />
           <div>
             <h3 id="data-heading">Your data</h3>
-            <p>
-              Keep a portable copy of the information connected to this account.
-            </p>
+            <p>Keep a portable copy of the information connected to this account.</p>
           </div>
         </header>
         <div className="settings-account-plan">
           <div>
             <strong>Export your data</strong>
             <small id="account-export-availability">
-              Export is not connected yet. No request will be sent until the
-              server export service is available.
+              Export is not connected yet. No request will be sent until the server export service
+              is available.
             </small>
           </div>
           <button
@@ -151,8 +137,8 @@ export function AccountSettings({
             <div>
               <strong>Deactivate your account</strong>
               <small>
-                You will be signed out of every device and will not be able to
-                sign in again. We will send a confirmation email.
+                You will be signed out of every device and will not be able to sign in again. We
+                will send a confirmation email.
               </small>
             </div>
             <button
@@ -182,9 +168,7 @@ export function AccountSettings({
           <div className="settings-account-plan">
             <div>
               <strong>Log out</strong>
-              <small>
-                You will need to sign in again with your email or mobile OTP.
-              </small>
+              <small>You will need to sign in again with your email or mobile OTP.</small>
             </div>
             <button
               type="button"
@@ -215,9 +199,8 @@ export function AccountSettings({
         description={
           <>
             <span>
-              This signs you out everywhere and permanently disables access to
-              this account. Your stored account record will be retained as
-              required for platform records.
+              This signs you out everywhere and permanently disables access to this account. Your
+              stored account record will be retained as required for platform records.
             </span>
             {deactivateMutation.error && (
               <span

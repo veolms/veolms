@@ -14,10 +14,7 @@ export function CourseCatalogueLoadingSkeleton({ role }: { role: CourseRole }) {
       data-course-catalogue-grid
       suppressHydrationWarning
     >
-      <div
-        className={getCourseCatalogueGridClasses(role)}
-        data-testid="course-catalogue-skeleton"
-      >
+      <div className={getCourseCatalogueGridClasses(role)} data-testid="course-catalogue-skeleton">
         {Array.from({ length: 6 }).map((_, index) => (
           <CourseCardSkeleton key={index} role={role} />
         ))}

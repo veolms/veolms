@@ -20,12 +20,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(database: Kysely<unknown>): Promise<void> {
-  await database.schema
-    .dropIndex("idx_course_lessons_section_position")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropIndex("idx_course_sections_course_position")
-    .ifExists()
-    .execute();
+  await database.schema.dropIndex("idx_course_lessons_section_position").ifExists().execute();
+  await database.schema.dropIndex("idx_course_sections_course_position").ifExists().execute();
 }

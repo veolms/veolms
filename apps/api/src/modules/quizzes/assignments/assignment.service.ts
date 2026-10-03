@@ -17,16 +17,8 @@ type PricingRow = Awaited<ReturnType<typeof pricingRepo.findPricing>>;
  * Pricing belongs to the course (one quiz pass covers every quiz in it), so it
  * is joined in read-only here rather than stored on the assignment.
  */
-function present(
-  row: Awaited<ReturnType<typeof repo.findAssignment>>,
-  pricing: PricingRow,
-) {
-  if (!row)
-    throw new AppError(
-      404,
-      "ASSIGNMENT_NOT_FOUND",
-      "Quiz assignment not found.",
-    );
+function present(row: Awaited<ReturnType<typeof repo.findAssignment>>, pricing: PricingRow) {
+  if (!row) throw new AppError(404, "ASSIGNMENT_NOT_FOUND", "Quiz assignment not found.");
   return {
     id: row.id,
     quizId: row.quiz_id,
@@ -57,33 +49,17 @@ export function createAssignmentService(options: QuizServiceOptions) {
   const { database, courseService, getAcademyId } = options;
   const outbox = createOutboxService();
 
-  async function assertAuthorAssignment(
-    actor: QuizActor,
-    assignmentId: string,
-  ) {
+  async function assertAuthorAssignment(actor: QuizActor, assignmentId: string) {
     const assignment = await repo.findAssignment(database, assignmentId);
-    if (!assignment)
-      throw new AppError(
-        404,
-        "ASSIGNMENT_NOT_FOUND",
-        "Quiz assignment not found.",
-      );
+    if (!assignment) throw new AppError(404, "ASSIGNMENT_NOT_FOUND", "Quiz assignment not found.");
     const course = await courseService.findCourseById(assignment.course_id);
-    if (!course)
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    if (!course) throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
     if (!isAdmin(actor))
-      await courseService.getCourseAndVerifyOwner(
-        assignment.course_id,
-        actor.id,
-      );
+      await courseService.getCourseAndVerifyOwner(assignment.course_id, actor.id);
     if (!isAdmin(actor)) {
       const quiz = await repo.findQuiz(database, assignment.quiz_id);
       if (!quiz || quiz.creator_id !== actor.id)
-        throw new AppError(
-          403,
-          "FORBIDDEN",
-          "You do not own this Quiz assignment.",
-        );
+        throw new AppError(403, "FORBIDDEN", "You do not own this Quiz assignment.");
     }
     return assignment;
   }
@@ -95,20 +71,12 @@ export function createAssignmentService(options: QuizServiceOptions) {
     payload: AssignQuizRequest,
   ) {
     const course = await courseService.findCourseById(courseId);
-    if (!course)
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    if (!isAdmin(actor))
-      await courseService.getCourseAndVerifyOwner(courseId, actor.id);
+    if (!course) throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    if (!isAdmin(actor)) await courseService.getCourseAndVerifyOwner(courseId, actor.id);
     const lesson = await courseService.findLessonById(courseId, lessonId);
-    if (!lesson)
-      throw new AppError(404, "LESSON_NOT_FOUND", "Course lesson not found.");
+    if (!lesson) throw new AppError(404, "LESSON_NOT_FOUND", "Course lesson not found.");
     const version = await repo.findVersion(database, payload.quizVersionId);
-    if (!version)
-      throw new AppError(
-        404,
-        "QUIZ_VERSION_NOT_FOUND",
-        "Quiz version not found.",
-      );
+    if (!version) throw new AppError(404, "QUIZ_VERSION_NOT_FOUND", "Quiz version not found.");
     if (!version.published_at)
       throw new AppError(
         400,
@@ -120,11 +88,7 @@ export function createAssignmentService(options: QuizServiceOptions) {
       throw new AppError(403, "FORBIDDEN", "You do not own this Quiz.");
     const currentAcademyId = await getAcademyId();
     if (currentAcademyId && quiz.academy_id !== currentAcademyId)
-      throw new AppError(
-        403,
-        "ACADEMY_MISMATCH",
-        "Quiz must belong to the active Academy.",
-      );
+      throw new AppError(403, "ACADEMY_MISMATCH", "Quiz must belong to the active Academy.");
     if (version.quiz_id !== quiz.id)
       throw new AppError(
         400,
@@ -199,13 +163,9 @@ export function createAssignmentService(options: QuizServiceOptions) {
   ) {
     const current = await assertAuthorAssignment(actor, assignmentId);
     const availableFrom =
-      payload.availableFrom !== undefined
-        ? payload.availableFrom
-        : current.available_from;
+      payload.availableFrom !== undefined ? payload.availableFrom : current.available_from;
     const availableUntil =
-      payload.availableUntil !== undefined
-        ? payload.availableUntil
-        : current.available_until;
+      payload.availableUntil !== undefined ? payload.availableUntil : current.available_until;
     let quizVersionId: string | undefined;
     if (payload.quizVersionId !== undefined) {
       const version = await repo.findVersion(database, payload.quizVersionId);
@@ -230,46 +190,28 @@ export function createAssignmentService(options: QuizServiceOptions) {
         "Quiz availability must end after it starts.",
       );
     const row = await repo.updateAssignment(database, assignmentId, {
-      ...(quizVersionId !== undefined
-        ? { quiz_version_id: quizVersionId }
-        : {}),
+      ...(quizVersionId !== undefined ? { quiz_version_id: quizVersionId } : {}),
       ...(payload.required !== undefined ? { required: payload.required } : {}),
-      ...(payload.passPercentage !== undefined
-        ? { pass_percentage: payload.passPercentage }
-        : {}),
-      ...(payload.maxAttempts !== undefined
-        ? { max_attempts: payload.maxAttempts }
-        : {}),
+      ...(payload.passPercentage !== undefined ? { pass_percentage: payload.passPercentage } : {}),
+      ...(payload.maxAttempts !== undefined ? { max_attempts: payload.maxAttempts } : {}),
       ...(payload.timeLimitSeconds !== undefined
         ? { time_limit_seconds: payload.timeLimitSeconds }
         : {}),
       ...(payload.shuffleQuestions !== undefined
         ? { shuffle_questions: payload.shuffleQuestions }
         : {}),
-      ...(payload.shuffleOptions !== undefined
-        ? { shuffle_options: payload.shuffleOptions }
-        : {}),
-      ...(payload.feedbackMode !== undefined
-        ? { feedback_mode: payload.feedbackMode }
-        : {}),
-      ...(payload.availableFrom !== undefined
-        ? { available_from: payload.availableFrom }
-        : {}),
-      ...(payload.availableUntil !== undefined
-        ? { available_until: payload.availableUntil }
-        : {}),
+      ...(payload.shuffleOptions !== undefined ? { shuffle_options: payload.shuffleOptions } : {}),
+      ...(payload.feedbackMode !== undefined ? { feedback_mode: payload.feedbackMode } : {}),
+      ...(payload.availableFrom !== undefined ? { available_from: payload.availableFrom } : {}),
+      ...(payload.availableUntil !== undefined ? { available_until: payload.availableUntil } : {}),
     });
     const finalRow = row ?? current;
-    return present(
-      finalRow,
-      await pricingRepo.findPricing(database, finalRow.course_id),
-    );
+    return present(finalRow, await pricingRepo.findPricing(database, finalRow.course_id));
   }
 
   async function listForCourse(actor: QuizActor, courseId: string) {
     const course = await courseService.findCourseById(courseId);
-    if (!course)
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    if (!course) throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
     const canManageCourse =
       isAdmin(actor) ||
       course.creator_id === actor.id ||
@@ -277,11 +219,7 @@ export function createAssignmentService(options: QuizServiceOptions) {
     if (
       !canManageCourse &&
       !(await repo.isPublishedFreeCourse(database, courseId)) &&
-      !(await options.accessService.hasActiveAccess(
-        database,
-        actor.id,
-        courseId,
-      ))
+      !(await options.accessService.hasActiveAccess(database, actor.id, courseId))
     )
       throw new AppError(
         403,
@@ -291,11 +229,9 @@ export function createAssignmentService(options: QuizServiceOptions) {
     const rows = await repo.listAssignmentsForCourse(database, courseId);
     const pricing = await pricingRepo.findPricing(database, courseId);
     const quizTitles = new Map(
-      (
-        await repo.listQuizzesByIds(database, [
-          ...new Set(rows.map((row) => row.quiz_id)),
-        ])
-      ).map((quiz) => [quiz.id, quiz.title] as const),
+      (await repo.listQuizzesByIds(database, [...new Set(rows.map((row) => row.quiz_id))])).map(
+        (quiz) => [quiz.id, quiz.title] as const,
+      ),
     );
     return rows.map((row) => ({
       ...present(row, pricing),
@@ -305,10 +241,7 @@ export function createAssignmentService(options: QuizServiceOptions) {
 
   async function get(assignmentId: string) {
     const row = await repo.findAssignment(database, assignmentId);
-    return present(
-      row,
-      row ? await pricingRepo.findPricing(database, row.course_id) : undefined,
-    );
+    return present(row, row ? await pricingRepo.findPricing(database, row.course_id) : undefined);
   }
 
   function presentCoursePricing(courseId: string, row: PricingRow) {
@@ -319,29 +252,19 @@ export function createAssignmentService(options: QuizServiceOptions) {
       price: Number(row?.price ?? 0),
       currency: row?.currency ?? "INR",
       salePrice:
-        row?.sale_price !== null && row?.sale_price !== undefined
-          ? Number(row.sale_price)
-          : null,
+        row?.sale_price !== null && row?.sale_price !== undefined ? Number(row.sale_price) : null,
     };
   }
 
-  async function assertCanManageCoursePricing(
-    actor: QuizActor,
-    courseId: string,
-  ) {
+  async function assertCanManageCoursePricing(actor: QuizActor, courseId: string) {
     const course = await courseService.findCourseById(courseId);
-    if (!course)
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    if (!isAdmin(actor))
-      await courseService.getCourseAndVerifyOwner(courseId, actor.id);
+    if (!course) throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    if (!isAdmin(actor)) await courseService.getCourseAndVerifyOwner(courseId, actor.id);
   }
 
   async function getPricing(actor: QuizActor, courseId: string) {
     await assertCanManageCoursePricing(actor, courseId);
-    return presentCoursePricing(
-      courseId,
-      await pricingRepo.findPricing(database, courseId),
-    );
+    return presentCoursePricing(courseId, await pricingRepo.findPricing(database, courseId));
   }
 
   /**
@@ -358,14 +281,8 @@ export function createAssignmentService(options: QuizServiceOptions) {
     // Prices are always in the course's currency, so a quiz pass can be
     // bought alongside the course and never trips the gateway with a currency
     // it does not support.
-    const courseCurrency = await pricingRepo.findCourseCurrency(
-      database,
-      courseId,
-    );
-    if (
-      payload.currency !== undefined &&
-      payload.currency.toUpperCase() !== courseCurrency
-    ) {
+    const courseCurrency = await pricingRepo.findCourseCurrency(database, courseId);
+    if (payload.currency !== undefined && payload.currency.toUpperCase() !== courseCurrency) {
       throw new AppError(
         400,
         "QUIZ_CURRENCY_MISMATCH",

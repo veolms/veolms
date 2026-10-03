@@ -14,8 +14,5 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema
-    .dropIndex("courses_catalog_status_deleted_created_idx")
-    .ifExists()
-    .execute();
+  await db.schema.dropIndex("courses_catalog_status_deleted_created_idx").ifExists().execute();
 }

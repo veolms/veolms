@@ -60,9 +60,7 @@ export function ConfirmActionModal({
     if (!isOpen) return undefined;
 
     const previousActiveElement =
-      typeof document !== "undefined"
-        ? (document.activeElement as HTMLElement | null)
-        : null;
+      typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -92,10 +90,7 @@ export function ConfirmActionModal({
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    const focusTimer = window.setTimeout(
-      () => cancelBtnRef.current?.focus(),
-      50,
-    );
+    const focusTimer = window.setTimeout(() => cancelBtnRef.current?.focus(), 50);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
@@ -112,7 +107,7 @@ export function ConfirmActionModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+      className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm duration-150"
       onClick={dismissModal}
       role="dialog"
       aria-modal="true"
@@ -120,7 +115,7 @@ export function ConfirmActionModal({
       aria-describedby={descriptionId}
     >
       <div
-        className="relative w-full max-w-md rounded-[20px] border border-(--border) bg-(--card-surface,var(--surface)) p-6 text-(--text) shadow-2xl animate-in zoom-in-95 duration-150"
+        className="animate-in zoom-in-95 relative w-full max-w-md rounded-[20px] border border-(--border) bg-(--card-surface,var(--surface)) p-6 text-(--text) shadow-2xl duration-150"
         style={{ boxShadow: "var(--card-floating-shadow,var(--card-shadow))" }}
         onClick={(event) => event.stopPropagation()}
       >
@@ -132,10 +127,7 @@ export function ConfirmActionModal({
             >
               <Icon size={21} weight="duotone" />
             </div>
-            <h3
-              id={titleId}
-              className="min-w-0 text-lg font-bold tracking-tight text-(--text)"
-            >
+            <h3 id={titleId} className="min-w-0 text-lg font-bold tracking-tight text-(--text)">
               {title}
             </h3>
           </div>
@@ -152,10 +144,7 @@ export function ConfirmActionModal({
           </button>
         </div>
 
-        <p
-          id={descriptionId}
-          className="mt-4 mb-0 text-sm leading-6 text-(--text-secondary)"
-        >
+        <p id={descriptionId} className="mt-4 mb-0 text-sm leading-6 text-(--text-secondary)">
           {description}
         </p>
 
@@ -163,7 +152,7 @@ export function ConfirmActionModal({
           <button
             ref={cancelBtnRef}
             type="button"
-            className="settings-action settings-action--quiet w-auto min-w-32 flex-1 sm:flex-none max-[480px]:w-full"
+            className="settings-action settings-action--quiet w-auto min-w-32 flex-1 max-[480px]:w-full sm:flex-none"
             onClick={dismissModal}
             disabled={isPending}
           >
@@ -172,7 +161,7 @@ export function ConfirmActionModal({
           <button
             ref={confirmBtnRef}
             type="button"
-            className="settings-action w-auto min-w-32 flex-1 sm:flex-none max-[480px]:w-full"
+            className="settings-action w-auto min-w-32 flex-1 max-[480px]:w-full sm:flex-none"
             onClick={onConfirm}
             disabled={isPending}
             aria-busy={isPending}

@@ -14,22 +14,15 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column.references("course_lessons.id").onDelete("set null"),
     )
     .addColumn("lesson_number", "integer")
-    .addColumn("origin", "text", (column) =>
-      column.notNull().defaultTo("courses"),
-    )
-    .addColumn("return_path", "text", (column) =>
-      column.notNull().defaultTo("/courses"),
-    )
+    .addColumn("origin", "text", (column) => column.notNull().defaultTo("courses"))
+    .addColumn("return_path", "text", (column) => column.notNull().defaultTo("/courses"))
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
     .addColumn("updated_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
-    .addUniqueConstraint("learning_space_sessions_user_course_unique", [
-      "user_id",
-      "course_id",
-    ])
+    .addUniqueConstraint("learning_space_sessions_user_course_unique", ["user_id", "course_id"])
     .addCheckConstraint(
       "learning_space_sessions_lesson_number_valid",
       sql`lesson_number is null or lesson_number > 0`,
@@ -47,11 +40,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(database: Kysely<unknown>): Promise<void> {
-  await sql`drop index if exists idx_learning_space_sessions_user_updated`.execute(
-    database,
-  );
-  await database.schema
-    .dropTable("learning_space_sessions")
-    .ifExists()
-    .execute();
+  await sql`drop index if exists idx_learning_space_sessions_user_updated`.execute(database);
+  await database.schema.dropTable("learning_space_sessions").ifExists().execute();
 }

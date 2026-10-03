@@ -7,13 +7,8 @@ import { ordersService } from "./orders.service";
 export function useRefundOrder() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    Refund,
-    ApiError,
-    { orderId: string; payload: OrderDirectRefundRequest }
-  >({
-    mutationFn: ({ orderId, payload }) =>
-      ordersService.refundOrder(orderId, payload),
+  return useMutation<Refund, ApiError, { orderId: string; payload: OrderDirectRefundRequest }>({
+    mutationFn: ({ orderId, payload }) => ordersService.refundOrder(orderId, payload),
     onSuccess: (_data, variables) => {
       // Invalidate order lists, stats, and the specific order detail
       void queryClient.invalidateQueries({ queryKey: orderKeys.all });

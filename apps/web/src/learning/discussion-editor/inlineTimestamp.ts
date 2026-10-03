@@ -7,14 +7,11 @@ export interface ParsedInlineTimestamp {
 }
 
 export type InlineTimestampPart =
-  | { type: "text"; value: string }
-  | ({ type: "timestamp"; value: string } & ParsedInlineTimestamp);
+  { type: "text"; value: string } | ({ type: "timestamp"; value: string } & ParsedInlineTimestamp);
 
 const TIMESTAMP_CANDIDATE_PATTERN = /\d+(?::\d+){1,2}/g;
 
-export function parseInlineTimestampToken(
-  token: string,
-): ParsedInlineTimestamp | null {
+export function parseInlineTimestampToken(token: string): ParsedInlineTimestamp | null {
   if (!/^\d+(?::\d+){1,2}$/.test(token)) return null;
 
   const segments = token.split(":");
@@ -60,11 +57,7 @@ export function parseInlineTimestampToken(
   };
 }
 
-function hasTimestampBoundary(
-  text: string,
-  start: number,
-  end: number,
-): boolean {
+function hasTimestampBoundary(text: string, start: number, end: number): boolean {
   const previous = text[start - 1];
   const next = text[end];
 
@@ -106,9 +99,7 @@ function formatUnit(value: number, singular: string): string {
   return `${value} ${singular}${value === 1 ? "" : "s"}`;
 }
 
-export function formatInlineTimestampAriaLabel(
-  timestamp: ParsedInlineTimestamp,
-): string {
+export function formatInlineTimestampAriaLabel(timestamp: ParsedInlineTimestamp): string {
   const time =
     timestamp.hours === null
       ? `${formatUnit(timestamp.minutes, "minute")} ${formatUnit(timestamp.secondsPart, "second")}`

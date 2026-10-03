@@ -7,10 +7,7 @@ export const isEditingShortcutTarget = (target: EventTarget | null): boolean =>
   );
 
 export const getNumberShortcutIndex = (
-  event: Pick<
-    KeyboardEvent,
-    "key" | "code" | "ctrlKey" | "metaKey" | "shiftKey"
-  >,
+  event: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey" | "shiftKey">,
 ): number | null => {
   if (event.ctrlKey || event.metaKey || event.shiftKey) return null;
   const digit = /^Digit([1-9])$/.exec(event.code)?.[1] ?? event.key;
@@ -25,30 +22,24 @@ export type ShortcutPlatformPreference = "system" | "windows" | "mac";
 export type ShortcutPlatform = Exclude<ShortcutPlatformPreference, "system">;
 
 export const SHORTCUT_PLATFORM_PREFERENCE_KEY = "veolms-shortcut-platform";
-export const SHORTCUT_PLATFORM_PREFERENCE_EVENT =
-  "veolms-shortcut-platform-change";
-export const SHORTCUT_PLATFORM_PREFERENCE_DEFAULT: ShortcutPlatformPreference =
-  "system";
+export const SHORTCUT_PLATFORM_PREFERENCE_EVENT = "veolms-shortcut-platform-change";
+export const SHORTCUT_PLATFORM_PREFERENCE_DEFAULT: ShortcutPlatformPreference = "system";
 
-export const normalizeShortcutPlatformPreference = (
-  value: unknown,
-): ShortcutPlatformPreference =>
+export const normalizeShortcutPlatformPreference = (value: unknown): ShortcutPlatformPreference =>
   value === "windows" || value === "mac" || value === "system"
     ? value
     : SHORTCUT_PLATFORM_PREFERENCE_DEFAULT;
 
-export const readShortcutPlatformPreference =
-  (): ShortcutPlatformPreference => {
-    if (typeof window === "undefined")
-      return SHORTCUT_PLATFORM_PREFERENCE_DEFAULT;
-    try {
-      return normalizeShortcutPlatformPreference(
-        window.localStorage.getItem(SHORTCUT_PLATFORM_PREFERENCE_KEY),
-      );
-    } catch {
-      return SHORTCUT_PLATFORM_PREFERENCE_DEFAULT;
-    }
-  };
+export const readShortcutPlatformPreference = (): ShortcutPlatformPreference => {
+  if (typeof window === "undefined") return SHORTCUT_PLATFORM_PREFERENCE_DEFAULT;
+  try {
+    return normalizeShortcutPlatformPreference(
+      window.localStorage.getItem(SHORTCUT_PLATFORM_PREFERENCE_KEY),
+    );
+  } catch {
+    return SHORTCUT_PLATFORM_PREFERENCE_DEFAULT;
+  }
+};
 
 const readNavigatorPlatform = (): string => {
   if (typeof navigator === "undefined") return "";
@@ -78,10 +69,7 @@ export const persistShortcutPlatformPreference = (
   const normalizedPreference = normalizeShortcutPlatformPreference(preference);
   if (typeof window === "undefined") return normalizedPreference;
   try {
-    window.localStorage.setItem(
-      SHORTCUT_PLATFORM_PREFERENCE_KEY,
-      normalizedPreference,
-    );
+    window.localStorage.setItem(SHORTCUT_PLATFORM_PREFERENCE_KEY, normalizedPreference);
   } catch {
     // The preference event still updates the current tab when storage is blocked.
   }

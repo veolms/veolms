@@ -63,11 +63,7 @@ export async function recordOtpAttempt(
   `.execute(database);
 }
 
-export async function consumeOtp(
-  database: Executor,
-  otpId: string,
-  now: Date,
-): Promise<boolean> {
+export async function consumeOtp(database: Executor, otpId: string, now: Date): Promise<boolean> {
   const result = await database
     .updateTable("otp_codes")
     .set({ consumed_at: now })
@@ -100,10 +96,7 @@ export async function retireOutstandingOtps(
 }
 
 /** Removes an OTP that was never delivered so it does not count toward send limits. */
-export async function deleteOtp(
-  database: Executor,
-  otpId: string,
-): Promise<void> {
+export async function deleteOtp(database: Executor, otpId: string): Promise<void> {
   await database.deleteFrom("otp_codes").where("id", "=", otpId).execute();
 }
 

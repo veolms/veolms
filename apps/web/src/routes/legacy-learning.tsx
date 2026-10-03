@@ -9,9 +9,7 @@ export default function LegacyLearningRoute() {
   if (!courseSlug) return <Navigate replace to="/courses" />;
   if (
     !lectureSlug &&
-    isStudentCatalogueFilterSubpath(
-      normalizeNavigationPath(`/courses/${courseSlug}`),
-    )
+    isStudentCatalogueFilterSubpath(normalizeNavigationPath(`/courses/${courseSlug}`))
   ) {
     return null;
   }

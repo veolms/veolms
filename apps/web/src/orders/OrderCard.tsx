@@ -48,14 +48,14 @@ export function OrderCard({ order, onViewReceipt, setNotice }: OrderCardProps) {
   return (
     <article
       id={order.id}
-      className="group relative rounded-[18px] border border-(--border) bg-(--card-surface-raised,var(--surface)) p-4 md:p-5 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover))"
+      className="group relative rounded-[18px] border border-(--border) bg-(--card-surface-raised,var(--surface)) p-4 transition-all duration-200 hover:bg-(--card-surface-hover,var(--hover)) md:p-5"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
-      <div className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between min-w-0">
+      <div className="flex min-w-0 flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between">
         {/* Left: Badge + Course Title & Order ID */}
-        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-center gap-3.5">
           <div
-            className="flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl font-bold text-xs sm:text-sm shadow-sm"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xs font-bold shadow-sm sm:h-12 sm:w-12 sm:text-sm"
             style={{
               backgroundColor: order.badgeColor,
               color: order.badgeTextColor || "#ffffff",
@@ -65,38 +65,36 @@ export function OrderCard({ order, onViewReceipt, setNotice }: OrderCardProps) {
             {order.badgeText}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate font-bold text-sm sm:text-base text-(--text) tracking-tight">
+            <h3 className="truncate text-sm font-bold tracking-tight text-(--text) sm:text-base">
               {order.courseTitle}
             </h3>
-            <p className="text-xs text-(--muted) mt-0.5 font-mono">
-              Order ID: {order.orderNumber}
-            </p>
+            <p className="mt-0.5 font-mono text-xs text-(--muted)">Order ID: {order.orderNumber}</p>
           </div>
         </div>
 
         {/* Right Info Group: Date, Payment, Price, Status, Options */}
-        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 sm:gap-6 text-xs sm:text-sm shrink-0">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 text-xs sm:justify-end sm:gap-6 sm:text-sm">
           {/* Date & Payment Method */}
-          <div className="flex flex-col gap-0.5 min-w-22.5">
-            <div className="flex items-center gap-1.5 text-(--text-secondary) font-medium">
-              <CalendarBlank size={14} className="text-(--muted) shrink-0" />
+          <div className="flex min-w-22.5 flex-col gap-0.5">
+            <div className="flex items-center gap-1.5 font-medium text-(--text-secondary)">
+              <CalendarBlank size={14} className="shrink-0 text-(--muted)" />
               <span>{order.date}</span>
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-(--muted)">
-              <CreditCard size={13} className="text-(--muted) shrink-0" />
+              <CreditCard size={13} className="shrink-0 text-(--muted)" />
               <span>{order.paymentMethod}</span>
             </div>
           </div>
 
           {/* Price */}
-          <div className="text-right font-extrabold text-base sm:text-lg text-(--text) min-w-16.25">
+          <div className="min-w-16.25 text-right text-base font-extrabold text-(--text) sm:text-lg">
             {order.formattedPrice}
           </div>
 
           {/* Status Badge */}
-          <div className="min-w-21.25 flex justify-end">
+          <div className="flex min-w-21.25 justify-end">
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getStatusBadgeStyle(
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusBadgeStyle(
                 order.status,
               )}`}
             >
@@ -112,20 +110,17 @@ export function OrderCard({ order, onViewReceipt, setNotice }: OrderCardProps) {
               onClick={() => setMenuOpen((prev) => !prev)}
               aria-label={`Options for order ${order.orderNumber}`}
               aria-expanded={menuOpen}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text)"
             >
               <DotsThreeVertical size={18} weight="bold" />
             </button>
 
             {menuOpen && (
               <>
-                <div
-                  className="fixed inset-0 z-20"
-                  onClick={() => setMenuOpen(false)}
-                />
+                <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
                 <div
                   role="menu"
-                  className="absolute right-0 top-full mt-1 z-30 min-w-42.5 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+                  className="animate-in fade-in zoom-in-95 absolute top-full right-0 z-30 mt-1 min-w-42.5 rounded-xl border border-(--border) bg-(--card-surface) p-1.5 shadow-xl backdrop-blur-md duration-100"
                 >
                   <button
                     type="button"
@@ -134,7 +129,7 @@ export function OrderCard({ order, onViewReceipt, setNotice }: OrderCardProps) {
                       setMenuOpen(false);
                       onViewReceipt(order);
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover)"
                   >
                     <FileText size={14} />
                     <span>View invoice</span>
@@ -143,7 +138,7 @@ export function OrderCard({ order, onViewReceipt, setNotice }: OrderCardProps) {
                     type="button"
                     role="menuitem"
                     onClick={handleCopyOrderId}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover)"
                   >
                     <LinkSimple size={14} />
                     <span>Copy Order ID</span>
@@ -152,7 +147,7 @@ export function OrderCard({ order, onViewReceipt, setNotice }: OrderCardProps) {
                     type="button"
                     role="menuitem"
                     onClick={handleDownload}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover)"
                   >
                     <DownloadSimple size={14} />
                     <span>Download receipt</span>

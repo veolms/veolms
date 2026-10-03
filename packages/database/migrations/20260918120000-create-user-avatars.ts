@@ -22,13 +22,8 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("last_used_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
-    .addCheckConstraint(
-      "user_avatars_source_valid",
-      sql`source in ('upload', 'google', 'github')`,
-    )
-    .addUniqueConstraint("user_avatars_storage_prefix_unique", [
-      "storage_prefix",
-    ])
+    .addCheckConstraint("user_avatars_source_valid", sql`source in ('upload', 'google', 'github')`)
+    .addUniqueConstraint("user_avatars_storage_prefix_unique", ["storage_prefix"])
     .execute();
 
   await database.schema
@@ -47,13 +42,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(database: Kysely<unknown>): Promise<void> {
-  await database.schema
-    .dropIndex("idx_user_avatars_user_created")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropIndex("idx_user_avatars_user_source_created")
-    .ifExists()
-    .execute();
+  await database.schema.dropIndex("idx_user_avatars_user_created").ifExists().execute();
+  await database.schema.dropIndex("idx_user_avatars_user_source_created").ifExists().execute();
   await database.schema.dropTable("user_avatars").ifExists().execute();
 }

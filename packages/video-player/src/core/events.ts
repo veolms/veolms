@@ -1,11 +1,6 @@
 import type { VideoEngineError } from "./errors";
 import type { VideoEngineSnapshot } from "./snapshot";
-import type {
-  VideoAudioTrack,
-  VideoQuality,
-  VideoSource,
-  VideoTextTrack,
-} from "./types";
+import type { VideoAudioTrack, VideoQuality, VideoSource, VideoTextTrack } from "./types";
 
 export interface VideoEngineEventMap {
   snapshotchange: VideoEngineSnapshot;

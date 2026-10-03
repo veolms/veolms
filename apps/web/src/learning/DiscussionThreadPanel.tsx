@@ -27,12 +27,7 @@ import { QueryClientContext } from "@tanstack/react-query";
 import { Swiper, SwiperSlide } from "swiper/react";
 import type { Swiper as SwiperInstance } from "swiper/types";
 import "swiper/css";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-} from "../components/ui/drawer";
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "../components/ui/drawer";
 import {
   CommentActionMenu,
   InlineEditForm,
@@ -104,8 +99,7 @@ const THREAD_PANEL_INITIAL_VIEWPORT: ViewportBounds = {
   height: 768,
   width: 1024,
 };
-const useThreadPanelLayoutEffect =
-  typeof window === "undefined" ? useEffect : useLayoutEffect;
+const useThreadPanelLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface DiscussionThreadPanelProps {
   open: boolean;
@@ -129,11 +123,7 @@ interface DiscussionThreadPanelProps {
   onAddReply: (entryId: string | number, reply: CommentReply) => void;
   onEditEntry: (comment: Comment) => void;
   onDeleteEntry: (id: string | number) => void;
-  onEditReply: (
-    entryId: string | number,
-    replyId: string | number,
-    draft: DiscussionDraft,
-  ) => void;
+  onEditReply: (entryId: string | number, replyId: string | number, draft: DiscussionDraft) => void;
   onDeleteReply: (entryId: string | number, replyId: string | number) => void;
   onReport: (
     target:
@@ -152,14 +142,8 @@ interface DiscussionThreadPanelProps {
     serverReplyId?: string,
   ) => void;
   onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
-  onToggleBookmark?: (
-    threadId: string | number,
-    bookmarked: boolean,
-  ) => Promise<boolean> | void;
-  onToggleFollow?: (
-    threadId: string | number,
-    following: boolean,
-  ) => Promise<boolean> | void;
+  onToggleBookmark?: (threadId: string | number, bookmarked: boolean) => Promise<boolean> | void;
+  onToggleFollow?: (threadId: string | number, following: boolean) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
   onCopyTextNotice?: (message: string) => void;
   onReplyCreateError?: () => void;
@@ -206,47 +190,33 @@ export function DiscussionThreadPanel({
   const isPhone = useThreadPanelPhoneLayout();
   const viewport = useVisualViewportBounds();
   const [surfaceBoundsFrozen, setSurfaceBoundsFrozen] = useState(open);
-  const surfaceBounds = useThreadPanelSurfaceBounds(
-    viewport,
-    surfaceBoundsFrozen,
-  );
+  const surfaceBounds = useThreadPanelSurfaceBounds(viewport, surfaceBoundsFrozen);
   const swiperRef = useRef<SwiperInstance | null>(null);
   const widthResizeRef = useRef<PanelWidthResize | null>(null);
   const heightResizeRef = useRef<PanelHeightResize | null>(null);
   const wasOpenRef = useRef(false);
   const [panelWidth, setPanelWidth] = useState(getInitialPanelWidth);
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
-  const [resizingAxis, setResizingAxis] = useState<"width" | "height" | null>(
-    null,
-  );
+  const [resizingAxis, setResizingAxis] = useState<"width" | "height" | null>(null);
   const [expanded, setExpanded] = useState(false);
   const mobileCollapsedSnapPoint = Math.min(
     viewport.height,
     Math.max(320, Math.round(viewport.height * THREAD_PANEL_MOBILE_SNAP_RATIO)),
   );
-  const [mobileSnapPoint, setMobileSnapPoint] = useState<number | null>(
-    mobileCollapsedSnapPoint,
-  );
-  const mobileSnapPoints = useMemo(
-    () => [mobileCollapsedSnapPoint, 1],
-    [mobileCollapsedSnapPoint],
-  );
+  const [mobileSnapPoint, setMobileSnapPoint] = useState<number | null>(mobileCollapsedSnapPoint);
+  const mobileSnapPoints = useMemo(() => [mobileCollapsedSnapPoint, 1], [mobileCollapsedSnapPoint]);
   const mobileVisibleHeight =
     mobileSnapPoint === 1
       ? viewport.height
       : Math.min(
           viewport.height,
-          typeof mobileSnapPoint === "number"
-            ? mobileSnapPoint
-            : mobileCollapsedSnapPoint,
+          typeof mobileSnapPoint === "number" ? mobileSnapPoint : mobileCollapsedSnapPoint,
         );
   const [composerFocusRequest, setComposerFocusRequest] = useState<{
     id: number;
     entryId: string | number | null;
   }>({ id: 0, entryId: null });
-  const foundIndex = entries.findIndex((entry) =>
-    matchesEntryIdentity(entry, activeEntryId),
-  );
+  const foundIndex = entries.findIndex((entry) => matchesEntryIdentity(entry, activeEntryId));
   const activeIndex = foundIndex >= 0 ? foundIndex : 0;
   const requestComposerFocus = useCallback((entryId: string | number) => {
     setComposerFocusRequest((current) => ({
@@ -254,16 +224,13 @@ export function DiscussionThreadPanel({
       entryId,
     }));
   }, []);
-  const handleComposerFocusHandled = useCallback(
-    (entryId: string | number, requestId: number) => {
-      setComposerFocusRequest((current) =>
-        current.id === requestId && current.entryId === entryId
-          ? { ...current, entryId: null }
-          : current,
-      );
-    },
-    [],
-  );
+  const handleComposerFocusHandled = useCallback((entryId: string | number, requestId: number) => {
+    setComposerFocusRequest((current) =>
+      current.id === requestId && current.entryId === entryId
+        ? { ...current, entryId: null }
+        : current,
+    );
+  }, []);
 
   useThreadPanelLayoutEffect(() => {
     if (open) setSurfaceBoundsFrozen(true);
@@ -273,11 +240,7 @@ export function DiscussionThreadPanel({
     (width: number) => {
       const availableWidth = Math.max(1, surfaceBounds.lesson.width);
       const minimumWidth = Math.min(THREAD_PANEL_MIN_WIDTH, availableWidth);
-      return Math.min(
-        availableWidth,
-        THREAD_PANEL_MAX_WIDTH,
-        Math.max(minimumWidth, width),
-      );
+      return Math.min(availableWidth, THREAD_PANEL_MAX_WIDTH, Math.max(minimumWidth, width));
     },
     [surfaceBounds.lesson.width],
   );
@@ -298,8 +261,7 @@ export function DiscussionThreadPanel({
 
     const isOpening = !wasOpenRef.current;
     const animateBetweenThreads =
-      !isOpening &&
-      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      !isOpening && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     swiperRef.current?.slideTo(
       activeIndex,
       animateBetweenThreads ? THREAD_PANEL_SLIDE_DURATION : 0,
@@ -312,21 +274,12 @@ export function DiscussionThreadPanel({
     ) {
       requestComposerFocus(activeEntryId);
     }
-  }, [
-    activeEntryId,
-    activeIndex,
-    focusComposerOnOpen,
-    isPhone,
-    open,
-    requestComposerFocus,
-  ]);
+  }, [activeEntryId, activeIndex, focusComposerOnOpen, isPhone, open, requestComposerFocus]);
 
   useEffect(() => {
     if (isPhone) return;
     setPanelWidth((current) => clampPanelWidth(current));
-    setPanelHeight((current) =>
-      current === null ? null : clampPanelHeight(current),
-    );
+    setPanelHeight((current) => (current === null ? null : clampPanelHeight(current)));
   }, [clampPanelHeight, clampPanelWidth, isPhone]);
 
   useEffect(() => {
@@ -336,10 +289,7 @@ export function DiscussionThreadPanel({
   }, [isPhone, mobileCollapsedSnapPoint, open]);
 
   const commitPanelWidth = useCallback((width: number) => {
-    const nextWidth = Math.min(
-      THREAD_PANEL_MAX_WIDTH,
-      Math.max(THREAD_PANEL_MIN_WIDTH, width),
-    );
+    const nextWidth = Math.min(THREAD_PANEL_MAX_WIDTH, Math.max(THREAD_PANEL_MIN_WIDTH, width));
     setPanelWidth(nextWidth);
     try {
       window.localStorage.setItem(THREAD_PANEL_WIDTH_KEY, String(nextWidth));
@@ -402,17 +352,13 @@ export function DiscussionThreadPanel({
   const moveHeightResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     const resize = heightResizeRef.current;
     if (!resize || resize.pointerId !== event.pointerId) return;
-    setPanelHeight(
-      clampPanelHeight(resize.startHeight + (resize.startY - event.clientY)),
-    );
+    setPanelHeight(clampPanelHeight(resize.startHeight + (resize.startY - event.clientY)));
   };
 
   const endHeightResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     const resize = heightResizeRef.current;
     if (!resize || resize.pointerId !== event.pointerId) return;
-    const nextHeight = clampPanelHeight(
-      resize.startHeight + (resize.startY - event.clientY),
-    );
+    const nextHeight = clampPanelHeight(resize.startHeight + (resize.startY - event.clientY));
     heightResizeRef.current = null;
     setResizingAxis(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -433,9 +379,7 @@ export function DiscussionThreadPanel({
       ? activeSurface.height
       : clampPanelHeight(panelHeight ?? surfaceBounds.lesson.height);
   const appLeft = surfaceBounds.app.right - surfaceBounds.app.width;
-  const clipRight = expanded
-    ? surfaceBounds.app.right
-    : surfaceBounds.lesson.right;
+  const clipRight = expanded ? surfaceBounds.app.right : surfaceBounds.lesson.right;
   const clipBottom = surfaceBounds.app.top + surfaceBounds.app.height;
   const viewportInsetTop = Math.max(0, surfaceBounds.app.top);
   const viewportInsetRight = Math.max(0, viewport.width - clipRight);
@@ -513,10 +457,10 @@ export function DiscussionThreadPanel({
         data-panel-expanded={expanded || undefined}
         data-panel-surface-frozen={surfaceBoundsFrozen || undefined}
         data-panel-resizing={resizingAxis ? "true" : undefined}
-        className={`m-0! overflow-hidden border-0! [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_92%,transparent)] [--stack-scale:1]! bg-[color-mix(in_srgb,var(--app-shell)_92%,transparent)] shadow-[0_30px_90px_rgba(0,0,0,0.55)] backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] data-[panel-resizing=true]:transition-none! data-expanded:rounded-none! data-[swipe-axis=x]:flex-col! data-[swipe-direction=right]:rounded-none! sm:border! sm:border-[color-mix(in_srgb,var(--text)_14%,transparent)] sm:shadow-[0_30px_90px_rgba(0,0,0,0.55),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] sm:data-[swipe-direction=right]:rounded-xl! motion-reduce:transition-none! ${
+        className={`m-0! overflow-hidden border-0! bg-[color-mix(in_srgb,var(--app-shell)_92%,transparent)] shadow-[0_30px_90px_rgba(0,0,0,0.55)] backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_92%,transparent)] [--stack-scale:1]! data-expanded:rounded-none! data-[panel-resizing=true]:transition-none! data-[swipe-axis=x]:flex-col! data-[swipe-direction=right]:rounded-none! motion-reduce:transition-none! sm:border! sm:border-[color-mix(in_srgb,var(--text)_14%,transparent)] sm:shadow-[0_30px_90px_rgba(0,0,0,0.55),0_0_0_1px_color-mix(in_srgb,var(--text)_5%,transparent)] sm:data-[swipe-direction=right]:rounded-xl! ${
           isPhone
             ? ""
-            : "transform-none! translate-x-0! transition-[translate]! duration-300! ease-out! will-change-[translate] data-starting-style:translate-x-[calc(100%+2px)]! data-ending-style:translate-x-[calc(100%+2px)]! data-ending-style:duration-240! data-ending-style:ease-out!"
+            : "translate-x-0! transform-none! transition-[translate]! duration-300! ease-out! will-change-[translate] data-ending-style:translate-x-[calc(100%+2px)]! data-ending-style:duration-240! data-ending-style:ease-out! data-starting-style:translate-x-[calc(100%+2px)]!"
         }`}
       >
         <SurfaceTopRightAccentGlow />
@@ -545,9 +489,7 @@ export function DiscussionThreadPanel({
               }
               event.preventDefault();
               commitPanelWidth(
-                clampPanelWidth(
-                  panelWidth + (event.key === "ArrowLeft" ? 24 : -24),
-                ),
+                clampPanelWidth(panelWidth + (event.key === "ArrowLeft" ? 24 : -24)),
               );
             }}
             onPointerDown={beginWidthResize}
@@ -566,10 +508,7 @@ export function DiscussionThreadPanel({
             role="separator"
             aria-orientation="horizontal"
             aria-label="Resize discussion thread height"
-            aria-valuemin={Math.min(
-              THREAD_PANEL_MIN_HEIGHT,
-              surfaceBounds.app.height,
-            )}
+            aria-valuemin={Math.min(THREAD_PANEL_MIN_HEIGHT, surfaceBounds.app.height)}
             aria-valuemax={Math.round(surfaceBounds.app.height)}
             aria-valuenow={Math.round(resolvedPanelHeight)}
             tabIndex={0}
@@ -585,9 +524,7 @@ export function DiscussionThreadPanel({
                 return;
               }
               event.preventDefault();
-              commitPanelHeight(
-                resolvedPanelHeight + (event.key === "ArrowUp" ? 24 : -24),
-              );
+              commitPanelHeight(resolvedPanelHeight + (event.key === "ArrowUp" ? 24 : -24));
             }}
             onPointerDown={beginHeightResize}
             onPointerMove={moveHeightResize}
@@ -612,13 +549,11 @@ export function DiscussionThreadPanel({
               <span
                 aria-hidden="true"
                 data-thread-panel-divider
-                className="ml-0.75 mr-3 h-7 w-px bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+                className="mr-3 ml-0.75 h-7 w-px bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
               />
             </>
           )}
-          <DrawerTitle className="mr-auto text-lg font-bold">
-            Discussion thread
-          </DrawerTitle>
+          <DrawerTitle className="mr-auto text-lg font-bold">Discussion thread</DrawerTitle>
           <DrawerDescription className="sr-only">
             Read the selected lesson discussion and write a reply.
           </DrawerDescription>
@@ -626,14 +561,10 @@ export function DiscussionThreadPanel({
             <button
               type="button"
               data-thread-panel-size-toggle
-              aria-label={
-                expanded
-                  ? "Restore discussion thread"
-                  : "Expand discussion thread"
-              }
+              aria-label={expanded ? "Restore discussion thread" : "Expand discussion thread"}
               aria-pressed={expanded}
               onClick={() => setExpanded((current) => !current)}
-              className="ml-auto grid size-10 shrink-0 place-items-center rounded-lg text-(--text-secondary) transition-[background-color,color,transform] hover:bg-(--hover) hover:text-(--text) active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              className="ml-auto grid size-10 shrink-0 place-items-center rounded-lg text-(--text-secondary) transition-[background-color,color,transform] hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) active:scale-95"
             >
               {expanded ? (
                 <ArrowsIn
@@ -710,8 +641,7 @@ export function DiscussionThreadPanel({
                   participationActionLabel={participationActionLabel}
                   onParticipationAction={onParticipationAction}
                   focusRequest={
-                    String(composerFocusRequest.entryId) ===
-                    getClientEntityId(entry)
+                    String(composerFocusRequest.entryId) === getClientEntityId(entry)
                       ? composerFocusRequest.id
                       : 0
                   }
@@ -772,11 +702,7 @@ interface ThreadSlideProps {
   onAddReply: (entryId: string | number, reply: CommentReply) => void;
   onEditEntry: (comment: Comment) => void;
   onDeleteEntry: (id: string | number) => void;
-  onEditReply: (
-    entryId: string | number,
-    replyId: string | number,
-    draft: DiscussionDraft,
-  ) => void;
+  onEditReply: (entryId: string | number, replyId: string | number, draft: DiscussionDraft) => void;
   onDeleteReply: (entryId: string | number, replyId: string | number) => void;
   onReport: (
     target:
@@ -795,14 +721,8 @@ interface ThreadSlideProps {
     serverReplyId?: string,
   ) => void;
   onToggleLockThread?: (threadId: string | number, locked: boolean) => void;
-  onToggleBookmark?: (
-    threadId: string | number,
-    bookmarked: boolean,
-  ) => Promise<boolean> | void;
-  onToggleFollow?: (
-    threadId: string | number,
-    following: boolean,
-  ) => Promise<boolean> | void;
+  onToggleBookmark?: (threadId: string | number, bookmarked: boolean) => Promise<boolean> | void;
+  onToggleFollow?: (threadId: string | number, following: boolean) => Promise<boolean> | void;
   onSeekToTimestamp?: (seconds: number) => void;
   onCopyTextNotice?: (message: string) => void;
   onReplyCreateError?: () => void;
@@ -845,12 +765,10 @@ function ThreadSlide({
   courseId,
   lessonId,
 }: ThreadSlideProps) {
-  const isQuestion =
-    entry.entryKind === "question" || Boolean(entry.isQuestion);
+  const isQuestion = entry.entryKind === "question" || Boolean(entry.isQuestion);
   const isModerator = userRole === "Instructor" || userRole === "Admin";
   const canLock = canParticipate && Boolean(entry.isOwn || isModerator);
-  const canAcceptAnswer =
-    canParticipate && isQuestion && Boolean(entry.isOwn || isModerator);
+  const canAcceptAnswer = canParticipate && isQuestion && Boolean(entry.isOwn || isModerator);
 
   const clientId = getClientEntityId(entry);
   const serverId = getServerEntityId(entry);
@@ -892,10 +810,7 @@ function ThreadSlide({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        if (
-          entries.some((entry) => entry.isIntersecting) &&
-          !fetchingNextPageRef.current
-        ) {
+        if (entries.some((entry) => entry.isIntersecting) && !fetchingNextPageRef.current) {
           fetchingNextPageRef.current = true;
           void fetchNextPage().finally(() => {
             fetchingNextPageRef.current = false;
@@ -906,14 +821,7 @@ function ThreadSlide({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [
-    active,
-    fetchNextPage,
-    hasNextPage,
-    isBackend,
-    isFetchNextPageError,
-    isFetchingNextPage,
-  ]);
+  }, [active, fetchNextPage, hasNextPage, isBackend, isFetchNextPageError, isFetchingNextPage]);
 
   const createReplyMutation = useCreateReply(
     threadId,
@@ -978,9 +886,7 @@ function ThreadSlide({
     draft: DiscussionDraft,
   ): Promise<boolean> => {
     if (isBackend) {
-      const reply = replies.find(
-        (candidate) => getClientEntityId(candidate) === String(replyId),
-      );
+      const reply = replies.find((candidate) => getClientEntityId(candidate) === String(replyId));
       const serverReplyId = reply ? getServerEntityId(reply) : undefined;
       if (!reply || !serverReplyId) return false;
       try {
@@ -1013,13 +919,9 @@ function ThreadSlide({
     }
   };
 
-  const handleDeleteReply = async (
-    replyId: string | number,
-  ): Promise<boolean> => {
+  const handleDeleteReply = async (replyId: string | number): Promise<boolean> => {
     if (isBackend) {
-      const reply = replies.find(
-        (candidate) => getClientEntityId(candidate) === String(replyId),
-      );
+      const reply = replies.find((candidate) => getClientEntityId(candidate) === String(replyId));
       const serverReplyId = reply ? getServerEntityId(reply) : undefined;
       const replyClientId = reply ? getClientEntityId(reply) : undefined;
       if (
@@ -1051,8 +953,7 @@ function ThreadSlide({
   const handleLikeReply = (replyId: string | number) => {
     if (isBackendMode) {
       const reply = replies.find(
-        (candidate) =>
-          String(candidate.clientId ?? candidate.id) === String(replyId),
+        (candidate) => String(candidate.clientId ?? candidate.id) === String(replyId),
       );
       if (!reply) return;
       const replyClientId = String(reply.clientId ?? reply.id);
@@ -1124,20 +1025,15 @@ function ThreadSlide({
               <LoadingSpinnerIcon size={24} />
             </div>
           ) : isBackend && isRepliesError && !repliesData ? (
-            <div
-              className="py-12 text-center"
-              data-testid="learning-replies-error"
-            >
-              <p className="font-semibold text-(--text)">
-                Failed to load replies
-              </p>
+            <div className="py-12 text-center" data-testid="learning-replies-error">
+              <p className="font-semibold text-(--text)">Failed to load replies</p>
               <p className="mx-auto mt-1 max-w-md text-sm text-(--muted)">
                 There was a problem loading replies for this discussion.
               </p>
               <button
                 type="button"
                 onClick={() => refetchReplies()}
-                className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                className="mt-3 inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] ring-inset hover:bg-(--hover)"
               >
                 Retry
               </button>
@@ -1152,12 +1048,7 @@ function ThreadSlide({
                 isQuestion={isQuestion}
                 canAcceptAnswer={canAcceptAnswer}
                 onToggleAcceptReply={(replyId, accepted) =>
-                  onToggleAcceptReply?.(
-                    entry.id,
-                    replyId,
-                    accepted,
-                    getServerEntityId(reply),
-                  )
+                  onToggleAcceptReply?.(entry.id, replyId, accepted, getServerEntityId(reply))
                 }
                 onReply={entry.isLocked ? () => {} : focusComposer}
                 onEdit={handleEditReply}
@@ -1171,16 +1062,11 @@ function ThreadSlide({
               />
             ))
           ) : (
-            <div
-              className="px-4 py-12 text-center sm:py-16"
-              data-testid="learning-replies-empty"
-            >
+            <div className="px-4 py-12 text-center sm:py-16" data-testid="learning-replies-empty">
               <div className="mx-auto grid size-11 place-items-center rounded-full bg-[color-mix(in_srgb,var(--accent)_11%,transparent)] text-(--accent-ink,var(--accent))">
                 <ChatCenteredDots size={22} aria-hidden="true" />
               </div>
-              <p className="mt-3 text-sm font-semibold text-(--text)">
-                Start the conversation
-              </p>
+              <p className="mt-3 text-sm font-semibold text-(--text)">Start the conversation</p>
               <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-(--muted)">
                 Be the first to reply to {entry.name}.
               </p>
@@ -1192,7 +1078,7 @@ function ThreadSlide({
                 <button
                   type="button"
                   onClick={() => void fetchNextPage()}
-                  className="inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-inset ring-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:bg-(--hover)"
+                  className="inline-flex items-center rounded-lg bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--text) shadow-sm ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] ring-inset hover:bg-(--hover)"
                 >
                   Retry loading replies
                 </button>
@@ -1214,7 +1100,7 @@ function ThreadSlide({
         (entry.isLocked ? (
           <div
             data-testid="thread-locked-notice"
-            className="-mx-4 -mb-4 mt-0 flex items-center justify-center gap-2 rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-4 py-3.5 text-xs font-semibold text-(--muted) border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] sm:mx-0 sm:mb-0 sm:rounded-xl"
+            className="-mx-4 mt-0 -mb-4 flex items-center justify-center gap-2 rounded-t-xl border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-4 py-3.5 text-xs font-semibold text-(--muted) sm:mx-0 sm:mb-0 sm:rounded-xl"
           >
             <Lock size={16} weight="bold" />
             <span>This conversation is locked. Replies are disabled.</span>
@@ -1230,7 +1116,7 @@ function ThreadSlide({
           />
         ) : (
           <div
-            className="-mx-4 -mb-4 mt-0 flex flex-col items-center justify-center gap-2 rounded-t-xl border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] px-4 py-4 text-center sm:mx-0 sm:mb-0 sm:rounded-xl"
+            className="-mx-4 mt-0 -mb-4 flex flex-col items-center justify-center gap-2 rounded-t-xl border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] px-4 py-4 text-center sm:mx-0 sm:mb-0 sm:rounded-xl"
             data-testid="learning-thread-login-prompt"
           >
             <p className="text-sm font-medium text-(--muted)">
@@ -1276,14 +1162,8 @@ function ThreadRootEntry({
   canParticipate?: boolean;
   canLock?: boolean;
   onToggleLock?: () => void;
-  onToggleBookmark?: (
-    threadId: string | number,
-    bookmarked: boolean,
-  ) => Promise<boolean> | void;
-  onToggleFollow?: (
-    threadId: string | number,
-    following: boolean,
-  ) => Promise<boolean> | void;
+  onToggleBookmark?: (threadId: string | number, bookmarked: boolean) => Promise<boolean> | void;
+  onToggleFollow?: (threadId: string | number, following: boolean) => Promise<boolean> | void;
   onLike: (id: string | number, liked: boolean) => void;
   onReply: () => void;
   onEdit: () => void;
@@ -1307,9 +1187,7 @@ function ThreadRootEntry({
         <div className="min-w-0 flex-1">
           <div className="relative flex items-start gap-2 pr-9">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-              <h2 className="text-sm font-semibold text-(--text) sm:text-[15px]">
-                {entry.name}
-              </h2>
+              <h2 className="text-sm font-semibold text-(--text) sm:text-[15px]">{entry.name}</h2>
               {entry.role === "Instructor" && (
                 <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
                   Instructor
@@ -1356,26 +1234,16 @@ function ThreadRootEntry({
               <span aria-hidden="true" className="text-(--muted)">
                 ·
               </span>
-              <span className="text-xs text-(--muted) sm:text-sm">
-                {entry.time}
-              </span>
+              <span className="text-xs text-(--muted) sm:text-sm">{entry.time}</span>
             </div>
             <CommentActionMenu
               name={entry.name}
-              kind={
-                entry.entryKind ?? (entry.isQuestion ? "question" : "comment")
-              }
+              kind={entry.entryKind ?? (entry.isQuestion ? "question" : "comment")}
               textToCopy={entry.content?.markdown ?? entry.text}
               onCopyTextNotice={onCopyTextNotice}
               isOwn={Boolean(entry.isOwn)}
-              canEdit={
-                canParticipate &&
-                (!isBackendMode || (Boolean(serverId) && !isEditing))
-              }
-              canDelete={
-                canParticipate &&
-                (!isBackendMode || (Boolean(serverId) && !isEditing))
-              }
+              canEdit={canParticipate && (!isBackendMode || (Boolean(serverId) && !isEditing))}
+              canDelete={canParticipate && (!isBackendMode || (Boolean(serverId) && !isEditing))}
               canLock={canLock}
               isLocked={Boolean(entry.isLocked)}
               onToggleLock={onToggleLock}
@@ -1383,9 +1251,9 @@ function ThreadRootEntry({
               onToggleBookmark={
                 onToggleBookmark
                   ? () => {
-                      void Promise.resolve(
-                        onToggleBookmark(entry.id, !entry.isBookmarked),
-                      ).catch(() => {});
+                      void Promise.resolve(onToggleBookmark(entry.id, !entry.isBookmarked)).catch(
+                        () => {},
+                      );
                     }
                   : undefined
               }
@@ -1393,17 +1261,15 @@ function ThreadRootEntry({
               onToggleFollow={
                 onToggleFollow
                   ? () => {
-                      void Promise.resolve(
-                        onToggleFollow(entry.id, !entry.isFollowing),
-                      ).catch(() => {});
+                      void Promise.resolve(onToggleFollow(entry.id, !entry.isFollowing)).catch(
+                        () => {},
+                      );
                     }
                   : undefined
               }
               onEdit={onEdit}
               onShare={() =>
-                serverId
-                  ? void shareDiscussionEntry(serverId, entry.name, entry.text)
-                  : undefined
+                serverId ? void shareDiscussionEntry(serverId, entry.name, entry.text) : undefined
               }
               onDelete={onDelete}
               onReport={onReport}
@@ -1428,9 +1294,7 @@ function ThreadRootEntry({
                 <p className="truncate text-sm font-medium text-(--text)">
                   {entry.attachment.name}
                 </p>
-                <p className="text-xs text-(--muted)">
-                  {entry.attachment.meta}
-                </p>
+                <p className="text-xs text-(--muted)">{entry.attachment.meta}</p>
               </div>
             </div>
           ) : null}
@@ -1445,10 +1309,7 @@ function ThreadRootEntry({
                 }}
                 className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isEntryLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
               >
-                <ThumbsUp
-                  size={19}
-                  weight={isEntryLiked ? "fill" : "regular"}
-                />
+                <ThumbsUp size={19} weight={isEntryLiked ? "fill" : "regular"} />
                 {entry.likes}
               </button>
             )}
@@ -1509,10 +1370,7 @@ function ThreadReplyEntry({
     serverReplyId?: string,
   ) => void;
   onReply: () => void;
-  onEdit: (
-    replyId: string | number,
-    draft: DiscussionDraft,
-  ) => Promise<boolean>;
+  onEdit: (replyId: string | number, draft: DiscussionDraft) => Promise<boolean>;
   onDelete: (replyId: string | number) => Promise<boolean>;
   onLikeReply: (replyId: string | number) => void;
   onReport: (
@@ -1529,12 +1387,9 @@ function ThreadReplyEntry({
   onCopyTextNotice?: (message: string) => void;
   courseId?: string;
 }) {
-  const canAcceptReply =
-    Boolean(getServerEntityId(reply)) && reply.creationStatus !== "pending";
+  const canAcceptReply = Boolean(getServerEntityId(reply)) && reply.creationStatus !== "pending";
   const [editing, setEditing] = useState(false);
-  const [editDraft, setEditDraft] = useState(
-    reply.content ?? createDiscussionDraft(reply.text),
-  );
+  const [editDraft, setEditDraft] = useState(reply.content ?? createDiscussionDraft(reply.text));
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState("");
   const replyClientId = getClientEntityId(reply);
@@ -1606,9 +1461,7 @@ function ThreadReplyEntry({
                   <span aria-hidden="true" className="text-(--muted)">
                     ·
                   </span>
-                  <span className="text-xs text-(--muted) sm:text-sm">
-                    {reply.time}
-                  </span>
+                  <span className="text-xs text-(--muted) sm:text-sm">{reply.time}</span>
                 </div>
                 <CommentActionMenu
                   name={reply.name}
@@ -1617,42 +1470,27 @@ function ThreadReplyEntry({
                   onCopyTextNotice={onCopyTextNotice}
                   isOwn={Boolean(reply.isOwn)}
                   canEdit={
-                    canParticipate &&
-                    (!isBackendMode || (Boolean(replyServerId) && !isEditing))
+                    canParticipate && (!isBackendMode || (Boolean(replyServerId) && !isEditing))
                   }
                   canDelete={
-                    canParticipate &&
-                    (!isBackendMode || (Boolean(replyServerId) && !isEditing))
+                    canParticipate && (!isBackendMode || (Boolean(replyServerId) && !isEditing))
                   }
-                  canAcceptAnswer={
-                    isQuestion && canAcceptAnswer && canAcceptReply
-                  }
+                  canAcceptAnswer={isQuestion && canAcceptAnswer && canAcceptReply}
                   isAccepted={Boolean(reply.isAccepted)}
                   onToggleAccept={
                     isQuestion && canAcceptAnswer && onToggleAcceptReply
                       ? () =>
-                          onToggleAcceptReply(
-                            reply.id,
-                            !reply.isAccepted,
-                            getServerEntityId(reply),
-                          )
+                          onToggleAcceptReply(reply.id, !reply.isAccepted, getServerEntityId(reply))
                       : undefined
                   }
                   onEdit={() => {
-                    setEditDraft(
-                      reply.content ?? createDiscussionDraft(reply.text),
-                    );
+                    setEditDraft(reply.content ?? createDiscussionDraft(reply.text));
                     setEditing(true);
                   }}
                   onShare={() =>
-                    void shareDiscussionEntry(
-                      reply.id,
-                      reply.name,
-                      reply.text,
-                      {
-                        parentThreadId: parentId,
-                      },
-                    )
+                    void shareDiscussionEntry(reply.id, reply.name, reply.text, {
+                      parentThreadId: parentId,
+                    })
                   }
                   onDelete={() => {
                     void onDelete(reply.id);
@@ -1678,9 +1516,7 @@ function ThreadReplyEntry({
                     mentionsEnabled={true}
                     onChange={setEditDraft}
                     onCancel={() => {
-                      setEditDraft(
-                        reply.content ?? createDiscussionDraft(reply.text),
-                      );
+                      setEditDraft(reply.content ?? createDiscussionDraft(reply.text));
                       setEditing(false);
                       setUpdateError("");
                     }}
@@ -1715,10 +1551,7 @@ function ThreadReplyEntry({
                     onClick={() => onLikeReply(reply.id)}
                     className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${reply.liked ? "text-(--accent-ink,var(--accent))" : ""}`}
                   >
-                    <ThumbsUp
-                      size={18}
-                      weight={reply.liked ? "fill" : "regular"}
-                    />
+                    <ThumbsUp size={18} weight={reply.liked ? "fill" : "regular"} />
                     <span>{reply.likes}</span>
                   </button>
                 )}
@@ -1727,19 +1560,11 @@ function ThreadReplyEntry({
                     type="button"
                     data-testid={`accept-reply-btn-${reply.id}`}
                     disabled={!canAcceptReply}
-                    aria-label={
-                      reply.isAccepted ? "Unaccept answer" : "Accept answer"
-                    }
-                    title={
-                      reply.isAccepted ? "Unaccept answer" : "Accept answer"
-                    }
+                    aria-label={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
+                    title={reply.isAccepted ? "Unaccept answer" : "Accept answer"}
                     onClick={() => {
                       if (!canAcceptReply) return;
-                      onToggleAcceptReply(
-                        reply.id,
-                        !reply.isAccepted,
-                        getServerEntityId(reply),
-                      );
+                      onToggleAcceptReply(reply.id, !reply.isAccepted, getServerEntityId(reply));
                     }}
                     className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-(--accent) ${
                       reply.isAccepted
@@ -1747,10 +1572,7 @@ function ThreadReplyEntry({
                         : "text-(--muted) hover:bg-(--hover) hover:text-(--text)"
                     }`}
                   >
-                    <CheckCircle
-                      size={16}
-                      weight={reply.isAccepted ? "fill" : "bold"}
-                    />
+                    <CheckCircle size={16} weight={reply.isAccepted ? "fill" : "bold"} />
                     <span>{reply.isAccepted ? "Accepted" : "Accept"}</span>
                   </button>
                 )}
@@ -1809,15 +1631,10 @@ function ThreadReplyComposer({
   courseId?: string;
 }) {
   const [composerKey, setComposerKey] = useState(0);
-  const [draft, setDraft] = useState<DiscussionDraft>(
-    createEmptyDiscussionDraft,
-  );
-  const [replyAttachments, setReplyAttachments] = useState<
-    LocalComposerAttachment[]
-  >([]);
+  const [draft, setDraft] = useState<DiscussionDraft>(createEmptyDiscussionDraft);
+  const [replyAttachments, setReplyAttachments] = useState<LocalComposerAttachment[]>([]);
   const replyAttachmentsRef = useRef(replyAttachments);
-  const [editorController, setEditorController] =
-    useState<DiscussionEditorController | null>(null);
+  const [editorController, setEditorController] = useState<DiscussionEditorController | null>(null);
   const [formattingState, setFormattingState] =
     useState<DiscussionFormattingState>(EMPTY_FORMATTING_STATE);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1874,9 +1691,7 @@ function ThreadReplyComposer({
     }
   };
 
-  const handleControllerChange = (
-    controller: DiscussionEditorController | null,
-  ) => {
+  const handleControllerChange = (controller: DiscussionEditorController | null) => {
     setEditorController(controller);
   };
 
@@ -1885,7 +1700,7 @@ function ThreadReplyComposer({
   return (
     <div
       data-thread-reply-composer
-      className="-mx-4 -mb-4 mt-0 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
+      className="-mx-4 mt-0 -mb-4 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
     >
       <DiscussionEditor
         documentId={`thread-reply-${entry.id}`}
@@ -1922,17 +1737,14 @@ function ThreadReplyComposer({
       <div className="flex min-h-14 min-w-0 items-center gap-1.5 overflow-hidden bg-[color-mix(in_srgb,var(--surface)_66%,transparent)] px-2.5 py-2 sm:gap-2 sm:px-3">
         <DiscussionAvatar src={composerAvatar} className="size-9 sm:size-10" />
         {editorController && (
-          <CommentFormattingToolbar
-            editor={editorController}
-            formattingState={formattingState}
-          />
+          <CommentFormattingToolbar editor={editorController} formattingState={formattingState} />
         )}
         <button
           type="button"
           aria-label="Post reply"
           disabled={!canSubmit || isPendingSubmission}
           onClick={submit}
-          className="grid size-10 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,opacity] hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) sm:size-11"
+          className="grid size-10 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent) shadow-[0_8px_22px_color-mix(in_srgb,var(--accent-shadow)_62%,transparent)] transition-[background-color,opacity] hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) disabled:cursor-not-allowed disabled:opacity-45 sm:size-11"
         >
           <PaperPlaneTilt size={23} weight="fill" aria-hidden="true" />
         </button>
@@ -1941,16 +1753,10 @@ function ThreadReplyComposer({
   );
 }
 
-function matchesEntryIdentity(
-  entry: Comment,
-  activeEntryId: string | number | null,
-): boolean {
+function matchesEntryIdentity(entry: Comment, activeEntryId: string | number | null): boolean {
   if (activeEntryId === null) return false;
   const identity = String(activeEntryId);
-  return (
-    getClientEntityId(entry) === identity ||
-    getServerEntityId(entry) === identity
-  );
+  return getClientEntityId(entry) === identity || getServerEntityId(entry) === identity;
 }
 
 interface PanelWidthResize {
@@ -1989,10 +1795,7 @@ interface ThreadPanelSurfaceBounds {
   app: PanelSurfaceRect;
 }
 
-function useThreadPanelSurfaceBounds(
-  viewport: ViewportBounds,
-  frozen: boolean,
-) {
+function useThreadPanelSurfaceBounds(viewport: ViewportBounds, frozen: boolean) {
   const measure = useCallback(
     (): ThreadPanelSurfaceBounds => getThreadPanelSurfaceBounds(viewport),
     [viewport],
@@ -2007,9 +1810,7 @@ function useThreadPanelSurfaceBounds(
 
   useThreadPanelLayoutEffect(() => {
     let frame = 0;
-    const lesson = document.querySelector<HTMLElement>(
-      "[data-discussion-panel-anchor]",
-    );
+    const lesson = document.querySelector<HTMLElement>("[data-discussion-panel-anchor]");
     const app = document.querySelector<HTMLElement>("#courses-main-scrollport");
     const sync = () => {
       window.cancelAnimationFrame(frame);
@@ -2019,9 +1820,7 @@ function useThreadPanelSurfaceBounds(
       if (!frozen) sync();
     };
     const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(syncSurface);
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(syncSurface);
 
     if (lesson) resizeObserver?.observe(lesson);
     if (app) resizeObserver?.observe(app);
@@ -2037,27 +1836,17 @@ function useThreadPanelSurfaceBounds(
   return bounds;
 }
 
-function getThreadPanelSurfaceBounds(
-  viewport: ViewportBounds,
-): ThreadPanelSurfaceBounds {
+function getThreadPanelSurfaceBounds(viewport: ViewportBounds): ThreadPanelSurfaceBounds {
   const fallbackBounds = getThreadPanelFallbackSurfaceBounds(viewport);
   if (typeof document === "undefined") return fallbackBounds;
 
   const viewportBottom = viewport.top + viewport.height;
-  const appElement = document.querySelector<HTMLElement>(
-    "#courses-main-scrollport",
-  );
-  const lessonElement = document.querySelector<HTMLElement>(
-    "[data-discussion-panel-anchor]",
-  );
+  const appElement = document.querySelector<HTMLElement>("#courses-main-scrollport");
+  const lessonElement = document.querySelector<HTMLElement>("[data-discussion-panel-anchor]");
   const appRect = appElement?.getBoundingClientRect();
   const lessonRect = lessonElement?.getBoundingClientRect();
-  const hasAppRect = Boolean(
-    appRect && appRect.width > 1 && appRect.height > 1,
-  );
-  const hasLessonRect = Boolean(
-    lessonRect && lessonRect.width > 1 && lessonRect.height > 1,
-  );
+  const hasAppRect = Boolean(appRect && appRect.width > 1 && appRect.height > 1);
+  const hasLessonRect = Boolean(lessonRect && lessonRect.width > 1 && lessonRect.height > 1);
 
   if (!hasAppRect || !appRect) {
     return fallbackBounds;
@@ -2094,9 +1883,7 @@ function getThreadPanelSurfaceBounds(
   };
 }
 
-function getThreadPanelFallbackSurfaceBounds(
-  viewport: ViewportBounds,
-): ThreadPanelSurfaceBounds {
+function getThreadPanelFallbackSurfaceBounds(viewport: ViewportBounds): ThreadPanelSurfaceBounds {
   const fallbackInset = 14;
   const surface: PanelSurfaceRect = {
     top: viewport.top + fallbackInset,
@@ -2112,9 +1899,7 @@ function getInitialPanelWidth() {
   if (typeof window === "undefined") return THREAD_PANEL_DEFAULT_WIDTH;
   try {
     const stored = Number(window.localStorage.getItem(THREAD_PANEL_WIDTH_KEY));
-    return Number.isFinite(stored) && stored > 0
-      ? stored
-      : THREAD_PANEL_DEFAULT_WIDTH;
+    return Number.isFinite(stored) && stored > 0 ? stored : THREAD_PANEL_DEFAULT_WIDTH;
   } catch {
     return THREAD_PANEL_DEFAULT_WIDTH;
   }
@@ -2136,23 +1921,16 @@ function useVisualViewportBounds() {
   const getBounds = useCallback(() => {
     const visualViewport = window.visualViewport;
     const layoutWidth =
-      document.documentElement.clientWidth ||
-      document.body.clientWidth ||
-      window.innerWidth;
+      document.documentElement.clientWidth || document.body.clientWidth || window.innerWidth;
     return {
       top: Math.max(0, Math.round(visualViewport?.offsetTop ?? 0)),
       height: Math.max(
         1,
         Math.round(
-          visualViewport?.height ??
-            document.documentElement.clientHeight ??
-            window.innerHeight,
+          visualViewport?.height ?? document.documentElement.clientHeight ?? window.innerHeight,
         ),
       ),
-      width: Math.max(
-        1,
-        Math.round(Math.min(visualViewport?.width ?? layoutWidth, layoutWidth)),
-      ),
+      width: Math.max(1, Math.round(Math.min(visualViewport?.width ?? layoutWidth, layoutWidth))),
     };
   }, []);
   const [bounds, setBounds] = useState(THREAD_PANEL_INITIAL_VIEWPORT);

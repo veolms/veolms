@@ -47,18 +47,12 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 
   // 3. Alter courses table
   // Make short_description and description nullable for lightweight initial creation
-  await sql`alter table courses alter column short_description drop not null`.execute(
-    database,
-  );
-  await sql`alter table courses alter column description drop not null`.execute(
-    database,
-  );
+  await sql`alter table courses alter column short_description drop not null`.execute(database);
+  await sql`alter table courses alter column description drop not null`.execute(database);
 
   await database.schema
     .alterTable("courses")
-    .addColumn("creator_id", "uuid", (column) =>
-      column.references("users.id").onDelete("cascade"),
-    )
+    .addColumn("creator_id", "uuid", (column) => column.references("users.id").onDelete("cascade"))
     .addColumn("category_id", "uuid", (column) =>
       column.references("categories.id").onDelete("set null"),
     )
@@ -116,12 +110,8 @@ export async function up(database: Kysely<unknown>): Promise<void> {
       column.references("media_assets.id").onDelete("set null"),
     )
     .addColumn("position", "integer", (column) => column.notNull())
-    .addColumn("is_preview", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
-    .addColumn("is_published", "boolean", (column) =>
-      column.notNull().defaultTo(true),
-    )
+    .addColumn("is_preview", "boolean", (column) => column.notNull().defaultTo(false))
+    .addColumn("is_published", "boolean", (column) => column.notNull().defaultTo(true))
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
@@ -189,9 +179,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     )
     .addColumn("pricing_type", "text", (column) => column.notNull())
     .addColumn("price", "integer", (column) => column.notNull())
-    .addColumn("currency", "text", (column) =>
-      column.notNull().defaultTo("INR"),
-    )
+    .addColumn("currency", "text", (column) => column.notNull().defaultTo("INR"))
     .addColumn("sale_price", "integer")
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
@@ -199,10 +187,7 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("updated_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
     )
-    .addCheckConstraint(
-      "course_pricing_pricing_type_valid",
-      sql`pricing_type in ('free', 'paid')`,
-    )
+    .addCheckConstraint("course_pricing_pricing_type_valid", sql`pricing_type in ('free', 'paid')`)
     .execute();
 
   // 9. Create course_settings table
@@ -212,18 +197,10 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("course_id", "uuid", (column) =>
       column.notNull().unique().references("courses.id").onDelete("cascade"),
     )
-    .addColumn("allow_qa", "boolean", (column) =>
-      column.notNull().defaultTo(true),
-    )
-    .addColumn("allow_comments", "boolean", (column) =>
-      column.notNull().defaultTo(true),
-    )
-    .addColumn("allow_downloads", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
-    .addColumn("certificate_enabled", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("allow_qa", "boolean", (column) => column.notNull().defaultTo(true))
+    .addColumn("allow_comments", "boolean", (column) => column.notNull().defaultTo(true))
+    .addColumn("allow_downloads", "boolean", (column) => column.notNull().defaultTo(false))
+    .addColumn("certificate_enabled", "boolean", (column) => column.notNull().defaultTo(false))
     .addColumn("language", "text", (column) => column.notNull().defaultTo("en"))
     .addColumn("estimated_duration", "integer")
     .addColumn("created_at", "timestamptz", (column) =>
@@ -241,27 +218,17 @@ export async function up(database: Kysely<unknown>): Promise<void> {
     .addColumn("video_id", "uuid", (column) =>
       column.notNull().references("media_assets.id").onDelete("cascade"),
     )
-    .addColumn("status", "text", (column) =>
-      column.notNull().defaultTo("queued"),
-    )
+    .addColumn("status", "text", (column) => column.notNull().defaultTo("queued"))
     .addColumn("video_key", "text", (column) => column.notNull())
     .addColumn("output_prefix", "text", (column) => column.notNull())
-    .addColumn("video_size", "bigint", (column) =>
-      column.notNull().defaultTo(0),
-    )
+    .addColumn("video_size", "bigint", (column) => column.notNull().defaultTo(0))
     .addColumn("qualities", sql`text[]`, (column) =>
-      column
-        .notNull()
-        .defaultTo(sql`ARRAY['1080p', '720p', '480p', '360p']::text[]`),
+      column.notNull().defaultTo(sql`ARRAY['1080p', '720p', '480p', '360p']::text[]`),
     )
     .addColumn("worker_id", "text")
-    .addColumn("progress_percent", "integer", (column) =>
-      column.notNull().defaultTo(0),
-    )
+    .addColumn("progress_percent", "integer", (column) => column.notNull().defaultTo(0))
     .addColumn("attempts", "integer", (column) => column.notNull().defaultTo(0))
-    .addColumn("max_attempts", "integer", (column) =>
-      column.notNull().defaultTo(3),
-    )
+    .addColumn("max_attempts", "integer", (column) => column.notNull().defaultTo(3))
     .addColumn("error_message", "text")
     .addColumn("created_at", "timestamptz", (column) =>
       column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`),
@@ -376,14 +343,8 @@ export async function down(database: Kysely<unknown>): Promise<void> {
   await database.schema.dropTable("course_sections").execute();
 
   // Drop courses FK indexes before dropping columns
-  await database.schema
-    .dropIndex("idx_courses_creator_id")
-    .ifExists()
-    .execute();
-  await database.schema
-    .dropIndex("idx_courses_category_id")
-    .ifExists()
-    .execute();
+  await database.schema.dropIndex("idx_courses_creator_id").ifExists().execute();
+  await database.schema.dropIndex("idx_courses_category_id").ifExists().execute();
 
   // Revert course alterations
   await sql`alter table courses drop constraint if exists courses_difficulty_valid`.execute(
@@ -409,12 +370,8 @@ export async function down(database: Kysely<unknown>): Promise<void> {
     database,
   );
 
-  await sql`alter table courses alter column short_description set not null`.execute(
-    database,
-  );
-  await sql`alter table courses alter column description set not null`.execute(
-    database,
-  );
+  await sql`alter table courses alter column short_description set not null`.execute(database);
+  await sql`alter table courses alter column description set not null`.execute(database);
 
   await database.schema.dropTable("media_assets").execute();
   await database.schema.dropTable("categories").execute();

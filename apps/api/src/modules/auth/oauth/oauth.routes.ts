@@ -27,10 +27,7 @@ const oauthRoutes: RoutePlugin = async (app, options) => {
           "Generates the OAuth redirection URL with state and optional PKCE verifier stored in a secure cookie.",
         body: oauthUrlRequestSchema,
         response: {
-          200: jsonResponse(
-            "URL generated successfully.",
-            oauthUrlResponseSchema,
-          ),
+          200: jsonResponse("URL generated successfully.", oauthUrlResponseSchema),
         },
       },
     },
@@ -92,14 +89,9 @@ const oauthRoutes: RoutePlugin = async (app, options) => {
         description: "Registers a user with Google or GitHub OAuth.",
         body: oauthRegisterRequestSchema,
         response: {
-          200: jsonResponse(
-            "Existing account linked and logged in.",
-            loginResponseSchema,
-          ),
+          200: jsonResponse("Existing account linked and logged in.", loginResponseSchema),
           201: jsonResponse("Registration successful.", loginResponseSchema),
-          400: errorResponse(
-            "Authentication failed, username taken, or account exists.",
-          ),
+          400: errorResponse("Authentication failed, username taken, or account exists."),
         },
       },
     },

@@ -1,8 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import type {
-  SubmitManualPaymentRequest,
-  VerifyManualPaymentRequest,
-} from "@veolms/contracts";
+import type { SubmitManualPaymentRequest, VerifyManualPaymentRequest } from "@veolms/contracts";
 import type { ManualPaymentStatus } from "@veolms/database";
 import type { ManualPaymentService } from "./manual-payment.service.ts";
 
@@ -42,11 +39,7 @@ export function createManualPaymentController({
   ) {
     const userId = request.user!.id;
     const { orderId } = request.params;
-    const result = await service.submitManualPayment(
-      userId,
-      orderId,
-      request.body,
-    );
+    const result = await service.submitManualPayment(userId, orderId, request.body);
     reply.status(201).send(result);
   }
 
@@ -74,11 +67,7 @@ export function createManualPaymentController({
   ) {
     const adminUserId = request.user!.id;
     const { requestId } = request.params;
-    const result = await service.verifyManualPayment(
-      adminUserId,
-      requestId,
-      request.body,
-    );
+    const result = await service.verifyManualPayment(adminUserId, requestId, request.body);
     reply.status(200).send(result);
   }
 

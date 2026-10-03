@@ -27,8 +27,7 @@ export interface NotificationItem {
   actionUrl?: string;
 }
 
-export type NotificationTabId =
-  "all" | "unread" | "mentions" | "course-activity" | "announcements";
+export type NotificationTabId = "all" | "unread" | "mentions" | "course-activity" | "announcements";
 
 export interface RecentMentionItem {
   id: string;
@@ -39,11 +38,7 @@ export interface RecentMentionItem {
 }
 
 function startOfLocalDay(value: Date): number {
-  return new Date(
-    value.getFullYear(),
-    value.getMonth(),
-    value.getDate(),
-  ).getTime();
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
 }
 
 function dateGroup(createdAt: Date, now: Date): NotificationDateGroup {
@@ -116,10 +111,7 @@ function visualFor(notification: Notification) {
   };
 }
 
-export function toNotificationItem(
-  notification: Notification,
-  now = new Date(),
-): NotificationItem {
+export function toNotificationItem(notification: Notification, now = new Date()): NotificationItem {
   const createdAt = new Date(notification.createdAt);
   return {
     id: notification.id,

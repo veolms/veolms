@@ -75,9 +75,7 @@ export function readAutoplayPreference(
   }
 }
 
-export function readMutedPreference(
-  storage: StorageReader | null = getBrowserStorage(),
-): boolean {
+export function readMutedPreference(storage: StorageReader | null = getBrowserStorage()): boolean {
   if (!storage) return false;
   try {
     const value = storage.getItem(PLAYER_MUTED_STORAGE_KEY);
@@ -99,9 +97,7 @@ export function readPlaybackRatePreference(
   }
 }
 
-export function readVolumePreference(
-  storage: StorageReader | null = getBrowserStorage(),
-): number {
+export function readVolumePreference(storage: StorageReader | null = getBrowserStorage()): number {
   if (!storage) return 1;
   try {
     const raw = storage.getItem(PLAYER_VOLUME_STORAGE_KEY);
@@ -115,10 +111,7 @@ export function readVolumePreference(
 export function readAmbientPreference(
   storage: StorageReader | null = getBrowserStorage(),
   constrainedDevice = typeof window !== "undefined" &&
-    Boolean(
-      window.matchMedia?.("(prefers-reduced-motion: reduce), (pointer: coarse)")
-        .matches,
-    ),
+    Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce), (pointer: coarse)").matches),
 ): boolean {
   try {
     const value = storage?.getItem(PLAYER_AMBIENT_STORAGE_KEY);
@@ -137,9 +130,7 @@ export function readResumePosition(
 ): number {
   if (!storage) return 0;
   try {
-    const savedPosition = Number(
-      storage.getItem(lessonPlayerStorageKeys.resume(mediaKey)),
-    );
+    const savedPosition = Number(storage.getItem(lessonPlayerStorageKeys.resume(mediaKey)));
     if (!Number.isFinite(savedPosition) || savedPosition <= 0) return 0;
     if (duration === undefined || !Number.isFinite(duration) || duration <= 0) {
       return savedPosition;
@@ -179,10 +170,7 @@ export function writeVolumePreference(
 ): void {
   if (!Number.isFinite(volume)) return;
   try {
-    storage?.setItem(
-      PLAYER_VOLUME_STORAGE_KEY,
-      String(clampPlayerVolume(volume)),
-    );
+    storage?.setItem(PLAYER_VOLUME_STORAGE_KEY, String(clampPlayerVolume(volume)));
   } catch {
     // Playback remains usable when browser storage is unavailable.
   }
@@ -228,10 +216,7 @@ export function writeMiniPlayerRestore(
   storage: StorageWriter | null = getSessionStorage(),
 ): void {
   try {
-    storage?.setItem(
-      PLAYER_MINI_RESTORE_STORAGE_KEY,
-      JSON.stringify({ autoplay, mediaKey }),
-    );
+    storage?.setItem(PLAYER_MINI_RESTORE_STORAGE_KEY, JSON.stringify({ autoplay, mediaKey }));
   } catch {
     // Restoring the lesson still works even if playback cannot resume itself.
   }
@@ -265,10 +250,7 @@ export function writeResumePosition(
 ): void {
   if (!Number.isFinite(position) || position <= 0) return;
   try {
-    storage?.setItem(
-      lessonPlayerStorageKeys.resume(mediaKey),
-      String(position),
-    );
+    storage?.setItem(lessonPlayerStorageKeys.resume(mediaKey), String(position));
   } catch {
     // Resume persistence is optional and must never interrupt playback.
   }

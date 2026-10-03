@@ -4,10 +4,7 @@ import { XIcon as X } from "@phosphor-icons/react/X";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
-import {
-  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
-  SearchShortcutHint,
-} from "./searchShortcut";
+import { SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS, SearchShortcutHint } from "./searchShortcut";
 
 interface ExpandableSearchProps {
   children: ReactNode;
@@ -58,9 +55,7 @@ export function ExpandableSearch({
   const persistentRootClass =
     persistentDesktop && !useForcedDesktopLayout ? "min-[900px]:contents" : "";
   const persistentIdleClass =
-    persistentDesktop && !useForcedDesktopLayout
-      ? "min-[821px]:visible min-[900px]:contents"
-      : "";
+    persistentDesktop && !useForcedDesktopLayout ? "min-[821px]:visible min-[900px]:contents" : "";
   const persistentTriggerClass = persistentDesktop
     ? useForcedDesktopLayout
       ? ""
@@ -165,22 +160,18 @@ export function ExpandableSearch({
           title={label}
           onClick={openSearch}
         >
-          <MagnifyingGlass
-            size={triggerIconSize}
-            weight="bold"
-            aria-hidden="true"
-          />
+          <MagnifyingGlass size={triggerIconSize} weight="bold" aria-hidden="true" />
         </button>
       </div>
 
       <div
-        className={`${useForcedDesktopLayout ? "visible static z-20 order-2 flex h-11 w-[320px] max-w-[32vw] min-w-0 shrink-0 translate-y-0 origin-right scale-x-100 items-center gap-2 bg-transparent opacity-100" : `${open ? "visible scale-x-100 opacity-100" : "invisible scale-x-0 opacity-0"} absolute inset-x-0 top-1/2 z-20 flex min-w-0 -translate-y-1/2 origin-right items-center gap-2 bg-transparent transition-[transform,opacity] duration-200 ease-out`} ${persistentShellClass}`.trim()}
+        className={`${useForcedDesktopLayout ? "visible static z-20 order-2 flex h-11 w-[320px] max-w-[32vw] min-w-0 shrink-0 origin-right translate-y-0 scale-x-100 items-center gap-2 bg-transparent opacity-100" : `${open ? "visible scale-x-100 opacity-100" : "invisible scale-x-0 opacity-0"} absolute inset-x-0 top-1/2 z-20 flex min-w-0 origin-right -translate-y-1/2 items-center gap-2 bg-transparent transition-[transform,opacity] duration-200 ease-out`} ${persistentShellClass}`.trim()}
         data-mobile-search-shell
         data-expandable-search-shell
       >
         <button
           type="button"
-          className={`${useForcedDesktopLayout ? "hidden" : "flex"} size-10 shrink-0 items-center justify-center rounded-full border-0! bg-transparent! shadow-none! transition-colors hover:bg-[color-mix(in_srgb,currentColor_10%,transparent)] active:bg-[color-mix(in_srgb,currentColor_18%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${foregroundClass} ${persistentBackClass} ${backButtonClassName}`.trim()}
+          className={`${useForcedDesktopLayout ? "hidden" : "flex"} size-10 shrink-0 items-center justify-center rounded-full border-0! bg-transparent! shadow-none! transition-colors hover:bg-[color-mix(in_srgb,currentColor_10%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) active:bg-[color-mix(in_srgb,currentColor_18%,transparent)] ${foregroundClass} ${persistentBackClass} ${backButtonClassName}`.trim()}
           aria-label={backLabel}
           title="Back"
           onClick={closeSearch}
@@ -196,9 +187,7 @@ export function ExpandableSearch({
         >
           {persistentDesktop && (
             <MagnifyingGlass
-              className={
-                useForcedDesktopLayout ? "block" : "hidden min-[821px]:block"
-              }
+              className={useForcedDesktopLayout ? "block" : "hidden min-[821px]:block"}
               size={19}
               aria-hidden="true"
             />
@@ -219,18 +208,12 @@ export function ExpandableSearch({
             onFocus={() => onOpenChange(true)}
             placeholder={placeholder}
             data-search-shortcut-target
-            data-search-shortcut-priority={
-              shortcutPriority ? "true" : undefined
-            }
+            data-search-shortcut-priority={shortcutPriority ? "true" : undefined}
             aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
           />
           {persistentDesktop && (
             <span
-              className={
-                useForcedDesktopLayout
-                  ? "inline-flex"
-                  : "hidden min-[821px]:inline-flex"
-              }
+              className={useForcedDesktopLayout ? "inline-flex" : "hidden min-[821px]:inline-flex"}
             >
               <SearchShortcutHint />
             </span>
@@ -238,7 +221,7 @@ export function ExpandableSearch({
           {value ? (
             <button
               type="button"
-              className={`flex size-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent transition-colors hover:bg-[color-mix(in_srgb,currentColor_10%,transparent)] active:bg-[color-mix(in_srgb,currentColor_18%,transparent)] focus-visible:outline-2 focus-visible:outline-(--accent) ${overlay ? "text-white/72 hover:text-white" : "text-(--muted) hover:text-(--text)"} ${useForcedDesktopLayout ? "size-auto min-h-8 min-w-8 rounded-(--control-radius-structured)" : persistentDesktop ? "min-[821px]:size-auto min-[821px]:min-h-8 min-[821px]:min-w-8 min-[821px]:rounded-(--control-radius-structured)" : ""}`.trim()}
+              className={`flex size-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent transition-colors hover:bg-[color-mix(in_srgb,currentColor_10%,transparent)] focus-visible:outline-2 focus-visible:outline-(--accent) active:bg-[color-mix(in_srgb,currentColor_18%,transparent)] ${overlay ? "text-white/72 hover:text-white" : "text-(--muted) hover:text-(--text)"} ${useForcedDesktopLayout ? "size-auto min-h-8 min-w-8 rounded-(--control-radius-structured)" : persistentDesktop ? "min-[821px]:size-auto min-[821px]:min-h-8 min-[821px]:min-w-8 min-[821px]:rounded-(--control-radius-structured)" : ""}`.trim()}
               aria-label="Clear search"
               title="Clear search"
               onClick={() => {
@@ -260,11 +243,7 @@ export function ExpandableSearch({
           ) : (
             <MagnifyingGlass
               className={
-                useForcedDesktopLayout
-                  ? "hidden"
-                  : persistentDesktop
-                    ? "min-[821px]:hidden"
-                    : ""
+                useForcedDesktopLayout ? "hidden" : persistentDesktop ? "min-[821px]:hidden" : ""
               }
               size={21}
               aria-hidden="true"

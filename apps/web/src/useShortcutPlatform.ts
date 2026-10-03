@@ -6,10 +6,7 @@ import {
   SHORTCUT_PLATFORM_PREFERENCE_EVENT,
   SHORTCUT_PLATFORM_PREFERENCE_KEY,
 } from "./keyboardShortcuts";
-import type {
-  ShortcutPlatform,
-  ShortcutPlatformPreference,
-} from "./keyboardShortcuts";
+import type { ShortcutPlatform, ShortcutPlatformPreference } from "./keyboardShortcuts";
 
 interface ShortcutPlatformPreferenceState {
   preference: ShortcutPlatformPreference;
@@ -26,8 +23,7 @@ function useShortcutPlatformPreferenceState(): ShortcutPlatformPreferenceState {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const syncPreference = () =>
-      setPreference(readShortcutPlatformPreference());
+    const syncPreference = () => setPreference(readShortcutPlatformPreference());
     const syncStoredPreference = (event: StorageEvent) => {
       if (event.key === SHORTCUT_PLATFORM_PREFERENCE_KEY) syncPreference();
     };
@@ -37,10 +33,7 @@ function useShortcutPlatformPreferenceState(): ShortcutPlatformPreferenceState {
     window.addEventListener(SHORTCUT_PLATFORM_PREFERENCE_EVENT, syncPreference);
     window.addEventListener("storage", syncStoredPreference);
     return () => {
-      window.removeEventListener(
-        SHORTCUT_PLATFORM_PREFERENCE_EVENT,
-        syncPreference,
-      );
+      window.removeEventListener(SHORTCUT_PLATFORM_PREFERENCE_EVENT, syncPreference);
       window.removeEventListener("storage", syncStoredPreference);
     };
   }, []);

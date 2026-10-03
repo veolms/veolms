@@ -36,8 +36,7 @@ export function QuizRichTextField({
   minHeight = "min-h-28",
   onChange,
 }: Props) {
-  const [controller, setController] =
-    useState<DiscussionEditorController | null>(null);
+  const [controller, setController] = useState<DiscussionEditorController | null>(null);
   const [formattingState, setFormattingState] =
     useState<DiscussionFormattingState>(EMPTY_FORMATTING_STATE);
   const draft = useMemo(() => createDiscussionDraft(value), [value]);
@@ -50,7 +49,7 @@ export function QuizRichTextField({
         label={label}
         placeholderText={placeholder}
         autoGrow
-        className={`${minHeight} px-2.5 sm:px-3.5 py-2 sm:py-3 text-xs sm:text-sm text-(--text)`}
+        className={`${minHeight} px-2.5 py-2 text-xs text-(--text) sm:px-3.5 sm:py-3 sm:text-sm`}
         onChange={(next) => onChange(next.markdown)}
         onControllerChange={setController}
         onFormattingStateChange={setFormattingState}

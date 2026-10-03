@@ -65,11 +65,7 @@ the lazy Shaka engine by default.
 
 ```tsx
 import { useMemo } from "react";
-import {
-  VideoPlayer,
-  type TimelineMarker,
-  type VideoSource,
-} from "@veolms/video-player";
+import { VideoPlayer, type TimelineMarker, type VideoSource } from "@veolms/video-player";
 
 const markers: TimelineMarker[] = [
   {
@@ -172,10 +168,7 @@ CSS custom properties on the player root, and icon overrides are semantic, so
 consumers never need to fork control components:
 
 ```tsx
-import {
-  createPlayerTheme,
-  type PlayerThemeIconProps,
-} from "@veolms/video-player";
+import { createPlayerTheme, type PlayerThemeIconProps } from "@veolms/video-player";
 
 function BrandPlayIcon({ active: _active, ...props }: PlayerThemeIconProps) {
   return (
@@ -443,12 +436,7 @@ credentials, refreshed URLs, or response transformations. Supply a
 Use `PlayerRoot` and `PlayerMedia` when the default assembly is not suitable:
 
 ```tsx
-import {
-  DefaultControls,
-  NativeVideoEngine,
-  PlayerMedia,
-  PlayerRoot,
-} from "@veolms/video-player";
+import { DefaultControls, NativeVideoEngine, PlayerMedia, PlayerRoot } from "@veolms/video-player";
 
 <PlayerRoot
   source={source}
@@ -512,10 +500,7 @@ backend. A conforming engine must:
 Inject the engine without changing player UI:
 
 ```tsx
-<VideoPlayer
-  source={source}
-  engineFactory={() => new CompanyCdnVideoEngine()}
-/>
+<VideoPlayer source={source} engineFactory={() => new CompanyCdnVideoEngine()} />
 ```
 
 Keep provider SDK types and behavior inside the adapter. Do not leak them into

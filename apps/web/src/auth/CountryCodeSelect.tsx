@@ -1,23 +1,18 @@
 import { ThemedSelect } from "../ThemedSelect.tsx";
 import type { ThemedSelectOption } from "../ThemedSelect.tsx";
 import { CountryFlag } from "./CountryFlag";
-import {
-  DEFAULT_COUNTRY_ID,
-  SUPPORTED_COUNTRIES,
-  findCountry,
-} from "./identifier";
+import { DEFAULT_COUNTRY_ID, SUPPORTED_COUNTRIES, findCountry } from "./identifier";
 import type { CountryOption } from "./identifier";
 
-export const COUNTRY_OPTIONS: readonly ThemedSelectOption[] =
-  SUPPORTED_COUNTRIES.map((country) => [
-    country.id,
-    country.dialCode,
-    {
-      flag: <CountryFlag code={country.id} />,
-      label: `${country.name} (${country.dialCode})`,
-      searchKeywords: `${country.name} ${country.dialCode} ${country.id}`,
-    },
-  ]);
+export const COUNTRY_OPTIONS: readonly ThemedSelectOption[] = SUPPORTED_COUNTRIES.map((country) => [
+  country.id,
+  country.dialCode,
+  {
+    flag: <CountryFlag code={country.id} />,
+    label: `${country.name} (${country.dialCode})`,
+    searchKeywords: `${country.name} ${country.dialCode} ${country.id}`,
+  },
+]);
 
 export function getDefaultCountry(): CountryOption {
   const country = findCountry(DEFAULT_COUNTRY_ID);

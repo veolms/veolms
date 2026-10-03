@@ -1,9 +1,6 @@
 import { useRef, type ReactNode } from "react";
 import type { VideoEngineEventMap } from "../core/events";
-import {
-  createInitialVideoEngineSnapshot,
-  type VideoEngineSnapshot,
-} from "../core/snapshot";
+import { createInitialVideoEngineSnapshot, type VideoEngineSnapshot } from "../core/snapshot";
 import { TypedEventEmitter } from "../core/typed-emitter";
 import type {
   VideoAudioTrack,
@@ -14,11 +11,7 @@ import type {
   VideoTextTrack,
 } from "../core/types";
 import type { VideoEngine } from "../core/VideoEngine";
-import {
-  getPlayerThemeStyle,
-  resolvePlayerTheme,
-  type PlayerTheme,
-} from "../themes/playerThemes";
+import { getPlayerThemeStyle, resolvePlayerTheme, type PlayerTheme } from "../themes/playerThemes";
 import { PlayerThemeProvider } from "../themes/PlayerThemeContext";
 import { classNames } from "../utils/classNames";
 import { PlayerControllerContext } from "./context";
@@ -38,11 +31,7 @@ class PreviewVideoEngine implements VideoEngine {
   readonly #events = new TypedEventEmitter<VideoEngineEventMap>();
   readonly #snapshot: VideoEngineSnapshot;
 
-  constructor(playback?: {
-    muted?: boolean;
-    playbackRate?: number;
-    volume?: number;
-  }) {
+  constructor(playback?: { muted?: boolean; playbackRate?: number; volume?: number }) {
     this.#snapshot = {
       ...createInitialVideoEngineSnapshot(),
       lifecycle: "loading",
@@ -54,10 +43,7 @@ class PreviewVideoEngine implements VideoEngine {
 
   async attach(): Promise<void> {}
   async detach(): Promise<void> {}
-  async load(
-    _source: VideoSource,
-    _options?: VideoLoadOptions,
-  ): Promise<void> {}
+  async load(_source: VideoSource, _options?: VideoLoadOptions): Promise<void> {}
   async unload(): Promise<void> {}
   async destroy(): Promise<void> {
     this.#events.clear();
@@ -141,15 +127,10 @@ export function PlayerChromePreview({
       <PlayerControllerContext.Provider value={controller}>
         <PlayerInteractionModeProvider mobile={mobileInteraction}>
           <div
-            className={classNames(
-              resolvedTheme.className,
-              "relative size-full",
-            )}
+            className={classNames(resolvedTheme.className, "relative size-full")}
             style={getPlayerThemeStyle(resolvedTheme)}
             data-player-theme={resolvedTheme.id}
-            data-player-mobile-interaction={
-              mobileInteraction ? "true" : "false"
-            }
+            data-player-mobile-interaction={mobileInteraction ? "true" : "false"}
             data-video-player-root=""
             data-video-player-chrome-preview=""
           >

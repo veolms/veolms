@@ -9,40 +9,28 @@ export interface QuizAttemptDraft {
   currentQuestionId: string | null;
 }
 
-export function answeredQuestionCount(
-  attempt: LearnerQuizAttempt,
-  draft: QuizAttemptDraft,
-) {
+export function answeredQuestionCount(attempt: LearnerQuizAttempt, draft: QuizAttemptDraft) {
   return attempt.questions.filter((question) => {
     const answer = draft.answers[question.id];
     if (!answer) return false;
     if (question.questionType === "short_answer") {
-      return Boolean(
-        answer.textResponse && answer.textResponse.trim().length > 0,
-      );
+      return Boolean(answer.textResponse && answer.textResponse.trim().length > 0);
     }
     return (answer.selectedOptionIds?.length ?? 0) > 0;
   }).length;
 }
 
-export function hasAnsweredEveryQuestion(
-  attempt: LearnerQuizAttempt,
-  draft: QuizAttemptDraft,
-) {
+export function hasAnsweredEveryQuestion(attempt: LearnerQuizAttempt, draft: QuizAttemptDraft) {
   return answeredQuestionCount(attempt, draft) === attempt.questions.length;
 }
 
 /** The only payload shape used by the attempt autosync boundary. */
-export function toBulkQuizAnswers(
-  draft: QuizAttemptDraft,
-): BulkQuizAnswersRequest {
+export function toBulkQuizAnswers(draft: QuizAttemptDraft): BulkQuizAnswersRequest {
   return {
-    answers: Object.entries(draft.answers).map(
-      ([questionId, responseValue]) => ({
-        questionId,
-        responseValue,
-      }),
-    ),
+    answers: Object.entries(draft.answers).map(([questionId, responseValue]) => ({
+      questionId,
+      responseValue,
+    })),
   };
 }
 

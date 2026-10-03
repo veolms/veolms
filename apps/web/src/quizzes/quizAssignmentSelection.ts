@@ -31,32 +31,23 @@ export function selectQuizAssignment({
   allowEmbeddedInitialResolution = false,
 }: SelectQuizAssignmentOptions): QuizAssignment | undefined {
   const uniqueAssignments = Array.from(
-    new Map(
-      assignments.map((assignment) => [assignment.id, assignment]),
-    ).values(),
+    new Map(assignments.map((assignment) => [assignment.id, assignment])).values(),
   );
 
   const scopedAssignments = activeQuizId
-    ? uniqueAssignments.filter(
-        (assignment) => assignment.quizId === activeQuizId,
-      )
+    ? uniqueAssignments.filter((assignment) => assignment.quizId === activeQuizId)
     : allowEmbeddedInitialResolution && targetCourseId && targetLessonId
       ? uniqueAssignments.filter(
           (assignment) =>
-            assignment.courseId === targetCourseId &&
-            assignment.lessonId === targetLessonId,
+            assignment.courseId === targetCourseId && assignment.lessonId === targetLessonId,
         )
       : [];
 
   if (targetLessonId) {
-    return scopedAssignments.find(
-      (assignment) => assignment.lessonId === targetLessonId,
-    );
+    return scopedAssignments.find((assignment) => assignment.lessonId === targetLessonId);
   }
   if (targetCourseId) {
-    return scopedAssignments.find(
-      (assignment) => assignment.courseId === targetCourseId,
-    );
+    return scopedAssignments.find((assignment) => assignment.courseId === targetCourseId);
   }
   return scopedAssignments[0];
 }

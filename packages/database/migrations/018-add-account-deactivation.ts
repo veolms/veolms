@@ -4,9 +4,7 @@ import type { Kysely } from "kysely";
 export async function up(database: Kysely<any>): Promise<void> {
   await database.schema
     .alterTable("users")
-    .addColumn("is_deleted", "boolean", (column) =>
-      column.notNull().defaultTo(false),
-    )
+    .addColumn("is_deleted", "boolean", (column) => column.notNull().defaultTo(false))
     .execute();
 }
 

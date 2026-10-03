@@ -100,9 +100,7 @@ function mockProfile(provider: OauthProviderName, code: string): OauthProfile {
   };
 }
 
-async function fetchGoogleProfile(
-  input: FetchOauthProfileInput,
-): Promise<OauthProfile> {
+async function fetchGoogleProfile(input: FetchOauthProfileInput): Promise<OauthProfile> {
   const { credentials, code, codeVerifier, redirectUri } = input;
 
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -128,10 +126,9 @@ async function fetchGoogleProfile(
     "Google token endpoint",
   );
 
-  const userInfoResponse = await fetch(
-    "https://www.googleapis.com/oauth2/v3/userinfo",
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  const userInfoResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 
   if (!userInfoResponse.ok) {
     throw oauthFailure("Google userinfo fetch failed");
@@ -158,42 +155,31 @@ async function fetchGoogleProfile(
   };
 }
 
-async function fetchGithubProfile(
-  input: FetchOauthProfileInput,
-): Promise<OauthProfile> {
+async function fetchGithubProfile(input: FetchOauthProfileInput): Promise<OauthProfile> {
   const { credentials, code, redirectUri } = input;
 
-  const tokenResponse = await fetch(
-    "https://github.com/login/oauth/access_token",
-    {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        client_id: credentials.githubClientId,
-        client_secret: credentials.githubClientSecret,
-        code,
-        redirect_uri: redirectUri,
-      }),
+  const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      client_id: credentials.githubClientId,
+      client_secret: credentials.githubClientSecret,
+      code,
+      redirect_uri: redirectUri,
+    }),
+  });
 
   if (!tokenResponse.ok) {
     throw oauthFailure("GitHub token exchange failed");
   }
 
-  const tokenData = await parseJson(
-    tokenResponse,
-    githubTokenSchema,
-    "GitHub token endpoint",
-  );
+  const tokenData = await parseJson(tokenResponse, githubTokenSchema, "GitHub token endpoint");
 
   if (tokenData.error) {
-    throw oauthFailure(
-      `GitHub OAuth error: ${tokenData.error_description || tokenData.error}`,
-    );
+    throw oauthFailure(`GitHub OAuth error: ${tokenData.error_description || tokenData.error}`);
   }
 
   const accessToken = tokenData.access_token;
@@ -214,11 +200,7 @@ async function fetchGithubProfile(
     throw oauthFailure("GitHub access token invalid");
   }
 
-  const user = await parseJson(
-    userResponse,
-    githubUserSchema,
-    "GitHub user endpoint",
-  );
+  const user = await parseJson(userResponse, githubUserSchema, "GitHub user endpoint");
 
   const emailsResponse = await fetch("https://api.github.com/user/emails", {
     headers: authHeaders,
@@ -226,14 +208,9 @@ async function fetchGithubProfile(
 
   let email = "";
   if (emailsResponse.ok) {
-    const emails = await parseJson(
-      emailsResponse,
-      githubEmailsSchema,
-      "GitHub emails endpoint",
-    );
+    const emails = await parseJson(emailsResponse, githubEmailsSchema, "GitHub emails endpoint");
     const verified = emails.filter((entry) => entry.verified);
-    email =
-      (verified.find((entry) => entry.primary) || verified[0])?.email || "";
+    email = (verified.find((entry) => entry.primary) || verified[0])?.email || "";
   }
 
   if (!email) {
@@ -249,10 +226,7 @@ async function fetchGithubProfile(
   };
 }
 
-const GOOGLE_ISSUERS = new Set([
-  "accounts.google.com",
-  "https://accounts.google.com",
-]);
+const GOOGLE_ISSUERS = new Set(["accounts.google.com", "https://accounts.google.com"]);
 
 export interface GoogleIdTokenClaims {
   sub?: string | undefined;
@@ -264,16 +238,9 @@ export interface GoogleIdTokenClaims {
   iss?: string | undefined;
 }
 
-function audienceMatches(
-  audience: string | string[] | undefined,
-  clientId: string,
-): boolean {
+function audienceMatches(audience: string | string[] | undefined, clientId: string): boolean {
   if (!clientId) return false;
-  const values = Array.isArray(audience)
-    ? audience
-    : audience
-      ? [audience]
-      : [];
+  const values = Array.isArray(audience) ? audience : audience ? [audience] : [];
   return values.includes(clientId);
 }
 
@@ -303,9 +270,7 @@ export function googleIdTokenToProfile(
 
   const localPart = claims.email.split("@")[0] || "";
   const pictureUrl =
-    claims.picture && claims.picture.startsWith("https://")
-      ? claims.picture
-      : undefined;
+    claims.picture && claims.picture.startsWith("https://") ? claims.picture : undefined;
 
   return {
     email: claims.email,
@@ -356,16 +321,12 @@ export async function verifyGoogleIdToken(
   return googleIdTokenToProfile(claims, clientId);
 }
 
-export async function fetchOauthProfile(
-  input: FetchOauthProfileInput,
-): Promise<OauthProfile> {
+export async function fetchOauthProfile(input: FetchOauthProfileInput): Promise<OauthProfile> {
   if (input.allowMockCodes && input.code.startsWith("mock_")) {
     return mockProfile(input.provider, input.code);
   }
 
-  return input.provider === "google"
-    ? fetchGoogleProfile(input)
-    : fetchGithubProfile(input);
+  return input.provider === "google" ? fetchGoogleProfile(input) : fetchGithubProfile(input);
 }
 
 const oauthStateCookieSchema = z.object({
@@ -395,28 +356,16 @@ export function verifyOauthState({
   try {
     parsedJson = JSON.parse(cookieValue);
   } catch {
-    throw new AppError(
-      400,
-      "OAUTH_STATE_INVALID",
-      "OAuth state cookie is invalid.",
-    );
+    throw new AppError(400, "OAUTH_STATE_INVALID", "OAuth state cookie is invalid.");
   }
 
   const parsed = oauthStateCookieSchema.safeParse(parsedJson);
   if (!parsed.success) {
-    throw new AppError(
-      400,
-      "OAUTH_STATE_INVALID",
-      "OAuth state cookie is invalid.",
-    );
+    throw new AppError(400, "OAUTH_STATE_INVALID", "OAuth state cookie is invalid.");
   }
 
   if (parsed.data.provider !== provider || parsed.data.state !== state) {
-    throw new AppError(
-      400,
-      "OAUTH_STATE_MISMATCH",
-      "OAuth state mismatch (possible CSRF attack).",
-    );
+    throw new AppError(400, "OAUTH_STATE_MISMATCH", "OAuth state mismatch (possible CSRF attack).");
   }
 
   return { codeVerifier: parsed.data.code_verifier };

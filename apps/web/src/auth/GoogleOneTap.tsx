@@ -80,11 +80,7 @@ interface GoogleOneTapProps {
   returnTo?: string | null;
 }
 
-export function GoogleOneTap({
-  onError,
-  onPendingChange,
-  returnTo,
-}: GoogleOneTapProps) {
+export function GoogleOneTap({ onError, onPendingChange, returnTo }: GoogleOneTapProps) {
   const navigate = useNavigate();
   const { data } = useAuthConfig();
   const login = useGoogleOneTapLogin();
@@ -125,10 +121,9 @@ export function GoogleOneTap({
               { credential: response.credential },
               {
                 onSuccess: (result) => {
-                  navigateRef.current(
-                    resolvePostAuthPath(result, returnToRef.current),
-                    { replace: true },
-                  );
+                  navigateRef.current(resolvePostAuthPath(result, returnToRef.current), {
+                    replace: true,
+                  });
                 },
                 onError: (error) => {
                   onPendingChangeRef.current?.(false);
@@ -156,7 +151,7 @@ export function GoogleOneTap({
 function OneTapVerifyingOverlay() {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs px-4 text-(--text) animate-in fade-in duration-200"
+      className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 text-(--text) backdrop-blur-xs duration-200"
       role="status"
       aria-live="polite"
       aria-label="Signing in with Google"
@@ -183,11 +178,7 @@ function OneTapVerifyingOverlay() {
   );
 }
 
-const EXCLUDED_ONE_TAP_PATHS = new Set([
-  "/mfa-setup",
-  "/auth/callback",
-  "/logout",
-]);
+const EXCLUDED_ONE_TAP_PATHS = new Set(["/mfa-setup", "/auth/callback", "/logout"]);
 
 /**
  * Global Google One Tap component.
@@ -255,10 +246,9 @@ export function GlobalGoogleOneTap() {
               {
                 onSuccess: (result) => {
                   setIsVerifying(false);
-                  navigateRef.current(
-                    resolvePostAuthPath(result, returnToRef.current),
-                    { replace: true },
-                  );
+                  navigateRef.current(resolvePostAuthPath(result, returnToRef.current), {
+                    replace: true,
+                  });
                 },
                 onError: (error) => {
                   setIsVerifying(false);
@@ -293,4 +283,3 @@ export function GlobalGoogleOneTap() {
     </>
   );
 }
-

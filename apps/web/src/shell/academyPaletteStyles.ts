@@ -37,9 +37,7 @@ export interface AcademyPaletteStyles {
   light: string;
 }
 
-export const academyPaletteStylesById: Readonly<
-  Record<string, AcademyPaletteStyles>
-> = {
+export const academyPaletteStylesById: Readonly<Record<string, AcademyPaletteStyles>> = {
   codex: { dark: codexDark, light: codexLight },
   ocean: { dark: oceanDark, light: oceanLight },
   midnight: { dark: midnightDark, light: midnightLight },
@@ -89,22 +87,15 @@ function loadAcademyPaletteStylesheet(
   });
 }
 
-export function ensureAcademyPaletteStylesheets(
-  paletteId: string,
-): Promise<void> {
+export function ensureAcademyPaletteStylesheets(paletteId: string): Promise<void> {
   if (typeof document === "undefined") return Promise.resolve();
 
   const palette = academyPaletteStylesById[paletteId] ? paletteId : "codex";
-  if (
-    document.querySelector<HTMLLinkElement>(
-      "link[data-academy-palette-catalog]",
-    )?.sheet
-  ) {
+  if (document.querySelector<HTMLLinkElement>("link[data-academy-palette-catalog]")?.sheet) {
     return Promise.resolve();
   }
 
-  const styles =
-    academyPaletteStylesById[palette] ?? academyPaletteStylesById.codex!;
+  const styles = academyPaletteStylesById[palette] ?? academyPaletteStylesById.codex!;
   return Promise.all([
     loadAcademyPaletteStylesheet(palette, "dark", styles.dark),
     loadAcademyPaletteStylesheet(palette, "light", styles.light),
@@ -114,17 +105,14 @@ export function ensureAcademyPaletteStylesheets(
 export function ensureAcademyPaletteCatalogStylesheet(): Promise<void> {
   if (typeof document === "undefined") return Promise.resolve();
 
-  const existing = document.querySelector<HTMLLinkElement>(
-    "link[data-academy-palette-catalog]",
-  );
+  const existing = document.querySelector<HTMLLinkElement>("link[data-academy-palette-catalog]");
   if (existing?.sheet) return Promise.resolve();
   if (paletteCatalogLoad) return paletteCatalogLoad;
 
   paletteCatalogLoad = new Promise<void>((resolve, reject) => {
     const link = existing ?? document.createElement("link");
     const finish = () => resolve();
-    const fail = () =>
-      reject(new Error("Could not load academy theme palettes"));
+    const fail = () => reject(new Error("Could not load academy theme palettes"));
     link.addEventListener("load", finish, { once: true });
     link.addEventListener("error", fail, { once: true });
     link.rel = "stylesheet";

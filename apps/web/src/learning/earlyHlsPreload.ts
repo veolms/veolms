@@ -6,10 +6,7 @@ import {
   type LearningPlaybackRequestMetadata,
 } from "./learningHlsBootstrap";
 import { createLearningHlsPreloadSource } from "./player/learningHlsPreloadSource";
-import {
-  getVideoPlaybackBootstrap,
-  refreshVideoPlaybackToken,
-} from "./videoPlaybackBootstrap";
+import { getVideoPlaybackBootstrap, refreshVideoPlaybackToken } from "./videoPlaybackBootstrap";
 
 let inFlight:
   | {

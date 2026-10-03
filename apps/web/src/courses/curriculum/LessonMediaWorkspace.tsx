@@ -25,15 +25,9 @@ import {
   getVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,
 } from "../../learning/videoPlaybackBootstrap";
-import type {
-  VideoPlaybackBootstrap,
-  VideoPlaybackToken,
-} from "@veolms/contracts";
+import type { VideoPlaybackBootstrap, VideoPlaybackToken } from "@veolms/contracts";
 import type { CourseVideo } from "../../learning/courseContent";
-import {
-  mediaService,
-  useMediaImageVariantManifest,
-} from "../../services/media";
+import { mediaService, useMediaImageVariantManifest } from "../../services/media";
 
 export interface AttachedMediaInfo {
   id?: string;
@@ -95,17 +89,12 @@ export function LessonMediaWorkspace({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [playbackBootstrap, setPlaybackBootstrap] =
-    useState<VideoPlaybackBootstrap | null>(null);
+  const [playbackBootstrap, setPlaybackBootstrap] = useState<VideoPlaybackBootstrap | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [thumbnailPreviewFile, setThumbnailPreviewFile] = useState<File | null>(
-    null,
-  );
+  const [thumbnailPreviewFile, setThumbnailPreviewFile] = useState<File | null>(null);
   // The generated thumbnail can lag behind processing progress; remember a
   // URL that failed to load so the card falls back to its placeholder.
-  const [failedThumbnailUrl, setFailedThumbnailUrl] = useState<string | null>(
-    null,
-  );
+  const [failedThumbnailUrl, setFailedThumbnailUrl] = useState<string | null>(null);
   const imageVariantManifestQuery = useMediaImageVariantManifest(
     mediaInfo?.id,
     contentType === "image" && !previewFile,
@@ -115,10 +104,7 @@ export function LessonMediaWorkspace({
   const imageVariantSrcSet =
     !previewFile && mediaInfoId
       ? imageVariantManifest?.variants
-          .map(
-            ({ width }) =>
-              `${mediaService.getImageVariantUrl(mediaInfoId, width)} ${width}w`,
-          )
+          .map(({ width }) => `${mediaService.getImageVariantUrl(mediaInfoId, width)} ${width}w`)
           .join(", ")
       : undefined;
   const imagePreviewSrc = previewFile
@@ -153,12 +139,7 @@ export function LessonMediaWorkspace({
   }, [previewFile]);
 
   useEffect(() => {
-    if (
-      !courseSlug ||
-      !lessonNumber ||
-      contentType !== "video" ||
-      previewFile
-    ) {
+    if (!courseSlug || !lessonNumber || contentType !== "video" || previewFile) {
       setPlaybackBootstrap(null);
       return;
     }
@@ -181,20 +162,11 @@ export function LessonMediaWorkspace({
     return () => {
       active = false;
     };
-  }, [
-    contentType,
-    courseSlug,
-    lessonNumber,
-    mediaInfo?.id,
-    playbackRevision,
-    previewFile,
-  ]);
+  }, [contentType, courseSlug, lessonNumber, mediaInfo?.id, playbackRevision, previewFile]);
 
   const refreshPlaybackToken = useCallback((): Promise<VideoPlaybackToken> => {
     if (!courseSlug || !lessonNumber) {
-      return Promise.reject(
-        new Error("A course lesson is required for playback."),
-      );
+      return Promise.reject(new Error("A course lesson is required for playback."));
     }
     return refreshVideoPlaybackToken({ courseSlug, lessonNumber });
   }, [courseSlug, lessonNumber]);
@@ -206,9 +178,7 @@ export function LessonMediaWorkspace({
       fileName: previewFile?.name || mediaInfo?.name || lessonTitle,
       duration: mediaInfo?.durationSeconds || 0,
       src: previewUrl || mediaInfo?.url || "",
-      thumbnailSrc: previewUrl
-        ? undefined
-        : mediaInfo?.thumbnailUrl || undefined,
+      thumbnailSrc: previewUrl ? undefined : mediaInfo?.thumbnailUrl || undefined,
     }),
     [
       lessonTitle,
@@ -221,18 +191,14 @@ export function LessonMediaWorkspace({
     ],
   );
 
-  const hasMediaAttached = Boolean(
-    mediaInfo?.url || mediaInfo?.id || mediaInfo?.name,
-  );
+  const hasMediaAttached = Boolean(mediaInfo?.url || mediaInfo?.id || mediaInfo?.name);
   const hasVideoPreview = Boolean(previewUrl) && contentType === "video";
-  const hasPendingVideoPreview =
-    Boolean(previewFile) && contentType === "video";
+  const hasPendingVideoPreview = Boolean(previewFile) && contentType === "video";
   const hasVideoSource = hasMediaAttached || hasVideoPreview;
   const hasVideoStage = hasVideoSource || hasPendingVideoPreview;
   const isAttachedVideo = hasMediaAttached && contentType === "video";
   const isGroupedVideo =
-    contentType === "video" &&
-    (isAttachedVideo || (hasVideoStage && Boolean(videoUploadSection)));
+    contentType === "video" && (isAttachedVideo || (hasVideoStage && Boolean(videoUploadSection)));
   const thumbnailUrl =
     mediaInfo?.thumbnailUrl && mediaInfo.thumbnailUrl !== failedThumbnailUrl
       ? mediaInfo.thumbnailUrl
@@ -324,9 +290,7 @@ export function LessonMediaWorkspace({
     hasVideoStage && contentType === "video" ? (
       <div
         className={`relative aspect-video w-full overflow-hidden bg-black ${
-          isGroupedVideo
-            ? "rounded-none shadow-none"
-            : "rounded-[14px] shadow-(--card-shadow)"
+          isGroupedVideo ? "rounded-none shadow-none" : "rounded-[14px] shadow-(--card-shadow)"
         }`}
       >
         {hasVideoSource && (!hasPendingVideoPreview || previewUrl) ? (
@@ -352,7 +316,7 @@ export function LessonMediaWorkspace({
     ) : null;
 
   return (
-    <div className="flex min-w-0 w-full flex-1 flex-col gap-4">
+    <div className="flex w-full min-w-0 flex-1 flex-col gap-4">
       {/* Hidden File Inputs */}
       <input
         ref={fileInputRef}
@@ -386,7 +350,7 @@ export function LessonMediaWorkspace({
       <div
         className={
           isGroupedVideo
-            ? "overflow-hidden rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow)"
+            ? "overflow-hidden rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) shadow-(--card-shadow) sm:rounded-[16px]"
             : "contents"
         }
         onDragOverCapture={isGroupedVideo ? handleCardDragOver : undefined}
@@ -483,11 +447,11 @@ export function LessonMediaWorkspace({
             className={`flex flex-col ${
               isGroupedVideo
                 ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5"
-                : "rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5 shadow-(--card-shadow)"
+                : "rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 shadow-(--card-shadow) sm:rounded-[16px] sm:p-4.5"
             }`}
           >
             {!isGroupedVideo ? (
-              <h4 className="m-0 text-[0.84rem] sm:text-[0.88rem] font-bold text-(--text)">
+              <h4 className="m-0 text-[0.84rem] font-bold text-(--text) sm:text-[0.88rem]">
                 {contentType === "video"
                   ? "Video Settings"
                   : contentType === "audio"
@@ -502,13 +466,13 @@ export function LessonMediaWorkspace({
               className={`flex items-center justify-between gap-3 ${
                 isGroupedVideo
                   ? "mt-0 rounded-none border-0 bg-transparent p-0"
-                  : "mt-3 rounded-[10px] sm:rounded-[12px] border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 sm:p-3"
+                  : "mt-3 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 sm:rounded-[12px] sm:p-3"
               }`}
             >
               <div className="flex min-w-0 items-center gap-3">
                 {/* Square Icon / Thumbnail */}
                 <div
-                  className={`flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-[8px] sm:rounded-[10px] ${
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] sm:h-11 sm:w-11 sm:rounded-[10px] ${
                     contentType === "video"
                       ? "bg-blue-500/15 text-blue-500"
                       : contentType === "audio"
@@ -531,13 +495,13 @@ export function LessonMediaWorkspace({
 
                 {/* File Info / Empty info */}
                 <div className="min-w-0">
-                  <p className="m-0 truncate text-[0.82rem] sm:text-[0.86rem] font-bold text-(--text)">
+                  <p className="m-0 truncate text-[0.82rem] font-bold text-(--text) sm:text-[0.86rem]">
                     {hasMediaAttached
                       ? mediaInfo?.name ||
                         `${contentType[0]!.toUpperCase()}${contentType.slice(1)} attached`
                       : `No ${contentType} uploaded yet`}
                   </p>
-                  <p className="m-0 mt-0.5 truncate text-[0.70rem] sm:text-[0.74rem] text-(--muted)">
+                  <p className="m-0 mt-0.5 truncate text-[0.70rem] text-(--muted) sm:text-[0.74rem]">
                     {hasMediaAttached ? (
                       <span>
                         {[
@@ -561,7 +525,7 @@ export function LessonMediaWorkspace({
                   type="button"
                   disabled={disabled}
                   onClick={handleChooseFile}
-                  className="inline-flex h-8.5 shrink-0 items-center justify-center gap-1.5 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_7%,var(--surface))] px-3.5 text-[0.76rem] font-semibold text-(--text) shadow-sm transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,var(--surface))] active:scale-95 cursor-pointer whitespace-nowrap"
+                  className="inline-flex h-8.5 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_7%,var(--surface))] px-3.5 text-[0.76rem] font-semibold whitespace-nowrap text-(--text) shadow-sm transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,var(--surface))] active:scale-95"
                 >
                   <CloudArrowUp size={15} weight="bold" />
                   <span>
@@ -584,12 +548,12 @@ export function LessonMediaWorkspace({
           <div
             className={`flex flex-col ${
               isGroupedVideo
-                ? "rounded-b-[14px] sm:rounded-b-[16px] border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5"
-                : "rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5 shadow-(--card-shadow)"
+                ? "rounded-b-[14px] border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:rounded-b-[16px] sm:p-4.5"
+                : "rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 shadow-(--card-shadow) sm:rounded-[16px] sm:p-4.5"
             }`}
           >
             {!isGroupedVideo ? (
-              <h4 className="m-0 text-[0.84rem] sm:text-[0.88rem] font-bold text-(--text)">
+              <h4 className="m-0 text-[0.84rem] font-bold text-(--text) sm:text-[0.88rem]">
                 Thumbnail
               </h4>
             ) : null}
@@ -598,11 +562,11 @@ export function LessonMediaWorkspace({
               className={`flex items-center justify-between gap-3 ${
                 isGroupedVideo
                   ? "mt-0 rounded-none border-0 bg-transparent p-0"
-                  : "mt-3 rounded-[10px] sm:rounded-[12px] border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 sm:p-3"
+                  : "mt-3 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 sm:rounded-[12px] sm:p-3"
               }`}
             >
               <div className="flex min-w-0 items-center gap-3">
-                <div className="relative flex h-10 w-14 sm:h-11 sm:w-16 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[radial-gradient(ellipse_at_center,_#1e1b4b_0%,_#09090b_100%)]">
+                <div className="relative flex h-10 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[radial-gradient(ellipse_at_center,_#1e1b4b_0%,_#09090b_100%)] sm:h-11 sm:w-16">
                   {thumbnailUrl ? (
                     <img
                       src={thumbnailUrl}
@@ -611,23 +575,17 @@ export function LessonMediaWorkspace({
                       onError={() => setFailedThumbnailUrl(thumbnailUrl)}
                     />
                   ) : contentType === "audio" ? (
-                    <Headphones
-                      size={20}
-                      weight="fill"
-                      className="text-rose-400"
-                    />
+                    <Headphones size={20} weight="fill" className="text-rose-400" />
                   ) : (
                     <Video size={20} weight="fill" className="text-blue-400" />
                   )}
                 </div>
 
                 <div className="min-w-0">
-                  <p className="m-0 truncate text-[0.82rem] sm:text-[0.86rem] font-bold text-(--text)">
-                    {hasPersistedThumbnail
-                      ? "Current thumbnail"
-                      : "No thumbnail"}
+                  <p className="m-0 truncate text-[0.82rem] font-bold text-(--text) sm:text-[0.86rem]">
+                    {hasPersistedThumbnail ? "Current thumbnail" : "No thumbnail"}
                   </p>
-                  <p className="m-0 mt-0.5 truncate text-[0.70rem] sm:text-[0.74rem] text-(--muted)">
+                  <p className="m-0 mt-0.5 truncate text-[0.70rem] text-(--muted) sm:text-[0.74rem]">
                     Recommended size: 1280 × 720
                   </p>
                 </div>
@@ -637,7 +595,7 @@ export function LessonMediaWorkspace({
                 type="button"
                 disabled={disabled}
                 onClick={() => thumbnailInputRef.current?.click()}
-                className="inline-flex h-8.5 shrink-0 items-center justify-center gap-1.5 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_7%,var(--surface))] px-3.5 text-[0.76rem] font-semibold text-(--text) shadow-sm transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,var(--surface))] active:scale-95 cursor-pointer whitespace-nowrap"
+                className="inline-flex h-8.5 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--text)_7%,var(--surface))] px-3.5 text-[0.76rem] font-semibold whitespace-nowrap text-(--text) shadow-sm transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,var(--surface))] active:scale-95"
               >
                 <Image size={15} weight="bold" />
                 <span>
@@ -650,7 +608,7 @@ export function LessonMediaWorkspace({
           </div>
         ) : (
           /* Image or Document Guidelines */
-          <div className="flex flex-col rounded-[14px] sm:rounded-[16px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-4.5 shadow-(--card-shadow)">
+          <div className="flex flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-4 shadow-(--card-shadow) sm:rounded-[16px] sm:p-4.5">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--text)">
                 {contentType === "image" ? (
@@ -660,12 +618,10 @@ export function LessonMediaWorkspace({
                 )}
               </div>
               <div>
-                <h4 className="m-0 text-[0.84rem] sm:text-[0.88rem] font-bold text-(--text)">
-                  {contentType === "image"
-                    ? "Image Guidelines"
-                    : "Document Guidelines"}
+                <h4 className="m-0 text-[0.84rem] font-bold text-(--text) sm:text-[0.88rem]">
+                  {contentType === "image" ? "Image Guidelines" : "Document Guidelines"}
                 </h4>
-                <p className="m-0 mt-1 text-[0.74rem] sm:text-[0.78rem] text-(--muted) leading-relaxed">
+                <p className="m-0 mt-1 text-[0.74rem] leading-relaxed text-(--muted) sm:text-[0.78rem]">
                   {contentType === "image"
                     ? "For best results, use a 16:9 ratio. Supported formats: JPG, PNG, WebP."
                     : "Supported formats: MD, PDF, DOC. PDF is recommended for native in-browser reading."}

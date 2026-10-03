@@ -22,10 +22,7 @@ export interface CurriculumServiceOptions {
   services: AppServices;
 }
 
-export function createCurriculumService({
-  database,
-  services,
-}: CurriculumServiceOptions) {
+export function createCurriculumService({ database, services }: CurriculumServiceOptions) {
   const mediaService = createMediaService({ database, services });
 
   function getCourseAndVerifyOwner(
@@ -46,10 +43,7 @@ export function createCurriculumService({
   ) {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const maxPos = await curriculumRepo.findMaxSectionPosition(
-      database,
-      courseId,
-    );
+    const maxPos = await curriculumRepo.findMaxSectionPosition(database, courseId);
     const position = (maxPos?.max ?? -1) + 1;
     const sectionId = crypto.randomUUID();
     const now = new Date();
@@ -75,11 +69,7 @@ export function createCurriculumService({
   ) {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const section = await curriculumRepo.findSectionById(
-      database,
-      sectionId,
-      courseId,
-    );
+    const section = await curriculumRepo.findSectionById(database, sectionId, courseId);
     if (!section) {
       throw new AppError(404, "SECTION_NOT_FOUND", "Section not found.");
     }
@@ -100,11 +90,7 @@ export function createCurriculumService({
   ) {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const section = await curriculumRepo.findSectionById(
-      database,
-      sectionId,
-      courseId,
-    );
+    const section = await curriculumRepo.findSectionById(database, sectionId, courseId);
     if (!section) {
       throw new AppError(404, "SECTION_NOT_FOUND", "Section not found.");
     }
@@ -113,19 +99,12 @@ export function createCurriculumService({
       const now = new Date();
       await curriculumRepo.softDeleteSection(trx, sectionId, courseId, now);
 
-      const lessons = await curriculumRepo.findLessonsBySectionId(
-        trx,
-        sectionId,
-      );
+      const lessons = await curriculumRepo.findLessonsBySectionId(trx, sectionId);
       const lessonIds = lessons.map((l) => l.id);
 
       if (lessonIds.length > 0) {
         await curriculumRepo.softDeleteLessonsBySectionId(trx, sectionId, now);
-        await curriculumRepo.softDeleteResourcesByLessonIds(
-          trx,
-          lessonIds,
-          now,
-        );
+        await curriculumRepo.softDeleteResourcesByLessonIds(trx, lessonIds, now);
       }
     });
 
@@ -139,11 +118,7 @@ export function createCurriculumService({
     version: number,
     userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(
-      courseId,
-      creatorId,
-      userRoles,
-    );
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
     if (course.version !== version) {
       throw new AppError(
         409,
@@ -152,10 +127,7 @@ export function createCurriculumService({
       );
     }
 
-    const currentSections = await curriculumRepo.findSectionsByCourseId(
-      database,
-      courseId,
-    );
+    const currentSections = await curriculumRepo.findSectionsByCourseId(database, courseId);
     const currentSectionIds = new Set(currentSections.map((s) => s.id));
     if (
       currentSections.length !== orderedSectionIds.length ||
@@ -170,25 +142,14 @@ export function createCurriculumService({
 
     await database.transaction().execute(async (trx) => {
       const now = new Date();
-      const updateResult = await courseRepo.updateCourse(
-        trx,
-        courseId,
-        version,
-        {
-          version: version + 1,
-          updated_at: now,
-        },
-      );
+      const updateResult = await courseRepo.updateCourse(trx, courseId, version, {
+        version: version + 1,
+        updated_at: now,
+      });
       assertOptimisticUpdate(updateResult);
 
       for (let i = 0; i < orderedSectionIds.length; i++) {
-        await curriculumRepo.updateSectionPosition(
-          trx,
-          orderedSectionIds[i]!,
-          courseId,
-          i,
-          now,
-        );
+        await curriculumRepo.updateSectionPosition(trx, orderedSectionIds[i]!, courseId, i, now);
       }
     });
 
@@ -206,19 +167,12 @@ export function createCurriculumService({
   ) {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const section = await curriculumRepo.findSectionById(
-      database,
-      sectionId,
-      courseId,
-    );
+    const section = await curriculumRepo.findSectionById(database, sectionId, courseId);
     if (!section) {
       throw new AppError(404, "SECTION_NOT_FOUND", "Section not found.");
     }
 
-    const maxPos = await curriculumRepo.findMaxLessonPosition(
-      database,
-      sectionId,
-    );
+    const maxPos = await curriculumRepo.findMaxLessonPosition(database, sectionId);
     const position = (maxPos?.max ?? -1) + 1;
     const lessonId = crypto.randomUUID();
     const now = new Date();
@@ -250,11 +204,7 @@ export function createCurriculumService({
   ) {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const lesson = await curriculumRepo.findLessonById(
-      database,
-      lessonId,
-      courseId,
-    );
+    const lesson = await curriculumRepo.findLessonById(database, lessonId, courseId);
     if (!lesson) {
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
@@ -268,18 +218,12 @@ export function createCurriculumService({
           : lesson.content_media_id;
 
     const mediaChanged =
-      payload.contentMediaId !== undefined &&
-      payload.contentMediaId !== lesson.content_media_id;
+      payload.contentMediaId !== undefined && payload.contentMediaId !== lesson.content_media_id;
     const typeChanged =
-      payload.contentType !== undefined &&
-      payload.contentType !== lesson.content_type;
+      payload.contentType !== undefined && payload.contentType !== lesson.content_type;
 
     if (effectiveMediaId && (mediaChanged || typeChanged)) {
-      const media = await mediaService.getMediaAsset(
-        effectiveMediaId,
-        creatorId,
-        userRoles,
-      );
+      const media = await mediaService.getMediaAsset(effectiveMediaId, creatorId, userRoles);
       if (!media) {
         throw new AppError(400, "INVALID_MEDIA", "Media asset not found.");
       }
@@ -298,8 +242,7 @@ export function createCurriculumService({
       title: payload.title,
       description: payload.description,
       content_type: payload.contentType,
-      content_media_id:
-        effectiveContentType === "quiz" ? null : payload.contentMediaId,
+      content_media_id: effectiveContentType === "quiz" ? null : payload.contentMediaId,
       is_preview: payload.isPreview,
       is_published: payload.isPublished,
       updated_at: now,
@@ -309,11 +252,7 @@ export function createCurriculumService({
       should202: boolean;
       jobId: string | null;
     } | null = null;
-    if (
-      effectiveMediaId &&
-      (mediaChanged || typeChanged) &&
-      effectiveContentType === "video"
-    ) {
+    if (effectiveMediaId && (mediaChanged || typeChanged) && effectiveContentType === "video") {
       transcodeJobInfo = await mediaService.queueTranscodeJob(
         effectiveMediaId,
         creatorId,
@@ -341,11 +280,7 @@ export function createCurriculumService({
   ) {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const lesson = await curriculumRepo.findLessonById(
-      database,
-      lessonId,
-      courseId,
-    );
+    const lesson = await curriculumRepo.findLessonById(database, lessonId, courseId);
     if (!lesson) {
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
@@ -367,11 +302,7 @@ export function createCurriculumService({
     version: number,
     userRoles?: readonly string[],
   ) {
-    const course = await getCourseAndVerifyOwner(
-      courseId,
-      creatorId,
-      userRoles,
-    );
+    const course = await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
     if (course.version !== version) {
       throw new AppError(
         409,
@@ -380,19 +311,12 @@ export function createCurriculumService({
       );
     }
 
-    const section = await curriculumRepo.findSectionById(
-      database,
-      sectionId,
-      courseId,
-    );
+    const section = await curriculumRepo.findSectionById(database, sectionId, courseId);
     if (!section) {
       throw new AppError(404, "SECTION_NOT_FOUND", "Section not found.");
     }
 
-    const currentLessons = await curriculumRepo.findLessonsBySection(
-      database,
-      sectionId,
-    );
+    const currentLessons = await curriculumRepo.findLessonsBySection(database, sectionId);
     const currentLessonIds = new Set(currentLessons.map((l) => l.id));
     if (
       currentLessons.length !== orderedLessonIds.length ||
@@ -407,25 +331,14 @@ export function createCurriculumService({
 
     await database.transaction().execute(async (trx) => {
       const now = new Date();
-      const updateResult = await courseRepo.updateCourse(
-        trx,
-        courseId,
-        version,
-        {
-          version: version + 1,
-          updated_at: now,
-        },
-      );
+      const updateResult = await courseRepo.updateCourse(trx, courseId, version, {
+        version: version + 1,
+        updated_at: now,
+      });
       assertOptimisticUpdate(updateResult);
 
       for (let i = 0; i < orderedLessonIds.length; i++) {
-        await curriculumRepo.updateLessonPosition(
-          trx,
-          orderedLessonIds[i]!,
-          sectionId,
-          i,
-          now,
-        );
+        await curriculumRepo.updateLessonPosition(trx, orderedLessonIds[i]!, sectionId, i, now);
       }
     });
 
@@ -443,42 +356,23 @@ export function createCurriculumService({
   ) {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const lesson = await curriculumRepo.findLessonById(
-      database,
-      lessonId,
-      courseId,
-    );
+    const lesson = await curriculumRepo.findLessonById(database, lessonId, courseId);
     if (!lesson) {
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
-    const media = await mediaService.getMediaAsset(
-      payload.mediaAssetId,
-      creatorId,
-      userRoles,
-    );
+    const media = await mediaService.getMediaAsset(payload.mediaAssetId, creatorId, userRoles);
     if (!media) {
       throw new AppError(400, "INVALID_MEDIA", "Media asset not found.");
     }
     if (media.status === "uploading") {
-      throw new AppError(
-        409,
-        "MEDIA_NOT_READY",
-        "Media upload is still in progress.",
-      );
+      throw new AppError(409, "MEDIA_NOT_READY", "Media upload is still in progress.");
     }
     if (media.status === "failed") {
-      throw new AppError(
-        409,
-        "MEDIA_NOT_READY",
-        "Media asset is not available.",
-      );
+      throw new AppError(409, "MEDIA_NOT_READY", "Media asset is not available.");
     }
 
-    const maxPos = await curriculumRepo.findMaxResourcePosition(
-      database,
-      lessonId,
-    );
+    const maxPos = await curriculumRepo.findMaxResourcePosition(database, lessonId);
     const position = (maxPos?.max ?? -1) + 1;
     const resourceId = crypto.randomUUID();
     const now = new Date();
@@ -518,21 +412,12 @@ export function createCurriculumService({
   ) {
     await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
-    const resource = await curriculumRepo.findResourceById(
-      database,
-      resourceId,
-      courseId,
-    );
+    const resource = await curriculumRepo.findResourceById(database, resourceId, courseId);
     if (!resource) {
       throw new AppError(404, "RESOURCE_NOT_FOUND", "Resource not found.");
     }
 
-    await curriculumRepo.softDeleteResource(
-      database,
-      resourceId,
-      resource.lesson_id,
-      new Date(),
-    );
+    await curriculumRepo.softDeleteResource(database, resourceId, resource.lesson_id, new Date());
     return { success: true };
   }
 
@@ -559,11 +444,7 @@ export function createCurriculumService({
   }
 
   async function findResourceById(resourceId: string, courseId: string) {
-    return await curriculumRepo.findResourceById(
-      database,
-      resourceId,
-      courseId,
-    );
+    return await curriculumRepo.findResourceById(database, resourceId, courseId);
   }
 
   return {

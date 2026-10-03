@@ -11,10 +11,7 @@ export interface ThemeRevealOrigin {
   y: number;
 }
 
-const revealOriginProperties = [
-  "--theme-reveal-x",
-  "--theme-reveal-y",
-] as const;
+const revealOriginProperties = ["--theme-reveal-x", "--theme-reveal-y"] as const;
 
 // Overlapping transitions of the same kind share the tag value and can even
 // stage identical reveal coordinates, so value comparisons can never prove
@@ -78,10 +75,7 @@ export function themeRevealOriginFromClick(event: {
 // transition: one with an origin restages the coordinates, and one without
 // removes any earlier pointer transition's coordinates so the mask's
 // keyword fallbacks (corner origins) apply for OS-triggered changes.
-function stageRevealOrigin(
-  transitionId: number,
-  origin: ThemeRevealOrigin | null,
-): void {
+function stageRevealOrigin(transitionId: number, origin: ThemeRevealOrigin | null): void {
   // The duration stays fixed: shortening it for center-ish clicks is what
   // made the reveal feel rushed there, while corner clicks felt smooth.
   const style = document.documentElement.style;

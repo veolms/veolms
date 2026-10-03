@@ -42,10 +42,7 @@ export interface TotpSetupResponse {
   uri: string;
 }
 
-const AVATAR_CONTENT_TYPE_BY_EXTENSION: Record<
-  string,
-  AvatarUploadContentType
-> = {
+const AVATAR_CONTENT_TYPE_BY_EXTENSION: Record<string, AvatarUploadContentType> = {
   gif: "image/gif",
   jpeg: "image/jpeg",
   jpg: "image/jpeg",
@@ -85,21 +82,13 @@ async function uploadToPresignedAvatarUrl(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve();
       } else {
-        reject(
-          new Error(
-            `Storage upload failed with status ${xhr.status || "unknown"}.`,
-          ),
-        );
+        reject(new Error(`Storage upload failed with status ${xhr.status || "unknown"}.`));
       }
     });
     xhr.addEventListener("error", () =>
-      reject(
-        new Error("Storage upload failed before a response was received."),
-      ),
+      reject(new Error("Storage upload failed before a response was received.")),
     );
-    xhr.addEventListener("abort", () =>
-      reject(new Error("Storage upload was cancelled.")),
-    );
+    xhr.addEventListener("abort", () => reject(new Error("Storage upload was cancelled.")));
     xhr.send(file);
   });
 }
@@ -143,15 +132,11 @@ export const authService = {
     return api.post<AuthMessageResponse>("/auth/me/email/otp/send", payload);
   },
 
-  verifyPhoneNumber: (
-    payload: PhoneVerificationVerifyRequest,
-  ): Promise<AuthMessageResponse> => {
+  verifyPhoneNumber: (payload: PhoneVerificationVerifyRequest): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/me/phone/otp/verify", payload);
   },
 
-  verifyEmail: (
-    payload: EmailVerificationVerifyRequest,
-  ): Promise<AuthMessageResponse> => {
+  verifyEmail: (payload: EmailVerificationVerifyRequest): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/me/email/otp/verify", payload);
   },
 
@@ -175,9 +160,7 @@ export const authService = {
     return api.get<AuthConfigResponse>("/auth/config");
   },
 
-  googleOneTapLogin: (
-    payload: GoogleOneTapLoginRequest,
-  ): Promise<LoginResponse> => {
+  googleOneTapLogin: (payload: GoogleOneTapLoginRequest): Promise<LoginResponse> => {
     // The client has no global timeout; without one a hung request leaves the
     // One Tap UI stuck on "Verifying…" with the login buttons locked.
     return api.post<LoginResponse>("/auth/oauth/google/one-tap", payload, {
@@ -189,9 +172,7 @@ export const authService = {
     return api.post<TotpSetupResponse>("/auth/totp/setup");
   },
 
-  enableTotp: (
-    payload: TotpEnableRequest,
-  ): Promise<{ backupCodes: string[] }> => {
+  enableTotp: (payload: TotpEnableRequest): Promise<{ backupCodes: string[] }> => {
     return api.post<{ backupCodes: string[] }>("/auth/totp/enable", payload);
   },
 
@@ -207,32 +188,21 @@ export const authService = {
     return api.post<AuthMessageResponse>("/auth/totp/verify", payload);
   },
 
-  getPasskeyRegisterOptions:
-    async (): Promise<PasskeyRegistrationOptionsResponse> => {
-      const response = await api.post<unknown>(
-        "/auth/passkey/register/options",
-      );
-      return passkeyRegistrationOptionsResponseSchema.parse(response);
-    },
-
-  verifyPasskeyRegister: (payload: {
-    response: unknown;
-  }): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>(
-      "/auth/passkey/register/verify",
-      payload,
-    );
+  getPasskeyRegisterOptions: async (): Promise<PasskeyRegistrationOptionsResponse> => {
+    const response = await api.post<unknown>("/auth/passkey/register/options");
+    return passkeyRegistrationOptionsResponseSchema.parse(response);
   },
 
-  getPasskeyLoginOptions:
-    async (): Promise<PasskeyAuthenticationOptionsResponse> => {
-      const response = await api.post<unknown>("/auth/passkey/login/options");
-      return passkeyAuthenticationOptionsResponseSchema.parse(response);
-    },
+  verifyPasskeyRegister: (payload: { response: unknown }): Promise<AuthMessageResponse> => {
+    return api.post<AuthMessageResponse>("/auth/passkey/register/verify", payload);
+  },
 
-  verifyPasskeyLogin: (payload: {
-    response: unknown;
-  }): Promise<AuthMessageResponse> => {
+  getPasskeyLoginOptions: async (): Promise<PasskeyAuthenticationOptionsResponse> => {
+    const response = await api.post<unknown>("/auth/passkey/login/options");
+    return passkeyAuthenticationOptionsResponseSchema.parse(response);
+  },
+
+  verifyPasskeyLogin: (payload: { response: unknown }): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/passkey/login/verify", payload);
   },
 
@@ -254,27 +224,19 @@ export const authService = {
     return response;
   },
 
-  getPublicProfile: async (
-    username: string,
-  ): Promise<PublicProfileResponse> => {
-    const response = await api.get<unknown>(
-      `/auth/profiles/${encodeURIComponent(username)}`,
-    );
+  getPublicProfile: async (username: string): Promise<PublicProfileResponse> => {
+    const response = await api.get<unknown>(`/auth/profiles/${encodeURIComponent(username)}`);
     return publicProfileResponseSchema.parse(response);
   },
 
-  updateProfile: (
-    payload: ProfileUpdateRequest,
-  ): Promise<UserProfileResponse> => {
+  updateProfile: (payload: ProfileUpdateRequest): Promise<UserProfileResponse> => {
     return api.patch<UserProfileResponse>("/auth/me", payload);
   },
 
   uploadAvatarPhoto: (file: File): Promise<UserProfileResponse> => {
     const contentType = resolveAvatarUploadContentType(file);
     if (!contentType) {
-      return Promise.reject(
-        new Error("Choose a JPEG, PNG, WebP, or GIF image."),
-      );
+      return Promise.reject(new Error("Choose a JPEG, PNG, WebP, or GIF image."));
     }
 
     const payload: AvatarUploadPresignRequest = {
@@ -285,9 +247,7 @@ export const authService = {
     return api
       .post<AvatarUploadPresignResponse>("/auth/me/avatar/presign", payload)
       .then(({ uploadId, uploadUrl }) =>
-        uploadToPresignedAvatarUrl(uploadUrl, file, contentType).then(
-          () => uploadId,
-        ),
+        uploadToPresignedAvatarUrl(uploadUrl, file, contentType).then(() => uploadId),
       )
       .then((uploadId) =>
         api.post<UserProfileResponse>("/auth/me/avatar/complete", {
@@ -298,9 +258,7 @@ export const authService = {
   },
 
   /** Uses the same presigned browser-to-R2 flow as course media uploads. */
-  uploadGeneratedAvatar: async (
-    previewUrl: string,
-  ): Promise<UserProfileResponse> => {
+  uploadGeneratedAvatar: async (previewUrl: string): Promise<UserProfileResponse> => {
     const file = await generatedAvatarFile(previewUrl);
     return authService.uploadAvatarPhoto(file);
   },

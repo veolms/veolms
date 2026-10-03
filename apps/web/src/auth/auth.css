@@ -61,8 +61,7 @@
   border: 1px solid var(--auth-line);
   border-radius: 16px;
   background: var(--surface);
-  box-shadow: 0 24px 60px
-    color-mix(in srgb, var(--card-shadow) 32%, transparent);
+  box-shadow: 0 24px 60px color-mix(in srgb, var(--card-shadow) 32%, transparent);
 }
 
 .auth-page__form-column {
@@ -164,8 +163,7 @@
   overflow: hidden;
   border-radius: var(--auth-radius-switch);
   background: color-mix(in srgb, var(--canvas) 74%, var(--surface));
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-strong) 72%, transparent);
 }
 
 .auth-method-switch__tab {
@@ -380,8 +378,7 @@
   border-radius: var(--auth-radius);
   color: var(--on-accent, #fff);
   background: var(--accent);
-  box-shadow: 0 10px 22px
-    color-mix(in srgb, var(--accent-shadow) 48%, transparent);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--accent-shadow) 48%, transparent);
   font: inherit;
   font-size: clamp(0.84rem, 1.1vw, 0.95rem);
   font-weight: 650;
@@ -1110,6 +1107,5 @@
 
 :root[data-theme="light"] .auth-page__container {
   background: var(--surface);
-  box-shadow: 0 20px 50px
-    color-mix(in srgb, var(--card-shadow, #000) 10%, transparent);
+  box-shadow: 0 20px 50px color-mix(in srgb, var(--card-shadow, #000) 10%, transparent);
 }

@@ -9,10 +9,7 @@ export async function findRefundById(database: Executor, refundId: string) {
     .executeTakeFirst();
 }
 
-export async function findRefundByGatewayRefundId(
-  database: Executor,
-  gatewayRefundId: string,
-) {
+export async function findRefundByGatewayRefundId(database: Executor, gatewayRefundId: string) {
   return await database
     .selectFrom("refunds")
     .selectAll()
@@ -33,10 +30,7 @@ export async function findRefundByIdempotencyKey(
     .executeTakeFirst();
 }
 
-export async function listRefundsByOrderId(
-  database: Executor,
-  orderId: string,
-) {
+export async function listRefundsByOrderId(database: Executor, orderId: string) {
   return await database
     .selectFrom("refunds")
     .selectAll()
@@ -176,11 +170,7 @@ export async function sumOtherCountedRefunds(
   return existingRefunds
     .filter((r) => {
       if (exclude?.refundId && r.id === exclude.refundId) return false;
-      if (
-        exclude?.gatewayRefundId &&
-        r.gateway_refund_id === exclude.gatewayRefundId
-      )
-        return false;
+      if (exclude?.gatewayRefundId && r.gateway_refund_id === exclude.gatewayRefundId) return false;
       return r.status === "processed" || r.status === "pending";
     })
     .reduce((sum, r) => sum + r.amount, 0);

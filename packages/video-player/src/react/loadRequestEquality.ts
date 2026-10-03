@@ -24,12 +24,7 @@ function areLoadValuesEqual(
 ): boolean {
   if (Object.is(left, right)) return true;
   if (typeof left === "function" && typeof right === "function") return true;
-  if (
-    left === null ||
-    right === null ||
-    typeof left !== "object" ||
-    typeof right !== "object"
-  ) {
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
     return false;
   }
 
@@ -44,9 +39,7 @@ function areLoadValuesEqual(
     if (!Array.isArray(left) || !Array.isArray(right)) return false;
     return (
       left.length === right.length &&
-      left.every((value, index) =>
-        areLoadValuesEqual(value, right[index], seen),
-      )
+      left.every((value, index) => areLoadValuesEqual(value, right[index], seen))
     );
   }
 
@@ -86,10 +79,7 @@ function areLoadObjectsEqual(left: unknown, right: unknown): boolean {
  * interrupting playback, while preserving reloads for real configuration
  * changes (including nested DRM, networking, track, and metadata values).
  */
-export function areVideoSourcesLoadEquivalent(
-  left: VideoSource,
-  right: VideoSource,
-): boolean {
+export function areVideoSourcesLoadEquivalent(left: VideoSource, right: VideoSource): boolean {
   if (left === right) return true;
   if (left.id === right.id && left.src === right.src) {
     const { startTime: _leftStartTime, ...leftRest } = left;

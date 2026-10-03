@@ -21,9 +21,7 @@ export function createAuthorizationController(options: {
       reply: FastifyReply,
     ): Promise<void> {
       if (!request.user) {
-        return reply
-          .code(401)
-          .send(httpError(401, "UNAUTHORIZED", "Authentication required"));
+        return reply.code(401).send(httpError(401, "UNAUTHORIZED", "Authentication required"));
       }
 
       const { courseId } = request.query;

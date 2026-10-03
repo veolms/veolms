@@ -38,10 +38,7 @@ export const ordersService = {
     return `${base}/orders/${orderId}/invoice/download${queryString}`;
   },
 
-  refundOrder: (
-    orderId: string,
-    payload: OrderDirectRefundRequest,
-  ): Promise<Refund> => {
+  refundOrder: (orderId: string, payload: OrderDirectRefundRequest): Promise<Refund> => {
     return api.post<Refund>(`/orders/${orderId}/refund`, payload);
   },
 };

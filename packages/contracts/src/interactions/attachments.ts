@@ -28,23 +28,13 @@ export const attachmentDimensionsSchema = z
   });
 export type AttachmentDimensions = z.infer<typeof attachmentDimensionsSchema>;
 
-export const attachmentKindSchema = z.enum([
-  "image",
-  "screenshot",
-  "code",
-  "document",
-]);
+export const attachmentKindSchema = z.enum(["image", "screenshot", "code", "document"]);
 export type AttachmentKind = z.infer<typeof attachmentKindSchema>;
 
 export const attachmentTargetTypeSchema = z.enum(["thread", "reply", "note"]);
 export type AttachmentTargetType = z.infer<typeof attachmentTargetTypeSchema>;
 
-export const attachmentStatusSchema = z.enum([
-  "uploading",
-  "ready",
-  "rejected",
-  "deleted",
-]);
+export const attachmentStatusSchema = z.enum(["uploading", "ready", "rejected", "deleted"]);
 export type AttachmentStatus = z.infer<typeof attachmentStatusSchema>;
 
 export const learningAttachmentSchema = z.object({
@@ -89,9 +79,7 @@ export const initiateAttachmentUploadRequestSchema = z
       }
     }
   });
-export type InitiateAttachmentUploadRequest = z.infer<
-  typeof initiateAttachmentUploadRequestSchema
->;
+export type InitiateAttachmentUploadRequest = z.infer<typeof initiateAttachmentUploadRequestSchema>;
 
 export const initiateAttachmentUploadResponseSchema = z.object({
   attachmentId: z.uuid(),
@@ -108,9 +96,7 @@ export type InitiateAttachmentUploadResponse = z.infer<
 export const completeAttachmentUploadRequestSchema = z.object({
   attachmentId: z.uuid(),
 });
-export type CompleteAttachmentUploadRequest = z.infer<
-  typeof completeAttachmentUploadRequestSchema
->;
+export type CompleteAttachmentUploadRequest = z.infer<typeof completeAttachmentUploadRequestSchema>;
 
 export const learningUploadResponseSchema = z.object({
   id: z.uuid(),
@@ -125,16 +111,12 @@ export const learningUploadResponseSchema = z.object({
   width: optionalAttachmentDimensionSchema,
   height: optionalAttachmentDimensionSchema,
 });
-export type LearningUploadResponse = z.infer<
-  typeof learningUploadResponseSchema
->;
+export type LearningUploadResponse = z.infer<typeof learningUploadResponseSchema>;
 
 export const createLinkPreviewRequestSchema = z.object({
   url: z.string().url(),
 });
-export type CreateLinkPreviewRequest = z.infer<
-  typeof createLinkPreviewRequestSchema
->;
+export type CreateLinkPreviewRequest = z.infer<typeof createLinkPreviewRequestSchema>;
 
 export const linkPreviewResponseSchema = z.object({
   url: z.string().url(),

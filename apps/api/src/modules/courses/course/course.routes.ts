@@ -88,17 +88,11 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           "Use limit and cursor for incremental catalogue loading; supports creatorId, search, and title sorting.",
         querystring: courseListQuerySchema,
         response: {
-          200: jsonResponse(
-            "The published course catalogue.",
-            courseListResponseSchema,
-          ),
+          200: jsonResponse("The published course catalogue.", courseListResponseSchema),
           403: errorResponse("MFA step-up required."),
         },
       },
-      preHandler: [
-        ctx.middleware.authenticate,
-        ctx.middleware.requireMfaVerifiedIfAuthenticated,
-      ],
+      preHandler: [ctx.middleware.authenticate, ctx.middleware.requireMfaVerifiedIfAuthenticated],
     },
     controller.listCourses,
   );
@@ -113,17 +107,11 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         description:
           "Returns only IDs and titles for published courses, for course filter controls.",
         response: {
-          200: jsonResponse(
-            "Published course IDs and titles.",
-            courseOptionsResponseSchema,
-          ),
+          200: jsonResponse("Published course IDs and titles.", courseOptionsResponseSchema),
           403: errorResponse("MFA step-up required."),
         },
       },
-      preHandler: [
-        ctx.middleware.authenticate,
-        ctx.middleware.requireMfaVerifiedIfAuthenticated,
-      ],
+      preHandler: [ctx.middleware.authenticate, ctx.middleware.requireMfaVerifiedIfAuthenticated],
     },
     controller.listCourseOptions,
   );
@@ -135,23 +123,16 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         operationId: "listCreatorCourses",
         tags: ["Courses"],
         summary: "List available published courses by creator ID",
-        description:
-          "Returns all available published courses created by the specified author.",
+        description: "Returns all available published courses created by the specified author.",
         params: z.object({
           creatorId: z.uuid().meta({ description: "Creator UUID" }),
         }),
         response: {
-          200: jsonResponse(
-            "Available courses by this creator.",
-            myCoursesListResponseSchema,
-          ),
+          200: jsonResponse("Available courses by this creator.", myCoursesListResponseSchema),
           403: errorResponse("MFA step-up required."),
         },
       },
-      preHandler: [
-        ctx.middleware.authenticate,
-        ctx.middleware.requireMfaVerifiedIfAuthenticated,
-      ],
+      preHandler: [ctx.middleware.authenticate, ctx.middleware.requireMfaVerifiedIfAuthenticated],
     },
     controller.listCreatorCourses,
   );
@@ -174,10 +155,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           403: errorResponse("MFA step-up required."),
         },
       },
-      preHandler: [
-        ctx.middleware.authenticate,
-        ctx.middleware.requireMfaVerifiedIfAuthenticated,
-      ],
+      preHandler: [ctx.middleware.authenticate, ctx.middleware.requireMfaVerifiedIfAuthenticated],
     },
     controller.getCourseBySlug,
   );
@@ -190,8 +168,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "getCourseOverview",
         tags: ["Courses"],
-        summary:
-          "Get full course overview data for learners and public visitors",
+        summary: "Get full course overview data for learners and public visitors",
         description:
           "Returns the published course overview including its curriculum, instructor info, category, pricing, settings, and duration metrics. Authentication is optional for anonymous visitors; authenticated sessions must complete MFA before accessing it. Unpublished courses remain private.",
         params: z.object({
@@ -202,20 +179,14 @@ const courseRoutes: RoutePlugin = async (app, options) => {
             .meta({ description: "Course UUID or URL-safe slug." }),
         }),
         response: {
-          200: jsonResponse(
-            "The full course overview details.",
-            courseOverviewSchema,
-          ),
+          200: jsonResponse("The full course overview details.", courseOverviewSchema),
           404: errorResponse("No course matches the provided ID or slug."),
           403: errorResponse("MFA step-up required."),
         },
       },
       // Parse an optional session so owners/admins can still preview their
       // unpublished courses while anonymous visitors can view published ones.
-      preHandler: [
-        ctx.middleware.authenticate,
-        ctx.middleware.requireMfaVerifiedIfAuthenticated,
-      ],
+      preHandler: [ctx.middleware.authenticate, ctx.middleware.requireMfaVerifiedIfAuthenticated],
     },
     controller.getCourseOverview,
   );
@@ -247,10 +218,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         tags: ["Course Authoring"],
         summary: "List all courses owned by the authenticated author",
         response: {
-          200: jsonResponse(
-            "List of the author's courses",
-            myCoursesListResponseSchema,
-          ),
+          200: jsonResponse("List of the author's courses", myCoursesListResponseSchema),
         },
       },
       preHandler: [
@@ -271,10 +239,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         summary: "Load full course editor state",
         params: z.object({ id: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Course editor data",
-            courseEditorDataResponseSchema,
-          ),
+          200: jsonResponse("Course editor data", courseEditorDataResponseSchema),
           404: errorResponse("Course not found"),
         },
       },
@@ -289,8 +254,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "updateCourseBasics",
         tags: ["Course Authoring"],
-        summary:
-          "Update basic course details with optimistic concurrency check",
+        summary: "Update basic course details with optimistic concurrency check",
         params: z.object({ id: z.uuid() }),
         body: updateCourseBasicsRequestSchema,
         response: {
@@ -299,12 +263,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
             "Video processing accepted",
             z.object({
               videoJobId: z.uuid(),
-              processingStatus: z.enum([
-                "queued",
-                "processing",
-                "completed",
-                "failed",
-              ]),
+              processingStatus: z.enum(["queued", "processing", "completed", "failed"]),
               version: z.number().int(),
             }),
           ),
@@ -329,9 +288,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           subtitle: z.string().max(500).optional().nullable(),
           description: z.string().max(20000).optional().nullable(),
           language: z.string().max(10).optional(),
-          level: z
-            .enum(["beginner", "intermediate", "advanced", "all_levels"])
-            .optional(),
+          level: z.enum(["beginner", "intermediate", "advanced", "all_levels"]).optional(),
           categoryId: z.string().uuid().optional().nullable(),
         }),
         response: {

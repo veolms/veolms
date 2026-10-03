@@ -142,9 +142,7 @@ function normalizeThemePool(value: unknown): string[] {
 
   const pool = value.filter(
     (themeId, index): themeId is string =>
-      typeof themeId === "string" &&
-      paletteIds.has(themeId) &&
-      value.indexOf(themeId) === index,
+      typeof themeId === "string" && paletteIds.has(themeId) && value.indexOf(themeId) === index,
   );
   return pool.length >= 2 ? pool : [...allThemeIds];
 }
@@ -156,9 +154,7 @@ export function getThemeRotationPreferences(): ThemeRotationPreferences {
 
   let storedPool: unknown;
   try {
-    storedPool = JSON.parse(
-      window.localStorage.getItem(ROTATION_POOL_KEY) || "null",
-    );
+    storedPool = JSON.parse(window.localStorage.getItem(ROTATION_POOL_KEY) || "null");
   } catch {
     storedPool = null;
   }
@@ -178,8 +174,7 @@ export function persistThemeRotationPreferences(
   };
   if (typeof window === "undefined") return normalized;
 
-  const previousEnabled =
-    window.localStorage.getItem(ROTATION_ENABLED_KEY) === "true";
+  const previousEnabled = window.localStorage.getItem(ROTATION_ENABLED_KEY) === "true";
   const previousPool = window.localStorage.getItem(ROTATION_POOL_KEY);
   const nextPool = JSON.stringify(normalized.pool);
 
@@ -188,19 +183,14 @@ export function persistThemeRotationPreferences(
 
   if (!normalized.enabled) {
     window.sessionStorage.removeItem(SESSION_THEME_KEY);
-  } else if (
-    previousEnabled !== normalized.enabled ||
-    previousPool !== nextPool
-  ) {
+  } else if (previousEnabled !== normalized.enabled || previousPool !== nextPool) {
     const sessionTheme = window.sessionStorage.getItem(SESSION_THEME_KEY);
     const savedTheme = window.localStorage.getItem(THEME_KEY);
     const savedVersion = window.localStorage.getItem(THEME_VERSION_KEY);
     const currentTheme =
       sessionTheme && paletteIds.has(sessionTheme)
         ? sessionTheme
-        : savedVersion === ACADEMY_THEME_VERSION &&
-            savedTheme &&
-            paletteIds.has(savedTheme)
+        : savedVersion === ACADEMY_THEME_VERSION && savedTheme && paletteIds.has(savedTheme)
           ? savedTheme
           : DEFAULT_ACADEMY_THEME;
     window.sessionStorage.setItem(SESSION_THEME_KEY, currentTheme);
@@ -233,9 +223,7 @@ export function getInitialAcademyTheme(): string {
   const savedVersion = window.localStorage.getItem(THEME_VERSION_KEY);
   const savedTheme = window.localStorage.getItem(THEME_KEY);
   const currentTheme =
-    savedVersion === ACADEMY_THEME_VERSION &&
-    savedTheme !== null &&
-    paletteIds.has(savedTheme)
+    savedVersion === ACADEMY_THEME_VERSION && savedTheme !== null && paletteIds.has(savedTheme)
       ? savedTheme
       : DEFAULT_ACADEMY_THEME;
   const rotation = getThemeRotationPreferences();

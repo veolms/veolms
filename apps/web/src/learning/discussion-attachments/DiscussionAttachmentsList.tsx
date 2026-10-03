@@ -24,35 +24,20 @@ export function DiscussionAttachmentsList({
   attachments,
   className = "",
 }: DiscussionAttachmentsListProps) {
-  const [viewerAttachment, setViewerAttachment] =
-    useState<DiscussionAttachmentItem | null>(null);
-  const [activatedVideoIds, setActivatedVideoIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [failedVideoIds, setFailedVideoIds] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [viewerAttachment, setViewerAttachment] = useState<DiscussionAttachmentItem | null>(null);
+  const [activatedVideoIds, setActivatedVideoIds] = useState<Set<string>>(() => new Set());
+  const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(() => new Set());
+  const [failedVideoIds, setFailedVideoIds] = useState<Set<string>>(() => new Set());
   const viewerDialogRef = useRef<HTMLDialogElement>(null);
   const viewerTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const dialog = viewerDialogRef.current;
     if (!dialog) return;
-    if (
-      viewerAttachment &&
-      !dialog.open &&
-      typeof dialog.showModal === "function"
-    ) {
+    if (viewerAttachment && !dialog.open && typeof dialog.showModal === "function") {
       dialog.showModal();
     }
-    if (
-      !viewerAttachment &&
-      dialog.open &&
-      typeof dialog.close === "function"
-    ) {
+    if (!viewerAttachment && dialog.open && typeof dialog.close === "function") {
       dialog.close();
     }
   }, [viewerAttachment]);
@@ -80,10 +65,7 @@ export function DiscussionAttachmentsList({
       >
         <div className="flex flex-col items-start gap-2.5">
           {attachments.map((attachment) => {
-            const category = getAttachmentCategory(
-              attachment.mimeType,
-              attachment.kind,
-            );
+            const category = getAttachmentCategory(attachment.mimeType, attachment.kind);
             const visualUrl = getAttachmentVisualUrl(attachment);
             const attachmentId = attachment.clientId ?? attachment.id;
             const geometryStyle = getAttachmentAspectRatioStyle(attachment);
@@ -142,8 +124,7 @@ export function DiscussionAttachmentsList({
 
             if (category === "video") {
               const isLocalVideo = Boolean(attachment.localPreviewUrl);
-              const isActivated =
-                isLocalVideo || activatedVideoIds.has(attachmentId);
+              const isActivated = isLocalVideo || activatedVideoIds.has(attachmentId);
               const hasFailed = failedVideoIds.has(attachmentId);
 
               return (
@@ -166,9 +147,7 @@ export function DiscussionAttachmentsList({
                         fileName={attachment.fileName}
                         attemptPlayback={!isLocalVideo}
                         onError={() =>
-                          setFailedVideoIds((current) =>
-                            new Set(current).add(attachmentId),
-                          )
+                          setFailedVideoIds((current) => new Set(current).add(attachmentId))
                         }
                       />
                     ) : (
@@ -184,39 +163,30 @@ export function DiscussionAttachmentsList({
                               next.delete(attachmentId);
                               return next;
                             });
-                            setActivatedVideoIds((current) =>
-                              new Set(current).add(attachmentId),
-                            );
+                            setActivatedVideoIds((current) => new Set(current).add(attachmentId));
                           }}
                           onKeyDown={(event) => {
-                            if (event.key !== "Enter" && event.key !== " ")
-                              return;
+                            if (event.key !== "Enter" && event.key !== " ") return;
                             event.preventDefault();
                             setFailedVideoIds((current) => {
                               const next = new Set(current);
                               next.delete(attachmentId);
                               return next;
                             });
-                            setActivatedVideoIds((current) =>
-                              new Set(current).add(attachmentId),
-                            );
+                            setActivatedVideoIds((current) => new Set(current).add(attachmentId));
                           }}
                         >
                           {hasFailed ? (
                             <>
                               <VideoCamera size={28} weight="duotone" />
-                              <span className="text-sm">
-                                Unable to load video. Retry
-                              </span>
+                              <span className="text-sm">Unable to load video. Retry</span>
                             </>
                           ) : (
                             <>
                               <span className="grid size-14 place-items-center rounded-full border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--surface)_65%,transparent)] shadow-sm backdrop-blur-xs">
                                 <Play size={28} weight="fill" />
                               </span>
-                              <span className="text-sm font-semibold">
-                                Play video
-                              </span>
+                              <span className="text-sm font-semibold">Play video</span>
                             </>
                           )}
                         </button>
@@ -242,9 +212,7 @@ export function DiscussionAttachmentsList({
       <dialog
         ref={viewerDialogRef}
         aria-label={
-          viewerAttachment
-            ? `Image preview: ${viewerAttachment.fileName}`
-            : "Image preview"
+          viewerAttachment ? `Image preview: ${viewerAttachment.fileName}` : "Image preview"
         }
         data-testid="discussion-image-viewer"
         className="fixed inset-0 z-150 m-auto max-h-[92dvh] max-w-[94vw] overflow-visible border-0 bg-transparent p-0 text-(--text) backdrop:bg-black/75 backdrop:backdrop-blur-xs"
@@ -320,24 +288,15 @@ function ActivatedVideo({
   );
 }
 
-function AttachmentMetadata({
-  attachment,
-}: {
-  attachment: DiscussionAttachmentItem;
-}) {
+function AttachmentMetadata({ attachment }: { attachment: DiscussionAttachmentItem }) {
   const visualUrl = getAttachmentVisualUrl(attachment);
   return (
     <div className="flex items-center justify-between gap-2 p-2.5 text-xs">
       <div className="min-w-0 flex-1">
-        <p
-          className="truncate font-medium text-(--text)"
-          title={attachment.fileName}
-        >
+        <p className="truncate font-medium text-(--text)" title={attachment.fileName}>
           {attachment.fileName}
         </p>
-        <p className="mt-0.5 text-(--muted)">
-          {formatFileSize(attachment.fileSize)}
-        </p>
+        <p className="mt-0.5 text-(--muted)">{formatFileSize(attachment.fileSize)}</p>
       </div>
       {visualUrl && attachment.uploadState !== "uploading" && (
         <a
@@ -354,16 +313,11 @@ function AttachmentMetadata({
   );
 }
 
-function GenericAttachmentCard({
-  attachment,
-}: {
-  attachment: DiscussionAttachmentItem;
-}) {
+function GenericAttachmentCard({ attachment }: { attachment: DiscussionAttachmentItem }) {
   const category = getAttachmentCategory(attachment.mimeType, attachment.kind);
   const visualUrl = getAttachmentVisualUrl(attachment);
   const isPdf =
-    attachment.mimeType === "application/pdf" ||
-    attachment.fileName.toLowerCase().endsWith(".pdf");
+    attachment.mimeType === "application/pdf" || attachment.fileName.toLowerCase().endsWith(".pdf");
 
   return (
     <div
@@ -380,16 +334,11 @@ function GenericAttachmentCard({
           <FileText size={22} className="text-sky-500" />
         )}
       </div>
-      <div className="min-w-0 max-w-[200px] sm:max-w-xs">
-        <p
-          className="truncate text-sm font-medium text-(--text)"
-          title={attachment.fileName}
-        >
+      <div className="max-w-[200px] min-w-0 sm:max-w-xs">
+        <p className="truncate text-sm font-medium text-(--text)" title={attachment.fileName}>
           {attachment.fileName}
         </p>
-        <p className="mt-0.5 text-xs text-(--muted)">
-          {formatFileSize(attachment.fileSize)}
-        </p>
+        <p className="mt-0.5 text-xs text-(--muted)">{formatFileSize(attachment.fileSize)}</p>
       </div>
       {visualUrl && attachment.uploadState !== "uploading" && (
         <a
@@ -407,17 +356,11 @@ function GenericAttachmentCard({
   );
 }
 
-function AttachmentUploadTreatment({
-  attachment,
-}: {
-  attachment: DiscussionAttachmentItem;
-}) {
+function AttachmentUploadTreatment({ attachment }: { attachment: DiscussionAttachmentItem }) {
   if (attachment.uploadState !== "uploading") return null;
   const progress = attachment.uploadProgress;
   const remainingWidth =
-    typeof progress === "number"
-      ? `${Math.max(0, 1 - progress) * 100}%`
-      : "100%";
+    typeof progress === "number" ? `${Math.max(0, 1 - progress) * 100}%` : "100%";
 
   return (
     <>

@@ -23,7 +23,7 @@ export function RatingSummaryWidget({
   return (
     <section
       aria-labelledby="rating-summary-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
+      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 transition-all md:p-6"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <div
@@ -34,7 +34,7 @@ export function RatingSummaryWidget({
       >
         <h3
           id="rating-summary-heading"
-          className="font-bold text-base text-(--text) tracking-tight"
+          className="text-base font-bold tracking-tight text-(--text)"
         >
           Rating summary
         </h3>
@@ -43,14 +43,12 @@ export function RatingSummaryWidget({
             type="button"
             aria-expanded={isExpanded}
             aria-label="Toggle rating summary breakdown"
-            className="text-(--muted) hover:text-(--text) transition-transform"
+            className="text-(--muted) transition-transform hover:text-(--text)"
           >
             <CaretRight
               size={18}
               weight="bold"
-              className={`transition-transform duration-200 ${
-                isExpanded ? "rotate-90" : ""
-              }`}
+              className={`transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
             />
           </button>
         )}
@@ -69,17 +67,10 @@ export function RatingSummaryWidget({
                 aria-label={`Average rating ${summary.averageRating} out of 5 stars`}
               >
                 {Array.from({ length: 5 }).map((_, idx) => (
-                  <Star
-                    key={idx}
-                    size={16}
-                    weight="fill"
-                    className="text-(--accent)"
-                  />
+                  <Star key={idx} size={16} weight="fill" className="text-(--accent)" />
                 ))}
               </div>
-              <p className="text-xs text-(--muted)">
-                Based on {summary.totalReviews} reviews
-              </p>
+              <p className="text-xs text-(--muted)">Based on {summary.totalReviews} reviews</p>
             </div>
           </div>
 
@@ -93,21 +84,18 @@ export function RatingSummaryWidget({
                   type="button"
                   onClick={() =>
                     onSelectRatingFilter?.(
-                      isSelected
-                        ? "all"
-                        : (String(row.stars) as RatingFilterOption),
+                      isSelected ? "all" : (String(row.stars) as RatingFilterOption),
                     )
                   }
-                  className={`group flex items-center gap-2 text-xs transition-colors rounded-lg px-2 py-1.5 text-left cursor-pointer ${
+                  className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors ${
                     isSelected
-                      ? "bg-(--accent-soft) text-(--accent) font-semibold"
+                      ? "bg-(--accent-soft) font-semibold text-(--accent)"
                       : "text-(--text-secondary) hover:bg-(--hover) hover:text-(--text)"
                   }`}
                   title={`Filter by ${row.stars} star reviews`}
                 >
-                  <span className="w-6 font-medium flex items-center gap-0.5">
-                    {row.stars}{" "}
-                    <Star size={11} weight="fill" className="opacity-80" />
+                  <span className="flex w-6 items-center gap-0.5 font-medium">
+                    {row.stars} <Star size={11} weight="fill" className="opacity-80" />
                   </span>
 
                   {/* Progress Bar Container */}

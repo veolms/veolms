@@ -78,28 +78,19 @@
 
   height: auto;
   min-height: var(--discussion-editor-auto-grow-min-height);
-  max-height: var(
-    --atomic-editor-max-height,
-    var(--discussion-editor-auto-grow-max-height)
-  );
+  max-height: var(--atomic-editor-max-height, var(--discussion-editor-auto-grow-max-height));
 }
 
 .learning-discussion-atomic-editor[data-auto-grow="true"] .atomic-cm-editor,
 .learning-discussion-atomic-editor[data-auto-grow="true"] .cm-editor {
   height: auto;
   min-height: var(--discussion-editor-auto-grow-min-height);
-  max-height: var(
-    --atomic-editor-max-height,
-    var(--discussion-editor-auto-grow-max-height)
-  );
+  max-height: var(--atomic-editor-max-height, var(--discussion-editor-auto-grow-max-height));
 }
 
 .learning-discussion-atomic-editor[data-auto-grow="true"] .cm-scroller {
   min-height: var(--discussion-editor-auto-grow-min-height);
-  max-height: var(
-    --atomic-editor-max-height,
-    var(--discussion-editor-auto-grow-max-height)
-  );
+  max-height: var(--atomic-editor-max-height, var(--discussion-editor-auto-grow-max-height));
   overflow-y: auto;
 }
 
@@ -256,7 +247,6 @@
   text-overflow: ellipsis !important;
   font-size: 0.75rem !important;
   color: var(--muted) !important;
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   font-style: normal !important;
 }

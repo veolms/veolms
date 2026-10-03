@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  enrollmentStatusSchema,
-  enrollmentSourceSchema,
-} from "../course/enrollment.ts";
+import { enrollmentStatusSchema, enrollmentSourceSchema } from "../course/enrollment.ts";
 
 export const enrolledCourseSchema = z.strictObject({
   enrollmentId: z.uuid(),
@@ -27,16 +24,12 @@ export type EnrolledCourse = z.infer<typeof enrolledCourseSchema>;
 export const enrolledCoursesResponseSchema = z.strictObject({
   courses: z.array(enrolledCourseSchema),
 });
-export type EnrolledCoursesResponse = z.infer<
-  typeof enrolledCoursesResponseSchema
->;
+export type EnrolledCoursesResponse = z.infer<typeof enrolledCoursesResponseSchema>;
 
 export const academyEnrollmentListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(10).default(10),
 });
-export type AcademyEnrollmentListQuery = z.infer<
-  typeof academyEnrollmentListQuerySchema
->;
+export type AcademyEnrollmentListQuery = z.infer<typeof academyEnrollmentListQuerySchema>;
 
 export const academyEnrollmentListItemSchema = z.strictObject({
   enrollmentId: z.uuid(),
@@ -53,13 +46,9 @@ export const academyEnrollmentListItemSchema = z.strictObject({
   averageProgressPercent: z.number().min(0).max(100).nullable(),
   enrolledAt: z.string().or(z.date()),
 });
-export type AcademyEnrollmentListItem = z.infer<
-  typeof academyEnrollmentListItemSchema
->;
+export type AcademyEnrollmentListItem = z.infer<typeof academyEnrollmentListItemSchema>;
 
 export const academyEnrollmentListResponseSchema = z.strictObject({
   items: z.array(academyEnrollmentListItemSchema),
 });
-export type AcademyEnrollmentListResponse = z.infer<
-  typeof academyEnrollmentListResponseSchema
->;
+export type AcademyEnrollmentListResponse = z.infer<typeof academyEnrollmentListResponseSchema>;

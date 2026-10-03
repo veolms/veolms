@@ -3,8 +3,7 @@ import type { AutosyncKey } from "./types";
 
 const encodeKeyPart = (value: string) => encodeURIComponent(value);
 
-export const getAutosyncKey = (key: AutosyncKey) =>
-  `${key.entity}:${key.entityId}:${key.scope}`;
+export const getAutosyncKey = (key: AutosyncKey) => `${key.entity}:${key.entityId}:${key.scope}`;
 
 export const getAutosyncDraftKey = (key: AutosyncKey) =>
   `veolms:autosync:draft:${encodeKeyPart(key.entity)}:${encodeKeyPart(
@@ -22,6 +21,4 @@ export const getAutosyncMutationKey = (key: AutosyncKey): MutationKey => [
 ];
 
 export const autosyncKeysEqual = (left: AutosyncKey, right: AutosyncKey) =>
-  left.entity === right.entity &&
-  left.entityId === right.entityId &&
-  left.scope === right.scope;
+  left.entity === right.entity && left.entityId === right.entityId && left.scope === right.scope;

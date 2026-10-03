@@ -57,8 +57,7 @@ export async function probeVideoSource(
   videoSourceUrlOrPath: string,
   options: { ffprobePath?: string; timeoutMs?: number } = {},
 ): Promise<ProbedVideoMetadata | null> {
-  const ffprobePath =
-    options.ffprobePath || process.env["FFPROBE_PATH"] || "ffprobe";
+  const ffprobePath = options.ffprobePath || process.env["FFPROBE_PATH"] || "ffprobe";
   const timeout = options.timeoutMs ?? 15_000;
 
   const args = [
@@ -88,22 +87,18 @@ export async function probeVideoSource(
     const format = parsed.format ?? {};
 
     const videoStream = streams.find(
-      (s) =>
-        s.codec_type === "video" || (Boolean(s.width) && Boolean(s.height)),
+      (s) => s.codec_type === "video" || (Boolean(s.width) && Boolean(s.height)),
     );
 
     const width = Number(videoStream?.width ?? 0);
     const height = Number(videoStream?.height ?? 0);
     const streamDuration = Number(videoStream?.duration ?? 0);
     const formatDuration = Number(format.duration ?? 0);
-    const resolvedDuration = Math.round(
-      Math.max(formatDuration, streamDuration, 0),
-    );
+    const resolvedDuration = Math.round(Math.max(formatDuration, streamDuration, 0));
     const sizeBytes = Number(format.size ?? 0);
     const bitrate = Number(format.bit_rate ?? videoStream?.bit_rate ?? 0);
     const fps =
-      parseFrameRate(videoStream?.r_frame_rate) ??
-      parseFrameRate(videoStream?.avg_frame_rate);
+      parseFrameRate(videoStream?.r_frame_rate) ?? parseFrameRate(videoStream?.avg_frame_rate);
     const codec = videoStream?.codec_name;
 
     return {

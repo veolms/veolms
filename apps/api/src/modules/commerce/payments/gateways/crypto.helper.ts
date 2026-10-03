@@ -22,10 +22,7 @@ export function encryptSecret(plainText: string): string {
   const key = getDerivedKey();
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
-  const encrypted = Buffer.concat([
-    cipher.update(plainText, "utf8"),
-    cipher.final(),
-  ]);
+  const encrypted = Buffer.concat([cipher.update(plainText, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
 
   // Combine IV + Tag + EncryptedData into a single hex string
@@ -49,10 +46,7 @@ export function decryptSecret(encryptedPayload: string): string {
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(tag);
 
-  const decrypted = Buffer.concat([
-    decipher.update(encryptedText),
-    decipher.final(),
-  ]);
+  const decrypted = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
 
   return decrypted.toString("utf8");
 }

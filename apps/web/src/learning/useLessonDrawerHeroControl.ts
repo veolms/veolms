@@ -85,8 +85,7 @@ export interface LessonDrawerViewportBounds {
 export const LESSON_DRAWER_DEFAULT_FLOATING_WIDTH = 500;
 export const LESSON_DRAWER_MIN_FLOATING_WIDTH = 300;
 export const LESSON_DRAWER_MAX_FLOATING_WIDTH = 680;
-export const LESSON_DRAWER_MAX_TABLET_WIDTH =
-  LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
+export const LESSON_DRAWER_MAX_TABLET_WIDTH = LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
 export const LESSON_DRAWER_TABLET_GUTTER = 12;
 export const PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET = 12;
 
@@ -101,9 +100,7 @@ export function getPhoneLessonDrawerCollapsedSnapPoint(
 
   return Math.max(
     2,
-    Math.round(
-      viewportHeight - playerBottom + PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET,
-    ),
+    Math.round(viewportHeight - playerBottom + PHONE_LESSON_DRAWER_TIMELINE_COVER_OFFSET),
   );
 }
 
@@ -123,28 +120,16 @@ export function getSideLessonDrawerBounds(
   }
 
   const visibleLeft = Math.max(0, playerBounds.left);
-  const visibleRight = Math.min(
-    viewportWidth,
-    playerBounds.left + playerBounds.width,
-  );
+  const visibleRight = Math.min(viewportWidth, playerBounds.left + playerBounds.width);
   const visibleWidth = Math.max(0, visibleRight - visibleLeft);
-  const availableWidth = Math.max(
-    0,
-    visibleWidth - LESSON_DRAWER_TABLET_GUTTER,
-  );
+  const availableWidth = Math.max(0, visibleWidth - LESSON_DRAWER_TABLET_GUTTER);
   const safePreferredWidth = Number.isFinite(preferredWidth)
     ? preferredWidth
     : LESSON_DRAWER_DEFAULT_FLOATING_WIDTH;
-  const minimumWidth = Math.min(
-    LESSON_DRAWER_MIN_FLOATING_WIDTH,
-    availableWidth,
-  );
+  const minimumWidth = Math.min(LESSON_DRAWER_MIN_FLOATING_WIDTH, availableWidth);
   const width = Math.min(
     availableWidth,
-    Math.max(
-      minimumWidth,
-      Math.min(LESSON_DRAWER_MAX_FLOATING_WIDTH, safePreferredWidth),
-    ),
+    Math.max(minimumWidth, Math.min(LESSON_DRAWER_MAX_FLOATING_WIDTH, safePreferredWidth)),
   );
 
   if (width <= 0) return null;
@@ -159,8 +144,7 @@ const findTouch = (touches: ReactTouchEvent["touches"], identifier: number) =>
   Array.from(touches).find((touch) => touch.identifier === identifier);
 
 const isWheelControlExcludedTarget = (target: EventTarget | null) =>
-  target instanceof Element &&
-  Boolean(target.closest(WHEEL_CONTROL_EXCLUSION_SELECTOR));
+  target instanceof Element && Boolean(target.closest(WHEEL_CONTROL_EXCLUSION_SELECTOR));
 
 export function useLessonDrawerHeroControl({
   open,
@@ -263,9 +247,7 @@ export function useLessonDrawerHeroControl({
     clientY: number,
   ) => {
     if (!optionsRef.current.open || gestureRef.current) return;
-    const popupElement = heroElementRef.current?.closest<HTMLElement>(
-      DRAWER_POPUP_SELECTOR,
-    );
+    const popupElement = heroElementRef.current?.closest<HTMLElement>(DRAWER_POPUP_SELECTOR);
     gestureRef.current = {
       source,
       id,
@@ -276,36 +258,22 @@ export function useLessonDrawerHeroControl({
       cancelled: false,
       expandedAtStart: optionsRef.current.expanded,
       popupElement: popupElement ?? null,
-      popupHadSwipingAttribute:
-        popupElement?.hasAttribute("data-swiping") ?? false,
-      popupPreviousMovementY:
-        popupElement?.style.getPropertyValue(DRAWER_SWIPE_MOVEMENT_Y) ?? "",
+      popupHadSwipingAttribute: popupElement?.hasAttribute("data-swiping") ?? false,
+      popupPreviousMovementY: popupElement?.style.getPropertyValue(DRAWER_SWIPE_MOVEMENT_Y) ?? "",
       popupStartTop: popupElement?.getBoundingClientRect().top ?? 0,
     };
   };
 
-  const moveDrawerWithGesture = (
-    gesture: LessonDrawerGesture,
-    deltaY: number,
-  ) => {
+  const moveDrawerWithGesture = (gesture: LessonDrawerGesture, deltaY: number) => {
     const popupElement = gesture.popupElement;
     if (!popupElement) return;
 
     const minimumOffset = -Math.max(0, gesture.popupStartTop);
-    const maximumOffset = Math.max(
-      0,
-      window.innerHeight - gesture.popupStartTop,
-    );
-    const boundedOffset = Math.max(
-      minimumOffset,
-      Math.min(maximumOffset, deltaY),
-    );
+    const maximumOffset = Math.max(0, window.innerHeight - gesture.popupStartTop);
+    const boundedOffset = Math.max(minimumOffset, Math.min(maximumOffset, deltaY));
 
     popupElement.setAttribute("data-swiping", "");
-    popupElement.style.setProperty(
-      DRAWER_SWIPE_MOVEMENT_Y,
-      `${boundedOffset}px`,
-    );
+    popupElement.style.setProperty(DRAWER_SWIPE_MOVEMENT_Y, `${boundedOffset}px`);
   };
 
   const settleDrawerGesture = (gesture: LessonDrawerGesture) => {
@@ -314,10 +282,7 @@ export function useLessonDrawerHeroControl({
 
     window.requestAnimationFrame(() => {
       if (gesture.popupPreviousMovementY) {
-        popupElement.style.setProperty(
-          DRAWER_SWIPE_MOVEMENT_Y,
-          gesture.popupPreviousMovementY,
-        );
+        popupElement.style.setProperty(DRAWER_SWIPE_MOVEMENT_Y, gesture.popupPreviousMovementY);
       } else {
         popupElement.style.removeProperty(DRAWER_SWIPE_MOVEMENT_Y);
       }
@@ -334,12 +299,7 @@ export function useLessonDrawerHeroControl({
     clientY: number,
   ) => {
     const gesture = gestureRef.current;
-    if (
-      !gesture ||
-      gesture.source !== source ||
-      gesture.id !== id ||
-      gesture.cancelled
-    ) {
+    if (!gesture || gesture.source !== source || gesture.id !== id || gesture.cancelled) {
       return false;
     }
 
@@ -369,11 +329,7 @@ export function useLessonDrawerHeroControl({
     return true;
   };
 
-  const finishGesture = (
-    source: LessonDrawerGesture["source"],
-    id: number,
-    clientY: number,
-  ) => {
+  const finishGesture = (source: LessonDrawerGesture["source"], id: number, clientY: number) => {
     const gesture = gestureRef.current;
     if (!gesture || gesture.source !== source || gesture.id !== id) {
       return false;
@@ -397,8 +353,7 @@ export function useLessonDrawerHeroControl({
 
   const cancelGesture = (source: LessonDrawerGesture["source"], id: number) => {
     const gesture = gestureRef.current;
-    if (!gesture || gesture.source !== source || gesture.id !== id)
-      return false;
+    if (!gesture || gesture.source !== source || gesture.id !== id) return false;
     gestureRef.current = null;
     if (!gesture.active) return false;
     suppressClickUntilRef.current = Date.now() + CLICK_SUPPRESSION_DURATION;
@@ -440,9 +395,7 @@ export function useLessonDrawerHeroControl({
     },
     onPointerMoveCapture: (event) => {
       if (event.pointerType === "touch") return;
-      if (
-        !updateGesture("pointer", event.pointerId, event.clientX, event.clientY)
-      ) {
+      if (!updateGesture("pointer", event.pointerId, event.clientX, event.clientY)) {
         return;
       }
       event.preventDefault();
@@ -472,10 +425,7 @@ export function useLessonDrawerHeroControl({
       const gesture = gestureRef.current;
       if (!gesture || gesture.source !== "touch") return;
       const touch = findTouch(event.touches, gesture.id);
-      if (
-        !touch ||
-        !updateGesture("touch", gesture.id, touch.clientX, touch.clientY)
-      ) {
+      if (!touch || !updateGesture("touch", gesture.id, touch.clientX, touch.clientY)) {
         return;
       }
       event.preventDefault();

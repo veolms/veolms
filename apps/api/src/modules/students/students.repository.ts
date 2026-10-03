@@ -26,12 +26,7 @@ export type StudentListCursor =
   | { sortBy: "courses"; courses: number; id: string }
   | { sortBy: "progress"; progress: number; id: string };
 
-const studentListSorts: readonly StudentListSort[] = [
-  "recent",
-  "name",
-  "courses",
-  "progress",
-];
+const studentListSorts: readonly StudentListSort[] = ["recent", "name", "courses", "progress"];
 
 /**
  * Cursors are opaque to clients but include the complete sort position so
@@ -41,15 +36,11 @@ export function encodeStudentListCursor(cursor: StudentListCursor): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
 }
 
-export function decodeStudentListCursor(
-  value: string | undefined,
-): StudentListCursor | null {
+export function decodeStudentListCursor(value: string | undefined): StudentListCursor | null {
   if (!value) return null;
 
   try {
-    const parsed: unknown = JSON.parse(
-      Buffer.from(value, "base64url").toString("utf8"),
-    );
+    const parsed: unknown = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
     if (!parsed || typeof parsed !== "object") return null;
 
     const cursor = parsed as Record<string, unknown>;
@@ -75,14 +66,12 @@ export function decodeStudentListCursor(
     }
 
     if (cursor.sortBy === "courses") {
-      return typeof cursor.courses === "number" &&
-        Number.isFinite(cursor.courses)
+      return typeof cursor.courses === "number" && Number.isFinite(cursor.courses)
         ? { sortBy: "courses", courses: cursor.courses, id: cursor.id }
         : null;
     }
 
-    return typeof cursor.progress === "number" &&
-      Number.isFinite(cursor.progress)
+    return typeof cursor.progress === "number" && Number.isFinite(cursor.progress)
       ? { sortBy: "progress", progress: cursor.progress, id: cursor.id }
       : null;
   } catch {
@@ -144,10 +133,7 @@ export async function listStudentsPaginated(
             .where("r.name", "=", "student"),
         ),
         eb.exists(
-          eb
-            .selectFrom("enrollments as e")
-            .select("e.id")
-            .whereRef("e.user_id", "=", "u.id"),
+          eb.selectFrom("enrollments as e").select("e.id").whereRef("e.user_id", "=", "u.id"),
         ),
       ]),
     );
@@ -221,20 +207,14 @@ export async function listStudentsPaginated(
       query = query.where((eb) =>
         eb.or([
           eb("u.created_at", "<", cursorDate),
-          eb.and([
-            eb("u.created_at", "=", cursorDate),
-            eb("u.id", "<", cursor.id),
-          ]),
+          eb.and([eb("u.created_at", "=", cursorDate), eb("u.id", "<", cursor.id)]),
         ]),
       );
     } else if (cursor.sortBy === "name") {
       query = query.where((eb) =>
         eb.or([
           eb("u.display_name", ">", cursor.name),
-          eb.and([
-            eb("u.display_name", "=", cursor.name),
-            eb("u.id", ">", cursor.id),
-          ]),
+          eb.and([eb("u.display_name", "=", cursor.name), eb("u.id", ">", cursor.id)]),
         ]),
       );
     } else if (cursor.sortBy === "courses") {
@@ -298,10 +278,7 @@ export async function countTotalStudents(
             .where("r.name", "=", "student"),
         ),
         eb.exists(
-          eb
-            .selectFrom("enrollments as e")
-            .select("e.id")
-            .whereRef("e.user_id", "=", "u.id"),
+          eb.selectFrom("enrollments as e").select("e.id").whereRef("e.user_id", "=", "u.id"),
         ),
       ]),
     );
@@ -417,10 +394,7 @@ export async function countStudentsCreatedBetween(
             .where("r.name", "=", "student"),
         ),
         eb.exists(
-          eb
-            .selectFrom("enrollments as e")
-            .select("e.id")
-            .whereRef("e.user_id", "=", "u.id"),
+          eb.selectFrom("enrollments as e").select("e.id").whereRef("e.user_id", "=", "u.id"),
         ),
       ]),
     );
@@ -484,10 +458,7 @@ export async function getActiveLearnerCount(
 /**
  * Batch loads enrollments for a list of student user IDs.
  */
-export async function listEnrollmentsForUserIds(
-  database: StudentsExecutor,
-  userIds: string[],
-) {
+export async function listEnrollmentsForUserIds(database: StudentsExecutor, userIds: string[]) {
   if (userIds.length === 0) return [];
   return await database
     .selectFrom("enrollments as e")
@@ -502,20 +473,11 @@ export async function listEnrollmentsForUserIds(
 /**
  * Batch loads learning progress records for a list of student user IDs.
  */
-export async function listProgressForUserIds(
-  database: StudentsExecutor,
-  userIds: string[],
-) {
+export async function listProgressForUserIds(database: StudentsExecutor, userIds: string[]) {
   if (userIds.length === 0) return [];
   return await database
     .selectFrom("learning_progress as lp")
-    .select([
-      "lp.user_id",
-      "lp.course_id",
-      "lp.lesson_id",
-      "lp.progress_percent",
-      "lp.updated_at",
-    ])
+    .select(["lp.user_id", "lp.course_id", "lp.lesson_id", "lp.progress_percent", "lp.updated_at"])
     .where("lp.user_id", "in", userIds)
     .execute();
 }
@@ -523,10 +485,7 @@ export async function listProgressForUserIds(
 /**
  * Batch loads total published lesson counts for courses.
  */
-export async function listCourseLessonCounts(
-  database: StudentsExecutor,
-  courseIds: string[],
-) {
+export async function listCourseLessonCounts(database: StudentsExecutor, courseIds: string[]) {
   if (courseIds.length === 0) return new Map<string, number>();
   const rows = await database
     .selectFrom("course_lessons as cl")
@@ -547,21 +506,11 @@ export async function listCourseLessonCounts(
 /**
  * Batch loads avatars for a list of student user IDs.
  */
-export async function listAvatarsForUserIds(
-  database: StudentsExecutor,
-  userIds: string[],
-) {
+export async function listAvatarsForUserIds(database: StudentsExecutor, userIds: string[]) {
   if (userIds.length === 0) return [];
   return await database
     .selectFrom("user_avatars")
-    .select([
-      "id",
-      "user_id",
-      "source",
-      "avatar_data_url",
-      "created_at",
-      "last_used_at",
-    ])
+    .select(["id", "user_id", "source", "avatar_data_url", "created_at", "last_used_at"])
     .where("user_id", "in", userIds)
     .orderBy("created_at", "desc")
     .execute();
@@ -570,10 +519,7 @@ export async function listAvatarsForUserIds(
 /**
  * Finds a student user by username (case-insensitive, strips any leading @).
  */
-export async function findStudentByUsername(
-  database: StudentsExecutor,
-  username: string,
-) {
+export async function findStudentByUsername(database: StudentsExecutor, username: string) {
   const cleanUsername = username.replace(/^@+/, "").trim();
   return await database
     .selectFrom("users as u")
@@ -591,10 +537,7 @@ export async function findStudentByUsername(
 /**
  * Gets all enrolled courses and aggregated metrics for a specific student.
  */
-export async function getStudentEnrolledCourses(
-  database: StudentsExecutor,
-  userId: string,
-) {
+export async function getStudentEnrolledCourses(database: StudentsExecutor, userId: string) {
   return await database
     .selectFrom("enrollments as e")
     .innerJoin("courses as c", "c.id", "e.course_id")

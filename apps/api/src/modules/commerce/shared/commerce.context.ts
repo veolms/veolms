@@ -1,8 +1,5 @@
 import type { RoutePluginOptions } from "../../../lib/route-plugin.ts";
-import {
-  createAuthMiddleware,
-  type AuthMiddleware,
-} from "../../../middlewares/auth.middleware.ts";
+import { createAuthMiddleware, type AuthMiddleware } from "../../../middlewares/auth.middleware.ts";
 import { ADMIN_ROLE, createSessionService } from "../../auth/index.ts";
 
 export interface CommerceContext {
@@ -12,9 +9,7 @@ export interface CommerceContext {
   requireStaff: AuthMiddleware["authenticate"][];
 }
 
-export function createCommerceContext({
-  database,
-}: RoutePluginOptions): CommerceContext {
+export function createCommerceContext({ database }: RoutePluginOptions): CommerceContext {
   const sessionService = createSessionService({ database });
   const middleware = createAuthMiddleware(sessionService);
 

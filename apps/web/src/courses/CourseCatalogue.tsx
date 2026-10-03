@@ -1,22 +1,12 @@
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import { ExpandableSearch } from "../ExpandableSearch";
 import { ThemedSelect } from "../ThemedSelect";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
-import {
-  CourseCard,
-  courseThumbnailSizes,
-  getCourseThumbnailSrcSet,
-} from "./CourseCard";
+import { CourseCard, courseThumbnailSizes, getCourseThumbnailSrcSet } from "./CourseCard";
 import {
   CourseCatalogueLoadingSkeleton,
   getCourseCatalogueGridClasses,
@@ -127,25 +117,17 @@ export function CourseCatalogue({
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
   const quickFilterTabsRef = useRef<HTMLDivElement>(null);
   const [hasQuickFilterOverflow, setHasQuickFilterOverflow] = useState(false);
-  const [localDeletingIds, setLocalDeletingIds] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [localDeletingIds, setLocalDeletingIds] = useState<Set<string>>(() => new Set());
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const mediumBreakpoint = useCourseCatalogueBreakpoint("(min-width: 640px)");
-  const wideControlsBreakpoint =
-    useCourseCatalogueBreakpoint("(min-width: 821px)");
+  const wideControlsBreakpoint = useCourseCatalogueBreakpoint("(min-width: 821px)");
   const desktopLayout = useCourseCatalogueBreakpoint("(min-width: 900px)");
   const mediumLayout = mediumBreakpoint || desktopLayout;
   const wideControlsLayout = wideControlsBreakpoint || desktopLayout;
 
-  const isFiltered =
-    Boolean(search.trim()) ||
-    enrollmentFilter !== "all" ||
-    statusFilter !== "all";
+  const isFiltered = Boolean(search.trim()) || enrollmentFilter !== "all" || statusFilter !== "all";
   const hasCourses =
-    totalCoursesCount !== undefined
-      ? totalCoursesCount > 0 || isFiltered
-      : isFiltered;
+    totalCoursesCount !== undefined ? totalCoursesCount > 0 || isFiltered : isFiltered;
 
   const isCourseDeleting = (courseId: string) =>
     Boolean(deletingCourseIds?.has(courseId) || localDeletingIds.has(courseId));
@@ -232,17 +214,12 @@ export function CourseCatalogue({
         : "border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_72%,transparent)] text-(--text-secondary)",
     ].join(" ");
 
-  const firstImageIndex = visibleCourses.findIndex((course) =>
-    Boolean(course.thumbnail),
-  );
-  const firstImageCourse =
-    firstImageIndex >= 0 ? visibleCourses[firstImageIndex] : undefined;
+  const firstImageIndex = visibleCourses.findIndex((course) => Boolean(course.thumbnail));
+  const firstImageCourse = firstImageIndex >= 0 ? visibleCourses[firstImageIndex] : undefined;
   const priorityImageIndexes = new Set<number>();
   for (
     let index = firstImageIndex;
-    index >= 0 &&
-    index < visibleCourses.length &&
-    priorityImageIndexes.size < 2;
+    index >= 0 && index < visibleCourses.length && priorityImageIndexes.size < 2;
     index += 1
   ) {
     if (visibleCourses[index]?.thumbnail) priorityImageIndexes.add(index);
@@ -260,34 +237,24 @@ export function CourseCatalogue({
       onOpen={(selected) =>
         onOpenCourse(
           selected,
-          role === "student" && !selected.enrolled
-            ? { preview: true }
-            : undefined,
+          role === "student" && !selected.enrolled ? { preview: true } : undefined,
         )
       }
       onExplore={(selected) =>
-        onNavigatePage(
-          `/courses/${encodeURIComponent(getCourseRouteKey(selected))}/overview`,
-        )
+        onNavigatePage(`/courses/${encodeURIComponent(getCourseRouteKey(selected))}/overview`)
       }
       onEdit={(selected) => {
         onEditIntent?.(selected);
-        onNavigatePage(
-          `/courses/${encodeURIComponent(selected.id)}/edit/basics`,
-        );
+        onNavigatePage(`/courses/${encodeURIComponent(selected.id)}/edit/basics`);
       }}
       onEditIntent={onEditIntent}
       onManage={(selected) => {
         onEditIntent?.(selected);
-        onNavigatePage(
-          `/courses/${encodeURIComponent(selected.id)}/edit/curriculum`,
-        );
+        onNavigatePage(`/courses/${encodeURIComponent(selected.id)}/edit/curriculum`);
       }}
       onPublish={(selected) => {
         onEditIntent?.(selected);
-        onNavigatePage(
-          `/courses/${encodeURIComponent(selected.id)}/edit/publish`,
-        );
+        onNavigatePage(`/courses/${encodeURIComponent(selected.id)}/edit/publish`);
       }}
       onDeleteRequested={setPendingDelete}
       onRestoreRequested={onRestoreCourse}
@@ -302,10 +269,7 @@ export function CourseCatalogue({
   );
 
   return (
-    <section
-      aria-label={activeSection}
-      className="mx-auto w-full max-w-[1800px]"
-    >
+    <section aria-label={activeSection} className="mx-auto w-full max-w-[1800px]">
       {preloadFirstCourseImage && firstImageCourse?.thumbnail ? (
         <link
           rel="preload"
@@ -335,7 +299,7 @@ export function CourseCatalogue({
           <div
             className={`min-w-0 ${desktopLayout ? "order-1 flex-1" : ""} min-[900px]:order-1 min-[900px]:flex-1`}
           >
-            <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
+            <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] leading-tight font-bold tracking-[-0.035em] text-(--text)">
               {activeSection}
             </h1>
             <p
@@ -371,9 +335,7 @@ export function CourseCatalogue({
           mediumLayout
             ? {
                 display: "grid",
-                gridTemplateColumns: wideControlsLayout
-                  ? "minmax(0, 1fr) auto"
-                  : "minmax(0, 1fr)",
+                gridTemplateColumns: wideControlsLayout ? "minmax(0, 1fr) auto" : "minmax(0, 1fr)",
                 alignItems: "center",
               }
             : undefined
@@ -386,9 +348,7 @@ export function CourseCatalogue({
             role="tablist"
             data-course-quick-filters
             data-fade-right={hasQuickFilterOverflow ? "true" : undefined}
-            aria-label={
-              role === "creator" ? "Course lifecycle" : "Course enrollment"
-            }
+            aria-label={role === "creator" ? "Course lifecycle" : "Course enrollment"}
           >
             {quickFilters.map(([value, label]) => (
               <button
@@ -402,11 +362,7 @@ export function CourseCatalogue({
                 onKeyDown={handleRovingTabKeyDown}
               >
                 <span>{label}</span>
-                <span
-                  className={quickFilterCountClassName(
-                    enrollmentFilter === value,
-                  )}
-                >
+                <span className={quickFilterCountClassName(enrollmentFilter === value)}>
                   {filterCountFor(value)}
                 </span>
               </button>
@@ -425,19 +381,11 @@ export function CourseCatalogue({
                 <Heart
                   size={16}
                   weight={enrollmentFilter === "wishlist" ? "fill" : "regular"}
-                  className={
-                    enrollmentFilter === "wishlist"
-                      ? "text-[#d12d52]"
-                      : "text-[#ff6684]"
-                  }
+                  className={enrollmentFilter === "wishlist" ? "text-[#d12d52]" : "text-[#ff6684]"}
                   aria-hidden
                 />
                 <span>Wishlisted</span>
-                <span
-                  className={quickFilterCountClassName(
-                    enrollmentFilter === "wishlist",
-                  )}
-                >
+                <span className={quickFilterCountClassName(enrollmentFilter === "wishlist")}>
                   {quickFilterCounts.wishlist}
                 </span>
               </button>
@@ -475,9 +423,7 @@ export function CourseCatalogue({
           role="alert"
         >
           <div>
-            <h2 className="text-base font-semibold text-(--text)">
-              Courses couldn’t load
-            </h2>
+            <h2 className="text-base font-semibold text-(--text)">Courses couldn’t load</h2>
             <p className="mt-1.5 max-w-sm text-[0.82rem] leading-6 text-(--muted)">
               Check your connection and try again.
             </p>
@@ -557,11 +503,7 @@ export function CourseCatalogue({
             disabled={isFetchingNextPage}
           >
             {isFetchingNextPage ? (
-              <CircleNotch
-                size={16}
-                className="animate-spin"
-                aria-hidden="true"
-              />
+              <CircleNotch size={16} className="animate-spin" aria-hidden="true" />
             ) : null}
             {isFetchingNextPage ? null : "Load more courses"}
           </button>

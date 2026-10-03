@@ -1,10 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { DatabaseExecutor } from "@veolms/database";
-import type {
-  LockThreadRequest,
-  SearchMentionsQuery,
-  ToggleLikeRequest,
-} from "@veolms/contracts";
+import type { LockThreadRequest, SearchMentionsQuery, ToggleLikeRequest } from "@veolms/contracts";
 import type { EngagementsService } from "./engagements.service.ts";
 import { discussionActor } from "../shared/discussion.access.ts";
 
@@ -68,11 +64,7 @@ export function createEngagementsController({
       const user = request.user!;
       const { threadId } = request.params;
 
-      const result = await service.toggleBookmark(
-        database,
-        discussionActor(user),
-        threadId,
-      );
+      const result = await service.toggleBookmark(database, discussionActor(user), threadId);
       reply.status(200).send(result);
     },
 
@@ -80,11 +72,7 @@ export function createEngagementsController({
       const user = request.user!;
       const { noteId } = request.params;
 
-      const result = await service.toggleNoteBookmark(
-        database,
-        discussionActor(user),
-        noteId,
-      );
+      const result = await service.toggleNoteBookmark(database, discussionActor(user), noteId);
       reply.status(200).send(result);
     },
 
@@ -92,11 +80,7 @@ export function createEngagementsController({
       const user = request.user!;
       const { threadId } = request.params;
 
-      const result = await service.toggleFollow(
-        database,
-        discussionActor(user),
-        threadId,
-      );
+      const result = await service.toggleFollow(database, discussionActor(user), threadId);
       reply.status(200).send(result);
     },
 
@@ -105,22 +89,13 @@ export function createEngagementsController({
       const { threadId } = request.params;
       const { isLocked } = request.body;
 
-      const result = await service.lockThread(
-        database,
-        threadId,
-        isLocked,
-        discussionActor(user),
-      );
+      const result = await service.lockThread(database, threadId, isLocked, discussionActor(user));
       reply.status(200).send(result);
     },
 
     async searchMentions(request, reply) {
       const user = request.user!;
-      const users = await service.searchMentions(
-        database,
-        discussionActor(user),
-        request.query,
-      );
+      const users = await service.searchMentions(database, discussionActor(user), request.query);
       reply.status(200).send({ users });
     },
   };

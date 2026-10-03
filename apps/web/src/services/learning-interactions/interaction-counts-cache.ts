@@ -24,9 +24,7 @@ function countsKey(courseId: string, lessonId: string) {
   return learningInteractionKeys.lessonInteractionCounts(courseId, lessonId);
 }
 
-function countField(
-  kind: LessonInteractionCountKind,
-): "comments" | "qna" | "notes" {
+function countField(kind: LessonInteractionCountKind): "comments" | "qna" | "notes" {
   if (kind === "question") return "qna";
   if (kind === "note") return "notes";
   return "comments";

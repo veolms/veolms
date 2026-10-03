@@ -54,29 +54,18 @@ const icons = {
       },
     ],
   },
-} as const satisfies Record<
-  string,
-  { viewBox: string; marks: readonly AppIconMark[] }
->;
+} as const satisfies Record<string, { viewBox: string; marks: readonly AppIconMark[] }>;
 
 export type AppIconName = keyof typeof icons;
 
-export interface AppIconProps extends Omit<
-  SVGProps<SVGSVGElement>,
-  "name" | "title"
-> {
+export interface AppIconProps extends Omit<SVGProps<SVGSVGElement>, "name" | "title"> {
   name: AppIconName;
   title?: string;
 }
 
 export function AppIcon({ name, title, ...props }: AppIconProps) {
   const icon = icons[name];
-  const {
-    role,
-    "aria-hidden": ariaHidden,
-    "aria-label": ariaLabel,
-    ...svgProps
-  } = props;
+  const { role, "aria-hidden": ariaHidden, "aria-label": ariaLabel, ...svgProps } = props;
   const labelled = Boolean(title || ariaLabel);
 
   return (
@@ -99,9 +88,7 @@ export function AppIcon({ name, title, ...props }: AppIconProps) {
             d={mark.d}
             fill={isFill ? "currentColor" : "none"}
             stroke={isFill ? "none" : "currentColor"}
-            strokeWidth={
-              isFill ? undefined : "strokeWidth" in mark ? mark.strokeWidth : 2
-            }
+            strokeWidth={isFill ? undefined : "strokeWidth" in mark ? mark.strokeWidth : 2}
             strokeLinecap={isFill ? undefined : "round"}
             strokeLinejoin={isFill ? undefined : "round"}
           />

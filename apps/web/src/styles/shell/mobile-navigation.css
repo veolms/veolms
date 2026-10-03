@@ -7,9 +7,7 @@
   .mobile-bottom-nav {
     --mobile-nav-inset: env(safe-area-inset-bottom, 0px);
     --mobile-nav-max-inset: var(--app-viewport-safe-area-max-bottom);
-    --mobile-nav-offset: calc(
-      var(--mobile-nav-inset) - var(--mobile-nav-max-inset)
-    );
+    --mobile-nav-offset: calc(var(--mobile-nav-inset) - var(--mobile-nav-max-inset));
 
     position: fixed;
     right: 0;
@@ -66,9 +64,7 @@
     background: color-mix(in srgb, var(--app-shell) 72%, transparent);
   }
 
-  @supports not (
-    (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
-  ) {
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
     .mobile-bottom-nav {
       background: color-mix(in srgb, var(--app-shell) 94%, var(--surface));
     }
@@ -161,8 +157,7 @@
 
   .mobile-menu-sheet {
     --mobile-menu-sheet-vertical-chrome: calc(
-      var(--mobile-menu-sheet-top-space) +
-        max(14px, var(--app-safe-area-bottom))
+      var(--mobile-menu-sheet-top-space) + max(14px, var(--app-safe-area-bottom))
     );
     --mobile-menu-sheet-inline-inset: 0.75rem;
 
@@ -182,10 +177,7 @@
     min-height: 0;
     height: clamp(
       0px,
-      calc(
-        100dvh - max(0px, var(--translate-y, 0px)) -
-          var(--mobile-menu-sheet-vertical-chrome)
-      ),
+      calc(100dvh - max(0px, var(--translate-y, 0px)) - var(--mobile-menu-sheet-vertical-chrome)),
       100dvh
     );
     flex: 0 0 auto;
@@ -250,11 +242,7 @@
 
   .mobile-menu-sheet__profile:hover,
   .mobile-menu-sheet__profile[aria-expanded="true"] {
-    background: color-mix(
-      in srgb,
-      var(--surface-strong) 88%,
-      var(--accent) 12%
-    );
+    background: color-mix(in srgb, var(--surface-strong) 88%, var(--accent) 12%);
   }
 
   .mobile-menu-sheet__profile:focus-visible {
@@ -406,8 +394,7 @@
       color-mix(in srgb, var(--accent) 19%, var(--surface-strong)),
       color-mix(in srgb, var(--surface-strong) 88%, transparent)
     );
-    box-shadow: 0 8px 24px
-      color-mix(in srgb, var(--accent-shadow) 34%, transparent);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--accent-shadow) 34%, transparent);
   }
 
   .mobile-menu-sheet__appearance {
@@ -455,9 +442,7 @@
   #mobile-navigation-sheet > .settings-quick-menu--mobile,
   #mobile-navigation-sheet > .reading-mode-quick-menu--mobile {
     top: auto;
-    bottom: calc(
-      68px + var(--app-viewport-safe-area-bottom, 0px) + var(--translate-y, 0px)
-    );
+    bottom: calc(68px + var(--app-viewport-safe-area-bottom, 0px) + var(--translate-y, 0px));
     max-height: calc(100dvh - 92px - env(safe-area-inset-top, 0px));
   }
 

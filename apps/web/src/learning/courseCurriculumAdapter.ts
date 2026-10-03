@@ -1,9 +1,5 @@
 import type { CourseLesson, CourseOverviewResponse } from "@veolms/contracts";
-import {
-  formatMediaTime,
-  type CourseSection,
-  type Lesson,
-} from "./courseContent";
+import { formatMediaTime, type CourseSection, type Lesson } from "./courseContent";
 
 export interface AdaptedCurriculumSection extends CourseSection {
   /** Original section UUID from the API */
@@ -41,43 +37,37 @@ export function adaptCourseOverviewToCurriculum(
   }
 
   // Shallow copy before sorting to guarantee no mutation on the original input
-  const sortedSections = [...overview.sections].sort(
-    (a, b) => a.position - b.position,
-  );
+  const sortedSections = [...overview.sections].sort((a, b) => a.position - b.position);
 
   let sequentialIndex = 1;
 
-  const adaptedSections: AdaptedCurriculumSection[] = sortedSections.map(
-    (sec, secIdx) => {
-      // Shallow copy lessons array before sorting
-      const sortedLessons = [...(sec.lessons ?? [])].sort(
-        (a, b) => a.position - b.position,
-      );
+  const adaptedSections: AdaptedCurriculumSection[] = sortedSections.map((sec, secIdx) => {
+    // Shallow copy lessons array before sorting
+    const sortedLessons = [...(sec.lessons ?? [])].sort((a, b) => a.position - b.position);
 
-      const adaptedLessons: Lesson[] = sortedLessons.map((les) => {
-        const lessonNumber = sequentialIndex++;
-        lessonsByNumber.set(lessonNumber, les);
+    const adaptedLessons: Lesson[] = sortedLessons.map((les) => {
+      const lessonNumber = sequentialIndex++;
+      lessonsByNumber.set(lessonNumber, les);
 
-        return [
-          lessonNumber,
-          les.title,
-          formatMediaTime(les.durationSeconds ?? 0),
-          "todo" as const,
-          les.isPreview,
-          les.contentType ?? "video",
-          les.id,
-        ];
-      });
+      return [
+        lessonNumber,
+        les.title,
+        formatMediaTime(les.durationSeconds ?? 0),
+        "todo" as const,
+        les.isPreview,
+        les.contentType ?? "video",
+        les.id,
+      ];
+    });
 
-      return {
-        id: secIdx + 1,
-        sectionId: sec.id,
-        title: sec.title,
-        progress: `0/${adaptedLessons.length}`,
-        lessons: adaptedLessons,
-      };
-    },
-  );
+    return {
+      id: secIdx + 1,
+      sectionId: sec.id,
+      title: sec.title,
+      progress: `0/${adaptedLessons.length}`,
+      lessons: adaptedLessons,
+    };
+  });
 
   return {
     sections: adaptedSections,

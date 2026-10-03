@@ -10,10 +10,7 @@ export function findUserById(database: Executor, userId: string) {
     .executeTakeFirst();
 }
 
-export function findPublicProfileByUsername(
-  database: Executor,
-  username: string,
-) {
+export function findPublicProfileByUsername(database: Executor, username: string) {
   return database
     .selectFrom("users")
     .select([
@@ -40,15 +37,8 @@ export function findPublicProfileByUsername(
 }
 
 /** Used only by durable notification delivery after an account is deactivated. */
-export function findUserByIdIncludingDeleted(
-  database: Executor,
-  userId: string,
-) {
-  return database
-    .selectFrom("users")
-    .selectAll()
-    .where("id", "=", userId)
-    .executeTakeFirst();
+export function findUserByIdIncludingDeleted(database: Executor, userId: string) {
+  return database.selectFrom("users").selectAll().where("id", "=", userId).executeTakeFirst();
 }
 
 /** Looks a user up by whichever contact channel the flow was started with. */
@@ -103,10 +93,7 @@ export async function usernameExists(
   username: string,
   excludingUserId?: string,
 ): Promise<boolean> {
-  let query = database
-    .selectFrom("users")
-    .select("id")
-    .where("username", "=", username);
+  let query = database.selectFrom("users").select("id").where("username", "=", username);
 
   if (excludingUserId) {
     query = query.where("id", "!=", excludingUserId);
@@ -138,10 +125,7 @@ export interface InsertUserInput {
   avatarDataUrl?: string | null;
 }
 
-export async function insertUser(
-  database: Executor,
-  input: InsertUserInput,
-): Promise<void> {
+export async function insertUser(database: Executor, input: InsertUserInput): Promise<void> {
   await database
     .insertInto("users")
     .values({
@@ -192,10 +176,7 @@ export interface InsertUserAvatarInput {
   avatarDataUrl: string;
 }
 
-export function insertUserAvatar(
-  database: Executor,
-  input: InsertUserAvatarInput,
-) {
+export function insertUserAvatar(database: Executor, input: InsertUserAvatarInput) {
   return database
     .insertInto("user_avatars")
     .values({
@@ -209,11 +190,7 @@ export function insertUserAvatar(
     .executeTakeFirstOrThrow();
 }
 
-export function findUserAvatarById(
-  database: Executor,
-  userId: string,
-  avatarId: string,
-) {
+export function findUserAvatarById(database: Executor, userId: string, avatarId: string) {
   return database
     .selectFrom("user_avatars")
     .selectAll()
@@ -246,11 +223,7 @@ export function listUserAvatars(database: Executor, userId: string) {
     .execute();
 }
 
-export function touchUserAvatar(
-  database: Executor,
-  userId: string,
-  avatarId: string,
-) {
+export function touchUserAvatar(database: Executor, userId: string, avatarId: string) {
   return database
     .updateTable("user_avatars")
     .set({ last_used_at: new Date() })
@@ -307,35 +280,17 @@ export async function updateUserProfile(
 ) {
   const updates = {
     ...(input.username !== undefined ? { username: input.username } : {}),
-    ...(input.displayName !== undefined
-      ? { display_name: input.displayName }
-      : {}),
-    ...(input.avatarDataUrl !== undefined
-      ? { avatar_data_url: input.avatarDataUrl }
-      : {}),
+    ...(input.displayName !== undefined ? { display_name: input.displayName } : {}),
+    ...(input.avatarDataUrl !== undefined ? { avatar_data_url: input.avatarDataUrl } : {}),
     ...(input.bio !== undefined ? { bio: input.bio } : {}),
-    ...(input.emailPublic !== undefined
-      ? { email_public: input.emailPublic }
-      : {}),
-    ...(input.mobilePublic !== undefined
-      ? { mobile_public: input.mobilePublic }
-      : {}),
-    ...(input.linkedinUrl !== undefined
-      ? { linkedin_url: input.linkedinUrl }
-      : {}),
-    ...(input.linkedinPublic !== undefined
-      ? { linkedin_public: input.linkedinPublic }
-      : {}),
+    ...(input.emailPublic !== undefined ? { email_public: input.emailPublic } : {}),
+    ...(input.mobilePublic !== undefined ? { mobile_public: input.mobilePublic } : {}),
+    ...(input.linkedinUrl !== undefined ? { linkedin_url: input.linkedinUrl } : {}),
+    ...(input.linkedinPublic !== undefined ? { linkedin_public: input.linkedinPublic } : {}),
     ...(input.githubUrl !== undefined ? { github_url: input.githubUrl } : {}),
-    ...(input.githubPublic !== undefined
-      ? { github_public: input.githubPublic }
-      : {}),
-    ...(input.websiteUrl !== undefined
-      ? { website_url: input.websiteUrl }
-      : {}),
-    ...(input.websitePublic !== undefined
-      ? { website_public: input.websitePublic }
-      : {}),
+    ...(input.githubPublic !== undefined ? { github_public: input.githubPublic } : {}),
+    ...(input.websiteUrl !== undefined ? { website_url: input.websiteUrl } : {}),
+    ...(input.websitePublic !== undefined ? { website_public: input.websitePublic } : {}),
     updated_at: new Date(),
   };
 
@@ -369,11 +324,7 @@ export async function updateUserPhoneNumber(
     .executeTakeFirst();
 }
 
-export async function markUserEmailVerified(
-  database: Executor,
-  userId: string,
-  verifiedAt: Date,
-) {
+export async function markUserEmailVerified(database: Executor, userId: string, verifiedAt: Date) {
   return database
     .updateTable("users")
     .set({
@@ -386,10 +337,7 @@ export async function markUserEmailVerified(
     .executeTakeFirst();
 }
 
-export async function listUserRoleNames(
-  database: Executor,
-  userId: string,
-): Promise<string[]> {
+export async function listUserRoleNames(database: Executor, userId: string): Promise<string[]> {
   const rows = await database
     .selectFrom("user_roles")
     .innerJoin("roles", "roles.id", "user_roles.role_id")
@@ -418,8 +366,5 @@ export async function assignRole(
   userId: string,
   roleId: string,
 ): Promise<void> {
-  await database
-    .insertInto("user_roles")
-    .values({ user_id: userId, role_id: roleId })
-    .execute();
+  await database.insertInto("user_roles").values({ user_id: userId, role_id: roleId }).execute();
 }

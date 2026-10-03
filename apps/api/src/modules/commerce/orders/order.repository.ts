@@ -1,10 +1,6 @@
 import { sql } from "kysely";
 import type { OrderStatus, OrderItemType } from "@veolms/database";
-import type {
-  OrderScope,
-  OrderCursorPayload,
-  OrderSortOrder,
-} from "@veolms/contracts";
+import type { OrderScope, OrderCursorPayload, OrderSortOrder } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 
 export interface ListOrdersOptions {
@@ -116,15 +112,8 @@ export async function getOrderStatusFunnel(
   };
 }
 
-export async function findOrderById(
-  database: Executor,
-  orderId: string,
-  scope?: OrderScope,
-) {
-  let query = database
-    .selectFrom("orders as o")
-    .selectAll("o")
-    .where("o.id", "=", orderId);
+export async function findOrderById(database: Executor, orderId: string, scope?: OrderScope) {
+  let query = database.selectFrom("orders as o").selectAll("o").where("o.id", "=", orderId);
 
   if (scope && scope.type === "user") {
     query = query.where("o.user_id", "=", scope.id);
@@ -311,9 +300,7 @@ export async function getOrderStatsByCurrency(
     query = query.where("o.created_at", "<=", filters.to);
   }
   if (filters.courseId) {
-    const courseIds = Array.isArray(filters.courseId)
-      ? filters.courseId
-      : [filters.courseId];
+    const courseIds = Array.isArray(filters.courseId) ? filters.courseId : [filters.courseId];
     if (courseIds.length > 0) {
       query = query.where(
         sql<boolean>`EXISTS (
@@ -382,9 +369,7 @@ export async function getRevenueTrend(
     query = query.where("o.created_at", "<=", filters.to);
   }
   if (filters.courseId) {
-    const courseIds = Array.isArray(filters.courseId)
-      ? filters.courseId
-      : [filters.courseId];
+    const courseIds = Array.isArray(filters.courseId) ? filters.courseId : [filters.courseId];
     if (courseIds.length > 0) {
       query = query.where(
         sql<boolean>`EXISTS (
@@ -407,10 +392,7 @@ export async function getRevenueTrend(
  * Same as findOrderById, but takes a `SELECT ... FOR UPDATE` row lock. Must
  * be called inside a transaction.
  */
-export async function findOrderByIdForUpdate(
-  database: Executor,
-  orderId: string,
-) {
+export async function findOrderByIdForUpdate(database: Executor, orderId: string) {
   return await database
     .selectFrom("orders")
     .selectAll()
@@ -419,10 +401,7 @@ export async function findOrderByIdForUpdate(
     .executeTakeFirst();
 }
 
-export async function findOrderByOrderNumber(
-  database: Executor,
-  orderNumber: string,
-) {
+export async function findOrderByOrderNumber(database: Executor, orderNumber: string) {
   return await database
     .selectFrom("orders")
     .selectAll()
@@ -430,10 +409,7 @@ export async function findOrderByOrderNumber(
     .executeTakeFirst();
 }
 
-export async function findOrderByIdempotencyKey(
-  database: Executor,
-  idempotencyKey: string,
-) {
+export async function findOrderByIdempotencyKey(database: Executor, idempotencyKey: string) {
   return await database
     .selectFrom("orders")
     .selectAll()
@@ -450,10 +426,7 @@ export async function listOrderItems(database: Executor, orderId: string) {
     .execute();
 }
 
-export async function findOrderItemById(
-  database: Executor,
-  orderItemId: string,
-) {
+export async function findOrderItemById(database: Executor, orderItemId: string) {
   return await database
     .selectFrom("order_items")
     .selectAll()
@@ -461,10 +434,7 @@ export async function findOrderItemById(
     .executeTakeFirst();
 }
 
-export async function listOrderItemsByOrderIds(
-  database: Executor,
-  orderIds: string[],
-) {
+export async function listOrderItemsByOrderIds(database: Executor, orderIds: string[]) {
   if (orderIds.length === 0) return [];
   return await database
     .selectFrom("order_items")
@@ -519,11 +489,7 @@ export async function insertOrderItems(
   }>,
 ) {
   if (items.length === 0) return [];
-  return await database
-    .insertInto("order_items")
-    .values(items)
-    .returningAll()
-    .execute();
+  return await database.insertInto("order_items").values(items).returningAll().execute();
 }
 
 export async function updateOrderStatus(
@@ -543,11 +509,7 @@ export async function updateOrderStatus(
     .executeTakeFirst();
 }
 
-export async function markOrderPaidIfPending(
-  database: Executor,
-  orderId: string,
-  paidAt: Date,
-) {
+export async function markOrderPaidIfPending(database: Executor, orderId: string, paidAt: Date) {
   return await database
     .updateTable("orders")
     .set({
@@ -571,10 +533,7 @@ export async function listUsersByIds(database: Executor, userIds: string[]) {
     .execute();
 }
 
-export async function listPaymentsByOrderIds(
-  database: Executor,
-  orderIds: string[],
-) {
+export async function listPaymentsByOrderIds(database: Executor, orderIds: string[]) {
   if (orderIds.length === 0) return [];
   // Ranked so the payment that represents the order comes first: the settled
   // one, then any retry attempts, newest first. Callers take the first row
@@ -592,10 +551,7 @@ export async function listPaymentsByOrderIds(
     .execute();
 }
 
-export async function listPaymentSummariesByOrderIds(
-  database: Executor,
-  orderIds: string[],
-) {
+export async function listPaymentSummariesByOrderIds(database: Executor, orderIds: string[]) {
   if (orderIds.length === 0) return [];
   return await database
     .selectFrom("payments")
@@ -610,22 +566,12 @@ export async function listPaymentSummariesByOrderIds(
     .execute();
 }
 
-export async function listCouponsByIds(
-  database: Executor,
-  couponIds: string[],
-) {
+export async function listCouponsByIds(database: Executor, couponIds: string[]) {
   if (couponIds.length === 0) return [];
-  return await database
-    .selectFrom("coupons")
-    .selectAll()
-    .where("id", "in", couponIds)
-    .execute();
+  return await database.selectFrom("coupons").selectAll().where("id", "in", couponIds).execute();
 }
 
-export async function listRefundsByOrderIds(
-  database: Executor,
-  orderIds: string[],
-) {
+export async function listRefundsByOrderIds(database: Executor, orderIds: string[]) {
   if (orderIds.length === 0) return [];
   return await database
     .selectFrom("refunds")

@@ -21,12 +21,7 @@ export const otpSendRequestSchema = z
 
 export const otpVerifyRequestSchema = z
   .object({
-    email: z
-      .email()
-      .max(255)
-      .toLowerCase()
-      .meta({ example: "ada@example.com" })
-      .optional(),
+    email: z.email().max(255).toLowerCase().meta({ example: "ada@example.com" }).optional(),
     phoneNo: z.string().meta({ example: "+15551234567" }).optional(),
     code: z
       .string()
@@ -44,10 +39,7 @@ const phoneNumberSchema = z
   .trim()
   .min(8, "Phone number is too short")
   .max(15, "Phone number is too long")
-  .regex(
-    /^\+?[0-9\s().-]+$/,
-    "Phone number can contain digits, spaces, and + ( ) - only",
-  )
+  .regex(/^\+?[0-9\s().-]+$/, "Phone number can contain digits, spaces, and + ( ) - only")
   .meta({ example: "+15551234567" });
 
 export const phoneVerificationSendRequestSchema = z.object({
@@ -108,10 +100,7 @@ export const registerRequestSchema = z
       .string()
       .min(3, "Username must be at least 3 characters")
       .max(30, "Username is too long")
-      .regex(
-        /^[a-zA-Z0-9_]+$/,
-        "Username must contain only letters, numbers, and underscores",
-      )
+      .regex(/^[a-zA-Z0-9_]+$/, "Username must contain only letters, numbers, and underscores")
       .toLowerCase()
       .meta({ example: "ada_lovelace" }),
     displayName: z
@@ -126,9 +115,7 @@ export const registerRequestSchema = z
   })
   .refine(
     (data) =>
-      data.email && data.phoneNo
-        ? Boolean(data.emailCode && data.phoneCode)
-        : Boolean(data.code),
+      data.email && data.phoneNo ? Boolean(data.emailCode && data.phoneCode) : Boolean(data.code),
     {
       message:
         "A code is required, or both emailCode and phoneCode are required when both channels are provided",
@@ -209,11 +196,7 @@ export const profileUpdateRequestSchema = z.strictObject({
     )
     .toLowerCase()
     .optional(),
-  displayName: z
-    .string()
-    .min(1, "Display name is required")
-    .max(100)
-    .optional(),
+  displayName: z.string().min(1, "Display name is required").max(100).optional(),
   ...profileFieldSchemas,
 });
 
@@ -243,37 +226,19 @@ export const publicProfileResponseSchema = z.strictObject({
 export const currentUserResponseSchema = userProfileResponseSchema.nullable();
 
 export const creatorRegisterRequestSchema = z.object({
-  name: z
-    .string()
-    .min(1, "Name is required")
-    .max(100)
-    .meta({ example: "Ada Lovelace" }),
+  name: z.string().min(1, "Name is required").max(100).meta({ example: "Ada Lovelace" }),
   email: z
     .email("Invalid email address")
     .max(255)
     .toLowerCase()
     .meta({ example: "ada@example.com" }),
-  phoneNo: z
-    .string()
-    .min(8)
-    .meta({ example: "+15551234567" })
-    .nullable()
-    .optional(),
+  phoneNo: z.string().min(8).meta({ example: "+15551234567" }).nullable().optional(),
 });
 
 export const academyRequestSchema = z.object({
   name: z.string().min(1).max(255).meta({ example: "Acme Academy" }),
-  logoUrl: z
-    .url()
-    .meta({ example: "https://cdn.example.com/logo.png" })
-    .nullable()
-    .optional(),
-  customDomain: z
-    .string()
-    .max(255)
-    .meta({ example: "learn.example.com" })
-    .nullable()
-    .optional(),
+  logoUrl: z.url().meta({ example: "https://cdn.example.com/logo.png" }).nullable().optional(),
+  customDomain: z.string().max(255).meta({ example: "learn.example.com" }).nullable().optional(),
 });
 
 export const academyResponseSchema = z.object({
@@ -290,32 +255,18 @@ export const setupTokenRequestSchema = z.object({
 
 export type OtpSendRequest = z.input<typeof otpSendRequestSchema>;
 export type OtpVerifyRequest = z.input<typeof otpVerifyRequestSchema>;
-export type PhoneVerificationSendRequest = z.input<
-  typeof phoneVerificationSendRequestSchema
->;
-export type PhoneVerificationVerifyRequest = z.input<
-  typeof phoneVerificationVerifyRequestSchema
->;
-export type EmailVerificationSendRequest = z.input<
-  typeof emailVerificationSendRequestSchema
->;
-export type EmailVerificationVerifyRequest = z.input<
-  typeof emailVerificationVerifyRequestSchema
->;
+export type PhoneVerificationSendRequest = z.input<typeof phoneVerificationSendRequestSchema>;
+export type PhoneVerificationVerifyRequest = z.input<typeof phoneVerificationVerifyRequestSchema>;
+export type EmailVerificationSendRequest = z.input<typeof emailVerificationSendRequestSchema>;
+export type EmailVerificationVerifyRequest = z.input<typeof emailVerificationVerifyRequestSchema>;
 export type RegisterRequest = z.input<typeof registerRequestSchema>;
 export type AuthUser = z.output<typeof authUserSchema>;
 export type UserProfileResponse = z.output<typeof userProfileResponseSchema>;
 export type ProfileUpdateRequest = z.input<typeof profileUpdateRequestSchema>;
-export type PublicProfileUsernameParams = z.input<
-  typeof publicProfileUsernameParamsSchema
->;
-export type PublicProfileResponse = z.output<
-  typeof publicProfileResponseSchema
->;
+export type PublicProfileUsernameParams = z.input<typeof publicProfileUsernameParamsSchema>;
+export type PublicProfileResponse = z.output<typeof publicProfileResponseSchema>;
 export type CurrentUserResponse = z.output<typeof currentUserResponseSchema>;
-export type CreatorRegisterRequest = z.input<
-  typeof creatorRegisterRequestSchema
->;
+export type CreatorRegisterRequest = z.input<typeof creatorRegisterRequestSchema>;
 export type AcademyRequest = z.input<typeof academyRequestSchema>;
 export type AcademyResponse = z.output<typeof academyResponseSchema>;
 export type SetupTokenRequest = z.input<typeof setupTokenRequestSchema>;

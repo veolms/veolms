@@ -3,10 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createInitialVideoEngineSnapshot } from "../core/snapshot";
 import type { PlayerController } from "../react/PlayerController";
 import { PlayerControllerContext } from "../react/context";
-import {
-  createInitialPlayerUiState,
-  type PlayerSnapshot,
-} from "../react/playerState";
+import { createInitialPlayerUiState, type PlayerSnapshot } from "../react/playerState";
 import { VolumeControl } from "./VolumeControl";
 
 afterEach(cleanup);
@@ -30,10 +27,7 @@ describe("VolumeControl mouse wheel", () => {
   it("restores volume from zero when scrolling up while muted", () => {
     const { setVolume } = renderVolumeControl({ muted: true, volume: 0.7 });
 
-    fireEvent(
-      screen.getByRole("slider", { name: "Volume" }),
-      createWheelEvent(-100),
-    );
+    fireEvent(screen.getByRole("slider", { name: "Volume" }), createWheelEvent(-100));
 
     expect(setVolume).toHaveBeenCalledWith(0.05);
   });
@@ -47,13 +41,7 @@ function createWheelEvent(deltaY: number) {
   });
 }
 
-function renderVolumeControl({
-  muted = false,
-  volume,
-}: {
-  muted?: boolean;
-  volume: number;
-}) {
+function renderVolumeControl({ muted = false, volume }: { muted?: boolean; volume: number }) {
   const snapshot: PlayerSnapshot = {
     media: {
       ...createInitialVideoEngineSnapshot(),

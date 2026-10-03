@@ -55,8 +55,7 @@ interface PanelDragSession {
   velocityX: number;
 }
 
-type PanelMotionMode =
-  "idle" | "dragging" | "resizing" | "settling" | "dismissing";
+type PanelMotionMode = "idle" | "dragging" | "resizing" | "settling" | "dismissing";
 
 const clampVideoWidthPercent = (percent: number) =>
   Math.min(
@@ -78,14 +77,9 @@ const getResizeDismissPercent = (requestedVideoWidthPercent: number) =>
     ),
   );
 
-const hasDismissIntent = (
-  dismissPercent: number,
-  dismissDistance: number,
-  velocityX: number,
-) =>
+const hasDismissIntent = (dismissPercent: number, dismissDistance: number, velocityX: number) =>
   dismissPercent >= PANEL_DISMISS_PERCENT ||
-  (dismissDistance >= PANEL_DISMISS_FLICK_DISTANCE &&
-    velocityX >= PANEL_DISMISS_FLICK_VELOCITY);
+  (dismissDistance >= PANEL_DISMISS_FLICK_DISTANCE && velocityX >= PANEL_DISMISS_FLICK_VELOCITY);
 
 export function FullscreenLandscapeCurriculumPanel({
   children,
@@ -124,10 +118,7 @@ export function FullscreenLandscapeCurriculumPanel({
       finishDismiss();
       return;
     }
-    motionTimerRef.current = window.setTimeout(
-      finishDismiss,
-      PANEL_MOTION_DURATION_MS + 80,
-    );
+    motionTimerRef.current = window.setTimeout(finishDismiss, PANEL_MOTION_DURATION_MS + 80);
   }, [clearMotionTimer, finishDismiss, onVideoWidthPreviewChange]);
 
   const settlePanel = useCallback(() => {
@@ -223,20 +214,14 @@ export function FullscreenLandscapeCurriculumPanel({
 
     event.preventDefault();
     event.stopPropagation();
-    const dismissPercent = Math.min(
-      100,
-      Math.max(0, (deltaX / session.panelWidth) * 100),
-    );
+    const dismissPercent = Math.min(100, Math.max(0, (deltaX / session.panelWidth) * 100));
     onVideoWidthPreviewChange(
       session.initialVideoWidthPercent +
         (100 - session.initialVideoWidthPercent) * (dismissPercent / 100),
     );
   };
 
-  const finishPanelDrag = (
-    event: ReactPointerEvent<HTMLDivElement>,
-    cancelled = false,
-  ) => {
+  const finishPanelDrag = (event: ReactPointerEvent<HTMLDivElement>, cancelled = false) => {
     const session = panelDragSessionRef.current;
     if (!session || session.pointerId !== event.pointerId) return;
     panelDragSessionRef.current = null;
@@ -283,8 +268,7 @@ export function FullscreenLandscapeCurriculumPanel({
       initialVideoWidthPercent: videoWidthPercent,
       lastTime: timestamp,
       lastX: event.clientX,
-      minimumPanelWidth:
-        shellBounds.width * ((100 - FULLSCREEN_VIDEO_WIDTH_MAX_PERCENT) / 100),
+      minimumPanelWidth: shellBounds.width * ((100 - FULLSCREEN_VIDEO_WIDTH_MAX_PERCENT) / 100),
       pointerId: event.pointerId,
       shellLeft: shellBounds.left,
       shellWidth: shellBounds.width,
@@ -309,24 +293,13 @@ export function FullscreenLandscapeCurriculumPanel({
     session.lastX = event.clientX;
     const requestedVideoWidthPercent =
       ((event.clientX - session.shellLeft) / session.shellWidth) * 100;
-    onVideoWidthPercentChange(
-      clampVideoWidthPercent(requestedVideoWidthPercent),
-    );
+    onVideoWidthPercentChange(clampVideoWidthPercent(requestedVideoWidthPercent));
     onVideoWidthPreviewChange(
-      Math.min(
-        100,
-        Math.max(
-          FULLSCREEN_VIDEO_WIDTH_MIN_PERCENT,
-          requestedVideoWidthPercent,
-        ),
-      ),
+      Math.min(100, Math.max(FULLSCREEN_VIDEO_WIDTH_MIN_PERCENT, requestedVideoWidthPercent)),
     );
   };
 
-  const finishResize = (
-    event: ReactPointerEvent<HTMLDivElement>,
-    cancelled = false,
-  ) => {
+  const finishResize = (event: ReactPointerEvent<HTMLDivElement>, cancelled = false) => {
     const session = resizeSessionRef.current;
     if (!session || session.pointerId !== event.pointerId) return;
     resizeSessionRef.current = null;
@@ -337,10 +310,7 @@ export function FullscreenLandscapeCurriculumPanel({
     const dismissPercent = getResizeDismissPercent(requestedVideoWidthPercent);
     const dismissDistance = (dismissPercent / 100) * session.minimumPanelWidth;
     const duration = Math.max(1, getEventTime(event) - session.startTime);
-    const velocityX = Math.max(
-      session.velocityX,
-      (event.clientX - session.startX) / duration,
-    );
+    const velocityX = Math.max(session.velocityX, (event.clientX - session.startX) / duration);
     try {
       session.handle.releasePointerCapture?.(session.pointerId);
     } catch {
@@ -351,9 +321,7 @@ export function FullscreenLandscapeCurriculumPanel({
       settlePanel();
       return;
     }
-    onVideoWidthPercentChange(
-      clampVideoWidthPercent(requestedVideoWidthPercent),
-    );
+    onVideoWidthPercentChange(clampVideoWidthPercent(requestedVideoWidthPercent));
     if (hasDismissIntent(dismissPercent, dismissDistance, velocityX)) {
       dismissPanel();
       return;
@@ -364,17 +332,12 @@ export function FullscreenLandscapeCurriculumPanel({
   const handleResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
-      if (
-        event.key === "ArrowRight" &&
-        videoWidthPercent >= FULLSCREEN_VIDEO_WIDTH_MAX_PERCENT
-      ) {
+      if (event.key === "ArrowRight" && videoWidthPercent >= FULLSCREEN_VIDEO_WIDTH_MAX_PERCENT) {
         dismissPanel();
         return;
       }
       onVideoWidthPercentChange(
-        clampVideoWidthPercent(
-          videoWidthPercent + (event.key === "ArrowRight" ? 5 : -5),
-        ),
+        clampVideoWidthPercent(videoWidthPercent + (event.key === "ArrowRight" ? 5 : -5)),
       );
     } else if (event.key === "Home") {
       event.preventDefault();
@@ -391,8 +354,7 @@ export function FullscreenLandscapeCurriculumPanel({
     <div
       className={`relative z-20 h-full min-w-0 flex-1 touch-pan-y overflow-hidden border-l border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] text-(--text) shadow-[-18px_0_40px_rgba(0,0,0,0.2)] will-change-transform [&_.learning-curriculum]:h-full [&_.learning-curriculum]:rounded-none [&_.learning-curriculum]:bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] [&_.learning-curriculum]:shadow-none ${motionMode === "settling" || motionMode === "dismissing" ? "transition-transform duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none" : "transition-none"}`}
       style={{
-        transform:
-          "translate3d(var(--learning-fullscreen-panel-offset-x, 0px), 0, 0)",
+        transform: "translate3d(var(--learning-fullscreen-panel-offset-x, 0px), 0, 0)",
       }}
       data-learning-fullscreen-course-panel=""
       data-learning-swipe-ignore=""
@@ -414,10 +376,7 @@ export function FullscreenLandscapeCurriculumPanel({
       onPointerMoveCapture={dragPanel}
       onPointerUpCapture={finishPanelDrag}
       onTransitionEnd={(event: ReactTransitionEvent<HTMLDivElement>) => {
-        if (
-          event.target !== event.currentTarget ||
-          event.propertyName !== "transform"
-        ) {
+        if (event.target !== event.currentTarget || event.propertyName !== "transform") {
           return;
         }
         if (motionMode === "dismissing") {

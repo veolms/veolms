@@ -9,12 +9,7 @@ const PROVIDER_FETCH_MAX_BYTES = 5 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 4_000;
 export const AVATAR_IMAGE_WIDTHS = [45, 96, 160] as const;
 const AVATAR_ORIGINAL_EXTENSIONS = ["jpg", "png", "webp", "gif"] as const;
-export const AVATAR_CONTENT_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-]);
+export const AVATAR_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 /**
  * A single namespace segment keeps the existing CDN transform Worker path
@@ -29,19 +24,11 @@ export function avatarStoragePrefix(userId: string, avatarId?: string): string {
   return `public/avatars/${avatarNamespace(userId, avatarId)}`;
 }
 
-function avatarVariantKey(
-  userId: string,
-  width: number,
-  avatarId?: string,
-): string {
+function avatarVariantKey(userId: string, width: number, avatarId?: string): string {
   return `${avatarStoragePrefix(userId, avatarId)}/${width}.webp`;
 }
 
-export function avatarOriginalKey(
-  userId: string,
-  contentType: string,
-  avatarId?: string,
-): string {
+export function avatarOriginalKey(userId: string, contentType: string, avatarId?: string): string {
   const extension =
     contentType === "image/jpeg"
       ? "jpg"
@@ -87,9 +74,7 @@ export async function removeAvatarVariants(
   avatarId?: string,
 ): Promise<void> {
   await storage.deleteObjects(
-    AVATAR_IMAGE_WIDTHS.map((width) =>
-      avatarVariantKey(userId, width, avatarId),
-    ),
+    AVATAR_IMAGE_WIDTHS.map((width) => avatarVariantKey(userId, width, avatarId)),
   );
 }
 
@@ -104,9 +89,7 @@ export function isStoredAvatarUrl(value: string | null | undefined): boolean {
 }
 
 /** Builds the responsive source set for the canonical 160px CDN URL. */
-export function avatarSrcSetFromUrl(
-  value: string | null | undefined,
-): AvatarImageVariant[] {
+export function avatarSrcSetFromUrl(value: string | null | undefined): AvatarImageVariant[] {
   if (!value) return [];
   const match = AVATAR_VARIANT_URL_PATTERN.exec(value);
   if (!match) return [];
@@ -142,8 +125,7 @@ export async function storeAvatarBuffer(
   await removeOtherAvatarOriginals(storage, userId, contentType, avatarId);
 
   const avatarUrl =
-    storage.getPublicObjectUrl(originalKey) ??
-    avatarCdnUrl(storage, userId, 160, avatarId);
+    storage.getPublicObjectUrl(originalKey) ?? avatarCdnUrl(storage, userId, 160, avatarId);
   if (!avatarUrl) {
     await storage.deleteObject(originalKey).catch(() => undefined);
     throw new Error("A public CDN URL is required to serve profile avatars.");
@@ -155,12 +137,7 @@ export async function storeAvatarBuffer(
 export function detectImageContentType(
   buffer: Buffer,
 ): "image/jpeg" | "image/png" | "image/webp" | "image/gif" | null {
-  if (
-    buffer.length >= 3 &&
-    buffer[0] === 0xff &&
-    buffer[1] === 0xd8 &&
-    buffer[2] === 0xff
-  ) {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
     return "image/jpeg";
   }
   if (
@@ -271,8 +248,7 @@ export async function storeAvatarFromUrl(
     );
     if (!response || !response.ok) return null;
 
-    const contentTypeHeader =
-      response.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
+    const contentTypeHeader = response.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
     if (!AVATAR_CONTENT_TYPES.has(contentTypeHeader)) return null;
 
     if (!response.body) return null;
@@ -311,19 +287,11 @@ export async function storeAvatarFromUrl(
 }
 
 /** Deletes the user's stored original and any CDN-generated variants. */
-export async function removeAvatar(
-  storage: S3StorageService,
-  userId: string,
-): Promise<void> {
-  await removeAvatarPrefix(storage, avatarStoragePrefix(userId)).catch(
-    () => undefined,
-  );
+export async function removeAvatar(storage: S3StorageService, userId: string): Promise<void> {
+  await removeAvatarPrefix(storage, avatarStoragePrefix(userId)).catch(() => undefined);
 }
 
 /** Deletes one explicitly-owned avatar namespace. */
-export async function removeAvatarPrefix(
-  storage: S3StorageService,
-  prefix: string,
-): Promise<void> {
+export async function removeAvatarPrefix(storage: S3StorageService, prefix: string): Promise<void> {
   await storage.deletePrefix(`${prefix.replace(/\/+$/u, "")}/`);
 }

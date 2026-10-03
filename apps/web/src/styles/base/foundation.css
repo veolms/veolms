@@ -141,17 +141,14 @@ button {
 .app-slider::-webkit-slider-thumb {
   width: var(--app-slider-thumb-size);
   height: var(--app-slider-thumb-size);
-  margin-top: calc(
-    (var(--app-slider-track-height) - var(--app-slider-thumb-size)) / 2
-  );
+  margin-top: calc((var(--app-slider-track-height) - var(--app-slider-thumb-size)) / 2);
   appearance: none;
   border: 3px solid var(--app-slider-thumb-border);
   border-radius: 50%;
   background: var(--app-slider-thumb);
   box-shadow:
     0 3px 10px rgb(0 0 0 / 34%),
-    0 0 0 1px
-      color-mix(in srgb, var(--app-slider-thumb-accent) 52%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--app-slider-thumb-accent) 52%, transparent);
   transition:
     box-shadow 160ms ease,
     transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -165,8 +162,7 @@ button {
   background: var(--app-slider-thumb);
   box-shadow:
     0 3px 10px rgb(0 0 0 / 34%),
-    0 0 0 1px
-      color-mix(in srgb, var(--app-slider-thumb-accent) 52%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--app-slider-thumb-accent) 52%, transparent);
   transition:
     box-shadow 160ms ease,
     transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -175,15 +171,13 @@ button {
 .app-slider:hover:not(:disabled)::-webkit-slider-thumb {
   box-shadow:
     0 4px 12px rgb(0 0 0 / 38%),
-    0 0 0 5px
-      color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
+    0 0 0 5px color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
 }
 
 .app-slider:hover:not(:disabled)::-moz-range-thumb {
   box-shadow:
     0 4px 12px rgb(0 0 0 / 38%),
-    0 0 0 5px
-      color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
+    0 0 0 5px color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
 }
 
 .app-slider:active:not(:disabled)::-webkit-slider-thumb {
@@ -201,19 +195,15 @@ button {
 .app-slider:focus-visible::-webkit-slider-thumb {
   box-shadow:
     0 3px 10px rgb(0 0 0 / 34%),
-    0 0 0 4px
-      color-mix(in srgb, var(--app-slider-thumb-accent) 42%, transparent),
-    0 0 0 7px
-      color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
+    0 0 0 4px color-mix(in srgb, var(--app-slider-thumb-accent) 42%, transparent),
+    0 0 0 7px color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
 }
 
 .app-slider:focus-visible::-moz-range-thumb {
   box-shadow:
     0 3px 10px rgb(0 0 0 / 34%),
-    0 0 0 4px
-      color-mix(in srgb, var(--app-slider-thumb-accent) 42%, transparent),
-    0 0 0 7px
-      color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
+    0 0 0 4px color-mix(in srgb, var(--app-slider-thumb-accent) 42%, transparent),
+    0 0 0 7px color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
 }
 
 .app-slider:disabled {
@@ -223,12 +213,7 @@ button {
 
 .app-slider--temperature {
   --app-slider-fill: #80bfff;
-  --app-slider-track-background: linear-gradient(
-    90deg,
-    #80bfff 0%,
-    #dceaf0 50%,
-    #f2ad65 100%
-  );
+  --app-slider-track-background: linear-gradient(90deg, #80bfff 0%, #dceaf0 50%, #f2ad65 100%);
 }
 
 .app-slider--player,
@@ -356,9 +341,7 @@ button {
   --page-tab-tone: #b82b52;
 }
 
-:root[data-page-tab-colors="multicolor"]
-  .page-tabs
-  [role="tab"][data-page-tab-tone],
+:root[data-page-tab-colors="multicolor"] .page-tabs [role="tab"][data-page-tab-tone],
 :root[data-page-tab-colors="follow-sidebar"][data-sidebar-icon-style="multicolor"]
   .page-tabs
   [role="tab"][data-page-tab-tone] {

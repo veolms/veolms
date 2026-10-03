@@ -10,11 +10,7 @@ import {
 } from "../services/learning-interactions/interaction-entities";
 
 export function isCommentOrQaThread(thread: LearningThread): boolean {
-  return (
-    thread.kind === "comment" ||
-    thread.kind === "question" ||
-    thread.kind === "qna"
-  );
+  return thread.kind === "comment" || thread.kind === "question" || thread.kind === "qna";
 }
 
 export function adaptLearningThreadToComment(
@@ -59,8 +55,7 @@ export function adaptLearningThreadToComment(
     role: thread.author.role,
     attachment,
     attachments: thread.attachments || [],
-    isOwn:
-      thread.isOwn ?? (currentUserId ? thread.userId === currentUserId : false),
+    isOwn: thread.isOwn ?? (currentUserId ? thread.userId === currentUserId : false),
     createdAt: thread.createdAt,
     timestampSeconds: thread.timestampSeconds ?? null,
     acceptedAnswerId: thread.acceptedAnswerId ?? null,

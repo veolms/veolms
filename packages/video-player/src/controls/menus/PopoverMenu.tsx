@@ -91,8 +91,7 @@ function measurePopoverPanelLayout(
 ): PopoverPanelLayout | null {
   const host = getPopoverOverlayHost(trigger);
   if (!host) return null;
-  const player =
-    trigger.closest<HTMLElement>("[data-video-player-root]") ?? host;
+  const player = trigger.closest<HTMLElement>("[data-video-player-root]") ?? host;
   const hostRect = host.getBoundingClientRect();
   const playerRect = player.getBoundingClientRect();
   const triggerRect = trigger.getBoundingClientRect();
@@ -110,10 +109,7 @@ function measurePopoverPanelLayout(
         popoverMaxHeightCapPx,
         Math.max(
           popoverMinHeightPx,
-          playerRect.bottom -
-            triggerRect.bottom -
-            popoverGapPx -
-            popoverEdgePadPx,
+          playerRect.bottom - triggerRect.bottom - popoverGapPx - popoverEdgePadPx,
         ),
       ),
     };
@@ -172,14 +168,11 @@ export function PopoverMenu({
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const [mobileSheetDragOffset, setMobileSheetDragOffset] = useState(0);
   const [mobileSheetDragging, setMobileSheetDragging] = useState(false);
-  const [panelLayout, setPanelLayout] = useState<PopoverPanelLayout | null>(
-    null,
-  );
+  const [panelLayout, setPanelLayout] = useState<PopoverPanelLayout | null>(null);
   const isControlled = controlledOpen !== undefined;
   const isOpen = controlledOpen ?? internalOpen;
   const isMobileSheet = mobilePresentation === "sheet" && mobileInteraction;
-  const isContainedMobileSheet =
-    isMobileSheet && Boolean(mobileSheetPortalTarget);
+  const isContainedMobileSheet = isMobileSheet && Boolean(mobileSheetPortalTarget);
 
   const setOpen = useCallback(
     (nextOpen: boolean) => {
@@ -198,9 +191,9 @@ export function PopoverMenu({
 
   const getItems = useCallback((): HTMLElement[] => {
     if (!panelRef.current) return [];
-    return Array.from(
-      panelRef.current.querySelectorAll<HTMLElement>(menuItemSelector),
-    ).filter((item) => !item.hasAttribute("disabled"));
+    return Array.from(panelRef.current.querySelectorAll<HTMLElement>(menuItemSelector)).filter(
+      (item) => !item.hasAttribute("disabled"),
+    );
   }, []);
 
   useLayoutEffect(() => {
@@ -238,13 +231,9 @@ export function PopoverMenu({
       setPanelLayout(measurePopoverPanelLayout(trigger, side, align));
     };
     update();
-    const observed =
-      trigger.closest("[data-video-player-root]") ??
-      getPopoverOverlayHost(trigger);
+    const observed = trigger.closest("[data-video-player-root]") ?? getPopoverOverlayHost(trigger);
     const observer =
-      observed && typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(update)
-        : null;
+      observed && typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
     if (observed) observer?.observe(observed);
     window.addEventListener("resize", update);
     return () => {
@@ -266,8 +255,7 @@ export function PopoverMenu({
       }
     };
     document.addEventListener("pointerdown", handlePointerDown, true);
-    return () =>
-      document.removeEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
   }, [closeMenu, isMobileSheet, isOpen]);
 
   useEffect(() => {
@@ -287,9 +275,7 @@ export function PopoverMenu({
     setOpen(true);
   };
 
-  const handleTriggerKeyDown = (
-    event: ReactKeyboardEvent<HTMLButtonElement>,
-  ) => {
+  const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
       openWithFocus("first");
@@ -307,9 +293,7 @@ export function PopoverMenu({
 
   const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const items = getItems();
-    const currentIndex = items.findIndex(
-      (item) => item === document.activeElement,
-    );
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
     const navigationOwner =
       event.target instanceof Element &&
       event.target.closest("input, textarea, select, [role='slider']");
@@ -341,18 +325,12 @@ export function PopoverMenu({
     const target = event.target;
     if (!(target instanceof Element)) return;
     const item = target.closest<HTMLElement>(menuItemSelector);
-    if (
-      closeOnItemSelect &&
-      item &&
-      !item.hasAttribute("data-menu-keep-open")
-    ) {
+    if (closeOnItemSelect && item && !item.hasAttribute("data-menu-keep-open")) {
       closeAndRestoreFocus();
     }
   };
 
-  const handleMobileSheetDragStart = (
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) => {
+  const handleMobileSheetDragStart = (event: ReactPointerEvent<HTMLDivElement>) => {
     mobileSheetDragRef.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
@@ -361,18 +339,13 @@ export function PopoverMenu({
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
-  const handleMobileSheetDragMove = (
-    event: ReactPointerEvent<HTMLDivElement>,
-  ) => {
+  const handleMobileSheetDragMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = mobileSheetDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     setMobileSheetDragOffset(Math.max(0, event.clientY - drag.startY));
   };
 
-  const finishMobileSheetDrag = (
-    event: ReactPointerEvent<HTMLDivElement>,
-    cancelled = false,
-  ) => {
+  const finishMobileSheetDrag = (event: ReactPointerEvent<HTMLDivElement>, cancelled = false) => {
     const drag = mobileSheetDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     mobileSheetDragRef.current = null;
@@ -420,8 +393,7 @@ export function PopoverMenu({
           isMobileSheet && mobileSheetDragOffset > 0
             ? `translate3d(0, ${mobileSheetDragOffset}px, 0)`
             : undefined,
-        transitionDuration:
-          isMobileSheet && mobileSheetDragging ? "0ms" : undefined,
+        transitionDuration: isMobileSheet && mobileSheetDragging ? "0ms" : undefined,
       }}
       className={classNames(
         isMobileSheet
@@ -430,10 +402,7 @@ export function PopoverMenu({
               isContainedMobileSheet ? "absolute" : "fixed",
               mobileSheetPanelClassName,
             )
-          : classNames(
-              panelClass,
-              panelLayout ? "pointer-events-auto" : positionClass,
-            ),
+          : classNames(panelClass, panelLayout ? "pointer-events-auto" : positionClass),
         panelClassName,
       )}
       onClick={handleMenuClick}
@@ -442,7 +411,7 @@ export function PopoverMenu({
       {isMobileSheet ? (
         <div
           data-video-player-mobile-sheet-drag-handle=""
-          className="flex min-h-16 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-2 px-4 pb-3 pt-2 active:cursor-grabbing"
+          className="flex min-h-16 shrink-0 cursor-grab touch-none flex-col items-center justify-center gap-2 px-4 pt-2 pb-3 active:cursor-grabbing"
           onPointerDown={handleMobileSheetDragStart}
           onPointerMove={handleMobileSheetDragMove}
           onPointerUp={finishMobileSheetDrag}
@@ -466,9 +435,7 @@ export function PopoverMenu({
           aria-label={resolvedMenuLabel}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
         >
-          {typeof children === "function"
-            ? children({ close: closeMenu })
-            : children}
+          {typeof children === "function" ? children({ close: closeMenu }) : children}
         </div>
       ) : typeof children === "function" ? (
         children({ close: closeMenu })
@@ -501,18 +468,11 @@ export function PopoverMenu({
         : panel;
 
   return (
-    <div
-      ref={rootRef}
-      className={classNames("relative inline-flex", className)}
-    >
+    <div ref={rootRef} className={classNames("relative inline-flex", className)}>
       <button
         ref={triggerRef}
         type="button"
-        className={classNames(
-          triggerClass,
-          mobileInteraction && "!text-xs",
-          triggerClassName,
-        )}
+        className={classNames(triggerClass, mobileInteraction && "!text-xs", triggerClassName)}
         aria-controls={isOpen ? menuId : undefined}
         aria-expanded={isOpen}
         aria-haspopup={isMobileSheet ? "dialog" : "menu"}

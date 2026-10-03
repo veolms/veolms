@@ -26,11 +26,7 @@ export interface OtpServiceOptions {
   academyName: string;
 }
 
-export function createOtpService({
-  database,
-  services,
-  academyName,
-}: OtpServiceOptions) {
+export function createOtpService({ database, services, academyName }: OtpServiceOptions) {
   /** Existing accounts get a login code; unknown identifiers get a signup code. */
   async function resolveOtpPurpose(
     identifier: string,
@@ -44,18 +40,12 @@ export function createOtpService({
 
     if (user) {
       if (user.is_deleted) {
-        throw new AppError(
-          403,
-          "ACCOUNT_DEACTIVATED",
-          "This account has been deactivated.",
-        );
+        throw new AppError(403, "ACCOUNT_DEACTIVATED", "This account has been deactivated.");
       }
       return "login";
     }
 
-    return identifierType === "email"
-      ? "email_verification"
-      : "phone_verification";
+    return identifierType === "email" ? "email_verification" : "phone_verification";
   }
 
   async function assertOtpSendAllowed(
@@ -96,10 +86,7 @@ export function createOtpService({
     }
   }
 
-  async function sendOtp(
-    identifier: string,
-    identifierType: IdentifierType,
-  ): Promise<void> {
+  async function sendOtp(identifier: string, identifierType: IdentifierType): Promise<void> {
     const purpose = await resolveOtpPurpose(identifier, identifierType);
     await sendOtpWithPurpose(identifier, identifierType, purpose);
   }

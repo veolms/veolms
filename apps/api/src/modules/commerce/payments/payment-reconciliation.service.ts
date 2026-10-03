@@ -41,9 +41,7 @@ export interface PaymentReconciliationService {
    * (order paid, coupon redeemed, access granted, enrollment created) to
    * execute more than once.
    */
-  finalizeSuccessfulPayment(
-    params: FinalizePaymentParams,
-  ): Promise<FinalizePaymentResult>;
+  finalizeSuccessfulPayment(params: FinalizePaymentParams): Promise<FinalizePaymentResult>;
 }
 
 export function createPaymentReconciliationService({
@@ -119,10 +117,7 @@ export function createPaymentReconciliationService({
       }
 
       // 1. Record successful payment attempt
-      const existingAttempts = await paymentRepo.listPaymentAttempts(
-        trx,
-        paymentId,
-      );
+      const existingAttempts = await paymentRepo.listPaymentAttempts(trx, paymentId);
       await paymentRepo.insertPaymentAttempt(trx, {
         id: crypto.randomUUID(),
         payment_id: paymentId,
@@ -133,11 +128,7 @@ export function createPaymentReconciliationService({
 
       // 2. Mark order paid — idempotent conditional UPDATE
       //    (safe even if somehow called twice because WHERE filters non-paid statuses)
-      const markedPaid = await orderRepo.markOrderPaidIfPending(
-        trx,
-        order.id,
-        now,
-      );
+      const markedPaid = await orderRepo.markOrderPaidIfPending(trx, order.id, now);
       if (!markedPaid) {
         // The payment claim gate above succeeded, but the order itself is in
         // a settled state (cancelled/paid/partially_refunded/refunded) that
@@ -160,17 +151,16 @@ export function createPaymentReconciliationService({
           .where("id", "=", order.coupon_id)
           .executeTakeFirst();
 
-        const redemptionResult =
-          await couponRepo.insertCouponRedemptionIfLimitNotReached(trx, {
-            id: crypto.randomUUID(),
-            coupon_id: order.coupon_id,
-            user_id: order.user_id,
-            order_id: order.id,
-            discount_amount: order.discount_amount,
-            global_usage_limit: coupon?.global_usage_limit ?? null,
-            per_user_limit: coupon?.per_user_limit ?? null,
-            created_at: now,
-          });
+        const redemptionResult = await couponRepo.insertCouponRedemptionIfLimitNotReached(trx, {
+          id: crypto.randomUUID(),
+          coupon_id: order.coupon_id,
+          user_id: order.user_id,
+          order_id: order.id,
+          discount_amount: order.discount_amount,
+          global_usage_limit: coupon?.global_usage_limit ?? null,
+          per_user_limit: coupon?.per_user_limit ?? null,
+          created_at: now,
+        });
 
         if (!redemptionResult.success) {
           // The gateway has already captured this payment (real money moved)

@@ -100,18 +100,9 @@ export interface ShakaPreloadManagerLike {
 }
 
 export interface ShakaPlayerLike {
-  addEventListener(
-    type: string,
-    listener: (event: ShakaEventLike) => void,
-  ): void;
-  removeEventListener(
-    type: string,
-    listener: (event: ShakaEventLike) => void,
-  ): void;
-  attach(
-    media: HTMLMediaElement,
-    initializeMediaSource?: boolean,
-  ): Promise<void>;
+  addEventListener(type: string, listener: (event: ShakaEventLike) => void): void;
+  removeEventListener(type: string, listener: (event: ShakaEventLike) => void): void;
+  attach(media: HTMLMediaElement, initializeMediaSource?: boolean): Promise<void>;
   detach(): Promise<void>;
   load(
     uriOrPreloader: string | ShakaPreloadManagerLike | null,
@@ -189,8 +180,7 @@ export async function defaultShakaRuntimeLoader(): Promise<unknown> {
 
 export function resolveShakaRuntime(module: unknown): ShakaRuntimeLike {
   const record = module as { default?: unknown } | null;
-  const candidate = (record?.default ??
-    module) as Partial<ShakaRuntimeLike> | null;
+  const candidate = (record?.default ?? module) as Partial<ShakaRuntimeLike> | null;
 
   if (
     !candidate ||
@@ -204,14 +194,10 @@ export function resolveShakaRuntime(module: unknown): ShakaRuntimeLike {
   return candidate as ShakaRuntimeLike;
 }
 
-export function normalizeShakaQuality(
-  track: ShakaVariantTrackLike,
-): VideoQuality {
+export function normalizeShakaQuality(track: ShakaVariantTrackLike): VideoQuality {
   const heightLabel = track.height ? `${track.height}p` : "Audio only";
   const frameRateLabel =
-    track.frameRate && track.frameRate > 30
-      ? ` ${Math.round(track.frameRate)}fps`
-      : "";
+    track.frameRate && track.frameRate > 30 ? ` ${Math.round(track.frameRate)}fps` : "";
 
   return {
     id: `shaka-quality:${String(track.id)}`,
@@ -227,10 +213,7 @@ export function normalizeShakaQuality(
   };
 }
 
-export function normalizeShakaAudioTrack(
-  track: ShakaAudioTrackLike,
-  index = 0,
-): VideoAudioTrack {
+export function normalizeShakaAudioTrack(track: ShakaAudioTrackLike, index = 0): VideoAudioTrack {
   const language = track.language || "und";
   const fingerprint = [
     track.id ?? index,
@@ -253,9 +236,7 @@ export function normalizeShakaAudioTrack(
   };
 }
 
-export function normalizeShakaTextTrack(
-  track: ShakaTextTrackLike,
-): VideoTextTrack {
+export function normalizeShakaTextTrack(track: ShakaTextTrackLike): VideoTextTrack {
   const language = track.language || "und";
   return {
     id: `shaka-text:${String(track.id)}`,
@@ -348,12 +329,10 @@ function retryConfiguration(
   const mapped: Record<string, number> = {};
   if (retry.maxAttempts !== undefined) mapped.maxAttempts = retry.maxAttempts;
   if (retry.baseDelayMs !== undefined) mapped.baseDelay = retry.baseDelayMs;
-  if (retry.backoffFactor !== undefined)
-    mapped.backoffFactor = retry.backoffFactor;
+  if (retry.backoffFactor !== undefined) mapped.backoffFactor = retry.backoffFactor;
   if (retry.fuzzFactor !== undefined) mapped.fuzzFactor = retry.fuzzFactor;
   if (retry.timeoutMs !== undefined) mapped.timeout = retry.timeoutMs;
-  if (retry.stallTimeoutMs !== undefined)
-    mapped.stallTimeout = retry.stallTimeoutMs;
+  if (retry.stallTimeoutMs !== undefined) mapped.stallTimeout = retry.stallTimeoutMs;
   if (retry.connectionTimeoutMs !== undefined) {
     mapped.connectionTimeout = retry.connectionTimeoutMs;
   }
@@ -365,12 +344,8 @@ function robustnessConfiguration(
 ): Record<string, unknown> {
   return {
     ...(config.headers ? { headers: { ...config.headers } } : {}),
-    ...(config.audioRobustness
-      ? { audioRobustness: [...config.audioRobustness] }
-      : {}),
-    ...(config.videoRobustness
-      ? { videoRobustness: [...config.videoRobustness] }
-      : {}),
+    ...(config.audioRobustness ? { audioRobustness: [...config.audioRobustness] } : {}),
+    ...(config.videoRobustness ? { videoRobustness: [...config.videoRobustness] } : {}),
   };
 }
 
@@ -387,8 +362,7 @@ function decodeFairPlaySkdUri(data: Uint8Array): string {
   for (let index = 1; index < data.byteLength; index += 2) {
     if (data[index] === 0) zeroHighBytes += 1;
   }
-  const encoding =
-    pairs > 0 && zeroHighBytes / pairs > 0.4 ? "utf-16le" : "utf-8";
+  const encoding = pairs > 0 && zeroHighBytes / pairs > 0.4 ? "utf-16le" : "utf-8";
   return new TextDecoder(encoding).decode(data).replace(/\0+$/u, "").trim();
 }
 
@@ -402,15 +376,11 @@ export function createShakaConfiguration(
 
   result.streaming = {
     segmentPrefetchLimit: SHAKA_SEGMENT_PREFETCH_LIMIT,
-    ...(streaming?.bufferingGoal !== undefined
-      ? { bufferingGoal: streaming.bufferingGoal }
-      : {}),
+    ...(streaming?.bufferingGoal !== undefined ? { bufferingGoal: streaming.bufferingGoal } : {}),
     ...(streaming?.rebufferingGoal !== undefined
       ? { rebufferingGoal: streaming.rebufferingGoal }
       : {}),
-    ...(streaming?.bufferBehind !== undefined
-      ? { bufferBehind: streaming.bufferBehind }
-      : {}),
+    ...(streaming?.bufferBehind !== undefined ? { bufferBehind: streaming.bufferBehind } : {}),
     ...(streaming?.lowLatencyMode !== undefined
       ? { lowLatencyMode: streaming.lowLatencyMode }
       : {}),
@@ -427,12 +397,8 @@ export function createShakaConfiguration(
 
   if (streaming?.abrEnabled !== undefined || streaming?.abrRestrictions) {
     result.abr = {
-      ...(streaming.abrEnabled !== undefined
-        ? { enabled: streaming.abrEnabled }
-        : {}),
-      ...(streaming.abrRestrictions
-        ? { restrictions: { ...streaming.abrRestrictions } }
-        : {}),
+      ...(streaming.abrEnabled !== undefined ? { enabled: streaming.abrEnabled } : {}),
+      ...(streaming.abrRestrictions ? { restrictions: { ...streaming.abrRestrictions } } : {}),
     };
   }
 
@@ -459,9 +425,7 @@ export function createShakaConfiguration(
     }
     if (drm.playready) {
       servers["com.microsoft.playready"] = drm.playready.licenseUrl;
-      advanced["com.microsoft.playready"] = robustnessConfiguration(
-        drm.playready,
-      );
+      advanced["com.microsoft.playready"] = robustnessConfiguration(drm.playready);
     }
     if (drm.fairplay) {
       const fairPlayAdvanced = {
@@ -469,9 +433,7 @@ export function createShakaConfiguration(
         ...(drm.fairplay.certificateUrl
           ? { serverCertificateUri: drm.fairplay.certificateUrl }
           : {}),
-        ...(drm.fairplay.certificate
-          ? { serverCertificate: drm.fairplay.certificate }
-          : {}),
+        ...(drm.fairplay.certificate ? { serverCertificate: drm.fairplay.certificate } : {}),
       };
       servers["com.apple.fps"] = drm.fairplay.licenseUrl;
       servers["com.apple.fps.1_0"] = drm.fairplay.licenseUrl;
@@ -495,9 +457,7 @@ export function createShakaConfiguration(
     }
 
     if (networking?.licenseRetry) {
-      drmConfiguration.retryParameters = retryConfiguration(
-        networking.licenseRetry,
-      );
+      drmConfiguration.retryParameters = retryConfiguration(networking.licenseRetry);
     }
 
     const fairPlay = drm.fairplay;
@@ -626,16 +586,12 @@ export function resolveShakaLoadMimeType(
   source: VideoSource,
   options: import("../../core/types").VideoLoadOptions = {},
 ): string | undefined {
-  const manifestMimeTypes: Partial<
-    Record<import("../../core/types").VideoSourceKind, string>
-  > = {
+  const manifestMimeTypes: Partial<Record<import("../../core/types").VideoSourceKind, string>> = {
     dash: "application/dash+xml",
     hls: "application/x-mpegurl",
   };
   return (
-    options.mimeType ??
-    source.type ??
-    (source.kind ? manifestMimeTypes[source.kind] : undefined)
+    options.mimeType ?? source.type ?? (source.kind ? manifestMimeTypes[source.kind] : undefined)
   );
 }
 

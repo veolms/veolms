@@ -24,7 +24,7 @@ export function VideoPlayerCloseButton({
       type="button"
       aria-label="Close video player"
       title="Close video player"
-      className="absolute right-2 top-2 z-30 inline-flex size-9 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      className="absolute top-2 right-2 z-30 inline-flex size-9 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       onClick={onClose}
     >
       {icon}
@@ -35,11 +35,7 @@ export function VideoPlayerCloseButton({
 export function ErrorOverlay({ onClose }: { onClose?: () => void }) {
   const controller = usePlayerController();
   const error = usePlayerState(({ media }) => media.error);
-  const {
-    close: CloseIcon,
-    retry: RetryIcon,
-    warning: WarningIcon,
-  } = usePlayerTheme().icons;
+  const { close: CloseIcon, retry: RetryIcon, warning: WarningIcon } = usePlayerTheme().icons;
   if (!error) return null;
 
   return (
@@ -47,19 +43,12 @@ export function ErrorOverlay({ onClose }: { onClose?: () => void }) {
       className="absolute inset-0 z-40 grid place-items-center overflow-hidden rounded-[inherit] bg-black/75 p-6 text-center text-white backdrop-blur-sm"
       role="alert"
     >
-      {onClose ? (
-        <VideoPlayerCloseButton
-          icon={<CloseIcon size={20} />}
-          onClose={onClose}
-        />
-      ) : null}
+      {onClose ? <VideoPlayerCloseButton icon={<CloseIcon size={20} />} onClose={onClose} /> : null}
       <div className="max-w-sm space-y-4">
         <WarningIcon size={42} active className="mx-auto text-amber-300" />
         <div className="space-y-1">
           <h2 className="text-base font-semibold">Unable to play this video</h2>
-          <p className="text-sm text-white/70">
-            {messages[error.category] ?? error.message}
-          </p>
+          <p className="text-sm text-white/70">{messages[error.category] ?? error.message}</p>
         </div>
         {error.recoverable ? (
           <button

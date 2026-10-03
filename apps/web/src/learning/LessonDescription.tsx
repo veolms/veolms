@@ -1,8 +1,5 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import {
-  parseChapterDeclarationsFromDescription,
-  resolveChapters,
-} from "@veolms/video-player";
+import { parseChapterDeclarationsFromDescription, resolveChapters } from "@veolms/video-player";
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "./discussion-editor/types";
 import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
@@ -15,20 +12,14 @@ export const DESCRIPTION_SURFACE = `rounded-xl ${DESCRIPTION_SURFACE_BASE}`;
 
 const DESCRIPTION_PREVIEW_TYPOGRAPHY = "text-sm leading-6 sm:text-[15px]";
 
-function handleCollapsedKeyDown(
-  event: KeyboardEvent<HTMLElement>,
-  onExpand: () => void,
-) {
+function handleCollapsedKeyDown(event: KeyboardEvent<HTMLElement>, onExpand: () => void) {
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
     onExpand();
   }
 }
 
-function handleExpandedKeyDown(
-  event: KeyboardEvent<HTMLElement>,
-  onCollapse: () => void,
-) {
+function handleExpandedKeyDown(event: KeyboardEvent<HTMLElement>, onCollapse: () => void) {
   if (event.key !== "Escape") {
     return;
   }
@@ -61,18 +52,13 @@ export function LessonDescription({
   const [expanded, setExpanded] = useState(false);
 
   const rawMarkdown = (description ?? "").trim();
-  const draftContent = useMemo(
-    () => createDiscussionDraft(rawMarkdown),
-    [rawMarkdown],
-  );
+  const draftContent = useMemo(() => createDiscussionDraft(rawMarkdown), [rawMarkdown]);
   const chapterDeclarations = useMemo(() => {
     const resolved = resolveChapters({ description: rawMarkdown });
     if (resolved.source !== "description") return [];
 
     const accepted = new Set(
-      resolved.chapters.map(
-        (chapter) => `${chapter.startTime}\u0000${chapter.title}`,
-      ),
+      resolved.chapters.map((chapter) => `${chapter.startTime}\u0000${chapter.title}`),
     );
 
     return parseChapterDeclarationsFromDescription(rawMarkdown).filter(
@@ -111,9 +97,7 @@ export function LessonDescription({
       ref={sectionRef}
       data-lesson-description
       data-expanded={expanded ? "true" : "false"}
-      aria-label={
-        expanded ? "Lesson description" : "Show more of the lesson description"
-      }
+      aria-label={expanded ? "Lesson description" : "Show more of the lesson description"}
       aria-expanded={expanded}
       role={expanded || isLoading || !hasDescription ? undefined : "button"}
       tabIndex={expanded || isLoading || !hasDescription ? -1 : 0}
@@ -125,7 +109,7 @@ export function LessonDescription({
             ? undefined
             : (event) => handleCollapsedKeyDown(event, expand)
       }
-      className={`relative isolate overflow-hidden px-3.5 py-2.5 ${DESCRIPTION_SURFACE}${expanded || isLoading || !hasDescription ? "" : " cursor-pointer"}`}
+      className={`relative isolate overflow-hidden px-3.5 py-2.5 ${DESCRIPTION_SURFACE}${expanded || isLoading || !hasDescription ? "" : "cursor-pointer"}`}
     >
       <SurfaceTopRightAccentGlow />
       <div
@@ -136,9 +120,7 @@ export function LessonDescription({
       >
         {isLoading ? (
           <div>
-            <h2 className="mt-0 mb-2 text-lg font-bold leading-tight text-(--text)">
-              Description
-            </h2>
+            <h2 className="mt-0 mb-2 text-lg leading-tight font-bold text-(--text)">Description</h2>
             <CenteredLoadingSpinner
               label="Loading lesson description"
               className="min-h-20 w-full"
@@ -156,15 +138,13 @@ export function LessonDescription({
               className="wrap-anywhere [&>:first-child]:mt-0"
             />
           ) : (
-            <p className="m-0 text-(--muted) text-sm italic">
+            <p className="m-0 text-sm text-(--muted) italic">
               No description provided for this lesson.
             </p>
           )
         ) : (
           <div>
-            <h2 className="mt-0 mb-2 text-lg font-bold leading-tight text-(--text)">
-              Description
-            </h2>
+            <h2 className="mt-0 mb-2 text-lg leading-tight font-bold text-(--text)">Description</h2>
             <p
               data-lesson-description-preview
               className={`line-clamp-2 overflow-hidden ${DESCRIPTION_PREVIEW_TYPOGRAPHY} text-(--text-secondary) sm:line-clamp-3`}
@@ -199,7 +179,7 @@ export function LessonDescription({
             aria-controls={contentId}
             aria-label="Show less of the lesson description"
             onClick={() => collapse()}
-            className="inline rounded-lg pl-0 ml-0 pr-1 font-normal text-(--accent-ink,var(--accent)) transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+            className="ml-0 inline rounded-lg pr-1 pl-0 font-normal text-(--accent-ink,var(--accent)) transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
           >
             Show less
           </button>

@@ -21,9 +21,7 @@ export function useQuiz(id: string | null | undefined) {
 export function useMyQuizAssignments(options?: { enabled?: boolean }) {
   return useQuery<
     {
-      assignments: Awaited<
-        ReturnType<typeof quizzesService.listMineAssignments>
-      >["assignments"];
+      assignments: Awaited<ReturnType<typeof quizzesService.listMineAssignments>>["assignments"];
     },
     ApiError
   >({

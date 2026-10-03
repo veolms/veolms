@@ -10,22 +10,12 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import {
-  Outlet,
-  useLocation,
-  useMatches,
-  useNavigate,
-  useParams,
-} from "react-router";
+import { Outlet, useLocation, useMatches, useNavigate, useParams } from "react-router";
 import type { Route } from "./+types/academy-layout";
 import academyShellStylesheet from "../shell-theme.css?url";
 import type { AcademyStaticPageData } from "./academyStaticPageData";
 import { CoursesPage } from "../CoursesPage";
-import {
-  getCourseRouteKey,
-  type Course,
-  type CourseOpenOptions,
-} from "../courses/catalogue";
+import { getCourseRouteKey, type Course, type CourseOpenOptions } from "../courses/catalogue";
 import { getStudentCatalogueEnrollmentFilterFromPath } from "../courses/catalogueRoutes";
 import { authKeys, useCurrentUser, useSignOut } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
@@ -73,8 +63,7 @@ const PersistentLearningPlayerHost = lazy(() =>
     default: module.PersistentLearningPlayerHost,
   })),
 );
-const loadLearningMiniPlayer = () =>
-  import("../learning/player/LearningMiniPlayer");
+const loadLearningMiniPlayer = () => import("../learning/player/LearningMiniPlayer");
 const LearningMiniPlayer = lazy(() =>
   loadLearningMiniPlayer().then((module) => ({
     default: module.LearningMiniPlayer,
@@ -111,10 +100,7 @@ import {
 import { getInitialSidebarPreferences } from "../shell/sidebarPreferences";
 import { normalizeSidebarDockItems } from "../settings/settingsPreferences";
 import { autosyncManager } from "../lib/autosync";
-import {
-  getNumberShortcutIndex,
-  isEditingShortcutTarget,
-} from "../keyboardShortcuts";
+import { getNumberShortcutIndex, isEditingShortcutTarget } from "../keyboardShortcuts";
 import {
   getDestinationPath,
   getMatchedRouteDescriptor,
@@ -129,9 +115,7 @@ export interface AcademyOutletContext {
   mobileBottomNavigation: boolean;
   mobileBottomNavigationHidden: boolean;
   navigateTo: NavigateTo;
-  onLearningPlayerMinimizeGestureChange: (
-    state: LessonPlayerMinimizeGestureState,
-  ) => void;
+  onLearningPlayerMinimizeGestureChange: (state: LessonPlayerMinimizeGestureState) => void;
   onMiniPlayerRestoreReady: () => void;
   openLearningMiniPlayer: (session: LearningMiniPlayerSession) => void;
   persistentPlayerMounted: boolean;
@@ -151,10 +135,8 @@ interface ApplicationScrollRestorationEntry {
   canRestoreScroll?: NavigationOptions["canRestoreScroll"];
 }
 
-const getApplicationScrollStorageKey = (
-  path: string,
-  restorationKey?: string,
-) => (restorationKey ? `${path}\u0000${restorationKey}` : path);
+const getApplicationScrollStorageKey = (path: string, restorationKey?: string) =>
+  restorationKey ? `${path}\u0000${restorationKey}` : path;
 
 const ACADEMY_NAVIGATION_ORIGIN_PATH = "academyNavigationOriginPath";
 const ACADEMY_NAVIGATION_ORIGIN_SECTION = "academyNavigationOriginSection";
@@ -165,24 +147,18 @@ function readAcademyNavigationState(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function getNavigationMatch(
-  pathname: string,
-  items: readonly NavigationItemWithMetadata[],
-) {
+function getNavigationMatch(pathname: string, items: readonly NavigationItemWithMetadata[]) {
   const path = normalizeNavigationPath(pathname.split(/[?#]/, 1)[0] || "/");
-  let bestMatch:
-    { label: string; path: string; exact: boolean; length: number } | undefined;
+  let bestMatch: { label: string; path: string; exact: boolean; length: number } | undefined;
 
   for (const [label, , metadata] of items) {
     const itemPath = normalizeNavigationPath(metadata?.routeLink ?? "/");
     // The Discussions menu resolves to the last tab visited in this session,
     // so its tab URLs are still the menu's destination rather than a detail
     // page that should inherit the previously selected section.
-    const isDiscussionTab =
-      itemPath === "/discussions" && path.startsWith("/discussions/");
+    const isDiscussionTab = itemPath === "/discussions" && path.startsWith("/discussions/");
     const exact = path === itemPath || isDiscussionTab;
-    const isChild =
-      itemPath !== "/" && path.startsWith(`${itemPath.replace(/\/$/, "")}/`);
+    const isChild = itemPath !== "/" && path.startsWith(`${itemPath.replace(/\/$/, "")}/`);
     if (!exact && !isChild) continue;
     if (!bestMatch || itemPath.length > bestMatch.length) {
       bestMatch = { label, path: itemPath, exact, length: itemPath.length };
@@ -215,15 +191,10 @@ function getWorkspaceNavigationItems(
     resolveWorkspaceRole(roles, rolePreference),
     hasAdminRole(roles),
   );
-  return navigation.filter(
-    ([label]) => label !== "Settings" || !settingsDocked,
-  );
+  return navigation.filter(([label]) => label !== "Settings" || !settingsDocked);
 }
 
-function getFallbackNavigationPath(
-  path: string,
-  items: readonly NavigationItemWithMetadata[],
-) {
+function getFallbackNavigationPath(path: string, items: readonly NavigationItemWithMetadata[]) {
   const match = getNavigationMatch(path, items);
   if (match && !match.exact) return match.path;
   const courses = items.find(([label]) => label === "Courses");
@@ -241,9 +212,7 @@ const clearLearningPlayerMotionProperties = (element: HTMLElement) => {
   delete element.dataset.learningPlayerRestoring;
 };
 
-const resolveLearningBackgroundSurface = (
-  returnPath: string,
-): LearningBackgroundSurface => {
+const resolveLearningBackgroundSurface = (returnPath: string): LearningBackgroundSurface => {
   try {
     const url = new URL(returnPath, "https://procodrr.local");
     const pathname = normalizeNavigationPath(url.pathname);
@@ -285,9 +254,7 @@ const isSettingsPath = (path: string) => {
 };
 
 const isLearningRoutePath = (path: string) =>
-  normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/").startsWith(
-    "/learn/",
-  );
+  normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/").startsWith("/learn/");
 
 const getLearningCourseRouteKey = (path: string) => {
   const pathname = normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/");
@@ -300,13 +267,8 @@ const getLearningCourseRouteKey = (path: string) => {
   }
 };
 
-const decorateCoursePlayerLaunch = (
-  destinationPath: string,
-  sourcePath: string,
-) => {
-  const sourcePathname = normalizeNavigationPath(
-    sourcePath.split(/[?#]/, 1)[0] || "/",
-  );
+const decorateCoursePlayerLaunch = (destinationPath: string, sourcePath: string) => {
+  const sourcePathname = normalizeNavigationPath(sourcePath.split(/[?#]/, 1)[0] || "/");
   if (sourcePathname.startsWith("/learn/")) return destinationPath;
 
   try {
@@ -320,16 +282,11 @@ const decorateCoursePlayerLaunch = (
       pathParts.length > 3
     )
       return destinationPath;
-    if (
-      destinationUrl.searchParams.has("from") ||
-      destinationUrl.searchParams.has("returnTo")
-    )
+    if (destinationUrl.searchParams.has("from") || destinationUrl.searchParams.has("returnTo"))
       return destinationPath;
 
     const courseId = decodeURIComponent(pathParts[1]!);
-    const lessonIdentifier = pathParts[2]
-      ? decodeURIComponent(pathParts[2])
-      : undefined;
+    const lessonIdentifier = pathParts[2] ? decodeURIComponent(pathParts[2]) : undefined;
     return getCoursePlayerLaunchPath(courseId, sourcePath, lessonIdentifier);
   } catch {
     return destinationPath;
@@ -350,9 +307,7 @@ export default function AcademyLayout() {
     position: ApplicationScrollPosition;
     canRestoreScroll?: NavigationOptions["canRestoreScroll"];
   } | null>(null);
-  const locationPathRef = useRef(
-    `${location.pathname}${location.search}${location.hash}`,
-  );
+  const locationPathRef = useRef(`${location.pathname}${location.search}${location.hash}`);
   const renderedLocationPathRef = useRef(locationPathRef.current);
   const settingsReturnLocationRef = useRef({
     path: "/",
@@ -365,14 +320,11 @@ export default function AcademyLayout() {
     getLearningMiniPlayerSnapshot,
     getLearningMiniPlayerServerSnapshot,
   );
-  const [learningBackgroundMounted, setLearningBackgroundMounted] =
-    useState(false);
+  const [learningBackgroundMounted, setLearningBackgroundMounted] = useState(false);
   const [persistentPlayer, setPersistentPlayer] =
     useState<PersistentLearningPlayerRegistration | null>(null);
-  const [playerPresentation, setPlayerPresentation] =
-    useState<LearningPlayerPresentation>("full");
-  const persistentPlayerRef =
-    useRef<PersistentLearningPlayerRegistration | null>(null);
+  const [playerPresentation, setPlayerPresentation] = useState<LearningPlayerPresentation>("full");
+  const persistentPlayerRef = useRef<PersistentLearningPlayerRegistration | null>(null);
   const selectPersistentMiniPlayerLessonRef = useRef<
     (lessonNumber: number, options?: { retry?: boolean }) => void
   >(() => {});
@@ -381,9 +333,7 @@ export default function AcademyLayout() {
   const playerRestoreVersionRef = useRef(0);
   const learningBackgroundMountedRef = useRef(false);
   const learningMotionStageRef = useRef<HTMLDivElement>(null);
-  const learningMotionFadeStartViewportProgressRef = useRef<number | null>(
-    null,
-  );
+  const learningMotionFadeStartViewportProgressRef = useRef<number | null>(null);
   const learningMotionOffsetYRef = useRef(0);
   const learningMotionViewportHeightRef = useRef(0);
   const surfaceMotionFrameRef = useRef<number | null>(null);
@@ -394,13 +344,9 @@ export default function AcademyLayout() {
   const selectLessonTokenRef = useRef(0);
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
-  const staticCourseRouteData = matches.find((match) => match.id === "root")
-    ?.loaderData as AcademyStaticPageData | undefined;
-  const {
-    data: authUser,
-    isError: authUserError,
-    isFetched: authUserFetched,
-  } = useCurrentUser();
+  const staticCourseRouteData = matches.find((match) => match.id === "root")?.loaderData as
+    AcademyStaticPageData | undefined;
+  const { data: authUser, isError: authUserError, isFetched: authUserFetched } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const settingsDocked = normalizeSidebarDockItems(
@@ -411,20 +357,15 @@ export default function AcademyLayout() {
     [activeUser, settingsDocked],
   );
   const currentNavigationState = readAcademyNavigationState(location.state);
-  const originPathValue =
-    currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
-  const originSectionValue =
-    currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
+  const originPathValue = currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
+  const originSectionValue = currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
   const hasValidNavigationOrigin =
     typeof originPathValue === "string" &&
     originPathValue.startsWith("/") &&
     !originPathValue.startsWith("//") &&
     typeof originSectionValue === "string" &&
     workspaceNavigationItems.some(([label]) => label === originSectionValue);
-  const currentNavigationMatch = getNavigationMatch(
-    location.pathname,
-    workspaceNavigationItems,
-  );
+  const currentNavigationMatch = getNavigationMatch(location.pathname, workspaceNavigationItems);
   const activeRouteSection = hasValidNavigationOrigin
     ? originSectionValue
     : (currentNavigationMatch?.label ??
@@ -467,8 +408,7 @@ export default function AcademyLayout() {
       return;
     }
     const destination = pathname === "/my-learning" ? "/courses" : null;
-    if (destination)
-      void navigate(`${destination}${location.search}`, { replace: true });
+    if (destination) void navigate(`${destination}${location.search}`, { replace: true });
   }, [location.pathname, location.search, navigate, signOut]);
 
   useLayoutEffect(() => {
@@ -485,8 +425,7 @@ export default function AcademyLayout() {
       renderedLocationPathRef.current = currentLocationPath;
     }
 
-    const storedEntry =
-      applicationScrollPositionsRef.current.get(currentLocationPath);
+    const storedEntry = applicationScrollPositionsRef.current.get(currentLocationPath);
     const position =
       pending?.destinationPath === currentLocationPath
         ? pending.position
@@ -522,19 +461,11 @@ export default function AcademyLayout() {
         options?.exact ? destination : getDestinationPath(destination),
         locationPathRef.current,
       );
-      const requestedPathname = normalizeNavigationPath(
-        requestedPath.split(/[?#]/, 1)[0] || "/",
-      );
+      const requestedPathname = normalizeNavigationPath(requestedPath.split(/[?#]/, 1)[0] || "/");
       const isDiscussionsPath =
-        requestedPathname === "/discussions" ||
-        requestedPathname.startsWith("/discussions/");
+        requestedPathname === "/discussions" || requestedPathname.startsWith("/discussions/");
 
-      if (
-        isDiscussionsPath &&
-        authUserFetched &&
-        !authUserError &&
-        !activeUser
-      ) {
+      if (isDiscussionsPath && authUserFetched && !authUserError && !activeUser) {
         // Keep the confirmed signed-out state fresh so the login route can
         // render immediately without revalidating the same session query.
         queryClient.setQueryData(authKeys.me(), null);
@@ -543,37 +474,25 @@ export default function AcademyLayout() {
       }
 
       const performNavigation = () => {
-        const destinationPath = options?.exact
-          ? destination
-          : getDestinationPath(destination);
+        const destinationPath = options?.exact ? destination : getDestinationPath(destination);
         const activeLocationPath = locationPathRef.current;
-        const path = decorateCoursePlayerLaunch(
-          destinationPath,
-          activeLocationPath,
-        );
+        const path = decorateCoursePlayerLaunch(destinationPath, activeLocationPath);
         const navigationState = {
           ...readAcademyNavigationState(location.state),
         };
-        const targetNavigationMatch = getNavigationMatch(
-          path,
-          workspaceNavigationItems,
-        );
+        const targetNavigationMatch = getNavigationMatch(path, workspaceNavigationItems);
         if (targetNavigationMatch?.exact) {
           delete navigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
           delete navigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
         } else {
-          const existingOriginPath =
-            navigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
-          const existingOriginSection =
-            navigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
+          const existingOriginPath = navigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
+          const existingOriginSection = navigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
           const originIsValid =
             typeof existingOriginPath === "string" &&
             existingOriginPath.startsWith("/") &&
             !existingOriginPath.startsWith("//") &&
             typeof existingOriginSection === "string" &&
-            workspaceNavigationItems.some(
-              ([label]) => label === existingOriginSection,
-            );
+            workspaceNavigationItems.some(([label]) => label === existingOriginSection);
           const sourceNavigationMatch = getNavigationMatch(
             activeLocationPath,
             workspaceNavigationItems,
@@ -581,9 +500,7 @@ export default function AcademyLayout() {
           const originSection = originIsValid
             ? existingOriginSection
             : (sourceNavigationMatch?.label ??
-              (workspaceNavigationItems.some(
-                ([label]) => label === route.section,
-              )
+              (workspaceNavigationItems.some(([label]) => label === route.section)
                 ? route.section
                 : workspaceNavigationItems[0]?.[0]));
           if (originSection) {
@@ -614,11 +531,9 @@ export default function AcademyLayout() {
         const sourcePath = locationPathRef.current;
         const sourcePosition = readApplicationScrollPosition();
         const routeChanged =
-          normalizeNavigationPath(path) !==
-          normalizeNavigationPath(locationPathRef.current);
+          normalizeNavigationPath(path) !== normalizeNavigationPath(locationPathRef.current);
         const resetDestinationScroll =
-          options?.resetScroll ||
-          (isSettingsPath(path) && !isSettingsPath(sourcePath));
+          options?.resetScroll || (isSettingsPath(path) && !isSettingsPath(sourcePath));
         const sourceStorageKey = getApplicationScrollStorageKey(
           sourcePath,
           options?.sourceScrollRestorationKey,
@@ -632,10 +547,7 @@ export default function AcademyLayout() {
           canRestoreScroll: options?.canRestoreScroll,
         };
         if (options?.captureScroll !== false) {
-          applicationScrollPositionsRef.current.set(
-            sourceStorageKey,
-            sourceEntry,
-          );
+          applicationScrollPositionsRef.current.set(sourceStorageKey, sourceEntry);
           if (sourceStorageKey !== sourcePath) {
             applicationScrollPositionsRef.current.set(sourcePath, sourceEntry);
           }
@@ -655,8 +567,7 @@ export default function AcademyLayout() {
           const position = storedDestination?.position ?? { left: 0, top: 0 };
           const restorePosition = () => {
             const shouldRestore =
-              resetDestinationScroll ||
-              options?.canRestoreScroll?.(position) !== false;
+              resetDestinationScroll || options?.canRestoreScroll?.(position) !== false;
             scrollApplicationTo({
               ...(shouldRestore ? position : { left: 0, top: 0 }),
               behavior: "auto",
@@ -683,8 +594,7 @@ export default function AcademyLayout() {
           position,
           canRestoreScroll: resetDestinationScroll
             ? undefined
-            : (options?.canRestoreScroll ??
-              storedDestination?.canRestoreScroll),
+            : (options?.canRestoreScroll ?? storedDestination?.canRestoreScroll),
         };
         // Update synchronously so a second shortcut pressed before React's
         // route render still compares against the destination just requested.
@@ -746,8 +656,7 @@ export default function AcademyLayout() {
 
   useEffect(() => {
     const navigateByNumber = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditingShortcutTarget(event.target))
-        return;
+      if (event.defaultPrevented || isEditingShortcutTarget(event.target)) return;
 
       const cycleDirection =
         event.ctrlKey &&
@@ -760,14 +669,10 @@ export default function AcademyLayout() {
             : -1
           : null;
       const numberIndex =
-        cycleDirection === null && !event.altKey
-          ? getNumberShortcutIndex(event)
-          : null;
+        cycleDirection === null && !event.altKey ? getNumberShortcutIndex(event) : null;
       if (cycleDirection === null && numberIndex === null) return;
 
-      const storedWorkspaceRole = localStorage.getItem(
-        getWorkspaceRoleStorageKey(activeUser?.id),
-      );
+      const storedWorkspaceRole = localStorage.getItem(getWorkspaceRoleStorageKey(activeUser?.id));
       const userRoles = getUserRoles(activeUser);
       const rolePreference =
         storedWorkspaceRole === "creator" || storedWorkspaceRole === "student"
@@ -776,23 +681,16 @@ export default function AcademyLayout() {
             ? "creator"
             : "student";
       const navigationRole = resolveWorkspaceRole(userRoles, rolePreference);
-      const navigationItems = getRoleNavigationItems(
-        navigationRole,
-        hasAdminRole(userRoles),
-      );
+      const navigationItems = getRoleNavigationItems(navigationRole, hasAdminRole(userRoles));
       const orderedNavigation = navigationItems.filter(
         ([label]) =>
           label !== "Settings" ||
-          !normalizeSidebarDockItems(
-            getInitialSidebarPreferences().dockItems,
-          ).includes("settings"),
+          !normalizeSidebarDockItems(getInitialSidebarPreferences().dockItems).includes("settings"),
       );
 
       let destination: NavigationItemWithMetadata | undefined;
       if (cycleDirection !== null) {
-        const cycleNavigation = orderedNavigation.filter(
-          ([label]) => label !== "Logout",
-        );
+        const cycleNavigation = orderedNavigation.filter(([label]) => label !== "Logout");
         if (cycleNavigation.length === 0) return;
 
         const currentPath = normalizeNavigationPath(
@@ -802,15 +700,12 @@ export default function AcademyLayout() {
         let currentMatchLength = -1;
         cycleNavigation.forEach((item, index) => {
           const destinationPath = normalizeNavigationPath(
-            getDestinationPath(getNavigationDestination(item)).split(
-              /[?#]/,
-            )[0] || "/",
+            getDestinationPath(getNavigationDestination(item)).split(/[?#]/)[0] || "/",
           );
           const matches =
             destinationPath === "/"
               ? currentPath === "/"
-              : currentPath === destinationPath ||
-                currentPath.startsWith(`${destinationPath}/`);
+              : currentPath === destinationPath || currentPath.startsWith(`${destinationPath}/`);
           if (matches && destinationPath.length > currentMatchLength) {
             currentIndex = index;
             currentMatchLength = destinationPath.length;
@@ -821,8 +716,7 @@ export default function AcademyLayout() {
             ? cycleDirection > 0
               ? 0
               : cycleNavigation.length - 1
-            : (currentIndex + cycleDirection + cycleNavigation.length) %
-              cycleNavigation.length;
+            : (currentIndex + cycleDirection + cycleNavigation.length) % cycleNavigation.length;
         destination = cycleNavigation[nextIndex];
       } else if (numberIndex !== null) {
         destination = orderedNavigation[numberIndex];
@@ -881,64 +775,63 @@ export default function AcademyLayout() {
     [navigateTo],
   );
 
-  const registerPersistentPlayer =
-    useCallback<RegisterPersistentLearningPlayer>((registration) => {
-      void loadPersistentLearningPlayerHost().catch(() => undefined);
-      const token = Symbol("persistent-learning-player-registration");
-      const restoreVersionAtRegistration = playerRestoreVersionRef.current;
-      persistentRegistrationTokenRef.current = token;
-      const existing = persistentPlayerRef.current;
-      const resolvedRegistration =
-        registration.playerProps.playbackBootstrap == null &&
-        existing?.mediaKey === registration.mediaKey &&
-        existing.playerProps.playbackBootstrap != null
-          ? {
-              ...registration,
-              playerProps: {
-                ...registration.playerProps,
-                playbackBootstrap: existing.playerProps.playbackBootstrap,
-                refreshPlaybackToken:
-                  registration.playerProps.refreshPlaybackToken ??
-                  existing.playerProps.refreshPlaybackToken,
-              },
-            }
-          : registration;
-      persistentPlayerRef.current = resolvedRegistration;
-      setPersistentPlayer(resolvedRegistration);
-      if (playerPresentationRef.current === "mini") {
-        // Opening the learning route while the same (or another) course is
-        // minimized should expand into the in-page player, not leave a hollow
-        // lesson page with a stuck mini player.
-        restoringPlayerRef.current = true;
-      } else {
-        playerPresentationRef.current = "full";
-        setPlayerPresentation("full");
-      }
-      if (getLearningMiniPlayerSnapshot()) {
-        closeLearningMiniPlayerSession();
-      }
-
-      return () => {
-        queueMicrotask(() => {
-          if (persistentRegistrationTokenRef.current !== token) return;
-          const current = persistentPlayerRef.current;
-          if (!current) return;
-          const detachedPlayer = { ...current, anchor: null };
-          persistentPlayerRef.current = detachedPlayer;
-          setPersistentPlayer(detachedPlayer);
-          if (
-            shouldDemoteDetachedPersistentPlayer({
-              presentation: playerPresentationRef.current,
-              restoreVersionAtRegistration,
-              currentRestoreVersion: playerRestoreVersionRef.current,
-            })
-          ) {
-            playerPresentationRef.current = "mini";
-            setPlayerPresentation("mini");
+  const registerPersistentPlayer = useCallback<RegisterPersistentLearningPlayer>((registration) => {
+    void loadPersistentLearningPlayerHost().catch(() => undefined);
+    const token = Symbol("persistent-learning-player-registration");
+    const restoreVersionAtRegistration = playerRestoreVersionRef.current;
+    persistentRegistrationTokenRef.current = token;
+    const existing = persistentPlayerRef.current;
+    const resolvedRegistration =
+      registration.playerProps.playbackBootstrap == null &&
+      existing?.mediaKey === registration.mediaKey &&
+      existing.playerProps.playbackBootstrap != null
+        ? {
+            ...registration,
+            playerProps: {
+              ...registration.playerProps,
+              playbackBootstrap: existing.playerProps.playbackBootstrap,
+              refreshPlaybackToken:
+                registration.playerProps.refreshPlaybackToken ??
+                existing.playerProps.refreshPlaybackToken,
+            },
           }
-        });
-      };
-    }, []);
+        : registration;
+    persistentPlayerRef.current = resolvedRegistration;
+    setPersistentPlayer(resolvedRegistration);
+    if (playerPresentationRef.current === "mini") {
+      // Opening the learning route while the same (or another) course is
+      // minimized should expand into the in-page player, not leave a hollow
+      // lesson page with a stuck mini player.
+      restoringPlayerRef.current = true;
+    } else {
+      playerPresentationRef.current = "full";
+      setPlayerPresentation("full");
+    }
+    if (getLearningMiniPlayerSnapshot()) {
+      closeLearningMiniPlayerSession();
+    }
+
+    return () => {
+      queueMicrotask(() => {
+        if (persistentRegistrationTokenRef.current !== token) return;
+        const current = persistentPlayerRef.current;
+        if (!current) return;
+        const detachedPlayer = { ...current, anchor: null };
+        persistentPlayerRef.current = detachedPlayer;
+        setPersistentPlayer(detachedPlayer);
+        if (
+          shouldDemoteDetachedPersistentPlayer({
+            presentation: playerPresentationRef.current,
+            restoreVersionAtRegistration,
+            currentRestoreVersion: playerRestoreVersionRef.current,
+          })
+        ) {
+          playerPresentationRef.current = "mini";
+          setPlayerPresentation("mini");
+        }
+      });
+    };
+  }, []);
 
   const openLearningMiniPlayer = useCallback(
     (session: LearningMiniPlayerSession) => {
@@ -967,26 +860,17 @@ export default function AcademyLayout() {
   }, []);
 
   const openPersistentPlayerCourseOverview = useCallback(() => {
-    const slug =
-      persistentPlayer?.courseSlug ?? persistentPlayer?.courseRouteKey;
+    const slug = persistentPlayer?.courseSlug ?? persistentPlayer?.courseRouteKey;
     if (!slug) return;
     navigateTo(`/courses/${encodeURIComponent(slug)}/overview`);
-  }, [
-    navigateTo,
-    persistentPlayer?.courseRouteKey,
-    persistentPlayer?.courseSlug,
-  ]);
+  }, [navigateTo, persistentPlayer?.courseRouteKey, persistentPlayer?.courseSlug]);
 
   const openPersistentPlayerLogin = useCallback(() => {
-    const returnPath =
-      persistentPlayerRef.current?.lessonPath ?? locationPathRef.current;
+    const returnPath = persistentPlayerRef.current?.lessonPath ?? locationPathRef.current;
     navigateTo(buildLoginPath(returnPath), { exact: true });
   }, [navigateTo]);
 
-  selectPersistentMiniPlayerLessonRef.current = (
-    lessonNumber: number,
-    options,
-  ) => {
+  selectPersistentMiniPlayerLessonRef.current = (lessonNumber: number, options) => {
     const current = persistentPlayerRef.current;
     if (!current || playerPresentationRef.current !== "mini") return;
     const retry = options?.retry === true;
@@ -1002,21 +886,16 @@ export default function AcademyLayout() {
       : null;
 
     const isProtected = Boolean(
-      current.playerProps.protectedPlayback ||
-      current.playerProps.playbackBootstrap != null,
+      current.playerProps.protectedPlayback || current.playerProps.playbackBootstrap != null,
     );
 
     const token = ++selectLessonTokenRef.current;
 
     if (!retry && (cachedBootstrap || !isProtected)) {
-      const updated = applyPersistentMiniPlayerLessonChange(
-        current,
-        lessonNumber,
-        {
-          playbackBootstrap: cachedBootstrap,
-          playbackSuspended: false,
-        },
-      );
+      const updated = applyPersistentMiniPlayerLessonChange(current, lessonNumber, {
+        playbackBootstrap: cachedBootstrap,
+        playbackSuspended: false,
+      });
       if (!updated) return;
 
       persistentPlayerRef.current = updated;
@@ -1066,8 +945,7 @@ export default function AcademyLayout() {
             playbackAccessError: null,
             playbackUnavailableMessage: null,
             playbackSuspended: false,
-            refreshPlaybackToken: () =>
-              refreshVideoPlaybackToken({ courseSlug, lessonNumber }),
+            refreshPlaybackToken: () => refreshVideoPlaybackToken({ courseSlug, lessonNumber }),
           },
         };
         persistentPlayerRef.current = withBootstrap;
@@ -1078,8 +956,7 @@ export default function AcademyLayout() {
         const active = persistentPlayerRef.current;
         if (!active || active.selectedLesson !== lessonNumber) return;
 
-        const bootstrapError =
-          error instanceof VideoPlaybackBootstrapError ? error : null;
+        const bootstrapError = error instanceof VideoPlaybackBootstrapError ? error : null;
         const playbackAccessError =
           bootstrapError?.status === 401 ||
           bootstrapError?.code === "UNAUTHORIZED" ||
@@ -1125,12 +1002,9 @@ export default function AcademyLayout() {
       });
   };
 
-  const selectPersistentMiniPlayerLesson = useCallback(
-    (lessonNumber: number) => {
-      selectPersistentMiniPlayerLessonRef.current(lessonNumber);
-    },
-    [],
-  );
+  const selectPersistentMiniPlayerLesson = useCallback((lessonNumber: number) => {
+    selectPersistentMiniPlayerLessonRef.current(lessonNumber);
+  }, []);
   const retryPersistentMiniPlayerPlayback = useCallback(() => {
     const current = persistentPlayerRef.current;
     if (!current || current.selectedLesson === undefined) return;
@@ -1168,23 +1042,18 @@ export default function AcademyLayout() {
     }
   }, []);
 
-  const setLearningLessonContentMotionActive = useCallback(
-    (active: boolean) => {
-      const lessonContent = document.querySelector<HTMLElement>(
-        "[data-learning-lesson-content]",
-      );
-      if (!lessonContent) return;
-      lessonContent.inert = active;
-      if (active) {
-        lessonContent.style.pointerEvents = "none";
-        lessonContent.style.willChange = "transform, opacity";
-        return;
-      }
-      lessonContent.style.removeProperty("pointer-events");
-      lessonContent.style.removeProperty("will-change");
-    },
-    [],
-  );
+  const setLearningLessonContentMotionActive = useCallback((active: boolean) => {
+    const lessonContent = document.querySelector<HTMLElement>("[data-learning-lesson-content]");
+    if (!lessonContent) return;
+    lessonContent.inert = active;
+    if (active) {
+      lessonContent.style.pointerEvents = "none";
+      lessonContent.style.willChange = "transform, opacity";
+      return;
+    }
+    lessonContent.style.removeProperty("pointer-events");
+    lessonContent.style.removeProperty("will-change");
+  }, []);
 
   const applyLearningSurfaceMotion = useCallback(
     (
@@ -1202,40 +1071,23 @@ export default function AcademyLayout() {
         1,
         Math.max(0, (playerBottom - viewportTop) / Math.max(1, viewportHeight)),
       );
-      learningMotionFadeStartViewportProgressRef.current ??=
-        playerBottomViewportProgress;
-      const motion = getLearningBackgroundMotionState(
-        playerBottom,
-        viewportHeight,
-        {
-          contentFadeStartViewportProgress:
-            learningMotionFadeStartViewportProgressRef.current,
-          viewportTop,
-        },
-      );
+      learningMotionFadeStartViewportProgressRef.current ??= playerBottomViewportProgress;
+      const motion = getLearningBackgroundMotionState(playerBottom, viewportHeight, {
+        contentFadeStartViewportProgress: learningMotionFadeStartViewportProgressRef.current,
+        viewportTop,
+      });
       learningMotionOffsetYRef.current = offsetY;
       learningMotionViewportHeightRef.current = viewportHeight;
       if (forceMount || motion.shouldMount) mountLearningBackground();
 
       const motionStage = learningMotionStageRef.current;
       if (!motionStage) return;
-      motionStage.style.setProperty(
-        "--learning-background-reveal-duration",
-        "0ms",
-      );
-      motionStage.style.setProperty(
-        "--learning-background-reveal",
-        String(motion.revealProgress),
-      );
-      motionStage.style.setProperty(
-        "--learning-player-content-motion-duration",
-        "0ms",
-      );
+      motionStage.style.setProperty("--learning-background-reveal-duration", "0ms");
+      motionStage.style.setProperty("--learning-background-reveal", String(motion.revealProgress));
+      motionStage.style.setProperty("--learning-player-content-motion-duration", "0ms");
       motionStage.style.setProperty(
         "--learning-player-content-opacity",
-        isDesktopLearningMinimizeViewport()
-          ? "1"
-          : String(motion.contentOpacity),
+        isDesktopLearningMinimizeViewport() ? "1" : String(motion.contentOpacity),
       );
       motionStage.style.setProperty(
         "--learning-player-content-offset-y",
@@ -1257,12 +1109,7 @@ export default function AcademyLayout() {
       cancelLearningSurfaceMotion();
       const forceMount = phase === "settling-mini" || phase === "restoring";
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        applyLearningSurfaceMotion(
-          toOffsetY,
-          viewportHeight,
-          phase,
-          forceMount,
-        );
+        applyLearningSurfaceMotion(toOffsetY, viewportHeight, phase, forceMount);
         onComplete?.();
         return;
       }
@@ -1279,22 +1126,14 @@ export default function AcademyLayout() {
           window.clearTimeout(surfaceMotionTimerRef.current);
           surfaceMotionTimerRef.current = null;
         }
-        applyLearningSurfaceMotion(
-          toOffsetY,
-          viewportHeight,
-          phase,
-          forceMount,
-        );
+        applyLearningSurfaceMotion(toOffsetY, viewportHeight, phase, forceMount);
         onComplete?.();
       };
       const tick = (timestamp: number) => {
         if (surfaceMotionVersionRef.current !== version) return;
         const elapsedProgress = Math.min(
           1,
-          Math.max(
-            0,
-            (timestamp - startedAt) / LEARNING_PLAYER_MOTION_DURATION_MS,
-          ),
+          Math.max(0, (timestamp - startedAt) / LEARNING_PLAYER_MOTION_DURATION_MS),
         );
         const easedProgress = easeLearningPlayerMotionProgress(elapsedProgress);
         applyLearningSurfaceMotion(
@@ -1310,12 +1149,7 @@ export default function AcademyLayout() {
         surfaceMotionFrameRef.current = window.requestAnimationFrame(tick);
       };
 
-      applyLearningSurfaceMotion(
-        fromOffsetY,
-        viewportHeight,
-        phase,
-        forceMount,
-      );
+      applyLearningSurfaceMotion(fromOffsetY, viewportHeight, phase, forceMount);
       surfaceMotionFrameRef.current = window.requestAnimationFrame(tick);
       surfaceMotionTimerRef.current = window.setTimeout(
         complete,
@@ -1370,8 +1204,7 @@ export default function AcademyLayout() {
       if (state.phase !== "idle" && restoringPlayerRef.current) {
         finishLearningPlayerRestoreMotion();
       }
-      const viewportHeight =
-        window.visualViewport?.height ?? window.innerHeight;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
       const motionStage = learningMotionStageRef.current;
       if (!motionStage) return;
       if (state.phase === "idle") {
@@ -1438,10 +1271,7 @@ export default function AcademyLayout() {
     commitPersistentPlayerRestore();
   }, [commitPersistentPlayerRestore, route.kind]);
 
-  useEffect(
-    () => () => finishLearningPlayerRestoreMotion(),
-    [finishLearningPlayerRestoreMotion],
-  );
+  useEffect(() => () => finishLearningPlayerRestoreMotion(), [finishLearningPlayerRestoreMotion]);
 
   const openStandaloneMiniPlayerCourseOverview = useCallback(() => {
     const slug = learningMiniPlayer?.courseSlug;
@@ -1452,10 +1282,8 @@ export default function AcademyLayout() {
   const restoreLearningMiniPlayer = useCallback(() => {
     const activePlayer = persistentPlayerRef.current;
     const lessonPath = resolveLearningMiniPlayerLessonPath({
-      courseRouteKey:
-        activePlayer?.courseRouteKey ?? learningMiniPlayer?.courseSlug,
-      lessonNumber:
-        activePlayer?.selectedLesson ?? learningMiniPlayer?.selectedLesson,
+      courseRouteKey: activePlayer?.courseRouteKey ?? learningMiniPlayer?.courseSlug,
+      lessonNumber: activePlayer?.selectedLesson ?? learningMiniPlayer?.selectedLesson,
       lessonPath: activePlayer?.lessonPath ?? learningMiniPlayer?.lessonPath,
     });
     if (!lessonPath) return;
@@ -1508,9 +1336,7 @@ export default function AcademyLayout() {
         getCoursePlayerReturnPath(location.search)
       : null;
   const learningBackground =
-    route.kind === "learning" &&
-    learningBackgroundMounted &&
-    activeLearningReturnPath
+    route.kind === "learning" && learningBackgroundMounted && activeLearningReturnPath
       ? {
           ...resolveLearningBackgroundSurface(activeLearningReturnPath),
         }

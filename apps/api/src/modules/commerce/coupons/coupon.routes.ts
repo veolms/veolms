@@ -114,10 +114,7 @@ const couponRoutes: RoutePlugin = async (app, options) => {
         summary: "Delete a coupon",
         params: z.object({ couponId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Coupon deleted successfully",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Coupon deleted successfully", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
           404: errorResponse("Coupon not found"),

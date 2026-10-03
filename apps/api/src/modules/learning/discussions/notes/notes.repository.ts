@@ -1,8 +1,4 @@
-import type {
-  Database,
-  DatabaseExecutor,
-  LearningNoteTable,
-} from "@veolms/database";
+import type { Database, DatabaseExecutor, LearningNoteTable } from "@veolms/database";
 import type {
   DiscussionVisibility,
   ListLearningNotesQuery,
@@ -11,10 +7,7 @@ import type {
 import type { ExpressionBuilder, SelectQueryBuilder, Updateable } from "kysely";
 import { sql } from "kysely";
 import { withWriteTransaction } from "../shared/discussion.mentions.ts";
-import {
-  createdAtIdDescSql,
-  type DiscussionListCursor,
-} from "../shared/discussion.utils.ts";
+import { createdAtIdDescSql, type DiscussionListCursor } from "../shared/discussion.utils.ts";
 
 export interface NoteRow {
   id: string;
@@ -109,17 +102,9 @@ export interface NotesRepository {
 
   findNoteById(db: DatabaseExecutor, noteId: string): Promise<NoteRow | null>;
 
-  listNotes(
-    db: DatabaseExecutor,
-    userId: string,
-    options: NoteFilterOptions,
-  ): Promise<NoteRow[]>;
+  listNotes(db: DatabaseExecutor, userId: string, options: NoteFilterOptions): Promise<NoteRow[]>;
 
-  countNotes(
-    db: DatabaseExecutor,
-    userId: string,
-    options: NoteFilterOptions,
-  ): Promise<number>;
+  countNotes(db: DatabaseExecutor, userId: string, options: NoteFilterOptions): Promise<number>;
 
   getCourseNotesOverview(
     db: DatabaseExecutor,
@@ -132,11 +117,7 @@ export interface NotesRepository {
     notes: NoteRow[];
   }>;
 
-  incrementLikesCount(
-    db: DatabaseExecutor,
-    noteId: string,
-    delta: number,
-  ): Promise<void>;
+  incrementLikesCount(db: DatabaseExecutor, noteId: string, delta: number): Promise<void>;
 
   updateNote(
     db: DatabaseExecutor,
@@ -156,10 +137,7 @@ function applyNoteFilters<O>(
 
   if (options.courseId) {
     q = q.where("n.course_id", "=", options.courseId);
-  } else if (
-    options.accessibleCourseIds &&
-    options.accessibleCourseIds.length > 0
-  ) {
+  } else if (options.accessibleCourseIds && options.accessibleCourseIds.length > 0) {
     q = q.where("n.course_id", "in", [...options.accessibleCourseIds]);
   }
 
@@ -179,9 +157,7 @@ function applyNoteFilters<O>(
   } else if (options.visibility === "private") {
     q = q.where("n.visibility", "=", "private").where("n.user_id", "=", userId);
   } else if (options.visibility === "unlisted") {
-    q = q
-      .where("n.visibility", "=", "unlisted")
-      .where("n.user_id", "=", userId);
+    q = q.where("n.visibility", "=", "unlisted").where("n.user_id", "=", userId);
   } else if (options.visibility === "public") {
     q = q.where("n.visibility", "=", "public");
   } else {
@@ -190,10 +166,7 @@ function applyNoteFilters<O>(
     // Otherwise (general listing with no params), default to user's own notes.
     if (options.courseId || options.lessonId) {
       q = q.where((eb: ExpressionBuilder<NotesAliasedDB, "n">) =>
-        eb.or([
-          eb("n.visibility", "=", "public"),
-          eb("n.user_id", "=", userId),
-        ]),
+        eb.or([eb("n.visibility", "=", "public"), eb("n.user_id", "=", userId)]),
       );
     } else {
       q = q.where("n.user_id", "=", userId);
@@ -277,9 +250,7 @@ export function createNotesRepository(): NotesRepository {
       let query = db.selectFrom("learning_notes as n");
       query = applyNoteFilters(query, userId, options);
 
-      const row = await query
-        .select(sql<number>`count(*)::int`.as("count"))
-        .executeTakeFirst();
+      const row = await query.select(sql<number>`count(*)::int`.as("count")).executeTakeFirst();
       return Number(row?.count ?? 0);
     },
 
@@ -370,19 +341,13 @@ export function createNotesRepository(): NotesRepository {
       };
       if (updates.title !== undefined) updateData.title = updates.title;
       if (updates.content !== undefined) updateData.content = updates.content;
-      if (updates.plainText !== undefined)
-        updateData.plain_text = updates.plainText;
+      if (updates.plainText !== undefined) updateData.plain_text = updates.plainText;
       if (updates.timestampSeconds !== undefined)
         updateData.timestamp_seconds = updates.timestampSeconds;
       if (updates.tags !== undefined) updateData.tags = updates.tags;
-      if (updates.visibility !== undefined)
-        updateData.visibility = updates.visibility;
+      if (updates.visibility !== undefined) updateData.visibility = updates.visibility;
 
-      await db
-        .updateTable("learning_notes")
-        .set(updateData)
-        .where("id", "=", noteId)
-        .execute();
+      await db.updateTable("learning_notes").set(updateData).where("id", "=", noteId).execute();
     },
 
     async deleteNote(db, noteId) {
@@ -404,10 +369,7 @@ export function createNotesRepository(): NotesRepository {
           .where("target_id", "=", noteId)
           .execute();
 
-        await trx
-          .deleteFrom("learning_bookmarks")
-          .where("note_id", "=", noteId)
-          .execute();
+        await trx.deleteFrom("learning_bookmarks").where("note_id", "=", noteId).execute();
 
         await trx
           .deleteFrom("learning_mentions")
@@ -415,10 +377,7 @@ export function createNotesRepository(): NotesRepository {
           .where("source_id", "=", noteId)
           .execute();
 
-        await trx
-          .deleteFrom("learning_notes")
-          .where("id", "=", noteId)
-          .execute();
+        await trx.deleteFrom("learning_notes").where("id", "=", noteId).execute();
       });
     },
   };

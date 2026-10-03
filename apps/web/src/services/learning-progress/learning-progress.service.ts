@@ -14,9 +14,7 @@ export const learningProgressService = {
     return api.get<LearningProgressResponse>(getProgressPath(courseKey));
   },
 
-  getResumeContext(
-    courseKey: string,
-  ): Promise<LearningProgressResumeContextResponse> {
+  getResumeContext(courseKey: string): Promise<LearningProgressResumeContextResponse> {
     return api.get<LearningProgressResumeContextResponse>(
       `${getProgressPath(courseKey)}/resume-context`,
     );
@@ -26,20 +24,14 @@ export const learningProgressService = {
     courseKey: string,
     payload: LearningProgressBatchRequest,
   ): Promise<LearningProgressSyncResponse> {
-    return api.post<LearningProgressSyncResponse>(
-      `${getProgressPath(courseKey)}/batch`,
-      payload,
-    );
+    return api.post<LearningProgressSyncResponse>(`${getProgressPath(courseKey)}/batch`, payload);
   },
 
   getSyncUrl(courseKey: string): string {
     return getApiRequestUrl(`${getProgressPath(courseKey)}/batch`);
   },
 
-  syncKeepalive(
-    courseKey: string,
-    payload: LearningProgressBatchRequest,
-  ): Promise<void> {
+  syncKeepalive(courseKey: string, payload: LearningProgressBatchRequest): Promise<void> {
     return fetch(this.getSyncUrl(courseKey), {
       method: "POST",
       credentials: "include",

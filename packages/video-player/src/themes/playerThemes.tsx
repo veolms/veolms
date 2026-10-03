@@ -54,10 +54,7 @@ import type { CSSProperties, ComponentType } from "react";
 import { BUILT_IN_PLAYER_THEME_IDS } from "./playerThemeIds";
 import type { BuiltInPlayerThemeId } from "./playerThemeIds";
 
-export {
-  BUILT_IN_PLAYER_THEME_IDS,
-  isBuiltInPlayerThemeId,
-} from "./playerThemeIds";
+export { BUILT_IN_PLAYER_THEME_IDS, isBuiltInPlayerThemeId } from "./playerThemeIds";
 export type { BuiltInPlayerThemeId } from "./playerThemeIds";
 
 export interface PlayerThemeIconProps extends Omit<IconProps, "weight"> {
@@ -261,10 +258,7 @@ const minimalIcons: PlayerThemeIcons = {
   retry: themedIcon(ArrowClockwise, "regular"),
 };
 
-export const BUILT_IN_PLAYER_THEMES: Record<
-  BuiltInPlayerThemeId,
-  PlayerThemeDefinition
-> = {
+export const BUILT_IN_PLAYER_THEMES: Record<BuiltInPlayerThemeId, PlayerThemeDefinition> = {
   youtube: {
     id: "youtube",
     label: "YouTube",
@@ -297,8 +291,7 @@ export const BUILT_IN_PLAYER_THEMES: Record<
   aurora: {
     id: "aurora",
     label: "Aurora",
-    description:
-      "Expressive violet controls with cyan detail and softer icons.",
+    description: "Expressive violet controls with cyan detail and softer icons.",
     tokens: {
       accent: "#a78bfa",
       accentContrast: "#160c2e",
@@ -359,9 +352,7 @@ export const PLAYER_THEME_OPTIONS = BUILT_IN_PLAYER_THEME_IDS.map(
   (id) => BUILT_IN_PLAYER_THEMES[id],
 );
 
-export function resolvePlayerTheme(
-  theme: PlayerTheme = "youtube",
-): PlayerThemeDefinition {
+export function resolvePlayerTheme(theme: PlayerTheme = "youtube"): PlayerThemeDefinition {
   return typeof theme === "string" ? BUILT_IN_PLAYER_THEMES[theme] : theme;
 }
 
@@ -387,9 +378,7 @@ export function createPlayerTheme({
   };
 }
 
-export function getPlayerThemeStyle(
-  theme: PlayerThemeDefinition,
-): PlayerThemeStyle {
+export function getPlayerThemeStyle(theme: PlayerThemeDefinition): PlayerThemeStyle {
   const { tokens } = theme;
   return {
     "--video-player-accent": tokens.accent,

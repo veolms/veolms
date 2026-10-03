@@ -3,12 +3,7 @@ import { BellSimpleIcon as BellSimple } from "@phosphor-icons/react/BellSimple";
 import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
 import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-} from "../components/ui/drawer";
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "../components/ui/drawer";
 import type { DiscussionWorkspaceCard } from "./discussions-workspace.adapter";
 import { useDiscussionWorkspaceCardActions } from "./useDiscussionWorkspaceCardActions";
 
@@ -16,8 +11,7 @@ function getPreviewTypeLabel(card: DiscussionWorkspaceCard): string {
   if (card.itemType === "note" || card.kind === "note") return "Note";
 
   const isQuestion = card.kind === "question" || card.kind === "qna";
-  if (card.itemType === "reply")
-    return isQuestion ? "Q&A reply" : "Comment reply";
+  if (card.itemType === "reply") return isQuestion ? "Q&A reply" : "Comment reply";
   return isQuestion ? "Q&A" : "Comment";
 }
 
@@ -31,11 +25,7 @@ function getPreviewText(card: DiscussionWorkspaceCard): string {
   );
 }
 
-function DiscussionWorkspaceActionPreview({
-  card,
-}: {
-  card: DiscussionWorkspaceCard;
-}) {
+function DiscussionWorkspaceActionPreview({ card }: { card: DiscussionWorkspaceCard }) {
   const authorLabel = card.isOwn ? "You" : card.author || card.authorUsername;
   const avatarFallback = (authorLabel || "?").slice(0, 1).toUpperCase();
   const previewText = getPreviewText(card);
@@ -44,21 +34,14 @@ function DiscussionWorkspaceActionPreview({
     <div className="mt-2 flex min-w-0 items-center gap-2 rounded-lg border border-(--border) bg-(--surface-strong) px-2.5 py-2">
       <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-(--surface) text-xs font-semibold text-(--text-muted)">
         {card.avatar ? (
-          <img
-            src={card.avatar}
-            alt=""
-            className="size-full object-cover"
-            aria-hidden="true"
-          />
+          <img src={card.avatar} alt="" className="size-full object-cover" aria-hidden="true" />
         ) : (
           avatarFallback
         )}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5 text-xs text-(--text-muted)">
-          <span className="truncate font-medium text-(--text)">
-            {authorLabel}
-          </span>
+          <span className="truncate font-medium text-(--text)">{authorLabel}</span>
           <span aria-hidden="true">·</span>
           <span className="shrink-0">{getPreviewTypeLabel(card)}</span>
           {card.activity && (
@@ -68,10 +51,7 @@ function DiscussionWorkspaceActionPreview({
             </>
           )}
         </div>
-        <p
-          className="mt-0.5 truncate text-xs text-(--text-muted)"
-          title={previewText}
-        >
+        <p className="mt-0.5 truncate text-xs text-(--text-muted)" title={previewText}>
           {previewText}
         </p>
       </div>
@@ -125,7 +105,7 @@ export function DiscussionWorkspaceMobileActionSheet({
         aria-describedby="discussion-mobile-actions-description"
         initialFocus={firstActionRef}
         finalFocus={false}
-        className="[--drawer-content-max-height:min(480px,calc(100dvh-16px))] bg-(--surface)"
+        className="bg-(--surface) [--drawer-content-max-height:min(480px,calc(100dvh-16px))]"
       >
         <div className="flex min-h-0 flex-1 flex-col px-4 pt-3 pb-[max(16px,var(--app-safe-area-bottom,0px))]">
           <DrawerTitle
@@ -134,10 +114,7 @@ export function DiscussionWorkspaceMobileActionSheet({
           >
             {title}
           </DrawerTitle>
-          <DrawerDescription
-            id="discussion-mobile-actions-description"
-            className="sr-only"
-          >
+          <DrawerDescription id="discussion-mobile-actions-description" className="sr-only">
             Choose an action for this {sourceLabel}.
           </DrawerDescription>
           <DiscussionWorkspaceActionPreview card={card} />

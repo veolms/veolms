@@ -22,10 +22,7 @@
 
 .learning-workspace__main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(
-      0,
-      var(--learning-curriculum-width, 400px)
-    );
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--learning-curriculum-width, 400px));
   column-gap: 0;
   width: min(100%, 1840px);
   height: 100%;
@@ -42,9 +39,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 }
 
 @media (min-width: 1081px) {
-  .learning-workspace__main:has(
-    .learning-workspace__curriculum-column:not(.is-collapsed)
-  ) {
+  .learning-workspace__main:has(.learning-workspace__curriculum-column:not(.is-collapsed)) {
     --learning-scrollbar-separator-width: 12px;
     --learning-scrollbar-edge-bleed: 1px;
     --learning-lesson-edge-extension: var(--learning-scrollbar-separator-width);
@@ -54,18 +49,14 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   :root[data-lesson-page-scrollbar="visible"]:not([data-hide-scrollbars="true"])
     .courses-main-frame:has(+ .floating-scrollbar--learning-page.is-visible)
     > .courses-main--learning
-    .learning-workspace__main:has(
-      .learning-workspace__curriculum-column:not(.is-collapsed)
-    ) {
+    .learning-workspace__main:has(.learning-workspace__curriculum-column:not(.is-collapsed)) {
     --learning-lesson-edge-extension: calc(
-      var(--learning-scrollbar-separator-width) +
-        var(--learning-scrollbar-edge-bleed) - var(--scrollbar-thumb-size, 6px)
+      var(--learning-scrollbar-separator-width) + var(--learning-scrollbar-edge-bleed) -
+        var(--scrollbar-thumb-size, 6px)
     );
   }
 
-  .learning-workspace__main:has(
-      .learning-workspace__curriculum-column:not(.is-collapsed)
-    )
+  .learning-workspace__main:has(.learning-workspace__curriculum-column:not(.is-collapsed))
     > .learning-workspace__lesson-column {
     width: calc(100% + var(--learning-lesson-edge-extension));
   }
@@ -138,23 +129,18 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 
 /* The prerendered anchor owns first-paint chrome + loader. Once React
    installs the persistent player, return the anchor to its transparent shell. */
-.courses-main:has([data-learning-persistent-player])
-  [data-learning-player-anchor] {
+.courses-main:has([data-learning-persistent-player]) [data-learning-player-anchor] {
   background: transparent;
 }
 
-.courses-main:has([data-learning-persistent-player])
-  [data-learning-player-initial-loader] {
+.courses-main:has([data-learning-persistent-player]) [data-learning-player-initial-loader] {
   display: none;
 }
 
-.courses-main[data-learning-quiz-active="true"]
-  .learning-persistent-player--full,
-.courses-main:has([data-learning-quiz-active="true"])
-  .learning-persistent-player--full,
+.courses-main[data-learning-quiz-active="true"] .learning-persistent-player--full,
+.courses-main:has([data-learning-quiz-active="true"]) .learning-persistent-player--full,
 .courses-main[data-learning-quiz-active="true"] [data-learning-mini-player],
-.courses-main:has([data-learning-quiz-active="true"])
-  [data-learning-mini-player] {
+.courses-main:has([data-learning-quiz-active="true"]) [data-learning-mini-player] {
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
@@ -257,8 +243,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 }
 
 .learning-workspace__player-wrap:hover .learning-workspace__back,
-.courses-app:has(.learning-persistent-player--full:hover)
-  .learning-workspace__back,
+.courses-app:has(.learning-persistent-player--full:hover) .learning-workspace__back,
 .learning-workspace__back:focus-visible {
   opacity: 1;
   pointer-events: auto;
@@ -301,8 +286,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 }
 
 .learning-workspace__player-wrap:hover .learning-workspace__curriculum-toggle,
-.courses-app:has(.learning-persistent-player--full:hover)
-  .learning-workspace__curriculum-toggle,
+.courses-app:has(.learning-persistent-player--full:hover) .learning-workspace__curriculum-toggle,
 .learning-workspace__curriculum-toggle:focus-visible {
   opacity: 1;
   pointer-events: auto;
@@ -338,13 +322,9 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     .learning-workspace__back,
   .learning-workspace__player-wrap:has(.youtube-player[data-playing="true"])
     .learning-workspace__curriculum-toggle,
-  .courses-app:has(
-      .learning-persistent-player--full .youtube-player[data-playing="true"]
-    )
+  .courses-app:has(.learning-persistent-player--full .youtube-player[data-playing="true"])
     .learning-workspace__back,
-  .courses-app:has(
-      .learning-persistent-player--full .youtube-player[data-playing="true"]
-    )
+  .courses-app:has(.learning-persistent-player--full .youtube-player[data-playing="true"])
     .learning-workspace__curriculum-toggle {
     opacity: 0;
     pointer-events: none;
@@ -355,13 +335,9 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     .learning-workspace__back,
   .learning-workspace__player-wrap:has(.youtube-player[data-playing="false"])
     .learning-workspace__curriculum-toggle,
-  .courses-app:has(
-      .learning-persistent-player--full .youtube-player[data-playing="false"]
-    )
+  .courses-app:has(.learning-persistent-player--full .youtube-player[data-playing="false"])
     .learning-workspace__back,
-  .courses-app:has(
-      .learning-persistent-player--full .youtube-player[data-playing="false"]
-    )
+  .courses-app:has(.learning-persistent-player--full .youtube-player[data-playing="false"])
     .learning-workspace__curriculum-toggle,
   .learning-workspace__back:focus-visible,
   .learning-workspace__curriculum-toggle:focus-visible {
@@ -400,13 +376,9 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  width: calc(
-    100% + var(--learning-lesson-content-inset) +
-      var(--learning-lesson-content-inset)
-  );
+  width: calc(100% + var(--learning-lesson-content-inset) + var(--learning-lesson-content-inset));
   min-width: calc(
-    100% + var(--learning-lesson-content-inset) +
-      var(--learning-lesson-content-inset)
+    100% + var(--learning-lesson-content-inset) + var(--learning-lesson-content-inset)
   );
   box-sizing: border-box;
   gap: 16px;
@@ -414,8 +386,8 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   margin-inline: calc(-1 * var(--learning-lesson-content-inset));
   padding: 10px var(--learning-lesson-content-inset);
   border: 0;
-  border-radius: var(--control-radius-learning-panel, 8px)
-    var(--control-radius-learning-panel, 8px) 0 0;
+  border-radius: var(--control-radius-learning-panel, 8px) var(--control-radius-learning-panel, 8px)
+    0 0;
   color: inherit;
   background: transparent;
   font: inherit;
@@ -500,8 +472,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   touch-action: none;
 }
 
-.learning-workspace__curriculum-column.is-collapsed
-  .learning-curriculum__resize-rail {
+.learning-workspace__curriculum-column.is-collapsed .learning-curriculum__resize-rail {
   left: -20px;
   justify-content: flex-end;
 }
@@ -527,16 +498,14 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 
 .learning-curriculum__resize-rail:hover::before,
 .learning-curriculum__resize-rail:focus-visible::before,
-.learning-workspace.is-curriculum-resizing
-  .learning-curriculum__resize-rail::before {
+.learning-workspace.is-curriculum-resizing .learning-curriculum__resize-rail::before {
   width: 3px;
   opacity: 1;
   box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 42%, transparent);
 }
 
 .learning-curriculum__resize-rail:active::before,
-.learning-workspace.is-curriculum-resizing
-  .learning-curriculum__resize-rail::before {
+.learning-workspace.is-curriculum-resizing .learning-curriculum__resize-rail::before {
   opacity: 0.72;
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent-shadow) 48%, transparent);
 }
@@ -620,8 +589,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   -ms-overflow-style: none;
 }
 
-:root:not([data-scrollbar-style="default"])
-  .learning-curriculum::-webkit-scrollbar {
+:root:not([data-scrollbar-style="default"]) .learning-curriculum::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
@@ -739,11 +707,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
       var(--learning-curriculum-thumbnail-shade-middle) 56%,
       var(--learning-curriculum-thumbnail-shade-bottom) 100%
     ),
-    linear-gradient(
-      105deg,
-      color-mix(in srgb, var(--accent) 30%, transparent),
-      transparent 68%
-    );
+    linear-gradient(105deg, color-mix(in srgb, var(--accent) 30%, transparent), transparent 68%);
 }
 
 .learning-curriculum__overview-content {
@@ -803,8 +767,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 }
 
 .learning-curriculum__search-trigger:active::before {
-  animation: learning-curriculum-search-press 340ms
-    cubic-bezier(0.16, 1, 0.3, 1);
+  animation: learning-curriculum-search-press 340ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes learning-curriculum-search-press {
@@ -1200,8 +1163,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   pointer-events: none;
 }
 
-[data-learning-player-controls-suppressed]
-  [data-player-zoom-indicator="feedback"],
+[data-learning-player-controls-suppressed] [data-player-zoom-indicator="feedback"],
 [data-learning-player-controls-suppressed] [data-player-hud-variant],
 [data-learning-player-controls-suppressed] [data-playback-feedback-surface] {
   visibility: hidden;
@@ -1287,8 +1249,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   border-radius: 50%;
   color: var(--on-accent);
   background: var(--accent);
-  box-shadow: 0 7px 17px
-    color-mix(in srgb, var(--accent-shadow) 60%, transparent);
+  box-shadow: 0 7px 17px color-mix(in srgb, var(--accent-shadow) 60%, transparent);
   transition:
     color 150ms ease,
     background-color 150ms ease,
@@ -1329,8 +1290,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   border-radius: 50%;
   color: var(--on-accent);
   background: var(--accent);
-  box-shadow: 0 7px 17px
-    color-mix(in srgb, var(--accent-shadow) 60%, transparent);
+  box-shadow: 0 7px 17px color-mix(in srgb, var(--accent-shadow) 60%, transparent);
   transition:
     transform 160ms ease,
     background-color 160ms ease;
@@ -1516,9 +1476,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 }
 
 @media (min-width: 641px) and (max-width: 1080px) {
-  :root:not([data-content-layout="edge-to-edge"])
-    .learning-workspace__player-wrap
-    .youtube-player {
+  :root:not([data-content-layout="edge-to-edge"]) .learning-workspace__player-wrap .youtube-player {
     border-radius: 18px 18px 0 0;
   }
 }
@@ -1631,15 +1589,14 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 
 .learning-comment-composer-drawer {
   --learning-comment-drawer-visible-height: calc(
-    var(--drawer-content-height, 100dvh) -
-      var(--drawer-snap-point-offset, 0px) - var(--drawer-swipe-movement-y, 0px)
+    var(--drawer-content-height, 100dvh) - var(--drawer-snap-point-offset, 0px) -
+      var(--drawer-swipe-movement-y, 0px)
   );
 }
 
 .learning-comment-composer-drawer > [data-slot="drawer-content"] {
   max-height: calc(
-    var(--learning-comment-drawer-visible-height) -
-      max(13px, var(--app-safe-area-bottom))
+    var(--learning-comment-drawer-visible-height) - max(13px, var(--app-safe-area-bottom))
   );
 }
 
@@ -1661,41 +1618,13 @@ aside[data-learning-mini-player] video {
 
 /* Scoped curriculum styling inside minimized desktop player */
 aside[data-learning-mini-player] {
-  --learning-mini-player-curriculum-bg: color-mix(
-    in srgb,
-    var(--accent) 5%,
-    #0a0a0c
-  );
-  --learning-mini-player-info-bar-bg: color-mix(
-    in srgb,
-    var(--accent) 24%,
-    #0a0a0c
-  );
-  --learning-mini-player-info-bar-bg-hover: color-mix(
-    in srgb,
-    var(--accent) 30%,
-    #0a0a0c
-  );
-  --learning-mini-player-section-bg: color-mix(
-    in srgb,
-    var(--accent) 9%,
-    #0a0a0c
-  );
-  --learning-mini-player-section-toggle-bg: color-mix(
-    in srgb,
-    var(--accent) 14%,
-    #0a0a0c
-  );
-  --learning-mini-player-section-toggle-bg-hover: color-mix(
-    in srgb,
-    var(--accent) 18%,
-    #0a0a0c
-  );
-  --learning-mini-player-chrome-border: color-mix(
-    in srgb,
-    var(--accent) 22%,
-    transparent
-  );
+  --learning-mini-player-curriculum-bg: color-mix(in srgb, var(--accent) 5%, #0a0a0c);
+  --learning-mini-player-info-bar-bg: color-mix(in srgb, var(--accent) 24%, #0a0a0c);
+  --learning-mini-player-info-bar-bg-hover: color-mix(in srgb, var(--accent) 30%, #0a0a0c);
+  --learning-mini-player-section-bg: color-mix(in srgb, var(--accent) 9%, #0a0a0c);
+  --learning-mini-player-section-toggle-bg: color-mix(in srgb, var(--accent) 14%, #0a0a0c);
+  --learning-mini-player-section-toggle-bg-hover: color-mix(in srgb, var(--accent) 18%, #0a0a0c);
+  --learning-mini-player-chrome-border: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 aside[data-learning-mini-player] [data-learning-mini-player-info-bar] {
@@ -1802,16 +1731,10 @@ aside[data-learning-mini-player] [data-learning-mini-player-playlist-shell] {
 }
 
 [data-learning-mini-player-timeline]:hover [data-timeline-track],
-[data-learning-mini-player-timeline]
-  [role="slider"]:hover
-  [data-timeline-track],
-[data-learning-mini-player-timeline]
-  [data-scrubbing="true"]
-  [data-timeline-track],
+[data-learning-mini-player-timeline] [role="slider"]:hover [data-timeline-track],
+[data-learning-mini-player-timeline] [data-scrubbing="true"] [data-timeline-track],
 [data-learning-mini-player-timeline]:focus-within [data-timeline-track],
-[data-learning-mini-player-timeline]
-  .group\/timeline:hover
-  [data-timeline-track] {
+[data-learning-mini-player-timeline] .group\/timeline:hover [data-timeline-track] {
   height: 3px !important;
 }
 

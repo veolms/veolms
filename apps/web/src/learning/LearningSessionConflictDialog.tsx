@@ -63,14 +63,11 @@ export function LearningSessionConflictDialog({
       <div className="learning-session-dialog__copy">
         <h2 id="learning-session-dialog-title">Post your comment first?</h2>
         <p id="learning-session-dialog-description">
-          Opening <strong>{nextCourseTitle}</strong> will replace your active
-          session in <strong>{currentCourseTitle}</strong>. This comment has not
-          been posted yet.
+          Opening <strong>{nextCourseTitle}</strong> will replace your active session in{" "}
+          <strong>{currentCourseTitle}</strong>. This comment has not been posted yet.
         </p>
       </div>
-      <blockquote className="learning-session-dialog__draft">
-        {draftText}
-      </blockquote>
+      <blockquote className="learning-session-dialog__draft">{draftText}</blockquote>
       <div className="learning-session-dialog__actions">
         <button type="button" onClick={onCancel}>
           Keep learning
@@ -78,12 +75,7 @@ export function LearningSessionConflictDialog({
         <button type="button" onClick={onDiscard}>
           Discard &amp; switch
         </button>
-        <button
-          type="button"
-          data-control-radius-action
-          onClick={onPost}
-          autoFocus
-        >
+        <button type="button" data-control-radius-action onClick={onPost} autoFocus>
           Post &amp; switch
         </button>
       </div>

@@ -12,12 +12,7 @@ export const reportReasonSchema = z.enum([
 ]);
 export type ReportReason = z.infer<typeof reportReasonSchema>;
 
-export const reportStatusSchema = z.enum([
-  "pending",
-  "reviewed",
-  "dismissed",
-  "actioned",
-]);
+export const reportStatusSchema = z.enum(["pending", "reviewed", "dismissed", "actioned"]);
 export type ReportStatus = z.infer<typeof reportStatusSchema>;
 
 export const moderationActionTypeSchema = z.enum([
@@ -151,9 +146,7 @@ export const suspensionStatusResponseSchema = z.object({
   reason: z.string().nullable().optional(),
   expiresAt: z.string().nullable().optional(),
 });
-export type SuspensionStatusResponse = z.infer<
-  typeof suspensionStatusResponseSchema
->;
+export type SuspensionStatusResponse = z.infer<typeof suspensionStatusResponseSchema>;
 
 export const learningAuditLogSchema = z.object({
   id: z.uuid(),

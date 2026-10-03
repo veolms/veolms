@@ -1,18 +1,11 @@
-import {
-  VideoPlayer,
-  type VideoPlayerEvent,
-  type VideoPlayerHandle,
-} from "@veolms/video-player";
+import { VideoPlayer, type VideoPlayerEvent, type VideoPlayerHandle } from "@veolms/video-player";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../learning-feature.css";
 import type {
   LearningMiniPlayerSession,
   LearningPlayerPlaybackSnapshot,
 } from "./learningMiniPlayerTypes";
-import {
-  writeMiniPlayerRestore,
-  writeResumePosition,
-} from "./lessonPlayerPersistence";
+import { writeMiniPlayerRestore, writeResumePosition } from "./lessonPlayerPersistence";
 import {
   getLearningMiniPlayerSnapshot,
   openLearningMiniPlayerSession,
@@ -33,11 +26,7 @@ import { resolveLearningMiniPlayerLessonPath } from "./persistentMiniPlayerLesso
 import { LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE } from "./learningPlayerMotion";
 import { useMiniPlayerCurriculumSections } from "./useMiniPlayerCurriculumSections";
 import { Curriculum } from "../Curriculum";
-import {
-  createLessonSequence,
-  createLessonsById,
-  type CourseSection,
-} from "../courseContent";
+import { createLessonSequence, createLessonsById, type CourseSection } from "../courseContent";
 import { adaptCourseOverviewToCurriculum } from "../courseCurriculumAdapter";
 import { useCourseOverview } from "../../services/courses";
 
@@ -69,14 +58,11 @@ export function LearningMiniPlayer({
   const preparationCompletedRef = useRef(false);
   const preparationFramePendingRef = useRef(false);
   const preparationStartedRef = useRef(false);
-  const pendingPreparationRef = useRef<LearningPlayerPlaybackSnapshot | null>(
-    null,
-  );
+  const pendingPreparationRef = useRef<LearningPlayerPlaybackSnapshot | null>(null);
 
   const persistCurrentTime = useCallback(() => {
     const currentTime =
-      playerRef.current?.getSnapshot().media.currentTime ??
-      currentTimeRef.current;
+      playerRef.current?.getSnapshot().media.currentTime ?? currentTimeRef.current;
     writeResumePosition(session.mediaKey, currentTime);
     return currentTime;
   }, [session.mediaKey]);
@@ -161,9 +147,7 @@ export function LearningMiniPlayer({
   } = useMiniPlayerCurriculumSections(curriculumSections, selectedLesson);
   const selectedLessonIndex = lessonSequence.indexOf(selectedLesson);
   const previousLessonId =
-    selectedLessonIndex > 0
-      ? lessonSequence[selectedLessonIndex - 1]
-      : undefined;
+    selectedLessonIndex > 0 ? lessonSequence[selectedLessonIndex - 1] : undefined;
   const nextLessonId =
     selectedLessonIndex >= 0 && selectedLessonIndex < lessonSequence.length - 1
       ? lessonSequence[selectedLessonIndex + 1]
@@ -239,16 +223,14 @@ export function LearningMiniPlayer({
   }, [handleSelectLesson, nextLessonId]);
 
   const finishPreparation = useCallback(() => {
-    const playback =
-      session.getLivePlaybackSnapshot?.() ?? pendingPreparationRef.current;
+    const playback = session.getLivePlaybackSnapshot?.() ?? pendingPreparationRef.current;
     if (!preparing || preparationCompletedRef.current || !playback) return;
 
     const candidate = playerRef.current?.getSnapshot().media;
     if (
       playback.playing &&
       candidate &&
-      Math.abs(playback.currentTime - candidate.currentTime) >
-        MAX_HANDOFF_DRIFT_SECONDS
+      Math.abs(playback.currentTime - candidate.currentTime) > MAX_HANDOFF_DRIFT_SECONDS
     ) {
       preparationFramePendingRef.current = false;
       pendingPreparationRef.current = playback;
@@ -266,8 +248,7 @@ export function LearningMiniPlayer({
   }, [onPrepared, preparing, session]);
 
   const completePreparation = useCallback(() => {
-    const playback =
-      session.getLivePlaybackSnapshot?.() ?? pendingPreparationRef.current;
+    const playback = session.getLivePlaybackSnapshot?.() ?? pendingPreparationRef.current;
     if (
       !preparing ||
       preparationCompletedRef.current ||
@@ -287,10 +268,7 @@ export function LearningMiniPlayer({
       return;
     }
     const candidate = player.getSnapshot().media;
-    if (
-      Math.abs(playback.currentTime - candidate.currentTime) >
-      MAX_HANDOFF_DRIFT_SECONDS
-    ) {
+    if (Math.abs(playback.currentTime - candidate.currentTime) > MAX_HANDOFF_DRIFT_SECONDS) {
       player.seekTo(playback.currentTime);
       return;
     }
@@ -353,7 +331,7 @@ export function LearningMiniPlayer({
   return (
     <aside
       ref={miniPlayerRef}
-      className="fixed right-3 z-130 m-0 w-[min(82vw,22rem)] min-w-50 max-w-[calc(100vw-1.5rem)] touch-none overflow-hidden rounded-xl border-0 bg-black p-0 shadow-[0_18px_48px_rgba(0,0,0,0.52)] ring-1 ring-white/14 ring-inset select-none flex flex-col group/mini-player-shell data-[mini-player-mode=dragging]:cursor-grabbing data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] data-[mini-player-preparing]:pointer-events-none data-[mini-player-preparing]:opacity-0 motion-reduce:transition-none"
+      className="group/mini-player-shell fixed right-3 z-130 m-0 flex w-[min(82vw,22rem)] max-w-[calc(100vw-1.5rem)] min-w-50 touch-none flex-col overflow-hidden rounded-xl border-0 bg-black p-0 shadow-[0_18px_48px_rgba(0,0,0,0.52)] ring-1 ring-white/14 select-none ring-inset data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] data-[mini-player-mode=dragging]:cursor-grabbing data-[mini-player-preparing]:pointer-events-none data-[mini-player-preparing]:opacity-0 motion-reduce:transition-none"
       style={{
         bottom: "calc(70px + env(safe-area-inset-bottom))",
         ...miniPlayerGestures.style,
@@ -367,8 +345,7 @@ export function LearningMiniPlayer({
       {...miniPlayerGestures.gestureProps}
     >
       <span id="learning-mini-player-gesture-help" className="sr-only">
-        Drag to move, resize from an edge, pinch to resize, or swipe down
-        quickly to close.
+        Drag to move, resize from an edge, pinch to resize, or swipe down quickly to close.
       </span>
       <MiniPlayerResizeHandles expanded={isExpanded} />
       <VideoPlayer
@@ -421,7 +398,7 @@ export function LearningMiniPlayer({
       />
       {isExpanded ? (
         <div
-          className="hidden min-[641px]:flex flex-col w-full h-(--learning-mini-player-playlist-height,320px) shrink-0 overflow-hidden"
+          className="hidden h-(--learning-mini-player-playlist-height,320px) w-full shrink-0 flex-col overflow-hidden min-[641px]:flex"
           data-learning-mini-player-gesture-ignore=""
           data-learning-mini-player-playlist-shell=""
         >
@@ -437,9 +414,7 @@ export function LearningMiniPlayer({
               LEARNING_MINI_PLAYER_CURRICULUM_SCROLL_CONTROL_BOTTOM_CLEARANCE
             }
             expandedSectionIds={expandedSectionIds}
-            onExpandedSectionIdsChange={(sectionIds) =>
-              setExpandedSectionIds([...sectionIds])
-            }
+            onExpandedSectionIdsChange={(sectionIds) => setExpandedSectionIds([...sectionIds])}
             onOpenCourseOverview={onOpenCourseOverview}
           />
         </div>

@@ -64,10 +64,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
         body: updateCourseSectionRequestSchema,
         response: {
-          200: jsonResponse(
-            "Section updated",
-            z.object({ success: z.boolean() }),
-          ),
+          200: jsonResponse("Section updated", z.object({ success: z.boolean() })),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Section not found"),
         },
@@ -86,10 +83,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         summary: "Soft delete a section and all its lessons/resources",
         params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Section deleted",
-            z.object({ success: z.boolean() }),
-          ),
+          200: jsonResponse("Section deleted", z.object({ success: z.boolean() })),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Section not found"),
         },
@@ -109,10 +103,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid() }),
         body: reorderSectionsRequestSchema,
         response: {
-          200: jsonResponse(
-            "Sections reordered",
-            z.object({ success: z.boolean() }),
-          ),
+          200: jsonResponse("Sections reordered", z.object({ success: z.boolean() })),
           400: errorResponse("Invalid section list"),
           403: errorResponse("Forbidden - not permitted"),
           409: errorResponse("Optimistic lock conflict"),
@@ -133,10 +124,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
         body: createCourseLessonRequestSchema,
         response: {
-          201: jsonResponse(
-            "Lesson created",
-            z.object({ id: z.uuid(), position: z.number() }),
-          ),
+          201: jsonResponse("Lesson created", z.object({ id: z.uuid(), position: z.number() })),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Section not found"),
         },
@@ -156,20 +144,12 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid(), lessonId: z.uuid() }),
         body: updateCourseLessonRequestSchema,
         response: {
-          200: jsonResponse(
-            "Lesson details updated",
-            z.object({ success: z.boolean() }),
-          ),
+          200: jsonResponse("Lesson details updated", z.object({ success: z.boolean() })),
           202: jsonResponse(
             "Video processing accepted",
             z.object({
               videoJobId: z.uuid(),
-              processingStatus: z.enum([
-                "queued",
-                "processing",
-                "completed",
-                "failed",
-              ]),
+              processingStatus: z.enum(["queued", "processing", "completed", "failed"]),
             }),
           ),
           400: errorResponse("Invalid media asset or type mismatch"),
@@ -191,10 +171,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         summary: "Soft delete a lesson",
         params: z.object({ id: z.uuid(), lessonId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Lesson deleted",
-            z.object({ success: z.boolean() }),
-          ),
+          200: jsonResponse("Lesson deleted", z.object({ success: z.boolean() })),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Lesson not found"),
         },
@@ -214,10 +191,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
         body: reorderLessonsRequestSchema,
         response: {
-          200: jsonResponse(
-            "Lessons reordered",
-            z.object({ success: z.boolean() }),
-          ),
+          200: jsonResponse("Lessons reordered", z.object({ success: z.boolean() })),
           400: errorResponse("Invalid lesson list"),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Section not found"),
@@ -260,10 +234,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         summary: "Remove resource from lesson",
         params: z.object({ id: z.uuid(), resourceId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Resource removed",
-            z.object({ success: z.boolean() }),
-          ),
+          200: jsonResponse("Resource removed", z.object({ success: z.boolean() })),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Resource not found"),
         },

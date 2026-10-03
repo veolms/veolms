@@ -13,21 +13,14 @@ const actor = (request: FastifyRequest) => ({
   id: context(request).user.id,
   roles: context(request).user.roles,
 });
-export function createAnalyticsController({
-  service,
-}: {
-  service: AnalyticsService;
-}) {
+export function createAnalyticsController({ service }: { service: AnalyticsService }) {
   return {
-    adminOverview: async (
-      request: FastifyRequest<{ Querystring: AnalyticsFilterQuery }>,
-    ) => service.adminOverview(actor(request), request.query),
-    instructorOverview: async (
-      request: FastifyRequest<{ Querystring: AnalyticsFilterQuery }>,
-    ) => service.instructorOverview(actor(request), request.query),
-    dashboard: async (
-      request: FastifyRequest<{ Querystring: DashboardQuery }>,
-    ) => service.dashboard(actor(request), "platform", request.query.range),
+    adminOverview: async (request: FastifyRequest<{ Querystring: AnalyticsFilterQuery }>) =>
+      service.adminOverview(actor(request), request.query),
+    instructorOverview: async (request: FastifyRequest<{ Querystring: AnalyticsFilterQuery }>) =>
+      service.instructorOverview(actor(request), request.query),
+    dashboard: async (request: FastifyRequest<{ Querystring: DashboardQuery }>) =>
+      service.dashboard(actor(request), "platform", request.query.range),
   };
 }
 

@@ -24,10 +24,7 @@ const sessionRoutes: RoutePlugin = async (app, options) => {
         summary: "List active sessions",
         description: "Returns metadata for all active user sessions.",
         response: {
-          200: jsonResponse(
-            "List of active sessions.",
-            sessionResponseSchema.array(),
-          ),
+          200: jsonResponse("List of active sessions.", sessionResponseSchema.array()),
           401: errorResponse("Unauthorized."),
           403: errorResponse("MFA step-up required."),
         },
@@ -64,13 +61,9 @@ const sessionRoutes: RoutePlugin = async (app, options) => {
         operationId: "revokeAllOtherSessions",
         tags: ["Auth"],
         summary: "Revoke other active sessions",
-        description:
-          "Terminates all user sessions except the current active one.",
+        description: "Terminates all user sessions except the current active one.",
         response: {
-          200: jsonResponse(
-            "Other sessions successfully revoked.",
-            authMessageResponseSchema,
-          ),
+          200: jsonResponse("Other sessions successfully revoked.", authMessageResponseSchema),
           401: errorResponse("Unauthorized."),
           403: errorResponse("MFA step-up required."),
         },

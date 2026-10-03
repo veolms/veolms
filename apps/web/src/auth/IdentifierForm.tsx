@@ -55,9 +55,7 @@ export function IdentifierForm({
   const sending = status === "sending";
   const locked = sending || disabled;
 
-  const [method, setMethod] = useState<IdentifierMethod>(
-    forcedMethod ?? getDefaultLoginMethod(),
-  );
+  const [method, setMethod] = useState<IdentifierMethod>(forcedMethod ?? getDefaultLoginMethod());
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
   const [country, setCountry] = useState<CountryOption>(DEFAULT_COUNTRY);
@@ -94,9 +92,7 @@ export function IdentifierForm({
 
   const selectCountry = (next: CountryOption) => {
     setCountry(next);
-    setInvalidReason(
-      mobile.trim().length > 0 ? validateMobile(mobile, next) : null,
-    );
+    setInvalidReason(mobile.trim().length > 0 ? validateMobile(mobile, next) : null);
   };
 
   const showEmailOnly = forcedMethod
@@ -112,31 +108,22 @@ export function IdentifierForm({
       {showSwitch && (
         <div className="auth-form__method">
           <p className="auth-form__section-label">Continue with</p>
-          <IdentifierMethodSwitch
-            method={method}
-            onMethodChange={changeMethod}
-          />
-          <p className="auth-form__helper">
-            We&apos;ll send you a one-time code
-          </p>
+          <IdentifierMethodSwitch method={method} onMethodChange={changeMethod} />
+          <p className="auth-form__helper">We&apos;ll send you a one-time code</p>
         </div>
       )}
 
       {showEmailOnly && (
         <div className="auth-form__method">
           <p className="auth-form__section-label">Continue with email</p>
-          <p className="auth-form__helper">
-            We&apos;ll send you a one-time code
-          </p>
+          <p className="auth-form__helper">We&apos;ll send you a one-time code</p>
         </div>
       )}
 
       {showMobileOnly && (
         <div className="auth-form__method">
           <p className="auth-form__section-label">Continue with mobile</p>
-          <p className="auth-form__helper">
-            We&apos;ll send you a one-time code
-          </p>
+          <p className="auth-form__helper">We&apos;ll send you a one-time code</p>
         </div>
       )}
 

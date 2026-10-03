@@ -11,11 +11,7 @@ import { CurriculumSectionActionsMenuContent } from "./CurriculumSectionActionsM
 import { getInitialCurriculumExpandedSections } from "./curriculumExpandedSections";
 import type { CourseSection, Lesson } from "./courseContent";
 
-import {
-  isStoredBoolean,
-  isStoredString,
-  useSessionStorageState,
-} from "./useSessionStorageState";
+import { isStoredBoolean, isStoredString, useSessionStorageState } from "./useSessionStorageState";
 import type { LessonDrawerHeroControlProps } from "./useLessonDrawerHeroControl";
 import { CurriculumLessonRows } from "./CurriculumLessonRows";
 import { useCurriculumLayoutRevision } from "./useCurriculumLayoutRevision";
@@ -83,22 +79,18 @@ export function Curriculum({
 }: CurriculumProps) {
   const sectionIds = sections.map(({ id }) => id);
   const isExpandedControlled = controlledExpandedSectionIds !== undefined;
-  const [uncontrolledExpandedSectionIds, setUncontrolledExpandedSectionIds] =
-    useState<number[]>(() =>
+  const [uncontrolledExpandedSectionIds, setUncontrolledExpandedSectionIds] = useState<number[]>(
+    () =>
       getInitialCurriculumExpandedSections(sections, selectedLesson, {
         expandAllSections,
         hideHero,
       }),
-    );
-  const expanded =
-    controlledExpandedSectionIds ?? uncontrolledExpandedSectionIds;
+  );
+  const expanded = controlledExpandedSectionIds ?? uncontrolledExpandedSectionIds;
   const expandedRef = useRef(expanded);
   expandedRef.current = expanded;
   const setExpanded = useCallback(
-    (
-      value:
-        readonly number[] | ((current: readonly number[]) => readonly number[]),
-    ) => {
+    (value: readonly number[] | ((current: readonly number[]) => readonly number[])) => {
       const resolveNext = (current: readonly number[]) =>
         typeof value === "function" ? value(current) : value;
       if (onExpandedSectionIdsChange) {
@@ -120,10 +112,7 @@ export function Curriculum({
     false,
     isStoredBoolean,
   );
-  const debouncedLessonSearch = useDebounce(
-    lessonSearch,
-    DEFAULT_DEBOUNCE_DELAY_MS,
-  );
+  const debouncedLessonSearch = useDebounce(lessonSearch, DEFAULT_DEBOUNCE_DELAY_MS);
   const activeLessonSearch = searchOpen ? debouncedLessonSearch : "";
   const lessonSearchInputId = `learning-curriculum-search-${useId().replaceAll(":", "")}`;
   const activeLessonRef = useRef<HTMLButtonElement>(null);
@@ -143,19 +132,13 @@ export function Curriculum({
   };
   const fallbackLesson: Lesson = [selectedLesson || 1, "", "", "todo"];
   const currentSection =
-    sections.find((section) =>
-      section.lessons.some(([number]) => number === selectedLesson),
-    ) ||
+    sections.find((section) => section.lessons.some(([number]) => number === selectedLesson)) ||
     sections[0] ||
     fallbackSection;
-  const currentLesson =
-    lessonsById?.get(selectedLesson) || lessonsById?.get(1) || fallbackLesson;
+  const currentLesson = lessonsById?.get(selectedLesson) || lessonsById?.get(1) || fallbackLesson;
   useEffect(() => {
     if (expandAllSections || isExpandedControlled) return;
-    if (
-      expandedRef.current.length === 1 &&
-      expandedRef.current[0] === currentSection.id
-    ) {
+    if (expandedRef.current.length === 1 && expandedRef.current[0] === currentSection.id) {
       return;
     }
     setExpanded([currentSection.id]);
@@ -171,8 +154,7 @@ export function Curriculum({
   const setCurriculumScrollport = useCallback(
     (node: HTMLElement | null) => {
       curriculumRef.current = node;
-      contextMenuPortalHostRef.current =
-        node?.closest<HTMLElement>(".video-shell") ?? null;
+      contextMenuPortalHostRef.current = node?.closest<HTMLElement>(".video-shell") ?? null;
       if (scrollportRef) scrollportRef.current = node;
     },
     [scrollportRef],
@@ -182,29 +164,26 @@ export function Curriculum({
     (sectionId: number) => expandedRef.current.includes(sectionId),
     [],
   );
-  const { prepareSectionChange, handleCollapseTransitionEnd } =
-    useCurriculumSectionScrollAnchor(curriculumRef, isSectionExpanded);
+  const { prepareSectionChange, handleCollapseTransitionEnd } = useCurriculumSectionScrollAnchor(
+    curriculumRef,
+    isSectionExpanded,
+  );
 
   const getLessonProgress = (number: number, status: string) => {
     const storedProgress = lessonProgress[number];
-    if (typeof storedProgress === "number")
-      return Math.max(0, Math.min(100, storedProgress));
+    if (typeof storedProgress === "number") return Math.max(0, Math.min(100, storedProgress));
     if (status === "done") return 100;
     return 0;
   };
 
-  const totalLessonCount = sections.reduce(
-    (total, section) => total + section.lessons.length,
-    0,
-  );
+  const totalLessonCount = sections.reduce((total, section) => total + section.lessons.length, 0);
   const shouldVirtualizeCurriculum = totalLessonCount >= 80;
   const allLessons = sections.flatMap(({ lessons }) => lessons);
   const courseProgress =
     allLessons.length > 0
       ? Math.round(
           allLessons.reduce(
-            (total, [number, , , status]) =>
-              total + getLessonProgress(number, status),
+            (total, [number, , , status]) => total + getLessonProgress(number, status),
             0,
           ) / allLessons.length,
         )
@@ -221,31 +200,22 @@ export function Curriculum({
     if (typeof curriculum.scrollTo === "function") {
       curriculum.scrollTo({
         top: itemTop,
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "auto"
-          : "smooth",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
       });
     } else {
       curriculum.scrollTop = itemTop;
     }
   };
 
-  const revealAndScrollTo = (
-    target: "section" | "chapter",
-    sectionId: number,
-  ) => {
+  const revealAndScrollTo = (target: "section" | "chapter", sectionId: number) => {
     setSearchOpen(false);
     setExpanded([sectionId]);
 
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         const targetElement =
-          target === "section"
-            ? currentSectionRef.current
-            : activeLessonRef.current;
-        const curriculum = targetElement?.closest<HTMLElement>(
-          ".learning-curriculum",
-        );
+          target === "section" ? currentSectionRef.current : activeLessonRef.current;
+        const curriculum = targetElement?.closest<HTMLElement>(".learning-curriculum");
         const lessonList = lessonListRef.current;
         if (!targetElement || !curriculum || !lessonList) return;
 
@@ -253,14 +223,10 @@ export function Curriculum({
           targetElement.getBoundingClientRect().top -
           curriculum.getBoundingClientRect().top +
           curriculum.scrollTop;
-        const currentRevealSpace = Number.parseFloat(
-          lessonList.dataset.revealSpace || "0",
-        );
+        const currentRevealSpace = Number.parseFloat(lessonList.dataset.revealSpace || "0");
         const maximumScrollWithoutRevealSpace = Math.max(
           0,
-          curriculum.scrollHeight -
-            currentRevealSpace -
-            curriculum.clientHeight,
+          curriculum.scrollHeight - currentRevealSpace - curriculum.clientHeight,
         );
         const nextRevealSpace = Math.ceil(
           Math.max(0, targetTop - maximumScrollWithoutRevealSpace) + 4,
@@ -268,10 +234,7 @@ export function Curriculum({
 
         if (nextRevealSpace !== currentRevealSpace) {
           lessonList.dataset.revealSpace = String(nextRevealSpace);
-          lessonList.style.setProperty(
-            "--curriculum-reveal-space",
-            `${nextRevealSpace}px`,
-          );
+          lessonList.style.setProperty("--curriculum-reveal-space", `${nextRevealSpace}px`);
           window.requestAnimationFrame(() => {
             window.requestAnimationFrame(() => scrollItemToTop(targetElement));
           });
@@ -309,9 +272,7 @@ export function Curriculum({
 
   const toggleSection = (id: number, header: HTMLElement) => {
     setSearchOpen(false);
-    setExpanded((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [id],
-    );
+    setExpanded((current) => (current.includes(id) ? current.filter((item) => item !== id) : [id]));
     if (!expandedRef.current.includes(id)) {
       prepareSectionChange(
         id,
@@ -322,8 +283,7 @@ export function Curriculum({
   };
 
   useEffect(() => {
-    if (!focusRequest || focusRequest === handledFocusRequestRef.current)
-      return undefined;
+    if (!focusRequest || focusRequest === handledFocusRequestRef.current) return undefined;
 
     handledFocusRequestRef.current = focusRequest;
     setExpanded([currentSection.id]);
@@ -343,8 +303,7 @@ export function Curriculum({
   }, [focusRequest, currentSection.id, setExpanded]);
 
   useEffect(() => {
-    if (!topRequest || topRequest === handledTopRequestRef.current)
-      return undefined;
+    if (!topRequest || topRequest === handledTopRequestRef.current) return undefined;
 
     handledTopRequestRef.current = topRequest;
     setSearchOpen(false);
@@ -371,9 +330,7 @@ export function Curriculum({
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         const targetElement = currentSectionRef.current;
-        const curriculum = targetElement?.closest<HTMLElement>(
-          ".learning-curriculum",
-        );
+        const curriculum = targetElement?.closest<HTMLElement>(".learning-curriculum");
         const lessonList = lessonListRef.current;
         if (!targetElement || !curriculum) return;
 
@@ -382,14 +339,10 @@ export function Curriculum({
             targetElement.getBoundingClientRect().top -
             curriculum.getBoundingClientRect().top +
             curriculum.scrollTop;
-          const currentRevealSpace = Number.parseFloat(
-            lessonList.dataset.revealSpace || "0",
-          );
+          const currentRevealSpace = Number.parseFloat(lessonList.dataset.revealSpace || "0");
           const maximumScrollWithoutRevealSpace = Math.max(
             0,
-            curriculum.scrollHeight -
-              currentRevealSpace -
-              curriculum.clientHeight,
+            curriculum.scrollHeight - currentRevealSpace - curriculum.clientHeight,
           );
           const nextRevealSpace = Math.ceil(
             Math.max(0, targetTop - maximumScrollWithoutRevealSpace) + 4,
@@ -397,10 +350,7 @@ export function Curriculum({
 
           if (nextRevealSpace !== currentRevealSpace) {
             lessonList.dataset.revealSpace = String(nextRevealSpace);
-            lessonList.style.setProperty(
-              "--curriculum-reveal-space",
-              `${nextRevealSpace}px`,
-            );
+            lessonList.style.setProperty("--curriculum-reveal-space", `${nextRevealSpace}px`);
           }
         }
 
@@ -432,12 +382,7 @@ export function Curriculum({
         />
         {!hideHero ? (
           <ContextMenuTrigger
-            render={
-              <div
-                {...drawerHeroControlProps}
-                className="learning-curriculum__hero"
-              />
-            }
+            render={<div {...drawerHeroControlProps} className="learning-curriculum__hero" />}
           >
             {courseThumbnail ? (
               <img
@@ -459,14 +404,9 @@ export function Curriculum({
               aria-label={
                 searchOpen
                   ? "Close lesson search"
-                  : (courseNavigationActionLabel ??
-                    `View course overview for ${courseTitle}`)
+                  : (courseNavigationActionLabel ?? `View course overview for ${courseTitle}`)
               }
-              title={
-                searchOpen
-                  ? "Close search"
-                  : (courseNavigationActionLabel ?? "View")
-              }
+              title={searchOpen ? "Close search" : (courseNavigationActionLabel ?? "View")}
               onClick={() => {
                 if (searchOpen) {
                   setSearchOpen(false);
@@ -494,9 +434,7 @@ export function Curriculum({
                     backButtonClassName="learning-curriculum__search-trigger rounded-full"
                   >
                     <div className="min-w-0 flex-1">
-                      <h2 className="text-[clamp(1rem,4.25cqi,1.1875rem)]">
-                        {courseTitle}
-                      </h2>
+                      <h2 className="text-[clamp(1rem,4.25cqi,1.1875rem)]">{courseTitle}</h2>
                     </div>
                   </ExpandableSearch>
                 </div>
@@ -518,10 +456,7 @@ export function Curriculum({
               >
                 <span style={{ width: `${courseProgress}%` }} />
               </div>
-              <div
-                className="learning-curriculum__current"
-                aria-label="Current lesson location"
-              >
+              <div className="learning-curriculum__current" aria-label="Current lesson location">
                 <button
                   type="button"
                   className="learning-curriculum__current-action"
@@ -535,15 +470,10 @@ export function Curriculum({
                     revealAndScrollTo("section", currentSection.id);
                   }}
                 >
-                  <span
-                    className="learning-curriculum__current-key"
-                    aria-hidden="true"
-                  >
+                  <span className="learning-curriculum__current-key" aria-hidden="true">
                     S{currentSection.id}:
                   </span>
-                  <span className="learning-curriculum__current-label">
-                    {currentSection.title}
-                  </span>
+                  <span className="learning-curriculum__current-label">{currentSection.title}</span>
                 </button>
                 <button
                   type="button"
@@ -558,15 +488,10 @@ export function Curriculum({
                     revealAndScrollTo("chapter", currentSection.id);
                   }}
                 >
-                  <span
-                    className="learning-curriculum__current-key"
-                    aria-hidden="true"
-                  >
+                  <span className="learning-curriculum__current-key" aria-hidden="true">
                     L{selectedLesson}:
                   </span>
-                  <span className="learning-curriculum__current-label">
-                    {currentLesson[1]}
-                  </span>
+                  <span className="learning-curriculum__current-label">{currentLesson[1]}</span>
                 </button>
               </div>
             </div>
@@ -576,13 +501,13 @@ export function Curriculum({
         <div ref={lessonListRef} className="learning-curriculum__lesson-list">
           {isLoading ? (
             <div
-              className="p-3 space-y-4 animate-pulse"
+              className="animate-pulse space-y-4 p-3"
               data-testid="curriculum-loading-skeleton"
               aria-label="Loading curriculum"
             >
               {[1, 2, 3].map((sectionIndex) => (
                 <div key={sectionIndex} className="space-y-2.5">
-                  <div className="flex items-center justify-between py-2 px-1">
+                  <div className="flex items-center justify-between px-1 py-2">
                     <div className="h-4 w-36 rounded bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))]" />
                     <div className="h-3.5 w-8 rounded bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))]" />
                   </div>
@@ -596,14 +521,11 @@ export function Curriculum({
           ) : (
             sections.map((section) => {
               const matchingLessons = section.lessons.filter((lesson) =>
-                lesson[1]
-                  .toLowerCase()
-                  .includes(activeLessonSearch.toLowerCase()),
+                lesson[1].toLowerCase().includes(activeLessonSearch.toLowerCase()),
               );
               const completedLessons = section.lessons.filter(
                 ([number, , , status]) =>
-                  getLessonProgress(number, status) >=
-                  LESSON_PROGRESS_COMPLETE_THRESHOLD,
+                  getLessonProgress(number, status) >= LESSON_PROGRESS_COMPLETE_THRESHOLD,
               ).length;
               const sectionProgress = `${completedLessons}/${section.lessons.length}`;
               const isOpen =
@@ -611,33 +533,25 @@ export function Curriculum({
                 Boolean(activeLessonSearch && matchingLessons.length > 0);
               if (
                 activeLessonSearch &&
-                !section.title
-                  .toLowerCase()
-                  .includes(activeLessonSearch.toLowerCase()) &&
+                !section.title.toLowerCase().includes(activeLessonSearch.toLowerCase()) &&
                 matchingLessons.length === 0
               )
                 return null;
               return (
                 <section
                   key={section.id}
-                  ref={
-                    section.id === currentSection.id
-                      ? currentSectionRef
-                      : undefined
-                  }
+                  ref={section.id === currentSection.id ? currentSectionRef : undefined}
                   className="learning-curriculum__section relative after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-(--learning-panel-border) after:content-['']"
                   data-expanded={isOpen}
                 >
                   <button
                     type="button"
-                    onClick={(event) =>
-                      toggleSection(section.id, event.currentTarget)
-                    }
+                    onClick={(event) => toggleSection(section.id, event.currentTarget)}
                     aria-expanded={isOpen}
                     className="learning-curriculum__section-toggle"
                   >
                     <span
-                      className={`learning-curriculum__section-arrow${isOpen ? " is-open" : ""}`}
+                      className={`learning-curriculum__section-arrow${isOpen ? "is-open" : ""}`}
                       aria-hidden="true"
                     >
                       <CaretDown size={17} />
@@ -645,9 +559,7 @@ export function Curriculum({
                     <span className="min-w-0 flex-1 truncate">
                       Section {section.id}: {section.title}
                     </span>
-                    <span className="learning-curriculum__section-progress">
-                      {sectionProgress}
-                    </span>
+                    <span className="learning-curriculum__section-progress">{sectionProgress}</span>
                   </button>
                   {matchingLessons.length > 0 && (
                     <div

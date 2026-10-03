@@ -22,8 +22,7 @@ export const getAutosyncMutationOptions = <TData, TVariables>(
   networkMode: "online" as const,
   mutationFn,
   retry: 3,
-  retryDelay: (attemptIndex: number) =>
-    Math.min(1_000 * 2 ** attemptIndex, 30_000),
+  retryDelay: (attemptIndex: number) => Math.min(1_000 * 2 ** attemptIndex, 30_000),
 });
 
 export const getAutosyncMutationKeyFor = (key: AutosyncKey): MutationKey =>

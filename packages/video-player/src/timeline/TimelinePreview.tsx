@@ -56,13 +56,9 @@ function SpriteFrame({ frame }: { frame: StoryboardFrame }) {
   }, [frame.imageUrl]);
 
   const backgroundPositionX =
-    sheetSize && sheetSize.width > width
-      ? (x / (sheetSize.width - width)) * 100
-      : 0;
+    sheetSize && sheetSize.width > width ? (x / (sheetSize.width - width)) * 100 : 0;
   const backgroundPositionY =
-    sheetSize && sheetSize.height > height
-      ? (y / (sheetSize.height - height)) * 100
-      : 0;
+    sheetSize && sheetSize.height > height ? (y / (sheetSize.height - height)) * 100 : 0;
 
   return (
     <div
@@ -86,16 +82,11 @@ export interface TimelinePreviewProps {
   previewTime: number;
 }
 
-export function TimelinePreview({
-  duration,
-  previewTime,
-}: TimelinePreviewProps) {
+export function TimelinePreview({ duration, previewTime }: TimelinePreviewProps) {
   const controllerData = useTimelinePreviewData(previewTime);
   const position = timeToPositionPercent(previewTime, duration);
   const translate = position < 14 ? 0 : position > 86 ? -100 : -50;
-  const hasRichPreview = Boolean(
-    controllerData.frame || controllerData.chapterTitle,
-  );
+  const hasRichPreview = Boolean(controllerData.frame || controllerData.chapterTitle);
 
   return (
     <div
@@ -121,9 +112,7 @@ export function TimelinePreview({
       ) : null}
       <div
         className={
-          hasRichPreview
-            ? "space-y-0.5 px-3 py-2 text-center"
-            : "px-2.5 py-1.5 text-center"
+          hasRichPreview ? "space-y-0.5 px-3 py-2 text-center" : "px-2.5 py-1.5 text-center"
         }
       >
         {controllerData.chapterTitle ? (
@@ -131,9 +120,7 @@ export function TimelinePreview({
             {controllerData.chapterTitle}
           </p>
         ) : null}
-        <p
-          className={`${hasRichPreview ? "text-sm" : "text-xs"} font-semibold tabular-nums`}
-        >
+        <p className={`${hasRichPreview ? "text-sm" : "text-xs"} font-semibold tabular-nums`}>
           {formatMediaTime(previewTime)}
         </p>
       </div>
@@ -147,8 +134,6 @@ function useTimelinePreviewData(previewTime: number) {
       frame: getThumbnailAtTime(storyboard, previewTime),
       chapterTitle: getActiveChapter(chapters, previewTime)?.title ?? null,
     }),
-    (left, right) =>
-      left.frame?.id === right.frame?.id &&
-      left.chapterTitle === right.chapterTitle,
+    (left, right) => left.frame?.id === right.frame?.id && left.chapterTitle === right.chapterTitle,
   );
 }

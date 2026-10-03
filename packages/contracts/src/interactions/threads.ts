@@ -1,18 +1,9 @@
 import { z } from "zod";
 
-export const discussionEntryKindSchema = z.enum([
-  "comment",
-  "question",
-  "note",
-  "qna",
-]);
+export const discussionEntryKindSchema = z.enum(["comment", "question", "note", "qna"]);
 export type DiscussionEntryKind = z.infer<typeof discussionEntryKindSchema>;
 
-export const discussionVisibilitySchema = z.enum([
-  "public",
-  "unlisted",
-  "private",
-]);
+export const discussionVisibilitySchema = z.enum(["public", "unlisted", "private"]);
 export type DiscussionVisibility = z.infer<typeof discussionVisibilitySchema>;
 
 export const interactionStatusSchema = z.enum(["active", "hidden", "deleted"]);
@@ -70,9 +61,7 @@ export const learningThreadAttachmentSummarySchema = z.object({
   height: z.number().int().positive().nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
-export type LearningThreadAttachmentSummary = z.infer<
-  typeof learningThreadAttachmentSummarySchema
->;
+export type LearningThreadAttachmentSummary = z.infer<typeof learningThreadAttachmentSummarySchema>;
 
 export const discussionAttachmentSummarySchema = z.object({
   count: z.number().int().nonnegative(),
@@ -80,9 +69,7 @@ export const discussionAttachmentSummarySchema = z.object({
   hasVideos: z.boolean(),
   hasFiles: z.boolean(),
 });
-export type DiscussionAttachmentSummary = z.infer<
-  typeof discussionAttachmentSummarySchema
->;
+export type DiscussionAttachmentSummary = z.infer<typeof discussionAttachmentSummarySchema>;
 
 export const learningThreadSchema = z.object({
   id: z.uuid(),
@@ -141,9 +128,7 @@ export const createLearningThreadRequestSchema = z
         "Comments and Q&A can only be 'public' or 'unlisted'. Notes can be 'public', 'unlisted', or 'private'.",
     },
   );
-export type CreateLearningThreadRequest = z.infer<
-  typeof createLearningThreadRequestSchema
->;
+export type CreateLearningThreadRequest = z.infer<typeof createLearningThreadRequestSchema>;
 
 export const updateLearningThreadRequestSchema = z.object({
   title: z.string().max(255).nullable().optional(),
@@ -152,9 +137,7 @@ export const updateLearningThreadRequestSchema = z.object({
   visibility: discussionVisibilitySchema.optional(),
   tags: z.array(z.string().min(1).max(50)).optional(),
 });
-export type UpdateLearningThreadRequest = z.infer<
-  typeof updateLearningThreadRequestSchema
->;
+export type UpdateLearningThreadRequest = z.infer<typeof updateLearningThreadRequestSchema>;
 
 export const listLearningThreadsQuerySchema = z.object({
   kind: z.enum(["all", "comment", "question", "note", "qna"]).default("all"),
@@ -169,18 +152,14 @@ export const listLearningThreadsQuerySchema = z.object({
   cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
-export type ListLearningThreadsQuery = z.infer<
-  typeof listLearningThreadsQuerySchema
->;
+export type ListLearningThreadsQuery = z.infer<typeof listLearningThreadsQuerySchema>;
 
 export const learningThreadsListResponseSchema = z.object({
   threads: z.array(learningThreadSchema),
   nextCursor: z.string().nullable(),
   totalCount: z.number().int().nonnegative().optional(),
 });
-export type LearningThreadsListResponse = z.infer<
-  typeof learningThreadsListResponseSchema
->;
+export type LearningThreadsListResponse = z.infer<typeof learningThreadsListResponseSchema>;
 
 export const userDiscussionActivitySchema = z.object({
   questionsAsked: z.number().int().nonnegative(),
@@ -188,9 +167,7 @@ export const userDiscussionActivitySchema = z.object({
   answersAccepted: z.number().int().nonnegative(),
   helpfulVotes: z.number().int().nonnegative(),
 });
-export type UserDiscussionActivity = z.infer<
-  typeof userDiscussionActivitySchema
->;
+export type UserDiscussionActivity = z.infer<typeof userDiscussionActivitySchema>;
 
 export const userMentionNotificationSchema = z.object({
   id: z.uuid(),
@@ -206,17 +183,13 @@ export const userMentionNotificationSchema = z.object({
   snippet: z.string(),
   createdAt: z.string(),
 });
-export type UserMentionNotification = z.infer<
-  typeof userMentionNotificationSchema
->;
+export type UserMentionNotification = z.infer<typeof userMentionNotificationSchema>;
 
 export const userMentionsListResponseSchema = z.object({
   mentions: z.array(userMentionNotificationSchema),
   totalCount: z.number().int().nonnegative().optional(),
 });
-export type UserMentionsListResponse = z.infer<
-  typeof userMentionsListResponseSchema
->;
+export type UserMentionsListResponse = z.infer<typeof userMentionsListResponseSchema>;
 
 export const discussionsWorkspaceCourseOptionSchema = z.object({
   id: z.uuid(),
@@ -260,9 +233,7 @@ export const workspaceDiscussionItemSchema = z.object({
       targetId: z.uuid(),
       reason: z.string(),
       details: z.string().nullable().optional(),
-      status: z
-        .enum(["pending", "reviewed", "dismissed", "actioned"])
-        .optional(),
+      status: z.enum(["pending", "reviewed", "dismissed", "actioned"]).optional(),
       actionTaken: z.string().nullable().optional(),
     })
     .optional(),
@@ -271,9 +242,7 @@ export const workspaceDiscussionItemSchema = z.object({
   // Present for bookmark workspace items; omitted by existing tabs.
   bookmarkedAt: z.string().optional(),
 });
-export type WorkspaceDiscussionItem = z.infer<
-  typeof workspaceDiscussionItemSchema
->;
+export type WorkspaceDiscussionItem = z.infer<typeof workspaceDiscussionItemSchema>;
 
 export const discussionsWorkspaceResponseSchema = z.object({
   items: z.array(workspaceDiscussionItemSchema),
@@ -281,6 +250,4 @@ export const discussionsWorkspaceResponseSchema = z.object({
   nextCursor: z.string().nullable(),
   totalCount: z.number().int().nonnegative(),
 });
-export type DiscussionsWorkspaceResponse = z.infer<
-  typeof discussionsWorkspaceResponseSchema
->;
+export type DiscussionsWorkspaceResponse = z.infer<typeof discussionsWorkspaceResponseSchema>;

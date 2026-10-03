@@ -11,23 +11,13 @@ export const DiscussionErrors = {
     return httpError(401, "UNAUTHORIZED", "Authentication required");
   },
   courseAccessDenied() {
-    return httpError(
-      403,
-      "COURSE_ACCESS_DENIED",
-      "You do not have access to this course.",
-    );
+    return httpError(403, "COURSE_ACCESS_DENIED", "You do not have access to this course.");
   },
-  forbidden(
-    message: string = "You do not have permission to perform this action",
-  ) {
+  forbidden(message: string = "You do not have permission to perform this action") {
     return httpError(403, "FORBIDDEN", message);
   },
   commentsDisabled() {
-    return httpError(
-      403,
-      "FORBIDDEN",
-      "Comments are disabled for this course.",
-    );
+    return httpError(403, "FORBIDDEN", "Comments are disabled for this course.");
   },
   qaDisabled() {
     return httpError(403, "FORBIDDEN", "Q&A is disabled for this course.");
@@ -50,11 +40,7 @@ export const DiscussionErrors = {
     );
   },
   notAQuestion() {
-    return httpError(
-      400,
-      "NOT_A_QUESTION",
-      "Only Q&A questions can have accepted answers",
-    );
+    return httpError(400, "NOT_A_QUESTION", "Only Q&A questions can have accepted answers");
   },
   invalidReply() {
     return httpError(

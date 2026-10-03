@@ -1,15 +1,9 @@
-import type {
-  AcademyEnrollmentListItem,
-  EnrolledCourse,
-} from "@veolms/contracts";
+import type { AcademyEnrollmentListItem, EnrolledCourse } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { sql } from "kysely";
 import { toEnrolledCourseContract } from "./enrollment.mapper.ts";
 import * as enrollmentRepo from "./enrollment.repository.ts";
-import {
-  createStudentsService,
-  type StudentsService,
-} from "../../students/index.ts";
+import { createStudentsService, type StudentsService } from "../../students/index.ts";
 
 export interface EnrollmentService {
   listEnrolledCourses(userId: string): Promise<EnrolledCourse[]>;
@@ -38,9 +32,7 @@ export function createEnrollmentService({
   database: Executor;
   studentsService?: Pick<StudentsService, "resolveStudentAvatars">;
 }): EnrollmentService {
-  async function listAcademyEnrollments(
-    limit: number,
-  ): Promise<AcademyEnrollmentListItem[]> {
+  async function listAcademyEnrollments(limit: number): Promise<AcademyEnrollmentListItem[]> {
     const rows = await enrollmentRepo.listAcademyEnrollments(database, limit);
     const avatarUrls = await studentsService.resolveStudentAvatars(
       rows.map((row) => ({
@@ -62,16 +54,12 @@ export function createEnrollmentService({
         title: row.course_title,
       },
       averageProgressPercent:
-        row.average_progress_percent === null
-          ? null
-          : Number(row.average_progress_percent),
+        row.average_progress_percent === null ? null : Number(row.average_progress_percent),
       enrolledAt: row.enrolled_at,
     }));
   }
 
-  async function listEnrolledCourses(
-    userId: string,
-  ): Promise<EnrolledCourse[]> {
+  async function listEnrolledCourses(userId: string): Promise<EnrolledCourse[]> {
     // Join enrollments with courses to get course details in a single query.
     // Excludes revoked, expired (past access_expires_at), and suspended
     // enrollments — only "active" with valid access windows are returned.
@@ -104,9 +92,7 @@ export function createEnrollmentService({
               .on("lp.user_id", "=", userId),
           )
           .select(
-            sql<number>`coalesce(avg(coalesce(lp.progress_percent, 0)), 0)`.as(
-              "progress_percent",
-            ),
+            sql<number>`coalesce(avg(coalesce(lp.progress_percent, 0)), 0)`.as("progress_percent"),
           )
           .whereRef("progress_lesson.course_id", "=", "c.id")
           .where("progress_lesson.is_published", "=", true)
@@ -116,11 +102,7 @@ export function createEnrollmentService({
       .select((eb) =>
         eb
           .selectFrom("learning_progress as lp")
-          .innerJoin(
-            "course_lessons as progress_lesson",
-            "progress_lesson.id",
-            "lp.lesson_id",
-          )
+          .innerJoin("course_lessons as progress_lesson", "progress_lesson.id", "lp.lesson_id")
           .select((sub) => sub.fn.max("lp.updated_at").as("last_accessed_at"))
           .whereRef("lp.course_id", "=", "c.id")
           .where("lp.user_id", "=", userId)
@@ -151,18 +133,9 @@ export function createEnrollmentService({
       .select((eb) =>
         eb
           .selectFrom("course_lessons as cl2")
-          .leftJoin(
-            "media_assets as lesson_media",
-            "lesson_media.id",
-            "cl2.content_media_id",
-          )
+          .leftJoin("media_assets as lesson_media", "lesson_media.id", "cl2.content_media_id")
           .select((sub) =>
-            sub.fn
-              .coalesce(
-                sub.fn.sum("lesson_media.duration_seconds"),
-                sql<number>`0`,
-              )
-              .as("dur"),
+            sub.fn.coalesce(sub.fn.sum("lesson_media.duration_seconds"), sql<number>`0`).as("dur"),
           )
           .whereRef("cl2.course_id", "=", "c.id")
           .where("cl2.is_published", "=", true)
@@ -172,10 +145,7 @@ export function createEnrollmentService({
       .where("e.user_id", "=", userId)
       .where("e.status", "=", "active")
       .where((eb) =>
-        eb.or([
-          eb("e.access_expires_at", "is", null),
-          eb("e.access_expires_at", ">", new Date()),
-        ]),
+        eb.or([eb("e.access_expires_at", "is", null), eb("e.access_expires_at", ">", new Date())]),
       )
       // Only include published courses (hide draft/archived from student view)
       .where("c.status", "=", "published")
@@ -205,15 +175,11 @@ export function createEnrollmentService({
     );
   }
 
-  async function getEnrollmentStats(
-    filters: enrollmentRepo.EnrollmentAnalyticsFilters,
-  ) {
+  async function getEnrollmentStats(filters: enrollmentRepo.EnrollmentAnalyticsFilters) {
     return await enrollmentRepo.getEnrollmentStats(database, filters);
   }
 
-  async function getEnrollmentActivityBuckets(
-    filters: enrollmentRepo.EnrollmentAnalyticsFilters,
-  ) {
+  async function getEnrollmentActivityBuckets(filters: enrollmentRepo.EnrollmentAnalyticsFilters) {
     return await enrollmentRepo.getEnrollmentActivityBuckets(database, filters);
   }
 

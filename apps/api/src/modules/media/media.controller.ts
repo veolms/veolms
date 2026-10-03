@@ -14,37 +14,22 @@ export function createMediaController({ service }: { service: MediaService }) {
     return result;
   }
 
-  async function confirmMediaUpload(
-    request: FastifyRequest<{ Params: { mediaId: string } }>,
-  ) {
+  async function confirmMediaUpload(request: FastifyRequest<{ Params: { mediaId: string } }>) {
     const { mediaId } = request.params;
     const ownerId = request.user!.id;
-    const result = await service.confirmUpload(
-      mediaId,
-      ownerId,
-      request.log,
-      request.user?.roles,
-    );
+    const result = await service.confirmUpload(mediaId, ownerId, request.log, request.user?.roles);
     return {
       status: result.status,
       ...(result.deliveryUrl ? { deliveryUrl: result.deliveryUrl } : {}),
-      ...(result.deliveryUrlExpiresAt
-        ? { deliveryUrlExpiresAt: result.deliveryUrlExpiresAt }
-        : {}),
+      ...(result.deliveryUrlExpiresAt ? { deliveryUrlExpiresAt: result.deliveryUrlExpiresAt } : {}),
       ...(result.thumbnailUrl ? { thumbnailUrl: result.thumbnailUrl } : {}),
     };
   }
 
-  async function getVideoJobProgress(
-    request: FastifyRequest<{ Params: { mediaId: string } }>,
-  ) {
+  async function getVideoJobProgress(request: FastifyRequest<{ Params: { mediaId: string } }>) {
     const { mediaId } = request.params;
     const ownerId = request.user!.id;
-    return await service.getVideoJobProgress(
-      mediaId,
-      ownerId,
-      request.user?.roles,
-    );
+    return await service.getVideoJobProgress(mediaId, ownerId, request.user?.roles);
   }
 
   async function getPlaybackBootstrap(
@@ -52,9 +37,7 @@ export function createMediaController({ service }: { service: MediaService }) {
       Params: { idOrSlug: string; lessonNumber: number };
     }>,
   ) {
-    const user = request.user
-      ? { id: request.user.id, roles: request.user.roles }
-      : undefined;
+    const user = request.user ? { id: request.user.id, roles: request.user.roles } : undefined;
     return await service.getPlaybackBootstrap(
       request.params.idOrSlug,
       request.params.lessonNumber,
@@ -68,9 +51,7 @@ export function createMediaController({ service }: { service: MediaService }) {
     }>,
     reply: FastifyReply,
   ) {
-    const user = request.user
-      ? { id: request.user.id, roles: request.user.roles }
-      : undefined;
+    const user = request.user ? { id: request.user.id, roles: request.user.roles } : undefined;
     reply.header("Cache-Control", "private, no-store");
     return await service.getPlaybackToken(
       request.params.idOrSlug,
@@ -79,19 +60,11 @@ export function createMediaController({ service }: { service: MediaService }) {
     );
   }
 
-  async function getMediaDelivery(
-    request: FastifyRequest<{ Params: { mediaId: string } }>,
-  ) {
-    return service.getMediaDelivery(
-      request.params.mediaId,
-      request.user?.id,
-      request.user?.roles,
-    );
+  async function getMediaDelivery(request: FastifyRequest<{ Params: { mediaId: string } }>) {
+    return service.getMediaDelivery(request.params.mediaId, request.user?.id, request.user?.roles);
   }
 
-  async function retryVideoJob(
-    request: FastifyRequest<{ Params: { mediaId: string } }>,
-  ) {
+  async function retryVideoJob(request: FastifyRequest<{ Params: { mediaId: string } }>) {
     return service.retryTranscodeJob(
       request.params.mediaId,
       request.user!.id,
@@ -100,9 +73,7 @@ export function createMediaController({ service }: { service: MediaService }) {
     );
   }
 
-  async function cancelVideoJob(
-    request: FastifyRequest<{ Params: { mediaId: string } }>,
-  ) {
+  async function cancelVideoJob(request: FastifyRequest<{ Params: { mediaId: string } }>) {
     return service.cancelTranscodeJob(
       request.params.mediaId,
       request.user!.id,
@@ -120,12 +91,8 @@ export function createMediaController({ service }: { service: MediaService }) {
     // explicitly before writeHead; otherwise EventSource requests from the
     // separately hosted web app can be rejected by the browser as CORS errors.
     const corsHeaders = {
-      "Access-Control-Allow-Origin": reply.getHeader(
-        "Access-Control-Allow-Origin",
-      ),
-      "Access-Control-Allow-Credentials": reply.getHeader(
-        "Access-Control-Allow-Credentials",
-      ),
+      "Access-Control-Allow-Origin": reply.getHeader("Access-Control-Allow-Origin"),
+      "Access-Control-Allow-Credentials": reply.getHeader("Access-Control-Allow-Credentials"),
       Vary: reply.getHeader("Vary"),
     };
     reply.hijack();
@@ -136,13 +103,10 @@ export function createMediaController({ service }: { service: MediaService }) {
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
       ...(typeof corsHeaders["Access-Control-Allow-Origin"] === "string" && {
-        "Access-Control-Allow-Origin":
-          corsHeaders["Access-Control-Allow-Origin"],
+        "Access-Control-Allow-Origin": corsHeaders["Access-Control-Allow-Origin"],
       }),
-      ...(typeof corsHeaders["Access-Control-Allow-Credentials"] ===
-        "string" && {
-        "Access-Control-Allow-Credentials":
-          corsHeaders["Access-Control-Allow-Credentials"],
+      ...(typeof corsHeaders["Access-Control-Allow-Credentials"] === "string" && {
+        "Access-Control-Allow-Credentials": corsHeaders["Access-Control-Allow-Credentials"],
       }),
       ...(typeof corsHeaders.Vary === "string" && {
         Vary: corsHeaders.Vary,
@@ -159,11 +123,8 @@ export function createMediaController({ service }: { service: MediaService }) {
           request.user!.id,
           request.user?.roles,
         );
-        response.write(
-          `event: progress\ndata: ${JSON.stringify(progress)}\n\n`,
-        );
-        if (["completed", "failed", "cancelled"].includes(progress.status))
-          break;
+        response.write(`event: progress\ndata: ${JSON.stringify(progress)}\n\n`);
+        if (["completed", "failed", "cancelled"].includes(progress.status)) break;
       } catch (error) {
         response.write(
           `event: error\ndata: ${JSON.stringify({ message: error instanceof Error ? error.message : "Unable to read progress" })}\n\n`,
@@ -180,14 +141,8 @@ export function createMediaController({ service }: { service: MediaService }) {
     }>,
     reply: FastifyReply,
   ) {
-    const user = request.user
-      ? { id: request.user.id, roles: request.user.roles }
-      : undefined;
-    const result = await service.getHlsStream(
-      request.params.mediaId,
-      request.params["*"],
-      user,
-    );
+    const user = request.user ? { id: request.user.id, roles: request.user.roles } : undefined;
+    const result = await service.getHlsStream(request.params.mediaId, request.params["*"], user);
     reply.header("Content-Type", result.contentType);
     if (result.contentLength !== undefined) {
       reply.header("Content-Length", result.contentLength);
@@ -210,11 +165,7 @@ export function createMediaController({ service }: { service: MediaService }) {
   ) {
     const { mediaId } = request.params;
     const requestingUserId = request.user?.id;
-    const result = await service.getMediaStream(
-      mediaId,
-      requestingUserId,
-      request.user?.roles,
-    );
+    const result = await service.getMediaStream(mediaId, requestingUserId, request.user?.roles);
     reply.header("Content-Type", result.contentType);
     if (result.contentLength !== undefined) {
       reply.header("Content-Length", result.contentLength);
@@ -251,8 +202,7 @@ export function createMediaController({ service }: { service: MediaService }) {
     reply
       .header("Content-Type", result.contentType)
       .header("Cache-Control", "public, max-age=31536000, immutable");
-    if (result.contentLength !== undefined)
-      reply.header("Content-Length", result.contentLength);
+    if (result.contentLength !== undefined) reply.header("Content-Length", result.contentLength);
     return reply.send(result.stream);
   }
 

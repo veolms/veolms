@@ -13,9 +13,7 @@ export function createCartController({ service }: { service: CartService }) {
     return await service.addItem(userId, request.body);
   }
 
-  async function removeItem(
-    request: FastifyRequest<{ Params: { itemId: string } }>,
-  ) {
+  async function removeItem(request: FastifyRequest<{ Params: { itemId: string } }>) {
     const userId = request.user!.id;
     return await service.removeItem(userId, request.params.itemId);
   }

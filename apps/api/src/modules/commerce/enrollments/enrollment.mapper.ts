@@ -19,9 +19,7 @@ interface EnrolledCourseRow {
   last_accessed_at?: Date | null;
 }
 
-export function toEnrolledCourseContract(
-  row: EnrolledCourseRow,
-): EnrolledCourse {
+export function toEnrolledCourseContract(row: EnrolledCourseRow): EnrolledCourse {
   const totalLessons = Number(row.total_lessons) || 0;
   const progressValue = Number(row.progress_percent);
   const progress =

@@ -16,11 +16,10 @@ export interface TimelineMarker<TMetadata = unknown> {
   metadata?: TMetadata;
 }
 
-export type PositionedTimelineMarker<TMetadata = unknown> =
-  TimelineMarker<TMetadata> & {
-    position: number;
-    positionPercent: number;
-  };
+export type PositionedTimelineMarker<TMetadata = unknown> = TimelineMarker<TMetadata> & {
+  position: number;
+  positionPercent: number;
+};
 
 export function clamp(value: number, minimum: number, maximum: number): number {
   const lowerBound = Math.min(minimum, maximum);
@@ -34,10 +33,7 @@ export function clamp(value: number, minimum: number, maximum: number): number {
 }
 
 /** Converts a pointer's client X coordinate into a normalized track position. */
-export function pointerPositionToRatio(
-  clientX: number,
-  bounds: TimelineBounds,
-): number {
+export function pointerPositionToRatio(clientX: number, bounds: TimelineBounds): number {
   if (
     !Number.isFinite(clientX) ||
     !Number.isFinite(bounds.left) ||
@@ -93,9 +89,7 @@ export function normalizeBufferedRanges(
   const bounded = ranges
     .filter(
       (range) =>
-        Number.isFinite(range.start) &&
-        Number.isFinite(range.end) &&
-        range.end > range.start,
+        Number.isFinite(range.start) && Number.isFinite(range.end) && range.end > range.start,
     )
     .map((range) => ({
       start: clamp(range.start, 0, duration),

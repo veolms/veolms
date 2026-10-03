@@ -29,8 +29,7 @@ export function PlayerBehaviorBridge({
       playing: media.playing,
     }),
     (left, right) =>
-      left.controlsVisible === right.controlsVisible &&
-      left.playing === right.playing,
+      left.controlsVisible === right.controlsVisible && left.playing === right.playing,
   );
   usePlayerKeyboard({
     enabled: keyboardEnabled,

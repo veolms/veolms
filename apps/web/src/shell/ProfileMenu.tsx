@@ -14,8 +14,7 @@ import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import type { CourseRole } from "../courses/catalogue";
 import { getRoleDisplayName } from "./workspaceRole";
 
-const FALLBACK_AVATAR_CLASS =
-  "shell-profile-avatar shell-profile-avatar--fallback";
+const FALLBACK_AVATAR_CLASS = "shell-profile-avatar shell-profile-avatar--fallback";
 
 export interface ProfileIdentityData {
   displayName: string;
@@ -43,13 +42,7 @@ export function ProfileMenuIdentity({
 }: ProfileMenuIdentityProps) {
   const profilePath = `/${encodeURIComponent(username)}`;
   const handleProfileClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
       onClose?.();
       return;
     }
@@ -65,17 +58,14 @@ export function ProfileMenuIdentity({
       aria-label="Your profile"
     >
       <a
-        className="profile-menu__identity-link absolute inset-0 z-0 flex min-w-0 items-center gap-1 rounded-[inherit] pl-0.5 pr-2 py-1 text-inherit no-underline outline-none transition-colors hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,white_10%)]! focus-visible:ring-2 focus-visible:ring-(--accent)"
+        className="profile-menu__identity-link absolute inset-0 z-0 flex min-w-0 items-center gap-1 rounded-[inherit] py-1 pr-2 pl-0.5 text-inherit no-underline transition-colors outline-none hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,white_10%)]! focus-visible:ring-2 focus-visible:ring-(--accent)"
         href={profilePath}
         aria-label={`Open ${displayName}'s public profile`}
         role={mobile ? undefined : "menuitem"}
         onClick={handleProfileClick}
       >
         <span className="courses-profile__avatar-wrap">
-          <ShellProfileAvatar
-            avatarUrl={avatarUrl}
-            avatarSrcSet={avatarSrcSet}
-          />
+          <ShellProfileAvatar avatarUrl={avatarUrl} avatarSrcSet={avatarSrcSet} />
           {unreadNotificationCount > 0 ? (
             <i
               className="courses-profile__presence"
@@ -87,14 +77,12 @@ export function ProfileMenuIdentity({
           <strong className="truncate text-[0.84rem] font-semibold text-(--text)">
             {displayName}
           </strong>
-          <small className="truncate text-[0.72rem] text-(--muted)">
-            @{username}
-          </small>
+          <small className="truncate text-[0.72rem] text-(--muted)">@{username}</small>
         </span>
       </a>
       <button
         type="button"
-        className="profile-menu__identity-edit group absolute right-1.5 top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-(--border) bg-[color-mix(in_srgb,var(--surface-strong)_84%,black_16%)]! p-0 text-(--muted) outline-none transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+        className="profile-menu__identity-edit group absolute top-1/2 right-1.5 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-(--border) bg-[color-mix(in_srgb,var(--surface-strong)_84%,black_16%)]! p-0 text-(--muted) transition-colors outline-none hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
         aria-label="Edit profile"
         title="Edit profile"
         role={mobile ? undefined : "menuitem"}
@@ -134,9 +122,7 @@ export function ShellProfileAvatar({
 
   return (
     <i
-      className={
-        showImage && avatarUrl ? "shell-profile-avatar" : FALLBACK_AVATAR_CLASS
-      }
+      className={showImage && avatarUrl ? "shell-profile-avatar" : FALLBACK_AVATAR_CLASS}
       aria-hidden="true"
     >
       {showImage && avatarUrl ? (
@@ -200,17 +186,8 @@ export function ProfileMenu({
     onRoleChange(nextRole);
     onClose();
   };
-  const openDestination = (
-    event: MouseEvent<HTMLAnchorElement>,
-    path: string,
-  ) => {
-    if (
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
+  const openDestination = (event: MouseEvent<HTMLAnchorElement>, path: string) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
       onClose();
       return;
     }
@@ -222,8 +199,7 @@ export function ProfileMenu({
   const canPreviewAsCreator = allowedRoles.includes("creator");
   const canSwitchWorkspace = canPreviewAsStudent && canPreviewAsCreator;
   const authoringRoleLabel = getRoleDisplayName("creator", userRoles);
-  const AuthoringRoleIcon =
-    authoringRoleLabel === "Admin" ? ShieldCheck : Users;
+  const AuthoringRoleIcon = authoringRoleLabel === "Admin" ? ShieldCheck : Users;
   const menuClassName = [
     "profile-menu",
     canSwitchWorkspace ? "profile-menu--switchable" : null,
@@ -268,11 +244,7 @@ export function ProfileMenu({
               />
               <span>Student</span>
               {role === "student" ? (
-                <Check
-                  className="profile-menu__check"
-                  size={18}
-                  weight="bold"
-                />
+                <Check className="profile-menu__check" size={18} weight="bold" />
               ) : (
                 <span className="profile-menu__trail" aria-hidden="true" />
               )}
@@ -291,21 +263,13 @@ export function ProfileMenu({
               />
               <span>{authoringRoleLabel}</span>
               {role === "creator" ? (
-                <Check
-                  className="profile-menu__check"
-                  size={18}
-                  weight="bold"
-                />
+                <Check className="profile-menu__check" size={18} weight="bold" />
               ) : (
                 <span className="profile-menu__trail" aria-hidden="true" />
               )}
             </button>
           </div>
-          <div
-            className="profile-menu__divider"
-            role="separator"
-            aria-orientation="horizontal"
-          />
+          <div className="profile-menu__divider" role="separator" aria-orientation="horizontal" />
         </>
       ) : null}
 
@@ -360,11 +324,7 @@ export function ProfileMenu({
           </a>
         ) : null}
       </div>
-      <div
-        className="profile-menu__divider"
-        role="separator"
-        aria-orientation="horizontal"
-      />
+      <div className="profile-menu__divider" role="separator" aria-orientation="horizontal" />
 
       {includeSidebarControl && onToggleSidebar ? (
         <div className="profile-menu__group profile-menu__group--session">
@@ -381,9 +341,7 @@ export function ProfileMenu({
               className="profile-menu__item-icon profile-menu__item-icon--sidebar"
               size={21}
             />
-            <span>
-              {sidebarHidden ? "Keep sidebar visible" : "Hide sidebar"}
-            </span>
+            <span>{sidebarHidden ? "Keep sidebar visible" : "Hide sidebar"}</span>
           </button>
         </div>
       ) : null}
@@ -398,10 +356,7 @@ export function ProfileMenu({
             onLogout();
           }}
         >
-          <SignOut
-            className="profile-menu__item-icon profile-menu__item-icon--logout"
-            size={21}
-          />
+          <SignOut className="profile-menu__item-icon profile-menu__item-icon--logout" size={21} />
           <span>Logout</span>
         </button>
       </div>

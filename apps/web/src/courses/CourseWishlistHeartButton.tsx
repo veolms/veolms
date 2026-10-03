@@ -1,13 +1,7 @@
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import type { MouseEvent } from "react";
 
-function CourseWishlistHeartIcon({
-  wishlisted,
-  size,
-}: {
-  wishlisted: boolean;
-  size: number;
-}) {
+function CourseWishlistHeartIcon({ wishlisted, size }: { wishlisted: boolean; size: number }) {
   return (
     <span className="relative inline-flex items-center justify-center">
       <Heart
@@ -51,7 +45,7 @@ export function CourseWishlistHeartButton({
     return (
       <button
         type="button"
-        className="group/wishlist absolute right-3 top-3 z-20 flex min-h-10 min-w-10 items-center justify-center rounded-full border border-white/15 bg-slate-950/70 text-white shadow-lg transition-colors hover:bg-slate-950/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className="group/wishlist absolute top-3 right-3 z-20 flex min-h-10 min-w-10 items-center justify-center rounded-full border border-white/15 bg-slate-950/70 text-white shadow-lg transition-colors hover:bg-slate-950/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         aria-label={ariaLabel}
         aria-pressed={wishlisted}
         disabled={disabled}

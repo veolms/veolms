@@ -1,7 +1,4 @@
-import {
-  capabilitiesQuerySchema,
-  capabilitiesResponseSchema,
-} from "@veolms/contracts";
+import { capabilitiesQuerySchema, capabilitiesResponseSchema } from "@veolms/contracts";
 import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";

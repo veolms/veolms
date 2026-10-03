@@ -25,17 +25,17 @@ export function OrderHistoryInvoiceModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+      className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm duration-150"
       role="dialog"
       aria-modal="true"
       aria-labelledby="order-history-receipt-title"
     >
       <div
-        className="w-full max-w-lg rounded-[20px] border border-(--border) bg-(--card-surface) p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+        className="animate-in zoom-in-95 w-full max-w-lg rounded-[20px] border border-(--border) bg-(--card-surface) p-6 shadow-2xl duration-150"
         style={{ boxShadow: "var(--card-floating-shadow,var(--card-shadow))" }}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 pb-4 border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-(--accent-soft) text-(--accent)">
               <Receipt size={22} weight="duotone" />
@@ -43,13 +43,11 @@ export function OrderHistoryInvoiceModal({
             <div>
               <h2
                 id="order-history-receipt-title"
-                className="text-lg font-bold text-(--text) tracking-tight"
+                className="text-lg font-bold tracking-tight text-(--text)"
               >
                 Order Invoice
               </h2>
-              <p className="text-xs text-(--muted)">
-                Invoice {order.invoiceNumber}
-              </p>
+              <p className="text-xs text-(--muted)">Invoice {order.invoiceNumber}</p>
             </div>
           </div>
 
@@ -57,7 +55,7 @@ export function OrderHistoryInvoiceModal({
             type="button"
             onClick={onClose}
             aria-label="Close invoice modal"
-            className="rounded-lg p-1.5 text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+            className="cursor-pointer rounded-lg p-1.5 text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text)"
           >
             <X size={18} />
           </button>
@@ -73,46 +71,36 @@ export function OrderHistoryInvoiceModal({
             <ShoppingBag size={21} weight="duotone" />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate font-bold text-sm text-(--text)">
-              {order.courseTitle}
-            </h3>
-            <p className="text-xs text-(--muted) mt-0.5 font-mono">
-              Order ID: {order.orderNumber}
-            </p>
+            <h3 className="truncate text-sm font-bold text-(--text)">{order.courseTitle}</h3>
+            <p className="mt-0.5 font-mono text-xs text-(--muted)">Order ID: {order.orderNumber}</p>
           </div>
         </div>
 
         {/* Transaction Details Grid */}
         <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
           <div className="rounded-xl bg-(--card-surface-raised,var(--hover)) p-3">
-            <span className="text-(--muted) block">Date & Time</span>
-            <strong className="text-(--text) font-semibold mt-1 block">
+            <span className="block text-(--muted)">Date & Time</span>
+            <strong className="mt-1 block font-semibold text-(--text)">
               {order.date} • {order.time}
             </strong>
           </div>
           <div className="rounded-xl bg-(--card-surface-raised,var(--hover)) p-3">
-            <span className="text-(--muted) block">Payment Method</span>
-            <strong className="text-(--text) font-semibold mt-1 block">
+            <span className="block text-(--muted)">Payment Method</span>
+            <strong className="mt-1 block font-semibold text-(--text)">
               {order.payment.brand} ({order.payment.label})
             </strong>
           </div>
-          <div className="rounded-xl bg-(--card-surface-raised,var(--hover)) p-3 col-span-2 sm:col-span-1">
-            <span className="text-(--muted) block">Transaction ID</span>
-            <strong className="text-(--text) font-mono text-[11px] mt-1 block truncate">
+          <div className="col-span-2 rounded-xl bg-(--card-surface-raised,var(--hover)) p-3 sm:col-span-1">
+            <span className="block text-(--muted)">Transaction ID</span>
+            <strong className="mt-1 block truncate font-mono text-[11px] text-(--text)">
               {order.transactionId}
             </strong>
           </div>
-          <div className="rounded-xl bg-(--card-surface-raised,var(--hover)) p-3 col-span-2 sm:col-span-1">
-            <span className="text-(--muted) block">Status</span>
-            <div className="flex items-center gap-1.5 mt-1">
-              <CheckCircle
-                size={15}
-                weight="fill"
-                className="text-emerald-400"
-              />
-              <strong className="text-(--text) font-semibold">
-                {order.statusLabel}
-              </strong>
+          <div className="col-span-2 rounded-xl bg-(--card-surface-raised,var(--hover)) p-3 sm:col-span-1">
+            <span className="block text-(--muted)">Status</span>
+            <div className="mt-1 flex items-center gap-1.5">
+              <CheckCircle size={15} weight="fill" className="text-emerald-400" />
+              <strong className="font-semibold text-(--text)">{order.statusLabel}</strong>
             </div>
           </div>
         </div>
@@ -127,7 +115,7 @@ export function OrderHistoryInvoiceModal({
             <span>Taxes & Processing Fee (18%)</span>
             <span>${order.tax.toFixed(2)}</span>
           </div>
-          <div className="mt-2 pt-2 border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] flex justify-between text-sm font-bold text-(--text)">
+          <div className="mt-2 flex justify-between border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] pt-2 text-sm font-bold text-(--text)">
             <span>Total Paid</span>
             <span className="text-(--accent)">{order.formattedAmount}</span>
           </div>
@@ -138,14 +126,14 @@ export function OrderHistoryInvoiceModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl px-4 py-2.5 text-xs md:text-sm font-semibold text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+            className="cursor-pointer rounded-xl px-4 py-2.5 text-xs font-semibold text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) md:text-sm"
           >
             Close
           </button>
           <button
             type="button"
             onClick={() => onDownloadReceipt?.(order)}
-            className="flex items-center gap-2 rounded-xl bg-(--accent) px-4 py-2.5 text-xs md:text-sm font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
+            className="flex cursor-pointer items-center gap-2 rounded-xl bg-(--accent) px-4 py-2.5 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm transition-opacity hover:opacity-90 md:text-sm"
           >
             <DownloadSimple size={16} weight="bold" />
             <span>Download receipt</span>

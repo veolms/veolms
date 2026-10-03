@@ -13,15 +13,8 @@ export interface InvoiceService {
   generateInvoiceHtml(scope: OrderScope, orderId: string): Promise<string>;
 }
 
-export function createInvoiceService({
-  database,
-}: {
-  database: Executor;
-}): InvoiceService {
-  async function generateInvoiceData(
-    scope: OrderScope,
-    orderId: string,
-  ): Promise<Invoice> {
+export function createInvoiceService({ database }: { database: Executor }): InvoiceService {
+  async function generateInvoiceData(scope: OrderScope, orderId: string): Promise<Invoice> {
     const order = await orderRepo.findOrderById(database, orderId, scope);
     if (!order) {
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
@@ -32,11 +25,7 @@ export function createInvoiceService({
     }
 
     if (!["paid", "partially_refunded", "refunded"].includes(order.status)) {
-      throw new AppError(
-        400,
-        "ORDER_NOT_PAID",
-        "Invoices are only available for paid orders.",
-      );
+      throw new AppError(400, "ORDER_NOT_PAID", "Invoices are only available for paid orders.");
     }
 
     const items = await orderRepo.listOrderItems(database, orderId);
@@ -44,8 +33,7 @@ export function createInvoiceService({
     const user = await authRepo.findUserById(database, order.user_id);
     const academy = await setupRepo.findAcademy(database);
 
-    const paymentRef =
-      payment?.gateway_payment_id ?? payment?.gateway_order_id ?? "N/A";
+    const paymentRef = payment?.gateway_payment_id ?? payment?.gateway_order_id ?? "N/A";
 
     return {
       invoiceNumber: `INV-${order.order_number}`,
@@ -78,10 +66,7 @@ export function createInvoiceService({
     };
   }
 
-  async function generateInvoiceHtml(
-    scope: OrderScope,
-    orderId: string,
-  ): Promise<string> {
+  async function generateInvoiceHtml(scope: OrderScope, orderId: string): Promise<string> {
     const inv = await generateInvoiceData(scope, orderId);
     const dateStr = inv.paidAt
       ? new Date(inv.paidAt).toLocaleDateString("en-IN", {

@@ -1,19 +1,9 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import type {
-  CreateBundleRequest,
-  UpdateBundleRequest,
-} from "@veolms/contracts";
+import type { CreateBundleRequest, UpdateBundleRequest } from "@veolms/contracts";
 import type { BundleService } from "./bundle.service.ts";
 
-export function createBundleController({
-  service,
-}: {
-  service: BundleService;
-}) {
-  async function listPublishedBundles(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) {
+export function createBundleController({ service }: { service: BundleService }) {
+  async function listPublishedBundles(request: FastifyRequest, reply: FastifyReply) {
     const bundles = await service.listPublishedBundles();
     return bundles;
   }
@@ -54,10 +44,7 @@ export function createBundleController({
     }>,
     reply: FastifyReply,
   ) {
-    const bundle = await service.updateBundle(
-      request.params.bundleId,
-      request.body,
-    );
+    const bundle = await service.updateBundle(request.params.bundleId, request.body);
     return bundle;
   }
 

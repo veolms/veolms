@@ -2,8 +2,7 @@ import { getLessonSlug, resolveLessonIdentifier } from "./courseContent";
 
 export type CoursePlayerOrigin = "home" | "courses" | "wishlist";
 
-type LegacyCoursePlayerOrigin =
-  "explore-courses" | "my-courses" | "my-learning";
+type LegacyCoursePlayerOrigin = "explore-courses" | "my-courses" | "my-learning";
 
 type CoursePlayerStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -26,10 +25,8 @@ export interface PendingCourseCommentDraft {
   commentsStorageKey: string;
 }
 
-export const COURSE_PLAYER_SESSIONS_STORAGE_KEY =
-  "veolms-open-course-player-sessions";
-export const COURSE_PLAYER_SESSION_CHANGE_EVENT =
-  "veolms-course-player-session-change";
+export const COURSE_PLAYER_SESSIONS_STORAGE_KEY = "veolms-open-course-player-sessions";
+export const COURSE_PLAYER_SESSION_CHANGE_EVENT = "veolms-course-player-session-change";
 
 const LEGACY_COURSE_PLAYER_SESSION_STORAGE_KEY = "veolms-active-course-player";
 const DEFAULT_COURSE_PLAYER_ORIGIN: CoursePlayerOrigin = "courses";
@@ -53,9 +50,7 @@ const COURSE_PLAYER_BACK_LABELS: Record<CoursePlayerOrigin, string> = {
   wishlist: "Return to Courses",
 };
 
-const COURSE_PLAYER_ORIGINS_BY_PATH: Readonly<
-  Record<string, CoursePlayerOrigin>
-> = {
+const COURSE_PLAYER_ORIGINS_BY_PATH: Readonly<Record<string, CoursePlayerOrigin>> = {
   "/": "home",
   "/home": "home",
   "/courses": "courses",
@@ -66,15 +61,9 @@ const COURSE_PLAYER_ORIGINS_BY_PATH: Readonly<
 const isCoursePlayerOrigin = (value: unknown): value is CoursePlayerOrigin =>
   value === "home" || value === "courses" || value === "wishlist";
 
-const normalizeCoursePlayerOrigin = (
-  value: unknown,
-): CoursePlayerOrigin | null => {
+const normalizeCoursePlayerOrigin = (value: unknown): CoursePlayerOrigin | null => {
   if (isCoursePlayerOrigin(value)) return value;
-  if (
-    value === "explore-courses" ||
-    value === "my-courses" ||
-    value === "my-learning"
-  )
+  if (value === "explore-courses" || value === "my-courses" || value === "my-learning")
     return "courses";
   return null;
 };
@@ -88,27 +77,19 @@ const getBrowserStorage = (): CoursePlayerStorage | null => {
   }
 };
 
-const normalizePathname = (pathname: string) =>
-  pathname.replace(/\/+$/, "") || "/";
+const normalizePathname = (pathname: string) => pathname.replace(/\/+$/, "") || "/";
 
-const getCoursePlayerOriginForPath = (
-  path: string,
-): CoursePlayerOrigin | null => {
+const getCoursePlayerOriginForPath = (path: string): CoursePlayerOrigin | null => {
   try {
     const url = new URL(path, INTERNAL_URL_ORIGIN);
     if (url.origin !== INTERNAL_URL_ORIGIN) return null;
-    return (
-      COURSE_PLAYER_ORIGINS_BY_PATH[normalizePathname(url.pathname)] ?? null
-    );
+    return COURSE_PLAYER_ORIGINS_BY_PATH[normalizePathname(url.pathname)] ?? null;
   } catch {
     return null;
   }
 };
 
-const normalizeInternalReturnPath = (
-  value: unknown,
-  fallback: string,
-): string => {
+const normalizeInternalReturnPath = (value: unknown, fallback: string): string => {
   if (typeof value !== "string") return fallback;
   const candidate = value.trim();
   if (
@@ -123,10 +104,7 @@ const normalizeInternalReturnPath = (
     const url = new URL(candidate, INTERNAL_URL_ORIGIN);
     if (url.origin !== INTERNAL_URL_ORIGIN) return fallback;
     const decodedPathname = decodeURIComponent(url.pathname);
-    if (
-      decodedPathname.includes("\\") ||
-      /^\/+learn(?:\/|$)/i.test(decodedPathname)
-    )
+    if (decodedPathname.includes("\\") || /^\/+learn(?:\/|$)/i.test(decodedPathname))
       return fallback;
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
@@ -139,9 +117,7 @@ const notifyCoursePlayerSessionChange = () => {
   window.dispatchEvent(new Event(COURSE_PLAYER_SESSION_CHANGE_EVENT));
 };
 
-const removeLegacyCoursePlayerDestinations = (
-  storage: CoursePlayerStorage,
-): boolean => {
+const removeLegacyCoursePlayerDestinations = (storage: CoursePlayerStorage): boolean => {
   let didRemoveDestination = false;
   for (const key of LEGACY_COURSE_PLAYER_STORAGE_KEYS) {
     if (storage.getItem(key) === null) continue;
@@ -151,9 +127,7 @@ const removeLegacyCoursePlayerDestinations = (
   return didRemoveDestination;
 };
 
-const parseCoursePlayerSessionCandidate = (
-  value: unknown,
-): CoursePlayerSession | null => {
+const parseCoursePlayerSessionCandidate = (value: unknown): CoursePlayerSession | null => {
   try {
     if (!value || typeof value !== "object") return null;
     const candidate = value as Partial<CoursePlayerSession>;
@@ -170,13 +144,10 @@ const parseCoursePlayerSessionCandidate = (
     if (pathUrl.origin !== INTERNAL_URL_ORIGIN || pathUrl.hash) return null;
     const pathParts = pathUrl.pathname.split("/").filter(Boolean);
     if (pathParts.length !== 3 || pathParts[0] !== "learn") return null;
-    if (decodeURIComponent(pathParts[1] || "") !== candidate.courseId)
-      return null;
+    if (decodeURIComponent(pathParts[1] || "") !== candidate.courseId) return null;
 
     const lessonId = resolveLessonIdentifier(pathParts[2]);
-    const pathOrigin = normalizeCoursePlayerOrigin(
-      pathUrl.searchParams.get("from"),
-    );
+    const pathOrigin = normalizeCoursePlayerOrigin(pathUrl.searchParams.get("from"));
     const candidateOrigin = normalizeCoursePlayerOrigin(candidate.origin);
     const origin = candidateOrigin ?? pathOrigin;
     if (
@@ -210,13 +181,11 @@ const parseCoursePlayerSessionCandidate = (
       courseId: candidate.courseId,
       lessonId,
       origin,
-      path: getCoursePlayerPath(
-        candidate.courseId,
-        origin,
-        lessonId,
-        returnPath,
-        { threadId, noteId, view },
-      ),
+      path: getCoursePlayerPath(candidate.courseId, origin, lessonId, returnPath, {
+        threadId,
+        noteId,
+        view,
+      }),
       returnPath,
       updatedAt: candidate.updatedAt,
     };
@@ -225,9 +194,7 @@ const parseCoursePlayerSessionCandidate = (
   }
 };
 
-const parseStoredCoursePlayerSession = (
-  value: string | null,
-): CoursePlayerSession | null => {
+const parseStoredCoursePlayerSession = (value: string | null): CoursePlayerSession | null => {
   if (!value) return null;
   try {
     return parseCoursePlayerSessionCandidate(JSON.parse(value));
@@ -245,10 +212,7 @@ const writeSessionCollectionWithoutNotification = (
   sessions: readonly CoursePlayerSession[],
 ) => {
   if (sessions.length > 0) {
-    storage.setItem(
-      COURSE_PLAYER_SESSIONS_STORAGE_KEY,
-      JSON.stringify(sessions),
-    );
+    storage.setItem(COURSE_PLAYER_SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
   } else {
     storage.removeItem(COURSE_PLAYER_SESSIONS_STORAGE_KEY);
   }
@@ -284,20 +248,15 @@ const readCoursePlayerSessionState = (
               collectionNeedsWrite = true;
             }
           }
-          if (storedSessions !== JSON.stringify(state.sessions))
-            collectionNeedsWrite = true;
+          if (storedSessions !== JSON.stringify(state.sessions)) collectionNeedsWrite = true;
         }
       } catch {
         collectionNeedsWrite = true;
       }
     }
 
-    const storedLegacySingleton = storage.getItem(
-      LEGACY_COURSE_PLAYER_SESSION_STORAGE_KEY,
-    );
-    const legacySingleton = parseStoredCoursePlayerSession(
-      storedLegacySingleton,
-    );
+    const storedLegacySingleton = storage.getItem(LEGACY_COURSE_PLAYER_SESSION_STORAGE_KEY);
+    const legacySingleton = parseStoredCoursePlayerSession(storedLegacySingleton);
     if (storedLegacySingleton !== null) {
       storage.removeItem(LEGACY_COURSE_PLAYER_SESSION_STORAGE_KEY);
       collectionNeedsWrite = true;
@@ -309,18 +268,15 @@ const readCoursePlayerSessionState = (
       if (existingIndex === -1) {
         state.sessions.push(legacySingleton);
       } else if (
-        legacySingleton.updatedAt >
-        (state.sessions[existingIndex]?.updatedAt ?? -Infinity)
+        legacySingleton.updatedAt > (state.sessions[existingIndex]?.updatedAt ?? -Infinity)
       ) {
         state.sessions[existingIndex] = legacySingleton;
       }
       collectionNeedsWrite = true;
     }
 
-    if (removeLegacyCoursePlayerDestinations(storage))
-      collectionNeedsWrite = true;
-    if (collectionNeedsWrite)
-      writeSessionCollectionWithoutNotification(storage, state.sessions);
+    if (removeLegacyCoursePlayerDestinations(storage)) collectionNeedsWrite = true;
+    if (collectionNeedsWrite) writeSessionCollectionWithoutNotification(storage, state.sessions);
   } catch {
     // A partial or unavailable store should not block normal navigation.
   }
@@ -349,9 +305,7 @@ export function getCoursePlayerOrigin(search: string): CoursePlayerOrigin {
   return normalizeCoursePlayerOrigin(origin) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
 }
 
-export function getCoursePlayerOriginFromPathname(
-  pathname: string,
-): CoursePlayerOrigin {
+export function getCoursePlayerOriginFromPathname(pathname: string): CoursePlayerOrigin {
   return getCoursePlayerOriginForPath(pathname) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
 }
 
@@ -379,12 +333,8 @@ export function getCoursePlayerNote(search: string): string | null {
   return normalized && !normalized.startsWith("client-") ? normalized : null;
 }
 
-export function getCoursePlayerView(
-  search: string,
-): "video" | "quiz" | undefined {
-  return new URLSearchParams(search).get("view") === "quiz"
-    ? "quiz"
-    : undefined;
+export function getCoursePlayerView(search: string): "video" | "quiz" | undefined {
+  return new URLSearchParams(search).get("view") === "quiz" ? "quiz" : undefined;
 }
 
 export interface CoursePlayerPathOptions {
@@ -400,17 +350,12 @@ export function getCoursePlayerPath(
   returnPath?: string,
   options?: CoursePlayerPathOptions,
 ): string {
-  const normalizedOrigin =
-    normalizeCoursePlayerOrigin(origin) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
+  const normalizedOrigin = normalizeCoursePlayerOrigin(origin) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
   const lessonId = resolveLessonIdentifier(lessonIdentifier) ?? 1;
   const fallbackReturnPath = COURSE_PLAYER_PARENT_PATHS[normalizedOrigin];
-  const normalizedReturnPath = normalizeInternalReturnPath(
-    returnPath,
-    fallbackReturnPath,
-  );
+  const normalizedReturnPath = normalizeInternalReturnPath(returnPath, fallbackReturnPath);
   const search = new URLSearchParams({ from: normalizedOrigin });
-  if (normalizedReturnPath !== fallbackReturnPath)
-    search.set("returnTo", normalizedReturnPath);
+  if (normalizedReturnPath !== fallbackReturnPath) search.set("returnTo", normalizedReturnPath);
   const threadId = options?.threadId?.trim();
   const noteId = options?.noteId?.trim();
   if (noteId && !noteId.startsWith("client-")) {
@@ -438,8 +383,7 @@ export function getStoredCourseLessonId(
 ): number {
   try {
     const courseKey = encodeURIComponent(courseId);
-    const savedLesson =
-      storage?.getItem(`veolms-last-lesson-${courseKey}`) ?? 1;
+    const savedLesson = storage?.getItem(`veolms-last-lesson-${courseKey}`) ?? 1;
     return resolveLessonIdentifier(savedLesson) ?? 1;
   } catch {
     return 1;
@@ -457,9 +401,7 @@ export function getMostRecentCoursePlayerSession(
 ): CoursePlayerSession | null {
   return sessions.reduce<CoursePlayerSession | null>(
     (mostRecent, session) =>
-      !mostRecent || session.updatedAt > mostRecent.updatedAt
-        ? session
-        : mostRecent,
+      !mostRecent || session.updatedAt > mostRecent.updatedAt ? session : mostRecent,
     null,
   );
 }
@@ -487,13 +429,10 @@ export function migrateCoursePlayerSessionKey(
   if (previousCourseId === nextCourseId) return;
 
   const state = readCoursePlayerSessionState(storage);
-  const previousSession = state.sessions.find(
-    (session) => session.courseId === previousCourseId,
-  );
+  const previousSession = state.sessions.find((session) => session.courseId === previousCourseId);
   if (!previousSession) return;
 
-  const previousSearch = new URL(previousSession.path, INTERNAL_URL_ORIGIN)
-    .search;
+  const previousSearch = new URL(previousSession.path, INTERNAL_URL_ORIGIN).search;
   const migratedSession: CoursePlayerSession = {
     ...previousSession,
     courseId: nextCourseId,
@@ -511,9 +450,7 @@ export function migrateCoursePlayerSessionKey(
     updatedAt: Date.now(),
   };
   const remainingSessions = state.sessions.filter(
-    (session) =>
-      session.courseId !== previousCourseId &&
-      session.courseId !== nextCourseId,
+    (session) => session.courseId !== previousCourseId && session.courseId !== nextCourseId,
   );
   remainingSessions.push(migratedSession);
   persistCoursePlayerSessions(remainingSessions, storage);
@@ -529,15 +466,11 @@ export function upsertCoursePlayerSessionFromRoute(
   const existingIndex = state.sessions.findIndex(
     (openSession) => openSession.courseId === courseId,
   );
-  const existingSession =
-    existingIndex === -1 ? null : (state.sessions[existingIndex] ?? null);
+  const existingSession = existingIndex === -1 ? null : (state.sessions[existingIndex] ?? null);
   const searchParams = new URLSearchParams(search);
-  const hasLaunchContext =
-    searchParams.has("from") || searchParams.has("returnTo");
+  const hasLaunchContext = searchParams.has("from") || searchParams.has("returnTo");
   const origin =
-    !hasLaunchContext && existingSession
-      ? existingSession.origin
-      : getCoursePlayerOrigin(search);
+    !hasLaunchContext && existingSession ? existingSession.origin : getCoursePlayerOrigin(search);
   const lessonId = resolveLessonIdentifier(lessonIdentifier) ?? 1;
   const returnPath =
     !hasLaunchContext && existingSession
@@ -570,9 +503,7 @@ export function activateCoursePlayerSession(
   storage: CoursePlayerStorage | null = getBrowserStorage(),
 ): string | null {
   const state = readCoursePlayerSessionState(storage);
-  const sessionIndex = state.sessions.findIndex(
-    (session) => session.courseId === courseId,
-  );
+  const sessionIndex = state.sessions.findIndex((session) => session.courseId === courseId);
   if (sessionIndex === -1) return null;
 
   const session = state.sessions[sessionIndex];
@@ -595,9 +526,7 @@ export function closeCoursePlayerSession(
     return getMostRecentCoursePlayerSession(state.sessions);
   }
 
-  const remainingSessions = state.sessions.filter(
-    (session) => session.courseId !== courseId,
-  );
+  const remainingSessions = state.sessions.filter((session) => session.courseId !== courseId);
   persistCoursePlayerSessions(remainingSessions, storage);
   return getMostRecentCoursePlayerSession(remainingSessions);
 }
@@ -621,20 +550,13 @@ export function clearCoursePlayerSessions(
   }
 }
 
-export function getCoursePlayerBackLabel(
-  source: CoursePlayerOrigin | string,
-): string {
+export function getCoursePlayerBackLabel(source: CoursePlayerOrigin | string): string {
   if (isCoursePlayerOrigin(source)) return COURSE_PLAYER_BACK_LABELS[source];
   const returnPath = normalizeInternalReturnPath(source, "/courses");
-  const pathname = normalizePathname(
-    new URL(returnPath, INTERNAL_URL_ORIGIN).pathname,
-  );
-  if (/^\/courses\/[^/]+\/overview$/.test(pathname))
-    return "Return to Course Overview";
+  const pathname = normalizePathname(new URL(returnPath, INTERNAL_URL_ORIGIN).pathname);
+  if (/^\/courses\/[^/]+\/overview$/.test(pathname)) return "Return to Course Overview";
   const origin = getCoursePlayerOriginForPath(pathname);
-  return origin
-    ? COURSE_PLAYER_BACK_LABELS[origin]
-    : "Return to the previous page";
+  return origin ? COURSE_PLAYER_BACK_LABELS[origin] : "Return to the previous page";
 }
 
 export function getPendingCourseCommentDraft(
@@ -694,9 +616,7 @@ export function postPendingCourseCommentDraft(
     : window.sessionStorage,
 ) {
   try {
-    const stored: unknown = JSON.parse(
-      storage?.getItem(draft.commentsStorageKey) || "[]",
-    );
+    const stored: unknown = JSON.parse(storage?.getItem(draft.commentsStorageKey) || "[]");
     const comments = Array.isArray(stored) ? stored : [];
     storage?.setItem(
       draft.commentsStorageKey,

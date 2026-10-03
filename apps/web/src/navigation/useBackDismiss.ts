@@ -57,9 +57,7 @@ const scheduleActiveLayerRestoration = () => {
 
     const currentState = window.history.state;
     const historyState =
-      typeof currentState === "object" && currentState !== null
-        ? currentState
-        : {};
+      typeof currentState === "object" && currentState !== null ? currentState : {};
     window.history.pushState(
       {
         ...historyState,
@@ -95,10 +93,8 @@ const handlePopState = (event: PopStateEvent) => {
   // A lower layer may have closed while another popup was above it. Skip that
   // now-stale same-URL history entry so one Back press still dismisses exactly
   // one visible layer and never leaves an invisible stop in the history stack.
-  if (nextEntryId !== null && !activeLayers.has(nextEntryId))
-    scheduleStaleEntryCleanup();
-  else if (nextEntryId === null && activeLayers.size > 0)
-    scheduleActiveLayerRestoration();
+  if (nextEntryId !== null && !activeLayers.has(nextEntryId)) scheduleStaleEntryCleanup();
+  else if (nextEntryId === null && activeLayers.size > 0) scheduleActiveLayerRestoration();
 };
 
 const ensureHistoryListener = () => {
@@ -114,9 +110,7 @@ const registerBackDismissLayer = (entryId: string, layer: BackDismissLayer) => {
 
   const currentState = window.history.state;
   const historyState =
-    typeof currentState === "object" && currentState !== null
-      ? currentState
-      : {};
+    typeof currentState === "object" && currentState !== null ? currentState : {};
   window.history.pushState(
     {
       ...historyState,
@@ -136,10 +130,7 @@ const unregisterBackDismissLayer = (entryId: string) => {
   if (browserEntryId !== entryId) return;
 
   window.requestAnimationFrame(() => {
-    if (
-      getOverlayHistoryEntryId(window.history.state) === entryId &&
-      !activeLayers.has(entryId)
-    )
+    if (getOverlayHistoryEntryId(window.history.state) === entryId && !activeLayers.has(entryId))
       window.history.back();
   });
 };
@@ -149,11 +140,7 @@ const unregisterBackDismissLayer = (entryId: string) => {
  * Android Back therefore dismisses the topmost drawer, dialog, menu, listbox,
  * or popover before normal route history is allowed to continue.
  */
-export function useBackDismiss({
-  enabled = true,
-  open,
-  onDismiss,
-}: UseBackDismissOptions) {
+export function useBackDismiss({ enabled = true, open, onDismiss }: UseBackDismissOptions) {
   const reactId = useId();
   const sequenceRef = useRef(0);
   const entryIdRef = useRef<string | null>(null);

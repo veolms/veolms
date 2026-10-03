@@ -72,17 +72,10 @@ describe("parseChaptersFromDescription", () => {
 
   it("keeps the first valid title when timestamps are duplicated", () => {
     const chapters = parseChaptersFromDescription(
-      [
-        "00:00 Introduction",
-        "02:00 First setup title",
-        "02:00 Replacement setup title",
-      ].join("\n"),
+      ["00:00 Introduction", "02:00 First setup title", "02:00 Replacement setup title"].join("\n"),
     );
 
-    expect(chapters.map((chapter) => chapter.title)).toEqual([
-      "Introduction",
-      "First setup title",
-    ]);
+    expect(chapters.map((chapter) => chapter.title)).toEqual(["Introduction", "First setup title"]);
   });
 });
 
@@ -136,9 +129,7 @@ describe("resolveChapters", () => {
     });
 
     expect(resolved.source).toBe("manual");
-    expect(resolved.chapters.map((chapter) => chapter.title)).toEqual([
-      "Manual",
-    ]);
+    expect(resolved.chapters.map((chapter) => chapter.title)).toEqual(["Manual"]);
   });
 
   it("falls back to the next usable source", () => {

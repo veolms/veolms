@@ -49,36 +49,12 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
-  await db.schema
-    .dropIndex("quiz_attempts_user_created_idx")
-    .ifExists()
-    .execute();
-  await db.schema
-    .dropIndex("quiz_attempts_assignment_created_idx")
-    .ifExists()
-    .execute();
-  await db.schema
-    .dropIndex("quiz_assignments_quiz_created_idx")
-    .ifExists()
-    .execute();
-  await db.schema
-    .dropIndex("quiz_assignments_course_created_idx")
-    .ifExists()
-    .execute();
-  await db.schema
-    .dropIndex("quiz_question_options_question_position_idx")
-    .ifExists()
-    .execute();
-  await db.schema
-    .dropIndex("quiz_questions_version_deleted_position_idx")
-    .ifExists()
-    .execute();
-  await db.schema
-    .dropIndex("quizzes_academy_deleted_updated_idx")
-    .ifExists()
-    .execute();
-  await db.schema
-    .dropIndex("quizzes_creator_deleted_updated_idx")
-    .ifExists()
-    .execute();
+  await db.schema.dropIndex("quiz_attempts_user_created_idx").ifExists().execute();
+  await db.schema.dropIndex("quiz_attempts_assignment_created_idx").ifExists().execute();
+  await db.schema.dropIndex("quiz_assignments_quiz_created_idx").ifExists().execute();
+  await db.schema.dropIndex("quiz_assignments_course_created_idx").ifExists().execute();
+  await db.schema.dropIndex("quiz_question_options_question_position_idx").ifExists().execute();
+  await db.schema.dropIndex("quiz_questions_version_deleted_position_idx").ifExists().execute();
+  await db.schema.dropIndex("quizzes_academy_deleted_updated_idx").ifExists().execute();
+  await db.schema.dropIndex("quizzes_creator_deleted_updated_idx").ifExists().execute();
 }

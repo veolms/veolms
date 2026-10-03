@@ -1,9 +1,5 @@
 import type { FastifyBaseLogger } from "fastify";
-import type {
-  ISmsProvider,
-  SendOtpOptions,
-  SmsProviderResult,
-} from "../sms-provider.interface.ts";
+import type { ISmsProvider, SendOtpOptions, SmsProviderResult } from "../sms-provider.interface.ts";
 
 export interface TwilioProviderConfig {
   backupUrl?: string | undefined;

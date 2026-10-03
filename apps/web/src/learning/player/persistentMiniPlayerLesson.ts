@@ -4,10 +4,7 @@ import {
   getCachedVideoPlaybackBootstrap,
   refreshVideoPlaybackToken,
 } from "../videoPlaybackBootstrap";
-import type {
-  VideoPlaybackBootstrap,
-  VideoPlaybackToken,
-} from "@veolms/contracts";
+import type { VideoPlaybackBootstrap, VideoPlaybackToken } from "@veolms/contracts";
 import type {
   LearningPlayerPresentation,
   PersistentLearningPlayerRegistration,
@@ -19,9 +16,7 @@ export interface PersistentMiniPlayerLessonChangeOptions {
   refreshPlaybackToken?: () => Promise<VideoPlaybackToken>;
 }
 
-export function courseRouteKeyFromLessonPath(
-  path?: string | null,
-): string | null {
+export function courseRouteKeyFromLessonPath(path?: string | null): string | null {
   if (!path) return null;
   const learnMatch = /^\/learn\/([^/?#]+)/.exec(path);
   if (learnMatch?.[1]) return decodeURIComponent(learnMatch[1]);
@@ -44,14 +39,8 @@ export function resolveLearningMiniPlayerLessonPath({
     return lessonPath?.startsWith("/learn/") ? lessonPath : null;
   }
 
-  const search = lessonPath?.includes("?")
-    ? lessonPath.slice(lessonPath.indexOf("?"))
-    : "";
-  return upsertCoursePlayerSessionFromRoute(
-    courseId,
-    search,
-    lessonNumber ?? 1,
-  );
+  const search = lessonPath?.includes("?") ? lessonPath.slice(lessonPath.indexOf("?")) : "";
+  return upsertCoursePlayerSessionFromRoute(courseId, search, lessonNumber ?? 1);
 }
 
 export function buildPersistentMiniPlayerLessonSequence(
@@ -70,10 +59,7 @@ export function applyPersistentMiniPlayerLessonChange(
   const lesson = registration.curriculumLessonsById?.get(lessonNumber);
   if (!lesson) return null;
 
-  if (
-    registration.isLessonAvailable &&
-    !registration.isLessonAvailable(lessonNumber)
-  ) {
+  if (registration.isLessonAvailable && !registration.isLessonAvailable(lessonNumber)) {
     return null;
   }
 
@@ -91,12 +77,9 @@ export function applyPersistentMiniPlayerLessonChange(
     lessonNumber,
   );
   const resumePersistenceKey = `${registration.courseRouteKey}-lesson-${lessonNumber}`;
-  const previousLessonId =
-    lessonIndex > 0 ? lessonSequence[lessonIndex - 1] : undefined;
+  const previousLessonId = lessonIndex > 0 ? lessonSequence[lessonIndex - 1] : undefined;
   const nextLessonId =
-    lessonIndex < lessonSequence.length - 1
-      ? lessonSequence[lessonIndex + 1]
-      : undefined;
+    lessonIndex < lessonSequence.length - 1 ? lessonSequence[lessonIndex + 1] : undefined;
 
   const courseSlug =
     registration.courseSlug ??
@@ -130,9 +113,7 @@ export function applyPersistentMiniPlayerLessonChange(
       ...registration.playerProps,
       media,
       playbackBootstrap: resolvedBootstrap,
-      playbackAccessError: resolvedBootstrap
-        ? null
-        : registration.playerProps.playbackAccessError,
+      playbackAccessError: resolvedBootstrap ? null : registration.playerProps.playbackAccessError,
       playbackBootstrapPending: resolvedBootstrap
         ? false
         : registration.playerProps.playbackBootstrapPending,

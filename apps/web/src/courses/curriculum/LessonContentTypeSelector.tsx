@@ -79,12 +79,12 @@ export function LessonContentTypeSelector({
       <div className="flex items-center gap-1">
         <label
           id="content-type-label"
-          className="m-0 text-[0.85rem] sm:text-[0.88rem] font-bold text-(--text)"
+          className="m-0 text-[0.85rem] font-bold text-(--text) sm:text-[0.88rem]"
         >
           Content Type <span className="text-red-500">*</span>
         </label>
       </div>
-      <p className="m-0 text-[0.74rem] sm:text-[0.76rem] text-(--muted)">
+      <p className="m-0 text-[0.74rem] text-(--muted) sm:text-[0.76rem]">
         Select the main type of content for this lesson.
       </p>
 
@@ -115,7 +115,7 @@ export function LessonContentTypeSelector({
                     : {}),
                 } as CSSProperties
               }
-              className={`group relative flex flex-col items-center justify-center gap-2 rounded-[14px] border-2 p-3 text-center transition-[border-color,background-color,box-shadow] duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`group relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[14px] border-2 p-3 text-center transition-[border-color,background-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
                 isSelected
                   ? "border-(--type-accent) bg-[color-mix(in_srgb,var(--type-accent)_14%,var(--surface))]"
                   : "border-transparent bg-(--card-surface,var(--surface)) shadow-(--card-shadow) hover:border-[color-mix(in_srgb,var(--type-accent)_55%,transparent)] hover:bg-[color-mix(in_srgb,var(--type-accent)_8%,var(--surface))]"
@@ -130,11 +130,11 @@ export function LessonContentTypeSelector({
                 alt=""
                 aria-hidden="true"
                 decoding="async"
-                className="block h-10 w-10 sm:h-11 sm:w-11 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.28)]"
+                className="block h-10 w-10 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.28)] sm:h-11 sm:w-11"
               />
 
               <span
-                className={`text-[0.76rem] sm:text-[0.80rem] font-bold ${
+                className={`text-[0.76rem] font-bold sm:text-[0.80rem] ${
                   isSelected ? "text-(--text)" : "text-(--text-secondary)"
                 }`}
               >

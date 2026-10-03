@@ -15,10 +15,7 @@ import type {
 } from "@veolms/contracts";
 import type { Nullable, SelectQueryBuilder } from "kysely";
 import { sql } from "kysely";
-import {
-  type DiscussionListCursor,
-  authorRoleSql,
-} from "../shared/discussion.utils.ts";
+import { type DiscussionListCursor, authorRoleSql } from "../shared/discussion.utils.ts";
 
 export const BOOKMARKS_WORKSPACE_SORT = "bookmarked";
 
@@ -94,9 +91,7 @@ const bookmarkWorkspaceSelect = [
   "c.title as courseTitle",
   sql<string | null>`coalesce(t.lesson_id, n.lesson_id)`.as("lessonId"),
   "l.title as lessonTitle",
-  sql<number | null>`coalesce(t.timestamp_seconds, n.timestamp_seconds)`.as(
-    "timestampSeconds",
-  ),
+  sql<number | null>`coalesce(t.timestamp_seconds, n.timestamp_seconds)`.as("timestampSeconds"),
   sql<string>`coalesce(t.user_id, n.user_id)`.as("userId"),
   "u.display_name as authorName",
   "u.username as authorUsername",
@@ -117,9 +112,7 @@ function joinBookmarkSources(db: DatabaseExecutor) {
     .selectFrom("learning_bookmarks as b")
     .leftJoin("learning_threads as t", "t.id", "b.thread_id")
     .leftJoin("learning_notes as n", "n.id", "b.note_id")
-    .leftJoin("users as u", (join) =>
-      join.on(sql<boolean>`u.id = coalesce(t.user_id, n.user_id)`),
-    )
+    .leftJoin("users as u", (join) => join.on(sql<boolean>`u.id = coalesce(t.user_id, n.user_id)`))
     .leftJoin("courses as c", (join) =>
       join.on(sql<boolean>`c.id = coalesce(t.course_id, n.course_id)`),
     )
@@ -136,9 +129,7 @@ function applyBookmarkFilters<O>(
     .where("b.user_id", "=", options.currentUserId)
     .where("c.deleted_at", "is", null)
     .where("c.id", "is not", null)
-    .where(
-      sql<boolean>`coalesce(t.academy_id, n.academy_id) = ${options.academyId}`,
-    )
+    .where(sql<boolean>`coalesce(t.academy_id, n.academy_id) = ${options.academyId}`)
     .where(
       sql<boolean>`(
         (
@@ -168,9 +159,7 @@ function applyBookmarkFilters<O>(
   if (options.accessibleCourseIds !== "all") {
     const courseIds = [...options.accessibleCourseIds];
     if (courseIds.length === 0) {
-      q = q.where(
-        sql<boolean>`b.note_id is not null and n.user_id = ${options.currentUserId}`,
-      );
+      q = q.where(sql<boolean>`b.note_id is not null and n.user_id = ${options.currentUserId}`);
     } else {
       q = q.where(
         sql<boolean>`(
@@ -185,15 +174,11 @@ function applyBookmarkFilters<O>(
   }
 
   if (options.courseId) {
-    q = q.where(
-      sql<boolean>`coalesce(t.course_id, n.course_id) = ${options.courseId}`,
-    );
+    q = q.where(sql<boolean>`coalesce(t.course_id, n.course_id) = ${options.courseId}`);
   }
 
   if (options.lessonId) {
-    q = q.where(
-      sql<boolean>`coalesce(t.lesson_id, n.lesson_id) = ${options.lessonId}`,
-    );
+    q = q.where(sql<boolean>`coalesce(t.lesson_id, n.lesson_id) = ${options.lessonId}`);
   }
 
   if (options.kind && options.kind !== "all") {
@@ -206,9 +191,7 @@ function applyBookmarkFilters<O>(
   }
 
   if (options.visibility) {
-    q = q.where(
-      sql<boolean>`coalesce(t.visibility, n.visibility) = ${options.visibility}`,
-    );
+    q = q.where(sql<boolean>`coalesce(t.visibility, n.visibility) = ${options.visibility}`);
   }
 
   if (options.search) {

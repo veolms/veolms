@@ -48,39 +48,34 @@ export function BufferingIndicator({
   immediatePlayWaits = true,
 }: BufferingIndicatorProps) {
   const controller = usePlayerController();
-  const { initialLoading, playInFlight, playbackHasBegun, waitingForMedia } =
-    usePlayerState(
-      (snapshot) => {
-        const { buffered, buffering, currentTime, lifecycle } = snapshot.media;
-        const initialLoading = isInitialLoadingLifecycle(lifecycle);
-        const currentPositionBuffered = buffered.some(
-          (range) =>
-            currentTime >= range.start &&
-            range.end - currentTime >= BUFFERED_PLAYBACK_GRACE_SECONDS,
-        );
-        const playbackHasBegun = snapshot.media.playing || snapshot.media.ended;
-        const playInFlight = !playbackHasBegun && !snapshot.media.paused;
-        return {
-          initialLoading,
-          playInFlight,
-          playbackHasBegun,
-          waitingForMedia:
-            !snapshot.ui.scrubbing &&
-            (initialLoading ||
-              playInFlight ||
-              (buffering && !currentPositionBuffered)),
-        };
-      },
-      (left, right) =>
-        left.initialLoading === right.initialLoading &&
-        left.playInFlight === right.playInFlight &&
-        left.playbackHasBegun === right.playbackHasBegun &&
-        left.waitingForMedia === right.waitingForMedia,
-    );
+  const { initialLoading, playInFlight, playbackHasBegun, waitingForMedia } = usePlayerState(
+    (snapshot) => {
+      const { buffered, buffering, currentTime, lifecycle } = snapshot.media;
+      const initialLoading = isInitialLoadingLifecycle(lifecycle);
+      const currentPositionBuffered = buffered.some(
+        (range) =>
+          currentTime >= range.start && range.end - currentTime >= BUFFERED_PLAYBACK_GRACE_SECONDS,
+      );
+      const playbackHasBegun = snapshot.media.playing || snapshot.media.ended;
+      const playInFlight = !playbackHasBegun && !snapshot.media.paused;
+      return {
+        initialLoading,
+        playInFlight,
+        playbackHasBegun,
+        waitingForMedia:
+          !snapshot.ui.scrubbing &&
+          (initialLoading || playInFlight || (buffering && !currentPositionBuffered)),
+      };
+    },
+    (left, right) =>
+      left.initialLoading === right.initialLoading &&
+      left.playInFlight === right.playInFlight &&
+      left.playbackHasBegun === right.playbackHasBegun &&
+      left.waitingForMedia === right.waitingForMedia,
+  );
   const [visible, setVisible] = useState(
     () =>
-      waitingForMedia &&
-      (delay <= 0 || (immediatePlayWaits && (initialLoading || playInFlight))),
+      waitingForMedia && (delay <= 0 || (immediatePlayWaits && (initialLoading || playInFlight))),
   );
   const visibleRef = useRef(visible);
   const holdForFirstFrameRef = useRef(false);

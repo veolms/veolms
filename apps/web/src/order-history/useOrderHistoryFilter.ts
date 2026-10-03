@@ -1,9 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { OrderSortOrder } from "@veolms/contracts";
-import {
-  DEFAULT_DEBOUNCE_DELAY_MS,
-  useDebounceValue,
-} from "../hooks/useDebounce";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounceValue } from "../hooks/useDebounce";
 import type { OrderHistoryItem } from "./orderHistoryData";
 import { useOrders } from "../services/orders";
 import { adaptOrderToOrderHistoryItem } from "../orders/orderAdapter";
@@ -62,23 +59,16 @@ export function useOrderHistoryFilter(
   _setNotice?: (message: string) => void,
 ): UseOrderHistoryFilterReturn {
   const [searchQuery, setSearchQueryState] = useState("");
-  const [debouncedSearch] = useDebounceValue(
-    searchQuery.trim(),
-    DEFAULT_DEBOUNCE_DELAY_MS,
-  );
+  const [debouncedSearch] = useDebounceValue(searchQuery.trim(), DEFAULT_DEBOUNCE_DELAY_MS);
   const [dateRangeFilter, setDateRangeFilterState] = useState("all");
   const [statusFilter, setStatusFilterState] = useState("all");
   const [paymentMethodFilter, setPaymentMethodFilterState] = useState("all");
   const [currentPage, setCurrentPageState] = useState(1);
   const [sortOrder, setSortOrder] = useState<OrderSortOrder>("desc");
-  const [selectedReceiptOrder, setSelectedReceiptOrder] =
-    useState<OrderHistoryItem | null>(null);
+  const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<OrderHistoryItem | null>(null);
   const pageSize = 10;
 
-  const dateBounds = useMemo(
-    () => getDateBounds(dateRangeFilter),
-    [dateRangeFilter],
-  );
+  const dateBounds = useMemo(() => getDateBounds(dateRangeFilter), [dateRangeFilter]);
   const queryParams = useMemo(
     () => ({
       view: "student" as const,
@@ -99,10 +89,7 @@ export function useOrderHistoryFilter(
   } = useOrders(queryParams);
 
   const ordersList = useMemo(
-    () =>
-      (data?.pages.flatMap((page) => page.orders) ?? []).map(
-        adaptOrderToOrderHistoryItem,
-      ),
+    () => (data?.pages.flatMap((page) => page.orders) ?? []).map(adaptOrderToOrderHistoryItem),
     [data?.pages],
   );
 
@@ -110,10 +97,7 @@ export function useOrderHistoryFilter(
     const search = debouncedSearch.toLocaleLowerCase();
     return ordersList.filter((order) => {
       if (statusFilter !== "all" && order.status !== statusFilter) return false;
-      if (
-        paymentMethodFilter !== "all" &&
-        order.payment.type !== paymentMethodFilter
-      ) {
+      if (paymentMethodFilter !== "all" && order.payment.type !== paymentMethodFilter) {
         return false;
       }
       if (!search) return true;

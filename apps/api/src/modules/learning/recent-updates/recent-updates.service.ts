@@ -1,7 +1,4 @@
-import type {
-  RecentUpdatesQuery,
-  RecentUpdatesResponse,
-} from "@veolms/contracts";
+import type { RecentUpdatesQuery, RecentUpdatesResponse } from "@veolms/contracts";
 
 import {
   createRecentUpdatesRepository,
@@ -11,10 +8,7 @@ import {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface RecentUpdatesService {
-  list(
-    userId: string,
-    query: RecentUpdatesQuery,
-  ): Promise<RecentUpdatesResponse>;
+  list(userId: string, query: RecentUpdatesQuery): Promise<RecentUpdatesResponse>;
 }
 
 export function createRecentUpdatesService({
@@ -24,10 +18,7 @@ export function createRecentUpdatesService({
   repository: RecentUpdatesRepository;
   now?: () => Date;
 }): RecentUpdatesService {
-  async function list(
-    userId: string,
-    query: RecentUpdatesQuery,
-  ): Promise<RecentUpdatesResponse> {
+  async function list(userId: string, query: RecentUpdatesQuery): Promise<RecentUpdatesResponse> {
     const currentTime = now();
     const cutoff = new Date(currentTime.getTime() - query.days * DAY_MS);
     const courses = await repository.listRecentUpdateCourses({
@@ -60,14 +51,12 @@ export function createRecentUpdatesService({
         courseThumbnailMediaId: course.course_thumbnail_media_id,
         recentLessonCount: Number(course.recent_lesson_count),
         latestUpdatedAt: course.latest_updated_at.toISOString(),
-        lessons: (lessonsByCourse.get(course.course_id) ?? []).map(
-          (lesson) => ({
-            lessonId: lesson.lesson_id,
-            lessonTitle: lesson.lesson_title,
-            lessonNumber: Number(lesson.lesson_number),
-            updatedAt: lesson.lesson_updated_at.toISOString(),
-          }),
-        ),
+        lessons: (lessonsByCourse.get(course.course_id) ?? []).map((lesson) => ({
+          lessonId: lesson.lesson_id,
+          lessonTitle: lesson.lesson_title,
+          lessonNumber: Number(lesson.lesson_number),
+          updatedAt: lesson.lesson_updated_at.toISOString(),
+        })),
       })),
     };
   }

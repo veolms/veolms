@@ -12,9 +12,7 @@ const getOnlineState = () => {
   return online;
 };
 
-const awaitFlushUntilSettledOrOffline = async (
-  flush: () => Promise<void>,
-): Promise<void> => {
+const awaitFlushUntilSettledOrOffline = async (flush: () => Promise<void>): Promise<void> => {
   if (!getOnlineState()) return;
 
   await new Promise<void>((resolve) => {
@@ -52,9 +50,7 @@ class AutosyncManager {
   async flushAll(): Promise<void> {
     const registrations = [...this.registrations.values()];
     await Promise.all(
-      registrations.map((registration) =>
-        awaitFlushUntilSettledOrOffline(registration.flush),
-      ),
+      registrations.map((registration) => awaitFlushUntilSettledOrOffline(registration.flush)),
     );
 
     if (getOnlineState()) {
@@ -62,19 +58,11 @@ class AutosyncManager {
     }
   }
 
-  async requireSynced(
-    keys?: AutosyncKey | readonly AutosyncKey[],
-  ): Promise<void> {
-    const requestedKeys = keys
-      ? Array.isArray(keys)
-        ? keys
-        : [keys]
-      : undefined;
+  async requireSynced(keys?: AutosyncKey | readonly AutosyncKey[]): Promise<void> {
+    const requestedKeys = keys ? (Array.isArray(keys) ? keys : [keys]) : undefined;
     const registrations = [...this.registrations.values()].filter((entry) =>
       requestedKeys
-        ? requestedKeys.some(
-            (key) => getAutosyncKey(key) === getAutosyncKey(entry.key),
-          )
+        ? requestedKeys.some((key) => getAutosyncKey(key) === getAutosyncKey(entry.key))
         : true,
     );
 
@@ -91,15 +79,12 @@ class AutosyncManager {
       );
     }
 
-    await Promise.all(
-      registrations.map((registration) => registration.flush()),
-    );
+    await Promise.all(registrations.map((registration) => registration.flush()));
     await queryClient.resumePausedMutations();
 
     const unsynced = registrations.find(
       (registration) =>
-        registration.isDirty() ||
-        !["idle", "saved"].includes(registration.getStatus()),
+        registration.isDirty() || !["idle", "saved"].includes(registration.getStatus()),
     );
     if (unsynced) {
       throw new AutosyncSyncError(
@@ -113,9 +98,7 @@ class AutosyncManager {
       const registeredKeys = new Set(
         registrations.map((registration) => getAutosyncKey(registration.key)),
       );
-      const dirtyKeys = getDirtyAutosyncDrafts().map(({ key }) =>
-        getAutosyncKey(key),
-      );
+      const dirtyKeys = getDirtyAutosyncDrafts().map(({ key }) => getAutosyncKey(key));
       const missingDirtyKey = requestedKeys.find((key) => {
         const keyString = getAutosyncKey(key);
         return !registeredKeys.has(keyString) && dirtyKeys.includes(keyString);

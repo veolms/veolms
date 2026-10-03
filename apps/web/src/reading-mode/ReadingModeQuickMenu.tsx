@@ -1,15 +1,9 @@
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { AppSlider } from "../AppSlider";
 import { ThemedSelect } from "../ThemedSelect";
-import {
-  clickContainedSettingsToggle,
-  SettingsToggle,
-} from "../settings/SettingsControls";
+import { clickContainedSettingsToggle, SettingsToggle } from "../settings/SettingsControls";
 import type { ReadingModePreferences } from "./readingModePreferences";
-import {
-  getReadingModeTemperatureLabel,
-  READING_MODE_COLOR_OPTIONS,
-} from "./readingModeUi";
+import { getReadingModeTemperatureLabel, READING_MODE_COLOR_OPTIONS } from "./readingModeUi";
 
 interface ReadingModeQuickMenuProps {
   id: string;
@@ -24,9 +18,7 @@ export function ReadingModeQuickMenu({
   preferences,
   onChange,
 }: ReadingModeQuickMenuProps) {
-  const temperatureLabel = getReadingModeTemperatureLabel(
-    preferences.colorTemperature,
-  );
+  const temperatureLabel = getReadingModeTemperatureLabel(preferences.colorTemperature);
 
   return (
     <section
@@ -37,18 +29,13 @@ export function ReadingModeQuickMenu({
       data-reading-mode-menu
       onContextMenu={(event) => event.preventDefault()}
     >
-      <header
-        className="reading-mode-quick-menu__header"
-        onClick={clickContainedSettingsToggle}
-      >
+      <header className="reading-mode-quick-menu__header" onClick={clickContainedSettingsToggle}>
         <span className="reading-mode-quick-menu__icon" aria-hidden="true">
           <Eye size={18} weight={preferences.enabled ? "fill" : "regular"} />
         </span>
         <span>
           <strong>Reading mode</strong>
-          <small>
-            {preferences.enabled ? "Applied to app" : "Preview only"}
-          </small>
+          <small>{preferences.enabled ? "Applied to app" : "Preview only"}</small>
         </span>
         <SettingsToggle
           checked={preferences.enabled}
@@ -71,14 +58,9 @@ export function ReadingModeQuickMenu({
           variant="temperature"
           aria-label="Quick color temperature"
           aria-valuetext={temperatureLabel}
-          onChange={(event) =>
-            onChange({ colorTemperature: Number(event.currentTarget.value) })
-          }
+          onChange={(event) => onChange({ colorTemperature: Number(event.currentTarget.value) })}
         />
-        <div
-          className="reading-mode-quick-menu__range-labels"
-          aria-hidden="true"
-        >
+        <div className="reading-mode-quick-menu__range-labels" aria-hidden="true">
           <span>Cool</span>
           <span>Neutral</span>
           <span>Warm</span>
@@ -98,14 +80,9 @@ export function ReadingModeQuickMenu({
           value={preferences.texture}
           aria-label="Quick texture"
           aria-valuetext={`${preferences.texture}% texture`}
-          onChange={(event) =>
-            onChange({ texture: Number(event.currentTarget.value) })
-          }
+          onChange={(event) => onChange({ texture: Number(event.currentTarget.value) })}
         />
-        <div
-          className="reading-mode-quick-menu__range-labels"
-          aria-hidden="true"
-        >
+        <div className="reading-mode-quick-menu__range-labels" aria-hidden="true">
           <span>None</span>
           <span>Fine</span>
           <span>Paper</span>

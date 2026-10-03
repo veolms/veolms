@@ -45,8 +45,7 @@
   justify-content: center;
   color: var(--accent-ink, var(--accent));
   background: color-mix(in srgb, var(--accent) 15%, var(--surface));
-  box-shadow: 0 14px 28px
-    color-mix(in srgb, var(--accent-shadow) 28%, transparent);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--accent-shadow) 28%, transparent);
 }
 
 .courses-placeholder-heading-icon {

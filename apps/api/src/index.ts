@@ -45,10 +45,7 @@ async function shutdown(signal: string): Promise<void> {
     app.log.info("Graceful shutdown completed successfully.");
     clearTimeout(timeoutId);
   } catch (error) {
-    app.log.error(
-      { err: error },
-      "Unexpected error occurred during graceful shutdown.",
-    );
+    app.log.error({ err: error }, "Unexpected error occurred during graceful shutdown.");
     process.exit(1);
   }
 }
@@ -70,10 +67,7 @@ try {
     // shared Kysely driver is destroyed.
     await app.close();
   } catch (closeError) {
-    app.log.error(
-      { err: closeError },
-      "Failed to close application after listen error",
-    );
+    app.log.error({ err: closeError }, "Failed to close application after listen error");
   }
   await database.destroy();
   process.exitCode = 1;

@@ -82,7 +82,7 @@ export function CouponsTable({
   if (coupons.length === 0) {
     return (
       <div className="flex flex-col">
-        <div className="grid place-items-center p-6 sm:p-12 text-center">
+        <div className="grid place-items-center p-6 text-center sm:p-12">
           {isFetchingNextPage ? (
             <div
               className="grid min-h-40 place-items-center"
@@ -93,12 +93,10 @@ export function CouponsTable({
             </div>
           ) : (
             <>
-              <span className="flex size-10 sm:size-11 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent) sm:size-11">
                 <Tag size={22} weight="bold" />
               </span>
-              <h3 className="mt-2.5 sm:mt-3 text-sm font-semibold">
-                No coupons found
-              </h3>
+              <h3 className="mt-2.5 text-sm font-semibold sm:mt-3">No coupons found</h3>
               <p className="mt-1 max-w-sm text-xs leading-5 text-(--muted)">
                 {hasNextPage
                   ? "More matching coupons may be available."
@@ -116,13 +114,13 @@ export function CouponsTable({
         {hasNextPage ? (
           <div
             ref={observerTarget}
-            className="flex flex-col items-center justify-center p-4 sm:p-6 border-t border-(--border)"
+            className="flex flex-col items-center justify-center border-t border-(--border) p-4 sm:p-6"
           >
             {!isFetchingNextPage ? (
               <button
                 type="button"
                 onClick={() => fetchNextPage?.()}
-                className="rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-xs font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+                className="cursor-pointer rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-xs font-medium text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text)"
                 style={{ boxShadow: "var(--card-shadow)" }}
               >
                 Load more coupons
@@ -148,19 +146,17 @@ export function CouponsTable({
         return (
           <div
             key={coupon.id}
-            className="flex flex-col gap-3 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-4 hover:bg-(--hover) transition-colors"
+            className="flex flex-col gap-3 px-3 py-2.5 transition-colors hover:bg-(--hover) sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-4"
           >
             <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-              <div className="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent) sm:size-10">
                 <Tag size={18} weight="bold" />
               </div>
               <div className="min-w-0">
-                <p className="truncate font-semibold text-sm sm:text-base">
-                  {coupon.code}
-                </p>
-                <p className="mt-0.5 sm:mt-1 truncate text-[0.72rem] sm:text-xs text-(--muted)">
-                  {couponCampaignTitle(coupon)} · {formatCouponDiscount(coupon)}{" "}
-                  · {formatCouponDate(coupon.startsAt, true)} –{" "}
+                <p className="truncate text-sm font-semibold sm:text-base">{coupon.code}</p>
+                <p className="mt-0.5 truncate text-[0.72rem] text-(--muted) sm:mt-1 sm:text-xs">
+                  {couponCampaignTitle(coupon)} · {formatCouponDiscount(coupon)} ·{" "}
+                  {formatCouponDate(coupon.startsAt, true)} –{" "}
                   {formatCouponDate(coupon.expiresAt, true)}
                 </p>
                 {hasUsageLimit ? (
@@ -171,7 +167,7 @@ export function CouponsTable({
                       aria-valuemin={0}
                       aria-valuemax={usageLimit}
                       aria-label={`Coupon limit usage: ${redemptionCount} of ${usageLimit} uses (${usagePercent}%)`}
-                      className="relative h-1.5 w-28 sm:w-36 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)]"
+                      className="relative h-1.5 w-28 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] sm:w-36"
                     >
                       <div
                         className={`h-full rounded-full transition-all duration-300 ${
@@ -180,7 +176,7 @@ export function CouponsTable({
                         style={{ width: `${usagePercent}%` }}
                       />
                     </div>
-                    <span className="text-[0.7rem] sm:text-[0.75rem] font-medium text-(--muted)">
+                    <span className="text-[0.7rem] font-medium text-(--muted) sm:text-[0.75rem]">
                       {redemptionCount.toLocaleString("en-IN")} /{" "}
                       {usageLimit.toLocaleString("en-IN")} used ({usagePercent}
                       %)
@@ -190,9 +186,9 @@ export function CouponsTable({
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 sm:justify-end sm:gap-3 sm:shrink-0">
+            <div className="flex items-center justify-between gap-2 sm:shrink-0 sm:justify-end sm:gap-3">
               <span
-                className={`rounded-full px-2.5 py-0.5 sm:py-1 text-[0.65rem] sm:text-[0.68rem] font-bold uppercase tracking-[0.08em] ${couponStatusClass(status)}`}
+                className={`rounded-full px-2.5 py-0.5 text-[0.65rem] font-bold tracking-[0.08em] uppercase sm:py-1 sm:text-[0.68rem] ${couponStatusClass(status)}`}
               >
                 {couponStatusLabel(status)}
               </span>
@@ -200,7 +196,7 @@ export function CouponsTable({
                 type="button"
                 onClick={() => handleCopyCode(coupon)}
                 title="Copy code"
-                className="inline-flex size-8 sm:size-9 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] text-(--text) shadow-[var(--card-compact-shadow)] hover:bg-(--hover) cursor-pointer"
+                className="inline-flex size-8 cursor-pointer items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] text-(--text) shadow-[var(--card-compact-shadow)] hover:bg-(--hover) sm:size-9"
               >
                 {copiedId === coupon.id ? (
                   <Check size={15} weight="bold" className="text-emerald-500" />
@@ -212,26 +208,18 @@ export function CouponsTable({
                 type="button"
                 onClick={() => onToggleStatus(coupon)}
                 title={coupon.isActive ? "Deactivate" : "Activate"}
-                className="inline-flex size-8 sm:size-9 items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] text-(--text) shadow-[var(--card-compact-shadow)] hover:bg-(--hover) cursor-pointer"
+                className="inline-flex size-8 cursor-pointer items-center justify-center rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] text-(--text) shadow-[var(--card-compact-shadow)] hover:bg-(--hover) sm:size-9"
               >
                 {coupon.isActive ? (
-                  <ToggleRight
-                    size={16}
-                    weight="bold"
-                    className="text-emerald-500"
-                  />
+                  <ToggleRight size={16} weight="bold" className="text-emerald-500" />
                 ) : (
-                  <ToggleLeft
-                    size={16}
-                    weight="bold"
-                    className="text-(--muted)"
-                  />
+                  <ToggleLeft size={16} weight="bold" className="text-(--muted)" />
                 )}
               </button>
               <button
                 type="button"
                 onClick={() => onEditCoupon(coupon)}
-                className="inline-flex h-8 sm:h-9 items-center justify-center gap-1.5 rounded-[8px] sm:rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] px-2.5 sm:px-3.5 text-xs font-semibold text-(--text) shadow-[var(--card-compact-shadow)] hover:border-[color-mix(in_srgb,var(--text)_25%,transparent)] hover:bg-(--hover) transition-all cursor-pointer"
+                className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,var(--canvas))] px-2.5 text-xs font-semibold text-(--text) shadow-[var(--card-compact-shadow)] transition-all hover:border-[color-mix(in_srgb,var(--text)_25%,transparent)] hover:bg-(--hover) sm:h-9 sm:rounded-[9px] sm:px-3.5"
               >
                 <span>Open</span>
                 <ArrowRight size={14} weight="bold" />
@@ -244,7 +232,7 @@ export function CouponsTable({
       {hasNextPage ? (
         <div
           ref={observerTarget}
-          className="flex flex-col items-center justify-center p-4 sm:p-6 border-t border-(--border)"
+          className="flex flex-col items-center justify-center border-t border-(--border) p-4 sm:p-6"
         >
           {isFetchingNextPage ? (
             <div
@@ -258,7 +246,7 @@ export function CouponsTable({
             <button
               type="button"
               onClick={() => fetchNextPage?.()}
-              className="rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-xs font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+              className="cursor-pointer rounded-xl border border-(--border) bg-(--card-surface) px-4 py-2 text-xs font-medium text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text)"
               style={{ boxShadow: "var(--card-shadow)" }}
             >
               Load more coupons

@@ -8,10 +8,7 @@ export function successEnvelopeSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   });
 }
 
-export function jsonResponse<T extends z.ZodTypeAny>(
-  description: string,
-  schema: T,
-) {
+export function jsonResponse<T extends z.ZodTypeAny>(description: string, schema: T) {
   return {
     description,
     content: {
@@ -22,10 +19,7 @@ export function jsonResponse<T extends z.ZodTypeAny>(
   };
 }
 
-export function errorJsonResponse<T extends z.ZodTypeAny>(
-  description: string,
-  schema: T,
-) {
+export function errorJsonResponse<T extends z.ZodTypeAny>(description: string, schema: T) {
   return {
     description,
     content: { "application/json": { schema } },

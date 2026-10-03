@@ -1,14 +1,7 @@
 import type { Permission } from "@veolms/contracts";
 import type { RoutePluginOptions } from "../../../lib/route-plugin.ts";
-import {
-  createAuthMiddleware,
-  type AuthMiddleware,
-} from "../../../middlewares/auth.middleware.ts";
-import {
-  ADMIN_ROLE,
-  INSTRUCTOR_ROLE,
-  createSessionService,
-} from "../../auth/index.ts";
+import { createAuthMiddleware, type AuthMiddleware } from "../../../middlewares/auth.middleware.ts";
+import { ADMIN_ROLE, INSTRUCTOR_ROLE, createSessionService } from "../../auth/index.ts";
 import {
   createAuthorizationGuard,
   createAuthorizationService,
@@ -33,9 +26,7 @@ export interface CoursesContext {
   requireAuthenticated: AuthMiddleware["authenticate"][];
 }
 
-export function createCoursesContext({
-  database,
-}: RoutePluginOptions): CoursesContext {
+export function createCoursesContext({ database }: RoutePluginOptions): CoursesContext {
   const sessionService = createSessionService({ database });
   const middleware = createAuthMiddleware(sessionService);
   const authorizationService = createAuthorizationService(database);

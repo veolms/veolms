@@ -15,8 +15,7 @@ export function useLearningPlayerTheme(): PlayerThemeDefinition {
   const [theme, setTheme] = useState<BuiltInPlayerThemeId>("youtube");
 
   useEffect(() => {
-    const syncTheme = () =>
-      setTheme(readLearningPreferences().videoPlayerTheme);
+    const syncTheme = () => setTheme(readLearningPreferences().videoPlayerTheme);
     const syncStorageTheme = (event: StorageEvent) => {
       if (event.key === LEARNING_PREFERENCES_KEY) syncTheme();
     };

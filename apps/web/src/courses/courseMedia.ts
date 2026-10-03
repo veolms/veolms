@@ -6,9 +6,7 @@ const COURSE_MEDIA_CDN_BASE_URL = String(
     "",
 ).replace(/\/+$/, "");
 
-export const COURSE_THUMBNAIL_WIDTHS = [
-  160, 240, 320, 480, 640, 960, 1280,
-] as const;
+export const COURSE_THUMBNAIL_WIDTHS = [160, 240, 320, 480, 640, 960, 1280] as const;
 
 export function getCourseThumbnailCdnUrl(
   mediaId: string | null | undefined,
@@ -18,9 +16,7 @@ export function getCourseThumbnailCdnUrl(
   return `${COURSE_MEDIA_CDN_BASE_URL}/public/thumbnails/${encodeURIComponent(mediaId)}/${width}.webp`;
 }
 
-export function getCourseThumbnailCdnSrcSet(
-  mediaId: string | null | undefined,
-) {
+export function getCourseThumbnailCdnSrcSet(mediaId: string | null | undefined) {
   return COURSE_THUMBNAIL_WIDTHS.flatMap((width) => {
     const url = getCourseThumbnailCdnUrl(mediaId, width);
     return url ? [{ url, width, height: Math.round((width * 9) / 16) }] : [];
@@ -65,9 +61,7 @@ export async function waitForCourseThumbnailCdnUrl(
     await waitForNextThumbnailPoll(pollIntervalMs, options.signal);
   }
 
-  throw new Error(
-    "Thumbnail processing did not finish in time. Please try again.",
-  );
+  throw new Error("Thumbnail processing did not finish in time. Please try again.");
 }
 
 function createAbortError(): Error {
@@ -76,10 +70,7 @@ function createAbortError(): Error {
   return error;
 }
 
-function waitForNextThumbnailPoll(
-  delayMs: number,
-  signal?: AbortSignal,
-): Promise<void> {
+function waitForNextThumbnailPoll(delayMs: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.reject(createAbortError());
 
   return new Promise<void>((resolve, reject) => {

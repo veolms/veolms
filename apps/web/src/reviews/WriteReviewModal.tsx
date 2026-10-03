@@ -72,31 +72,31 @@ export function WriteReviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-150"
+      className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm duration-150"
       role="dialog"
       aria-modal="true"
       aria-labelledby="write-review-title"
     >
       <div
         ref={modalRef}
-        className="w-full max-w-lg rounded-2xl border border-(--border) bg-(--surface) p-6 shadow-2xl animate-in zoom-in-95 duration-200"
+        className="animate-in zoom-in-95 w-full max-w-lg rounded-2xl border border-(--border) bg-(--surface) p-6 shadow-2xl duration-200"
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2
               id="write-review-title"
-              className="text-lg md:text-xl font-bold text-(--text) tracking-tight"
+              className="text-lg font-bold tracking-tight text-(--text) md:text-xl"
             >
               Write a review
             </h2>
-            <p className="text-xs text-(--muted) mt-0.5">{courseTitle}</p>
+            <p className="mt-0.5 text-xs text-(--muted)">{courseTitle}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text)"
           >
             <X size={18} />
           </button>
@@ -105,7 +105,7 @@ export function WriteReviewModal({
         <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
           {/* Star Picker */}
           <div>
-            <label className="block text-xs font-semibold text-(--text) mb-1.5">
+            <label className="mb-1.5 block text-xs font-semibold text-(--text)">
               Your overall rating
             </label>
             <div className="flex items-center gap-1.5">
@@ -120,16 +120,12 @@ export function WriteReviewModal({
                     onMouseEnter={() => setHoverRating(starVal)}
                     onMouseLeave={() => setHoverRating(null)}
                     aria-label={`${starVal} star${starVal > 1 ? "s" : ""}`}
-                    className="p-1 text-(--accent) transition-transform hover:scale-110 cursor-pointer"
+                    className="cursor-pointer p-1 text-(--accent) transition-transform hover:scale-110"
                   >
                     <Star
                       size={24}
                       weight={isFilled ? "fill" : "regular"}
-                      className={
-                        isFilled
-                          ? "text-(--accent)"
-                          : "text-(--muted) opacity-40"
-                      }
+                      className={isFilled ? "text-(--accent)" : "text-(--muted) opacity-40"}
                     />
                   </button>
                 );
@@ -144,7 +140,7 @@ export function WriteReviewModal({
           <div>
             <label
               htmlFor="review-title"
-              className="block text-xs font-semibold text-(--text) mb-1.5"
+              className="mb-1.5 block text-xs font-semibold text-(--text)"
             >
               Review headline
             </label>
@@ -154,7 +150,7 @@ export function WriteReviewModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Excellent TypeScript course, clearly explained"
-              className="w-full rounded-xl border border-(--border) bg-(--card-surface-raised,var(--canvas)) px-3.5 py-2 text-xs md:text-sm text-(--text) placeholder-(--muted) focus:border-(--accent) focus:outline-none focus:ring-1 focus:ring-(--accent)"
+              className="w-full rounded-xl border border-(--border) bg-(--card-surface-raised,var(--canvas)) px-3.5 py-2 text-xs text-(--text) placeholder-(--muted) focus:border-(--accent) focus:ring-1 focus:ring-(--accent) focus:outline-none md:text-sm"
             />
           </div>
 
@@ -162,7 +158,7 @@ export function WriteReviewModal({
           <div>
             <label
               htmlFor="review-content"
-              className="block text-xs font-semibold text-(--text) mb-1.5"
+              className="mb-1.5 block text-xs font-semibold text-(--text)"
             >
               Detailed review
             </label>
@@ -175,11 +171,9 @@ export function WriteReviewModal({
                 if (error) setError("");
               }}
               placeholder="What did you like or dislike? How did this course help your learning?"
-              className="w-full rounded-xl border border-(--border) bg-(--card-surface-raised,var(--canvas)) px-3.5 py-2.5 text-xs md:text-sm text-(--text) placeholder-(--muted) focus:border-(--accent) focus:outline-none focus:ring-1 focus:ring-(--accent) resize-none"
+              className="w-full resize-none rounded-xl border border-(--border) bg-(--card-surface-raised,var(--canvas)) px-3.5 py-2.5 text-xs text-(--text) placeholder-(--muted) focus:border-(--accent) focus:ring-1 focus:ring-(--accent) focus:outline-none md:text-sm"
             />
-            {error && (
-              <p className="mt-1 text-xs text-rose-500 font-medium">{error}</p>
-            )}
+            {error && <p className="mt-1 text-xs font-medium text-rose-500">{error}</p>}
           </div>
 
           {/* Recommendation Checkbox */}
@@ -189,9 +183,9 @@ export function WriteReviewModal({
               role="checkbox"
               aria-checked={recommend}
               onClick={() => setRecommend((prev) => !prev)}
-              className={`flex h-5 w-5 items-center justify-center rounded border transition-colors cursor-pointer ${
+              className={`flex h-5 w-5 cursor-pointer items-center justify-center rounded border transition-colors ${
                 recommend
-                  ? "bg-(--accent) border-(--accent) text-white"
+                  ? "border-(--accent) bg-(--accent) text-white"
                   : "border-(--border) bg-transparent"
               }`}
             >
@@ -199,7 +193,7 @@ export function WriteReviewModal({
             </button>
             <span
               onClick={() => setRecommend((prev) => !prev)}
-              className="text-xs text-(--text-secondary) select-none cursor-pointer"
+              className="cursor-pointer text-xs text-(--text-secondary) select-none"
             >
               I recommend this course to other learners
             </span>
@@ -210,13 +204,13 @@ export function WriteReviewModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-(--border) px-4 py-2 text-xs md:text-sm font-medium text-(--muted) hover:bg-(--hover) hover:text-(--text) transition-colors cursor-pointer"
+              className="cursor-pointer rounded-xl border border-(--border) px-4 py-2 text-xs font-medium text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) md:text-sm"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-(--accent) px-4 py-2 text-xs md:text-sm font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
+              className="cursor-pointer rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm transition-all hover:opacity-90 active:scale-[0.98] md:text-sm"
             >
               Submit review
             </button>

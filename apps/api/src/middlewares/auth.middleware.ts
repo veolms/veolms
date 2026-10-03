@@ -7,14 +7,8 @@ import type { SessionService } from "../modules/auth/index.ts";
 
 export interface AuthMiddleware {
   authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  requireAuthenticated: (
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) => Promise<void>;
-  requireMfaVerified: (
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ) => Promise<void>;
+  requireAuthenticated: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  requireMfaVerified: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   /** Allows anonymous requests, but blocks an authenticated session pending MFA. */
   requireMfaVerifiedIfAuthenticated: (
     request: FastifyRequest,
@@ -25,9 +19,7 @@ export interface AuthMiddleware {
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
 
-export function createAuthMiddleware(
-  sessionService: SessionService,
-): AuthMiddleware {
+export function createAuthMiddleware(sessionService: SessionService): AuthMiddleware {
   function sessionHasPendingMfa(request: FastifyRequest): boolean {
     if (!request.user || !request.session) {
       return false;
@@ -52,15 +44,10 @@ export function createAuthMiddleware(
     reply: FastifyReply,
     message = "Multi-factor authentication is required to access this resource.",
   ) {
-    return reply
-      .code(403)
-      .send(httpError(403, "MFA_REQUIRED", message).toJSON());
+    return reply.code(403).send(httpError(403, "MFA_REQUIRED", message).toJSON());
   }
 
-  async function authenticate(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ): Promise<void> {
+  async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     request.user = null;
     request.session = null;
 
@@ -76,16 +63,11 @@ export function createAuthMiddleware(
     request.session = authenticated.session;
   }
 
-  async function requireAuthenticated(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ): Promise<void> {
+  async function requireAuthenticated(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     if (!request.user || !request.session) {
       return reply
         .code(401)
-        .send(
-          httpError(401, "UNAUTHORIZED", "Authentication required").toJSON(),
-        );
+        .send(httpError(401, "UNAUTHORIZED", "Authentication required").toJSON());
     }
   }
 
@@ -93,16 +75,11 @@ export function createAuthMiddleware(
    * Enforces MFA step-up for users who have any MFA factor enabled.
    * Must be used AFTER authenticate + requireAuthenticated in the preHandler chain.
    */
-  async function requireMfaVerified(
-    request: FastifyRequest,
-    reply: FastifyReply,
-  ): Promise<void> {
+  async function requireMfaVerified(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     if (!request.user || !request.session) {
       return reply
         .code(401)
-        .send(
-          httpError(401, "UNAUTHORIZED", "Authentication required").toJSON(),
-        );
+        .send(httpError(401, "UNAUTHORIZED", "Authentication required").toJSON());
     }
 
     if (sessionHasPendingMfa(request)) {
@@ -124,10 +101,7 @@ export function createAuthMiddleware(
    * be used AFTER authenticate + requireAuthenticated in the preHandler chain.
    */
   function requireRoles(roles: string[]) {
-    return async (
-      request: FastifyRequest,
-      reply: FastifyReply,
-    ): Promise<void> => {
+    return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
       const user = request.user;
       if (sessionHasPendingMfa(request)) {
         return sendMfaRequired(reply);

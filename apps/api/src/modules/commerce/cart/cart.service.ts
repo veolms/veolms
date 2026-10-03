@@ -6,10 +6,7 @@ import { AppError } from "../../../lib/errors.ts";
 import * as cartRepo from "./cart.repository.ts";
 import * as courseRepo from "../../courses/course/course.repository.ts";
 import * as bundleRepo from "../bundles/bundle.repository.ts";
-import {
-  createPricingService,
-  type PricingService,
-} from "../pricing/pricing.service.ts";
+import { createPricingService, type PricingService } from "../pricing/pricing.service.ts";
 
 export interface CartService {
   getOrCreateCart(userId: string): Promise<{ id: string; user_id: string }>;
@@ -132,10 +129,7 @@ export function createCartService({
     };
   }
 
-  async function addItem(
-    userId: string,
-    item: CartItemInput,
-  ): Promise<CartResponse> {
+  async function addItem(userId: string, item: CartItemInput): Promise<CartResponse> {
     if (item.itemType === "quiz") {
       throw new AppError(
         400,
@@ -175,10 +169,7 @@ export function createCartService({
     return await getActiveCart(userId);
   }
 
-  async function removeItem(
-    userId: string,
-    itemId: string,
-  ): Promise<CartResponse> {
+  async function removeItem(userId: string, itemId: string): Promise<CartResponse> {
     const cart = await getOrCreateCart(userId);
     const result = await cartRepo.deleteCartItem(database, cart.id, itemId);
 

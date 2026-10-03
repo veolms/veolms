@@ -54,15 +54,9 @@ function validateQuestionPayload(payload: CreateQuizQuestionRequest) {
         "Single-choice questions require exactly one correct option.",
       );
   }
-  const ids = payload.options.flatMap((option) =>
-    option.id ? [option.id] : [],
-  );
+  const ids = payload.options.flatMap((option) => (option.id ? [option.id] : []));
   if (new Set(ids).size !== ids.length)
-    throw new AppError(
-      400,
-      "DUPLICATE_OPTION_ID",
-      "Question options must be unique.",
-    );
+    throw new AppError(400, "DUPLICATE_OPTION_ID", "Question options must be unique.");
 }
 
 export function createAuthoringService(options: QuizServiceOptions) {
@@ -70,12 +64,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
 
   async function academyId() {
     const id = await options.getAcademyId();
-    if (!id)
-      throw new AppError(
-        503,
-        "ACADEMY_NOT_CONFIGURED",
-        "The academy is not configured.",
-      );
+    if (!id) throw new AppError(503, "ACADEMY_NOT_CONFIGURED", "The academy is not configured.");
     return id;
   }
 
@@ -224,9 +213,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
         })),
       });
     }
-    const assignmentRows = await repo.listAssignmentsForQuizzes(database, [
-      quizId,
-    ]);
+    const assignmentRows = await repo.listAssignmentsForQuizzes(database, [quizId]);
     const pricingByCourseId = new Map(
       (
         await pricingRepo.listPricingForCourses(database, [
@@ -283,13 +270,11 @@ export function createAuthoringService(options: QuizServiceOptions) {
     if (draft) return draft;
     const latest = await repo.listVersions(trx, quizId);
     const source = latest.at(-1);
-    if (!source)
-      throw new AppError(409, "QUIZ_VERSION_MISSING", "Quiz has no version.");
+    if (!source) throw new AppError(409, "QUIZ_VERSION_MISSING", "Quiz has no version.");
     const version = await repo.insertVersion(trx, {
       id: crypto.randomUUID(),
       quiz_id: quizId,
-      version_number:
-        Math.max(...latest.map((item) => item.version_number)) + 1,
+      version_number: Math.max(...latest.map((item) => item.version_number)) + 1,
       instructions: source.instructions,
       created_at: new Date(),
       published_at: null,
@@ -339,16 +324,10 @@ export function createAuthoringService(options: QuizServiceOptions) {
    * immutable snapshot. Match that source question to the cloned draft by its
    * stable authoring position so edits never mutate an attempt's pinned data.
    */
-  async function getEditableQuestion(
-    trx: DatabaseExecutor,
-    quizId: string,
-    questionId: string,
-  ) {
+  async function getEditableQuestion(trx: DatabaseExecutor, quizId: string, questionId: string) {
     let version = await repo.findLatestVersion(trx, quizId, false);
     if (version) {
-      const draftQuestion = (
-        await repo.listQuestionsByIds(trx, version.id, [questionId])
-      )[0];
+      const draftQuestion = (await repo.listQuestionsByIds(trx, version.id, [questionId]))[0];
       if (draftQuestion) return { version, question: draftQuestion };
     }
 
@@ -356,9 +335,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     if (!sourceVersion) {
       throw new AppError(404, "QUESTION_NOT_FOUND", "Question not found.");
     }
-    const sourceQuestion = (
-      await repo.listQuestionsByIds(trx, sourceVersion.id, [questionId])
-    )[0];
+    const sourceQuestion = (await repo.listQuestionsByIds(trx, sourceVersion.id, [questionId]))[0];
     if (!sourceQuestion) {
       throw new AppError(404, "QUESTION_NOT_FOUND", "Question not found.");
     }
@@ -366,12 +343,8 @@ export function createAuthoringService(options: QuizServiceOptions) {
     version = await getEditableVersion(trx, quizId);
     const draftQuestions = await repo.listQuestions(trx, version.id);
     const question =
-      draftQuestions.find(
-        (candidate) => candidate.position === sourceQuestion.position,
-      ) ??
-      draftQuestions.find(
-        (candidate) => candidate.prompt === sourceQuestion.prompt,
-      );
+      draftQuestions.find((candidate) => candidate.position === sourceQuestion.position) ??
+      draftQuestions.find((candidate) => candidate.prompt === sourceQuestion.prompt);
     if (!question) {
       throw new AppError(
         409,
@@ -382,11 +355,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     return { version, question };
   }
 
-  async function updateQuiz(
-    actor: QuizActor,
-    quizId: string,
-    payload: UpdateQuizRequest,
-  ) {
+  async function updateQuiz(actor: QuizActor, quizId: string, payload: UpdateQuizRequest) {
     await requireQuiz(quizId, actor);
     await database.transaction().execute(async (trx) => {
       if (payload.title !== undefined || payload.description !== undefined)
@@ -404,11 +373,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     return getQuiz(actor, quizId);
   }
 
-  async function addQuestion(
-    actor: QuizActor,
-    quizId: string,
-    payload: CreateQuizQuestionRequest,
-  ) {
+  async function addQuestion(actor: QuizActor, quizId: string, payload: CreateQuizQuestionRequest) {
     await requireQuiz(quizId, actor);
     validateQuestionPayload(payload);
     const questionId = crypto.randomUUID();
@@ -454,18 +419,14 @@ export function createAuthoringService(options: QuizServiceOptions) {
     await requireQuiz(quizId, actor);
     await database.transaction().execute(async (trx) => {
       const editable = await getEditableQuestion(trx, quizId, questionId);
-      const currentOptions = await repo.listOptions(trx, [
-        editable.question.id,
-      ]);
+      const currentOptions = await repo.listOptions(trx, [editable.question.id]);
       const next = {
         questionType: payload.questionType ?? editable.question.question_type,
         prompt: payload.prompt ?? editable.question.prompt,
         points: payload.points ?? Number(editable.question.points),
         position: payload.position ?? editable.question.position,
         explanation:
-          payload.explanation !== undefined
-            ? payload.explanation
-            : editable.question.explanation,
+          payload.explanation !== undefined ? payload.explanation : editable.question.explanation,
         options:
           payload.options ??
           currentOptions.map((option) => ({
@@ -484,17 +445,12 @@ export function createAuthoringService(options: QuizServiceOptions) {
         explanation: next.explanation,
       });
       if (payload.options) {
-        const currentOptionIds = new Set(
-          currentOptions.map((option) => option.id),
-        );
+        const currentOptionIds = new Set(currentOptions.map((option) => option.id));
         await repo.deleteOptions(trx, editable.question.id);
         await repo.insertOptions(
           trx,
           next.options.map((option, position) => ({
-            id:
-              option.id && currentOptionIds.has(option.id)
-                ? option.id
-                : crypto.randomUUID(),
+            id: option.id && currentOptionIds.has(option.id) ? option.id : crypto.randomUUID(),
             question_id: editable.question.id,
             option_text: option.text,
             is_correct: option.isCorrect,
@@ -509,11 +465,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     return getQuiz(actor, quizId);
   }
 
-  async function deleteQuestion(
-    actor: QuizActor,
-    quizId: string,
-    questionId: string,
-  ) {
+  async function deleteQuestion(actor: QuizActor, quizId: string, questionId: string) {
     await requireQuiz(quizId, actor);
     await database.transaction().execute(async (trx) => {
       const editable = await getEditableQuestion(trx, quizId, questionId);
@@ -525,12 +477,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
   async function publish(actor: QuizActor, quizId: string) {
     await requireQuiz(quizId, actor);
     const version = await repo.findLatestVersion(database, quizId, false);
-    if (!version)
-      throw new AppError(
-        409,
-        "QUIZ_VERSION_MISSING",
-        "Quiz has no draft version.",
-      );
+    if (!version) throw new AppError(409, "QUIZ_VERSION_MISSING", "Quiz has no draft version.");
     const questions = await repo.listQuestions(database, version.id);
     if (!questions.length)
       throw new AppError(
@@ -543,9 +490,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
       questions.map((question) => question.id),
     );
     for (const question of questions) {
-      const questionOptions = options.filter(
-        (option) => option.question_id === question.id,
-      );
+      const questionOptions = options.filter((option) => option.question_id === question.id);
       validateQuestionPayload({
         questionType: question.question_type,
         prompt: question.prompt,

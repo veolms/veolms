@@ -45,8 +45,7 @@ export function normalizeUnknownError(
   const message =
     error instanceof Error
       ? error.message
-      : (fallback.message ??
-        "The video engine encountered an unexpected error.");
+      : (fallback.message ?? "The video engine encountered an unexpected error.");
 
   return new VideoEngineError({
     ...fallback,

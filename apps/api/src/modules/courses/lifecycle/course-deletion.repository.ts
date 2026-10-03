@@ -10,10 +10,7 @@ export async function findCourseIncludingDeleted(
   courseId: string,
   lock = false,
 ) {
-  let query = database
-    .selectFrom("courses")
-    .selectAll()
-    .where("id", "=", courseId);
+  let query = database.selectFrom("courses").selectAll().where("id", "=", courseId);
 
   if (lock) {
     query = query.forUpdate();
@@ -36,10 +33,7 @@ export async function insertCourseDeletionJob(
   await database.insertInto("course_deletion_jobs").values(values).execute();
 }
 
-export async function findCourseDeletionJobForUpdate(
-  database: DatabaseExecutor,
-  courseId: string,
-) {
+export async function findCourseDeletionJobForUpdate(database: DatabaseExecutor, courseId: string) {
   return await database
     .selectFrom("course_deletion_jobs")
     .selectAll()
@@ -57,11 +51,7 @@ export async function listDeletedCourses(
 ) {
   let query = database
     .selectFrom("courses")
-    .innerJoin(
-      "course_deletion_jobs",
-      "course_deletion_jobs.course_id",
-      "courses.id",
-    )
+    .innerJoin("course_deletion_jobs", "course_deletion_jobs.course_id", "courses.id")
     .select([
       "courses.id",
       "courses.slug",
@@ -110,16 +100,10 @@ export async function claimDueCourseDeletionJobs(
         eb.or([
           eb.and([
             eb("status", "in", CLAIMABLE_STATUSES),
-            eb.or([
-              eb("next_attempt_at", "is", null),
-              eb("next_attempt_at", "<=", now),
-            ]),
+            eb.or([eb("next_attempt_at", "is", null), eb("next_attempt_at", "<=", now)]),
             eb("scheduled_for", "<=", now),
           ]),
-          eb.and([
-            eb("status", "=", "processing"),
-            eb("lease_until", "<=", now),
-          ]),
+          eb.and([eb("status", "=", "processing"), eb("lease_until", "<=", now)]),
         ]),
       )
       .orderBy("scheduled_for", "asc")
@@ -170,10 +154,7 @@ export async function markCourseDeletionJobFailed(
     .execute();
 }
 
-export async function listCourseMediaAssetIds(
-  database: DatabaseExecutor,
-  courseId: string,
-) {
+export async function listCourseMediaAssetIds(database: DatabaseExecutor, courseId: string) {
   const course = await database
     .selectFrom("courses")
     .select(["thumbnail_media_id", "trailer_media_id"])
@@ -186,11 +167,7 @@ export async function listCourseMediaAssetIds(
     .execute();
   const resources = await database
     .selectFrom("lesson_resources")
-    .innerJoin(
-      "course_lessons",
-      "course_lessons.id",
-      "lesson_resources.lesson_id",
-    )
+    .innerJoin("course_lessons", "course_lessons.id", "lesson_resources.lesson_id")
     .select("lesson_resources.media_asset_id")
     .where("course_lessons.course_id", "=", courseId)
     .execute();
@@ -224,10 +201,7 @@ export async function findMediaAssetIdsReferencedByOtherCourses(
     .select(["thumbnail_media_id", "trailer_media_id"])
     .where("id", "!=", excludedCourseId)
     .where((eb) =>
-      eb.or([
-        eb("thumbnail_media_id", "in", mediaIds),
-        eb("trailer_media_id", "in", mediaIds),
-      ]),
+      eb.or([eb("thumbnail_media_id", "in", mediaIds), eb("trailer_media_id", "in", mediaIds)]),
     )
     .execute();
   const lessonReferences = await database
@@ -238,11 +212,7 @@ export async function findMediaAssetIdsReferencedByOtherCourses(
     .execute();
   const resourceReferences = await database
     .selectFrom("lesson_resources")
-    .innerJoin(
-      "course_lessons",
-      "course_lessons.id",
-      "lesson_resources.lesson_id",
-    )
+    .innerJoin("course_lessons", "course_lessons.id", "lesson_resources.lesson_id")
     .select("lesson_resources.media_asset_id")
     .where("course_lessons.course_id", "!=", excludedCourseId)
     .where("lesson_resources.media_asset_id", "in", mediaIds)
@@ -298,15 +268,9 @@ export async function claimDueCourseDeletionStorageItems(
         eb.or([
           eb.and([
             eb("status", "in", ["scheduled", "failed"]),
-            eb.or([
-              eb("next_attempt_at", "is", null),
-              eb("next_attempt_at", "<=", now),
-            ]),
+            eb.or([eb("next_attempt_at", "is", null), eb("next_attempt_at", "<=", now)]),
           ]),
-          eb.and([
-            eb("status", "=", "processing"),
-            eb("lease_until", "<=", now),
-          ]),
+          eb.and([eb("status", "=", "processing"), eb("lease_until", "<=", now)]),
         ]),
       )
       .orderBy("created_at", "asc")
@@ -336,14 +300,8 @@ export async function claimDueCourseDeletionStorageItems(
   });
 }
 
-export async function deleteCourseDeletionStorageItem(
-  database: DatabaseExecutor,
-  itemId: string,
-) {
-  await database
-    .deleteFrom("course_deletion_storage_items")
-    .where("id", "=", itemId)
-    .execute();
+export async function deleteCourseDeletionStorageItem(database: DatabaseExecutor, itemId: string) {
+  await database.deleteFrom("course_deletion_storage_items").where("id", "=", itemId).execute();
 }
 
 export async function markCourseDeletionStorageItemFailed(
@@ -398,19 +356,13 @@ export async function restoreCourseAndCancelDeletion(
       return { course: undefined, jobStatus: job.status };
     }
 
-    await trx
-      .deleteFrom("course_deletion_jobs")
-      .where("id", "=", job.id)
-      .execute();
+    await trx.deleteFrom("course_deletion_jobs").where("id", "=", job.id).execute();
 
     return { course, jobStatus: job.status };
   });
 }
 
-export async function hardDeleteCourse(
-  database: DatabaseExecutor,
-  courseId: string,
-) {
+export async function hardDeleteCourse(database: DatabaseExecutor, courseId: string) {
   const result = await database
     .deleteFrom("courses")
     .where("id", "=", courseId)

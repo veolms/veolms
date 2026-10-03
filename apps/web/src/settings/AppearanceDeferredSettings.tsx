@@ -59,9 +59,8 @@ export default function AppearanceAdditionalSettings({
     pool: academyThemes.map((theme) => theme.id),
   });
 
-  const updateThemeRotation = (
-    next: Parameters<typeof persistThemeRotationPreferences>[0],
-  ) => setThemeRotation(persistThemeRotationPreferences(next));
+  const updateThemeRotation = (next: Parameters<typeof persistThemeRotationPreferences>[0]) =>
+    setThemeRotation(persistThemeRotationPreferences(next));
 
   const toggleThemeInPool = (themeId: string) => {
     const isSelected = themeRotation.pool.includes(themeId);
@@ -87,8 +86,7 @@ export default function AppearanceAdditionalSettings({
 
   useEffect(() => {
     if (!storageReady) return;
-    document.documentElement.dataset.reduceAnimations =
-      String(reduceAnimations);
+    document.documentElement.dataset.reduceAnimations = String(reduceAnimations);
     localStorage.setItem("veolms-reduce-animations", String(reduceAnimations));
   }, [reduceAnimations, storageReady]);
   useEffect(() => {
@@ -103,8 +101,7 @@ export default function AppearanceAdditionalSettings({
   }, [compactLayout, storageReady]);
   useEffect(() => {
     if (!storageReady) return;
-    document.documentElement.dataset.elevatedSurfaces =
-      String(elevatedSurfaces);
+    document.documentElement.dataset.elevatedSurfaces = String(elevatedSurfaces);
     localStorage.setItem(ELEVATED_SURFACES_KEY, String(elevatedSurfaces));
   }, [elevatedSurfaces, storageReady]);
   useEffect(() => {
@@ -129,9 +126,7 @@ export default function AppearanceAdditionalSettings({
           >
             <SettingsToggle
               checked={themeRotation.enabled}
-              onChange={(enabled) =>
-                updateThemeRotation({ ...themeRotation, enabled })
-              }
+              onChange={(enabled) => updateThemeRotation({ ...themeRotation, enabled })}
               label="Random theme on app open"
             />
           </SettingRow>
@@ -163,11 +158,7 @@ export default function AppearanceAdditionalSettings({
                     aria-disabled={isRequired}
                     className={isSelected ? "is-selected" : ""}
                     onClick={() => toggleThemeInPool(item.id)}
-                    title={
-                      isRequired
-                        ? "Keep at least two themes in the rotation"
-                        : undefined
-                    }
+                    title={isRequired ? "Keep at least two themes in the rotation" : undefined}
                   >
                     <span
                       className={`settings-theme-pool__swatch ${item.darkInk ? "has-dark-ink" : ""}`}
@@ -185,8 +176,7 @@ export default function AppearanceAdditionalSettings({
               })}
             </div>
             <p className="settings-theme-pool__footnote">
-              Your current theme stays unchanged. Rotation begins the next time
-              you open the app.
+              Your current theme stays unchanged. Rotation begins the next time you open the app.
             </p>
           </div>
         )}
@@ -206,10 +196,7 @@ export default function AppearanceAdditionalSettings({
             note="Pill applies to action buttons. Tabs stay square, while fields and option cards stop at Rounded"
           >
             <div className="settings-control-radius">
-              <RadioGroup
-                label="Control roundness"
-                className="settings-control-radius__presets"
-              >
+              <RadioGroup label="Control roundness" className="settings-control-radius__presets">
                 {CONTROL_RADIUS_PRESETS.map(({ id, label, radius }) => (
                   <button
                     type="button"
@@ -235,9 +222,7 @@ export default function AppearanceAdditionalSettings({
                   role="radio"
                   aria-checked={controlRadius.preset === "custom"}
                   tabIndex={controlRadius.preset === "custom" ? 0 : -1}
-                  className={
-                    controlRadius.preset === "custom" ? "is-selected" : ""
-                  }
+                  className={controlRadius.preset === "custom" ? "is-selected" : ""}
                   style={{ borderRadius: controlRadius.customPx }}
                   data-control-radius-preview
                   onClick={() =>
@@ -265,9 +250,7 @@ export default function AppearanceAdditionalSettings({
                       onChange={(event) =>
                         setControlRadius((current) => ({
                           ...current,
-                          customPx: normalizeControlRadiusCustom(
-                            event.target.value,
-                          ),
+                          customPx: normalizeControlRadiusCustom(event.target.value),
                         }))
                       }
                     />
@@ -336,10 +319,7 @@ export default function AppearanceAdditionalSettings({
                   ["system", "Follow system"],
                   ["windows", "Windows"],
                   ["mac", "Mac"],
-                ] as const satisfies readonly (readonly [
-                  ShortcutPlatformPreference,
-                  string,
-                ])[]
+                ] as const satisfies readonly (readonly [ShortcutPlatformPreference, string])[]
               ).map(([value, label]) => (
                 <button
                   type="button"
@@ -347,9 +327,7 @@ export default function AppearanceAdditionalSettings({
                   role="radio"
                   aria-checked={shortcutPlatformPreference === value}
                   tabIndex={shortcutPlatformPreference === value ? 0 : -1}
-                  className={
-                    shortcutPlatformPreference === value ? "is-selected" : ""
-                  }
+                  className={shortcutPlatformPreference === value ? "is-selected" : ""}
                   onClick={() => persistShortcutPlatformPreference(value)}
                 >
                   {label}

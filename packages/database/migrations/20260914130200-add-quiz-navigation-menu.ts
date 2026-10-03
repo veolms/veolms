@@ -37,8 +37,6 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
-  await sql`delete from permissions where menu_id = ${quizMenuId}::uuid`.execute(
-    db,
-  );
+  await sql`delete from permissions where menu_id = ${quizMenuId}::uuid`.execute(db);
   await sql`delete from menus where id = ${quizMenuId}::uuid`.execute(db);
 }

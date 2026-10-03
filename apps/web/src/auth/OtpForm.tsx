@@ -12,11 +12,7 @@ import {
   maskIdentifier,
   validateOtpCode,
 } from "./authFlow.ts";
-import type {
-  AuthIdentifier,
-  OtpFailureReason,
-  OtpMessage,
-} from "./authFlow.ts";
+import type { AuthIdentifier, OtpFailureReason, OtpMessage } from "./authFlow.ts";
 
 export interface OtpFormProps {
   identifier: AuthIdentifier;
@@ -146,9 +142,7 @@ export function OtpForm({
             {message === null ? null : (
               <p className="auth-form__error" id={MESSAGE_ID} role="alert">
                 {message.title === null ? null : (
-                  <strong className="auth-form__error-title">
-                    {message.title}
-                  </strong>
+                  <strong className="auth-form__error-title">{message.title}</strong>
                 )}
                 {message.body}
               </p>
@@ -156,9 +150,7 @@ export function OtpForm({
           </div>
 
           <div className="auth-otp-form__resend">
-            <p className="auth-otp-form__resend-prompt">
-              Didn&apos;t receive the code?
-            </p>
+            <p className="auth-otp-form__resend-prompt">Didn&apos;t receive the code?</p>
 
             <button
               className="auth-otp-form__resend-button"
@@ -184,13 +176,9 @@ export function OtpForm({
 
           <AuthBusySubmit
             busy={verifying || resending}
-            busyLabel={
-              resending ? "Sending a new code…" : OTP_ACTION_LABELS.verifying
-            }
+            busyLabel={resending ? "Sending a new code…" : OTP_ACTION_LABELS.verifying}
             label={OTP_ACTION_LABELS.verify}
-            pendingMessage={
-              verifying ? "Checking your code. Please wait." : undefined
-            }
+            pendingMessage={verifying ? "Checking your code. Please wait." : undefined}
           />
 
           <button

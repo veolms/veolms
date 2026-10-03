@@ -68,6 +68,4 @@ export const analyticsOverviewResponseSchema = z.strictObject({
     coursePerformance: z.array(coursePerformanceRowSchema),
   }),
 });
-export type AnalyticsOverviewResponse = z.infer<
-  typeof analyticsOverviewResponseSchema
->;
+export type AnalyticsOverviewResponse = z.infer<typeof analyticsOverviewResponseSchema>;

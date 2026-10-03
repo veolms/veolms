@@ -51,11 +51,7 @@ export function AcademyRouteSkeleton({
   }
 
   return (
-    <div
-      className="grid min-h-52 place-items-center"
-      role="status"
-      aria-label="Loading page"
-    >
+    <div className="grid min-h-52 place-items-center" role="status" aria-label="Loading page">
       <CircleNotch size={26} className="animate-spin text-(--accent)" />
     </div>
   );

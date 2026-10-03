@@ -11,11 +11,7 @@ interface ElasticScrollerIconProps {
   size?: number;
 }
 
-export function ElasticScrollerGlyph({
-  icon,
-  className,
-  size = 20,
-}: ElasticScrollerIconProps) {
+export function ElasticScrollerGlyph({ icon, className, size = 20 }: ElasticScrollerIconProps) {
   const props = {
     className,
     size,

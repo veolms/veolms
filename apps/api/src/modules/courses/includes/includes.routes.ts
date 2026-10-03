@@ -31,10 +31,7 @@ const includesRoutes: RoutePlugin = async (app, options) => {
         summary: "List all includes for a course",
         params: z.object({ id: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "List of course includes",
-            courseIncludesListResponseSchema,
-          ),
+          200: jsonResponse("List of course includes", courseIncludesListResponseSchema),
           404: errorResponse("Course not found"),
         },
       },
@@ -52,10 +49,7 @@ const includesRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid() }),
         body: createCourseIncludeRequestSchema,
         response: {
-          201: jsonResponse(
-            "Course include item created",
-            courseIncludeItemSchema,
-          ),
+          201: jsonResponse("Course include item created", courseIncludeItemSchema),
           403: errorResponse("Forbidden - not course owner"),
           404: errorResponse("Course not found"),
         },
@@ -75,10 +69,7 @@ const includesRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid(), includeId: z.uuid() }),
         body: updateCourseIncludeRequestSchema,
         response: {
-          200: jsonResponse(
-            "Course include item updated",
-            courseIncludeItemSchema,
-          ),
+          200: jsonResponse("Course include item updated", courseIncludeItemSchema),
           403: errorResponse("Forbidden - not course owner"),
           404: errorResponse("Include item not found"),
         },
@@ -97,10 +88,7 @@ const includesRoutes: RoutePlugin = async (app, options) => {
         summary: "Delete a course include item",
         params: z.object({ id: z.uuid(), includeId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Course include item deleted",
-            z.object({ success: z.boolean() }),
-          ),
+          200: jsonResponse("Course include item deleted", z.object({ success: z.boolean() })),
           403: errorResponse("Forbidden - not course owner"),
           404: errorResponse("Include item not found"),
         },
@@ -120,10 +108,7 @@ const includesRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid() }),
         body: reorderCourseIncludesRequestSchema,
         response: {
-          200: jsonResponse(
-            "Course includes reordered",
-            z.object({ success: z.boolean() }),
-          ),
+          200: jsonResponse("Course includes reordered", z.object({ success: z.boolean() })),
           400: errorResponse("Invalid includes list"),
           403: errorResponse("Forbidden - not course owner"),
         },

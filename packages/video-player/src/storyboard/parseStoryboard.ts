@@ -81,9 +81,7 @@ function parseImageReference(reference: string): ParsedImageReference | null {
     return null;
   }
 
-  const fragmentIndex = trimmed
-    .toLocaleLowerCase("en-US")
-    .lastIndexOf("#xywh=");
+  const fragmentIndex = trimmed.toLocaleLowerCase("en-US").lastIndexOf("#xywh=");
   if (fragmentIndex === -1) {
     return { imageUrl: trimmed };
   }
@@ -129,10 +127,7 @@ function parseImageReference(reference: string): ParsedImageReference | null {
   return { imageUrl, x, y, width, height };
 }
 
-function parseCueBlock(
-  block: string,
-  inputIndex: number,
-): StoryboardFrame | null {
+function parseCueBlock(block: string, inputIndex: number): StoryboardFrame | null {
   const lines = block
     .split("\n")
     .map((line) => line.trim())

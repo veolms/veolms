@@ -8,8 +8,7 @@ import {
 
 export function ReadingModeEffects() {
   useEffect(() => {
-    const refresh = () =>
-      applyReadingModePreferences(readReadingModePreferences());
+    const refresh = () => applyReadingModePreferences(readReadingModePreferences());
     const handleStorage = (event: StorageEvent) => {
       if (event.key === READING_MODE_STORAGE_KEY || event.key === null) {
         refresh();
@@ -43,14 +42,8 @@ export function ReadingModeEffects() {
         data-reading-mode-effects
         aria-hidden="true"
       />
-      <div
-        className="reading-mode-effects reading-mode-effects__temperature"
-        aria-hidden="true"
-      />
-      <div
-        className="reading-mode-effects reading-mode-effects__colors"
-        aria-hidden="true"
-      />
+      <div className="reading-mode-effects reading-mode-effects__temperature" aria-hidden="true" />
+      <div className="reading-mode-effects reading-mode-effects__colors" aria-hidden="true" />
     </>
   );
 }

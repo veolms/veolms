@@ -40,9 +40,7 @@ export interface LessonVideoUploadProps {
   attachedActionLabel?: string;
   stackStatusBelow?: boolean;
   onPreviewFile?: (file: File | null) => void;
-  onMediaAttached: (
-    mediaAssetId: string,
-  ) => void | boolean | Promise<void | boolean>;
+  onMediaAttached: (mediaAssetId: string) => void | boolean | Promise<void | boolean>;
   onProcessingComplete?: (mediaAssetId: string) => void | Promise<void>;
   /**
    * Called once per uploaded asset when its generated thumbnail can be shown.
@@ -57,24 +55,14 @@ export interface LessonVideoUploadHandle {
 }
 
 type UploadPhase =
-  | "idle"
-  | "attached"
-  | "uploading"
-  | "confirming"
-  | "transcoding"
-  | "ready"
-  | "failed";
+  "idle" | "attached" | "uploading" | "confirming" | "transcoding" | "ready" | "failed";
 
 type StreamConnectionState =
   "idle" | "connecting" | "connected" | "reconnecting" | "terminal" | "closed";
 
 const THUMBNAIL_READY_PROGRESS_PERCENT = 10;
 
-const BUSY_PHASES = new Set<UploadPhase>([
-  "uploading",
-  "confirming",
-  "transcoding",
-]);
+const BUSY_PHASES = new Set<UploadPhase>(["uploading", "confirming", "transcoding"]);
 
 // 3D design system surface tokens: 0 borders, pure tactile depth via theme-adaptive shadows & highlights
 const MODAL_FRAME_CLASS =
@@ -92,397 +80,404 @@ const PRIMARY_ACTION_CLASS =
 const SECONDARY_ACTION_CLASS =
   "inline-flex h-10 items-center justify-center rounded-[10px] border-none bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--text)_13%,var(--surface))] active:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] px-5 text-[0.82rem] font-semibold text-(--text) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_10%,transparent))] transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap";
 
-export const LessonVideoUpload = forwardRef<
-  LessonVideoUploadHandle,
-  LessonVideoUploadProps
->(function LessonVideoUpload(
-  {
-    mediaAssetId,
-    visibility,
-    disabled = false,
-    hideUploadWhenAttached = false,
-    hideTrigger = false,
-    inline = false,
-    attachedActionLabel = "Change Video",
-    stackStatusBelow = false,
-    onPreviewFile,
-    onMediaAttached,
-    onProcessingComplete,
-    onThumbnailAvailable,
-  },
-  ref,
-) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
-  const previousActiveElementRef = useRef<HTMLElement | null>(null);
-  const requestIdRef = useRef(0);
-  const uploadAbortControllerRef = useRef<AbortController | null>(null);
-  const mountedRef = useRef(true);
-  const uploadedThisSessionRef = useRef(false);
-  const committedMediaIdRef = useRef<string | null>(null);
-  const committingMediaIdRef = useRef<string | null>(null);
-  const replacementForMediaIdRef = useRef<string | null>(null);
-  const progressMediaIdRef = useRef<string | null>(mediaAssetId ?? null);
-  const highestTranscodeProgressRef = useRef(0);
-  const reconnectTimerRef = useRef<number | null>(null);
-  const streamReconnectAttemptRef = useRef(0);
-  const onMediaAttachedRef = useRef(onMediaAttached);
-  const onProcessingCompleteRef = useRef(onProcessingComplete);
-  const onThumbnailAvailableRef = useRef(onThumbnailAvailable);
-  const thumbnailNotifiedMediaIdRef = useRef<string | null>(null);
+export const LessonVideoUpload = forwardRef<LessonVideoUploadHandle, LessonVideoUploadProps>(
+  function LessonVideoUpload(
+    {
+      mediaAssetId,
+      visibility,
+      disabled = false,
+      hideUploadWhenAttached = false,
+      hideTrigger = false,
+      inline = false,
+      attachedActionLabel = "Change Video",
+      stackStatusBelow = false,
+      onPreviewFile,
+      onMediaAttached,
+      onProcessingComplete,
+      onThumbnailAvailable,
+    },
+    ref,
+  ) {
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+    const previousActiveElementRef = useRef<HTMLElement | null>(null);
+    const requestIdRef = useRef(0);
+    const uploadAbortControllerRef = useRef<AbortController | null>(null);
+    const mountedRef = useRef(true);
+    const uploadedThisSessionRef = useRef(false);
+    const committedMediaIdRef = useRef<string | null>(null);
+    const committingMediaIdRef = useRef<string | null>(null);
+    const replacementForMediaIdRef = useRef<string | null>(null);
+    const progressMediaIdRef = useRef<string | null>(mediaAssetId ?? null);
+    const highestTranscodeProgressRef = useRef(0);
+    const reconnectTimerRef = useRef<number | null>(null);
+    const streamReconnectAttemptRef = useRef(0);
+    const onMediaAttachedRef = useRef(onMediaAttached);
+    const onProcessingCompleteRef = useRef(onProcessingComplete);
+    const onThumbnailAvailableRef = useRef(onThumbnailAvailable);
+    const thumbnailNotifiedMediaIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    onMediaAttachedRef.current = onMediaAttached;
-  }, [onMediaAttached]);
+    useEffect(() => {
+      onMediaAttachedRef.current = onMediaAttached;
+    }, [onMediaAttached]);
 
-  useEffect(() => {
-    onProcessingCompleteRef.current = onProcessingComplete;
-  }, [onProcessingComplete]);
+    useEffect(() => {
+      onProcessingCompleteRef.current = onProcessingComplete;
+    }, [onProcessingComplete]);
 
-  useEffect(() => {
-    onThumbnailAvailableRef.current = onThumbnailAvailable;
-  }, [onThumbnailAvailable]);
+    useEffect(() => {
+      onThumbnailAvailableRef.current = onThumbnailAvailable;
+    }, [onThumbnailAvailable]);
 
-  const clearScheduledReconnect = useCallback(() => {
-    if (reconnectTimerRef.current !== null) {
-      window.clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-  }, []);
-
-  const resetReconnectBackoff = useCallback(() => {
-    clearScheduledReconnect();
-    streamReconnectAttemptRef.current = 0;
-  }, [clearScheduledReconnect]);
-
-  const [isOpen, setIsOpen] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [activeMediaId, setActiveMediaId] = useState<string | null>(
-    mediaAssetId ?? null,
-  );
-  const [candidateMediaId, setCandidateMediaId] = useState<string | null>(null);
-  const [phase, setPhase] = useState<UploadPhase>(
-    mediaAssetId ? "attached" : "idle",
-  );
-  const [trackProgress, setTrackProgress] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadLoadedBytes, setUploadLoadedBytes] = useState(0);
-  const [transcodeProgress, setTranscodeProgress] = useState(0);
-  const [transcodeStatus, setTranscodeStatus] = useState<
-    VideoJobStatus | undefined
-  >();
-  const [progressStreamError, setProgressStreamError] = useState<string | null>(
-    null,
-  );
-  const [progressStreamAttempt, setProgressStreamAttempt] = useState(0);
-  const [streamErrorCount, setStreamErrorCount] = useState(0);
-  const [streamConnectionState, setStreamConnectionState] =
-    useState<StreamConnectionState>("idle");
-  const [hasReceivedProgress, setHasReceivedProgress] = useState(false);
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isReplacingVideo, setIsReplacingVideo] = useState(false);
-
-  // Leaving the page loses an in-flight upload, and a processed video is only
-  // attached to the lesson when this component sees processing complete.
-  useBeforeUnloadWarning(
-    isBusy(phase) || (phase === "ready" && candidateMediaId !== null),
-  );
-  const isUploadSurfaceActive = inline || isOpen;
-
-  useEffect(() => {
-    onPreviewFile?.(selectedFile);
-  }, [onPreviewFile, selectedFile]);
-
-  const commitCandidate = useCallback(async (candidateId: string) => {
-    if (
-      committedMediaIdRef.current === candidateId ||
-      committingMediaIdRef.current === candidateId
-    ) {
-      return;
-    }
-
-    committingMediaIdRef.current = candidateId;
-    setAttachmentError(null);
-    try {
-      const result = await onMediaAttachedRef.current(candidateId);
-      if (!mountedRef.current) return;
-
-      if (result === false) {
-        committedMediaIdRef.current = null;
-        setAttachmentError(
-          "The video is ready, but it could not be attached to this lesson.",
-        );
-        return;
+    const clearScheduledReconnect = useCallback(() => {
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
       }
+    }, []);
 
-      committedMediaIdRef.current = candidateId;
-      setCandidateMediaId((current) =>
-        current === candidateId ? null : current,
-      );
-      replacementForMediaIdRef.current = null;
-      setSelectedFile(null);
-      uploadedThisSessionRef.current = false;
-      setPhase("ready");
-      setTrackProgress(false);
-    } catch (error: unknown) {
-      if (!mountedRef.current) return;
-      committedMediaIdRef.current = null;
-      setAttachmentError(
-        error instanceof Error
-          ? error.message
-          : "The video is ready, but it could not be attached to this lesson.",
-      );
-    } finally {
-      if (committingMediaIdRef.current === candidateId) {
-        committingMediaIdRef.current = null;
-      }
-    }
-  }, []);
+    const resetReconnectBackoff = useCallback(() => {
+      clearScheduledReconnect();
+      streamReconnectAttemptRef.current = 0;
+    }, [clearScheduledReconnect]);
 
-  const notifyProcessingComplete = useCallback((mediaId: string) => {
-    try {
-      void Promise.resolve(onProcessingCompleteRef.current?.(mediaId)).catch(
-        () => {
-          // The video is already ready; a refresh failure must not regress the
-          // terminal UI state or turn a successful transcode into an error.
-        },
-      );
-    } catch {
-      // Optional reconciliation is best effort after the terminal event.
-    }
-  }, []);
+    const [isOpen, setIsOpen] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [activeMediaId, setActiveMediaId] = useState<string | null>(mediaAssetId ?? null);
+    const [candidateMediaId, setCandidateMediaId] = useState<string | null>(null);
+    const [phase, setPhase] = useState<UploadPhase>(mediaAssetId ? "attached" : "idle");
+    const [trackProgress, setTrackProgress] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadLoadedBytes, setUploadLoadedBytes] = useState(0);
+    const [transcodeProgress, setTranscodeProgress] = useState(0);
+    const [transcodeStatus, setTranscodeStatus] = useState<VideoJobStatus | undefined>();
+    const [progressStreamError, setProgressStreamError] = useState<string | null>(null);
+    const [progressStreamAttempt, setProgressStreamAttempt] = useState(0);
+    const [streamErrorCount, setStreamErrorCount] = useState(0);
+    const [streamConnectionState, setStreamConnectionState] =
+      useState<StreamConnectionState>("idle");
+    const [hasReceivedProgress, setHasReceivedProgress] = useState(false);
+    const [attachmentError, setAttachmentError] = useState<string | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [isReplacingVideo, setIsReplacingVideo] = useState(false);
 
-  useEffect(() => {
-    if (!activeMediaId || !trackProgress || typeof window === "undefined") {
-      return;
-    }
+    // Leaving the page loses an in-flight upload, and a processed video is only
+    // attached to the lesson when this component sees processing complete.
+    useBeforeUnloadWarning(isBusy(phase) || (phase === "ready" && candidateMediaId !== null));
+    const isUploadSurfaceActive = inline || isOpen;
 
-    if (typeof window.EventSource === "undefined") {
-      const message =
-        "Live transcoding updates are not supported in this browser.";
-      setProgressStreamError(message);
-      setStreamConnectionState("closed");
-      setTrackProgress(false);
-      return;
-    }
+    useEffect(() => {
+      onPreviewFile?.(selectedFile);
+    }, [onPreviewFile, selectedFile]);
 
-    if (progressMediaIdRef.current !== activeMediaId) {
-      progressMediaIdRef.current = activeMediaId;
-      highestTranscodeProgressRef.current = 0;
-    }
-
-    let source: EventSource;
-    try {
-      source = mediaService.createVideoJobProgressEventSource(activeMediaId);
-    } catch (error: unknown) {
-      setProgressStreamError(
-        error instanceof Error
-          ? error.message
-          : "The transcoding status could not be loaded.",
-      );
-      setStreamConnectionState("closed");
-      setTrackProgress(false);
-      return;
-    }
-    let receivedTerminalEvent = false;
-    let disposed = false;
-    setStreamConnectionState("connecting");
-
-    const onOpen = () => {
-      if (disposed) return;
-      resetReconnectBackoff();
-      setStreamConnectionState("connected");
-      setProgressStreamError(null);
-      setStreamErrorCount(0);
-    };
-
-    const onProgress = (event: MessageEvent<string>) => {
-      if (disposed) return;
-
-      let payload: unknown;
-      try {
-        payload = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-
-      const parsed = videoJobProgressResponseSchema.safeParse(payload);
-      if (!parsed.success) {
-        return;
-      }
-
-      const next: VideoJobProgressResponse = parsed.data;
-      setHasReceivedProgress(true);
-      setProgressStreamError(null);
-      setStreamConnectionState("connected");
-      setStreamErrorCount(0);
-      setTranscodeStatus(next.status);
-      highestTranscodeProgressRef.current = Math.max(
-        highestTranscodeProgressRef.current,
-        next.progressPercent,
-      );
-      setTranscodeProgress(highestTranscodeProgressRef.current);
-
+    const commitCandidate = useCallback(async (candidateId: string) => {
       if (
-        thumbnailNotifiedMediaIdRef.current !== activeMediaId &&
-        (next.status === "completed" ||
-          highestTranscodeProgressRef.current >=
-            THUMBNAIL_READY_PROGRESS_PERCENT)
+        committedMediaIdRef.current === candidateId ||
+        committingMediaIdRef.current === candidateId
       ) {
-        thumbnailNotifiedMediaIdRef.current = activeMediaId;
-        onThumbnailAvailableRef.current?.(activeMediaId);
+        return;
       }
 
-      if (next.status === "completed") {
-        receivedTerminalEvent = true;
-        setStreamConnectionState("terminal");
-        setUploadProgress(100);
-        setTranscodeProgress(100);
-        setErrorMessage(null);
+      committingMediaIdRef.current = candidateId;
+      setAttachmentError(null);
+      try {
+        const result = await onMediaAttachedRef.current(candidateId);
+        if (!mountedRef.current) return;
+
+        if (result === false) {
+          committedMediaIdRef.current = null;
+          setAttachmentError("The video is ready, but it could not be attached to this lesson.");
+          return;
+        }
+
+        committedMediaIdRef.current = candidateId;
+        setCandidateMediaId((current) => (current === candidateId ? null : current));
+        replacementForMediaIdRef.current = null;
+        setSelectedFile(null);
+        uploadedThisSessionRef.current = false;
         setPhase("ready");
         setTrackProgress(false);
-
-        const isPendingReplacement =
-          activeMediaId !== null &&
-          activeMediaId !== mediaAssetId &&
-          replacementForMediaIdRef.current === (mediaAssetId ?? null);
-        if (
-          isPendingReplacement &&
-          committedMediaIdRef.current !== activeMediaId
-        ) {
-          void commitCandidate(activeMediaId).then(() => {
-            notifyProcessingComplete(activeMediaId);
-          });
-        } else {
-          notifyProcessingComplete(activeMediaId);
-        }
-      } else if (next.status === "failed" || next.status === "cancelled") {
-        receivedTerminalEvent = true;
-        setStreamConnectionState("terminal");
-        setPhase("failed");
-        setTrackProgress(false);
-        setErrorMessage(
-          next.error ||
-            (next.status === "cancelled"
-              ? "Video processing was cancelled."
-              : "The video could not be transcoded."),
+      } catch (error: unknown) {
+        if (!mountedRef.current) return;
+        committedMediaIdRef.current = null;
+        setAttachmentError(
+          error instanceof Error
+            ? error.message
+            : "The video is ready, but it could not be attached to this lesson.",
         );
-      } else {
-        setErrorMessage(null);
-        setPhase("transcoding");
+      } finally {
+        if (committingMediaIdRef.current === candidateId) {
+          committingMediaIdRef.current = null;
+        }
       }
-    };
-    const scheduleStreamReconnect = (message: string) => {
-      if (disposed || receivedTerminalEvent) return;
+    }, []);
 
-      const reconnectAttempt = streamReconnectAttemptRef.current;
-      const reconnectDelay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt);
-      streamReconnectAttemptRef.current = Math.min(reconnectAttempt + 1, 6);
-      setStreamConnectionState("reconnecting");
-      setProgressStreamError(message);
-
-      if (reconnectTimerRef.current === null) {
-        reconnectTimerRef.current = window.setTimeout(() => {
-          reconnectTimerRef.current = null;
-          if (!disposed && mountedRef.current) {
-            setProgressStreamAttempt((attempt) => attempt + 1);
-          }
-        }, reconnectDelay);
+    const notifyProcessingComplete = useCallback((mediaId: string) => {
+      try {
+        void Promise.resolve(onProcessingCompleteRef.current?.(mediaId)).catch(() => {
+          // The video is already ready; a refresh failure must not regress the
+          // terminal UI state or turn a successful transcode into an error.
+        });
+      } catch {
+        // Optional reconciliation is best effort after the terminal event.
       }
-    };
+    }, []);
 
-    const onStreamError = (event: Event) => {
-      if (disposed || receivedTerminalEvent) return;
+    useEffect(() => {
+      if (!activeMediaId || !trackProgress || typeof window === "undefined") {
+        return;
+      }
 
-      const data = getEventData(event);
-      const closedReadyState = window.EventSource.CLOSED ?? 2;
-      setStreamErrorCount((count) => Math.min(count + 1, 3));
+      if (typeof window.EventSource === "undefined") {
+        const message = "Live transcoding updates are not supported in this browser.";
+        setProgressStreamError(message);
+        setStreamConnectionState("closed");
+        setTrackProgress(false);
+        return;
+      }
 
-      if (data) {
-        let message = "The transcoding status could not be loaded.";
+      if (progressMediaIdRef.current !== activeMediaId) {
+        progressMediaIdRef.current = activeMediaId;
+        highestTranscodeProgressRef.current = 0;
+      }
+
+      let source: EventSource;
+      try {
+        source = mediaService.createVideoJobProgressEventSource(activeMediaId);
+      } catch (error: unknown) {
+        setProgressStreamError(
+          error instanceof Error ? error.message : "The transcoding status could not be loaded.",
+        );
+        setStreamConnectionState("closed");
+        setTrackProgress(false);
+        return;
+      }
+      let receivedTerminalEvent = false;
+      let disposed = false;
+      setStreamConnectionState("connecting");
+
+      const onOpen = () => {
+        if (disposed) return;
+        resetReconnectBackoff();
+        setStreamConnectionState("connected");
+        setProgressStreamError(null);
+        setStreamErrorCount(0);
+      };
+
+      const onProgress = (event: MessageEvent<string>) => {
+        if (disposed) return;
+
+        let payload: unknown;
         try {
-          const parsed = JSON.parse(data) as { message?: unknown };
-          if (typeof parsed.message === "string" && parsed.message.trim()) {
-            message = parsed.message;
-          }
+          payload = JSON.parse(event.data);
         } catch {
-          // Keep the generic stream error for malformed server events.
+          return;
         }
 
-        // The API can close the first stream while the transcoding job is
-        // still being created. Treat the error as transient. If EventSource
-        // is still CONNECTING, its native reconnect loop owns the connection;
-        // creating another source here would produce parallel stream requests.
+        const parsed = videoJobProgressResponseSchema.safeParse(payload);
+        if (!parsed.success) {
+          return;
+        }
+
+        const next: VideoJobProgressResponse = parsed.data;
+        setHasReceivedProgress(true);
+        setProgressStreamError(null);
+        setStreamConnectionState("connected");
+        setStreamErrorCount(0);
+        setTranscodeStatus(next.status);
+        highestTranscodeProgressRef.current = Math.max(
+          highestTranscodeProgressRef.current,
+          next.progressPercent,
+        );
+        setTranscodeProgress(highestTranscodeProgressRef.current);
+
+        if (
+          thumbnailNotifiedMediaIdRef.current !== activeMediaId &&
+          (next.status === "completed" ||
+            highestTranscodeProgressRef.current >= THUMBNAIL_READY_PROGRESS_PERCENT)
+        ) {
+          thumbnailNotifiedMediaIdRef.current = activeMediaId;
+          onThumbnailAvailableRef.current?.(activeMediaId);
+        }
+
+        if (next.status === "completed") {
+          receivedTerminalEvent = true;
+          setStreamConnectionState("terminal");
+          setUploadProgress(100);
+          setTranscodeProgress(100);
+          setErrorMessage(null);
+          setPhase("ready");
+          setTrackProgress(false);
+
+          const isPendingReplacement =
+            activeMediaId !== null &&
+            activeMediaId !== mediaAssetId &&
+            replacementForMediaIdRef.current === (mediaAssetId ?? null);
+          if (isPendingReplacement && committedMediaIdRef.current !== activeMediaId) {
+            void commitCandidate(activeMediaId).then(() => {
+              notifyProcessingComplete(activeMediaId);
+            });
+          } else {
+            notifyProcessingComplete(activeMediaId);
+          }
+        } else if (next.status === "failed" || next.status === "cancelled") {
+          receivedTerminalEvent = true;
+          setStreamConnectionState("terminal");
+          setPhase("failed");
+          setTrackProgress(false);
+          setErrorMessage(
+            next.error ||
+              (next.status === "cancelled"
+                ? "Video processing was cancelled."
+                : "The video could not be transcoded."),
+          );
+        } else {
+          setErrorMessage(null);
+          setPhase("transcoding");
+        }
+      };
+      const scheduleStreamReconnect = (message: string) => {
+        if (disposed || receivedTerminalEvent) return;
+
+        const reconnectAttempt = streamReconnectAttemptRef.current;
+        const reconnectDelay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt);
+        streamReconnectAttemptRef.current = Math.min(reconnectAttempt + 1, 6);
         setStreamConnectionState("reconnecting");
         setProgressStreamError(message);
-        if (source.readyState === closedReadyState) {
-          scheduleStreamReconnect(message);
+
+        if (reconnectTimerRef.current === null) {
+          reconnectTimerRef.current = window.setTimeout(() => {
+            reconnectTimerRef.current = null;
+            if (!disposed && mountedRef.current) {
+              setProgressStreamAttempt((attempt) => attempt + 1);
+            }
+          }, reconnectDelay);
         }
-        return;
-      }
+      };
 
-      // EventSource reconnects automatically while the connection is in the
-      // CONNECTING state. Preserve the last known job state and percentage.
-      if (source.readyState !== closedReadyState) {
-        setStreamConnectionState("reconnecting");
-        setProgressStreamError(
-          "Live status updates are temporarily unavailable. Reconnecting…",
+      const onStreamError = (event: Event) => {
+        if (disposed || receivedTerminalEvent) return;
+
+        const data = getEventData(event);
+        const closedReadyState = window.EventSource.CLOSED ?? 2;
+        setStreamErrorCount((count) => Math.min(count + 1, 3));
+
+        if (data) {
+          let message = "The transcoding status could not be loaded.";
+          try {
+            const parsed = JSON.parse(data) as { message?: unknown };
+            if (typeof parsed.message === "string" && parsed.message.trim()) {
+              message = parsed.message;
+            }
+          } catch {
+            // Keep the generic stream error for malformed server events.
+          }
+
+          // The API can close the first stream while the transcoding job is
+          // still being created. Treat the error as transient. If EventSource
+          // is still CONNECTING, its native reconnect loop owns the connection;
+          // creating another source here would produce parallel stream requests.
+          setStreamConnectionState("reconnecting");
+          setProgressStreamError(message);
+          if (source.readyState === closedReadyState) {
+            scheduleStreamReconnect(message);
+          }
+          return;
+        }
+
+        // EventSource reconnects automatically while the connection is in the
+        // CONNECTING state. Preserve the last known job state and percentage.
+        if (source.readyState !== closedReadyState) {
+          setStreamConnectionState("reconnecting");
+          setProgressStreamError("Live status updates are temporarily unavailable. Reconnecting…");
+          return;
+        }
+
+        scheduleStreamReconnect(
+          "Live status updates are temporarily unavailable. Reconnecting automatically…",
         );
+      };
+      source.addEventListener("open", onOpen);
+      source.addEventListener("progress", onProgress);
+      source.addEventListener("error", onStreamError);
+      return () => {
+        disposed = true;
+        source.removeEventListener("open", onOpen);
+        source.removeEventListener("progress", onProgress);
+        source.removeEventListener("error", onStreamError);
+        source.close();
+        clearScheduledReconnect();
+      };
+    }, [
+      activeMediaId,
+      candidateMediaId,
+      commitCandidate,
+      clearScheduledReconnect,
+      mediaAssetId,
+      notifyProcessingComplete,
+      progressStreamAttempt,
+      resetReconnectBackoff,
+      trackProgress,
+    ]);
+
+    useEffect(() => {
+      mountedRef.current = true;
+      return () => {
+        mountedRef.current = false;
+        requestIdRef.current += 1;
+        uploadAbortControllerRef.current?.abort();
+      };
+    }, []);
+
+    useEffect(() => {
+      // A candidate becomes the current lesson asset only after a completed
+      // terminal event invokes onMediaAttached and the parent sends the new ID
+      // back through this prop. Do not reset the candidate while that commit is
+      // in flight.
+      if (candidateMediaId && mediaAssetId !== candidateMediaId) {
+        // The normal replacement render keeps the original current media ID.
+        // If another tab/editor changed the lesson binding, stop tracking this
+        // local candidate so it cannot overwrite the newer binding.
+        if (replacementForMediaIdRef.current === (mediaAssetId ?? null)) return;
+
+        setCandidateMediaId(null);
+        replacementForMediaIdRef.current = null;
+        setSelectedFile(null);
+        setActiveMediaId(mediaAssetId ?? null);
+        setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
+        setTranscodeProgress(0);
+        setTranscodeStatus(undefined);
+        setProgressStreamError(null);
+        setStreamConnectionState("idle");
+        setHasReceivedProgress(false);
+        setAttachmentError(null);
+        setPhase(mediaAssetId ? "attached" : "idle");
+        setErrorMessage(null);
         return;
       }
 
-      scheduleStreamReconnect(
-        "Live status updates are temporarily unavailable. Reconnecting automatically…",
-      );
-    };
-    source.addEventListener("open", onOpen);
-    source.addEventListener("progress", onProgress);
-    source.addEventListener("error", onStreamError);
-    return () => {
-      disposed = true;
-      source.removeEventListener("open", onOpen);
-      source.removeEventListener("progress", onProgress);
-      source.removeEventListener("error", onStreamError);
-      source.close();
-      clearScheduledReconnect();
-    };
-  }, [
-    activeMediaId,
-    candidateMediaId,
-    commitCandidate,
-    clearScheduledReconnect,
-    mediaAssetId,
-    notifyProcessingComplete,
-    progressStreamAttempt,
-    resetReconnectBackoff,
-    trackProgress,
-  ]);
+      if (candidateMediaId && mediaAssetId === candidateMediaId) {
+        // The parent may optimistically render the candidate before its lesson
+        // update has finished. Keep the candidate state until the persistence
+        // callback explicitly succeeds, otherwise a failed save is mistaken for
+        // a completed attachment.
+        if (committedMediaIdRef.current !== candidateMediaId) return;
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      requestIdRef.current += 1;
-      uploadAbortControllerRef.current?.abort();
-    };
-  }, []);
+        setCandidateMediaId(null);
+        replacementForMediaIdRef.current = null;
+        setSelectedFile(null);
+        uploadedThisSessionRef.current = false;
+        setPhase("ready");
+        setTrackProgress(false);
+        setProgressStreamError(null);
+        setAttachmentError(null);
+        setErrorMessage(null);
+        return;
+      }
 
-  useEffect(() => {
-    // A candidate becomes the current lesson asset only after a completed
-    // terminal event invokes onMediaAttached and the parent sends the new ID
-    // back through this prop. Do not reset the candidate while that commit is
-    // in flight.
-    if (candidateMediaId && mediaAssetId !== candidateMediaId) {
-      // The normal replacement render keeps the original current media ID.
-      // If another tab/editor changed the lesson binding, stop tracking this
-      // local candidate so it cannot overwrite the newer binding.
-      if (replacementForMediaIdRef.current === (mediaAssetId ?? null)) return;
+      if (mediaAssetId === activeMediaId) return;
 
-      setCandidateMediaId(null);
-      replacementForMediaIdRef.current = null;
-      setSelectedFile(null);
       setActiveMediaId(mediaAssetId ?? null);
       setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
       setTranscodeProgress(0);
@@ -493,178 +488,378 @@ export const LessonVideoUpload = forwardRef<
       setAttachmentError(null);
       setPhase(mediaAssetId ? "attached" : "idle");
       setErrorMessage(null);
-      return;
-    }
+    }, [activeMediaId, candidateMediaId, isUploadSurfaceActive, mediaAssetId]);
 
-    if (candidateMediaId && mediaAssetId === candidateMediaId) {
-      // The parent may optimistically render the candidate before its lesson
-      // update has finished. Keep the candidate state until the persistence
-      // callback explicitly succeeds, otherwise a failed save is mistaken for
-      // a completed attachment.
-      if (committedMediaIdRef.current !== candidateMediaId) return;
+    useEffect(() => {
+      if (!isOpen || typeof document === "undefined") return undefined;
 
-      setCandidateMediaId(null);
-      replacementForMediaIdRef.current = null;
-      setSelectedFile(null);
-      uploadedThisSessionRef.current = false;
-      setPhase("ready");
-      setTrackProgress(false);
-      setProgressStreamError(null);
-      setAttachmentError(null);
-      setErrorMessage(null);
-      return;
-    }
+      previousActiveElementRef.current = document.activeElement as HTMLElement;
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      document.body.classList.add("modal-open");
+      document.body.setAttribute("data-modal-open", "true");
 
-    if (mediaAssetId === activeMediaId) return;
+      const focusTimer = window.setTimeout(() => {
+        closeButtonRef.current?.focus();
+      }, 0);
 
-    setActiveMediaId(mediaAssetId ?? null);
-    setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
-    setTranscodeProgress(0);
-    setTranscodeStatus(undefined);
-    setProgressStreamError(null);
-    setStreamConnectionState("idle");
-    setHasReceivedProgress(false);
-    setAttachmentError(null);
-    setPhase(mediaAssetId ? "attached" : "idle");
-    setErrorMessage(null);
-  }, [activeMediaId, candidateMediaId, isUploadSurfaceActive, mediaAssetId]);
+      return () => {
+        window.clearTimeout(focusTimer);
+        document.body.style.overflow = previousOverflow;
+        document.body.classList.remove("modal-open");
+        document.body.removeAttribute("data-modal-open");
+        previousActiveElementRef.current?.focus();
+      };
+    }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen || typeof document === "undefined") return undefined;
-
-    previousActiveElementRef.current = document.activeElement as HTMLElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.body.classList.add("modal-open");
-    document.body.setAttribute("data-modal-open", "true");
-
-    const focusTimer = window.setTimeout(() => {
-      closeButtonRef.current?.focus();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(focusTimer);
-      document.body.style.overflow = previousOverflow;
-      document.body.classList.remove("modal-open");
-      document.body.removeAttribute("data-modal-open");
-      previousActiveElementRef.current?.focus();
-    };
-  }, [isOpen]);
-
-  const openModal = useCallback(() => {
-    if (disabled) return;
-    setIsReplacingVideo(false);
-    if (activeMediaId && phase === "idle") {
-      setPhase("attached");
-    }
-    if (activeMediaId) setTrackProgress(true);
-    if (!activeMediaId) setStreamConnectionState("idle");
-    setIsOpen(true);
-  }, [activeMediaId, disabled, phase]);
-
-  const closeModal = useCallback(() => {
-    setIsOpen(false);
-    setIsDragging(false);
-    setIsReplacingVideo(false);
-  }, []);
-
-  const retryProcessingStatus = useCallback(() => {
-    if (!activeMediaId) return;
-    resetReconnectBackoff();
-    setErrorMessage(null);
-    setProgressStreamError(null);
-    setStreamErrorCount(0);
-    setStreamConnectionState("connecting");
-    if (phase === "attached") setPhase("transcoding");
-    setTrackProgress(true);
-    setProgressStreamAttempt((attempt) => attempt + 1);
-  }, [activeMediaId, phase, resetReconnectBackoff]);
-
-  const retryTranscoding = useCallback(async () => {
-    if (!activeMediaId) return;
-    resetReconnectBackoff();
-    setErrorMessage(null);
-    setProgressStreamError(null);
-    setStreamErrorCount(0);
-    setStreamConnectionState("connecting");
-    setHasReceivedProgress(false);
-    setTranscodeProgress(0);
-    highestTranscodeProgressRef.current = 0;
-    setTranscodeStatus("queued");
-    setPhase("transcoding");
-    setTrackProgress(false);
-    try {
-      await mediaService.retryTranscode(activeMediaId);
-      setTrackProgress(true);
-      setProgressStreamAttempt((attempt) => attempt + 1);
-    } catch (error) {
-      setPhase("failed");
-      setTrackProgress(false);
-      setStreamConnectionState("closed");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Retry could not be started.",
-      );
-    }
-  }, [activeMediaId, resetReconnectBackoff]);
-
-  const cancelTranscoding = useCallback(async () => {
-    if (!activeMediaId) return;
-    setErrorMessage(null);
-    setTrackProgress(false);
-    resetReconnectBackoff();
-    try {
-      await mediaService.cancelTranscode(activeMediaId);
-      setProgressStreamAttempt((attempt) => attempt + 1);
-      setTranscodeStatus("cancelled");
-      setPhase("failed");
-      setErrorMessage("Video processing was cancelled.");
-    } catch (error) {
-      setTrackProgress(true);
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to cancel video processing.",
-      );
-    }
-  }, [activeMediaId, resetReconnectBackoff]);
-
-  const retryAttachment = useCallback(async () => {
-    if (!candidateMediaId || phase !== "ready") return;
-    await commitCandidate(candidateMediaId);
-  }, [candidateMediaId, commitCandidate, phase]);
-
-  const validateFile = useCallback((file: File): string | null => {
-    if (!file.type.toLowerCase().startsWith("video/")) {
-      return "Please choose a video file.";
-    }
-    if (file.size <= 0) {
-      return "The selected video is empty.";
-    }
-    if (file.size > MEDIA_MAX_SIZES.video) {
-      return "Video files must be 5 GB or smaller.";
-    }
-    return null;
-  }, []);
-
-  const selectFile = useCallback(
-    (file: File) => {
-      if (isBusy(phase)) return;
-
-      const validationError = validateFile(file);
-      if (validationError) {
-        setErrorMessage(validationError);
-        return;
+    const openModal = useCallback(() => {
+      if (disabled) return;
+      setIsReplacingVideo(false);
+      if (activeMediaId && phase === "idle") {
+        setPhase("attached");
       }
+      if (activeMediaId) setTrackProgress(true);
+      if (!activeMediaId) setStreamConnectionState("idle");
+      setIsOpen(true);
+    }, [activeMediaId, disabled, phase]);
 
+    const closeModal = useCallback(() => {
+      setIsOpen(false);
+      setIsDragging(false);
+      setIsReplacingVideo(false);
+    }, []);
+
+    const retryProcessingStatus = useCallback(() => {
+      if (!activeMediaId) return;
+      resetReconnectBackoff();
+      setErrorMessage(null);
+      setProgressStreamError(null);
+      setStreamErrorCount(0);
+      setStreamConnectionState("connecting");
+      if (phase === "attached") setPhase("transcoding");
+      setTrackProgress(true);
+      setProgressStreamAttempt((attempt) => attempt + 1);
+    }, [activeMediaId, phase, resetReconnectBackoff]);
+
+    const retryTranscoding = useCallback(async () => {
+      if (!activeMediaId) return;
+      resetReconnectBackoff();
+      setErrorMessage(null);
+      setProgressStreamError(null);
+      setStreamErrorCount(0);
+      setStreamConnectionState("connecting");
+      setHasReceivedProgress(false);
+      setTranscodeProgress(0);
+      highestTranscodeProgressRef.current = 0;
+      setTranscodeStatus("queued");
+      setPhase("transcoding");
+      setTrackProgress(false);
+      try {
+        await mediaService.retryTranscode(activeMediaId);
+        setTrackProgress(true);
+        setProgressStreamAttempt((attempt) => attempt + 1);
+      } catch (error) {
+        setPhase("failed");
+        setTrackProgress(false);
+        setStreamConnectionState("closed");
+        setErrorMessage(error instanceof Error ? error.message : "Retry could not be started.");
+      }
+    }, [activeMediaId, resetReconnectBackoff]);
+
+    const cancelTranscoding = useCallback(async () => {
+      if (!activeMediaId) return;
+      setErrorMessage(null);
+      setTrackProgress(false);
+      resetReconnectBackoff();
+      try {
+        await mediaService.cancelTranscode(activeMediaId);
+        setProgressStreamAttempt((attempt) => attempt + 1);
+        setTranscodeStatus("cancelled");
+        setPhase("failed");
+        setErrorMessage("Video processing was cancelled.");
+      } catch (error) {
+        setTrackProgress(true);
+        setErrorMessage(
+          error instanceof Error ? error.message : "Unable to cancel video processing.",
+        );
+      }
+    }, [activeMediaId, resetReconnectBackoff]);
+
+    const retryAttachment = useCallback(async () => {
+      if (!candidateMediaId || phase !== "ready") return;
+      await commitCandidate(candidateMediaId);
+    }, [candidateMediaId, commitCandidate, phase]);
+
+    const validateFile = useCallback((file: File): string | null => {
+      if (!file.type.toLowerCase().startsWith("video/")) {
+        return "Please choose a video file.";
+      }
+      if (file.size <= 0) {
+        return "The selected video is empty.";
+      }
+      if (file.size > MEDIA_MAX_SIZES.video) {
+        return "Video files must be 5 GB or smaller.";
+      }
+      return null;
+    }, []);
+
+    const selectFile = useCallback(
+      (file: File) => {
+        if (isBusy(phase)) return;
+
+        const validationError = validateFile(file);
+        if (validationError) {
+          setErrorMessage(validationError);
+          return;
+        }
+
+        uploadedThisSessionRef.current = false;
+        resetReconnectBackoff();
+        committedMediaIdRef.current = null;
+        replacementForMediaIdRef.current = null;
+        setCandidateMediaId(null);
+        setActiveMediaId(mediaAssetId ?? null);
+        onPreviewFile?.(file);
+        setSelectedFile(file);
+        setErrorMessage(null);
+        setUploadProgress(0);
+        setUploadLoadedBytes(0);
+        setTranscodeProgress(0);
+        setTranscodeStatus(undefined);
+        setProgressStreamError(null);
+        setStreamErrorCount(0);
+        setStreamConnectionState("idle");
+        setHasReceivedProgress(false);
+        setAttachmentError(null);
+        setPhase("idle");
+        setTrackProgress(false);
+      },
+      [mediaAssetId, onPreviewFile, phase, resetReconnectBackoff, validateFile],
+    );
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        open: (file) => {
+          if (disabled) return;
+          if (inline) {
+            if (file) {
+              selectFile(file);
+              return;
+            }
+            fileInputRef.current?.click();
+            return;
+          }
+          openModal();
+          if (file) selectFile(file);
+        },
+      }),
+      [disabled, inline, openModal, selectFile],
+    );
+
+    const startUpload = useCallback(
+      async (file: File) => {
+        if (isBusy(phase)) return;
+
+        const validationError = validateFile(file);
+        if (validationError) {
+          setErrorMessage(validationError);
+          if (!activeMediaId) setPhase("failed");
+          return;
+        }
+
+        uploadAbortControllerRef.current?.abort();
+        const uploadAbortController = new AbortController();
+        uploadAbortControllerRef.current = uploadAbortController;
+        const requestId = ++requestIdRef.current;
+        uploadedThisSessionRef.current = true;
+        resetReconnectBackoff();
+        committedMediaIdRef.current = null;
+        replacementForMediaIdRef.current = mediaAssetId ?? null;
+        onPreviewFile?.(file);
+        setSelectedFile(file);
+        setIsReplacingVideo(false);
+        setErrorMessage(null);
+        setUploadProgress(0);
+        setUploadLoadedBytes(0);
+        setTranscodeProgress(0);
+        setHasReceivedProgress(false);
+        setStreamErrorCount(0);
+        setStreamConnectionState("idle");
+        setAttachmentError(null);
+        setPhase("uploading");
+        setTrackProgress(false);
+
+        try {
+          const presigned = await mediaService.presignVideoUpload({
+            filename: file.name,
+            contentType: file.type,
+            fileSize: file.size,
+            visibility,
+          });
+
+          if (!mountedRef.current || requestId !== requestIdRef.current) return;
+
+          await mediaService.uploadFileToPresignedUrl(
+            presigned.uploadUrl,
+            file,
+            ({ loadedBytes, percent }) => {
+              if (mountedRef.current && requestId === requestIdRef.current) {
+                setUploadProgress(percent);
+                setUploadLoadedBytes(loadedBytes);
+              }
+            },
+            uploadAbortController.signal,
+          );
+
+          if (!mountedRef.current || requestId !== requestIdRef.current) return;
+          setPhase("confirming");
+
+          await mediaService.confirmUpload(presigned.mediaAssetId);
+
+          if (!mountedRef.current || requestId !== requestIdRef.current) return;
+
+          setActiveMediaId(presigned.mediaAssetId);
+          setCandidateMediaId(presigned.mediaAssetId);
+          uploadedThisSessionRef.current = true;
+          setTranscodeStatus("queued");
+          setPhase("transcoding");
+          setHasReceivedProgress(false);
+          setAttachmentError(null);
+          setTrackProgress(true);
+        } catch (error: unknown) {
+          if (
+            !mountedRef.current ||
+            requestId !== requestIdRef.current ||
+            (error instanceof Error && error.name === "AbortError")
+          ) {
+            return;
+          }
+
+          setPhase("failed");
+          setTrackProgress(false);
+          setErrorMessage(resolveUploadError(error));
+        } finally {
+          if (uploadAbortControllerRef.current === uploadAbortController) {
+            uploadAbortControllerRef.current = null;
+          }
+        }
+      },
+      [
+        activeMediaId,
+        mediaAssetId,
+        onPreviewFile,
+        phase,
+        resetReconnectBackoff,
+        validateFile,
+        visibility,
+      ],
+    );
+
+    const handleFileInputChange = useCallback(
+      (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (file) selectFile(file);
+      },
+      [selectFile],
+    );
+
+    const handleDrop = useCallback(
+      (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        setIsDragging(false);
+        if (isBusy(phase)) return;
+
+        const file = event.dataTransfer.files?.[0];
+        if (file) selectFile(file);
+      },
+      [phase, selectFile],
+    );
+
+    const handleDragOver = useCallback(
+      (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        if (!isBusy(phase)) setIsDragging(true);
+      },
+      [phase],
+    );
+
+    const canChooseFile = !isBusy(phase);
+    const uploadStage = getUploadStage(
+      phase,
+      selectedFile,
+      activeMediaId,
+      uploadedThisSessionRef.current,
+    );
+    const showFilePicker = Boolean(
+      !isBusy(phase) &&
+      (phase === "failed" || (activeMediaId && !candidateMediaId && !selectedFile)),
+    );
+    const isStreamError = Boolean(
+      progressStreamError || (errorMessage && errorMessage.toLowerCase().includes("stream")),
+    );
+    const isPendingReplacement = Boolean(
+      candidateMediaId && mediaAssetId && candidateMediaId !== mediaAssetId,
+    );
+    const isReplacementFlow = Boolean(mediaAssetId && (selectedFile || candidateMediaId));
+    const canRetryStatus = Boolean(activeMediaId && isStreamError);
+    const canRetryTranscoding = Boolean(
+      activeMediaId &&
+      (transcodeStatus === "failed" ||
+        transcodeStatus === "cancelled" ||
+        (phase === "failed" && !isStreamError)),
+    );
+    const canRetryAttachment = Boolean(candidateMediaId && phase === "ready" && attachmentError);
+    const canRetry = Boolean(
+      activeMediaId && (canRetryStatus || canRetryTranscoding || canRetryAttachment),
+    );
+    const canChooseAnotherFile = Boolean(canRetryAttachment && !isBusy(phase));
+    const retryButtonLabel = canRetryAttachment
+      ? "Retry Attachment"
+      : canRetryTranscoding
+        ? "Retry Transcoding"
+        : "Retry Status";
+
+    const [isRetrying, setIsRetrying] = useState(false);
+
+    const handleRetry = useCallback(async () => {
+      if (!activeMediaId || isRetrying) return;
+      setIsRetrying(true);
+      try {
+        if (canRetryAttachment) {
+          await retryAttachment();
+        } else if (canRetryTranscoding) {
+          await retryTranscoding();
+        } else {
+          retryProcessingStatus();
+        }
+      } finally {
+        setIsRetrying(false);
+      }
+    }, [
+      activeMediaId,
+      canRetryAttachment,
+      canRetryTranscoding,
+      isRetrying,
+      retryProcessingStatus,
+      retryAttachment,
+      retryTranscoding,
+    ]);
+
+    const statusLabel = getStatusLabel(phase, transcodeStatus, streamConnectionState);
+
+    const cancelUpload = useCallback(() => {
+      requestIdRef.current += 1;
+      uploadAbortControllerRef.current?.abort();
+      uploadAbortControllerRef.current = null;
       uploadedThisSessionRef.current = false;
       resetReconnectBackoff();
-      committedMediaIdRef.current = null;
       replacementForMediaIdRef.current = null;
       setCandidateMediaId(null);
       setActiveMediaId(mediaAssetId ?? null);
-      onPreviewFile?.(file);
-      setSelectedFile(file);
-      setErrorMessage(null);
+      onPreviewFile?.(null);
+      setSelectedFile(null);
       setUploadProgress(0);
       setUploadLoadedBytes(0);
       setTranscodeProgress(0);
@@ -673,318 +868,80 @@ export const LessonVideoUpload = forwardRef<
       setStreamErrorCount(0);
       setStreamConnectionState("idle");
       setHasReceivedProgress(false);
-      setAttachmentError(null);
-      setPhase("idle");
-      setTrackProgress(false);
-    },
-    [mediaAssetId, onPreviewFile, phase, resetReconnectBackoff, validateFile],
-  );
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      open: (file) => {
-        if (disabled) return;
-        if (inline) {
-          if (file) {
-            selectFile(file);
-            return;
-          }
-          fileInputRef.current?.click();
-          return;
-        }
-        openModal();
-        if (file) selectFile(file);
-      },
-    }),
-    [disabled, inline, openModal, selectFile],
-  );
-
-  const startUpload = useCallback(
-    async (file: File) => {
-      if (isBusy(phase)) return;
-
-      const validationError = validateFile(file);
-      if (validationError) {
-        setErrorMessage(validationError);
-        if (!activeMediaId) setPhase("failed");
-        return;
-      }
-
-      uploadAbortControllerRef.current?.abort();
-      const uploadAbortController = new AbortController();
-      uploadAbortControllerRef.current = uploadAbortController;
-      const requestId = ++requestIdRef.current;
-      uploadedThisSessionRef.current = true;
-      resetReconnectBackoff();
-      committedMediaIdRef.current = null;
-      replacementForMediaIdRef.current = mediaAssetId ?? null;
-      onPreviewFile?.(file);
-      setSelectedFile(file);
-      setIsReplacingVideo(false);
       setErrorMessage(null);
-      setUploadProgress(0);
-      setUploadLoadedBytes(0);
-      setTranscodeProgress(0);
-      setHasReceivedProgress(false);
-      setStreamErrorCount(0);
-      setStreamConnectionState("idle");
-      setAttachmentError(null);
-      setPhase("uploading");
-      setTrackProgress(false);
+      setPhase(mediaAssetId ? "attached" : "idle");
+      setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
+      setIsReplacingVideo(false);
+    }, [isUploadSurfaceActive, mediaAssetId, onPreviewFile, resetReconnectBackoff]);
 
-      try {
-        const presigned = await mediaService.presignVideoUpload({
-          filename: file.name,
-          contentType: file.type,
-          fileSize: file.size,
-          visibility,
-        });
+    const removeSelectedFile = useCallback(() => {
+      onPreviewFile?.(null);
+      setSelectedFile(null);
+      setErrorMessage(null);
+      setIsReplacingVideo(false);
+      setPhase(mediaAssetId ? "attached" : "idle");
+    }, [mediaAssetId, onPreviewFile]);
 
-        if (!mountedRef.current || requestId !== requestIdRef.current) return;
+    const displayErrorMessage =
+      errorMessage ||
+      attachmentError ||
+      (progressStreamError &&
+      (hasReceivedProgress || streamConnectionState === "closed" || streamErrorCount >= 3)
+        ? progressStreamError
+        : null) ||
+      (phase === "failed" ? "Video processing could not be completed." : null);
 
-        await mediaService.uploadFileToPresignedUrl(
-          presigned.uploadUrl,
-          file,
-          ({ loadedBytes, percent }) => {
-            if (mountedRef.current && requestId === requestIdRef.current) {
-              setUploadProgress(percent);
-              setUploadLoadedBytes(loadedBytes);
-            }
-          },
-          uploadAbortController.signal,
-        );
+    const hasVideo = Boolean(activeMediaId || mediaAssetId);
 
-        if (!mountedRef.current || requestId !== requestIdRef.current) return;
-        setPhase("confirming");
-
-        await mediaService.confirmUpload(presigned.mediaAssetId);
-
-        if (!mountedRef.current || requestId !== requestIdRef.current) return;
-
-        setActiveMediaId(presigned.mediaAssetId);
-        setCandidateMediaId(presigned.mediaAssetId);
-        uploadedThisSessionRef.current = true;
-        setTranscodeStatus("queued");
-        setPhase("transcoding");
-        setHasReceivedProgress(false);
-        setAttachmentError(null);
-        setTrackProgress(true);
-      } catch (error: unknown) {
-        if (
-          !mountedRef.current ||
-          requestId !== requestIdRef.current ||
-          (error instanceof Error && error.name === "AbortError")
-        ) {
-          return;
-        }
-
-        setPhase("failed");
-        setTrackProgress(false);
-        setErrorMessage(resolveUploadError(error));
-      } finally {
-        if (uploadAbortControllerRef.current === uploadAbortController) {
-          uploadAbortControllerRef.current = null;
-        }
-      }
-    },
-    [
-      activeMediaId,
-      mediaAssetId,
-      onPreviewFile,
-      phase,
-      resetReconnectBackoff,
-      validateFile,
-      visibility,
-    ],
-  );
-
-  const handleFileInputChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      event.target.value = "";
-      if (file) selectFile(file);
-    },
-    [selectFile],
-  );
-
-  const handleDrop = useCallback(
-    (event: DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      setIsDragging(false);
-      if (isBusy(phase)) return;
-
-      const file = event.dataTransfer.files?.[0];
-      if (file) selectFile(file);
-    },
-    [phase, selectFile],
-  );
-
-  const handleDragOver = useCallback(
-    (event: DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      if (!isBusy(phase)) setIsDragging(true);
-    },
-    [phase],
-  );
-
-  const canChooseFile = !isBusy(phase);
-  const uploadStage = getUploadStage(
-    phase,
-    selectedFile,
-    activeMediaId,
-    uploadedThisSessionRef.current,
-  );
-  const showFilePicker = Boolean(
-    !isBusy(phase) &&
-    (phase === "failed" ||
-      (activeMediaId && !candidateMediaId && !selectedFile)),
-  );
-  const isStreamError = Boolean(
-    progressStreamError ||
-    (errorMessage && errorMessage.toLowerCase().includes("stream")),
-  );
-  const isPendingReplacement = Boolean(
-    candidateMediaId && mediaAssetId && candidateMediaId !== mediaAssetId,
-  );
-  const isReplacementFlow = Boolean(
-    mediaAssetId && (selectedFile || candidateMediaId),
-  );
-  const canRetryStatus = Boolean(activeMediaId && isStreamError);
-  const canRetryTranscoding = Boolean(
-    activeMediaId &&
-    (transcodeStatus === "failed" ||
-      transcodeStatus === "cancelled" ||
-      (phase === "failed" && !isStreamError)),
-  );
-  const canRetryAttachment = Boolean(
-    candidateMediaId && phase === "ready" && attachmentError,
-  );
-  const canRetry = Boolean(
-    activeMediaId &&
-    (canRetryStatus || canRetryTranscoding || canRetryAttachment),
-  );
-  const canChooseAnotherFile = Boolean(canRetryAttachment && !isBusy(phase));
-  const retryButtonLabel = canRetryAttachment
-    ? "Retry Attachment"
-    : canRetryTranscoding
-      ? "Retry Transcoding"
-      : "Retry Status";
-
-  const [isRetrying, setIsRetrying] = useState(false);
-
-  const handleRetry = useCallback(async () => {
-    if (!activeMediaId || isRetrying) return;
-    setIsRetrying(true);
-    try {
-      if (canRetryAttachment) {
-        await retryAttachment();
-      } else if (canRetryTranscoding) {
-        await retryTranscoding();
-      } else {
-        retryProcessingStatus();
-      }
-    } finally {
-      setIsRetrying(false);
-    }
-  }, [
-    activeMediaId,
-    canRetryAttachment,
-    canRetryTranscoding,
-    isRetrying,
-    retryProcessingStatus,
-    retryAttachment,
-    retryTranscoding,
-  ]);
-
-  const statusLabel = getStatusLabel(
-    phase,
-    transcodeStatus,
-    streamConnectionState,
-  );
-
-  const cancelUpload = useCallback(() => {
-    requestIdRef.current += 1;
-    uploadAbortControllerRef.current?.abort();
-    uploadAbortControllerRef.current = null;
-    uploadedThisSessionRef.current = false;
-    resetReconnectBackoff();
-    replacementForMediaIdRef.current = null;
-    setCandidateMediaId(null);
-    setActiveMediaId(mediaAssetId ?? null);
-    onPreviewFile?.(null);
-    setSelectedFile(null);
-    setUploadProgress(0);
-    setUploadLoadedBytes(0);
-    setTranscodeProgress(0);
-    setTranscodeStatus(undefined);
-    setProgressStreamError(null);
-    setStreamErrorCount(0);
-    setStreamConnectionState("idle");
-    setHasReceivedProgress(false);
-    setErrorMessage(null);
-    setPhase(mediaAssetId ? "attached" : "idle");
-    setTrackProgress(Boolean(mediaAssetId && isUploadSurfaceActive));
-    setIsReplacingVideo(false);
-  }, [
-    isUploadSurfaceActive,
-    mediaAssetId,
-    onPreviewFile,
-    resetReconnectBackoff,
-  ]);
-
-  const removeSelectedFile = useCallback(() => {
-    onPreviewFile?.(null);
-    setSelectedFile(null);
-    setErrorMessage(null);
-    setIsReplacingVideo(false);
-    setPhase(mediaAssetId ? "attached" : "idle");
-  }, [mediaAssetId, onPreviewFile]);
-
-  const displayErrorMessage =
-    errorMessage ||
-    attachmentError ||
-    (progressStreamError &&
-    (hasReceivedProgress ||
-      streamConnectionState === "closed" ||
-      streamErrorCount >= 3)
-      ? progressStreamError
-      : null) ||
-    (phase === "failed" ? "Video processing could not be completed." : null);
-
-  const hasVideo = Boolean(activeMediaId || mediaAssetId);
-
-  const stageContent = isReplacingVideo ? (
-    <div className="min-w-0 space-y-3.5 sm:space-y-4">
-      <div
-        className={`flex items-center justify-between gap-3 p-3 sm:p-3.5 ${RAISED_CARD_CLASS}`}
-      >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-emerald-500/15 text-emerald-400">
-            <CheckCircle size={16} weight="fill" />
-          </div>
-          <div className="min-w-0">
-            <p className="m-0 truncate text-[0.78rem] sm:text-[0.8rem] font-semibold text-(--text)">
-              Replacing current video
-            </p>
-            <p className="m-0 mt-0.5 truncate text-[0.7rem] sm:text-[0.72rem] text-(--muted)">
-              Your active video stays live until the replacement completes.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            onPreviewFile?.(null);
-            setSelectedFile(null);
-            setIsReplacingVideo(false);
-          }}
-          className="shrink-0 cursor-pointer rounded-[7px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2.5 py-1 text-[0.72rem] font-semibold text-(--text) transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,transparent)] active:scale-95"
+    const stageContent = isReplacingVideo ? (
+      <div className="min-w-0 space-y-3.5 sm:space-y-4">
+        <div
+          className={`flex items-center justify-between gap-3 p-3 sm:p-3.5 ${RAISED_CARD_CLASS}`}
         >
-          Keep current
-        </button>
-      </div>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-emerald-500/15 text-emerald-400">
+              <CheckCircle size={16} weight="fill" />
+            </div>
+            <div className="min-w-0">
+              <p className="m-0 truncate text-[0.78rem] font-semibold text-(--text) sm:text-[0.8rem]">
+                Replacing current video
+              </p>
+              <p className="m-0 mt-0.5 truncate text-[0.7rem] text-(--muted) sm:text-[0.72rem]">
+                Your active video stays live until the replacement completes.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onPreviewFile?.(null);
+              setSelectedFile(null);
+              setIsReplacingVideo(false);
+            }}
+            className="shrink-0 cursor-pointer rounded-[7px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2.5 py-1 text-[0.72rem] font-semibold text-(--text) transition-all hover:bg-[color-mix(in_srgb,var(--text)_12%,transparent)] active:scale-95"
+          >
+            Keep current
+          </button>
+        </div>
 
+        <SelectVideoStage
+          canChooseFile={canChooseFile}
+          isDragging={isDragging}
+          minimal={inline}
+          onChooseFile={() => fileInputRef.current?.click()}
+          onUploadFile={() => {
+            if (selectedFile) void startUpload(selectedFile);
+          }}
+          onDragEnter={handleDragOver}
+          onDragLeave={() => setIsDragging(false)}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onRemoveFile={removeSelectedFile}
+          selectedFile={selectedFile}
+          isReplacement={true}
+        />
+      </div>
+    ) : uploadStage === "select" ? (
       <SelectVideoStage
         canChooseFile={canChooseFile}
         isDragging={isDragging}
@@ -999,337 +956,292 @@ export const LessonVideoUpload = forwardRef<
         onDrop={handleDrop}
         onRemoveFile={removeSelectedFile}
         selectedFile={selectedFile}
-        isReplacement={true}
+        isReplacement={false}
       />
-    </div>
-  ) : uploadStage === "select" ? (
-    <SelectVideoStage
-      canChooseFile={canChooseFile}
-      isDragging={isDragging}
-      minimal={inline}
-      onChooseFile={() => fileInputRef.current?.click()}
-      onUploadFile={() => {
-        if (selectedFile) void startUpload(selectedFile);
-      }}
-      onDragEnter={handleDragOver}
-      onDragLeave={() => setIsDragging(false)}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      onRemoveFile={removeSelectedFile}
-      selectedFile={selectedFile}
-      isReplacement={false}
-    />
-  ) : uploadStage === "uploading" ? (
-    <UploadProgressStage
-      file={selectedFile}
-      loadedBytes={uploadLoadedBytes}
-      phase={phase}
-      progress={uploadProgress}
-      embedded={inline}
-    />
-  ) : (
-    <TranscodingProgressStage
-      file={selectedFile}
-      mediaAttached={!selectedFile && Boolean(activeMediaId)}
-      progress={hasReceivedProgress ? transcodeProgress : null}
-      status={transcodeStatus}
-      errorMessage={isStreamError ? null : errorMessage}
-      isReplacement={isPendingReplacement}
-      embedded={inline}
-      onReplace={
-        mediaAssetId && !isReplacingVideo && !selectedFile
-          ? () => fileInputRef.current?.click()
-          : undefined
-      }
-    />
-  );
-
-  return (
-    <>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="video/*"
-        className="hidden"
-        disabled={!canChooseFile}
-        aria-label="Choose a video file"
-        onChange={handleFileInputChange}
+    ) : uploadStage === "uploading" ? (
+      <UploadProgressStage
+        file={selectedFile}
+        loadedBytes={uploadLoadedBytes}
+        phase={phase}
+        progress={uploadProgress}
+        embedded={inline}
       />
+    ) : (
+      <TranscodingProgressStage
+        file={selectedFile}
+        mediaAttached={!selectedFile && Boolean(activeMediaId)}
+        progress={hasReceivedProgress ? transcodeProgress : null}
+        status={transcodeStatus}
+        errorMessage={isStreamError ? null : errorMessage}
+        isReplacement={isPendingReplacement}
+        embedded={inline}
+        onReplace={
+          mediaAssetId && !isReplacingVideo && !selectedFile
+            ? () => fileInputRef.current?.click()
+            : undefined
+        }
+      />
+    );
 
-      {!hideTrigger ? (
-        <div
-          className={`${stackStatusBelow ? "flex flex-col items-center gap-1.5" : "flex flex-wrap items-center gap-2"} max-[768px]:w-full`}
-        >
-          {(!hideUploadWhenAttached || activeMediaId) && (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={openModal}
-              style={{
-                fontSize: "0.80rem",
-                fontWeight: 700,
-                height: "34px",
-                borderRadius: "8px",
-                gap: "6px",
-                paddingLeft: "16px",
-                paddingRight: "16px",
-              }}
-              className={`${stackStatusBelow ? "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)] text-[0.8rem] font-bold" : "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)]"} transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1 cursor-pointer`}
-            >
-              {hasVideo ? <PlayCircle size={15} /> : <UploadSimple size={15} />}
-              <span>{hasVideo ? attachedActionLabel : "Upload"}</span>
-            </button>
-          )}
-          {isReplacementFlow && mediaAssetId ? (
-            <span
-              aria-live="polite"
-              className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.76rem] text-(--muted)"
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <CheckCircle
-                  size={14}
-                  weight="fill"
-                  className="text-emerald-400"
-                />
-                Current video kept
-              </span>
-              <span className="text-[color-mix(in_srgb,var(--muted)_70%,transparent)]">
-                · Replacement: {statusLabel || "Ready to upload"}
-              </span>
-            </span>
-          ) : (
-            activeMediaId && (
+    return (
+      <>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          disabled={!canChooseFile}
+          aria-label="Choose a video file"
+          onChange={handleFileInputChange}
+        />
+
+        {!hideTrigger ? (
+          <div
+            className={`${stackStatusBelow ? "flex flex-col items-center gap-1.5" : "flex flex-wrap items-center gap-2"} max-[768px]:w-full`}
+          >
+            {(!hideUploadWhenAttached || activeMediaId) && (
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={openModal}
+                style={{
+                  fontSize: "0.80rem",
+                  fontWeight: 700,
+                  height: "34px",
+                  borderRadius: "8px",
+                  gap: "6px",
+                  paddingLeft: "16px",
+                  paddingRight: "16px",
+                }}
+                className={`${stackStatusBelow ? "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[0_3px_10px_var(--accent-shadow)]" : "inline-flex h-8.5 items-center justify-center gap-1.5 rounded-[8px] border-none bg-(--accent) px-4 text-[0.8rem] font-bold text-(--on-accent,#ffffff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_25%,transparent),0_2px_6px_rgba(0,0,0,0.2)]"} cursor-pointer transition-all duration-150 hover:bg-(--accent-hover,var(--accent)) active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 max-[768px]:flex-1`}
+              >
+                {hasVideo ? <PlayCircle size={15} /> : <UploadSimple size={15} />}
+                <span>{hasVideo ? attachedActionLabel : "Upload"}</span>
+              </button>
+            )}
+            {isReplacementFlow && mediaAssetId ? (
               <span
                 aria-live="polite"
-                className="inline-flex items-center gap-1.5 text-[0.76rem] text-(--muted)"
+                className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.76rem] text-(--muted)"
               >
-                {phase === "transcoding" && (
-                  <CircleNotch
-                    size={14}
-                    className="animate-spin text-(--accent)"
-                  />
-                )}
-                {phase === "ready" && (
-                  <CheckCircle
-                    size={14}
-                    weight="fill"
-                    className="text-emerald-400"
-                  />
-                )}
-                {statusLabel}
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckCircle size={14} weight="fill" className="text-emerald-400" />
+                  Current video kept
+                </span>
+                <span className="text-[color-mix(in_srgb,var(--muted)_70%,transparent)]">
+                  · Replacement: {statusLabel || "Ready to upload"}
+                </span>
               </span>
-            )
-          )}
-        </div>
-      ) : null}
-
-      {inline &&
-      (!activeMediaId ||
-        isReplacingVideo ||
-        Boolean(selectedFile) ||
-        isBusy(phase) ||
-        phase === "failed" ||
-        Boolean(candidateMediaId)) ? (
-        <div
-          className="min-w-0 space-y-3.5 sm:space-y-4"
-          data-inline-video-upload="true"
-        >
-          {isReplacementFlow && phase !== "idle" && (
-            <div className="flex items-start gap-2.5 rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] p-3.5 text-[0.74rem] leading-relaxed text-(--text-secondary) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]">
-              <CheckCircle
-                size={18}
-                weight="fill"
-                className="mt-0.5 shrink-0 text-emerald-400"
-              />
-              <span>
-                Your current lesson video stays available until this replacement
-                is ready.
-              </span>
-            </div>
-          )}
-
-          {displayErrorMessage && (
-            <div
-              role="alert"
-              className={`flex flex-col items-start justify-between gap-3 p-3.5 sm:flex-row sm:items-center sm:p-4 ${inline ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface))" : RAISED_CARD_CLASS}`}
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <WarningCircle
-                  size={19}
-                  weight="fill"
-                  className="shrink-0 text-amber-400"
-                />
-                <p className="m-0 break-words text-[0.82rem] font-semibold leading-snug text-(--text)">
-                  {displayErrorMessage}
-                </p>
-              </div>
-              {canRetry && (
-                <button
-                  type="button"
-                  disabled={isRetrying}
-                  onClick={() => void handleRetry()}
-                  className="inline-flex h-8.5 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3.5 text-[0.74rem] font-semibold text-(--text) transition-all hover:bg-[color-mix(in_srgb,var(--text)_16%,transparent)] active:scale-95 disabled:opacity-50"
+            ) : (
+              activeMediaId && (
+                <span
+                  aria-live="polite"
+                  className="inline-flex items-center gap-1.5 text-[0.76rem] text-(--muted)"
                 >
-                  <ArrowsClockwise
-                    size={14}
-                    weight="bold"
-                    className={isRetrying ? "animate-spin" : ""}
-                  />
-                  {isRetrying ? "Retrying…" : retryButtonLabel}
-                </button>
-              )}
-            </div>
-          )}
+                  {phase === "transcoding" && (
+                    <CircleNotch size={14} className="animate-spin text-(--accent)" />
+                  )}
+                  {phase === "ready" && (
+                    <CheckCircle size={14} weight="fill" className="text-emerald-400" />
+                  )}
+                  {statusLabel}
+                </span>
+              )
+            )}
+          </div>
+        ) : null}
 
-          {stageContent}
-        </div>
-      ) : null}
+        {inline &&
+        (!activeMediaId ||
+          isReplacingVideo ||
+          Boolean(selectedFile) ||
+          isBusy(phase) ||
+          phase === "failed" ||
+          Boolean(candidateMediaId)) ? (
+          <div className="min-w-0 space-y-3.5 sm:space-y-4" data-inline-video-upload="true">
+            {isReplacementFlow && phase !== "idle" && (
+              <div className="flex items-start gap-2.5 rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] p-3.5 text-[0.74rem] leading-relaxed text-(--text-secondary) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]">
+                <CheckCircle size={18} weight="fill" className="mt-0.5 shrink-0 text-emerald-400" />
+                <span>
+                  Your current lesson video stays available until this replacement is ready.
+                </span>
+              </div>
+            )}
 
-      {isOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-[1200] flex items-center justify-center overflow-y-auto bg-black/60 p-2 sm:p-4 backdrop-blur-[8px]"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="lesson-video-upload-title"
-              aria-busy={isBusy(phase)}
-              data-modal-open="true"
-              data-lesson-video-modal=""
-            >
-              <div className={MODAL_FRAME_CLASS}>
-                <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2 sm:px-6 sm:pt-6 sm:pb-3">
-                  <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-                    <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-[10px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_22%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_10%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))]">
-                      <PlayCircle size={19} weight="fill" />
-                    </div>
-                    <div className="min-w-0">
-                      <h2
-                        id="lesson-video-upload-title"
-                        className="m-0 truncate text-[0.98rem] sm:text-[1.05rem] font-semibold tracking-[-0.01em] text-(--text)"
-                      >
-                        {isReplacingVideo
-                          ? "Replace Lesson Video"
-                          : phase === "ready" || phase === "attached"
-                            ? "Lesson Video"
-                            : "Upload Lesson Video"}
-                      </h2>
-                    </div>
-                  </div>
-                  <button
-                    ref={closeButtonRef}
-                    type="button"
-                    onClick={closeModal}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent),0_1px_2px_color-mix(in_srgb,var(--text)_8%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] hover:text-(--text) active:scale-95 cursor-pointer"
-                    aria-label="Close video upload dialog"
-                  >
-                    <X size={16} weight="bold" />
-                  </button>
+            {displayErrorMessage && (
+              <div
+                role="alert"
+                className={`flex flex-col items-start justify-between gap-3 p-3.5 sm:flex-row sm:items-center sm:p-4 ${inline ? "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface))" : RAISED_CARD_CLASS}`}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <WarningCircle size={19} weight="fill" className="shrink-0 text-amber-400" />
+                  <p className="m-0 text-[0.82rem] leading-snug font-semibold break-words text-(--text)">
+                    {displayErrorMessage}
+                  </p>
                 </div>
+                {canRetry && (
+                  <button
+                    type="button"
+                    disabled={isRetrying}
+                    onClick={() => void handleRetry()}
+                    className="inline-flex h-8.5 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3.5 text-[0.74rem] font-semibold text-(--text) transition-all hover:bg-[color-mix(in_srgb,var(--text)_16%,transparent)] active:scale-95 disabled:opacity-50"
+                  >
+                    <ArrowsClockwise
+                      size={14}
+                      weight="bold"
+                      className={isRetrying ? "animate-spin" : ""}
+                    />
+                    {isRetrying ? "Retrying…" : retryButtonLabel}
+                  </button>
+                )}
+              </div>
+            )}
 
-                <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-3 sm:px-6 sm:py-4">
-                  {isReplacementFlow && (
-                    <div className="mb-3.5 flex items-start gap-2.5 rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] p-3.5 text-[0.74rem] leading-relaxed text-(--text-secondary) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]">
-                      <CheckCircle
-                        size={18}
-                        weight="fill"
-                        className="mt-0.5 shrink-0 text-emerald-400"
-                      />
-                      <span>
-                        Your current lesson binding is unchanged while this
-                        replacement is uploaded and processed.
-                      </span>
-                    </div>
-                  )}
+            {stageContent}
+          </div>
+        ) : null}
 
-                  {/* Top-level Error Alert with Retry button - NEVER requires scrolling */}
-                  {displayErrorMessage && (
-                    <div
-                      role="alert"
-                      className={`mb-3.5 flex flex-col items-start justify-between gap-3 p-3.5 sm:flex-row sm:items-center sm:p-4 ${RAISED_CARD_CLASS}`}
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-[10px] bg-amber-500/15 text-amber-500 shadow-[inset_0_1px_0_color-mix(in_srgb,white_15%,transparent)] dark:text-amber-400 sm:h-9 sm:w-9">
-                          <WarningCircle size={19} weight="fill" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="m-0 break-words text-[0.82rem] font-semibold leading-snug text-(--text) sm:text-[0.85rem]">
-                            {displayErrorMessage}
-                          </p>
-                          <p className="m-0 mt-0.5 text-[0.7rem] text-(--muted) sm:text-[0.72rem]">
-                            {canRetryAttachment
-                              ? "The video is ready, but the lesson update did not save. Retry attaching it."
-                              : canRetryTranscoding
-                                ? "You can restart the video transcoding job."
-                                : isStreamError
-                                  ? "The video state is preserved. Reconnect to resume live updates."
-                                  : "Review the error and choose another video if needed."}
-                          </p>
-                        </div>
-                      </div>
-                      {canRetry && (
-                        <button
-                          type="button"
-                          disabled={isRetrying}
-                          onClick={() => void handleRetry()}
-                          className="inline-flex h-8.5 w-full shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3.5 text-[0.74rem] font-semibold text-(--text) shadow-none transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_16%,transparent)] active:scale-95 disabled:opacity-50 sm:w-auto sm:text-[0.76rem]"
-                        >
-                          <ArrowsClockwise
-                            size={14}
-                            weight="bold"
-                            className={isRetrying ? "animate-spin" : ""}
-                          />
-                          <span>
-                            {isRetrying ? "Retrying…" : retryButtonLabel}
-                          </span>
-                        </button>
-                      )}
-                      {canChooseAnotherFile && (
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="inline-flex h-8.5 w-full shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-3.5 text-[0.74rem] font-semibold text-(--text) shadow-none transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] active:scale-95 sm:w-auto sm:text-[0.76rem]"
-                        >
-                          Choose another video
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {phase === "ready" && !isReplacingVideo && (
-                    <div
-                      className={`mb-3.5 flex items-center gap-3 p-3.5 sm:p-4 ${RAISED_CARD_CLASS}`}
-                    >
-                      <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-[10px] bg-emerald-500/15 text-emerald-400 shadow-[inset_0_1px_0_color-mix(in_srgb,white_15%,transparent)] sm:h-9 sm:w-9">
-                        <CheckCircle size={19} weight="fill" />
+        {isOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-[1200] flex items-center justify-center overflow-y-auto bg-black/60 p-2 backdrop-blur-[8px] sm:p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="lesson-video-upload-title"
+                aria-busy={isBusy(phase)}
+                data-modal-open="true"
+                data-lesson-video-modal=""
+              >
+                <div className={MODAL_FRAME_CLASS}>
+                  <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2 sm:px-6 sm:pt-6 sm:pb-3">
+                    <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_22%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_10%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))] sm:h-9 sm:w-9">
+                        <PlayCircle size={19} weight="fill" />
                       </div>
                       <div className="min-w-0">
-                        <p className="m-0 break-words text-[0.82rem] font-semibold leading-snug text-(--text) sm:text-[0.85rem]">
-                          Video is ready
-                        </p>
-                        <p className="m-0 mt-0.5 text-[0.7rem] text-(--muted) sm:text-[0.72rem]">
-                          This video is ready and can be used when publishing
-                          the course.
-                        </p>
+                        <h2
+                          id="lesson-video-upload-title"
+                          className="m-0 truncate text-[0.98rem] font-semibold tracking-[-0.01em] text-(--text) sm:text-[1.05rem]"
+                        >
+                          {isReplacingVideo
+                            ? "Replace Lesson Video"
+                            : phase === "ready" || phase === "attached"
+                              ? "Lesson Video"
+                              : "Upload Lesson Video"}
+                        </h2>
                       </div>
                     </div>
-                  )}
-
-                  {stageContent}
-                </div>
-
-                <div className="flex items-center justify-end gap-2 sm:gap-2.5 px-4 pb-4 pt-2 sm:px-6 sm:pb-6 sm:pt-2">
-                  {isReplacingVideo && !selectedFile && (
                     <button
+                      ref={closeButtonRef}
                       type="button"
-                      onClick={() => setIsReplacingVideo(false)}
-                      className={`${SECONDARY_ACTION_CLASS} w-[100px]`}
+                      onClick={closeModal}
+                      className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent),0_1px_2px_color-mix(in_srgb,var(--text)_8%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] hover:text-(--text) active:scale-95"
+                      aria-label="Close video upload dialog"
                     >
-                      Cancel
+                      <X size={16} weight="bold" />
                     </button>
-                  )}
+                  </div>
 
-                  {(uploadStage === "select" || isReplacingVideo) &&
-                    selectedFile && (
+                  <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-3 sm:px-6 sm:py-4">
+                    {isReplacementFlow && (
+                      <div className="mb-3.5 flex items-start gap-2.5 rounded-[12px] border-none bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] p-3.5 text-[0.74rem] leading-relaxed text-(--text-secondary) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_8%,transparent))]">
+                        <CheckCircle
+                          size={18}
+                          weight="fill"
+                          className="mt-0.5 shrink-0 text-emerald-400"
+                        />
+                        <span>
+                          Your current lesson binding is unchanged while this replacement is
+                          uploaded and processed.
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Top-level Error Alert with Retry button - NEVER requires scrolling */}
+                    {displayErrorMessage && (
+                      <div
+                        role="alert"
+                        className={`mb-3.5 flex flex-col items-start justify-between gap-3 p-3.5 sm:flex-row sm:items-center sm:p-4 ${RAISED_CARD_CLASS}`}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-[10px] bg-amber-500/15 text-amber-500 shadow-[inset_0_1px_0_color-mix(in_srgb,white_15%,transparent)] sm:h-9 sm:w-9 dark:text-amber-400">
+                            <WarningCircle size={19} weight="fill" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="m-0 text-[0.82rem] leading-snug font-semibold break-words text-(--text) sm:text-[0.85rem]">
+                              {displayErrorMessage}
+                            </p>
+                            <p className="m-0 mt-0.5 text-[0.7rem] text-(--muted) sm:text-[0.72rem]">
+                              {canRetryAttachment
+                                ? "The video is ready, but the lesson update did not save. Retry attaching it."
+                                : canRetryTranscoding
+                                  ? "You can restart the video transcoding job."
+                                  : isStreamError
+                                    ? "The video state is preserved. Reconnect to resume live updates."
+                                    : "Review the error and choose another video if needed."}
+                            </p>
+                          </div>
+                        </div>
+                        {canRetry && (
+                          <button
+                            type="button"
+                            disabled={isRetrying}
+                            onClick={() => void handleRetry()}
+                            className="inline-flex h-8.5 w-full shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3.5 text-[0.74rem] font-semibold text-(--text) shadow-none transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_16%,transparent)] active:scale-95 disabled:opacity-50 sm:w-auto sm:text-[0.76rem]"
+                          >
+                            <ArrowsClockwise
+                              size={14}
+                              weight="bold"
+                              className={isRetrying ? "animate-spin" : ""}
+                            />
+                            <span>{isRetrying ? "Retrying…" : retryButtonLabel}</span>
+                          </button>
+                        )}
+                        {canChooseAnotherFile && (
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="inline-flex h-8.5 w-full shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-3.5 text-[0.74rem] font-semibold text-(--text) shadow-none transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_13%,transparent)] active:scale-95 sm:w-auto sm:text-[0.76rem]"
+                          >
+                            Choose another video
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {phase === "ready" && !isReplacingVideo && (
+                      <div
+                        className={`mb-3.5 flex items-center gap-3 p-3.5 sm:p-4 ${RAISED_CARD_CLASS}`}
+                      >
+                        <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-[10px] bg-emerald-500/15 text-emerald-400 shadow-[inset_0_1px_0_color-mix(in_srgb,white_15%,transparent)] sm:h-9 sm:w-9">
+                          <CheckCircle size={19} weight="fill" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="m-0 text-[0.82rem] leading-snug font-semibold break-words text-(--text) sm:text-[0.85rem]">
+                            Video is ready
+                          </p>
+                          <p className="m-0 mt-0.5 text-[0.7rem] text-(--muted) sm:text-[0.72rem]">
+                            This video is ready and can be used when publishing the course.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {stageContent}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 px-4 pt-2 pb-4 sm:gap-2.5 sm:px-6 sm:pt-2 sm:pb-6">
+                    {isReplacingVideo && !selectedFile && (
+                      <button
+                        type="button"
+                        onClick={() => setIsReplacingVideo(false)}
+                        className={`${SECONDARY_ACTION_CLASS} w-[100px]`}
+                      >
+                        Cancel
+                      </button>
+                    )}
+
+                    {(uploadStage === "select" || isReplacingVideo) && selectedFile && (
                       <button
                         type="button"
                         onClick={removeSelectedFile}
@@ -1339,49 +1251,49 @@ export const LessonVideoUpload = forwardRef<
                       </button>
                     )}
 
-                  {(uploadStage === "select" || isReplacingVideo) &&
-                  selectedFile ? (
-                    <button
-                      type="button"
-                      onClick={() => void startUpload(selectedFile)}
-                      className={`${PRIMARY_ACTION_CLASS} min-w-[120px] px-5`}
-                    >
-                      {isReplacingVideo ? "Upload Replacement" : "Upload Video"}
-                    </button>
-                  ) : uploadStage === "uploading" ? (
-                    <button
-                      type="button"
-                      onClick={cancelUpload}
-                      className={`${SECONDARY_ACTION_CLASS} min-w-[120px] px-5`}
-                    >
-                      Cancel Upload
-                    </button>
-                  ) : phase === "transcoding" ? (
-                    <button
-                      type="button"
-                      onClick={() => void cancelTranscoding()}
-                      className={`${SECONDARY_ACTION_CLASS} min-w-[140px] px-5`}
-                    >
-                      Cancel Processing
-                    </button>
-                  ) : !isReplacingVideo ? (
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className={`${SECONDARY_ACTION_CLASS} w-[100px]`}
-                    >
-                      Close
-                    </button>
-                  ) : null}
+                    {(uploadStage === "select" || isReplacingVideo) && selectedFile ? (
+                      <button
+                        type="button"
+                        onClick={() => void startUpload(selectedFile)}
+                        className={`${PRIMARY_ACTION_CLASS} min-w-[120px] px-5`}
+                      >
+                        {isReplacingVideo ? "Upload Replacement" : "Upload Video"}
+                      </button>
+                    ) : uploadStage === "uploading" ? (
+                      <button
+                        type="button"
+                        onClick={cancelUpload}
+                        className={`${SECONDARY_ACTION_CLASS} min-w-[120px] px-5`}
+                      >
+                        Cancel Upload
+                      </button>
+                    ) : phase === "transcoding" ? (
+                      <button
+                        type="button"
+                        onClick={() => void cancelTranscoding()}
+                        className={`${SECONDARY_ACTION_CLASS} min-w-[140px] px-5`}
+                      >
+                        Cancel Processing
+                      </button>
+                    ) : !isReplacingVideo ? (
+                      <button
+                        type="button"
+                        onClick={closeModal}
+                        className={`${SECONDARY_ACTION_CLASS} w-[100px]`}
+                      >
+                        Close
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
-    </>
-  );
-});
+              </div>,
+              document.body,
+            )
+          : null}
+      </>
+    );
+  },
+);
 
 interface SelectVideoStageProps {
   canChooseFile: boolean;
@@ -1415,7 +1327,7 @@ function SelectVideoStage({
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
       {!minimal && (
-        <p className="m-0 break-words text-[0.78rem] sm:text-[0.8rem] leading-relaxed text-(--muted)">
+        <p className="m-0 text-[0.78rem] leading-relaxed break-words text-(--muted) sm:text-[0.8rem]">
           {isReplacement
             ? "Choose a replacement video. Your current video stays available until the new one is ready."
             : "Upload a video for this lesson."}{" "}
@@ -1460,10 +1372,7 @@ function SelectVideoStage({
             aria-disabled={!canChooseFile}
             aria-label="Video upload dropzone"
             onKeyDown={(event) => {
-              if (
-                canChooseFile &&
-                (event.key === "Enter" || event.key === " ")
-              ) {
+              if (canChooseFile && (event.key === "Enter" || event.key === " ")) {
                 event.preventDefault();
                 onChooseFile();
               }
@@ -1489,9 +1398,7 @@ function SelectVideoStage({
             <button
               type="button"
               disabled={!canChooseFile}
-              aria-label={
-                isReplacement ? "Choose Replacement Video" : "Choose Video File"
-              }
+              aria-label={isReplacement ? "Choose Replacement Video" : "Choose Video File"}
               onClick={(event) => {
                 event.stopPropagation();
                 onChooseFile();
@@ -1544,19 +1451,19 @@ function UploadProgressStage({
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="m-0 text-[0.84rem] sm:text-[0.86rem] font-semibold text-(--text)">
+            <h3 className="m-0 text-[0.84rem] font-semibold text-(--text) sm:text-[0.86rem]">
               Uploading video
             </h3>
-            <p className="m-0 mt-0.5 sm:mt-1 text-[0.72rem] sm:text-[0.74rem] text-(--muted)">
+            <p className="m-0 mt-0.5 text-[0.72rem] text-(--muted) sm:mt-1 sm:text-[0.74rem]">
               Please keep this window open while uploading.
             </p>
           </div>
-          <span className="shrink-0 text-[0.88rem] sm:text-[0.92rem] font-bold text-(--text) tabular-nums">
+          <span className="shrink-0 text-[0.88rem] font-bold text-(--text) tabular-nums sm:text-[0.92rem]">
             {progress}%
           </span>
         </div>
         <ProgressBar label="Video upload progress" value={progress} />
-        <div className="mt-2.5 flex items-center justify-between gap-3 text-[0.7rem] sm:text-[0.72rem] text-(--muted) font-medium">
+        <div className="mt-2.5 flex items-center justify-between gap-3 text-[0.7rem] font-medium text-(--muted) sm:text-[0.72rem]">
           <span>
             {formatBytes(loadedBytes)} of {formatBytes(file?.size ?? 0)}
           </span>
@@ -1592,8 +1499,7 @@ function TranscodingProgressStage({
   // final output/attachment work. Only the durable completed status means the
   // playback files are verified and safe to show as Ready.
   const isReady = status === "completed";
-  const isFailed =
-    status === "failed" || status === "cancelled" || Boolean(errorMessage);
+  const isFailed = status === "failed" || status === "cancelled" || Boolean(errorMessage);
   const badge = isReady ? "Ready" : isFailed ? "Failed" : "Processing";
 
   return (
@@ -1683,16 +1589,12 @@ function VideoFileSummary({
       <VideoThumbnail file={file} />
       <div className="min-w-0 flex-1">
         <p
-          className="m-0 truncate text-[0.78rem] sm:text-[0.82rem] font-medium text-(--text)"
-          title={
-            file?.name ||
-            (mediaAttached ? "Current lesson video" : "Selected video")
-          }
+          className="m-0 truncate text-[0.78rem] font-medium text-(--text) sm:text-[0.82rem]"
+          title={file?.name || (mediaAttached ? "Current lesson video" : "Selected video")}
         >
-          {file?.name ||
-            (mediaAttached ? "Current lesson video" : "Selected video")}
+          {file?.name || (mediaAttached ? "Current lesson video" : "Selected video")}
         </p>
-        <p className="m-0 mt-0.5 text-[0.7rem] sm:text-[0.72rem] text-(--muted)">
+        <p className="m-0 mt-0.5 text-[0.7rem] text-(--muted) sm:text-[0.72rem]">
           {file
             ? `${formatBytes(file.size)}${videoDimensions ? ` • ${videoDimensions}` : ""}`
             : "Existing lesson media"}
@@ -1702,9 +1604,7 @@ function VideoFileSummary({
         <button
           type="button"
           onClick={onReplace}
-          aria-label={
-            mediaAttached ? "Choose Replacement Video" : "Replace video"
-          }
+          aria-label={mediaAttached ? "Choose Replacement Video" : "Replace video"}
           className="inline-flex h-7.5 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[8px] border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2.5 text-[0.72rem] font-semibold text-(--text) shadow-none transition-all hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] active:scale-95"
         >
           <ArrowsClockwise size={13} weight="bold" />
@@ -1724,19 +1624,19 @@ function VideoFileSummary({
       )}
       {badge === "Processing" ? (
         <span
-          className="group/processing-badge relative shrink-0 rounded-[8px] outline-none focus-visible:outline-2 focus-visible:outline-(--accent) focus-visible:outline-offset-2"
+          className="group/processing-badge relative shrink-0 rounded-[8px] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
           tabIndex={0}
           aria-describedby={processingTooltipId}
         >
           <span
-            className={`block rounded-[8px] border-none px-2 py-0.5 sm:px-2.5 sm:py-1 text-[0.68rem] sm:text-[0.7rem] font-semibold ${badgeClasses}`}
+            className={`block rounded-[8px] border-none px-2 py-0.5 text-[0.68rem] font-semibold sm:px-2.5 sm:py-1 sm:text-[0.7rem] ${badgeClasses}`}
           >
             {badge}
           </span>
           <span
             id={processingTooltipId}
             role="tooltip"
-            className="pointer-events-none absolute right-0 top-full z-20 mt-1.5 hidden w-max max-w-56 items-center gap-1.5 rounded bg-black/90 px-2 py-1 text-xs font-medium text-white shadow-lg group-hover/processing-badge:flex group-focus-visible/processing-badge:flex"
+            className="pointer-events-none absolute top-full right-0 z-20 mt-1.5 hidden w-max max-w-56 items-center gap-1.5 rounded bg-black/90 px-2 py-1 text-xs font-medium text-white shadow-lg group-hover/processing-badge:flex group-focus-visible/processing-badge:flex"
           >
             {processingProgress === null
               ? "Waiting for progress update"
@@ -1746,7 +1646,7 @@ function VideoFileSummary({
       ) : (
         badge && (
           <span
-            className={`shrink-0 rounded-[8px] border-none px-2 py-0.5 sm:px-2.5 sm:py-1 text-[0.68rem] sm:text-[0.7rem] font-semibold ${badgeClasses}`}
+            className={`shrink-0 rounded-[8px] border-none px-2 py-0.5 text-[0.68rem] font-semibold sm:px-2.5 sm:py-1 sm:text-[0.7rem] ${badgeClasses}`}
           >
             {badge}
           </span>
@@ -1757,7 +1657,7 @@ function VideoFileSummary({
           type="button"
           onClick={onRemove}
           aria-label="Remove selected video"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) active:scale-95 cursor-pointer"
+          className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--surface)_80%,transparent)] transition-all hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)] hover:text-(--text) active:scale-95"
         >
           <X size={15} weight="bold" />
         </button>
@@ -1782,14 +1682,14 @@ function VideoThumbnail({ file }: { file: File | null }) {
 
   if (!previewUrl) {
     return (
-      <div className="flex h-11 w-18 sm:h-12 sm:w-20 shrink-0 items-center justify-center rounded-[9px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_18%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_8%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_10%,transparent))]">
+      <div className="flex h-11 w-18 shrink-0 items-center justify-center rounded-[9px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_18%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_8%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_10%,transparent))] sm:h-12 sm:w-20">
         <FileVideo size={21} weight="duotone" />
       </div>
     );
   }
 
   return (
-    <div className="relative h-11 w-18 sm:h-12 sm:w-20 shrink-0 overflow-hidden rounded-[9px] border-none bg-black/60 shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]">
+    <div className="relative h-11 w-18 shrink-0 overflow-hidden rounded-[9px] border-none bg-black/60 shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)] sm:h-12 sm:w-20">
       <video
         src={previewUrl}
         muted
@@ -1801,24 +1701,18 @@ function VideoThumbnail({ file }: { file: File | null }) {
       <PlayCircle
         size={20}
         weight="fill"
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]"
       />
     </div>
   );
 }
 
-function ProgressBar({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | null;
-}) {
+function ProgressBar({ label, value }: { label: string; value: number | null }) {
   const isIndeterminate = value === null;
 
   return (
     <div
-      className="mt-3 sm:mt-3.5 h-2 w-full overflow-hidden rounded-full border-none bg-[color-mix(in_srgb,var(--canvas)_75%,var(--text)_14%)] p-[1px] shadow-[inset_0_1.5px_3px_color-mix(in_srgb,black_25%,transparent),inset_0_-1px_0_color-mix(in_srgb,var(--surface)_85%,transparent)]"
+      className="mt-3 h-2 w-full overflow-hidden rounded-full border-none bg-[color-mix(in_srgb,var(--canvas)_75%,var(--text)_14%)] p-[1px] shadow-[inset_0_1.5px_3px_color-mix(in_srgb,black_25%,transparent),inset_0_-1px_0_color-mix(in_srgb,var(--surface)_85%,transparent)] sm:mt-3.5"
       role="progressbar"
       aria-label={label}
       aria-valuemin={0}
@@ -1828,11 +1722,7 @@ function ProgressBar({
     >
       <div
         className={`h-full rounded-full bg-[linear-gradient(90deg,var(--accent)_0%,color-mix(in_srgb,var(--accent)_85%,white)_100%)] shadow-[0_0_10px_var(--accent-shadow),inset_0_1px_0_color-mix(in_srgb,white_35%,transparent)] ${isIndeterminate ? "lesson-video-progress-indeterminate motion-reduce:animate-none" : "transition-[width] duration-300"}`}
-        style={
-          isIndeterminate
-            ? undefined
-            : { width: `${Math.max(0, Math.min(100, value))}%` }
-        }
+        style={isIndeterminate ? undefined : { width: `${Math.max(0, Math.min(100, value))}%` }}
       />
     </div>
   );

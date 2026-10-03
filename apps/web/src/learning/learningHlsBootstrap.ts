@@ -5,8 +5,7 @@ export const LEARNING_HLS_MANIFEST_META_NAME = "veo-hls-manifest";
 export const LEARNING_HLS_MEDIA_KEY_META_NAME = "veo-hls-media-key";
 export const LEARNING_COURSE_SLUG_META_NAME = "veo-learning-course-slug";
 export const LEARNING_LESSON_NUMBER_META_NAME = "veo-learning-lesson-number";
-export const EARLY_HLS_PRELOAD_URL_PLACEHOLDER =
-  "__VEO_EARLY_HLS_PRELOAD_URL__";
+export const EARLY_HLS_PRELOAD_URL_PLACEHOLDER = "__VEO_EARLY_HLS_PRELOAD_URL__";
 
 export interface LearningHlsBootstrap {
   manifestUrl: string;
@@ -29,9 +28,7 @@ export function getLearningPlaybackRequestMetadata(params: {
   return { courseSlug: params.courseSlug, lessonNumber };
 }
 
-export function getLearningHlsPreconnectHref(
-  manifestUrl: string,
-): string | null {
+export function getLearningHlsPreconnectHref(manifestUrl: string): string | null {
   try {
     if (manifestUrl.startsWith("/") || manifestUrl.startsWith(".")) {
       return null;

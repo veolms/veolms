@@ -21,11 +21,7 @@ export function normalizePhoneIdentifier(phoneNo: string): string {
     return `+91${digits}`;
   }
 
-  if (
-    digits.length === 11 &&
-    digits.startsWith("0") &&
-    /^[6-9]/.test(digits.slice(1))
-  ) {
+  if (digits.length === 11 && digits.startsWith("0") && /^[6-9]/.test(digits.slice(1))) {
     return `+91${digits.slice(1)}`;
   }
 
@@ -54,11 +50,7 @@ export function resolveIdentifier(body: {
     };
   }
 
-  throw new AppError(
-    400,
-    "INVALID_REQUEST",
-    "Email or phone number is required.",
-  );
+  throw new AppError(400, "INVALID_REQUEST", "Email or phone number is required.");
 }
 
 export function normalizePhoneNumber(phoneNo: string): string {
@@ -67,10 +59,7 @@ export function normalizePhoneNumber(phoneNo: string): string {
 
 export function generatePkce(): { verifier: string; challenge: string } {
   const verifier = crypto.randomBytes(32).toString("base64url");
-  const challenge = crypto
-    .createHash("sha256")
-    .update(verifier)
-    .digest("base64url");
+  const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
   return { verifier, challenge };
 }
 
@@ -181,10 +170,7 @@ export function verifyTotp(
       }
 
       const binary =
-        ((byte0 & 0x7f) << 24) |
-        ((byte1 & 0xff) << 16) |
-        ((byte2 & 0xff) << 8) |
-        (byte3 & 0xff);
+        ((byte0 & 0x7f) << 24) | ((byte1 & 0xff) << 16) | ((byte2 & 0xff) << 8) | (byte3 & 0xff);
 
       const otp = (binary % 1000000).toString().padStart(6, "0");
       if (otp === code) {

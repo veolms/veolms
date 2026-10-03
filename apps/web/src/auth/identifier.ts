@@ -534,9 +534,7 @@ export function findCountry(id: string): CountryOption | undefined {
   return SUPPORTED_COUNTRIES.find((country) => country.id === id);
 }
 
-export function findCountryByPhoneNumber(
-  value: string,
-): CountryOption | undefined {
+export function findCountryByPhoneNumber(value: string): CountryOption | undefined {
   if (!value.trim().startsWith("+")) return undefined;
 
   const digits = toNationalDigits(value);
@@ -544,8 +542,7 @@ export function findCountryByPhoneNumber(
     .filter((country) => digits.startsWith(toNationalDigits(country.dialCode)))
     .sort(
       (left, right) =>
-        toNationalDigits(right.dialCode).length -
-        toNationalDigits(left.dialCode).length,
+        toNationalDigits(right.dialCode).length - toNationalDigits(left.dialCode).length,
     )[0];
 }
 
@@ -553,9 +550,7 @@ export function normalizeEmail(value: string): string {
   const trimmed = value.trim();
   const result = otpSendRequestSchema.safeParse({ email: trimmed });
 
-  return result.success && result.data.email
-    ? result.data.email
-    : trimmed.toLowerCase();
+  return result.success && result.data.email ? result.data.email : trimmed.toLowerCase();
 }
 
 export function validateEmail(value: string): string | null {
@@ -568,10 +563,7 @@ export function toNationalDigits(value: string): string {
   return value.replace(/\D/g, "");
 }
 
-export function toNationalNumber(
-  value: string,
-  country: CountryOption,
-): string {
+export function toNationalNumber(value: string, country: CountryOption): string {
   const dialDigits = toNationalDigits(country.dialCode);
   let digits = toNationalDigits(value);
 
@@ -586,39 +578,23 @@ export function toNationalNumber(
   return digits;
 }
 
-export function toInternationalPhoneNumber(
-  value: string,
-  country: CountryOption,
-): string {
-  const digits = toNationalNumber(value, country).slice(
-    -country.nationalDigits,
-  );
+export function toInternationalPhoneNumber(value: string, country: CountryOption): string {
+  const digits = toNationalNumber(value, country).slice(-country.nationalDigits);
 
   return digits ? `${country.dialCode}${digits}` : "";
 }
 
-export function formatNationalPhoneNumber(
-  value: string,
-  country: CountryOption,
-): string {
-  const digits = toNationalNumber(value, country).slice(
-    0,
-    country.nationalDigits,
-  );
+export function formatNationalPhoneNumber(value: string, country: CountryOption): string {
+  const digits = toNationalNumber(value, country).slice(0, country.nationalDigits);
 
-  return digits.length > 5
-    ? `${digits.slice(0, 5)} ${digits.slice(5)}`
-    : digits;
+  return digits.length > 5 ? `${digits.slice(0, 5)} ${digits.slice(5)}` : digits;
 }
 
 function invalidMobileMessage(country: CountryOption): string {
   return `Please enter a valid ${country.nationalDigits}-digit mobile number for ${country.name}.`;
 }
 
-export function validateMobile(
-  value: string,
-  country: CountryOption,
-): string | null {
+export function validateMobile(value: string, country: CountryOption): string | null {
   const digits = toNationalNumber(value, country);
 
   if (digits.length !== country.nationalDigits) {

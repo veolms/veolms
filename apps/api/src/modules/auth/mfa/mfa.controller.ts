@@ -33,9 +33,7 @@ export function createMfaController(context: AuthContext) {
     return mfaService.setupTotp(request.user!);
   }
 
-  async function enableTotp(
-    request: FastifyRequest<{ Body: TotpEnableRequest }>,
-  ) {
+  async function enableTotp(request: FastifyRequest<{ Body: TotpEnableRequest }>) {
     return mfaService.enableTotp({
       userId: request.user!.id,
       sessionId: request.session!.id,
@@ -50,15 +48,10 @@ export function createMfaController(context: AuthContext) {
   }
 
   async function deletePasskeys(request: FastifyRequest) {
-    return mfaService.deletePasskeys(
-      request.user!,
-      request.session!.mfa_verified,
-    );
+    return mfaService.deletePasskeys(request.user!, request.session!.mfa_verified);
   }
 
-  async function verifyTotp(
-    request: FastifyRequest<{ Body: TotpVerifyRequest }>,
-  ) {
+  async function verifyTotp(request: FastifyRequest<{ Body: TotpVerifyRequest }>) {
     return mfaService.verifyTotpCode({
       userId: request.user!.id,
       sessionId: request.session!.id,
@@ -76,9 +69,7 @@ export function createMfaController(context: AuthContext) {
     );
   }
 
-  async function registerVerify(
-    request: FastifyRequest<{ Body: PasskeyRegisterVerifyRequest }>,
-  ) {
+  async function registerVerify(request: FastifyRequest<{ Body: PasskeyRegisterVerifyRequest }>) {
     return mfaService.verifyPasskeyRegistration({
       userId: request.user!.id,
       sessionId: request.session!.id,
@@ -88,16 +79,11 @@ export function createMfaController(context: AuthContext) {
 
   async function loginOptions(request: FastifyRequest) {
     return presentPasskeyAuthenticationOptions(
-      await mfaService.getPasskeyLoginOptions(
-        request.user!.id,
-        extractRequestOrigin(request),
-      ),
+      await mfaService.getPasskeyLoginOptions(request.user!.id, extractRequestOrigin(request)),
     );
   }
 
-  async function loginVerify(
-    request: FastifyRequest<{ Body: PasskeyLoginVerifyRequest }>,
-  ) {
+  async function loginVerify(request: FastifyRequest<{ Body: PasskeyLoginVerifyRequest }>) {
     return mfaService.verifyPasskeyLogin({
       userId: request.user!.id,
       sessionId: request.session!.id,

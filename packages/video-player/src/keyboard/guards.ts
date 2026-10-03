@@ -28,18 +28,10 @@ const NATIVE_ACTIVATION_OWNER_SELECTOR = [
   "[role='checkbox']",
 ].join(",");
 
-const OWNED_NAVIGATION_CODES = new Set([
-  "ArrowLeft",
-  "ArrowRight",
-  "Home",
-  "End",
-]);
+const OWNED_NAVIGATION_CODES = new Set(["ArrowLeft", "ArrowRight", "Home", "End"]);
 
 export function isEditingShortcutTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof Element &&
-    Boolean(target.closest(EDITING_TARGET_SELECTOR))
-  );
+  return target instanceof Element && Boolean(target.closest(EDITING_TARGET_SELECTOR));
 }
 
 export function isInteractiveShortcutTarget(
@@ -51,9 +43,7 @@ export function isInteractiveShortcutTarget(
   return Boolean(interactiveTarget && interactiveTarget !== playerRoot);
 }
 
-export function isOwnedNavigationShortcut(
-  event: Pick<KeyboardEvent, "code" | "target">,
-): boolean {
+export function isOwnedNavigationShortcut(event: Pick<KeyboardEvent, "code" | "target">): boolean {
   return (
     OWNED_NAVIGATION_CODES.has(event.code) &&
     event.target instanceof Element &&
@@ -61,9 +51,7 @@ export function isOwnedNavigationShortcut(
   );
 }
 
-function isNativeActivationShortcut(
-  event: Pick<KeyboardEvent, "code" | "target">,
-): boolean {
+function isNativeActivationShortcut(event: Pick<KeyboardEvent, "code" | "target">): boolean {
   return (
     event.code === "Space" &&
     event.target instanceof Element &&

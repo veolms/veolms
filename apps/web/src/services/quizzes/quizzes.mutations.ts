@@ -48,13 +48,8 @@ export function useUpdateQuiz() {
 export function useAddQuizQuestion() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      payload,
-    }: {
-      id: string;
-      payload: CreateQuizQuestionRequest;
-    }) => quizzesService.addQuestion(id, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: CreateQuizQuestionRequest }) =>
+      quizzesService.addQuestion(id, payload),
     onSuccess: (data, vars) => {
       qc.setQueryData(quizKeys.detail(vars.id), data);
       void qc.invalidateQueries({ queryKey: quizKeys.detail(vars.id) });
@@ -82,13 +77,8 @@ export function useUpdateQuizQuestion() {
 export function useDeleteQuizQuestion() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      quizId,
-      questionId,
-    }: {
-      quizId: string;
-      questionId: string;
-    }) => quizzesService.deleteQuestion(quizId, questionId),
+    mutationFn: ({ quizId, questionId }: { quizId: string; questionId: string }) =>
+      quizzesService.deleteQuestion(quizId, questionId),
     onSuccess: (data, vars) => {
       qc.setQueryData(quizKeys.detail(vars.quizId), data);
       void qc.invalidateQueries({ queryKey: quizKeys.detail(vars.quizId) });
@@ -112,8 +102,7 @@ export function useSaveQuizAnswers() {
     ApiError,
     { attemptId: string; payload: BulkQuizAnswersRequest }
   >({
-    mutationFn: ({ attemptId, payload }) =>
-      quizzesService.saveAnswers(attemptId, payload),
+    mutationFn: ({ attemptId, payload }) => quizzesService.saveAnswers(attemptId, payload),
     onSuccess: (_, vars) =>
       void qc.invalidateQueries({ queryKey: quizKeys.attempt(vars.attemptId) }),
   });
@@ -173,15 +162,9 @@ export function useAssignQuiz() {
 export function useUpdateQuizAssignment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      payload,
-    }: {
-      id: string;
-      payload: UpdateQuizAssignmentRequest;
-    }) => quizzesService.updateAssignment(id, payload),
-    onSuccess: () =>
-      void qc.invalidateQueries({ queryKey: quizKeys.assignments() }),
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateQuizAssignmentRequest }) =>
+      quizzesService.updateAssignment(id, payload),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: quizKeys.assignments() }),
   });
 }
 
@@ -195,29 +178,26 @@ export function useDeleteQuiz() {
         if (!Array.isArray(old)) return old;
         return old.filter((q: { id?: string }) => q.id !== quizId);
       });
-      qc.setQueriesData(
-        { queryKey: quizKeys.assignments() },
-        (old: unknown) => {
-          if (!old) return old;
-          if (Array.isArray(old)) {
-            return old.filter((a: { quizId?: string }) => a.quizId !== quizId);
-          }
-          if (
-            typeof old === "object" &&
-            old !== null &&
-            "assignments" in old &&
-            Array.isArray((old as { assignments: unknown[] }).assignments)
-          ) {
-            return {
-              ...(old as object),
-              assignments: (
-                old as { assignments: { quizId?: string }[] }
-              ).assignments.filter((a) => a.quizId !== quizId),
-            };
-          }
-          return old;
-        },
-      );
+      qc.setQueriesData({ queryKey: quizKeys.assignments() }, (old: unknown) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.filter((a: { quizId?: string }) => a.quizId !== quizId);
+        }
+        if (
+          typeof old === "object" &&
+          old !== null &&
+          "assignments" in old &&
+          Array.isArray((old as { assignments: unknown[] }).assignments)
+        ) {
+          return {
+            ...(old as object),
+            assignments: (old as { assignments: { quizId?: string }[] }).assignments.filter(
+              (a) => a.quizId !== quizId,
+            ),
+          };
+        }
+        return old;
+      });
       void qc.invalidateQueries({ queryKey: quizKeys.all });
     },
   });
@@ -226,32 +206,28 @@ export function useDeleteQuiz() {
 export function useDeleteQuizAssignment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (assignmentId: string) =>
-      quizzesService.deleteAssignment(assignmentId),
+    mutationFn: (assignmentId: string) => quizzesService.deleteAssignment(assignmentId),
     onSuccess: (_, assignmentId) => {
-      qc.setQueriesData(
-        { queryKey: quizKeys.assignments() },
-        (old: unknown) => {
-          if (!old) return old;
-          if (Array.isArray(old)) {
-            return old.filter((a: { id?: string }) => a.id !== assignmentId);
-          }
-          if (
-            typeof old === "object" &&
-            old !== null &&
-            "assignments" in old &&
-            Array.isArray((old as { assignments: unknown[] }).assignments)
-          ) {
-            return {
-              ...(old as object),
-              assignments: (
-                old as { assignments: { id?: string }[] }
-              ).assignments.filter((a) => a.id !== assignmentId),
-            };
-          }
-          return old;
-        },
-      );
+      qc.setQueriesData({ queryKey: quizKeys.assignments() }, (old: unknown) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.filter((a: { id?: string }) => a.id !== assignmentId);
+        }
+        if (
+          typeof old === "object" &&
+          old !== null &&
+          "assignments" in old &&
+          Array.isArray((old as { assignments: unknown[] }).assignments)
+        ) {
+          return {
+            ...(old as object),
+            assignments: (old as { assignments: { id?: string }[] }).assignments.filter(
+              (a) => a.id !== assignmentId,
+            ),
+          };
+        }
+        return old;
+      });
       void qc.invalidateQueries({ queryKey: quizKeys.all });
     },
   });

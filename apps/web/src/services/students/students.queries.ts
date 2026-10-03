@@ -1,8 +1,4 @@
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useQuery,
-} from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type {
   StudentDetailResponse,
   StudentListQuery,
@@ -44,14 +40,9 @@ export function useStudents(
 /**
  * Query for retrieving comprehensive details for a single student.
  */
-export function useStudent(
-  username: string | null | undefined,
-  options?: { enabled?: boolean },
-) {
+export function useStudent(username: string | null | undefined, options?: { enabled?: boolean }) {
   return useQuery<StudentDetailResponse, ApiError>({
-    queryKey: username
-      ? studentKeys.detail(username)
-      : (["students", "detail", null] as const),
+    queryKey: username ? studentKeys.detail(username) : (["students", "detail", null] as const),
     queryFn: () => studentsService.getStudentByUsername(username!),
     enabled: Boolean(username) && (options?.enabled ?? true),
     staleTime: 60 * 1000,

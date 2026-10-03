@@ -63,14 +63,8 @@ export function clampPlayerPan(
   geometry: PlayerZoomGeometry,
 ): PlayerPan {
   if (scale <= MIN_PLAYER_ZOOM) return { x: 0, y: 0 };
-  const maxX = Math.max(
-    0,
-    (geometry.mediaWidth * scale - geometry.containerWidth) / 2,
-  );
-  const maxY = Math.max(
-    0,
-    (geometry.mediaHeight * scale - geometry.containerHeight) / 2,
-  );
+  const maxX = Math.max(0, (geometry.mediaWidth * scale - geometry.containerWidth) / 2);
+  const maxY = Math.max(0, (geometry.mediaHeight * scale - geometry.containerHeight) / 2);
   return {
     x: Math.min(maxX, Math.max(-maxX, pan.x)),
     y: Math.min(maxY, Math.max(-maxY, pan.y)),

@@ -5,10 +5,7 @@ import {
   dashboardSummaryResponseSchema,
 } from "@veolms/contracts";
 import { createAuthContext } from "../auth/shared/auth.context.ts";
-import {
-  createAuthorizationGuard,
-  createAuthorizationService,
-} from "../authorization/index.ts";
+import { createAuthorizationGuard, createAuthorizationService } from "../authorization/index.ts";
 import { createCourseService } from "../courses/course/course.service.ts";
 import { createOrderService } from "../commerce/orders/order.service.ts";
 import { createEnrollmentService } from "../commerce/enrollments/enrollment.service.ts";
@@ -58,17 +55,11 @@ const analyticsRoutes: RoutePlugin = async (app, options) => {
           "Revenue, enrollment, and learning-funnel overview metrics across the whole academy, or a single course when ?courseId= is given. Requires the analytics.revenue.read permission.",
         querystring: analyticsFilterQuerySchema,
         response: {
-          200: jsonResponse(
-            "Admin analytics overview",
-            analyticsOverviewResponseSchema,
-          ),
+          200: jsonResponse("Admin analytics overview", analyticsOverviewResponseSchema),
           ...errors,
         },
       },
-      preHandler: [
-        ...auth.mfaVerified,
-        authGuard.authorize("analytics.revenue.read", "platform"),
-      ],
+      preHandler: [...auth.mfaVerified, authGuard.authorize("analytics.revenue.read", "platform")],
     },
     controller.adminOverview,
   );
@@ -84,17 +75,11 @@ const analyticsRoutes: RoutePlugin = async (app, options) => {
           "Revenue, enrollment, and learning-funnel overview metrics for a specific course (?courseId=) or, with none given, every course the caller owns. Requires the analytics.course.read permission.",
         querystring: analyticsFilterQuerySchema,
         response: {
-          200: jsonResponse(
-            "Instructor analytics overview",
-            analyticsOverviewResponseSchema,
-          ),
+          200: jsonResponse("Instructor analytics overview", analyticsOverviewResponseSchema),
           ...errors,
         },
       },
-      preHandler: [
-        ...auth.mfaVerified,
-        authGuard.authorize("analytics.course.read", "course"),
-      ],
+      preHandler: [...auth.mfaVerified, authGuard.authorize("analytics.course.read", "course")],
     },
     controller.instructorOverview,
   );
@@ -110,17 +95,11 @@ const analyticsRoutes: RoutePlugin = async (app, options) => {
           "Returns the top dashboard card metrics, Learning Activity, and the range-aware Revenue Overview. Requires the platform-wide analytics.revenue.read permission.",
         querystring: dashboardQuerySchema,
         response: {
-          200: jsonResponse(
-            "Dashboard summary",
-            dashboardSummaryResponseSchema,
-          ),
+          200: jsonResponse("Dashboard summary", dashboardSummaryResponseSchema),
           ...errors,
         },
       },
-      preHandler: [
-        ...auth.mfaVerified,
-        authGuard.authorize("analytics.revenue.read", "platform"),
-      ],
+      preHandler: [...auth.mfaVerified, authGuard.authorize("analytics.revenue.read", "platform")],
     },
     controller.dashboard,
   );

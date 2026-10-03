@@ -131,9 +131,7 @@ export function createAttachmentsRepository(): AttachmentsRepository {
           mime_type: attachment.mimeType,
           file_size: attachment.fileSize,
           status: attachment.status || "uploading",
-          metadata: attachment.metadata
-            ? JSON.stringify(attachment.metadata)
-            : null,
+          metadata: attachment.metadata ? JSON.stringify(attachment.metadata) : null,
         })
         .execute();
     },
@@ -165,9 +163,7 @@ export function createAttachmentsRepository(): AttachmentsRepository {
             ? JSON.parse(row.metadata)
             : (row.metadata as Record<string, unknown> | null),
         createdAt:
-          row.created_at instanceof Date
-            ? row.created_at.toISOString()
-            : String(row.created_at),
+          row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       };
     },
 
@@ -199,9 +195,7 @@ export function createAttachmentsRepository(): AttachmentsRepository {
             ? JSON.parse(row.metadata)
             : (row.metadata as Record<string, unknown> | null),
         createdAt:
-          row.created_at instanceof Date
-            ? row.created_at.toISOString()
-            : String(row.created_at),
+          row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       }));
     },
 

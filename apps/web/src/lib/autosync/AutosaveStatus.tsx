@@ -5,8 +5,7 @@ interface AutosaveStatusProps {
 }
 
 export function AutosaveStatus({ status }: AutosaveStatusProps) {
-  const message =
-    status === "syncing" || status === "pending" ? "Saving…" : "Saved";
+  const message = status === "syncing" || status === "pending" ? "Saving…" : "Saved";
 
   return (
     <p role="status" aria-live="polite">

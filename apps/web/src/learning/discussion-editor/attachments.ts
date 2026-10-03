@@ -55,9 +55,7 @@ const ALLOWED_EXTENSIONS = [
   ".json",
 ];
 
-export function getClipboardMediaFiles(
-  clipboardData: DataTransfer | null,
-): File[] {
+export function getClipboardMediaFiles(clipboardData: DataTransfer | null): File[] {
   if (!clipboardData) return [];
 
   const itemFiles = Array.from(clipboardData.items)
@@ -69,9 +67,7 @@ export function getClipboardMediaFiles(
   return Array.from(clipboardData.files);
 }
 
-export async function selectDiscussionAttachment(
-  file: File,
-): Promise<DiscussionAttachmentResult> {
+export async function selectDiscussionAttachment(file: File): Promise<DiscussionAttachmentResult> {
   const validationMessage = validateAttachment(file);
   if (validationMessage) return { accepted: false, message: validationMessage };
 

@@ -18,8 +18,7 @@ const getDefaultScreenOrientation = (): ScreenOrientationTarget | undefined =>
     : (window.screen?.orientation as ScreenOrientationTarget | undefined);
 
 export async function lockScreenOrientation(
-  orientationTarget:
-    ScreenOrientationTarget | undefined = getDefaultScreenOrientation(),
+  orientationTarget: ScreenOrientationTarget | undefined = getDefaultScreenOrientation(),
 ): Promise<boolean> {
   if (!orientationTarget?.lock) return false;
 
@@ -33,8 +32,7 @@ export async function lockScreenOrientation(
 }
 
 export function unlockScreenOrientation(
-  orientationTarget:
-    ScreenOrientationTarget | undefined = getDefaultScreenOrientation(),
+  orientationTarget: ScreenOrientationTarget | undefined = getDefaultScreenOrientation(),
 ): void {
   try {
     orientationTarget?.unlock?.();
@@ -43,18 +41,12 @@ export function unlockScreenOrientation(
   }
 }
 
-export function getDocumentFullscreenElement(
-  documentTarget: Document = document,
-): Element | null {
+export function getDocumentFullscreenElement(documentTarget: Document = document): Element | null {
   const target = documentTarget as WebkitFullscreenDocument;
-  return (
-    documentTarget.fullscreenElement ?? target.webkitFullscreenElement ?? null
-  );
+  return documentTarget.fullscreenElement ?? target.webkitFullscreenElement ?? null;
 }
 
-export function canToggleDocumentFullscreen(
-  documentTarget: Document = document,
-): boolean {
+export function canToggleDocumentFullscreen(documentTarget: Document = document): boolean {
   const root = documentTarget.documentElement as WebkitFullscreenElement;
   const target = documentTarget as WebkitFullscreenDocument;
   return Boolean(
@@ -79,9 +71,7 @@ export async function toggleDocumentFullscreen(
   }
 
   const root = documentTarget.documentElement as WebkitFullscreenElement;
-  const request =
-    root.requestFullscreen?.bind(root) ??
-    root.webkitRequestFullscreen?.bind(root);
+  const request = root.requestFullscreen?.bind(root) ?? root.webkitRequestFullscreen?.bind(root);
   if (!request) throw new Error("Fullscreen is not supported");
   await Promise.resolve(request());
   return true;

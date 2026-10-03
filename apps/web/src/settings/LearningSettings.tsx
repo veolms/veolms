@@ -66,46 +66,33 @@ export function LearningSettings() {
   useEffect(() => {
     if (!storageReady) return;
     try {
-      window.localStorage.setItem(
-        LEARNING_PREFERENCES_KEY,
-        JSON.stringify(preferences),
-      );
+      window.localStorage.setItem(LEARNING_PREFERENCES_KEY, JSON.stringify(preferences));
     } catch {
       // Preferences remain available for this session when storage is blocked.
     }
-    window.dispatchEvent(
-      new CustomEvent(LEARNING_PREFERENCES_EVENT, { detail: preferences }),
-    );
-    document.documentElement.dataset.lessonPageScrollbar =
-      preferences.showLessonPageScrollbar ? "visible" : "hidden";
-    document.documentElement.dataset.curriculumScrollbar =
-      preferences.showCurriculumScrollbar ? "visible" : "hidden";
+    window.dispatchEvent(new CustomEvent(LEARNING_PREFERENCES_EVENT, { detail: preferences }));
+    document.documentElement.dataset.lessonPageScrollbar = preferences.showLessonPageScrollbar
+      ? "visible"
+      : "hidden";
+    document.documentElement.dataset.curriculumScrollbar = preferences.showCurriculumScrollbar
+      ? "visible"
+      : "hidden";
   }, [preferences, storageReady]);
 
   return (
-    <div
-      className="settings-learning"
-      aria-label="Playback and Learning settings"
-    >
+    <div className="settings-learning" aria-label="Playback and Learning settings">
       <header className="settings-learning__header">
         <div>
           <h2>Playback &amp; Learning</h2>
-          <p>
-            Customize your lesson playback, course navigation, and learning
-            goals.
-          </p>
+          <p>Customize your lesson playback, course navigation, and learning goals.</p>
         </div>
         <span className="settings-learning__saved">
-          <CheckCircle size={17} weight="fill" /> All changes are saved
-          automatically
+          <CheckCircle size={17} weight="fill" /> All changes are saved automatically
         </span>
       </header>
 
       <div className="settings-learning__grid">
-        <section
-          className="settings-learning-card"
-          aria-labelledby="playback-preferences-heading"
-        >
+        <section className="settings-learning-card" aria-labelledby="playback-preferences-heading">
           <header className="settings-learning-card__heading">
             <PlayCircle size={21} weight="duotone" />
             <h3 id="playback-preferences-heading">Playback preferences</h3>
@@ -146,11 +133,7 @@ export function LearningSettings() {
               id="learning-seek-interval"
               label="Skip interval"
               note="Used by Left/Right arrows and double-tap seeking."
-              value={
-                customSeekInterval
-                  ? "custom"
-                  : String(preferences.seekIntervalSeconds)
-              }
+              value={customSeekInterval ? "custom" : String(preferences.seekIntervalSeconds)}
               onChange={updateSeekInterval}
               options={[
                 ["5", "5 seconds"],
@@ -208,25 +191,18 @@ export function LearningSettings() {
               label="Show lesson page scrollbar"
               note="Drag vertically to scroll or sideways to resize course content."
               checked={preferences.showLessonPageScrollbar}
-              onChange={(showLessonPageScrollbar) =>
-                update({ showLessonPageScrollbar })
-              }
+              onChange={(showLessonPageScrollbar) => update({ showLessonPageScrollbar })}
             />
             <LearningToggleRow
               label="Show course content scrollbar"
               note="Display the scrollbar inside the course content panel."
               checked={preferences.showCurriculumScrollbar}
-              onChange={(showCurriculumScrollbar) =>
-                update({ showCurriculumScrollbar })
-              }
+              onChange={(showCurriculumScrollbar) => update({ showCurriculumScrollbar })}
             />
           </div>
         </section>
 
-        <section
-          className="settings-learning-card"
-          aria-labelledby="learning-goal-heading"
-        >
+        <section className="settings-learning-card" aria-labelledby="learning-goal-heading">
           <header className="settings-learning-card__heading">
             <Target size={21} weight="duotone" />
             <h3 id="learning-goal-heading">Learning goal &amp; reminders</h3>
@@ -257,10 +233,7 @@ export function LearningSettings() {
             >
               <legend>Reminder schedule</legend>
               <span className="settings-learning-field-label">Days</span>
-              <div
-                className="settings-learning-days"
-                aria-label="Reminder days"
-              >
+              <div className="settings-learning-days" aria-label="Reminder days">
                 {LEARNING_REMINDER_DAYS.map(([day, label]) => (
                   <button
                     type="button"
@@ -308,10 +281,7 @@ export function LearningSettings() {
           </div>
         </section>
 
-        <section
-          className="settings-learning-card"
-          aria-labelledby="captions-heading"
-        >
+        <section className="settings-learning-card" aria-labelledby="captions-heading">
           <header className="settings-learning-card__heading">
             <ClosedCaptioning size={21} weight="duotone" />
             <h3 id="captions-heading">Captions &amp; transcript</h3>
@@ -340,25 +310,18 @@ export function LearningSettings() {
               label="Auto-scroll transcript"
               note="Keep the currently spoken sentence visible."
               checked={preferences.autoScrollTranscript}
-              onChange={(autoScrollTranscript) =>
-                update({ autoScrollTranscript })
-              }
+              onChange={(autoScrollTranscript) => update({ autoScrollTranscript })}
             />
             <LearningToggleRow
               label="Highlight current transcript line"
               note="Highlight the sentence currently being spoken."
               checked={preferences.highlightTranscriptLine}
-              onChange={(highlightTranscriptLine) =>
-                update({ highlightTranscriptLine })
-              }
+              onChange={(highlightTranscriptLine) => update({ highlightTranscriptLine })}
             />
           </div>
         </section>
 
-        <section
-          className="settings-learning-card"
-          aria-labelledby="course-navigation-heading"
-        >
+        <section className="settings-learning-card" aria-labelledby="course-navigation-heading">
           <header className="settings-learning-card__heading">
             <BookOpen size={21} weight="duotone" />
             <h3 id="course-navigation-heading">Course navigation</h3>
@@ -374,25 +337,19 @@ export function LearningSettings() {
               label="Continue with next incomplete lecture"
               note="Resume a course from the next lecture that is not completed."
               checked={preferences.continueWithNextIncomplete}
-              onChange={(continueWithNextIncomplete) =>
-                update({ continueWithNextIncomplete })
-              }
+              onChange={(continueWithNextIncomplete) => update({ continueWithNextIncomplete })}
             />
             <LearningToggleRow
               label="Automatically move to the next section"
               note="Open the next section after completing the last lecture."
               checked={preferences.automaticallyMoveNextSection}
-              onChange={(automaticallyMoveNextSection) =>
-                update({ automaticallyMoveNextSection })
-              }
+              onChange={(automaticallyMoveNextSection) => update({ automaticallyMoveNextSection })}
             />
             <LearningToggleRow
               label="Keep completed lectures visible"
               note="Continue showing completed lectures in the course outline."
               checked={preferences.keepCompletedLecturesVisible}
-              onChange={(keepCompletedLecturesVisible) =>
-                update({ keepCompletedLecturesVisible })
-              }
+              onChange={(keepCompletedLecturesVisible) => update({ keepCompletedLecturesVisible })}
             />
           </div>
         </section>

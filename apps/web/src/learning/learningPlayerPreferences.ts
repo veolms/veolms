@@ -49,9 +49,7 @@ export const isLearningPlayerBootstrapState = (
   );
 };
 
-const applyLearningPlayerBootstrapDocument = (
-  preferences: LearningPlayerPreferences,
-) => {
+const applyLearningPlayerBootstrapDocument = (preferences: LearningPlayerPreferences) => {
   const root = document.documentElement;
   root.dataset.playerAutoplay = preferences.autoplay ? "on" : "off";
   root.dataset.playerMuted = preferences.muted ? "true" : "false";
@@ -59,33 +57,28 @@ const applyLearningPlayerBootstrapDocument = (
   root.dataset.playerVolume = String(preferences.volume);
 };
 
-export const getInitialLearningPlayerPreferences =
-  (): LearningPlayerPreferences => {
-    if (typeof window === "undefined") {
-      return DEFAULT_LEARNING_PLAYER_PREFERENCES;
-    }
+export const getInitialLearningPlayerPreferences = (): LearningPlayerPreferences => {
+  if (typeof window === "undefined") {
+    return DEFAULT_LEARNING_PLAYER_PREFERENCES;
+  }
 
-    const bootstrapState = window.__VEO_BOOTSTRAP__?.player;
-    if (isLearningPlayerBootstrapState(bootstrapState)) {
-      return normalizePlayerPreferences(bootstrapState);
-    }
+  const bootstrapState = window.__VEO_BOOTSTRAP__?.player;
+  if (isLearningPlayerBootstrapState(bootstrapState)) {
+    return normalizePlayerPreferences(bootstrapState);
+  }
 
-    return {
-      autoplay: readAutoplayPreference(),
-      muted: readMutedPreference(),
-      playbackRate: readPlaybackRatePreference(),
-      volume: readVolumePreference(),
-    };
+  return {
+    autoplay: readAutoplayPreference(),
+    muted: readMutedPreference(),
+    playbackRate: readPlaybackRatePreference(),
+    volume: readVolumePreference(),
   };
+};
 
-export const publishLearningPlayerBootstrap = (
-  patch: Partial<LearningPlayerPreferences>,
-) => {
+export const publishLearningPlayerBootstrap = (patch: Partial<LearningPlayerPreferences>) => {
   if (typeof window === "undefined") return;
 
-  const current = isLearningPlayerBootstrapState(
-    window.__VEO_BOOTSTRAP__?.player,
-  )
+  const current = isLearningPlayerBootstrapState(window.__VEO_BOOTSTRAP__?.player)
     ? normalizePlayerPreferences(window.__VEO_BOOTSTRAP__.player)
     : getInitialLearningPlayerPreferences();
   const next = { ...current, ...patch };

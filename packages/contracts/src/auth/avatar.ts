@@ -11,11 +11,7 @@ export const avatarUploadContentTypeSchema = z.enum([
   "image/gif",
 ]);
 
-const avatarUploadFileSizeSchema = z
-  .number()
-  .int()
-  .positive()
-  .max(AVATAR_UPLOAD_MAX_BYTES);
+const avatarUploadFileSizeSchema = z.number().int().positive().max(AVATAR_UPLOAD_MAX_BYTES);
 
 /** Shared request used by both the presign and upload-complete avatar calls. */
 export const avatarUploadPresignRequestSchema = z.strictObject({
@@ -23,10 +19,9 @@ export const avatarUploadPresignRequestSchema = z.strictObject({
   fileSize: avatarUploadFileSizeSchema,
 });
 
-export const avatarUploadCompleteRequestSchema =
-  avatarUploadPresignRequestSchema.extend({
-    uploadId: z.uuid(),
-  });
+export const avatarUploadCompleteRequestSchema = avatarUploadPresignRequestSchema.extend({
+  uploadId: z.uuid(),
+});
 
 export const avatarUploadPresignResponseSchema = z.strictObject({
   uploadId: z.uuid(),
@@ -51,23 +46,13 @@ export const selectAvatarRequestSchema = z.strictObject({
   avatarId: z.uuid(),
 });
 
-export type AvatarUploadContentType = z.infer<
-  typeof avatarUploadContentTypeSchema
->;
-export type AvatarUploadPresignRequest = z.input<
-  typeof avatarUploadPresignRequestSchema
->;
-export type AvatarUploadCompleteRequest = z.input<
-  typeof avatarUploadCompleteRequestSchema
->;
-export type AvatarUploadPresignResponse = z.output<
-  typeof avatarUploadPresignResponseSchema
->;
+export type AvatarUploadContentType = z.infer<typeof avatarUploadContentTypeSchema>;
+export type AvatarUploadPresignRequest = z.input<typeof avatarUploadPresignRequestSchema>;
+export type AvatarUploadCompleteRequest = z.input<typeof avatarUploadCompleteRequestSchema>;
+export type AvatarUploadPresignResponse = z.output<typeof avatarUploadPresignResponseSchema>;
 export type UserAvatarSource = z.infer<typeof userAvatarSourceSchema>;
 export type UserAvatar = z.output<typeof userAvatarSchema>;
-export type UserAvatarListResponse = z.output<
-  typeof userAvatarListResponseSchema
->;
+export type UserAvatarListResponse = z.output<typeof userAvatarListResponseSchema>;
 export type SelectAvatarRequest = z.input<typeof selectAvatarRequestSchema>;
 
 /**

@@ -58,32 +58,20 @@ export const coursesService = {
   },
 
   getOverview: (idOrSlug: string): Promise<CourseOverviewResponse> => {
-    return api.get<CourseOverviewResponse>(
-      `/courses/${encodeURIComponent(idOrSlug)}/overview`,
-    );
+    return api.get<CourseOverviewResponse>(`/courses/${encodeURIComponent(idOrSlug)}/overview`);
   },
 
-  getStaticPageRefreshStatus: (
-    courseId: string,
-  ): Promise<CourseStaticPageRefreshStatus> =>
-    api.get<CourseStaticPageRefreshStatus>(
-      `/courses/${courseId}/static-page-refresh`,
-    ),
+  getStaticPageRefreshStatus: (courseId: string): Promise<CourseStaticPageRefreshStatus> =>
+    api.get<CourseStaticPageRefreshStatus>(`/courses/${courseId}/static-page-refresh`),
 
-  retryStaticPageRefresh: (
-    courseId: string,
-  ): Promise<CourseStaticPageRefreshStatus> =>
-    api.post<CourseStaticPageRefreshStatus>(
-      `/courses/${courseId}/static-page-refresh/retry`,
-    ),
+  retryStaticPageRefresh: (courseId: string): Promise<CourseStaticPageRefreshStatus> =>
+    api.post<CourseStaticPageRefreshStatus>(`/courses/${courseId}/static-page-refresh/retry`),
 
   listMyCourses: (): Promise<MyCoursesListResponse> => {
     return api.get<MyCoursesListResponse>("/courses/mine");
   },
 
-  listDeletedCourses: (
-    params?: DeletedCoursesQuery,
-  ): Promise<DeletedCoursesListResponse> => {
+  listDeletedCourses: (params?: DeletedCoursesQuery): Promise<DeletedCoursesListResponse> => {
     return api.get<DeletedCoursesListResponse>("/bin/courses", { params });
   },
 
@@ -115,10 +103,7 @@ export const coursesService = {
     return api.post<Course>("/courses", payload);
   },
 
-  updateCourseBasics: (
-    id: string,
-    payload: UpdateCourseBasicsRequest,
-  ): Promise<Course> => {
+  updateCourseBasics: (id: string, payload: UpdateCourseBasicsRequest): Promise<Course> => {
     return api.patch<Course>(`/courses/${id}/basics`, payload);
   },
 
@@ -160,29 +145,18 @@ export const coursesService = {
     sectionId: string,
     payload: UpdateCourseSectionRequest,
   ): Promise<{ success: boolean }> => {
-    return api.patch<{ success: boolean }>(
-      `/courses/${courseId}/sections/${sectionId}`,
-      payload,
-    );
+    return api.patch<{ success: boolean }>(`/courses/${courseId}/sections/${sectionId}`, payload);
   },
 
-  deleteSection: (
-    courseId: string,
-    sectionId: string,
-  ): Promise<{ success: boolean }> => {
-    return api.delete<{ success: boolean }>(
-      `/courses/${courseId}/sections/${sectionId}`,
-    );
+  deleteSection: (courseId: string, sectionId: string): Promise<{ success: boolean }> => {
+    return api.delete<{ success: boolean }>(`/courses/${courseId}/sections/${sectionId}`);
   },
 
   reorderSections: (
     courseId: string,
     payload: ReorderSectionsRequest,
   ): Promise<{ success: boolean }> => {
-    return api.post<{ success: boolean }>(
-      `/courses/${courseId}/sections/reorder`,
-      payload,
-    );
+    return api.post<{ success: boolean }>(`/courses/${courseId}/sections/reorder`, payload);
   },
 
   createLesson: (
@@ -212,13 +186,8 @@ export const coursesService = {
     }>(`/courses/${courseId}/lessons/${lessonId}`, payload);
   },
 
-  deleteLesson: (
-    courseId: string,
-    lessonId: string,
-  ): Promise<{ success: boolean }> => {
-    return api.delete<{ success: boolean }>(
-      `/courses/${courseId}/lessons/${lessonId}`,
-    );
+  deleteLesson: (courseId: string, lessonId: string): Promise<{ success: boolean }> => {
+    return api.delete<{ success: boolean }>(`/courses/${courseId}/lessons/${lessonId}`);
   },
 
   reorderLessons: (
@@ -237,29 +206,18 @@ export const coursesService = {
     lessonId: string,
     payload: CreateLessonResourceRequest,
   ): Promise<LessonResource> => {
-    return api.post<LessonResource>(
-      `/courses/${courseId}/lessons/${lessonId}/resources`,
-      payload,
-    );
+    return api.post<LessonResource>(`/courses/${courseId}/lessons/${lessonId}/resources`, payload);
   },
 
-  deleteLessonResource: (
-    courseId: string,
-    resourceId: string,
-  ): Promise<{ success: boolean }> => {
-    return api.delete<{ success: boolean }>(
-      `/courses/${courseId}/resources/${resourceId}`,
-    );
+  deleteLessonResource: (courseId: string, resourceId: string): Promise<{ success: boolean }> => {
+    return api.delete<{ success: boolean }>(`/courses/${courseId}/resources/${resourceId}`);
   },
 
   upsertAccessRules: (
     courseId: string,
     payload: UpdateCourseAccessRuleRequest,
   ): Promise<CourseAccessRule> => {
-    return api.put<CourseAccessRule>(
-      `/courses/${courseId}/access-rules`,
-      payload,
-    );
+    return api.put<CourseAccessRule>(`/courses/${courseId}/access-rules`, payload);
   },
 
   upsertSettings: (
@@ -284,10 +242,7 @@ export const coursesService = {
     courseId: string,
     payload: CreateCourseIncludeRequest,
   ): Promise<CourseIncludeItem> => {
-    return api.post<CourseIncludeItem>(
-      `/courses/${courseId}/includes`,
-      payload,
-    );
+    return api.post<CourseIncludeItem>(`/courses/${courseId}/includes`, payload);
   },
 
   updateInclude: (
@@ -295,28 +250,17 @@ export const coursesService = {
     includeId: string,
     payload: UpdateCourseIncludeRequest,
   ): Promise<CourseIncludeItem> => {
-    return api.patch<CourseIncludeItem>(
-      `/courses/${courseId}/includes/${includeId}`,
-      payload,
-    );
+    return api.patch<CourseIncludeItem>(`/courses/${courseId}/includes/${includeId}`, payload);
   },
 
-  deleteInclude: (
-    courseId: string,
-    includeId: string,
-  ): Promise<{ success: boolean }> => {
-    return api.delete<{ success: boolean }>(
-      `/courses/${courseId}/includes/${includeId}`,
-    );
+  deleteInclude: (courseId: string, includeId: string): Promise<{ success: boolean }> => {
+    return api.delete<{ success: boolean }>(`/courses/${courseId}/includes/${includeId}`);
   },
 
   reorderIncludes: (
     courseId: string,
     payload: ReorderCourseIncludesRequest,
   ): Promise<{ success: boolean }> => {
-    return api.post<{ success: boolean }>(
-      `/courses/${courseId}/includes/reorder`,
-      payload,
-    );
+    return api.post<{ success: boolean }>(`/courses/${courseId}/includes/reorder`, payload);
   },
 };

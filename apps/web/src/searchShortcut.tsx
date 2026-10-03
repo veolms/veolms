@@ -20,12 +20,8 @@ const isVisibleSearchInput = (input: HTMLInputElement) =>
 const getVisibleSearchController = (input: HTMLInputElement) => {
   if (!input.id) return null;
   return (
-    [
-      ...document.querySelectorAll<HTMLButtonElement>("button[aria-controls]"),
-    ].find(
-      (button) =>
-        button.getAttribute("aria-controls") === input.id &&
-        isVisibleElement(button),
+    [...document.querySelectorAll<HTMLButtonElement>("button[aria-controls]")].find(
+      (button) => button.getAttribute("aria-controls") === input.id && isVisibleElement(button),
     ) ?? null
   );
 };
@@ -40,7 +36,7 @@ export function SearchShortcutHint({ className = "" }: { className?: string }) {
   return (
     <kbd
       aria-hidden="true"
-      className={`inline-flex shrink-0 items-center rounded-md border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_72%,transparent)] px-1.5 py-0.5 text-[0.64rem] font-semibold leading-4 tracking-[0.02em] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_7%,transparent)] ${className}`.trim()}
+      className={`inline-flex shrink-0 items-center rounded-md border border-[color-mix(in_srgb,var(--text)_14%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_72%,transparent)] px-1.5 py-0.5 text-[0.64rem] leading-4 font-semibold tracking-[0.02em] text-(--muted) shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_7%,transparent)] ${className}`.trim()}
     >
       {getSearchShortcutLabel(platform)}
     </kbd>
@@ -51,43 +47,27 @@ export function useGlobalSearchShortcut(platform: ShortcutPlatform) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const modifierPressed =
-        platform === "mac"
-          ? event.metaKey && !event.ctrlKey
-          : event.ctrlKey && !event.metaKey;
-      if (
-        !modifierPressed ||
-        event.altKey ||
-        event.shiftKey ||
-        event.key.toLowerCase() !== "k"
-      ) {
+        platform === "mac" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+      if (!modifierPressed || event.altKey || event.shiftKey || event.key.toLowerCase() !== "k") {
         return;
       }
 
       const activeElement = document.activeElement;
       const searchInputs = [
-        ...document.querySelectorAll<HTMLInputElement>(
-          SEARCH_SHORTCUT_SELECTOR,
-        ),
+        ...document.querySelectorAll<HTMLInputElement>(SEARCH_SHORTCUT_SELECTOR),
       ];
       const activeSearchInput =
-        activeElement instanceof HTMLInputElement &&
-        activeElement.matches(SEARCH_SHORTCUT_SELECTOR)
+        activeElement instanceof HTMLInputElement && activeElement.matches(SEARCH_SHORTCUT_SELECTOR)
           ? activeElement
           : null;
       const prioritySearchInput = searchInputs.find(
         (candidate) =>
           candidate.dataset.searchShortcutPriority === "true" &&
-          (isVisibleSearchInput(candidate) ||
-            Boolean(getVisibleSearchController(candidate))),
+          (isVisibleSearchInput(candidate) || Boolean(getVisibleSearchController(candidate))),
       );
-      const preferredVisibleInput = [
-        activeSearchInput,
-        prioritySearchInput,
-      ].find(
+      const preferredVisibleInput = [activeSearchInput, prioritySearchInput].find(
         (candidate, index, all) =>
-          candidate &&
-          all.indexOf(candidate) === index &&
-          isVisibleSearchInput(candidate),
+          candidate && all.indexOf(candidate) === index && isVisibleSearchInput(candidate),
       );
       const prioritySearchNeedsOpen =
         prioritySearchInput && !isVisibleSearchInput(prioritySearchInput)
@@ -95,9 +75,7 @@ export function useGlobalSearchShortcut(platform: ShortcutPlatform) {
           : null;
       const input =
         preferredVisibleInput ??
-        (prioritySearchNeedsOpen
-          ? undefined
-          : searchInputs.find(isVisibleSearchInput));
+        (prioritySearchNeedsOpen ? undefined : searchInputs.find(isVisibleSearchInput));
 
       const hiddenSearchInput = [prioritySearchNeedsOpen, ...searchInputs].find(
         (candidate, index, all) =>
@@ -117,10 +95,7 @@ export function useGlobalSearchShortcut(platform: ShortcutPlatform) {
       }
       window.requestAnimationFrame(() => {
         focusInput.focus();
-        focusInput.setSelectionRange(
-          focusInput.value.length,
-          focusInput.value.length,
-        );
+        focusInput.setSelectionRange(focusInput.value.length, focusInput.value.length);
       });
     };
 

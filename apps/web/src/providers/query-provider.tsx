@@ -41,9 +41,7 @@ function AutosyncPersistenceBootstrap() {
     // Restoring durable drafts can require an IndexedDB open. Query startup
     // must not wait on that storage or on a queued mutation retry; neither
     // persisted query data nor the draft registry is needed to render pages.
-    restorePromiseRef.current ??= persistQueryClientRestore(
-      persistOptions,
-    ).then(
+    restorePromiseRef.current ??= persistQueryClientRestore(persistOptions).then(
       () => undefined,
       () => undefined,
     );

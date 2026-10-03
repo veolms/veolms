@@ -1,7 +1,4 @@
-export {
-  createNotificationService,
-  type NotificationService,
-} from "./notifications.service.ts";
+export { createNotificationService, type NotificationService } from "./notifications.service.ts";
 export {
   createNotificationProcessor,
   type NotificationProcessor,

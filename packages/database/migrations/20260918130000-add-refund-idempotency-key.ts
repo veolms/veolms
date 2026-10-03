@@ -20,10 +20,6 @@ export async function up(database: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(database: Kysely<unknown>): Promise<void> {
-  await sql`drop index if exists idx_refunds_order_idempotency_key`.execute(
-    database,
-  );
-  await sql`alter table refunds drop column if exists idempotency_key`.execute(
-    database,
-  );
+  await sql`drop index if exists idx_refunds_order_idempotency_key`.execute(database);
+  await sql`alter table refunds drop column if exists idempotency_key`.execute(database);
 }

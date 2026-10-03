@@ -24,14 +24,10 @@ const setupRoutes: RoutePlugin = async (app, options) => {
         operationId: "verifySetupToken",
         tags: ["Auth"],
         summary: "Verify setup token",
-        description:
-          "Checks if the provided token matches the installation setup token.",
+        description: "Checks if the provided token matches the installation setup token.",
         body: setupTokenRequestSchema,
         response: {
-          200: jsonResponse(
-            "Token verified successfully.",
-            authMessageResponseSchema,
-          ),
+          200: jsonResponse("Token verified successfully.", authMessageResponseSchema),
           401: errorResponse("Invalid setup token."),
           403: errorResponse("Setup already completed."),
         },
@@ -51,10 +47,7 @@ const setupRoutes: RoutePlugin = async (app, options) => {
           "Registers the first user on the platform as an administrator. Disallowed if accounts exist.",
         body: creatorRegisterRequestSchema,
         response: {
-          201: jsonResponse(
-            "Administrator initialized successfully.",
-            loginResponseSchema,
-          ),
+          201: jsonResponse("Administrator initialized successfully.", loginResponseSchema),
           401: errorResponse("Setup session missing or expired."),
           403: errorResponse("Administrator already initialized."),
         },
@@ -70,14 +63,10 @@ const setupRoutes: RoutePlugin = async (app, options) => {
         operationId: "setupAcademy",
         tags: ["Auth"],
         summary: "Configure academy brand details",
-        description:
-          "Saves the academy brand configuration during platform setup.",
+        description: "Saves the academy brand configuration during platform setup.",
         body: academyRequestSchema,
         response: {
-          200: jsonResponse(
-            "Academy brand saved successfully.",
-            academyResponseSchema,
-          ),
+          200: jsonResponse("Academy brand saved successfully.", academyResponseSchema),
           401: errorResponse("Setup session missing or expired."),
           403: errorResponse("Setup already completed."),
         },
@@ -95,10 +84,7 @@ const setupRoutes: RoutePlugin = async (app, options) => {
         summary: "Finalize platform setup",
         description: "Locks the platform setup, completing installation.",
         response: {
-          200: jsonResponse(
-            "Setup finalized successfully.",
-            authMessageResponseSchema,
-          ),
+          200: jsonResponse("Setup finalized successfully.", authMessageResponseSchema),
           400: errorResponse("Academy configuration or administrator missing."),
           401: errorResponse("Setup session missing or expired."),
           403: errorResponse("Setup already completed."),

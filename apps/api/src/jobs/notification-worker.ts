@@ -31,8 +31,7 @@ try {
     logger: app.log,
     config,
     handlers: {
-      listActiveCourseRecipientUserIds: (courseId) =>
-        audience.listActiveUserIdsForCourse(courseId),
+      listActiveCourseRecipientUserIds: (courseId) => audience.listActiveUserIdsForCourse(courseId),
     },
     recipients: {
       findRecipient: async (userId) => {
@@ -55,11 +54,7 @@ try {
 
     while (running) {
       const result = await processor.process();
-      if (
-        result.outbox.processed > 0 ||
-        result.email.sent > 0 ||
-        result.outbox.failed > 0
-      ) {
+      if (result.outbox.processed > 0 || result.email.sent > 0 || result.outbox.failed > 0) {
         process.stdout.write(
           `${JSON.stringify({
             job: "notification-worker",
@@ -72,9 +67,7 @@ try {
     }
   } else {
     const result = await processor.process();
-    process.stdout.write(
-      `${JSON.stringify({ job: "notification-worker", ...result })}\n`,
-    );
+    process.stdout.write(`${JSON.stringify({ job: "notification-worker", ...result })}\n`);
     if (result.outbox.failed > 0 || result.email.failed > 0) {
       process.exitCode = 2;
     }

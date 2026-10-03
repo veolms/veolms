@@ -48,10 +48,7 @@ export async function upsertCreatorPaymentConfig(
     .executeTakeFirstOrThrow();
 }
 
-export async function listCreatorPaymentConfigs(
-  database: Executor,
-  creatorId: string,
-) {
+export async function listCreatorPaymentConfigs(database: Executor, creatorId: string) {
   return await database
     .selectFrom("creator_payment_configs")
     .selectAll()

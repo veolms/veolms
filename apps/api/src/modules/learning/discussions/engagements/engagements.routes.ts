@@ -68,10 +68,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
         summary: "Save or unsave a discussion thread",
         params: z.object({ threadId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Bookmark state toggled",
-            toggleBookmarkResponseSchema,
-          ),
+          200: jsonResponse("Bookmark state toggled", toggleBookmarkResponseSchema),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Discussion thread not found"),
         },
@@ -91,10 +88,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
         summary: "Save or unsave a learning note",
         params: z.object({ noteId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Bookmark state toggled",
-            toggleBookmarkResponseSchema,
-          ),
+          200: jsonResponse("Bookmark state toggled", toggleBookmarkResponseSchema),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Learning note not found"),
         },
@@ -156,10 +150,7 @@ const engagementsRoutes: RoutePlugin = async (app, options) => {
         summary: "Search course participants for @mentions",
         querystring: searchMentionsQuerySchema,
         response: {
-          200: jsonResponse(
-            "List of matching users",
-            searchMentionsResponseSchema,
-          ),
+          200: jsonResponse("List of matching users", searchMentionsResponseSchema),
           400: errorResponse("Query and courseId are required"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - No course access"),

@@ -63,8 +63,7 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
 
       if (
         !isInput &&
-        (event.key === "/" ||
-          ((event.metaKey || event.ctrlKey) && event.key === "k"))
+        (event.key === "/" || ((event.metaKey || event.ctrlKey) && event.key === "k"))
       ) {
         event.preventDefault();
         document.getElementById("coupons-search-input")?.focus();
@@ -90,9 +89,7 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
         payload: { isActive: !coupon.isActive },
       });
       setNotice?.(
-        coupon.isActive
-          ? `${coupon.code} is now inactive.`
-          : `${coupon.code} is now active.`,
+        coupon.isActive ? `${coupon.code} is now inactive.` : `${coupon.code} is now active.`,
       );
     } catch (err) {
       setNotice?.(getApiError(err).message);
@@ -102,10 +99,7 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
   if (!isAuthReady) {
     return (
       <main data-coupon-surface="" className="mx-auto w-full max-w-[1320px]">
-        <CenteredLoadingSpinner
-          label="Loading promotions workspace"
-          className="min-h-52 py-24"
-        />
+        <CenteredLoadingSpinner label="Loading promotions workspace" className="min-h-52 py-24" />
       </main>
     );
   }
@@ -124,13 +118,12 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
         <div>
           <h1
             id="coupons-page-title"
-            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
+            className="text-[clamp(1.8rem,2.4vw,2.15rem)] leading-tight font-bold tracking-[-0.035em] text-(--text)"
           >
             Coupons
           </h1>
           <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">
-            Create discount codes, schedule campaigns, and track redemptions
-            from one library.
+            Create discount codes, schedule campaigns, and track redemptions from one library.
           </p>
         </div>
         <div className="shrink-0 pt-2 pb-0.5 sm:py-0">
@@ -176,13 +169,11 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
         />
 
         {isError ? (
-          <div className="grid place-items-center p-6 sm:p-12 text-center">
+          <div className="grid place-items-center p-6 text-center sm:p-12">
             <span className="flex size-10 items-center justify-center rounded-xl bg-rose-500/10 text-rose-500">
               <Tag size={22} weight="bold" />
             </span>
-            <h3 className="mt-3 text-sm font-semibold">
-              Could not load coupons
-            </h3>
+            <h3 className="mt-3 text-sm font-semibold">Could not load coupons</h3>
             <p className="mt-1 max-w-sm text-xs leading-5 text-(--muted)">
               {error?.message || "Try again in a moment."}
             </p>

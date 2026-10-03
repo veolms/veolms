@@ -53,10 +53,7 @@ export function getAttachmentAspectRatioStyle(
   const height = hasValidDimensions ? rawHeight! : 9;
   const ratio = width / height;
   const maxHeightRem = ratio < 1 ? 24 : 20;
-  const boundedWidthRem = Math.min(
-    maxHeightRem * ratio,
-    DISCUSSION_MEDIA_MAX_WIDTH_REM,
-  );
+  const boundedWidthRem = Math.min(maxHeightRem * ratio, DISCUSSION_MEDIA_MAX_WIDTH_REM);
 
   return {
     aspectRatio: `${width} / ${height}`,
@@ -77,11 +74,7 @@ export function getAttachmentCategory(
   mimeType: string,
   kind?: string,
 ): "image" | "video" | "code" | "document" {
-  if (
-    mimeType.startsWith("image/") ||
-    kind === "image" ||
-    kind === "screenshot"
-  ) {
+  if (mimeType.startsWith("image/") || kind === "image" || kind === "screenshot") {
     return "image";
   }
   if (mimeType.startsWith("video/")) {
@@ -98,8 +91,6 @@ export function getAttachmentCategory(
   return "document";
 }
 
-export function getAttachmentVisualUrl(
-  attachment: AttachmentVisualItem,
-): string | undefined {
+export function getAttachmentVisualUrl(attachment: AttachmentVisualItem): string | undefined {
   return attachment.localPreviewUrl ?? attachment.fileUrl;
 }

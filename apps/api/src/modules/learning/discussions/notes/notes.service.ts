@@ -20,10 +20,7 @@ import {
   takePage,
   toDate,
 } from "../shared/discussion.utils.ts";
-import {
-  createDiscussionAccess,
-  type DiscussionActor,
-} from "../shared/discussion.access.ts";
+import { createDiscussionAccess, type DiscussionActor } from "../shared/discussion.access.ts";
 import {
   createDiscussionOutbox,
   syncMentionsAndNotify,
@@ -94,11 +91,7 @@ export interface NotesService {
     },
   ): Promise<LearningNote>;
 
-  getNote(
-    db: DatabaseExecutor,
-    noteId: string,
-    actor: DiscussionActor,
-  ): Promise<LearningNote>;
+  getNote(db: DatabaseExecutor, noteId: string, actor: DiscussionActor): Promise<LearningNote>;
 
   listNotes(
     db: DatabaseExecutor,
@@ -119,11 +112,7 @@ export interface NotesService {
     updates: UpdateLearningNoteRequest,
   ): Promise<LearningNote>;
 
-  deleteNote(
-    db: DatabaseExecutor,
-    noteId: string,
-    actor: DiscussionActor,
-  ): Promise<void>;
+  deleteNote(db: DatabaseExecutor, noteId: string, actor: DiscussionActor): Promise<void>;
 }
 
 export function createNotesService(
@@ -176,9 +165,7 @@ export function createNotesService(
         id: a.id,
         kind: a.kind,
         fileName: a.file_name,
-        fileUrl: storage
-          ? getCdnDeliveryUrl(storage, a.storage_key).url
-          : a.file_url,
+        fileUrl: storage ? getCdnDeliveryUrl(storage, a.storage_key).url : a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
         ...getAttachmentDimensionFields(a.metadata),
@@ -189,13 +176,9 @@ export function createNotesService(
           : null,
       })),
       createdAt:
-        row.createdAt instanceof Date
-          ? row.createdAt.toISOString()
-          : String(row.createdAt),
+        row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
       updatedAt:
-        row.updatedAt instanceof Date
-          ? row.updatedAt.toISOString()
-          : String(row.updatedAt),
+        row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
     };
   }
 
@@ -242,11 +225,7 @@ export function createNotesService(
         .executeTakeFirst();
 
       if (!lesson || lesson.course_id !== input.courseId) {
-        throw httpError(
-          400,
-          "INVALID_LESSON",
-          "Lesson does not belong to this course",
-        );
+        throw httpError(400, "INVALID_LESSON", "Lesson does not belong to this course");
       }
 
       const id = crypto.randomUUID();
@@ -282,21 +261,12 @@ export function createNotesService(
 
         // Link verified attachments owned by the caller
         if (input.attachmentIds && input.attachmentIds.length > 0) {
-          await linkOwnedAttachments(
-            trx,
-            input.attachmentIds,
-            input.userId,
-            id,
-          );
+          await linkOwnedAttachments(trx, input.attachmentIds, input.userId, id);
         }
 
         const created = await notesRepo.findNoteById(trx, id);
         if (!created) {
-          throw httpError(
-            500,
-            "CREATE_FAILED",
-            "Failed to retrieve created note",
-          );
+          throw httpError(500, "CREATE_FAILED", "Failed to retrieve created note");
         }
 
         const attachments = await trx
@@ -362,13 +332,7 @@ export function createNotesService(
           .executeTakeFirst(),
       ]);
 
-      return mapNoteRow(
-        note,
-        actor.userId,
-        attachments,
-        Boolean(likeRow),
-        Boolean(bookmarkRow),
-      );
+      return mapNoteRow(note, actor.userId, attachments, Boolean(likeRow), Boolean(bookmarkRow));
     },
 
     async listNotes(db, actor, query) {
@@ -392,9 +356,7 @@ export function createNotesService(
       const listOptions = {
         ...query,
         pageCursor,
-        ...(accessibleCourseIds && accessibleCourseIds !== "all"
-          ? { accessibleCourseIds }
-          : {}),
+        ...(accessibleCourseIds && accessibleCourseIds !== "all" ? { accessibleCourseIds } : {}),
       };
 
       const [rows, totalCount] = await Promise.all([
@@ -445,9 +407,7 @@ export function createNotesService(
         ]);
 
         likedNoteIds = new Set(likes.map((l) => l.target_id));
-        bookmarkedNoteIds = new Set(
-          bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])),
-        );
+        bookmarkedNoteIds = new Set(bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])));
         for (const att of attachments) {
           if (att.target_id) {
             const list = attachmentsByNoteId.get(att.target_id) || [];
@@ -482,11 +442,7 @@ export function createNotesService(
     },
 
     async getCourseNotesOverview(db, courseId, actor) {
-      const overview = await notesRepo.getCourseNotesOverview(
-        db,
-        courseId,
-        actor.userId,
-      );
+      const overview = await notesRepo.getCourseNotesOverview(db, courseId, actor.userId);
       if (!overview.course) {
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
@@ -534,9 +490,7 @@ export function createNotesService(
         ]);
 
         likedNoteIds = new Set(likes.map((l) => l.target_id));
-        bookmarkedNoteIds = new Set(
-          bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])),
-        );
+        bookmarkedNoteIds = new Set(bookmarks.flatMap((b) => (b.note_id ? [b.note_id] : [])));
         for (const att of attachments) {
           if (att.target_id) {
             const list = attachmentsByNoteId.get(att.target_id) || [];
@@ -587,10 +541,7 @@ export function createNotesService(
 
       const sections = overview.sections.map((sec) => {
         const sectionLessons = lessonsBySectionId.get(sec.id) || [];
-        const sectionNotesCount = sectionLessons.reduce(
-          (sum, l) => sum + l.notesCount,
-          0,
-        );
+        const sectionNotesCount = sectionLessons.reduce((sum, l) => sum + l.notesCount, 0);
 
         return {
           sectionId: sec.id,
@@ -602,10 +553,7 @@ export function createNotesService(
       });
 
       if (unassignedLessons.length > 0) {
-        const unassignedNotesCount = unassignedLessons.reduce(
-          (sum, l) => sum + l.notesCount,
-          0,
-        );
+        const unassignedNotesCount = unassignedLessons.reduce((sum, l) => sum + l.notesCount, 0);
         sections.push({
           sectionId: "00000000-0000-0000-0000-000000000000",
           sectionTitle: "General Lessons",
@@ -630,9 +578,7 @@ export function createNotesService(
       await courseAccess.assertNotesEnabled(db, note.courseId);
 
       const plainText =
-        updates.content !== undefined
-          ? extractPlainText(updates.content)
-          : undefined;
+        updates.content !== undefined ? extractPlainText(updates.content) : undefined;
       const finalVisibility = updates.visibility ?? note.visibility;
 
       return withWriteTransaction(db, async (trx) => {
@@ -647,10 +593,7 @@ export function createNotesService(
             .where("source_type", "=", "note")
             .where("source_id", "=", noteId)
             .execute();
-        } else if (
-          updates.content !== undefined ||
-          note.visibility === "private"
-        ) {
+        } else if (updates.content !== undefined || note.visibility === "private") {
           await syncMentionsAndNotify(trx, outbox, {
             sourceType: "note",
             sourceId: noteId,
@@ -663,12 +606,7 @@ export function createNotesService(
         }
 
         if (updates.attachmentIds && updates.attachmentIds.length > 0) {
-          await linkOwnedAttachments(
-            trx,
-            updates.attachmentIds,
-            actor.userId,
-            noteId,
-          );
+          await linkOwnedAttachments(trx, updates.attachmentIds, actor.userId, noteId);
         }
 
         const updated = await notesRepo.findNoteById(trx, noteId);

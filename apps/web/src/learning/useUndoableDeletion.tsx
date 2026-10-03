@@ -30,9 +30,7 @@ export function UndoDeleteButton({
         aria-hidden="true"
       />
       <span>Undo</span>
-      <span className="min-w-5 text-right font-medium tabular-nums text-(--muted)">
-        {seconds}s
-      </span>
+      <span className="min-w-5 text-right font-medium text-(--muted) tabular-nums">{seconds}s</span>
     </button>
   );
 }

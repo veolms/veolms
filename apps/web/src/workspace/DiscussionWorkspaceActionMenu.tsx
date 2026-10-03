@@ -46,11 +46,7 @@ export function DiscussionWorkspaceActionMenu({
         />
       )}
       {actions.canFollow && (
-        <MenuAction
-          Icon={BellSimple}
-          label={actions.followLabel}
-          onClick={actions.follow}
-        />
+        <MenuAction Icon={BellSimple} label={actions.followLabel} onClick={actions.follow} />
       )}
       {actions.canBookmark && actions.canCopyLink && <MenuDivider />}
       {actions.canCopyLink && (

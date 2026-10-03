@@ -8,9 +8,7 @@ import {
 } from "./curriculumTestPreferences";
 import type { CurriculumTestPreferences } from "./curriculumTestPreferences";
 
-const getEventPreferences = (
-  event: Event,
-): Partial<CurriculumTestPreferences> | undefined => {
+const getEventPreferences = (event: Event): Partial<CurriculumTestPreferences> | undefined => {
   if (!(event instanceof CustomEvent)) return undefined;
   const detail: unknown = event.detail;
   return typeof detail === "object" && detail !== null
@@ -19,9 +17,7 @@ const getEventPreferences = (
 };
 
 export function useCurriculumTestPreferences() {
-  const [preferences, setPreferences] = useState(
-    CURRICULUM_TEST_PREFERENCES_DEFAULTS,
-  );
+  const [preferences, setPreferences] = useState(CURRICULUM_TEST_PREFERENCES_DEFAULTS);
 
   useEffect(() => {
     setPreferences(readCurriculumTestPreferences());
@@ -36,11 +32,7 @@ export function useCurriculumTestPreferences() {
     };
 
     window.addEventListener(CURRICULUM_TEST_PREFERENCES_EVENT, syncPreferences);
-    return () =>
-      window.removeEventListener(
-        CURRICULUM_TEST_PREFERENCES_EVENT,
-        syncPreferences,
-      );
+    return () => window.removeEventListener(CURRICULUM_TEST_PREFERENCES_EVENT, syncPreferences);
   }, []);
 
   const savePreferences = useCallback((value: CurriculumTestPreferences) => {

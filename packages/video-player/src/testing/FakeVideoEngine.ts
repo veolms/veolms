@@ -1,9 +1,6 @@
 import { VideoEngineError } from "../core/errors";
 import type { VideoEngineEventMap } from "../core/events";
-import {
-  createInitialVideoEngineSnapshot,
-  type VideoEngineSnapshot,
-} from "../core/snapshot";
+import { createInitialVideoEngineSnapshot, type VideoEngineSnapshot } from "../core/snapshot";
 import { TypedEventEmitter } from "../core/typed-emitter";
 import type {
   VideoAudioTrack,

@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  accessGrantSchema,
-  createManualAccessGrantRequestSchema,
-} from "@veolms/contracts";
+import { accessGrantSchema, createManualAccessGrantRequestSchema } from "@veolms/contracts";
 import { jsonResponse } from "../../lib/responses.ts";
 import { errorResponse } from "../../lib/errors.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
@@ -54,10 +51,7 @@ const accessRoutes: RoutePlugin = async (app, options) => {
           "Revokes an active access grant and flips corresponding enrollment status to revoked.",
         params: z.object({ grantId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "Access grant revoked",
-            z.object({ message: z.string() }),
-          ),
+          200: jsonResponse("Access grant revoked", z.object({ message: z.string() })),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
         },
@@ -77,10 +71,7 @@ const accessRoutes: RoutePlugin = async (app, options) => {
         summary: "List access grants for a user",
         params: z.object({ userId: z.uuid() }),
         response: {
-          200: jsonResponse(
-            "List of access grants",
-            z.array(accessGrantSchema),
-          ),
+          200: jsonResponse("List of access grants", z.array(accessGrantSchema)),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
         },

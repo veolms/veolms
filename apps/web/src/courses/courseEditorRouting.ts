@@ -24,9 +24,7 @@ export function isCourseCreateEditorPath(pathname: string): boolean {
 
 export function isCourseEditEditorPath(pathname: string): boolean {
   const path = normalizeEditorPath(pathname);
-  return new RegExp(
-    `^/courses/[^/]+/edit/(?:${COURSE_EDITOR_STEP_PATTERN})$`,
-  ).test(path);
+  return new RegExp(`^/courses/[^/]+/edit/(?:${COURSE_EDITOR_STEP_PATTERN})$`).test(path);
 }
 
 export function isCourseEditorPath(pathname: string): boolean {

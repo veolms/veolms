@@ -1,10 +1,7 @@
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretUp } from "@phosphor-icons/react/CaretUp";
 import type { RefObject } from "react";
-import {
-  ContextMenu,
-  ContextMenuTrigger,
-} from "../../components/ui/context-menu";
+import { ContextMenu, ContextMenuTrigger } from "../../components/ui/context-menu";
 import { CurriculumSectionActionsMenuContent } from "../CurriculumSectionActionsMenu";
 
 export interface MiniPlayerInfoBarProps {
@@ -40,9 +37,7 @@ export function MiniPlayerInfoBar({
 }: MiniPlayerInfoBarProps) {
   const subtitleParts = [
     courseTitle,
-    lessonIndex !== undefined && totalLessons
-      ? `${lessonIndex} / ${totalLessons}`
-      : undefined,
+    lessonIndex !== undefined && totalLessons ? `${lessonIndex} / ${totalLessons}` : undefined,
   ].filter(Boolean);
   const subtitle = subtitleParts.join(" • ");
 
@@ -61,9 +56,7 @@ export function MiniPlayerInfoBar({
     <div
       role="button"
       tabIndex={0}
-      aria-label={
-        expanded ? "Collapse curriculum menu" : "Expand curriculum menu"
-      }
+      aria-label={expanded ? "Collapse curriculum menu" : "Expand curriculum menu"}
       aria-expanded={expanded}
       onClick={handleAction}
       onKeyDown={(event) => {
@@ -72,20 +65,20 @@ export function MiniPlayerInfoBar({
           handleAction();
         }
       }}
-      className="group/info hidden min-[641px]:flex h-[52px] w-full shrink-0 items-center justify-between px-3.5 py-1.5 border-t select-none cursor-pointer group-data-[mini-player-mode=dragging]/mini-player-shell:cursor-grabbing transition-colors"
+      className="group/info hidden h-[52px] w-full shrink-0 cursor-pointer items-center justify-between border-t px-3.5 py-1.5 transition-colors select-none group-data-[mini-player-mode=dragging]/mini-player-shell:cursor-grabbing min-[641px]:flex"
       data-learning-mini-player-expand-trigger=""
       data-learning-mini-player-info-bar=""
     >
-      <div className="flex-1 min-w-0 pr-2 text-left">
+      <div className="min-w-0 flex-1 pr-2 text-left">
         <p
-          className="truncate text-[13px] font-semibold text-white leading-tight"
+          className="truncate text-[13px] leading-tight font-semibold text-white"
           title={lessonTitle}
         >
           {lessonTitle}
         </p>
         {subtitle ? (
           <p
-            className="truncate text-xs leading-tight mt-0.5"
+            className="mt-0.5 truncate text-xs leading-tight"
             title={subtitle}
             data-learning-mini-player-info-subtitle=""
           >

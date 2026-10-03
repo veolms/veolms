@@ -101,9 +101,7 @@ function sameContext(left: FeedContext, right: FeedContext): boolean {
 function isUuid(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
-      value,
-    )
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)
   );
 }
 
@@ -171,9 +169,7 @@ function encodeFeedCursor(candidate: FeedCandidate, context: FeedContext) {
   });
 }
 
-function threadKinds(
-  context: FeedContext,
-): readonly ("comment" | "question")[] {
+function threadKinds(context: FeedContext): readonly ("comment" | "question")[] {
   if (context.kind === "comment") {
     return context.capabilities.allowComments ? ["comment"] : [];
   }
@@ -334,9 +330,7 @@ export function createLearningDiscussionsFeedService(options?: {
       undefined,
       options?.storage,
     );
-  const notes =
-    options?.notes ??
-    createNotesService(createNotesRepository(), options?.storage);
+  const notes = options?.notes ?? createNotesService(createNotesRepository(), options?.storage);
 
   return {
     async list(db, { courseId, lessonId, actor, query }) {
@@ -350,8 +344,7 @@ export function createLearningDiscussionsFeedService(options?: {
       const capabilities: FeedCapabilities = {
         allowComments: settings?.allow_comments !== false,
         allowQa: settings?.allow_qa !== false,
-        allowNotes:
-          readAccess.canReadPrivateState && settings?.allow_notes !== false,
+        allowNotes: readAccess.canReadPrivateState && settings?.allow_notes !== false,
       };
       const context: FeedContext = {
         courseId,
@@ -366,22 +359,13 @@ export function createLearningDiscussionsFeedService(options?: {
 
       const cursor = decodeFeedCursor(query.cursor, context);
       const academyId = await resolveAcademyId(db);
-      const rows = await listCandidates(
-        db,
-        actor,
-        academyId,
-        context,
-        cursor,
-        query.limit,
-      );
+      const rows = await listCandidates(db, actor, academyId, context, cursor, query.limit);
       const { page, hasMore } = takePage(rows, query.limit);
 
       const threadIds = page
         .filter((row) => row.sourceType === "thread")
         .map((row) => row.entityId);
-      const noteIds = page
-        .filter((row) => row.sourceType === "note")
-        .map((row) => row.entityId);
+      const noteIds = page.filter((row) => row.sourceType === "note").map((row) => row.entityId);
 
       const threadQuery: ThreadsListQuery = {
         kind: "all",
@@ -389,9 +373,7 @@ export function createLearningDiscussionsFeedService(options?: {
         sort: "latest",
         courseId,
         lessonId,
-        currentUserId: readAccess.canReadPrivateState
-          ? actor?.userId
-          : undefined,
+        currentUserId: readAccess.canReadPrivateState ? actor?.userId : undefined,
         roles: readAccess.canReadPrivateState ? actor?.roles : undefined,
         skipCourseAccessCheck: true,
         limit: Math.max(1, threadIds.length),
@@ -414,12 +396,8 @@ export function createLearningDiscussionsFeedService(options?: {
           : Promise.resolve({ notes: [], nextCursor: null }),
       ]);
 
-      const threadsById = new Map(
-        threadResponse.threads.map((thread) => [thread.id, thread]),
-      );
-      const notesById = new Map(
-        noteResponse.notes.map((note) => [note.id, note]),
-      );
+      const threadsById = new Map(threadResponse.threads.map((thread) => [thread.id, thread]));
+      const notesById = new Map(noteResponse.notes.map((note) => [note.id, note]));
       const items: LessonDiscussionItem[] = [];
 
       for (const row of page) {

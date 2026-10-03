@@ -26,11 +26,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   const permissions = createDiscussionPermissions(options);
   const repo = createAttachmentsRepository();
   const uploadStore = createDiscussionUploadStore(options.services.storage);
-  const service = createAttachmentsService(
-    repo,
-    uploadStore,
-    options.services.storage,
-  );
+  const service = createAttachmentsService(repo, uploadStore, options.services.storage);
   const controller = createAttachmentsController({
     database: options.database,
     service,
@@ -47,10 +43,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
         summary: "Initiate upload session for media or code file",
         body: initiateAttachmentUploadRequestSchema,
         response: {
-          201: jsonResponse(
-            "Upload slot initiated",
-            initiateAttachmentUploadResponseSchema,
-          ),
+          201: jsonResponse("Upload slot initiated", initiateAttachmentUploadResponseSchema),
           400: errorResponse("Invalid input"),
           401: errorResponse("Unauthorized"),
         },
@@ -112,10 +105,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
         summary: "Direct single-step file upload",
         consumes: ["multipart/form-data"],
         response: {
-          201: jsonResponse(
-            "Attachment uploaded",
-            learningUploadResponseSchema,
-          ),
+          201: jsonResponse("Attachment uploaded", learningUploadResponseSchema),
           400: errorResponse("File is required"),
           401: errorResponse("Unauthorized"),
           413: errorResponse("File is too large"),

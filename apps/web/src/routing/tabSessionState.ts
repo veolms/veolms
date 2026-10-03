@@ -1,14 +1,7 @@
 export type SettingsTab =
-  | "profile"
-  | "appearance"
-  | "sidebar"
-  | "learning"
-  | "notifications"
-  | "security"
-  | "account";
+  "profile" | "appearance" | "sidebar" | "learning" | "notifications" | "security" | "account";
 
-export type DiscussionTab =
-  "q-and-a" | "comments" | "notes" | "mentions" | "following" | "saved";
+export type DiscussionTab = "q-and-a" | "comments" | "notes" | "mentions" | "following" | "saved";
 
 export const SETTINGS_DEFAULT_TAB: SettingsTab = "profile";
 export const DISCUSSIONS_DEFAULT_TAB: DiscussionTab = "q-and-a";
@@ -55,9 +48,7 @@ export const normalizeDiscussionTab = (value: unknown): DiscussionTab =>
 
 export const readSettingsTab = (): SettingsTab => {
   try {
-    return normalizeSettingsTab(
-      getSessionStorage()?.getItem(SETTINGS_TAB_SESSION_KEY),
-    );
+    return normalizeSettingsTab(getSessionStorage()?.getItem(SETTINGS_TAB_SESSION_KEY));
   } catch {
     return SETTINGS_DEFAULT_TAB;
   }
@@ -65,9 +56,7 @@ export const readSettingsTab = (): SettingsTab => {
 
 export const readDiscussionTab = (): DiscussionTab => {
   try {
-    return normalizeDiscussionTab(
-      getSessionStorage()?.getItem(DISCUSSIONS_TAB_SESSION_KEY),
-    );
+    return normalizeDiscussionTab(getSessionStorage()?.getItem(DISCUSSIONS_TAB_SESSION_KEY));
   } catch {
     return DISCUSSIONS_DEFAULT_TAB;
   }

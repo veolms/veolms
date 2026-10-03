@@ -12,21 +12,11 @@ function LoadingStatus() {
       aria-live="polite"
     >
       <div className="grid size-14 place-items-center rounded-2xl bg-(--surface) shadow-(--surface-depth-shadow)">
-        <img
-          className="h-8 w-auto"
-          src={procodrrLogoMark}
-          alt=""
-          width={115}
-          height={136}
-        />
+        <img className="h-8 w-auto" src={procodrrLogoMark} alt="" width={115} height={136} />
       </div>
       <div className="space-y-1.5">
-        <p className="text-sm font-semibold tracking-tight">
-          Loading your workspace
-        </p>
-        <p className="text-xs leading-5 text-(--muted)">
-          Restoring your saved layout…
-        </p>
+        <p className="text-sm font-semibold tracking-tight">Loading your workspace</p>
+        <p className="text-xs leading-5 text-(--muted)">Restoring your saved layout…</p>
       </div>
       <span className="flex gap-1.5" aria-hidden="true">
         <span className="size-1.5 animate-pulse rounded-full bg-(--accent) motion-reduce:animate-none" />
@@ -37,13 +27,11 @@ function LoadingStatus() {
   );
 }
 
-export function AppLoadingScreen({
-  variant = "page",
-}: AppLoadingScreenProps = {}) {
+export function AppLoadingScreen({ variant = "page" }: AppLoadingScreenProps = {}) {
   if (variant === "embedded") {
     return (
       <div
-        className="flex w-full min-h-60 flex-col items-center justify-center px-2 py-8 lg:min-h-70"
+        className="flex min-h-60 w-full flex-col items-center justify-center px-2 py-8 lg:min-h-70"
         data-app-loading
         aria-label="Loading ProCodrr"
       >

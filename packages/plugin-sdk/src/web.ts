@@ -50,8 +50,7 @@ export function route(
   children?: RouteConfigEntry[],
 ): RouteConfigEntry {
   const isChildrenArray = Array.isArray(optionsOrChildren);
-  const options =
-    isChildrenArray || !optionsOrChildren ? undefined : optionsOrChildren;
+  const options = isChildrenArray || !optionsOrChildren ? undefined : optionsOrChildren;
   const childRoutes = isChildrenArray ? optionsOrChildren : children;
 
   const result: RouteConfigEntry = {
@@ -62,8 +61,7 @@ export function route(
 
   if (options?.id !== undefined) result.id = options.id;
   if (options?.index !== undefined) result.index = options.index;
-  if (options?.caseSensitive !== undefined)
-    result.caseSensitive = options.caseSensitive;
+  if (options?.caseSensitive !== undefined) result.caseSensitive = options.caseSensitive;
 
   return result;
 }
@@ -71,10 +69,7 @@ export function route(
 /**
  * Creates an index route config entry.
  */
-export function index(
-  file: string,
-  options?: CreateIndexOptions,
-): RouteConfigEntry {
+export function index(file: string, options?: CreateIndexOptions): RouteConfigEntry {
   const result: RouteConfigEntry = {
     file,
     index: true,
@@ -86,10 +81,7 @@ export function index(
 /**
  * Creates a layout route config entry.
  */
-export function layout(
-  file: string,
-  children?: RouteConfigEntry[],
-): RouteConfigEntry;
+export function layout(file: string, children?: RouteConfigEntry[]): RouteConfigEntry;
 export function layout(
   file: string,
   options: CreateLayoutOptions,
@@ -101,8 +93,7 @@ export function layout(
   children?: RouteConfigEntry[],
 ): RouteConfigEntry {
   const isChildrenArray = Array.isArray(optionsOrChildren);
-  const options =
-    isChildrenArray || !optionsOrChildren ? undefined : optionsOrChildren;
+  const options = isChildrenArray || !optionsOrChildren ? undefined : optionsOrChildren;
   const childRoutes = isChildrenArray ? optionsOrChildren : children;
 
   const result: RouteConfigEntry = {
@@ -118,10 +109,7 @@ export function layout(
 /**
  * Prefixes a list of routes with a base path.
  */
-export function prefix(
-  prefixPath: string,
-  routes: RouteConfigEntry[],
-): RouteConfigEntry[] {
+export function prefix(prefixPath: string, routes: RouteConfigEntry[]): RouteConfigEntry[] {
   return routes.map((entry) => {
     if (entry.index || typeof entry.path === "string") {
       return {
@@ -167,10 +155,7 @@ export interface WebExtension {
  * @param importMetaUrl - Pass `import.meta.url` from the extension file.
  * @param relativePath  - Path to the page component relative to that file.
  */
-export function pluginFile(
-  importMetaUrl: string,
-  relativePath: string,
-): string {
+export function pluginFile(importMetaUrl: string, relativePath: string): string {
   const url = new URL(relativePath, importMetaUrl);
   let pathname = decodeURIComponent(url.pathname);
   // On Windows, strip the leading slash before drive letters (e.g. /C:/path -> C:/path)

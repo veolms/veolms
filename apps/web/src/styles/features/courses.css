@@ -351,9 +351,7 @@
 
 /* The collapsed rail keeps only the login icon so the compact control cannot
    overflow even in browsers without container-query support. */
-.courses-app--collapsed
-  .courses-profile__button
-  > .courses-profile__login-arrow {
+.courses-app--collapsed .courses-profile__button > .courses-profile__login-arrow {
   display: none;
 }
 
@@ -393,8 +391,7 @@
     visibility 0s linear 280ms;
 }
 
-.courses-profile:has(> .profile-menu--animated)
-  > button.courses-profile__button,
+.courses-profile:has(> .profile-menu--animated) > button.courses-profile__button,
 .courses-profile:has(> .profile-menu--animated) > .sidebar-appearance {
   position: relative;
   z-index: 130;
@@ -425,9 +422,7 @@
     visibility 0s linear 280ms;
 }
 
-.courses-app--collapsed
-  .courses-profile
-  > .profile-menu--animated[data-open="true"],
+.courses-app--collapsed .courses-profile > .profile-menu--animated[data-open="true"],
 :root[data-sidebar-state="collapsed"]
   .courses-app:not(.courses-app--collapsed)
   .courses-profile
@@ -522,8 +517,7 @@
 }
 
 .profile-menu__item:focus-visible {
-  outline: 2px solid
-    color-mix(in srgb, var(--accent-ink, var(--accent)) 75%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent-ink, var(--accent)) 75%, transparent);
   outline-offset: 2px;
 }
 
@@ -668,9 +662,7 @@
 .courses-app--collapsed .courses-sidebar__label,
 .courses-app--collapsed .courses-nav button > span,
 .courses-app--collapsed .courses-nav button > b,
-.courses-app--collapsed
-  .courses-profile__button
-  > span:not(.courses-profile__avatar-wrap),
+.courses-app--collapsed .courses-profile__button > span:not(.courses-profile__avatar-wrap),
 .courses-app--collapsed .courses-profile__button > svg {
   display: none;
 }
@@ -721,9 +713,7 @@
 }
 
 .courses-app--hidden .courses-sidebar,
-:root[data-sidebar-state="hidden"]
-  .courses-app:not(.courses-app--edge-open)
-  .courses-sidebar {
+:root[data-sidebar-state="hidden"] .courses-app:not(.courses-app--edge-open) .courses-sidebar {
   position: fixed;
   top: 10px;
   bottom: 10px;
@@ -868,8 +858,7 @@
 .course-select:focus-within {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 8px 20px
-    color-mix(in srgb, var(--accent-shadow) 38%, transparent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent-shadow) 38%, transparent);
 }
 
 .courses-search input {
@@ -907,12 +896,7 @@
 @media (min-width: 821px) {
   /* The stateful fade follows horizontal overflow and cannot be expressed as a Tailwind utility. */
   [data-courses-toolbar] [data-course-quick-filters][data-fade-right="true"] {
-    mask-image: linear-gradient(
-      to right,
-      #000 0%,
-      #000 calc(100% - 1.5rem),
-      transparent 100%
-    );
+    mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 1.5rem), transparent 100%);
   }
 }
 
@@ -1127,29 +1111,17 @@
 
 @keyframes course-menu-press-feedback {
   0% {
-    background-color: color-mix(
-      in srgb,
-      var(--text) 24%,
-      var(--surface-strong)
-    );
+    background-color: color-mix(in srgb, var(--text) 24%, var(--surface-strong));
     transform: scale(1);
   }
 
   48% {
-    background-color: color-mix(
-      in srgb,
-      var(--text) 44%,
-      var(--surface-strong)
-    );
+    background-color: color-mix(in srgb, var(--text) 44%, var(--surface-strong));
     transform: scale(1.0278);
   }
 
   100% {
-    background-color: color-mix(
-      in srgb,
-      var(--text) 24%,
-      var(--surface-strong)
-    );
+    background-color: color-mix(in srgb, var(--text) 24%, var(--surface-strong));
     transform: scale(1);
   }
 }
@@ -1427,9 +1399,7 @@
     padding: 0;
   }
 
-  .courses-app:not(.courses-app--hidden)
-    .courses-profile
-    > .courses-profile__button {
+  .courses-app:not(.courses-app--hidden) .courses-profile > .courses-profile__button {
     height: 64px;
     min-height: 64px;
     justify-content: center;

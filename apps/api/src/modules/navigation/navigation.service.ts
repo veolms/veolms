@@ -7,9 +7,7 @@ export interface NavigationServiceOptions {
   database: Kysely<Database>;
 }
 
-export function createNavigationService({
-  database,
-}: NavigationServiceOptions) {
+export function createNavigationService({ database }: NavigationServiceOptions) {
   async function getSidenav(userId?: string | null): Promise<SidenavResponse> {
     if (!userId) {
       const publicMenus = await navigationRepository.listPublicMenus(database);

@@ -3,10 +3,7 @@ import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { LoadingCards } from "../components/analytics/StatTiles";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { useMyCourses } from "../services/courses";
-import {
-  useAdminAnalyticsOverview,
-  useInstructorAnalyticsOverview,
-} from "../services/analytics";
+import { useAdminAnalyticsOverview, useInstructorAnalyticsOverview } from "../services/analytics";
 import { selectTriggerClass } from "./analyticsShared";
 import { OverviewTab } from "./tabs/OverviewTab";
 
@@ -31,9 +28,7 @@ const RANGE_OPTIONS: ReadonlyArray<{
 
 function useDateRangeParams(rangeKey: RangeKey) {
   return useMemo(() => {
-    const option = RANGE_OPTIONS.find(
-      (candidate) => candidate.key === rangeKey,
-    )!;
+    const option = RANGE_OPTIONS.find((candidate) => candidate.key === rangeKey)!;
     const to = new Date();
     const from = new Date(to.getTime() - option.days * 24 * 60 * 60 * 1000);
     return { from: from.toISOString(), to: to.toISOString() };
@@ -51,7 +46,7 @@ function DateRangeTabs({
     <div
       role="tablist"
       aria-label="Date range"
-      className="flex gap-1 sm:gap-1.5 rounded-[12px] sm:rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_80%,var(--surface))] p-1 sm:p-1.5"
+      className="flex gap-1 rounded-[12px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_80%,var(--surface))] p-1 sm:gap-1.5 sm:rounded-[14px] sm:p-1.5"
     >
       {RANGE_OPTIONS.map((option) => (
         <button
@@ -62,10 +57,10 @@ function DateRangeTabs({
           tabIndex={value === option.key ? 0 : -1}
           onClick={() => onChange(option.key)}
           onKeyDown={handleRovingTabKeyDown}
-          className={`rounded-[8px] sm:rounded-[10px] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+          className={`cursor-pointer rounded-[8px] px-3 py-1.5 text-xs font-semibold transition-all sm:rounded-[10px] sm:px-4 sm:py-2 sm:text-sm ${
             value === option.key
               ? "bg-(--card-surface,var(--surface)) text-(--text) shadow-[var(--card-compact-shadow)]"
-              : "text-(--muted) hover:text-(--text) hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
+              : "text-(--muted) hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] hover:text-(--text)"
           }`}
         >
           {option.label}
@@ -86,14 +81,12 @@ function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="pt-2 sm:pt-0 flex flex-col gap-3.5 sm:gap-5 border-b border-(--border) pb-4.5 sm:pb-7 lg:flex-row lg:items-end lg:justify-between">
+    <header className="flex flex-col gap-3.5 border-b border-(--border) pt-2 pb-4.5 sm:gap-5 sm:pt-0 sm:pb-7 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)">
+        <h1 className="text-[clamp(1.8rem,2.4vw,2.15rem)] leading-tight font-bold tracking-[-0.035em] text-(--text)">
           {title}
         </h1>
-        <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">
-          {description}
-        </p>
+        <p className="mt-1.5 max-w-2xl text-[0.88rem] leading-6 text-(--muted)">{description}</p>
       </div>
       {action ? (
         <div className="flex shrink-0 flex-wrap items-center gap-2 pt-2 pb-0.5 sm:py-0">
@@ -121,10 +114,7 @@ function AnalyticsContent({ isAdmin }: { isAdmin: boolean }) {
   const { data, isLoading } = isAdmin ? adminQuery : instructorQuery;
 
   const courseOptions: ThemedSelectOption<string>[] = [
-    [
-      "all",
-      isAdmin ? "All Courses" : "All my courses",
-    ] as ThemedSelectOption<string>,
+    ["all", isAdmin ? "All Courses" : "All my courses"] as ThemedSelectOption<string>,
     ...(myCourses.data?.courses ?? []).map(
       (course) => [course.id, course.title] as ThemedSelectOption<string>,
     ),
@@ -155,7 +145,7 @@ function AnalyticsContent({ isAdmin }: { isAdmin: boolean }) {
       />
 
       {isLoading || !data ? (
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
           <LoadingCards />
         </div>
       ) : (

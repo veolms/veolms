@@ -2,22 +2,10 @@ export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
 export type CourseRole = "student" | "creator";
 export type CourseEnrollmentFilter =
-  | "all"
-  | "enrolled"
-  | "not-enrolled"
-  | "wishlist"
-  | "published"
-  | "draft"
-  | "bin";
+  "all" | "enrolled" | "not-enrolled" | "wishlist" | "published" | "draft" | "bin";
 export type CourseSort = "latest" | "title" | "progress";
 export type CourseStatusFilter =
-  | "all"
-  | "in-progress"
-  | "not-started"
-  | "completed"
-  | "published"
-  | "draft"
-  | "bin";
+  "all" | "in-progress" | "not-started" | "completed" | "published" | "draft" | "bin";
 export type CourseLifecycleStatus = "published" | "draft" | "archived";
 
 export interface CourseOpenOptions {
@@ -74,9 +62,7 @@ const LEGACY_API_COURSE_SLUGS: Readonly<Record<string, string>> = {
   "typescript-course": "ultimate-typescript-course",
 };
 
-export function getApiCourseSlugForLegacyKey(
-  courseKey: string | undefined,
-): string | undefined {
+export function getApiCourseSlugForLegacyKey(courseKey: string | undefined): string | undefined {
   return courseKey ? LEGACY_API_COURSE_SLUGS[courseKey] : undefined;
 }
 
@@ -98,15 +84,10 @@ export function courseMatchesWishlist(
   return Boolean(slug && wishlisted.has(slug));
 }
 
-function matchesCourseSearch(
-  course: Course,
-  normalizedSearch: string,
-): boolean {
+function matchesCourseSearch(course: Course, normalizedSearch: string): boolean {
   return (
     !normalizedSearch ||
-    `${course.title} ${course.description}`
-      .toLowerCase()
-      .includes(normalizedSearch)
+    `${course.title} ${course.description}`.toLowerCase().includes(normalizedSearch)
   );
 }
 
@@ -117,15 +98,10 @@ function matchesCourseStatusFilter(
 ): boolean {
   if (statusFilter === "all" || role !== "student") return true;
   const progress = course.progress ?? 0;
-  if (
-    statusFilter === "in-progress" &&
-    (!course.enrolled || progress <= 0 || progress >= 100)
-  )
+  if (statusFilter === "in-progress" && (!course.enrolled || progress <= 0 || progress >= 100))
     return false;
-  if (statusFilter === "not-started" && (!course.enrolled || progress !== 0))
-    return false;
-  if (statusFilter === "completed" && (!course.enrolled || progress < 100))
-    return false;
+  if (statusFilter === "not-started" && (!course.enrolled || progress !== 0)) return false;
+  if (statusFilter === "completed" && (!course.enrolled || progress < 100)) return false;
   return true;
 }
 
@@ -146,10 +122,7 @@ export function getCourseQuickFilterCounts(
     role,
     statusFilter,
     search,
-  }: Pick<
-    CourseCatalogueFilters,
-    "wishlisted" | "role" | "statusFilter" | "search"
-  >,
+  }: Pick<CourseCatalogueFilters, "wishlisted" | "role" | "statusFilter" | "search">,
 ): CourseQuickFilterCounts {
   const normalizedSearch = search.trim().toLowerCase();
   const pool = catalogue.filter((course) => {
@@ -157,9 +130,7 @@ export function getCourseQuickFilterCounts(
     return matchesCourseStatusFilter(course, role, statusFilter);
   });
 
-  const wishlistPool = pool.filter((course) =>
-    courseMatchesWishlist(course, wishlisted),
-  );
+  const wishlistPool = pool.filter((course) => courseMatchesWishlist(course, wishlisted));
 
   if (role === "student") {
     const enrolled = pool.filter((course) => course.enrolled).length;
@@ -174,12 +145,8 @@ export function getCourseQuickFilterCounts(
     };
   }
 
-  const published = pool.filter(
-    (course) => course.lifecycleStatus === "published",
-  ).length;
-  const draft = pool.filter(
-    (course) => course.lifecycleStatus === "draft",
-  ).length;
+  const published = pool.filter((course) => course.lifecycleStatus === "published").length;
+  const draft = pool.filter((course) => course.lifecycleStatus === "draft").length;
 
   return {
     all: pool.length,
@@ -194,14 +161,7 @@ export function getCourseQuickFilterCounts(
 
 export function getVisibleCourses(
   catalogue: readonly Course[],
-  {
-    wishlisted,
-    role,
-    enrollmentFilter,
-    statusFilter,
-    search,
-    sort,
-  }: CourseCatalogueFilters,
+  { wishlisted, role, enrollmentFilter, statusFilter, search, sort }: CourseCatalogueFilters,
 ): Course[] {
   const normalizedSearch = search.trim().toLowerCase();
   let result = catalogue.filter((course) => {
@@ -211,18 +171,8 @@ export function getVisibleCourses(
       !courseMatchesWishlist(course, wishlisted)
     )
       return false;
-    if (
-      role === "student" &&
-      enrollmentFilter === "enrolled" &&
-      !course.enrolled
-    )
-      return false;
-    if (
-      role === "student" &&
-      enrollmentFilter === "not-enrolled" &&
-      course.enrolled
-    )
-      return false;
+    if (role === "student" && enrollmentFilter === "enrolled" && !course.enrolled) return false;
+    if (role === "student" && enrollmentFilter === "not-enrolled" && course.enrolled) return false;
     if (
       role === "creator" &&
       enrollmentFilter !== "all" &&
@@ -232,32 +182,17 @@ export function getVisibleCourses(
       return false;
     if (statusFilter !== "all" && role === "student") {
       const progress = course.progress ?? 0;
-      if (
-        statusFilter === "in-progress" &&
-        (!course.enrolled || progress <= 0 || progress >= 100)
-      )
+      if (statusFilter === "in-progress" && (!course.enrolled || progress <= 0 || progress >= 100))
         return false;
-      if (
-        statusFilter === "not-started" &&
-        (!course.enrolled || progress !== 0)
-      )
-        return false;
-      if (statusFilter === "completed" && (!course.enrolled || progress < 100))
-        return false;
+      if (statusFilter === "not-started" && (!course.enrolled || progress !== 0)) return false;
+      if (statusFilter === "completed" && (!course.enrolled || progress < 100)) return false;
     }
     return (
       !normalizedSearch ||
-      `${course.title} ${course.description}`
-        .toLowerCase()
-        .includes(normalizedSearch)
+      `${course.title} ${course.description}`.toLowerCase().includes(normalizedSearch)
     );
   });
-  if (
-    role === "student" &&
-    enrollmentFilter === "all" &&
-    sort === "latest" &&
-    result.length > 1
-  ) {
+  if (role === "student" && enrollmentFilter === "all" && sort === "latest" && result.length > 1) {
     const contrastingCourseIndex = result.findIndex(
       (course, index) => index > 0 && course.enrolled !== result[0]?.enrolled,
     );
@@ -282,8 +217,7 @@ export function getVisibleCourses(
       return 0;
     });
   }
-  if (sort === "title")
-    result = [...result].sort((a, b) => a.title.localeCompare(b.title));
+  if (sort === "title") result = [...result].sort((a, b) => a.title.localeCompare(b.title));
   if (sort === "progress")
     result = [...result].sort((a, b) => (b.progress || 0) - (a.progress || 0));
   return result;

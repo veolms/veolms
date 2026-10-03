@@ -27,8 +27,7 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
         operationId: "setupTotp",
         tags: ["Auth"],
         summary: "Generate TOTP Secret",
-        description:
-          "Generates a dynamic base32 MFA secret and provisioning URL challenge.",
+        description: "Generates a dynamic base32 MFA secret and provisioning URL challenge.",
         response: {
           200: jsonResponse("MFA secret metadata.", totpSetupResponseSchema),
           401: errorResponse("Unauthorized."),
@@ -56,9 +55,7 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
           ),
           400: errorResponse("Verification failed."),
           401: errorResponse("Unauthorized."),
-          403: errorResponse(
-            "Step-up MFA required to replace existing factor.",
-          ),
+          403: errorResponse("Step-up MFA required to replace existing factor."),
         },
       },
       preHandler: context.authenticated,
@@ -73,13 +70,9 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
         operationId: "disableTotp",
         tags: ["Auth"],
         summary: "Disable TOTP Authenticator",
-        description:
-          "Removes TOTP authenticator credentials and associated backup recovery codes.",
+        description: "Removes TOTP authenticator credentials and associated backup recovery codes.",
         response: {
-          200: jsonResponse(
-            "TOTP disabled successfully.",
-            authMessageResponseSchema,
-          ),
+          200: jsonResponse("TOTP disabled successfully.", authMessageResponseSchema),
           400: errorResponse("Cannot disable mandatory MFA."),
           401: errorResponse("Unauthorized."),
           403: errorResponse("Step-up MFA required."),
@@ -97,13 +90,9 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
         operationId: "deletePasskeys",
         tags: ["Auth"],
         summary: "Delete All Passkeys",
-        description:
-          "Removes all registered WebAuthn passkey credentials for the user.",
+        description: "Removes all registered WebAuthn passkey credentials for the user.",
         response: {
-          200: jsonResponse(
-            "Passkeys removed successfully.",
-            authMessageResponseSchema,
-          ),
+          200: jsonResponse("Passkeys removed successfully.", authMessageResponseSchema),
           400: errorResponse("Cannot disable mandatory MFA."),
           401: errorResponse("Unauthorized."),
           403: errorResponse("Step-up MFA required."),
@@ -143,17 +132,11 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
         operationId: "getPasskeyRegisterOptions",
         tags: ["Auth"],
         summary: "Generate Passkey Registration Options",
-        description:
-          "Creates options challenge payload to register a new WebAuthn credential.",
+        description: "Creates options challenge payload to register a new WebAuthn credential.",
         response: {
-          200: jsonResponse(
-            "Passkey options challenge.",
-            passkeyRegistrationOptionsResponseSchema,
-          ),
+          200: jsonResponse("Passkey options challenge.", passkeyRegistrationOptionsResponseSchema),
           401: errorResponse("Unauthorized."),
-          403: errorResponse(
-            "Step-up MFA required to replace existing factor.",
-          ),
+          403: errorResponse("Step-up MFA required to replace existing factor."),
         },
       },
       preHandler: context.authenticated,
@@ -172,13 +155,8 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
           "Verifies the browser WebAuthn response signature and saves credential to user keys.",
         body: passkeyRegisterVerifyRequestSchema,
         response: {
-          200: jsonResponse(
-            "Passkey registered successfully.",
-            authMessageResponseSchema,
-          ),
-          400: errorResponse(
-            "Verification challenge expired or validation failed.",
-          ),
+          200: jsonResponse("Passkey registered successfully.", authMessageResponseSchema),
+          400: errorResponse("Verification challenge expired or validation failed."),
           401: errorResponse("Unauthorized."),
         },
       },
@@ -194,8 +172,7 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
         operationId: "getPasskeyLoginOptions",
         tags: ["Auth"],
         summary: "Generate Passkey Login Options",
-        description:
-          "Creates options challenge payload to complete WebAuthn login assertion.",
+        description: "Creates options challenge payload to complete WebAuthn login assertion.",
         response: {
           200: jsonResponse(
             "Passkey options challenge.",
@@ -216,17 +193,11 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
         operationId: "verifyPasskeyLogin",
         tags: ["Auth"],
         summary: "Verify Passkey Login Response",
-        description:
-          "Verifies browser WebAuthn assertion signature, completing step-up MFA login.",
+        description: "Verifies browser WebAuthn assertion signature, completing step-up MFA login.",
         body: passkeyLoginVerifyRequestSchema,
         response: {
-          200: jsonResponse(
-            "Passkey verified successfully.",
-            authMessageResponseSchema,
-          ),
-          400: errorResponse(
-            "Challenge expired or passkey credential missing.",
-          ),
+          200: jsonResponse("Passkey verified successfully.", authMessageResponseSchema),
+          400: errorResponse("Challenge expired or passkey credential missing."),
           401: errorResponse("Incorrect code or signature validation failed."),
         },
       },

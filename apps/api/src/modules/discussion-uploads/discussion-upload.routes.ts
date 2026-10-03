@@ -54,10 +54,7 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
 
     try {
       if (attachment.targetType === "thread") {
-        const thread = await threadsRepo.findThreadById(
-          db,
-          attachment.targetId,
-        );
+        const thread = await threadsRepo.findThreadById(db, attachment.targetId);
         if (!thread) return false;
         await discussionAccess.assertCanAccessThread(db, actor, thread);
         return true;
@@ -88,10 +85,7 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
   }
 
   const uploadResponse = {
-    200: jsonResponse(
-      "Discussion attachment stored",
-      discussionUploadResponseSchema,
-    ),
+    200: jsonResponse("Discussion attachment stored", discussionUploadResponseSchema),
     400: errorResponse("A file is required"),
     401: errorResponse("Unauthorized"),
     413: errorResponse("The file is too large"),
@@ -150,15 +144,12 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
         });
       } catch (error) {
         if (error instanceof AppError) throw error;
-        const message =
-          error instanceof Error ? error.message : "DISCUSSION_UPLOAD_FAILED";
-        const statusCode =
-          message === "DISCUSSION_UPLOAD_TOO_LARGE" ? 413 : 415;
+        const message = error instanceof Error ? error.message : "DISCUSSION_UPLOAD_FAILED";
+        const statusCode = message === "DISCUSSION_UPLOAD_TOO_LARGE" ? 413 : 415;
         return reply.code(statusCode).send({
           success: false,
           statusCode,
-          error:
-            statusCode === 413 ? "Payload Too Large" : "Unsupported Media Type",
+          error: statusCode === 413 ? "Payload Too Large" : "Unsupported Media Type",
           message:
             statusCode === 413
               ? "The selected file is too large."
@@ -192,10 +183,7 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
       const user = request.user!;
       const { fileName } = request.params;
       const attachmentId = fileName.slice(0, fileName.lastIndexOf("."));
-      const attachment = await attachmentsRepo.findAttachmentById(
-        options.database,
-        attachmentId,
-      );
+      const attachment = await attachmentsRepo.findAttachmentById(options.database, attachmentId);
       if (!attachment) {
         return notFound();
       }
@@ -219,10 +207,7 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
         .header("Content-Length", file.size)
         .header(
           "Content-Disposition",
-          getDiscussionAttachmentDisposition(
-            file.mimeType,
-            attachment.fileName,
-          ),
+          getDiscussionAttachmentDisposition(file.mimeType, attachment.fileName),
         )
         .header("X-Content-Type-Options", "nosniff")
         .header("Cache-Control", "no-store")

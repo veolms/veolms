@@ -10,8 +10,7 @@ export function PictureInPictureButton() {
       active: ui.pictureInPicture,
       available: capabilities.pictureInPicture,
     }),
-    (left, right) =>
-      left.active === right.active && left.available === right.available,
+    (left, right) => left.active === right.active && left.available === right.available,
   );
   const { icons } = usePlayerTheme();
   const Icon = icons.pictureInPicture;

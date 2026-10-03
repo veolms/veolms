@@ -72,8 +72,7 @@
   justify-content: center;
   gap: 6px;
   padding: 0 11px;
-  border: 1px solid
-    var(--auth-line, color-mix(in srgb, var(--text) 12%, transparent));
+  border: 1px solid var(--auth-line, color-mix(in srgb, var(--text) 12%, transparent));
   border-radius: var(--auth-radius, 10px);
   overflow: hidden;
   color: var(--text);
@@ -247,10 +246,7 @@
   padding: 8px 34px 8px 12px;
   border: 0;
   border-radius: 0;
-  color: var(
-    --text-secondary,
-    color-mix(in srgb, var(--text) 75%, transparent)
-  );
+  color: var(--text-secondary, color-mix(in srgb, var(--text) 75%, transparent));
   background: transparent;
   font: inherit;
   font-size: 0.8rem;

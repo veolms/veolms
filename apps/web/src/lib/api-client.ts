@@ -9,10 +9,7 @@ import { authStore } from "../store/auth.store";
 import { interactionCreationCoordinator } from "../services/learning-interactions/interaction-creation-coordinator";
 import { desiredStateCoordinator } from "../services/learning-interactions/desired-state-coordinator";
 import { optimisticDeletionCoordinator } from "../services/learning-interactions/optimistic-deletion-coordinator";
-import {
-  buildMfaChallengePath,
-  shouldRedirectToMfaChallenge,
-} from "../routing/routeAccess";
+import { buildMfaChallengePath, shouldRedirectToMfaChallenge } from "../routing/routeAccess";
 import { isReactRouterBuildRequest } from "./react-router-build";
 import { setApiClient } from "@veolms/web-core";
 
@@ -40,21 +37,14 @@ function isPrivateIpv4Address(hostname: string): boolean {
 
 /** Replace loopback with the host serving the app when opened over LAN. */
 export function getApiBaseUrl(): string {
-  if (
-    typeof window === "undefined" ||
-    !isPrivateIpv4Address(window.location.hostname)
-  ) {
+  if (typeof window === "undefined" || !isPrivateIpv4Address(window.location.hostname)) {
     return CONFIGURED_BACKEND_URL;
   }
 
   try {
-    const configuredUrl = new URL(
-      CONFIGURED_BACKEND_URL,
-      window.location.origin,
-    );
+    const configuredUrl = new URL(CONFIGURED_BACKEND_URL, window.location.origin);
     if (
-      (configuredUrl.hostname === "localhost" ||
-        configuredUrl.hostname === "127.0.0.1") &&
+      (configuredUrl.hostname === "localhost" || configuredUrl.hostname === "127.0.0.1") &&
       configuredUrl.protocol === "http:"
     ) {
       configuredUrl.hostname = window.location.hostname;
@@ -101,12 +91,9 @@ axiosInstance.interceptors.request.use(
   (config) => {
     if (isReactRouterBuildRequest()) {
       return Promise.reject(
-        Object.assign(
-          new Error("API requests are disabled during prerender."),
-          {
-            config,
-          },
-        ),
+        Object.assign(new Error("API requests are disabled during prerender."), {
+          config,
+        }),
       );
     }
     if (typeof FormData !== "undefined" && config.data instanceof FormData) {
@@ -117,10 +104,7 @@ axiosInstance.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
-function shouldClearAuthOnUnauthorized(
-  error: AxiosError,
-  apiError: ApiError,
-): boolean {
+function shouldClearAuthOnUnauthorized(error: AxiosError, apiError: ApiError): boolean {
   if (apiError.status !== 401) {
     return false;
   }
@@ -196,8 +180,7 @@ function normalizeApiResponse(response: AxiosResponse) {
           statusText: "Bad Gateway",
           data: {
             code: "INVALID_API_RESPONSE",
-            message:
-              "The API endpoint returned an HTML document instead of JSON.",
+            message: "The API endpoint returned an HTML document instead of JSON.",
           },
         },
       },
@@ -227,34 +210,18 @@ export const api = {
     return axiosInstance.get(url, config) as unknown as Promise<T>;
   },
 
-  post<T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: AxiosRequestConfig,
-  ): Promise<T> {
+  post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     // Fastify rejects an empty request when the client advertises
     // `application/json`. Treat a no-body POST as an empty JSON object so
     // action endpoints (publish, logout, retry, etc.) work consistently.
-    return axiosInstance.post(
-      url,
-      data === undefined ? {} : data,
-      config,
-    ) as unknown as Promise<T>;
+    return axiosInstance.post(url, data === undefined ? {} : data, config) as unknown as Promise<T>;
   },
 
-  put<T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: AxiosRequestConfig,
-  ): Promise<T> {
+  put<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return axiosInstance.put(url, data, config) as unknown as Promise<T>;
   },
 
-  patch<T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: AxiosRequestConfig,
-  ): Promise<T> {
+  patch<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return axiosInstance.patch(url, data, config) as unknown as Promise<T>;
   },
 

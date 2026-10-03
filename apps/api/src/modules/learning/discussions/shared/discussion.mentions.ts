@@ -2,10 +2,7 @@ import crypto from "node:crypto";
 import type { Database, DatabaseExecutor } from "@veolms/database";
 import type { EngagementTargetType } from "@veolms/contracts";
 import { sql, type Kysely, type Transaction } from "kysely";
-import {
-  createOutboxService,
-  type OutboxService,
-} from "../../../../events/outbox.service.ts";
+import { createOutboxService, type OutboxService } from "../../../../events/outbox.service.ts";
 import { extractPlainText } from "./discussion.utils.ts";
 import { DISCUSSION_CONSTANTS } from "./discussion.constants.ts";
 import { createDiscussionAccess } from "./discussion.access.ts";
@@ -98,17 +95,13 @@ export async function resolveDeepLink(
   return "/discussions";
 }
 
-export async function resolveActorName(
-  db: DatabaseExecutor,
-  userId: string,
-): Promise<string> {
+export async function resolveActorName(db: DatabaseExecutor, userId: string): Promise<string> {
   const user = await db
     .selectFrom("users")
     .select(["display_name", "username"])
     .where("id", "=", userId)
     .executeTakeFirst();
-  const name =
-    user?.display_name?.trim() || user?.username?.trim() || "Someone";
+  const name = user?.display_name?.trim() || user?.username?.trim() || "Someone";
   return clamp(name, MAX_ACTOR_NAME);
 }
 
@@ -145,15 +138,8 @@ export async function syncMentionsAndNotify(
 
   if (usernames.length > 0) {
     const courseAccess = createDiscussionAccess();
-    const participantScope = await courseAccess.listCourseParticipantIds(
-      db,
-      input.courseId,
-    );
-    const resolvedIds = await resolveMentionedUserIds(
-      db,
-      usernames,
-      participantScope,
-    );
+    const participantScope = await courseAccess.listCourseParticipantIds(db, input.courseId);
+    const resolvedIds = await resolveMentionedUserIds(db, usernames, participantScope);
     for (const userId of resolvedIds) mentionedIds.add(userId);
   }
 
@@ -174,22 +160,15 @@ export async function syncMentionsAndNotify(
   const removedIds = existing
     .filter((row) => !keepIds.has(row.mentioned_user_id))
     .map((row) => row.id);
-  const alreadyMentioned = new Set(
-    existing.map((row) => row.mentioned_user_id),
-  );
+  const alreadyMentioned = new Set(existing.map((row) => row.mentioned_user_id));
   const addedIds = [...keepIds].filter((id) => !alreadyMentioned.has(id));
 
   if (removedIds.length > 0) {
-    await db
-      .deleteFrom("learning_mentions")
-      .where("id", "in", removedIds)
-      .execute();
+    await db.deleteFrom("learning_mentions").where("id", "in", removedIds).execute();
   }
 
   const actorName = await resolveActorName(db, input.actorUserId);
-  const context = mentionContext(
-    input.plainText ?? extractPlainText(input.content),
-  );
+  const context = mentionContext(input.plainText ?? extractPlainText(input.content));
   const deepLink = await resolveDeepLink(
     db,
     input.courseId,
@@ -210,9 +189,7 @@ export async function syncMentionsAndNotify(
         mentioned_user_id: mentionedUserId,
       })
       .onConflict((conflict) =>
-        conflict
-          .columns(["source_type", "source_id", "mentioned_user_id"])
-          .doNothing(),
+        conflict.columns(["source_type", "source_id", "mentioned_user_id"]).doNothing(),
       )
       .returning("id")
       .executeTakeFirst();

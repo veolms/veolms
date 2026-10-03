@@ -21,7 +21,7 @@ export function RecentMentionsWidget({
       <div className="flex items-center justify-between">
         <h3
           id="recent-mentions-heading"
-          className="font-bold text-base text-(--text) tracking-tight"
+          className="text-base font-bold tracking-tight text-(--text)"
         >
           Recent mentions
         </h3>
@@ -49,14 +49,12 @@ export function RecentMentionsWidget({
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-xs sm:text-sm text-(--text) truncate">
+                <span className="truncate text-xs font-bold text-(--text) sm:text-sm">
                   {mention.title}
                 </span>
-                <span className="text-[11px] text-(--muted) shrink-0">
-                  {mention.timestamp}
-                </span>
+                <span className="shrink-0 text-[11px] text-(--muted)">{mention.timestamp}</span>
               </div>
-              <p className="mt-0.5 text-xs text-(--text-secondary) leading-snug line-clamp-2">
+              <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-(--text-secondary)">
                 {mention.context}
               </p>
             </div>

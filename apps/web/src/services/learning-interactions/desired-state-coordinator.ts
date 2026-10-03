@@ -1,9 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type {
-  LearningNote,
-  LearningReply,
-  LearningThread,
-} from "@veolms/contracts";
+import type { LearningNote, LearningReply, LearningThread } from "@veolms/contracts";
 import { queryClient as defaultQueryClient } from "../../lib/query-client";
 import { learningInteractionsService } from "./learning-interactions.service";
 import {
@@ -190,9 +186,7 @@ export class DesiredStateCoordinator {
     for (const [key, state] of this.entries) {
       if (
         state.targetType !== targetType ||
-        (state.targetId !== clientId &&
-          state.targetId !== serverId &&
-          state.serverId !== serverId)
+        (state.targetId !== clientId && state.targetId !== serverId && state.serverId !== serverId)
       ) {
         continue;
       }
@@ -221,9 +215,7 @@ export class DesiredStateCoordinator {
     }
 
     if (targetType === "reply" && threadId) {
-      const accepted = this.acceptAnswerEntries.get(
-        this.acceptAnswerKey(threadId),
-      );
+      const accepted = this.acceptAnswerEntries.get(this.acceptAnswerKey(threadId));
       if (accepted) {
         this.cancelAcceptedAnswerState(accepted);
         this.acceptAnswerEntries.delete(this.acceptAnswerKey(threadId));
@@ -332,10 +324,7 @@ export class DesiredStateCoordinator {
   /**
    * Returns current internal like state for a target (useful for tests and inspection).
    */
-  getState(
-    targetType: TargetLikeType,
-    targetId: string,
-  ): Readonly<EntityLikeState> | undefined {
+  getState(targetType: TargetLikeType, targetId: string): Readonly<EntityLikeState> | undefined {
     return this.entries.get(this.likeKey(targetType, targetId));
   }
 
@@ -363,9 +352,7 @@ export class DesiredStateCoordinator {
   /**
    * Returns current internal accept answer state for a thread.
    */
-  getAcceptedAnswerState(
-    threadId: string,
-  ): Readonly<ThreadAcceptedAnswerState> | undefined {
+  getAcceptedAnswerState(threadId: string): Readonly<ThreadAcceptedAnswerState> | undefined {
     return this.acceptAnswerEntries.get(this.acceptAnswerKey(threadId));
   }
 
@@ -400,9 +387,7 @@ export class DesiredStateCoordinator {
     return resolution?.generation === this.generation ? resolution : undefined;
   }
 
-  private setReplyResolution(
-    resolution: Omit<ReplyResolution, "generation">,
-  ): void {
+  private setReplyResolution(resolution: Omit<ReplyResolution, "generation">): void {
     this.replyResolutions.set(resolution.clientId, {
       ...resolution,
       generation: this.generation,
@@ -414,9 +399,7 @@ export class DesiredStateCoordinator {
     return resolution?.generation === this.generation ? resolution : undefined;
   }
 
-  private setNoteResolution(
-    resolution: Omit<NoteResolution, "generation">,
-  ): void {
+  private setNoteResolution(resolution: Omit<NoteResolution, "generation">): void {
     this.noteResolutions.set(resolution.clientId, {
       ...resolution,
       generation: this.generation,
@@ -525,9 +508,7 @@ export class DesiredStateCoordinator {
     serverId: string,
     baseline: boolean,
   ): void {
-    const state = this.booleanEntries.get(
-      this.booleanKey(targetType, clientId),
-    );
+    const state = this.booleanEntries.get(this.booleanKey(targetType, clientId));
     if (!state) return;
     state.serverId = serverId;
     state.serverBaseline = baseline;
@@ -558,26 +539,15 @@ export class DesiredStateCoordinator {
   }
 
   private isLikeStateCurrent(state: EntityLikeState): boolean {
-    return (
-      this.entries.get(this.likeKey(state.targetType, state.targetId)) === state
-    );
+    return this.entries.get(this.likeKey(state.targetType, state.targetId)) === state;
   }
 
   private isBooleanStateCurrent(state: ThreadBooleanState): boolean {
-    return (
-      this.booleanEntries.get(
-        this.booleanKey(state.targetType, state.threadId),
-      ) === state
-    );
+    return this.booleanEntries.get(this.booleanKey(state.targetType, state.threadId)) === state;
   }
 
-  private isAcceptedAnswerStateCurrent(
-    state: ThreadAcceptedAnswerState,
-  ): boolean {
-    return (
-      this.acceptAnswerEntries.get(this.acceptAnswerKey(state.threadId)) ===
-      state
-    );
+  private isAcceptedAnswerStateCurrent(state: ThreadAcceptedAnswerState): boolean {
+    return this.acceptAnswerEntries.get(this.acceptAnswerKey(state.threadId)) === state;
   }
 
   // ==========================================
@@ -602,16 +572,12 @@ export class DesiredStateCoordinator {
     queryClient,
     pendingTarget,
   }: SetLikedOptions): void {
-    const replyResolution =
-      targetType === "reply" ? this.getReplyResolution(targetId) : undefined;
-    const noteResolution =
-      targetType === "note" ? this.getNoteResolution(targetId) : undefined;
+    const replyResolution = targetType === "reply" ? this.getReplyResolution(targetId) : undefined;
+    const noteResolution = targetType === "note" ? this.getNoteResolution(targetId) : undefined;
     const creationResolution = replyResolution ?? noteResolution;
     if (creationResolution?.status === "failed") return;
     const resolvedServerId =
-      creationResolution?.status === "confirmed"
-        ? creationResolution.serverId
-        : undefined;
+      creationResolution?.status === "confirmed" ? creationResolution.serverId : undefined;
     const key = this.likeKey(targetType, targetId);
     let state = this.entries.get(key);
     const activeClient = queryClient ?? this.queryClient;
@@ -624,9 +590,7 @@ export class DesiredStateCoordinator {
       state = {
         targetType,
         targetId,
-        serverId: pendingTarget
-          ? resolvedServerId
-          : (serverId ?? resolvedServerId ?? targetId),
+        serverId: pendingTarget ? resolvedServerId : (serverId ?? resolvedServerId ?? targetId),
         serverBaseline: baseline,
         desiredState: desiredLiked,
         intentRevision: 1,
@@ -692,10 +656,7 @@ export class DesiredStateCoordinator {
     }
   }
 
-  private scheduleLikeConvergence(
-    state: EntityLikeState,
-    delayMs: number,
-  ): void {
+  private scheduleLikeConvergence(state: EntityLikeState, delayMs: number): void {
     if (state.dispatchTimer !== null) {
       clearTimeout(state.dispatchTimer);
       state.dispatchTimer = null;
@@ -713,12 +674,8 @@ export class DesiredStateCoordinator {
     }
   }
 
-  private processLikeConvergence(
-    state: EntityLikeState,
-    capturedGen: number,
-  ): void {
-    if (this.generation !== capturedGen || !this.isLikeStateCurrent(state))
-      return;
+  private processLikeConvergence(state: EntityLikeState, capturedGen: number): void {
+    if (this.generation !== capturedGen || !this.isLikeStateCurrent(state)) return;
     if (!state.serverId) return;
     if (state.inFlightState !== null) return;
     if (state.desiredState === state.serverBaseline) return;
@@ -736,14 +693,12 @@ export class DesiredStateCoordinator {
         targetId: state.serverId,
       })
       .then((response) => {
-        if (this.generation !== capturedGen || !this.isLikeStateCurrent(state))
-          return;
+        if (this.generation !== capturedGen || !this.isLikeStateCurrent(state)) return;
 
         state.abortController = null;
         state.inFlightState = null;
 
-        const confirmedLiked =
-          typeof response?.liked === "boolean" ? response.liked : targetState;
+        const confirmedLiked = typeof response?.liked === "boolean" ? response.liked : targetState;
         state.serverBaseline = confirmedLiked;
 
         if (state.desiredState !== state.serverBaseline) {
@@ -751,8 +706,7 @@ export class DesiredStateCoordinator {
         }
       })
       .catch((error) => {
-        if (this.generation !== capturedGen || !this.isLikeStateCurrent(state))
-          return;
+        if (this.generation !== capturedGen || !this.isLikeStateCurrent(state)) return;
         if (controller.signal.aborted) return;
 
         state.abortController = null;
@@ -958,12 +912,7 @@ export class DesiredStateCoordinator {
     lessonContext?: { courseId: string; lessonId: string },
   ): void {
     if (targetType === "bookmark") {
-      updateThreadBookmarkInCache(
-        client,
-        threadId,
-        desiredValue,
-        lessonContext,
-      );
+      updateThreadBookmarkInCache(client, threadId, desiredValue, lessonContext);
     } else if (targetType === "follow") {
       updateThreadFollowInCache(client, threadId, desiredValue, lessonContext);
     } else if (targetType === "lock") {
@@ -971,10 +920,7 @@ export class DesiredStateCoordinator {
     }
   }
 
-  private scheduleBooleanConvergence(
-    state: ThreadBooleanState,
-    delayMs: number,
-  ): void {
+  private scheduleBooleanConvergence(state: ThreadBooleanState, delayMs: number): void {
     if (state.dispatchTimer !== null) {
       clearTimeout(state.dispatchTimer);
       state.dispatchTimer = null;
@@ -992,12 +938,8 @@ export class DesiredStateCoordinator {
     }
   }
 
-  private processBooleanConvergence(
-    state: ThreadBooleanState,
-    capturedGen: number,
-  ): void {
-    if (this.generation !== capturedGen || !this.isBooleanStateCurrent(state))
-      return;
+  private processBooleanConvergence(state: ThreadBooleanState, capturedGen: number): void {
+    if (this.generation !== capturedGen || !this.isBooleanStateCurrent(state)) return;
     if (!state.serverId) return;
 
     // Never allow parallel requests for the same thread
@@ -1027,11 +969,7 @@ export class DesiredStateCoordinator {
 
     apiCall
       .then((response) => {
-        if (
-          this.generation !== capturedGen ||
-          !this.isBooleanStateCurrent(state)
-        )
-          return;
+        if (this.generation !== capturedGen || !this.isBooleanStateCurrent(state)) return;
 
         state.abortController = null;
         state.inFlightState = null;
@@ -1042,19 +980,13 @@ export class DesiredStateCoordinator {
         let authoritativeBaseline: boolean;
         if (state.targetType === "bookmark") {
           authoritativeBaseline =
-            typeof response?.bookmarked === "boolean"
-              ? response.bookmarked
-              : targetState;
+            typeof response?.bookmarked === "boolean" ? response.bookmarked : targetState;
         } else if (state.targetType === "follow") {
           authoritativeBaseline =
-            typeof response?.following === "boolean"
-              ? response.following
-              : targetState;
+            typeof response?.following === "boolean" ? response.following : targetState;
         } else {
           authoritativeBaseline =
-            typeof response?.isLocked === "boolean"
-              ? response.isLocked
-              : targetState;
+            typeof response?.isLocked === "boolean" ? response.isLocked : targetState;
         }
 
         state.serverBaseline = authoritativeBaseline;
@@ -1082,11 +1014,7 @@ export class DesiredStateCoordinator {
         }
       })
       .catch((error) => {
-        if (
-          this.generation !== capturedGen ||
-          !this.isBooleanStateCurrent(state)
-        )
-          return;
+        if (this.generation !== capturedGen || !this.isBooleanStateCurrent(state)) return;
         if (controller.signal.aborted) return;
 
         state.abortController = null;
@@ -1156,8 +1084,7 @@ export class DesiredStateCoordinator {
   }: SetAcceptedAnswerOptions): void {
     if (
       isClientEntityId(threadId) ||
-      (desiredAcceptedReplyId !== null &&
-        isClientEntityId(desiredAcceptedReplyId))
+      (desiredAcceptedReplyId !== null && isClientEntityId(desiredAcceptedReplyId))
     ) {
       return;
     }
@@ -1167,8 +1094,7 @@ export class DesiredStateCoordinator {
     const activeClient = queryClient ?? this.queryClient;
 
     if (!state) {
-      const baseline =
-        currentBaselineReplyId !== undefined ? currentBaselineReplyId : null;
+      const baseline = currentBaselineReplyId !== undefined ? currentBaselineReplyId : null;
       state = {
         threadId,
         serverBaselineAcceptedReplyId: baseline,
@@ -1203,10 +1129,7 @@ export class DesiredStateCoordinator {
     this.scheduleAcceptedConvergence(state, debounceMs);
   }
 
-  private scheduleAcceptedConvergence(
-    state: ThreadAcceptedAnswerState,
-    delayMs: number,
-  ): void {
+  private scheduleAcceptedConvergence(state: ThreadAcceptedAnswerState, delayMs: number): void {
     if (state.dispatchTimer !== null) {
       clearTimeout(state.dispatchTimer);
       state.dispatchTimer = null;
@@ -1224,14 +1147,8 @@ export class DesiredStateCoordinator {
     }
   }
 
-  private processAcceptedConvergence(
-    state: ThreadAcceptedAnswerState,
-    capturedGen: number,
-  ): void {
-    if (
-      this.generation !== capturedGen ||
-      !this.isAcceptedAnswerStateCurrent(state)
-    ) {
+  private processAcceptedConvergence(state: ThreadAcceptedAnswerState, capturedGen: number): void {
+    if (this.generation !== capturedGen || !this.isAcceptedAnswerStateCurrent(state)) {
       return;
     }
 
@@ -1271,10 +1188,7 @@ export class DesiredStateCoordinator {
     learningInteractionsService
       .acceptReply(targetReplyId, { accepted: targetAccepted })
       .then((response) => {
-        if (
-          this.generation !== capturedGen ||
-          !this.isAcceptedAnswerStateCurrent(state)
-        ) {
+        if (this.generation !== capturedGen || !this.isAcceptedAnswerStateCurrent(state)) {
           return;
         }
 
@@ -1293,9 +1207,7 @@ export class DesiredStateCoordinator {
 
         state.serverBaselineAcceptedReplyId = authoritativeReplyId;
 
-        if (
-          state.desiredAcceptedReplyId !== state.serverBaselineAcceptedReplyId
-        ) {
+        if (state.desiredAcceptedReplyId !== state.serverBaselineAcceptedReplyId) {
           // Intent changed while request was in-flight, continue convergence
           this.processAcceptedConvergence(state, capturedGen);
         } else if (authoritativeReplyId !== state.desiredAcceptedReplyId) {
@@ -1309,10 +1221,7 @@ export class DesiredStateCoordinator {
         }
       })
       .catch((error) => {
-        if (
-          this.generation !== capturedGen ||
-          !this.isAcceptedAnswerStateCurrent(state)
-        ) {
+        if (this.generation !== capturedGen || !this.isAcceptedAnswerStateCurrent(state)) {
           return;
         }
         if (controller.signal.aborted) return;
@@ -1331,9 +1240,7 @@ export class DesiredStateCoordinator {
             state.desiredAcceptedReplyId,
             state.lessonContext,
           );
-          if (
-            state.desiredAcceptedReplyId !== state.serverBaselineAcceptedReplyId
-          ) {
+          if (state.desiredAcceptedReplyId !== state.serverBaselineAcceptedReplyId) {
             this.processAcceptedConvergence(state, capturedGen);
           }
           return;

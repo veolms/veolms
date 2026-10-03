@@ -14,26 +14,10 @@
     /* Oppose the surrounding canvas for immediate legibility: an almost-white
        raised slab on dark shells, then an almost-black slab on light shells.
        The palette colors the material itself while the edge stays neutral. */
-    --sidebar-tooltip-surface-start: color-mix(
-      in srgb,
-      white 86%,
-      var(--accent) 14%
-    );
-    --sidebar-tooltip-surface-end: color-mix(
-      in srgb,
-      white 72%,
-      var(--accent) 28%
-    );
-    --sidebar-tooltip-edge-highlight: color-mix(
-      in srgb,
-      white 86%,
-      var(--accent) 14%
-    );
-    --sidebar-tooltip-edge-accent: color-mix(
-      in srgb,
-      #111827 18%,
-      transparent 82%
-    );
+    --sidebar-tooltip-surface-start: color-mix(in srgb, white 86%, var(--accent) 14%);
+    --sidebar-tooltip-surface-end: color-mix(in srgb, white 72%, var(--accent) 28%);
+    --sidebar-tooltip-edge-highlight: color-mix(in srgb, white 86%, var(--accent) 14%);
+    --sidebar-tooltip-edge-accent: color-mix(in srgb, #111827 18%, transparent 82%);
     position: fixed;
     top: var(--sidebar-tooltip-top);
     left: var(--sidebar-tooltip-left);
@@ -45,8 +29,7 @@
     box-sizing: border-box;
     gap: 0;
     color: #111827;
-    filter: drop-shadow(0 2px 3px rgb(0 0 0 / 52%))
-      drop-shadow(0 9px 16px rgb(0 0 0 / 46%))
+    filter: drop-shadow(0 2px 3px rgb(0 0 0 / 52%)) drop-shadow(0 9px 16px rgb(0 0 0 / 46%))
       drop-shadow(0 22px 34px rgb(0 0 0 / 34%));
     font-size: 0.78rem;
     font-weight: 650;
@@ -120,29 +103,12 @@
   }
 
   :root[data-theme="light"] .sidebar-nav-tooltip {
-    --sidebar-tooltip-surface-start: color-mix(
-      in srgb,
-      #171a21 70%,
-      var(--accent) 30%
-    );
-    --sidebar-tooltip-surface-end: color-mix(
-      in srgb,
-      #07090d 78%,
-      var(--accent) 22%
-    );
-    --sidebar-tooltip-edge-highlight: color-mix(
-      in srgb,
-      white 24%,
-      var(--accent) 10%
-    );
-    --sidebar-tooltip-edge-accent: color-mix(
-      in srgb,
-      white 6%,
-      transparent 94%
-    );
+    --sidebar-tooltip-surface-start: color-mix(in srgb, #171a21 70%, var(--accent) 30%);
+    --sidebar-tooltip-surface-end: color-mix(in srgb, #07090d 78%, var(--accent) 22%);
+    --sidebar-tooltip-edge-highlight: color-mix(in srgb, white 24%, var(--accent) 10%);
+    --sidebar-tooltip-edge-accent: color-mix(in srgb, white 6%, transparent 94%);
     color: #ffffff;
-    filter: drop-shadow(0 3px 5px rgb(15 23 42 / 28%))
-      drop-shadow(0 12px 22px rgb(15 23 42 / 22%))
+    filter: drop-shadow(0 3px 5px rgb(15 23 42 / 28%)) drop-shadow(0 12px 22px rgb(15 23 42 / 22%))
       drop-shadow(0 26px 44px rgb(15 23 42 / 16%));
   }
 

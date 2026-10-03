@@ -27,10 +27,7 @@ import {
   rememberSettingsTab,
 } from "./routing/tabSessionState";
 import type { SettingsTab } from "./routing/tabSessionState";
-import {
-  getNumberShortcutIndex,
-  isEditingShortcutTarget,
-} from "./keyboardShortcuts";
+import { getNumberShortcutIndex, isEditingShortcutTarget } from "./keyboardShortcuts";
 import { SwipeableTabPanel } from "./navigation/SwipeableTabPanel";
 import { useAuthStore } from "./store/auth.store";
 import { SETTINGS_TABS } from "./settings/settingsTabs";
@@ -116,9 +113,7 @@ const SettingsTabContent = memo(function SettingsTabContent({
     case "learning":
       return <LearningSettings />;
     case "notifications":
-      return (
-        <NotificationSettings isAuthenticated={pageProps.isAuthenticated} />
-      );
+      return <NotificationSettings isAuthenticated={pageProps.isAuthenticated} />;
     case "security":
       return <SecuritySettings isAuthenticated={pageProps.isAuthenticated} />;
     case "account":
@@ -264,17 +259,11 @@ export function SettingsPage({
 
   useEffect(() => {
     const exitSettings = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.key !== "Escape" ||
-        isEditingShortcutTarget(event.target)
-      )
+      if (event.defaultPrevented || event.key !== "Escape" || isEditingShortcutTarget(event.target))
         return;
 
       const transientSurfaceIsOpen = Array.from(
-        document.querySelectorAll<HTMLElement>(
-          '[role="dialog"], [role="menu"], [role="listbox"]',
-        ),
+        document.querySelectorAll<HTMLElement>('[role="dialog"], [role="menu"], [role="listbox"]'),
       ).some((element) => {
         const style = getComputedStyle(element);
         return (
@@ -295,8 +284,7 @@ export function SettingsPage({
 
   useEffect(() => {
     const navigateSettingsTab = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditingShortcutTarget(event.target))
-        return;
+      if (event.defaultPrevented || isEditingShortcutTarget(event.target)) return;
 
       let destination: (typeof SETTINGS_TABS)[number] | undefined;
       if (event.altKey) {
@@ -308,14 +296,12 @@ export function SettingsPage({
         !event.shiftKey &&
         (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
         !(
-          event.target instanceof Element &&
-          event.target.closest(SETTINGS_ARROW_KEY_OWNER_SELECTOR)
+          event.target instanceof Element && event.target.closest(SETTINGS_ARROW_KEY_OWNER_SELECTOR)
         )
       ) {
         const offset = event.key === "ArrowRight" ? 1 : -1;
         const currentIndex = SETTINGS_TAB_IDS.indexOf(readSettingsTab());
-        const nextIndex =
-          (currentIndex + offset + SETTINGS_TABS.length) % SETTINGS_TABS.length;
+        const nextIndex = (currentIndex + offset + SETTINGS_TABS.length) % SETTINGS_TABS.length;
         destination = SETTINGS_TABS[nextIndex];
       }
 
@@ -373,10 +359,7 @@ export function SettingsPage({
               }}
             >
               <span className="settings-tab__press-content inline-flex origin-bottom items-center gap-2 transition-transform duration-150 ease-out group-active:scale-[0.985] motion-reduce:duration-[0.01ms]">
-                <Icon
-                  size={17}
-                  weight={activeTab === id ? "fill" : "regular"}
-                />
+                <Icon size={17} weight={activeTab === id ? "fill" : "regular"} />
                 <span>{label}</span>
               </span>
             </button>
@@ -399,9 +382,7 @@ export function SettingsPage({
         focusable={false}
       >
         {(panelTab) =>
-          panelTab === activeTab || preparedTabs.has(panelTab)
-            ? renderSettingsTab(panelTab)
-            : null
+          panelTab === activeTab || preparedTabs.has(panelTab) ? renderSettingsTab(panelTab) : null
         }
       </SwipeableTabPanel>
     </div>

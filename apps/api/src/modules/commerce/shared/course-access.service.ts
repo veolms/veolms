@@ -97,10 +97,7 @@ export function createCourseAccessService({
         });
         enrolledCourseIds.push(item.course_id);
       } else if (item.item_type === "bundle" && item.bundle_id) {
-        const bundleCourses = await bundleRepo.listBundleCourses(
-          database,
-          item.bundle_id,
-        );
+        const bundleCourses = await bundleRepo.listBundleCourses(database, item.bundle_id);
         for (const bc of bundleCourses) {
           await accessService.grantAccess(database, {
             userId: order.user_id,
@@ -124,10 +121,7 @@ export function createCourseAccessService({
           enrolledCourseIds.push(bc.course_id);
         }
       } else if (item.item_type === "quiz" && item.quiz_pricing_id) {
-        const offering = await quizPricingRepo.findPricingById(
-          database,
-          item.quiz_pricing_id,
-        );
+        const offering = await quizPricingRepo.findPricingById(database, item.quiz_pricing_id);
         if (offering) {
           await quizPricingRepo.upsertGrant(database, {
             id: crypto.randomUUID(),
@@ -150,10 +144,7 @@ export function createCourseAccessService({
     return enrolledCourseIds;
   }
 
-  async function revokeAccessForOrder(
-    database: Executor,
-    order: OrderRefLike,
-  ): Promise<void> {
+  async function revokeAccessForOrder(database: Executor, order: OrderRefLike): Promise<void> {
     await accessService.revokeAccessForOrder(database, order.id);
     await enrollmentRepo.revokeEnrollmentsByOrderId(database, order.id);
     await quizPricingRepo.revokeGrantsByOrderId(database, order.id);
@@ -165,38 +156,16 @@ export function createCourseAccessService({
     item: OrderItemRefLike,
   ): Promise<void> {
     if (item.item_type === "course" && item.course_id) {
-      await accessService.revokeAccessForOrderCourse(
-        database,
-        order.id,
-        item.course_id,
-      );
-      await enrollmentRepo.revokeEnrollmentsForOrderCourse(
-        database,
-        order.id,
-        item.course_id,
-      );
+      await accessService.revokeAccessForOrderCourse(database, order.id, item.course_id);
+      await enrollmentRepo.revokeEnrollmentsForOrderCourse(database, order.id, item.course_id);
     } else if (item.item_type === "bundle" && item.bundle_id) {
-      const bundleCourses = await bundleRepo.listBundleCourses(
-        database,
-        item.bundle_id,
-      );
+      const bundleCourses = await bundleRepo.listBundleCourses(database, item.bundle_id);
       for (const bc of bundleCourses) {
-        await accessService.revokeAccessForOrderCourse(
-          database,
-          order.id,
-          bc.course_id,
-        );
-        await enrollmentRepo.revokeEnrollmentsForOrderCourse(
-          database,
-          order.id,
-          bc.course_id,
-        );
+        await accessService.revokeAccessForOrderCourse(database, order.id, bc.course_id);
+        await enrollmentRepo.revokeEnrollmentsForOrderCourse(database, order.id, bc.course_id);
       }
     } else if (item.item_type === "quiz" && item.quiz_pricing_id) {
-      const offering = await quizPricingRepo.findPricingById(
-        database,
-        item.quiz_pricing_id,
-      );
+      const offering = await quizPricingRepo.findPricingById(database, item.quiz_pricing_id);
       if (offering) {
         await quizPricingRepo.revokeGrantForOrderCourse(database, {
           orderId: order.id,

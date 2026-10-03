@@ -142,11 +142,7 @@ export function createModerationController({
       const user = request.user!;
       const body = request.body;
 
-      const result = await service.createReport(
-        database,
-        discussionActor(user),
-        body,
-      );
+      const result = await service.createReport(database, discussionActor(user), body);
       reply.status(201).send(result);
     },
 
@@ -187,12 +183,7 @@ export function createModerationController({
       const user = request.user!;
       const query = request.query;
 
-      const result = await service.listReports(
-        database,
-        discussionActor(user),
-        query,
-        "platform",
-      );
+      const result = await service.listReports(database, discussionActor(user), query, "platform");
       reply.status(200).send(result);
     },
 
@@ -225,9 +216,7 @@ export function createModerationController({
         courseId,
         request.ip,
       );
-      reply
-        .status(200)
-        .send({ message: `Thread action '${body.action}' applied.` });
+      reply.status(200).send({ message: `Thread action '${body.action}' applied.` });
     },
 
     async moderatePlatformThread(request, reply) {
@@ -243,9 +232,7 @@ export function createModerationController({
         undefined,
         request.ip,
       );
-      reply
-        .status(200)
-        .send({ message: `Thread action '${body.action}' applied.` });
+      reply.status(200).send({ message: `Thread action '${body.action}' applied.` });
     },
 
     async moderateCourseReply(request, reply) {
@@ -261,9 +248,7 @@ export function createModerationController({
         courseId,
         request.ip,
       );
-      reply
-        .status(200)
-        .send({ message: `Reply action '${body.action}' applied.` });
+      reply.status(200).send({ message: `Reply action '${body.action}' applied.` });
     },
 
     async moderatePlatformReply(request, reply) {
@@ -279,9 +264,7 @@ export function createModerationController({
         undefined,
         request.ip,
       );
-      reply
-        .status(200)
-        .send({ message: `Reply action '${body.action}' applied.` });
+      reply.status(200).send({ message: `Reply action '${body.action}' applied.` });
     },
 
     async suspendCourseParticipant(request, reply) {

@@ -8,8 +8,7 @@
 :root[data-content-layout="edge-to-edge"] .courses-main {
   min-height: 100dvh;
   border-radius: 0;
-  box-shadow: inset 1px 0
-    color-mix(in srgb, var(--surface-strong) 60%, transparent);
+  box-shadow: inset 1px 0 color-mix(in srgb, var(--surface-strong) 60%, transparent);
 }
 
 :root[data-content-layout="edge-to-edge"] .courses-sidebar {
@@ -17,25 +16,18 @@
   height: 100dvh;
   border-right: 0;
 }
-:root[data-content-layout="edge-to-edge"]
-  .courses-app--hidden
-  .courses-sidebar {
+:root[data-content-layout="edge-to-edge"] .courses-app--hidden .courses-sidebar {
   top: 14px;
   height: auto;
   border-right: 0;
 }
-:root[data-collapsed-tooltips="false"]
-  .sidebar-nav-tooltip.is-preference-controlled {
+:root[data-collapsed-tooltips="false"] .sidebar-nav-tooltip.is-preference-controlled {
   display: none !important;
 }
 :root[data-active-fill="false"] .courses-nav button.is-active,
 :root[data-active-fill="false"] .sidebar-appearance > button.is-active,
-:root[data-active-fill="false"]
-  .mobile-menu-sheet__appearance
-  > button.is-active,
-:root[data-active-fill="false"]
-  .mobile-menu-sheet__appearance
-  > button[aria-pressed="true"],
+:root[data-active-fill="false"] .mobile-menu-sheet__appearance > button.is-active,
+:root[data-active-fill="false"] .mobile-menu-sheet__appearance > button[aria-pressed="true"],
 :root[data-active-fill="false"] .sidebar-palette-trigger[aria-pressed="true"] {
   background: transparent;
   box-shadow: none;
@@ -270,9 +262,7 @@
     flex-direction: row;
   }
 
-  .settings-sidebar-glow-section
-    > .settings-section__heading-row
-    > div:first-child {
+  .settings-sidebar-glow-section > .settings-section__heading-row > div:first-child {
     min-width: 0;
   }
 

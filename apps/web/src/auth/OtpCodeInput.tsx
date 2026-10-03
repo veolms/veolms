@@ -32,22 +32,14 @@ export function OtpCodeInput({
   };
 
   const writeDigit = (position: number, digit: string) => {
-    onChange(
-      (value.slice(0, position) + digit + value.slice(position + 1)).slice(
-        0,
-        CODE_LENGTH,
-      ),
-    );
+    onChange((value.slice(0, position) + digit + value.slice(position + 1)).slice(0, CODE_LENGTH));
   };
 
   const clearDigit = (position: number) => {
     onChange(value.slice(0, position) + value.slice(position + 1));
   };
 
-  const pressKey = (
-    event: KeyboardEvent<HTMLInputElement>,
-    position: number,
-  ) => {
+  const pressKey = (event: KeyboardEvent<HTMLInputElement>, position: number) => {
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
       moveFocus(position + (event.key === "ArrowLeft" ? -1 : 1));
@@ -81,10 +73,7 @@ export function OtpCodeInput({
     moveFocus(Math.min(filled.length, CODE_LENGTH - 1));
   };
 
-  const pasteCode = (
-    event: ClipboardEvent<HTMLInputElement>,
-    position: number,
-  ) => {
+  const pasteCode = (event: ClipboardEvent<HTMLInputElement>, position: number) => {
     const digits = event.clipboardData
       .getData("text")
       .replace(NON_DIGITS, "")

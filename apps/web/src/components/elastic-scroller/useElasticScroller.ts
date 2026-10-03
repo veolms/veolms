@@ -18,10 +18,7 @@ import {
   getScrollDirectionAtEdge,
   getScrollProgress,
 } from "./elasticScrollerModel";
-import type {
-  ElasticScrollMode,
-  ScrollDirection,
-} from "./elasticScrollerModel";
+import type { ElasticScrollMode, ScrollDirection } from "./elasticScrollerModel";
 
 interface UseElasticScrollerOptions {
   scrollportRef: RefObject<HTMLElement | null>;
@@ -35,8 +32,7 @@ const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
 const isSideArmed = (inlineOffset: number, side: ElasticScrollGestureSide) =>
-  (side === "right" ? inlineOffset : -inlineOffset) >=
-  ELASTIC_SCROLL_CONTROL_LOCK_THRESHOLD;
+  (side === "right" ? inlineOffset : -inlineOffset) >= ELASTIC_SCROLL_CONTROL_LOCK_THRESHOLD;
 
 type DragAxis = "horizontal" | "vertical" | null;
 
@@ -96,10 +92,7 @@ export function useElasticScroller({
     clearIdleTimer();
     idleTimerRef.current = window.setTimeout(() => {
       idleTimerRef.current = null;
-      if (
-        edgeScrollFrameRef.current !== null ||
-        dragScrollFrameRef.current !== null
-      ) {
+      if (edgeScrollFrameRef.current !== null || dragScrollFrameRef.current !== null) {
         return;
       }
       setVisible(false);
@@ -143,8 +136,7 @@ export function useElasticScroller({
 
   const cancelDragScroll = useCallback(
     (hideAfterIdle = true) => {
-      const hadActiveScroll =
-        dragScrollFrameRef.current !== null || lockedRef.current;
+      const hadActiveScroll = dragScrollFrameRef.current !== null || lockedRef.current;
       if (!hadActiveScroll) return false;
       if (dragScrollFrameRef.current !== null) {
         window.cancelAnimationFrame(dragScrollFrameRef.current);
@@ -173,10 +165,7 @@ export function useElasticScroller({
       directionRef.current = nextDirection;
       setDirection(nextDirection);
       setVisible(true);
-      if (
-        edgeScrollFrameRef.current === null &&
-        dragScrollFrameRef.current === null
-      ) {
+      if (edgeScrollFrameRef.current === null && dragScrollFrameRef.current === null) {
         scheduleHide();
       }
     },
@@ -213,10 +202,7 @@ export function useElasticScroller({
       String(ELASTIC_SCROLL_CONTROL_PROGRESS_CIRCUMFERENCE * (1 - progress)),
     );
     progressValueRef.current?.setAttribute("aria-valuenow", String(percentage));
-    progressValueRef.current?.setAttribute(
-      "aria-valuetext",
-      `${percentage}% scrolled`,
-    );
+    progressValueRef.current?.setAttribute("aria-valuetext", `${percentage}% scrolled`);
   }, []);
 
   useEffect(() => {
@@ -240,10 +226,7 @@ export function useElasticScroller({
         fallbackDirection,
       );
 
-      if (
-        edgeDirection !== fallbackDirection &&
-        dragPointerIdRef.current === null
-      ) {
+      if (edgeDirection !== fallbackDirection && dragPointerIdRef.current === null) {
         directionRef.current = edgeDirection;
         setDirection(edgeDirection);
       }
@@ -267,16 +250,9 @@ export function useElasticScroller({
     };
     const interruptFromKeyboard = (event: KeyboardEvent) => {
       if (
-        [
-          "ArrowUp",
-          "ArrowDown",
-          "PageUp",
-          "PageDown",
-          "Home",
-          "End",
-          " ",
-          "Escape",
-        ].includes(event.key)
+        ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Escape"].includes(
+          event.key,
+        )
       ) {
         preserveDirectionRef.current = false;
         cancelAutomatedScroll();
@@ -371,10 +347,7 @@ export function useElasticScroller({
         return;
       }
 
-      const duration = Math.min(
-        850,
-        Math.max(340, 300 + Math.abs(distance) * 0.28),
-      );
+      const duration = Math.min(850, Math.max(340, 300 + Math.abs(distance) * 0.28));
       let startedAt: number | null = null;
       const advance = (timestamp: number) => {
         if (startedAt === null) startedAt = timestamp;
@@ -420,31 +393,21 @@ export function useElasticScroller({
 
     let previousTimestamp = performance.now();
     const advance = (timestamp: number) => {
-      const frameSeconds = Math.min(
-        0.05,
-        Math.max(0, (timestamp - previousTimestamp) / 1000),
-      );
+      const frameSeconds = Math.min(0.05, Math.max(0, (timestamp - previousTimestamp) / 1000));
       previousTimestamp = timestamp;
       const pointerOffset = dragPointerOffsetRef.current;
-      const maximumScrollTop = Math.max(
-        0,
-        scrollport.scrollHeight - scrollport.clientHeight,
-      );
+      const maximumScrollTop = Math.max(0, scrollport.scrollHeight - scrollport.clientHeight);
       const requestedScrollTop =
         scrollport.scrollTop +
         (pointerOffset >= 0 ? 1 : -1) *
           getElasticScrollSpeed(Math.abs(pointerOffset)) *
           frameSeconds;
-      const nextScrollTop = Math.min(
-        maximumScrollTop,
-        Math.max(0, requestedScrollTop),
-      );
+      const nextScrollTop = Math.min(maximumScrollTop, Math.max(0, requestedScrollTop));
       scrollport.scrollTop = nextScrollTop;
 
       const reachedLockedEdge =
         lockedRef.current &&
-        ((pointerOffset < -ELASTIC_SCROLL_CONTROL_DRAG_DEAD_ZONE &&
-          nextScrollTop <= 0) ||
+        ((pointerOffset < -ELASTIC_SCROLL_CONTROL_DRAG_DEAD_ZONE && nextScrollTop <= 0) ||
           (pointerOffset > ELASTIC_SCROLL_CONTROL_DRAG_DEAD_ZONE &&
             nextScrollTop >= maximumScrollTop));
       if (reachedLockedEdge) {
@@ -503,9 +466,7 @@ export function useElasticScroller({
 
       const startedLocked = lockedRef.current;
       pointerStartedLockedRef.current = startedLocked;
-      pointerDownStoppedEdgeRef.current = startedLocked
-        ? false
-        : cancelEdgeScroll(false);
+      pointerDownStoppedEdgeRef.current = startedLocked ? false : cancelEdgeScroll(false);
       dragPointerIdRef.current = event.pointerId;
       dragPointerLastXRef.current = event.clientX;
       dragPointerLastYRef.current = event.clientY;
@@ -513,11 +474,8 @@ export function useElasticScroller({
       dragAxisProbeStartYRef.current = event.clientY;
       dragAxisRef.current = null;
       const controlBounds = event.currentTarget.getBoundingClientRect();
-      dragControlCenterXRef.current =
-        controlBounds.left + controlBounds.width / 2;
-      dragPointerBaseOffsetRef.current = startedLocked
-        ? lockedOffsetRef.current
-        : 0;
+      dragControlCenterXRef.current = controlBounds.left + controlBounds.width / 2;
+      dragPointerBaseOffsetRef.current = startedLocked ? lockedOffsetRef.current : 0;
       dragPointerOffsetRef.current = dragPointerBaseOffsetRef.current;
       setScrollOffset(dragPointerBaseOffsetRef.current);
 
@@ -535,13 +493,7 @@ export function useElasticScroller({
         suppressClickRef.current = true;
       }, ELASTIC_SCROLL_CONTROL_LONG_PRESS_DELAY_MS);
     },
-    [
-      cancelEdgeScroll,
-      clearGestureFeedback,
-      clearIdleTimer,
-      clearLongPressTimer,
-      startDragScroll,
-    ],
+    [cancelEdgeScroll, clearGestureFeedback, clearIdleTimer, clearLongPressTimer, startDragScroll],
   );
 
   const handlePointerMove = useCallback(
@@ -619,8 +571,7 @@ export function useElasticScroller({
           applyVerticalMotion(pointerStepY);
           resetAxisProbe();
         } else if (
-          Math.abs(probeDeltaX) >=
-            ELASTIC_SCROLL_CONTROL_AXIS_SWITCH_DISTANCE &&
+          Math.abs(probeDeltaX) >= ELASTIC_SCROLL_CONTROL_AXIS_SWITCH_DISTANCE &&
           Math.abs(probeDeltaX) >=
             Math.abs(probeDeltaY) * ELASTIC_SCROLL_CONTROL_AXIS_SWITCH_DOMINANCE
         ) {
@@ -660,8 +611,7 @@ export function useElasticScroller({
 
       if (pointerStartedLockedRef.current) {
         const nextUnlockArmed =
-          nextAxis === "horizontal" &&
-          isSideArmed(nextInlineOffset, unlockSide);
+          nextAxis === "horizontal" && isSideArmed(nextInlineOffset, unlockSide);
         unlockArmedRef.current = nextUnlockArmed;
         setUnlockArmed(nextUnlockArmed);
       } else {
@@ -686,9 +636,7 @@ export function useElasticScroller({
     [lockSide, unlockSide],
   );
 
-  const releasePointerCapture = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-  ) => {
+  const releasePointerCapture = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -718,8 +666,7 @@ export function useElasticScroller({
       const shouldUnlock = startedLocked && unlockArmedRef.current;
       const shouldLock = !startedLocked && lockArmedRef.current;
       const nextLockedOffset = dragPointerOffsetRef.current;
-      const hasScrollSpeed =
-        Math.abs(nextLockedOffset) > ELASTIC_SCROLL_CONTROL_DRAG_DEAD_ZONE;
+      const hasScrollSpeed = Math.abs(nextLockedOffset) > ELASTIC_SCROLL_CONTROL_DRAG_DEAD_ZONE;
 
       clearPointerGesture();
       releasePointerCapture(event);
@@ -749,12 +696,7 @@ export function useElasticScroller({
       cancelDragScroll();
       syncDirectionAtEdge(directionRef.current);
     },
-    [
-      cancelDragScroll,
-      clearIdleTimer,
-      clearPointerGesture,
-      syncDirectionAtEdge,
-    ],
+    [cancelDragScroll, clearIdleTimer, clearPointerGesture, syncDirectionAtEdge],
   );
 
   const handlePointerCancel = useCallback(
@@ -796,13 +738,7 @@ export function useElasticScroller({
   if (mode === "locked") {
     lockFeedback = "closed";
   } else if (mode === "drag") {
-    lockFeedback = isLocked
-      ? unlockArmed
-        ? null
-        : "closed"
-      : lockArmed
-        ? "closed"
-        : null;
+    lockFeedback = isLocked ? (unlockArmed ? null : "closed") : lockArmed ? "closed" : null;
   }
 
   return {

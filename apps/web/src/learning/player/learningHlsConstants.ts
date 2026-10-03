@@ -14,10 +14,7 @@ const SHAKA_MALFORMED_SCHEME_PREFIX = /^(https?:)\/(?!\/)/i;
 
 export function getLearningMediaOrigin(): string | null {
   try {
-    if (
-      typeof window === "undefined" ||
-      !/^https?:$/i.test(window.location.protocol)
-    ) {
+    if (typeof window === "undefined" || !/^https?:$/i.test(window.location.protocol)) {
       return null;
     }
     return window.location.origin;
@@ -78,24 +75,14 @@ function appendHlsCacheQuery(uri: string, origin: string | null): string {
   }
 
   const queryIndex = withoutHash.indexOf("?");
-  const path =
-    queryIndex === -1 ? withoutHash : withoutHash.slice(0, queryIndex);
-  const params = new URLSearchParams(
-    queryIndex === -1 ? "" : withoutHash.slice(queryIndex + 1),
-  );
+  const path = queryIndex === -1 ? withoutHash : withoutHash.slice(0, queryIndex);
+  const params = new URLSearchParams(queryIndex === -1 ? "" : withoutHash.slice(queryIndex + 1));
   params.set("veo_hls_cache", LEARNING_HLS_CACHE_VERSION);
   return `${path}?${params.toString()}${hash}`;
 }
 
-export function appendLearningHlsCacheVersion(
-  request: VideoNetworkRequest,
-): void {
-  if (
-    request.type !== "manifest" &&
-    request.type !== "segment" &&
-    request.type !== "text"
-  )
-    return;
+export function appendLearningHlsCacheVersion(request: VideoNetworkRequest): void {
+  if (request.type !== "manifest" && request.type !== "segment" && request.type !== "text") return;
   const origin = getLearningMediaOrigin();
 
   request.uris = request.uris.map((uri) =>
@@ -117,8 +104,7 @@ export function createLearningHlsRequestFilter(options?: {
   }
   let currentToken = options.segmentToken;
   let currentTokenExpiresAt = options.segmentTokenExpiresAt;
-  let refreshInFlight:
-    Promise<{ token: string; expiresAt?: number } | null> | undefined;
+  let refreshInFlight: Promise<{ token: string; expiresAt?: number } | null> | undefined;
 
   return async (request: VideoNetworkRequest): Promise<void> => {
     appendLearningHlsCacheVersion(request);
@@ -128,8 +114,7 @@ export function createLearningHlsRequestFilter(options?: {
     if (
       options.refreshSegmentToken &&
       (!currentToken ||
-        (currentTokenExpiresAt !== undefined &&
-          currentTokenExpiresAt <= refreshBefore))
+        (currentTokenExpiresAt !== undefined && currentTokenExpiresAt <= refreshBefore))
     ) {
       refreshInFlight ??= options.refreshSegmentToken();
       try {
@@ -150,11 +135,7 @@ export function createLearningHlsRequestFilter(options?: {
   };
 }
 
-function appendLearningHlsQueryParameter(
-  uri: string,
-  key: string,
-  value: string,
-): string {
+function appendLearningHlsQueryParameter(uri: string, key: string, value: string): string {
   const hashIndex = uri.indexOf("#");
   const hash = hashIndex === -1 ? "" : uri.slice(hashIndex);
   const withoutHash = hashIndex === -1 ? uri : uri.slice(0, hashIndex);

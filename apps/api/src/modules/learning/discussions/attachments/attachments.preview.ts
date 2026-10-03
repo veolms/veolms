@@ -168,19 +168,11 @@ export async function fetchSafeHtml(
       try {
         records = await dns.lookup(host, { all: true });
       } catch {
-        throw httpError(
-          400,
-          "DNS_LOOKUP_FAILED",
-          `Could not resolve host "${host}"`,
-        );
+        throw httpError(400, "DNS_LOOKUP_FAILED", `Could not resolve host "${host}"`);
       }
 
       if (!records || records.length === 0) {
-        throw httpError(
-          400,
-          "DNS_LOOKUP_FAILED",
-          `Could not resolve host "${host}"`,
-        );
+        throw httpError(400, "DNS_LOOKUP_FAILED", `Could not resolve host "${host}"`);
       }
 
       for (const record of records) {
@@ -224,11 +216,7 @@ export async function fetchSafeHtml(
       });
     } catch (err: unknown) {
       if (timedOut) {
-        throw httpError(
-          408,
-          "TIMEOUT",
-          `Timed out fetching URL "${currentUrl}"`,
-        );
+        throw httpError(408, "TIMEOUT", `Timed out fetching URL "${currentUrl}"`);
       }
       throw httpError(
         400,
@@ -240,10 +228,7 @@ export async function fetchSafeHtml(
     }
 
     // Handle manual redirects safely
-    if (
-      [301, 302, 303, 307, 308].includes(response.status) &&
-      response.headers.has("location")
-    ) {
+    if ([301, 302, 303, 307, 308].includes(response.status) && response.headers.has("location")) {
       const location = response.headers.get("location");
       if (!location) {
         throw httpError(
@@ -277,10 +262,7 @@ export async function fetchSafeHtml(
     }
 
     const declaredSize = Number(response.headers.get("content-length"));
-    if (
-      Number.isFinite(declaredSize) &&
-      declaredSize > PREVIEW_CONSTANTS.MAX_RESPONSE_BYTES * 10
-    ) {
+    if (Number.isFinite(declaredSize) && declaredSize > PREVIEW_CONSTANTS.MAX_RESPONSE_BYTES * 10) {
       throw httpError(
         413,
         "RESPONSE_TOO_LARGE",
@@ -348,10 +330,7 @@ export function decodeHtmlEntities(str: string): string {
     .trim();
 }
 
-export function extractLinkMetadata(
-  html: string,
-  pageUrl: string,
-): LinkPreviewResponse {
+export function extractLinkMetadata(html: string, pageUrl: string): LinkPreviewResponse {
   const parsedPageUrl = new URL(pageUrl);
   let title: string | null = null;
   let description: string | null = null;
@@ -377,9 +356,7 @@ export function extractLinkMetadata(
       }
       if (
         !description &&
-        (prop === "og:description" ||
-          prop === "twitter:description" ||
-          prop === "description")
+        (prop === "og:description" || prop === "twitter:description" || prop === "description")
       ) {
         description = decodeHtmlEntities(content);
       }

@@ -7,21 +7,15 @@ export interface ReviewHighlightsWidgetProps {
   highlights: readonly HighlightItem[];
 }
 
-export function ReviewHighlightsWidget({
-  highlights,
-}: ReviewHighlightsWidgetProps) {
+export function ReviewHighlightsWidget({ highlights }: ReviewHighlightsWidgetProps) {
   const getIcon = (type: HighlightItem["iconType"]) => {
     switch (type) {
       case "recommend":
         return <ThumbsUp size={18} weight="fill" className="text-(--accent)" />;
       case "verified":
-        return (
-          <ShieldCheck size={18} weight="fill" className="text-emerald-500" />
-        );
+        return <ShieldCheck size={18} weight="fill" className="text-emerald-500" />;
       case "replies":
-        return (
-          <ChatCircleDots size={18} weight="fill" className="text-blue-400" />
-        );
+        return <ChatCircleDots size={18} weight="fill" className="text-blue-400" />;
     }
   };
 
@@ -39,12 +33,12 @@ export function ReviewHighlightsWidget({
   return (
     <section
       aria-labelledby="review-highlights-heading"
-      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 md:p-6 transition-all"
+      className="rounded-[18px] border border-(--border) bg-(--card-surface) p-5 transition-all md:p-6"
       style={{ boxShadow: "var(--card-shadow)" }}
     >
       <h3
         id="review-highlights-heading"
-        className="font-bold text-base text-(--text) tracking-tight"
+        className="text-base font-bold tracking-tight text-(--text)"
       >
         Highlights
       </h3>
@@ -61,12 +55,8 @@ export function ReviewHighlightsWidget({
               {getIcon(item.iconType)}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-bold text-sm text-(--text) leading-tight">
-                {item.value}
-              </div>
-              <div className="text-xs text-(--muted) mt-0.5 leading-snug">
-                {item.label}
-              </div>
+              <div className="text-sm leading-tight font-bold text-(--text)">{item.value}</div>
+              <div className="mt-0.5 text-xs leading-snug text-(--muted)">{item.label}</div>
             </div>
           </div>
         ))}

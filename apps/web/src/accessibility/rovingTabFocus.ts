@@ -8,9 +8,7 @@ const TAB_SELECTOR = '[role="tab"]:not([disabled])';
  * cancel the pointer's first click, which makes touch controls feel like they
  * require two taps.
  */
-export function scrollKeyboardFocusedTabIntoView(
-  event: FocusEvent<HTMLButtonElement>,
-) {
+export function scrollKeyboardFocusedTabIntoView(event: FocusEvent<HTMLButtonElement>) {
   if (!event.currentTarget.matches(":focus-visible")) return;
   event.currentTarget.scrollIntoView({
     block: "nearest",
@@ -22,9 +20,7 @@ export function scrollKeyboardFocusedTabIntoView(
  * Applies the WAI-ARIA tablist keyboard model to an existing tab button.
  * Selection remains owned by each feature through its normal click handler.
  */
-export function handleRovingTabKeyDown(
-  event: KeyboardEvent<HTMLButtonElement>,
-) {
+export function handleRovingTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   const { key } = event;
   if (
     key !== "ArrowLeft" &&
@@ -48,9 +44,7 @@ export function handleRovingTabKeyDown(
       ? 0
       : key === "End"
         ? tabs.length - 1
-        : (currentIndex +
-            (key === "ArrowRight" || key === "ArrowDown" ? 1 : -1) +
-            tabs.length) %
+        : (currentIndex + (key === "ArrowRight" || key === "ArrowDown" ? 1 : -1) + tabs.length) %
           tabs.length;
   const nextTab = tabs[nextIndex];
   nextTab?.focus({ preventScroll: true });

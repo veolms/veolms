@@ -9,18 +9,14 @@ export const mediaConvertOutputDetailSchema = z.object({
     })
     .optional(),
 });
-export type MediaConvertOutputDetail = z.infer<
-  typeof mediaConvertOutputDetailSchema
->;
+export type MediaConvertOutputDetail = z.infer<typeof mediaConvertOutputDetailSchema>;
 
 export const mediaConvertOutputGroupDetailSchema = z.object({
   type: z.string().optional(),
   playlistFilePaths: z.array(z.string()).optional(),
   outputDetails: z.array(mediaConvertOutputDetailSchema).optional(),
 });
-export type MediaConvertOutputGroupDetail = z.infer<
-  typeof mediaConvertOutputGroupDetailSchema
->;
+export type MediaConvertOutputGroupDetail = z.infer<typeof mediaConvertOutputGroupDetailSchema>;
 
 export const mediaConvertUserMetadataSchema = z
   .object({
@@ -46,9 +42,7 @@ export const mediaConvertUserMetadataSchema = z
       .optional(),
   })
   .passthrough();
-export type MediaConvertUserMetadata = z.infer<
-  typeof mediaConvertUserMetadataSchema
->;
+export type MediaConvertUserMetadata = z.infer<typeof mediaConvertUserMetadataSchema>;
 
 export const mediaConvertEventDetailSchema = z
   .object({
@@ -65,9 +59,7 @@ export const mediaConvertEventDetailSchema = z
     jobPercentComplete: z.number().optional(),
   })
   .passthrough();
-export type MediaConvertEventDetail = z.infer<
-  typeof mediaConvertEventDetailSchema
->;
+export type MediaConvertEventDetail = z.infer<typeof mediaConvertEventDetailSchema>;
 
 export const mediaConvertWebhookPayloadSchema = z
   .object({
@@ -94,15 +86,11 @@ export const mediaConvertWebhookPayloadSchema = z
     userMetadata: mediaConvertUserMetadataSchema.optional(),
   })
   .passthrough();
-export type MediaConvertWebhookPayload = z.infer<
-  typeof mediaConvertWebhookPayloadSchema
->;
+export type MediaConvertWebhookPayload = z.infer<typeof mediaConvertWebhookPayloadSchema>;
 
 export const mediaConvertWebhookResponseSchema = z.object({
   success: z.boolean(),
   status: z.string(),
   jobId: z.string().optional(),
 });
-export type MediaConvertWebhookResponse = z.infer<
-  typeof mediaConvertWebhookResponseSchema
->;
+export type MediaConvertWebhookResponse = z.infer<typeof mediaConvertWebhookResponseSchema>;

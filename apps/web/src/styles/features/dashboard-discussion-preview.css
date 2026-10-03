@@ -213,10 +213,7 @@
    shared Discussions surfaces and elevation unchanged. */
 .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact {
-  --creator-discussion-card-surface: var(
-    --card-surface-raised,
-    var(--surface-strong)
-  );
+  --creator-discussion-card-surface: var(--card-surface-raised, var(--surface-strong));
   --creator-discussion-card-hover-surface: color-mix(
     in srgb,
     var(--creator-discussion-card-surface) 92%,
