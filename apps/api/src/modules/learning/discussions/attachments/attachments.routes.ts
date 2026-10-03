@@ -26,7 +26,11 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   const permissions = createDiscussionPermissions(options);
   const repo = createAttachmentsRepository();
   const uploadStore = createDiscussionUploadStore(options.services.storage);
-  const service = createAttachmentsService(repo, uploadStore);
+  const service = createAttachmentsService(
+    repo,
+    uploadStore,
+    options.services.storage,
+  );
   const controller = createAttachmentsController({
     database: options.database,
     service,

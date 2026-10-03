@@ -60,6 +60,8 @@ import type {
   AttachmentsRepository,
   AttachmentSummaryRow,
 } from "../attachments/attachments.repository.ts";
+import type { S3StorageService } from "@veolms/storage";
+import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
 
 type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
 
@@ -147,6 +149,7 @@ export function createThreadsService(
   courseAccess: DiscussionAccess = createDiscussionAccess(),
   bookmarksRepo: BookmarksRepository = createBookmarksRepository(),
   lessonAccess: LessonDiscussionAccess = createLessonDiscussionAccess(),
+  storage?: S3StorageService,
 ): ThreadsService {
   const outbox = createDiscussionOutbox();
 
@@ -163,6 +166,12 @@ export function createThreadsService(
     new Map(
       summaries.map((summary) => [summary.targetId, summary.attachmentSummary]),
     );
+
+  function resolveAttachmentUrl(attachment: LearningAttachmentRow): string {
+    return storage
+      ? getCdnDeliveryUrl(storage, attachment.storage_key).url
+      : attachment.file_url;
+  }
 
   function mapBookmarkWorkspaceItem(
     row: BookmarkWorkspaceRow,
@@ -287,7 +296,7 @@ export function createThreadsService(
         id: a.id,
         kind: a.kind,
         fileName: a.file_name,
-        fileUrl: a.file_url,
+        fileUrl: resolveAttachmentUrl(a),
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
         ...getAttachmentDimensionFields(a.metadata),

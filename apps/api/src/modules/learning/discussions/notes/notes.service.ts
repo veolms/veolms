@@ -10,6 +10,7 @@ import type {
   ListLearningNotesQuery,
   UpdateLearningNoteRequest,
 } from "@veolms/contracts";
+import type { S3StorageService } from "@veolms/storage";
 import { httpError } from "../../../../lib/errors.ts";
 import {
   decodeDiscussionCursor,
@@ -29,12 +30,14 @@ import {
   withWriteTransaction,
 } from "../shared/discussion.mentions.ts";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
+import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
 import type { NoteRow, NotesRepository } from "./notes.repository.ts";
 
 interface NoteAttachmentItem {
   id: string;
   kind: "image" | "screenshot" | "code" | "document";
   file_name: string;
+  storage_key: string;
   file_url: string;
   mime_type: string;
   file_size: number;
@@ -123,7 +126,10 @@ export interface NotesService {
   ): Promise<void>;
 }
 
-export function createNotesService(notesRepo: NotesRepository): NotesService {
+export function createNotesService(
+  notesRepo: NotesRepository,
+  storage?: S3StorageService,
+): NotesService {
   const courseAccess = createDiscussionAccess();
   const outbox = createDiscussionOutbox();
 
@@ -170,7 +176,9 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
         id: a.id,
         kind: a.kind,
         fileName: a.file_name,
-        fileUrl: a.file_url,
+        fileUrl: storage
+          ? getCdnDeliveryUrl(storage, a.storage_key).url
+          : a.file_url,
         mimeType: a.mime_type,
         fileSize: Number(a.file_size || 0),
         ...getAttachmentDimensionFields(a.metadata),
@@ -297,6 +305,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
             "id",
             "kind",
             "file_name",
+            "storage_key",
             "file_url",
             "mime_type",
             "file_size",
@@ -327,6 +336,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
             "id",
             "kind",
             "file_name",
+            "storage_key",
             "file_url",
             "mime_type",
             "file_size",
@@ -421,6 +431,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
               "target_id",
               "kind",
               "file_name",
+              "storage_key",
               "file_url",
               "mime_type",
               "file_size",
@@ -509,6 +520,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
               "target_id",
               "kind",
               "file_name",
+              "storage_key",
               "file_url",
               "mime_type",
               "file_size",
@@ -671,6 +683,7 @@ export function createNotesService(notesRepo: NotesRepository): NotesService {
               "id",
               "kind",
               "file_name",
+              "storage_key",
               "file_url",
               "mime_type",
               "file_size",

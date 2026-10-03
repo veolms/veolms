@@ -46,6 +46,7 @@ import type {
   UserSuspension,
 } from "@veolms/contracts";
 import { api } from "../../lib/api-client";
+import { mediaService } from "../media/media.service";
 import { requireServerEntityId } from "./interaction-entities";
 
 export interface AttachmentUploadProgress {
@@ -314,17 +315,51 @@ export const learningInteractionsService = {
         new Error("Course and lesson context are required for attachments."),
       );
     }
-    const formData = new FormData();
-    formData.append("courseId", context.courseId);
-    formData.append("lessonId", context.lessonId);
-    appendDimensions(formData, dimensions);
-    formData.append("file", file, file.name);
-    return api.post<LearningUploadResponse>("/attachments/upload", formData, {
-      onUploadProgress: (event) =>
-        onProgress?.({
-          loaded: event.loaded,
-          ...(event.total && event.total > 0 ? { total: event.total } : {}),
-        }),
+    return this.initiateUpload({
+      courseId: context.courseId,
+      lessonId: context.lessonId,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      fileSize: file.size,
+      ...(dimensions?.width !== undefined ? { width: dimensions.width } : {}),
+      ...(dimensions?.height !== undefined
+        ? { height: dimensions.height }
+        : {}),
+    }).then(async (initiated) => {
+      await mediaService.uploadFileToPresignedUrl(
+        initiated.uploadUrl,
+        file,
+        (progress) =>
+          onProgress?.({
+            loaded: progress.loadedBytes,
+            total: progress.totalBytes,
+          }),
+      );
+
+      const completed = await this.completeUpload({
+        attachmentId: initiated.attachmentId,
+      });
+      const mediaType = completed.mimeType.startsWith("image/")
+        ? "image"
+        : completed.mimeType.startsWith("video/")
+          ? "video"
+          : completed.kind === "code"
+            ? "code"
+            : "document";
+
+      return {
+        id: completed.id,
+        url: completed.fileUrl,
+        storageKey: completed.storageKey,
+        fileName: completed.fileName,
+        kind: completed.kind,
+        mediaType,
+        mimeType: completed.mimeType,
+        size: completed.fileSize,
+        status: completed.status,
+        width: completed.width,
+        height: completed.height,
+      } satisfies LearningUploadResponse;
     });
   },
 

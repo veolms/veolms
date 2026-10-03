@@ -53,6 +53,6 @@
     "wrangler": "^4.131.2"
   },
   "lint-staged": {
-    "*": "prettier --write --ignore-unknown"
+    "*": "node ./node_modules/prettier/bin/prettier.cjs --write --ignore-unknown"
   }
 }

@@ -121,8 +121,11 @@
   width: min(18rem, calc(100vw - 1rem)) !important;
   min-width: min(15rem, calc(100vw - 1rem)) !important;
   max-width: 18rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
   overflow: hidden !important;
-  z-index: 50 !important;
+  z-index: 190 !important;
 }
 
 /* Obsolete standalone loader instances must never remain visible. */
@@ -167,6 +170,8 @@
 }
 
 .cm-tooltip-autocomplete > ul {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
   max-height: 6.75rem !important;
   overflow-y: auto !important;
   overscroll-behavior: contain;

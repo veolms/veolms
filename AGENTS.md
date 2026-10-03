@@ -14,12 +14,11 @@ This repository is a monorepo containing the following packages and applications
 2. For frontend architecture, state management, API integrations, visual design, and component reuse, strictly adhere to `apps/web/AGENTS.md`.
 3. For backend architecture, layered service pattern, and database repositories, strictly adhere to `apps/api/AGENTS.md`.
 
-## Frontend unit-test policy
+## Frontend test policy
 
-For work under `apps/web`, do not create, restore, or update unit-test cases.
-Do not add unit-test runners, setup files, or unit-test-only dependencies. Keep
-browser-level E2E coverage separate and preserve existing Playwright E2E tests
-unless the task explicitly asks for changes to them.
+For work under `apps/web`, do not create, restore, or update unit-test or E2E-test cases.
+Do not add unit-test runners, setup files, or test-only dependencies. E2E tests have been
+decommissioned; validate changes with the relevant typecheck, lint, and build checks.
 
 ## Branch Protection Rule
 
