@@ -7,6 +7,7 @@ import { ChatTeardropTextIcon as ChatTeardropText } from "@phosphor-icons/react/
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { ClipboardTextIcon as ClipboardText } from "@phosphor-icons/react/ClipboardText";
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
+import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
@@ -19,6 +20,7 @@ import { useBackDismiss } from "../navigation/useBackDismiss";
 export interface NotificationCardProps {
   notification: NotificationItem;
   onMarkRead: (id: string) => void;
+  onMarkUnread: (id: string) => void;
   onArchive: (id: string) => void;
   onOpen?: (destination: string) => void;
   setNotice?: (message: string) => void;
@@ -27,6 +29,7 @@ export interface NotificationCardProps {
 export function NotificationCard({
   notification,
   onMarkRead,
+  onMarkUnread,
   onArchive,
   onOpen,
   setNotice,
@@ -78,6 +81,11 @@ export function NotificationCard({
   const handleMarkRead = () => {
     setMenuOpen(false);
     if (!notification.isRead) onMarkRead(notification.id);
+  };
+
+  const handleMarkUnread = () => {
+    setMenuOpen(false);
+    if (notification.isRead) onMarkUnread(notification.id);
   };
 
   return (
@@ -173,6 +181,17 @@ export function NotificationCard({
                     >
                       <Check size={14} />
                       <span>Mark as read</span>
+                    </button>
+                  )}
+                  {notification.isRead && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleMarkUnread}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-(--text) hover:bg-(--hover) cursor-pointer"
+                    >
+                      <EnvelopeSimple size={14} />
+                      <span>Mark as unread</span>
                     </button>
                   )}
                   <button

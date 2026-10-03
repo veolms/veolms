@@ -1,3 +1,4 @@
+import { publicProfileUsernameParamsSchema } from "@veolms/contracts";
 import { getCourseTitle } from "../learning/courseMetadata";
 import {
   SETTINGS_DEFAULT_TAB,
@@ -32,7 +33,8 @@ export type ShellPage =
   | "course-overview"
   | "workspace"
   | "students"
-  | "student-details";
+  | "student-details"
+  | "public-profile";
 
 export interface ShellRouteDescriptor {
   kind: "shell";
@@ -168,6 +170,12 @@ export const routeDescriptors = {
     section: "Students",
     title: "Student profile",
     description: "Review learner details, enrolled courses, and progress.",
+  },
+  "public-profile": {
+    kind: "shell",
+    page: "public-profile",
+    title: "Public profile",
+    description: "View this member's public profile.",
   },
   reviews: {
     kind: "shell",
@@ -393,6 +401,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   "edit-course": "/courses/:courseId/edit/basics",
   students: "/students",
   "student-details": "/students/:username",
+  "public-profile": "/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
@@ -551,6 +560,19 @@ export const getEffectiveRouteId = (
       : "home-fallback";
   }
 
+  if (routeId === "public-profile") {
+    const match = /^\/([^/]+)$/.exec(normalizedPath);
+    if (!match?.[1]) return "home-fallback";
+    try {
+      const username = decodeURIComponent(match[1]);
+      return publicProfileUsernameParamsSchema.safeParse({ username }).success
+        ? routeId
+        : "home-fallback";
+    } catch {
+      return "home-fallback";
+    }
+  }
+
   if (routeId === "course-create") {
     return normalizedPath === "/courses/create" ? routeId : "home-fallback";
   }
@@ -606,6 +628,15 @@ export const getMatchedRouteDescriptor = (
     if (catalogueRouteId) {
       const catalogueDescriptor = getRouteDescriptor(catalogueRouteId);
       if (catalogueDescriptor) return catalogueDescriptor;
+    }
+
+    const normalizedPath = normalizeNavigationPath(pathname);
+    const canonicalRoute = Object.entries(canonicalPathsByRouteId).find(
+      ([, canonicalPath]) => canonicalPath === normalizedPath,
+    );
+    if (canonicalRoute) {
+      const canonicalDescriptor = getRouteDescriptor(canonicalRoute[0]);
+      if (canonicalDescriptor) return canonicalDescriptor;
     }
   }
 

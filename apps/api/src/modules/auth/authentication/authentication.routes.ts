@@ -8,6 +8,8 @@ import {
   loginRequestSchema,
   loginResponseSchema,
   profileUpdateRequestSchema,
+  publicProfileResponseSchema,
+  publicProfileUsernameParamsSchema,
   registerRequestSchema,
   selectAvatarRequestSchema,
   userAvatarListResponseSchema,
@@ -82,6 +84,28 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.getConfig,
+  );
+
+  app.get(
+    "/auth/profiles/:username",
+    {
+      schema: {
+        operationId: "getPublicProfileByUsername",
+        tags: ["Auth"],
+        summary: "Get a public profile",
+        description:
+          "Returns a user's public profile fields and only contact details they chose to share.",
+        params: publicProfileUsernameParamsSchema,
+        response: {
+          200: jsonResponse(
+            "Public profile details.",
+            publicProfileResponseSchema,
+          ),
+          404: errorResponse("This profile isn't available."),
+        },
+      },
+    },
+    controller.publicProfile,
   );
 
   app.post(

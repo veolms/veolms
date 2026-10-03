@@ -25,6 +25,12 @@ export function createNotificationController({
     return await service.markRead(request.user!.id, request.params.id);
   }
 
+  async function markUnread(
+    request: FastifyRequest<{ Params: { id: string } }>,
+  ) {
+    return await service.markUnread(request.user!.id, request.params.id);
+  }
+
   async function markAllRead(request: FastifyRequest) {
     return await service.markAllRead(request.user!.id);
   }
@@ -47,6 +53,7 @@ export function createNotificationController({
     list,
     getSummary,
     markRead,
+    markUnread,
     markAllRead,
     archive,
     getPreferences,

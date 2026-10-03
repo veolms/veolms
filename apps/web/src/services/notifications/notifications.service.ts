@@ -23,6 +23,9 @@ export const notificationsService = {
   markRead: (id: string): Promise<Notification> =>
     api.patch<Notification>(`/notifications/${id}/read`),
 
+  markUnread: (id: string): Promise<Notification> =>
+    api.patch<Notification>(`/notifications/${id}/unread`),
+
   markAllRead: (): Promise<{ updatedCount: number }> =>
     api.post<{ updatedCount: number }>("/notifications/read-all"),
 

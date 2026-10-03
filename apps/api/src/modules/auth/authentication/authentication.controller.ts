@@ -13,6 +13,7 @@ import type {
   AvatarUploadPresignRequest,
   LoginRequest,
   ProfileUpdateRequest,
+  PublicProfileUsernameParams,
   RegisterRequest,
   SelectAvatarRequest,
 } from "@veolms/contracts";
@@ -81,6 +82,30 @@ export function createAuthController(context: AuthContext) {
 
   async function getConfig() {
     return oauthService.getPublicConfig();
+  }
+
+  async function publicProfile(
+    request: FastifyRequest<{ Params: PublicProfileUsernameParams }>,
+  ) {
+    const user = await authService.getPublicProfile(request.params.username);
+
+    return {
+      username: user.username,
+      displayName: user.display_name,
+      ...presentAvatar(user.avatar_data_url),
+      bio: user.bio,
+      email:
+        user.email_public && user.email && user.email_verified_at
+          ? user.email
+          : null,
+      phoneNo:
+        user.mobile_public && user.phone_no && user.phone_verified_at
+          ? user.phone_no
+          : null,
+      linkedinUrl: user.linkedin_public ? user.linkedin_url : null,
+      githubUrl: user.github_public ? user.github_url : null,
+      websiteUrl: user.website_public ? user.website_url : null,
+    };
   }
 
   async function logout(request: FastifyRequest, reply: FastifyReply) {
@@ -302,6 +327,7 @@ export function createAuthController(context: AuthContext) {
     login,
     register,
     getConfig,
+    publicProfile,
     logout,
     me,
     updateProfile,

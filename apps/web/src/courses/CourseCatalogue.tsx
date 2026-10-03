@@ -190,10 +190,10 @@ export function CourseCatalogue({
   };
 
   const quickFilterTabClassName =
-    "inline-flex min-h-9 shrink-0 items-center gap-2 rounded-(--control-radius-structured) border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))] px-3.5 text-xs! leading-5! font-semibold text-(--text-secondary) shadow-[0_5px_14px_color-mix(in_srgb,var(--accent-shadow)_16%,transparent)] transition-[background-color,border-color,color,box-shadow] hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-(--hover) hover:text-(--text) aria-selected:border-[color-mix(in_srgb,var(--accent)_70%,transparent)] aria-selected:bg-(--accent) aria-selected:text-(--on-accent) aria-selected:shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_45%,transparent)] aria-selected:hover:bg-(--accent-hover) sm:min-h-9 sm:px-4 sm:text-[0.8rem]!";
+    "inline-flex min-h-9 shrink-0 items-center gap-2 rounded-(--control-radius-structured) border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))] px-3.5 text-xs! leading-5! font-semibold max-[640px]:font-bold text-(--text-secondary) shadow-[0_5px_14px_color-mix(in_srgb,var(--accent-shadow)_16%,transparent)] transition-[background-color,border-color,color,box-shadow] hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-(--hover) hover:text-(--text) aria-selected:border-[color-mix(in_srgb,var(--accent)_70%,transparent)] aria-selected:bg-(--accent) aria-selected:text-(--on-accent) aria-selected:shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_45%,transparent)] aria-selected:hover:bg-(--accent-hover) sm:min-h-9 sm:px-4 sm:text-[0.8rem]!";
   const quickFilterCountClassName = (active: boolean) =>
     [
-      "inline-flex min-w-6 items-center justify-center rounded-[6px] border px-1.5 py-0.5 text-[0.72rem]! font-bold tabular-nums",
+      "inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] border px-1 text-[0.625rem]! leading-none font-bold tabular-nums",
       active
         ? "border-[color-mix(in_srgb,var(--on-accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--on-accent)_16%,transparent)] text-(--on-accent)"
         : "border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_72%,transparent)] text-(--text-secondary)",
@@ -348,7 +348,7 @@ export function CourseCatalogue({
       >
         <div className="min-w-0 text-left">
           <div
-            className="inline-flex min-h-9 w-fit max-w-full gap-2 overflow-x-auto sm:min-h-10"
+            className="inline-flex min-h-9 w-fit max-w-full gap-2 overflow-x-auto max-[640px]:-mx-(--application-page-inline-gutter) max-[640px]:w-[calc(100%+var(--application-page-inline-gutter)+var(--application-page-inline-gutter))] max-[640px]:max-w-none max-[640px]:px-(--application-page-inline-gutter) min-[641px]:-ml-(--application-page-inline-gutter) min-[641px]:pl-(--application-page-inline-gutter) sm:min-h-10"
             role="tablist"
             aria-label={
               role === "creator" ? "Course lifecycle" : "Course enrollment"

@@ -30,7 +30,6 @@ import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotc
 import { CenteredLoadingSpinner } from "./components/LoadingSpinner";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
-import { DotsThreeCircleIcon as DotsThreeCircle } from "@phosphor-icons/react/DotsThreeCircle";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
@@ -73,8 +72,13 @@ import type {
 import { AcademyPaletteMenu } from "./shell/AcademyPaletteMenu";
 import { AcademyRouteSkeleton } from "./routing/AcademyRouteSkeleton";
 import { FloatingScrollbar } from "./shell/FloatingScrollbar";
+import { useMobileProfileDrawerSize } from "./shell/useMobileProfileDrawerSize";
 import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
-import { ProfileMenu, ShellProfileAvatar } from "./shell/ProfileMenu";
+import {
+  ProfileMenu,
+  ProfileMenuIdentity,
+  ShellProfileAvatar,
+} from "./shell/ProfileMenu";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { useCurrentUser, useSignOut } from "./services/auth";
 import {
@@ -311,6 +315,11 @@ const StudentDetailsPage = lazy(() =>
     default: module.StudentDetailsPage,
   })),
 );
+const PublicProfilePageRoute = lazy(() =>
+  import("./profiles/PublicProfilePage").then((module) => ({
+    default: module.PublicProfilePage,
+  })),
+);
 const CouponBuilderPage = lazy(() =>
   import("./coupons/CouponBuilderPage").then((module) => ({
     default: module.CouponBuilderPage,
@@ -338,7 +347,9 @@ interface CoursesPageProps {
     options?: CourseOpenOptions,
   ) => void;
   onNavigatePage: NavigateTo;
+  onNavigateBack?: () => void;
   onExitSettings?: () => void;
+  showPageBackButton?: boolean;
   cataloguePathname?: string;
   routeCatalogueEnrollmentFilter?: Extract<
     CourseEnrollmentFilter,
@@ -655,7 +666,9 @@ export function CoursesPage({
   initialCourseOverview,
   onOpenCourse,
   onNavigatePage,
+  onNavigateBack,
   onExitSettings,
+  showPageBackButton = false,
   cataloguePathname = "/courses",
   routeCatalogueEnrollmentFilter = "all",
   page = "courses",
@@ -1118,11 +1131,19 @@ export function CoursesPage({
   const mobileMoreRef = useRef<HTMLButtonElement>(null);
   const mobileSheetRef = useRef<HTMLDivElement>(null);
   const mobileMenuDismissThenRef = useRef<DrawerDismissThen>(null);
+  const toggleSettingsNavigationRef = useRef<(() => void) | null>(null);
   const mobileMenuSnapPoints = useMemo(
     () => [mobileMenuCollapsedSnapPoint, 1],
     [mobileMenuCollapsedSnapPoint],
   );
   const isLearningSurface = Boolean(renderMain);
+  const { ref: mobileSheetSizeRef, snapPoint: mobileMenuContentSnapPoint } =
+    useMobileProfileDrawerSize({
+      open: mobileMenuOpen,
+      popupRef: mobileSheetRef,
+      initialSnapPoint: MOBILE_DRAWER_INITIAL_SNAP_POINT,
+      contentKey: `${isAuthenticated}:${canSwitchWorkspace}:${effectiveRole}:${sidebarDockItems.length}`,
+    });
   const activeNavigationSection = isLearningSurface
     ? null
     : (requestedSection ??
@@ -1165,6 +1186,10 @@ export function CoursesPage({
   const sidebarShortcutTitle = usesMacShortcutStyle ? "⌘+B" : "Ctrl+B";
   const showKeyboardShortcuts =
     sidebarPreferences.showKeyboardShortcuts !== false;
+  const settingsShortcutTitle = usesMacShortcutStyle ? "⌘+," : "Ctrl+,";
+  const settingsControlTitle = showKeyboardShortcuts
+    ? `Open settings (${settingsShortcutTitle})`
+    : "Open settings";
 
   useEffect(
     () =>
@@ -1277,10 +1302,11 @@ export function CoursesPage({
   }, [storedPreferencesReady, theme]);
 
   useLayoutEffect(() => {
-    if (!compactNavigation || !isLearningSurface) {
+    if (!compactNavigation) {
       setMobileMenuCollapsedSnapPoint(MOBILE_DRAWER_INITIAL_SNAP_POINT);
       return undefined;
     }
+    if (!isLearningSurface) return undefined;
     if (!mobileMenuOpen) return undefined;
 
     let frame: number | null = null;
@@ -1288,9 +1314,15 @@ export function CoursesPage({
       if (frame !== null) return;
       frame = window.requestAnimationFrame(() => {
         frame = null;
-        const nextSnapPoint = getLearningMobileMenuSnapPoint();
+        const nextSnapPoint = Math.max(
+          getLearningMobileMenuSnapPoint(),
+          mobileMenuContentSnapPoint,
+        );
         setMobileMenuCollapsedSnapPoint((current) =>
           Math.abs(current - nextSnapPoint) < 0.002 ? current : nextSnapPoint,
+        );
+        setMobileMenuSnapPoint((current) =>
+          current === 1 ? current : nextSnapPoint,
         );
       });
     };
@@ -1323,7 +1355,12 @@ export function CoursesPage({
       );
       window.removeEventListener("scroll", updateLessonDrawerSnapPoint);
     };
-  }, [compactNavigation, isLearningSurface, mobileMenuOpen]);
+  }, [
+    compactNavigation,
+    isLearningSurface,
+    mobileMenuOpen,
+    mobileMenuContentSnapPoint,
+  ]);
 
   useEffect(() => {
     document.documentElement.dataset.elevatedSurfaces = String(
@@ -1753,7 +1790,7 @@ export function CoursesPage({
         !isEditingText
       ) {
         event.preventDefault();
-        onNavigatePage?.("/settings/appearance");
+        toggleSettingsNavigationRef.current?.();
         setActiveSection("Settings");
         setCourseMenu(null);
         setProfileMenu(false);
@@ -2074,6 +2111,17 @@ export function CoursesPage({
       onNavigatePage?.(getNavigationDestination(item ?? label));
     });
   };
+
+  const toggleSettingsNavigation = () => {
+    if (page !== "settings") {
+      selectNavigation("Settings");
+      return;
+    }
+
+    setEdgeSidebarOpen(false);
+    dismissMobileMenuThen(() => onExitSettings?.());
+  };
+  toggleSettingsNavigationRef.current = toggleSettingsNavigation;
 
   const navigationUsesCompactInteraction =
     compactNavigation || coarseNavigationInput;
@@ -3222,6 +3270,16 @@ export function CoursesPage({
     activeNavigationSection &&
     mobileMoreNavigation.some(isNavigationItemActive),
   );
+  useLayoutEffect(() => {
+    if (!mobileMenuOpen) return;
+    const nextSnapPoint = isLearningSurface
+      ? Math.max(getLearningMobileMenuSnapPoint(), mobileMenuContentSnapPoint)
+      : mobileMenuContentSnapPoint;
+    setMobileMenuCollapsedSnapPoint(nextSnapPoint);
+    setMobileMenuSnapPoint((current) =>
+      current === 1 ? current : nextSnapPoint,
+    );
+  }, [isLearningSurface, mobileMenuOpen, mobileMenuContentSnapPoint]);
   const currentAcademyThemeIndex = academyThemes.findIndex(
     (item) => item.id === academyTheme,
   );
@@ -3253,6 +3311,16 @@ export function CoursesPage({
 
     const surfaceActiveSection =
       surfaceSection ?? (surfacePage === "courses" ? "Courses" : activeSection);
+    if (surfacePage === "public-profile") {
+      return (
+        <Suspense fallback={<AcademyPageFallback />}>
+          <PublicProfilePageRoute
+            username={surfaceUsername}
+            onNavigateBack={showPageBackButton ? onNavigateBack : undefined}
+          />
+        </Suspense>
+      );
+    }
     if (surfacePage === "home" && effectiveRole === "creator") {
       return (
         <Suspense fallback={<AcademyPageFallback />}>
@@ -3285,6 +3353,7 @@ export function CoursesPage({
             isAuthenticated={isAuthenticated}
             onNavigatePage={onNavigatePage}
             onExitSettings={onExitSettings}
+            showBackButton={showPageBackButton}
             theme={theme}
             onThemeChange={(next, origin) => {
               if (next !== theme) themeRevealOriginRef.current = origin ?? null;
@@ -3425,6 +3494,7 @@ export function CoursesPage({
         >
           <OrderHistoryPageRoute
             onNavigatePage={onNavigatePage}
+            onNavigateBack={onNavigateBack}
             setNotice={setNotice}
           />
         </Suspense>
@@ -3439,6 +3509,7 @@ export function CoursesPage({
         <Suspense fallback={<AcademyPageFallback />}>
           <NotificationsPage
             onNavigatePage={onNavigatePage}
+            onNavigateBack={onNavigateBack}
             setNotice={setNotice}
           />
         </Suspense>
@@ -3800,11 +3871,24 @@ export function CoursesPage({
             </nav>
 
             <div className="courses-profile" ref={profileRef}>
-              {profileMenu && isAuthenticated && (
+              {isAuthenticated && (
                 <ProfileMenu
+                  id="desktop-profile-menu"
+                  className="profile-menu--animated"
+                  isOpen={profileMenu}
                   role={effectiveRole}
                   allowedRoles={allowedWorkspaceRoles}
                   userRoles={userRoles}
+                  identity={
+                    activeUser?.username
+                      ? {
+                          displayName: shellProfileDisplayName,
+                          username: activeUser.username,
+                          avatarUrl: shellProfileAvatarUrl,
+                          avatarSrcSet: shellProfileAvatarSrcSet,
+                        }
+                      : undefined
+                  }
                   unreadNotificationCount={
                     isAuthenticated ? unreadNotificationCount : 0
                   }
@@ -3831,6 +3915,7 @@ export function CoursesPage({
                   className="courses-profile__button"
                   aria-label={`${shellProfileDisplayName}, ${shellProfileSubtitle}. Open profile menu`}
                   aria-expanded={profileMenu}
+                  aria-controls="desktop-profile-menu"
                   onClick={() => setProfileMenu((current) => !current)}
                 >
                   <span className="courses-profile__avatar-wrap">
@@ -4058,10 +4143,10 @@ export function CoursesPage({
                           } as CSSProperties
                         }
                         aria-label="Open settings"
-                        title="Open settings"
+                        title={settingsControlTitle}
                         aria-current={settingsActive ? "page" : undefined}
                         aria-keyshortcuts={`${primaryShortcutModifier}+Comma`}
-                        onClick={() => selectNavigation("Settings")}
+                        onClick={toggleSettingsNavigation}
                       >
                         <GearSix
                           size={20}
@@ -4274,14 +4359,17 @@ export function CoursesPage({
             id="mobile-navigation-trigger"
             ref={mobileMoreRef}
             type="button"
-            className={mobileMoreActive ? "is-active" : ""}
-            aria-label="More navigation options"
+            className={mobileMoreActive || mobileMenuOpen ? "is-active" : ""}
+            aria-label="Open profile and navigation menu"
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-navigation-sheet"
             onClick={() => {
               const nextSnapPoint = isLearningSurface
-                ? getLearningMobileMenuSnapPoint()
-                : MOBILE_DRAWER_INITIAL_SNAP_POINT;
+                ? Math.max(
+                    getLearningMobileMenuSnapPoint(),
+                    mobileMenuContentSnapPoint,
+                  )
+                : mobileMenuContentSnapPoint;
               setMobilePaletteMenu(false);
               setMobileMenuCollapsedSnapPoint(nextSnapPoint);
               setMobileMenuSnapPoint(nextSnapPoint);
@@ -4289,12 +4377,17 @@ export function CoursesPage({
             }}
           >
             <span>
-              <DotsThreeCircle
-                size={24}
-                weight={mobileMoreActive ? "fill" : "regular"}
-              />
+              <span className="mobile-bottom-nav__profile-avatar">
+                <ShellProfileAvatar
+                  avatarUrl={shellProfileAvatarUrl}
+                  avatarSrcSet={shellProfileAvatarSrcSet}
+                />
+                {unreadNotificationCount > 0 ? (
+                  <i className="courses-profile__presence" aria-hidden="true" />
+                ) : null}
+              </span>
             </span>
-            <small>More</small>
+            <small>You</small>
           </button>
         </nav>
       )}
@@ -4317,14 +4410,14 @@ export function CoursesPage({
         triggerId="mobile-navigation-trigger"
       >
         <DrawerContent
-          ref={mobileSheetRef}
+          ref={mobileSheetSizeRef}
           id="mobile-navigation-sheet"
           aria-labelledby="mobile-navigation-title"
           aria-describedby="mobile-navigation-description"
           initialFocus={mobileSheetRef}
           finalFocus={mobileMoreRef}
           tabIndex={-1}
-          className="mobile-menu-sheet data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] rounded-t-[22px] px-3 pb-[max(14px,var(--app-safe-area-bottom))] shadow-[0_-24px_70px_rgba(0,0,0,0.42)]"
+          className="mobile-menu-sheet [--mobile-menu-sheet-top-space:3px] data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] rounded-t-[22px] px-3 pb-[max(14px,var(--app-safe-area-bottom))]"
           data-sidebar-swipe-ignore
           onPointerDownCapture={(event) => {
             if (
@@ -4337,64 +4430,35 @@ export function CoursesPage({
           }}
         >
           <div className="mobile-menu-sheet__body">
-            <div className="mobile-menu-sheet__heading">
-              <div>
-                <DrawerTitle id="mobile-navigation-title">More</DrawerTitle>
-                <DrawerDescription id="mobile-navigation-description">
-                  Navigation not shown in the bottom bar
-                </DrawerDescription>
-              </div>
-            </div>
+            <DrawerTitle id="mobile-navigation-title" className="sr-only">
+              Profile and navigation
+            </DrawerTitle>
+            <DrawerDescription
+              id="mobile-navigation-description"
+              className="sr-only"
+            >
+              Profile actions, additional navigation, and appearance controls
+            </DrawerDescription>
             <div
-              className="mobile-menu-sheet__profile-wrap"
+              className="mobile-menu-sheet__profile-wrap mt-2"
               data-profile-surface
             >
-              {isAuthenticated ? (
-                <button
-                  type="button"
-                  className="mobile-menu-sheet__profile"
-                  aria-haspopup="menu"
-                  aria-expanded={profileMenu}
-                  aria-controls="mobile-profile-menu"
-                  aria-label={`${shellProfileDisplayName}, ${shellProfileSubtitle}. Open profile menu`}
-                  onClick={() => setProfileMenu((current) => !current)}
-                >
-                  <span className="courses-profile__avatar-wrap">
-                    <ShellProfileAvatar
-                      avatarUrl={shellProfileAvatarUrl}
-                      avatarSrcSet={shellProfileAvatarSrcSet}
-                    />
-                    {unreadNotificationCount > 0 ? (
-                      <i
-                        className="courses-profile__presence"
-                        aria-label={`${unreadNotificationCount} unread notifications`}
-                      />
-                    ) : null}
-                  </span>
-                  <span>
-                    <strong>{shellProfileDisplayName}</strong>
-                    <small>
-                      {shellProfileSubtitle}
-                      {canSwitchWorkspace ? (
-                        <ProfileSubtitleIcon
-                          className={`courses-profile__role-icon courses-profile__role-icon--${effectiveRole === "student" ? "student" : hasAdminRole(userRoles) ? "admin" : "creator"}`}
-                          size={15}
-                          weight="duotone"
-                          aria-hidden="true"
-                        />
-                      ) : null}
-                    </small>
-                  </span>
-                  <CaretDown
-                    size={19}
-                    aria-hidden="true"
-                    className={
-                      profileMenu
-                        ? "courses-profile__caret is-open"
-                        : "courses-profile__caret"
-                    }
-                  />
-                </button>
+              {isAuthenticated && activeUser?.username ? (
+                <ProfileMenuIdentity
+                  variant="mobile"
+                  displayName={shellProfileDisplayName}
+                  username={activeUser.username}
+                  avatarUrl={shellProfileAvatarUrl}
+                  avatarSrcSet={shellProfileAvatarSrcSet}
+                  unreadNotificationCount={unreadNotificationCount}
+                  onClose={() => setProfileMenu(false)}
+                  onNavigate={(path) => {
+                    setEdgeSidebarOpen(false);
+                    dismissProfileMenuThen(() => {
+                      dismissMobileMenuThen(() => onNavigatePage(path));
+                    });
+                  }}
+                />
               ) : (
                 <LoginProfileButton
                   className="mobile-menu-sheet__profile"
@@ -4403,7 +4467,9 @@ export function CoursesPage({
                   onLogin={() => onNavigatePage("/login")}
                 />
               )}
-              {profileMenu && isAuthenticated && (
+            </div>
+            <div className="mobile-menu-sheet__scroll pb-11">
+              {isAuthenticated && (
                 <ProfileMenu
                   id="mobile-profile-menu"
                   className="mobile-menu-sheet__profile-menu"
@@ -4412,6 +4478,44 @@ export function CoursesPage({
                   userRoles={userRoles}
                   unreadNotificationCount={unreadNotificationCount}
                   includeSidebarControl={false}
+                  beforeAccountContent={
+                    <div
+                      className="mobile-menu-sheet__list mobile-menu-sheet__profile-navigation"
+                      role="group"
+                      aria-label="Additional navigation"
+                    >
+                      {mobileMoreNavigation.map((item) => {
+                        const [label, Icon] = item;
+                        const active = isNavigationItemActive(item);
+                        return (
+                          <button
+                            type="button"
+                            key={label}
+                            className={active ? "is-active" : ""}
+                            style={
+                              {
+                                "--nav-icon-color": getNavigationIconColor(
+                                  label,
+                                  sidebarPreferences,
+                                ),
+                              } as CSSProperties
+                            }
+                            role="menuitem"
+                            aria-current={active ? "page" : undefined}
+                            data-sidebar-swipe-ignore
+                            aria-label={label}
+                            onClick={() => selectNavigation(label, item)}
+                          >
+                            <Icon
+                              size={23}
+                              weight={active ? "fill" : "regular"}
+                            />
+                            <span>{label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  }
                   onClose={() => setProfileMenu(false)}
                   onRoleChange={setRole}
                   onNavigate={(path) => {
@@ -4427,40 +4531,8 @@ export function CoursesPage({
                 />
               )}
             </div>
-            <nav
-              className="mobile-menu-sheet__list"
-              aria-label="More navigation options"
-            >
-              {mobileMoreNavigation.map((item) => {
-                const [label, Icon] = item;
-                const active = isNavigationItemActive(item);
-                const displayLabel = label;
-                return (
-                  <button
-                    type="button"
-                    key={label}
-                    className={active ? "is-active" : ""}
-                    style={
-                      {
-                        "--nav-icon-color": getNavigationIconColor(
-                          label,
-                          sidebarPreferences,
-                        ),
-                      } as CSSProperties
-                    }
-                    aria-current={active ? "page" : undefined}
-                    data-sidebar-swipe-ignore
-                    aria-label={displayLabel}
-                    onClick={() => selectNavigation(label, item)}
-                  >
-                    <Icon size={23} weight={active ? "fill" : "regular"} />
-                    <span>{displayLabel}</span>
-                  </button>
-                );
-              })}
-            </nav>
             <div
-              className="mobile-menu-sheet__appearance"
+              className={`mobile-menu-sheet__appearance${mobilePaletteMenu ? " mobile-menu-sheet__appearance--palette-open" : ""}`}
               role="group"
               aria-label="Appearance controls"
               style={
@@ -4624,10 +4696,10 @@ export function CoursesPage({
                         } as CSSProperties
                       }
                       aria-label="Open settings"
-                      title="Open settings"
+                      title={settingsControlTitle}
                       aria-current={settingsActive ? "page" : undefined}
                       aria-keyshortcuts={`${primaryShortcutModifier}+Comma`}
-                      onClick={() => selectNavigation("Settings")}
+                      onClick={toggleSettingsNavigation}
                     >
                       <GearSix
                         size={21}

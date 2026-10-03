@@ -1,3 +1,4 @@
+import { publicProfileUsernameParamsSchema } from "@veolms/contracts";
 import type { MfaGateUser } from "../auth/mfaGate";
 import { resolveMfaSetupView } from "../auth/mfaGate";
 import { normalizeNavigationPath } from "./routeDescriptors";
@@ -20,6 +21,29 @@ const AUTH_FLOW_PATHS = new Set([
 ]);
 
 const GUEST_LANDING_PATHS = new Set(["/"]);
+const RESERVED_PROFILE_PATHS = new Set([
+  "/home",
+  "/dashboard",
+  "/courses",
+  "/wishlist",
+  "/students",
+  "/reviews",
+  "/quizzes",
+  "/discussions",
+  "/analytics",
+  "/orders",
+  "/messages",
+  "/purchase-history",
+  "/notifications",
+  "/settings",
+  "/coupons",
+  "/logout",
+  LOGIN_PATH,
+  "/register",
+  "/mfa-setup",
+  "/auth",
+  "/explore-courses",
+]);
 const DASHBOARD_PERMISSION = "analytics.revenue.read";
 
 export function hasDashboardAnalyticsPermission(
@@ -86,6 +110,17 @@ export function isCoursesPublicPath(pathname: string): boolean {
   );
 }
 
+export function isPublicProfilePath(pathname: string): boolean {
+  const path = normalizeAppPath(pathname);
+  const match = /^\/([^/]+)$/.exec(path);
+  return Boolean(
+    match?.[1] &&
+    publicProfileUsernameParamsSchema.safeParse({ username: match[1] })
+      .success &&
+    !RESERVED_PROFILE_PATHS.has(path.toLowerCase()),
+  );
+}
+
 export function isLearningPath(pathname: string): boolean {
   const path = normalizeAppPath(pathname);
 
@@ -104,6 +139,7 @@ export function isPublicAcademyPath(pathname: string): boolean {
   return (
     isSettingsPath(pathname) ||
     isCoursesPublicPath(pathname) ||
+    isPublicProfilePath(pathname) ||
     (ALLOW_GUEST_LEARNING && isLearningPath(pathname))
   );
 }

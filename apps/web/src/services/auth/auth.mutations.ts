@@ -30,6 +30,7 @@ import { autosyncManager } from "../../lib/autosync";
 import { authStore } from "../../store/auth.store";
 import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { authKeys } from "./auth.keys";
+import { updatePublicProfileCacheFromUser } from "./auth.queries";
 import { authService, type TotpSetupResponse } from "./auth.service";
 import {
   learningInteractionKeys,
@@ -165,8 +166,12 @@ export function useUpdateProfile() {
   return useMutation<UserProfileResponse, ApiError, ProfileUpdateRequest>({
     mutationFn: (payload) => authService.updateProfile(payload),
     onSuccess: async (profile) => {
+      const previousUsername = queryClient.getQueryData<CurrentUserResponse>(
+        authKeys.me(),
+      )?.username;
       authStore.setUser(profile);
       queryClient.setQueryData(authKeys.me(), profile);
+      updatePublicProfileCacheFromUser(queryClient, profile, previousUsername);
       queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
       // The PATCH response updates the UI immediately, but `/auth/me` remains
       // the canonical source after a reload. Re-fetch it here so visibility
@@ -182,8 +187,12 @@ export function useSelectAvatar() {
   return useMutation<UserProfileResponse, ApiError, string>({
     mutationFn: (avatarId) => authService.selectAvatar(avatarId),
     onSuccess: (profile) => {
+      const previousUsername = queryClient.getQueryData<CurrentUserResponse>(
+        authKeys.me(),
+      )?.username;
       authStore.setUser(profile);
       queryClient.setQueryData(authKeys.me(), profile);
+      updatePublicProfileCacheFromUser(queryClient, profile, previousUsername);
       queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
     },
   });
@@ -195,8 +204,12 @@ export function useDeleteUploadedAvatars() {
   return useMutation<UserProfileResponse, ApiError, void>({
     mutationFn: () => authService.deleteUploadedAvatars(),
     onSuccess: (profile) => {
+      const previousUsername = queryClient.getQueryData<CurrentUserResponse>(
+        authKeys.me(),
+      )?.username;
       authStore.setUser(profile);
       queryClient.setQueryData(authKeys.me(), profile);
+      updatePublicProfileCacheFromUser(queryClient, profile, previousUsername);
       queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
     },
   });

@@ -108,6 +108,10 @@ export function getAcademyRoutes(): RouteConfigEntry {
       caseSensitive: true,
     }),
     route("logout", marker, { id: "logout", caseSensitive: true }),
+    route(":username", marker, {
+      id: "public-profile",
+      caseSensitive: true,
+    }),
     route("courses/:courseSlug/overview", marker, {
       id: "course-overview",
       caseSensitive: true,

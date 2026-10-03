@@ -9,7 +9,7 @@ function CourseWishlistHeartIcon({
   size: number;
 }) {
   return (
-    <span className="relative inline-flex size-[1em] items-center justify-center">
+    <span className="relative inline-flex items-center justify-center">
       <Heart
         size={size}
         weight={wishlisted ? "fill" : "regular"}
@@ -45,13 +45,13 @@ export function CourseWishlistHeartButton({
   variant,
   "aria-label": ariaLabel,
 }: CourseWishlistHeartButtonProps) {
-  const heartSize = variant === "card-media" ? 21 : 20;
+  const heartSize = variant === "card-media" ? 23 : 20;
 
   if (variant === "card-media") {
     return (
       <button
         type="button"
-        className="group/wishlist absolute right-3 top-3 z-20 flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/15 bg-slate-950/70 text-white shadow-lg transition-colors hover:bg-slate-950/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className="group/wishlist absolute right-3 top-3 z-20 flex min-h-10 min-w-10 items-center justify-center rounded-full border border-white/15 bg-slate-950/70 text-white shadow-lg transition-colors hover:bg-slate-950/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         aria-label={ariaLabel}
         aria-pressed={wishlisted}
         disabled={disabled}

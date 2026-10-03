@@ -184,7 +184,7 @@
   width: 100%;
   min-height: 0;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
   border: 1px solid var(--border);
   border-radius: 11px;
   padding-block: 4px;
@@ -237,6 +237,34 @@
   border: 2px solid var(--surface-strong);
   border-radius: 50%;
   background: #ff3b30;
+}
+
+.profile-menu__identity {
+  position: relative;
+  box-sizing: border-box;
+  width: calc(100% - 20px);
+  height: 64px;
+  min-height: 64px;
+  margin: 0 10px 8px;
+  padding: 0;
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent),
+    0 2px 5px rgb(0 0 0 / 11%);
+}
+
+.profile-menu__identity-link {
+  border-radius: inherit;
+}
+
+.profile-menu__identity-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.profile-menu__identity-copy {
+  flex: 1 1 auto;
+  margin-right: 32px;
 }
 
 .courses-profile__button > span:not(.courses-profile__avatar-wrap) {
@@ -363,6 +391,75 @@
     var(--profile-menu-cast-shadow);
 }
 
+.courses-profile > .profile-menu--animated {
+  /* Matching the slide distance and bottom inset keeps the clipping edge at
+     the fixed profile control, including throughout an interrupted slide. */
+  transform: translateY(calc(100% + 8px));
+  clip-path: inset(0 -8px 100% -8px);
+  z-index: 1;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    clip-path 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 280ms;
+}
+
+.courses-profile:has(> .profile-menu--animated)
+  > button.courses-profile__button,
+.courses-profile:has(> .profile-menu--animated) > .sidebar-appearance {
+  position: relative;
+  z-index: 130;
+}
+
+.courses-profile > .profile-menu--animated[data-open="true"] {
+  transform: none;
+  clip-path: inset(-8px);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    clip-path 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s;
+}
+
+.courses-app--collapsed .courses-profile > .profile-menu--animated,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile
+  > .profile-menu--animated {
+  transform: translateX(calc(-100% - 8px));
+  clip-path: inset(0 0 0 100%);
+  transition:
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    clip-path 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 280ms;
+}
+
+.courses-app--collapsed
+  .courses-profile
+  > .profile-menu--animated[data-open="true"],
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile
+  > .profile-menu--animated[data-open="true"] {
+  transform: none;
+  clip-path: inset(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    clip-path 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .courses-profile > .profile-menu--animated,
+  .courses-profile > .profile-menu--animated[data-open="true"] {
+    transition: none !important;
+  }
+}
+
 .profile-menu__divider {
   height: 1px;
   margin: 9px 10px;
@@ -378,7 +475,8 @@
 }
 
 .profile-menu__section {
-  padding: 2px 10px 7px 14px;
+  margin-top: 4px;
+  padding: 2px 10px 3px 14px;
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 600;
@@ -448,7 +546,7 @@
 }
 
 .profile-menu__item .profile-menu__check {
-  color: var(--success);
+  color: var(--accent-ink, var(--accent));
 }
 
 .profile-menu__item-icon--profile,
@@ -553,9 +651,9 @@
   left: calc(100% + 8px);
   right: auto;
   bottom: 0;
-  width: 220px;
-  min-width: 0;
-  max-width: min(220px, calc(100vw - 32px));
+  width: 250px;
+  min-width: min(250px, calc(100vw - 32px));
+  max-width: min(250px, calc(100vw - 32px));
 }
 
 .courses-app--hidden {
@@ -1265,7 +1363,9 @@
     padding: 0;
   }
 
-  .courses-app:not(.courses-app--hidden) .courses-profile__button {
+  .courses-app:not(.courses-app--hidden)
+    .courses-profile
+    > .courses-profile__button {
     height: 64px;
     min-height: 64px;
     justify-content: center;
@@ -1282,9 +1382,9 @@
     left: calc(100% + 8px);
     right: auto;
     bottom: 0;
-    width: 220px;
-    min-width: 0;
-    max-width: min(220px, calc(100vw - 32px));
+    width: 250px;
+    min-width: min(250px, calc(100vw - 32px));
+    max-width: min(250px, calc(100vw - 32px));
   }
 
   .courses-main {

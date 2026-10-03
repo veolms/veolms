@@ -217,6 +217,28 @@ export const profileUpdateRequestSchema = z.strictObject({
   ...profileFieldSchemas,
 });
 
+export const publicProfileUsernameParamsSchema = z.strictObject({
+  username: z
+    .string()
+    .min(3)
+    .max(30)
+    .regex(/^[a-zA-Z0-9._-]+$/)
+    .toLowerCase(),
+});
+
+export const publicProfileResponseSchema = z.strictObject({
+  username: z.string().min(3).max(30),
+  displayName: z.string().min(1).max(100),
+  avatarDataUrl: z.string().max(3_000_000).nullable(),
+  avatarSrcSet: z.array(avatarImageVariantSchema),
+  bio: z.string().max(160).nullable(),
+  email: z.email().max(255).nullable(),
+  phoneNo: z.string().max(15).nullable(),
+  linkedinUrl: z.string().max(500).nullable(),
+  githubUrl: z.string().max(500).nullable(),
+  websiteUrl: z.string().max(500).nullable(),
+});
+
 /** The session may be absent when the client is visiting a public route. */
 export const currentUserResponseSchema = userProfileResponseSchema.nullable();
 
@@ -284,6 +306,12 @@ export type RegisterRequest = z.input<typeof registerRequestSchema>;
 export type AuthUser = z.output<typeof authUserSchema>;
 export type UserProfileResponse = z.output<typeof userProfileResponseSchema>;
 export type ProfileUpdateRequest = z.input<typeof profileUpdateRequestSchema>;
+export type PublicProfileUsernameParams = z.input<
+  typeof publicProfileUsernameParamsSchema
+>;
+export type PublicProfileResponse = z.output<
+  typeof publicProfileResponseSchema
+>;
 export type CurrentUserResponse = z.output<typeof currentUserResponseSchema>;
 export type CreatorRegisterRequest = z.input<
   typeof creatorRegisterRequestSchema

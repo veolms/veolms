@@ -1,13 +1,14 @@
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
+import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import type { AvatarImageVariant } from "@veolms/contracts";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import type { CourseRole } from "../courses/catalogue";
@@ -15,6 +16,106 @@ import { getRoleDisplayName } from "./workspaceRole";
 
 const FALLBACK_AVATAR_CLASS =
   "shell-profile-avatar shell-profile-avatar--fallback";
+
+export interface ProfileIdentityData {
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+  avatarSrcSet?: readonly AvatarImageVariant[] | null;
+}
+
+interface ProfileMenuIdentityProps extends ProfileIdentityData {
+  variant?: "menu" | "mobile";
+  unreadNotificationCount?: number;
+  onNavigate: (path: string) => void;
+  onClose?: () => void;
+}
+
+export function ProfileMenuIdentity({
+  displayName,
+  username,
+  avatarUrl,
+  avatarSrcSet,
+  variant = "menu",
+  unreadNotificationCount = 0,
+  onNavigate,
+  onClose,
+}: ProfileMenuIdentityProps) {
+  const profilePath = `/${encodeURIComponent(username)}`;
+  const handleProfileClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      onClose?.();
+      return;
+    }
+    event.preventDefault();
+    onNavigate(profilePath);
+  };
+  const mobile = variant === "mobile";
+
+  return (
+    <div
+      className="courses-profile__button profile-menu__identity bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]!"
+      role="group"
+      aria-label="Your profile"
+    >
+      <a
+        className="profile-menu__identity-link absolute inset-0 z-0 flex min-w-0 items-center gap-1 rounded-[inherit] pl-0.5 pr-2 py-1 text-inherit no-underline outline-none transition-colors hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,white_10%)]! focus-visible:ring-2 focus-visible:ring-(--accent)"
+        href={profilePath}
+        aria-label={`Open ${displayName}'s public profile`}
+        role={mobile ? undefined : "menuitem"}
+        onClick={handleProfileClick}
+      >
+        <span className="courses-profile__avatar-wrap">
+          <ShellProfileAvatar
+            avatarUrl={avatarUrl}
+            avatarSrcSet={avatarSrcSet}
+          />
+          {unreadNotificationCount > 0 ? (
+            <i
+              className="courses-profile__presence"
+              aria-label={`${unreadNotificationCount} unread notifications`}
+            />
+          ) : null}
+        </span>
+        <span className="profile-menu__identity-copy grid min-w-0 gap-0.5 text-left">
+          <strong className="truncate text-[0.84rem] font-semibold text-(--text)">
+            {displayName}
+          </strong>
+          <small className="truncate text-[0.72rem] text-(--muted)">
+            @{username}
+          </small>
+        </span>
+      </a>
+      <button
+        type="button"
+        className="profile-menu__identity-edit group absolute right-1.5 top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-(--border) bg-[color-mix(in_srgb,var(--surface-strong)_84%,black_16%)]! p-0 text-(--muted) outline-none transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+        aria-label="Edit profile"
+        title="Edit profile"
+        role={mobile ? undefined : "menuitem"}
+        onClick={() => onNavigate("/settings/profile")}
+      >
+        <PencilSimple
+          className="group-hover:hidden group-focus-visible:hidden"
+          size={18}
+          weight="regular"
+          aria-hidden="true"
+        />
+        <PencilSimple
+          className="hidden group-hover:block group-focus-visible:block"
+          size={18}
+          weight="fill"
+          aria-hidden="true"
+        />
+      </button>
+    </div>
+  );
+}
 
 export function ShellProfileAvatar({
   avatarUrl,
@@ -65,6 +166,9 @@ interface ProfileMenuProps {
   unreadNotificationCount?: number;
   sidebarHidden?: boolean;
   includeSidebarControl?: boolean;
+  beforeAccountContent?: ReactNode;
+  identity?: ProfileIdentityData;
+  isOpen?: boolean;
   id?: string;
   className?: string;
   onClose: () => void;
@@ -81,6 +185,9 @@ export function ProfileMenu({
   unreadNotificationCount = 0,
   sidebarHidden = false,
   includeSidebarControl = true,
+  beforeAccountContent,
+  identity,
+  isOpen = true,
   id,
   className,
   onClose,
@@ -131,7 +238,18 @@ export function ProfileMenu({
       className={menuClassName}
       role="menu"
       aria-label="Profile menu"
+      aria-hidden={!isOpen ? true : undefined}
+      inert={!isOpen ? true : undefined}
+      data-open={isOpen ? "true" : "false"}
     >
+      {identity ? (
+        <ProfileMenuIdentity
+          {...identity}
+          unreadNotificationCount={unreadNotificationCount}
+          onNavigate={onNavigate}
+          onClose={onClose}
+        />
+      ) : null}
       {canSwitchWorkspace ? (
         <>
           <div className="profile-menu__group profile-menu__group--roles">
@@ -191,19 +309,9 @@ export function ProfileMenu({
         </>
       ) : null}
 
+      {beforeAccountContent}
+
       <div className="profile-menu__group profile-menu__group--account">
-        <a
-          className="profile-menu__item profile-menu__item--profile"
-          role="menuitem"
-          href="/settings/profile"
-          onClick={(event) => openDestination(event, "/settings/profile")}
-        >
-          <UserCircle
-            className="profile-menu__item-icon profile-menu__item-icon--profile"
-            size={21}
-          />
-          <span>View Profile</span>
-        </a>
         <a
           className="profile-menu__item profile-menu__item--notifications"
           role="menuitem"

@@ -34,6 +34,7 @@ import type {
   SidebarPreferences,
 } from "./settings/settingsPreferences";
 import type { NavigateTo } from "./routing/navigation";
+import { PageHeading } from "./components/PageHeading";
 import {
   normalizeSettingsTab,
   readSettingsTab,
@@ -111,6 +112,7 @@ export interface SettingsPageProps {
   isAuthenticated: boolean;
   onNavigatePage?: NavigateTo;
   onExitSettings?: () => void;
+  showBackButton?: boolean;
   onProfileSaved?: (profile: ProfilePreferences) => void;
   theme: DisplayMode;
   onThemeChange: (theme: DisplayMode, origin?: ThemeRevealOrigin) => void;
@@ -188,6 +190,7 @@ export function SettingsPage({
   isAuthenticated,
   onNavigatePage,
   onExitSettings,
+  showBackButton = false,
   onProfileSaved,
   theme,
   onThemeChange,
@@ -374,17 +377,13 @@ export function SettingsPage({
     <div className="settings-page" aria-labelledby="settings-page-title">
       <header className="settings-page__topbar">
         <div className="settings-page__heading">
-          <div className="settings-page__heading-copy">
-            <h1
-              id="settings-page-title"
-              className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
-            >
-              Settings
-            </h1>
-            <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
-              Manage your personal preferences and interface experience.
-            </p>
-          </div>
+          <PageHeading
+            id="settings-page-title"
+            title="Settings"
+            description="Manage your personal preferences and interface experience."
+            onNavigateBack={showBackButton ? leaveSettings : undefined}
+            copyClassName="settings-page__heading-copy"
+          />
           <div className="settings-page__icon" aria-hidden="true">
             <GearSix size={25} weight="regular" />
           </div>

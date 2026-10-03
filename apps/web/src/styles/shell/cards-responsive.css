@@ -549,10 +549,13 @@
     overflow: hidden;
   }
 
-  .courses-app--resizing.courses-app--collapsed .courses-profile__button,
+  .courses-app--resizing.courses-app--collapsed
+    .courses-profile
+    > .courses-profile__button,
   :root[data-sidebar-state="collapsed"]
     .courses-app.courses-app--resizing:not(.courses-app--collapsed)
-    .courses-profile__button {
+    .courses-profile
+    > .courses-profile__button {
     height: 56px;
     min-height: 56px;
     aspect-ratio: auto;

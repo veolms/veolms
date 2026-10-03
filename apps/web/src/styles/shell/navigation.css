@@ -253,7 +253,9 @@
   padding-block: 4px;
   padding-inline: 9px;
   background: var(--surface-strong);
-  box-shadow: var(--card-shadow);
+  box-shadow:
+    var(--surface-depth-edge-shadow),
+    0 3px 7px color-mix(in srgb, var(--canvas) 35%, transparent);
 }
 
 .courses-profile__button:hover {
@@ -295,8 +297,8 @@
     var(--profile-menu-cast-shadow);
 }
 
-/* Keep the open profile stack above the sidebar resize grip. */
-.courses-profile:has(> .profile-menu) {
+/* Keep the profile stack above the sidebar resize grip during its close motion. */
+.courses-profile:has(> .profile-menu--animated) {
   z-index: 2;
 }
 
@@ -324,6 +326,9 @@
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 58%, transparent);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: none;
 }
 
 .sidebar-appearance > button,
@@ -337,15 +342,17 @@
   flex: 1;
 }
 
-.sidebar-appearance > button:hover,
-.sidebar-palette-trigger:hover {
+.sidebar-appearance > button:hover:not(.is-active),
+.sidebar-palette-trigger:hover:not([aria-pressed="true"]) {
   color: var(--text);
-  background: var(--hover);
+  background: color-mix(in srgb, var(--hover) 76%, var(--surface));
+  border-color: color-mix(in srgb, var(--border-strong) 82%, var(--accent));
 }
 
 .sidebar-appearance > button.is-active,
 .sidebar-palette-trigger[aria-pressed="true"] {
   color: var(--text);
+  border-color: transparent;
   background: var(--sidebar-menu-active-background);
   box-shadow: var(--sidebar-menu-active-shadow);
 }
@@ -363,6 +370,7 @@
 
 :root[data-reading-mode="true"] .sidebar-appearance__reading-mode {
   color: var(--text);
+  border-color: transparent;
   background: var(--sidebar-menu-active-background);
   box-shadow: var(--sidebar-menu-active-shadow);
 }
@@ -724,10 +732,12 @@
 :root[data-theme="light"] .courses-profile__button {
   background: var(--sidebar-control-surface);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 72%, transparent),
-    inset 1px 0 0 color-mix(in srgb, white 42%, transparent),
-    0 9px 22px color-mix(in srgb, var(--text) 10%, transparent),
-    0 2px 9px color-mix(in srgb, var(--accent-shadow) 18%, transparent);
+    var(--surface-depth-edge-shadow),
+    0 3px 7px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+:root[data-elevated-surfaces="false"] .courses-profile__button {
+  box-shadow: none;
 }
 
 :root[data-theme="light"] .courses-profile__button small,
@@ -895,7 +905,7 @@
   display: none;
 }
 
-.courses-app--collapsed .courses-profile__button {
+.courses-app--collapsed .courses-profile > .courses-profile__button {
   box-sizing: border-box;
   height: auto;
   min-height: 0;
@@ -931,6 +941,51 @@
 .courses-app--collapsed .sidebar-palette-wrap {
   width: 42px;
   flex: 0 0 38px;
+}
+
+/* Keep the compact profile and bottom dock on one squircle silhouette.
+   Override the structured radius locally because its global important rule
+   otherwise reduces these controls to 8px. */
+.courses-app--collapsed .courses-profile > .courses-profile__button,
+.courses-app--collapsed .sidebar-appearance > button,
+.courses-app--collapsed .sidebar-palette-trigger,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile
+  > .courses-profile__button,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-appearance
+  > button,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-palette-trigger {
+  --control-radius-structured: 30%;
+  border-radius: 30%;
+  corner-shape: squircle;
+}
+
+/* Switch the compact profile and dock to standard rounded corners on
+   pointer-down so their silhouettes follow the sidebar during resizing. */
+.courses-app--resizing.courses-app--collapsed
+  .courses-profile
+  > .courses-profile__button,
+:root[data-sidebar-state="collapsed"]
+  .courses-app.courses-app--resizing:not(.courses-app--collapsed)
+  .courses-profile
+  > .courses-profile__button,
+.courses-app--resizing.courses-app--collapsed .sidebar-appearance > button,
+:root[data-sidebar-state="collapsed"]
+  .courses-app.courses-app--resizing:not(.courses-app--collapsed)
+  .sidebar-appearance
+  > button,
+.courses-app--resizing.courses-app--collapsed .sidebar-palette-trigger,
+:root[data-sidebar-state="collapsed"]
+  .courses-app.courses-app--resizing:not(.courses-app--collapsed)
+  .sidebar-palette-trigger {
+  --control-radius-structured: 10px;
+  border-radius: 10px;
+  corner-shape: round;
 }
 
 .courses-app--collapsed .sidebar-palette-menu {
@@ -1122,7 +1177,8 @@
 
 :root[data-sidebar-state="collapsed"]
   .courses-app:not(.courses-app--collapsed)
-  .courses-profile__button {
+  .courses-profile
+  > .courses-profile__button {
   box-sizing: border-box;
   height: auto;
   min-height: 0;

@@ -155,6 +155,81 @@ const getApplicationScrollStorageKey = (
   restorationKey?: string,
 ) => (restorationKey ? `${path}\u0000${restorationKey}` : path);
 
+const ACADEMY_NAVIGATION_ORIGIN_PATH = "academyNavigationOriginPath";
+const ACADEMY_NAVIGATION_ORIGIN_SECTION = "academyNavigationOriginSection";
+
+function readAcademyNavigationState(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getNavigationMatch(
+  pathname: string,
+  items: readonly NavigationItemWithMetadata[],
+) {
+  const path = normalizeNavigationPath(pathname.split(/[?#]/, 1)[0] || "/");
+  let bestMatch:
+    { label: string; path: string; exact: boolean; length: number } | undefined;
+
+  for (const [label, , metadata] of items) {
+    const itemPath = normalizeNavigationPath(metadata?.routeLink ?? "/");
+    // The Discussions menu resolves to the last tab visited in this session,
+    // so its tab URLs are still the menu's destination rather than a detail
+    // page that should inherit the previously selected section.
+    const isDiscussionTab =
+      itemPath === "/discussions" && path.startsWith("/discussions/");
+    const exact = path === itemPath || isDiscussionTab;
+    const isChild =
+      itemPath !== "/" && path.startsWith(`${itemPath.replace(/\/$/, "")}/`);
+    if (!exact && !isChild) continue;
+    if (!bestMatch || itemPath.length > bestMatch.length) {
+      bestMatch = { label, path: itemPath, exact, length: itemPath.length };
+    }
+  }
+
+  return bestMatch;
+}
+
+function getWorkspaceNavigationItems(
+  user: { id?: string } | null | undefined,
+  settingsDocked: boolean,
+) {
+  const roles = getUserRoles(user);
+  let storedRole: string | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      storedRole = localStorage.getItem(getWorkspaceRoleStorageKey(user?.id));
+    } catch {
+      storedRole = null;
+    }
+  }
+  const rolePreference =
+    storedRole === "creator" || storedRole === "student"
+      ? storedRole
+      : isStaffRole(roles)
+        ? "creator"
+        : "student";
+  const navigation = getRoleNavigationItems(
+    resolveWorkspaceRole(roles, rolePreference),
+    hasAdminRole(roles),
+  );
+  return navigation.filter(
+    ([label]) => label !== "Settings" || !settingsDocked,
+  );
+}
+
+function getFallbackNavigationPath(
+  path: string,
+  items: readonly NavigationItemWithMetadata[],
+) {
+  const match = getNavigationMatch(path, items);
+  if (match && !match.exact) return match.path;
+  const courses = items.find(([label]) => label === "Courses");
+  if (courses?.[2]?.routeLink) return courses[2].routeLink;
+  return items[0]?.[2]?.routeLink ?? "/";
+}
+
 const clearLearningPlayerMotionProperties = (element: HTMLElement) => {
   element.style.removeProperty("--learning-background-reveal");
   element.style.removeProperty("--learning-background-reveal-duration");
@@ -327,6 +402,35 @@ export default function AcademyLayout() {
   } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
+  const settingsDocked = normalizeSidebarDockItems(
+    getInitialSidebarPreferences().dockItems,
+  ).includes("settings");
+  const workspaceNavigationItems = useMemo(
+    () => getWorkspaceNavigationItems(activeUser, settingsDocked),
+    [activeUser, settingsDocked],
+  );
+  const currentNavigationState = readAcademyNavigationState(location.state);
+  const originPathValue =
+    currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
+  const originSectionValue =
+    currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
+  const hasValidNavigationOrigin =
+    typeof originPathValue === "string" &&
+    originPathValue.startsWith("/") &&
+    !originPathValue.startsWith("//") &&
+    typeof originSectionValue === "string" &&
+    workspaceNavigationItems.some(([label]) => label === originSectionValue);
+  const currentNavigationMatch = getNavigationMatch(
+    location.pathname,
+    workspaceNavigationItems,
+  );
+  const activeRouteSection = hasValidNavigationOrigin
+    ? originSectionValue
+    : (currentNavigationMatch?.label ??
+      (workspaceNavigationItems.some(([label]) => label === route.section)
+        ? route.section
+        : workspaceNavigationItems[0]?.[0]));
+  const showRouteBackButton = !currentNavigationMatch?.exact;
 
   useLayoutEffect(() => {
     locationPathRef.current = currentLocationPath;
@@ -422,6 +526,48 @@ export default function AcademyLayout() {
           destinationPath,
           activeLocationPath,
         );
+        const navigationState = {
+          ...readAcademyNavigationState(location.state),
+        };
+        const targetNavigationMatch = getNavigationMatch(
+          path,
+          workspaceNavigationItems,
+        );
+        if (targetNavigationMatch?.exact) {
+          delete navigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
+          delete navigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
+        } else {
+          const existingOriginPath =
+            navigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
+          const existingOriginSection =
+            navigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
+          const originIsValid =
+            typeof existingOriginPath === "string" &&
+            existingOriginPath.startsWith("/") &&
+            !existingOriginPath.startsWith("//") &&
+            typeof existingOriginSection === "string" &&
+            workspaceNavigationItems.some(
+              ([label]) => label === existingOriginSection,
+            );
+          const sourceNavigationMatch = getNavigationMatch(
+            activeLocationPath,
+            workspaceNavigationItems,
+          );
+          const originSection = originIsValid
+            ? existingOriginSection
+            : (sourceNavigationMatch?.label ??
+              (workspaceNavigationItems.some(
+                ([label]) => label === route.section,
+              )
+                ? route.section
+                : workspaceNavigationItems[0]?.[0]));
+          if (originSection) {
+            navigationState[ACADEMY_NAVIGATION_ORIGIN_PATH] = originIsValid
+              ? existingOriginPath
+              : activeLocationPath;
+            navigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION] = originSection;
+          }
+        }
         if (
           !restoringPlayerRef.current &&
           shouldRestoreMiniPlayerForMatchingCourse({
@@ -521,17 +667,30 @@ export default function AcademyLayout() {
         void navigate(path, {
           preventScrollReset: true,
           replace: options?.replace,
+          state: navigationState,
         });
       };
 
       void autosyncManager.flushAll().then(performNavigation);
     },
-    [navigate],
+    [location.state, navigate, route.section, workspaceNavigationItems],
   );
   const navigateToRef = useRef(navigateTo);
   useLayoutEffect(() => {
     navigateToRef.current = navigateTo;
   }, [navigateTo]);
+  const navigateBackToOrigin = useCallback(() => {
+    const targetPath = hasValidNavigationOrigin
+      ? (originPathValue as string)
+      : getFallbackNavigationPath(location.pathname, workspaceNavigationItems);
+    navigateTo(targetPath, { replace: true });
+  }, [
+    hasValidNavigationOrigin,
+    location.pathname,
+    navigateTo,
+    originPathValue,
+    workspaceNavigationItems,
+  ]);
   const exitSettings = useCallback(() => {
     const destination = settingsReturnLocationRef.current;
     const sourcePath = locationPathRef.current;
@@ -1337,8 +1496,9 @@ export default function AcademyLayout() {
         }
         initialCourseOverview={staticCourseRouteData?.courseOverview}
         page={route.page}
-        section={route.section}
+        section={activeRouteSection}
         settingsTab={route.settingsTab}
+        showPageBackButton={showRouteBackButton}
         discussionTab={route.discussionTab}
         courseSlug={courseSlug}
         quizId={quizId}
@@ -1356,6 +1516,7 @@ export default function AcademyLayout() {
         learningBackground={learningBackground}
         learningMotionStageRef={learningMotionStageRef}
         onNavigatePage={navigateTo}
+        onNavigateBack={navigateBackToOrigin}
         onExitSettings={exitSettings}
         onOpenCourse={openCourse}
         renderMain={
