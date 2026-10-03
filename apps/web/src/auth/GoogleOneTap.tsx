@@ -1,8 +1,12 @@
-import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 import type { ApiError } from "../lib/api-client";
-import { useAuthConfig, useGoogleOneTapLogin } from "../services/auth";
+import { useAuthConfig, useCurrentUser, useGoogleOneTapLogin } from "../services/auth";
+import { useAuthStore } from "../store/auth.store";
+import { normalizeAppPath, sanitizeReturnTo } from "../routing/routeAccess";
 import { resolvePostAuthPath } from "./postAuthNavigation";
+import { ToastNotification } from "../ToastNotification";
+import { GoogleBrandIcon } from "./SocialBrandIcons";
 
 const GOOGLE_IDENTITY_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -148,3 +152,145 @@ export function GoogleOneTap({
 
   return null;
 }
+
+function OneTapVerifyingOverlay() {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs px-4 text-(--text) animate-in fade-in duration-200"
+      role="status"
+      aria-live="polite"
+      aria-label="Signing in with Google"
+    >
+      <div className="relative flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-(--border-subtle) bg-(--surface) p-6 text-center shadow-(--surface-depth-shadow)">
+        <div className="grid size-14 place-items-center rounded-2xl bg-(--surface-active) shadow-(--surface-depth-shadow)">
+          <GoogleBrandIcon size={32} />
+        </div>
+        <div className="space-y-1">
+          <p className="text-base font-semibold tracking-tight text-(--text)">
+            Signing you in with Google
+          </p>
+          <p className="text-xs leading-5 text-(--muted)">
+            Verifying your account… please wait a moment.
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 pt-1" aria-hidden="true">
+          <span className="size-1.5 animate-pulse rounded-full bg-(--accent) motion-reduce:animate-none" />
+          <span className="size-1.5 animate-pulse rounded-full bg-(--accent) [animation-delay:160ms] motion-reduce:animate-none" />
+          <span className="size-1.5 animate-pulse rounded-full bg-(--accent) [animation-delay:320ms] motion-reduce:animate-none" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const EXCLUDED_ONE_TAP_PATHS = new Set([
+  "/mfa-setup",
+  "/auth/callback",
+  "/logout",
+]);
+
+/**
+ * Global Google One Tap component.
+ * Renders across all application pages when a user is not authenticated.
+ * Handles credential exchange and MFA redirect.
+ */
+export function GlobalGoogleOneTap() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { data: user, isFetched, isLoading } = useCurrentUser();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const { data: authConfig } = useAuthConfig();
+  const login = useGoogleOneTapLogin();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  const clientId = authConfig?.googleClientId || "";
+  const normalizedPath = normalizeAppPath(location.pathname);
+
+  const isUserAuthenticated = isAuthenticated || Boolean(user);
+  const isExcludedRoute = EXCLUDED_ONE_TAP_PATHS.has(normalizedPath);
+  const shouldPrompt = !isUserAuthenticated && !isExcludedRoute && (!isLoading || isFetched);
+
+  // Compute return target
+  let returnTo: string | null = null;
+  if (normalizedPath === "/login") {
+    const searchParams = new URLSearchParams(location.search);
+    returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+  } else {
+    returnTo = sanitizeReturnTo(`${location.pathname}${location.search}`) || location.pathname;
+  }
+
+  const returnToRef = useRef(returnTo);
+  returnToRef.current = returnTo;
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const loginRef = useRef(login.mutate);
+  loginRef.current = login.mutate;
+
+  useEffect(() => {
+    if (!shouldPrompt || !clientId) {
+      cancelGoogleOneTap();
+      return;
+    }
+
+    let active = true;
+
+    void loadGoogleIdentityServices()
+      .then(() => {
+        const googleIdentity = window.google?.accounts?.id;
+        if (!active || !googleIdentity) return;
+
+        googleIdentity.initialize({
+          client_id: clientId,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+          use_fedcm_for_prompt: true,
+          itp_support: true,
+          callback: (response) => {
+            if (!active || !response.credential) return;
+
+            setIsVerifying(true);
+            loginRef.current(
+              { credential: response.credential },
+              {
+                onSuccess: (result) => {
+                  setIsVerifying(false);
+                  navigateRef.current(
+                    resolvePostAuthPath(result, returnToRef.current),
+                    { replace: true },
+                  );
+                },
+                onError: (error) => {
+                  setIsVerifying(false);
+                  setErrorMessage(toOneTapErrorMessage(error));
+                },
+              },
+            );
+          },
+        });
+        googleIdentity.prompt();
+      })
+      .catch(() => {
+        // Fallback gracefully
+      });
+
+    return () => {
+      active = false;
+      cancelGoogleOneTap();
+    };
+  }, [shouldPrompt, clientId, normalizedPath]);
+
+  return (
+    <>
+      {isVerifying ? <OneTapVerifyingOverlay /> : null}
+      {errorMessage ? (
+        <ToastNotification
+          message={errorMessage}
+          type="error"
+          onDismiss={() => setErrorMessage(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+

@@ -6,7 +6,6 @@ import { AuthBrandMark } from "./AuthBrandPanel";
 import { IdentifierForm } from "./IdentifierForm";
 import { OtpForm } from "./OtpForm";
 import { AuthProgress } from "./AuthProgress";
-import { GoogleOneTap } from "./GoogleOneTap";
 import { SocialLoginActions } from "./SocialLoginActions";
 import { MfaStepUp } from "./MfaStepUp";
 import {
@@ -25,6 +24,7 @@ import { productName } from "../routing/routeDescriptors";
 import { useLogin, useRegister, useSendOtp } from "../services/auth";
 import { authStore } from "../store/auth.store";
 import { ToastNotification } from "../ToastNotification";
+import { GoogleOneTap } from "./GoogleOneTap.tsx";
 
 function resolvePayload(identifier: AuthIdentifier) {
   return identifier.method === "email"
