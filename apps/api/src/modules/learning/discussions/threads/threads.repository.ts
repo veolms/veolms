@@ -29,6 +29,8 @@ import {
   type DiscussionListCursor,
   normalizeThreadSort,
 } from "../shared/discussion.utils.ts";
+import { discussionVisibilityPredicate } from "../shared/discussion.visibility.ts";
+import { publicLessonDiscussionPredicate } from "../shared/lesson-discussion-access.ts";
 
 export type LearningThreadRow = Selectable<LearningThreadTable>;
 
@@ -92,6 +94,20 @@ export interface ThreadRowWithAuthor {
   authorUsername: string | null;
   authorAvatarUrl: string | null;
   authorRole: string | null;
+}
+
+export interface PublicPopularThreadRow {
+  id: string;
+  kind: "comment" | "question";
+  title: string | null;
+  snippet: string;
+  courseTitle: string;
+  lessonTitle: string;
+  replyCount: number;
+  likeCount: number;
+  engagementScore: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface MentionWorkspaceRow {
@@ -426,6 +442,11 @@ export interface ThreadsRepository {
     db: DatabaseExecutor,
     options: ThreadFilterOptions,
   ): Promise<ThreadRowWithAuthor[]>;
+
+  listPublicPopularThreads(
+    db: DatabaseExecutor,
+    options: { academyId: string; limit: number },
+  ): Promise<PublicPopularThreadRow[]>;
 
   countThreads(
     db: DatabaseExecutor,
@@ -876,6 +897,68 @@ export function createThreadsRepository(): ThreadsRepository {
 
       const rows = await query.limit(options.limit + 1).execute();
       return rows as ThreadRowWithAuthor[];
+    },
+
+    async listPublicPopularThreads(db, { academyId, limit }) {
+      const rows = await db
+        .selectFrom("learning_threads as t")
+        .innerJoin("courses as c", "c.id", "t.course_id")
+        .innerJoin("course_lessons as l", "l.id", "t.lesson_id")
+        .innerJoin("course_sections as s", "s.id", "l.section_id")
+        .leftJoin("course_pricing as p", "p.course_id", "c.id")
+        .select([
+          "t.id as id",
+          "t.kind as kind",
+          "t.title as title",
+          sql<string>`left(t.plain_text, 500)`.as("snippet"),
+          "c.title as courseTitle",
+          "l.title as lessonTitle",
+          "t.replies_count as replyCount",
+          "t.likes_count as likeCount",
+          sql<number>`(
+            coalesce(t.replies_count, 0) + coalesce(t.likes_count, 0)
+          )::int`.as("engagementScore"),
+          "t.created_at as createdAt",
+          "t.updated_at as updatedAt",
+        ])
+        .where("t.academy_id", "=", academyId)
+        .where("t.kind", "in", ["comment", "question"])
+        .where("t.status", "=", "active")
+        .where(
+          publicLessonDiscussionPredicate({
+            course: "c",
+            lesson: "l",
+            section: "s",
+            pricing: "p",
+          }),
+        )
+        .where(discussionVisibilityPredicate("t", null, false))
+        .orderBy(
+          sql<number>`(
+            coalesce(t.replies_count, 0) + coalesce(t.likes_count, 0)
+          )`,
+          "desc",
+        )
+        .orderBy("t.updated_at", "desc")
+        .orderBy("t.id", "desc")
+        .limit(Math.min(20, limit))
+        .execute();
+
+      return rows.map((row) => ({
+        ...row,
+        kind: row.kind as "comment" | "question",
+        replyCount: Number(row.replyCount ?? 0),
+        likeCount: Number(row.likeCount ?? 0),
+        engagementScore: Number(row.engagementScore ?? 0),
+        createdAt:
+          row.createdAt instanceof Date
+            ? row.createdAt
+            : new Date(row.createdAt),
+        updatedAt:
+          row.updatedAt instanceof Date
+            ? row.updatedAt
+            : new Date(row.updatedAt),
+      }));
     },
 
     async countThreads(db, options) {

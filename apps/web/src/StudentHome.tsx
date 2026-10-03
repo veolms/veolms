@@ -46,6 +46,7 @@ interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
   onNavigatePage: (page: string) => void;
   studentName?: string;
+  isAuthenticated: boolean;
 }
 
 interface SectionHeaderProps {
@@ -372,7 +373,15 @@ function ProgressMetricSkeletons() {
   );
 }
 
-export function StudentHome({
+export function StudentHome(props: StudentHomeProps) {
+  if (!props.isAuthenticated) {
+    return null;
+  }
+
+  return <AuthenticatedStudentHome {...props} />;
+}
+
+function AuthenticatedStudentHome({
   onOpenCourse,
   onNavigatePage,
   studentName,

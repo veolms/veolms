@@ -3629,6 +3629,7 @@ export function CoursesPage({
             onOpenCourse={onOpenCourse}
             onNavigatePage={onNavigatePage}
             studentName={shellProfileDisplayName}
+            isAuthenticated={isAuthenticated}
           />
         </Suspense>
       );

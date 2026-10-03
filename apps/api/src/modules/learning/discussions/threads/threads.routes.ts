@@ -5,6 +5,7 @@ import {
   learningThreadSchema,
   learningThreadsListResponseSchema,
   listLearningThreadsQuerySchema,
+  publicPopularDiscussionsResponseSchema,
   updateLearningThreadRequestSchema,
 } from "@veolms/contracts";
 import { errorResponse } from "../../../../lib/errors.ts";
@@ -133,6 +134,25 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.getDiscussionsWorkspace,
+  );
+
+  // 3c. GET /discussions/popular - Public Home discussion preview
+  app.get(
+    "/discussions/popular",
+    {
+      schema: {
+        operationId: "getPublicPopularDiscussions",
+        tags: ["Learning Discussions"],
+        summary: "List public discussions ranked by engagement",
+        response: {
+          200: jsonResponse(
+            "Public discussion previews for Home discovery",
+            publicPopularDiscussionsResponseSchema,
+          ),
+        },
+      },
+    },
+    controller.listPublicPopularDiscussions,
   );
 
   // 6. GET /threads/:threadId - Get thread details

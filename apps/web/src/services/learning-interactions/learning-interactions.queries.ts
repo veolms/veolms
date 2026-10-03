@@ -15,6 +15,7 @@ import type {
   LessonDiscussionsListResponse,
   LessonDiscussionCountsResponse,
   ListLessonDiscussionsQuery,
+  PublicPopularDiscussionsResponse,
   ReportsListResponse,
   UserAutocompleteQuery,
   UserAutocompleteResponse,
@@ -75,6 +76,16 @@ export interface LessonInteractionCounts {
 export type LessonInteractionCountsOptions = {
   enabled?: boolean;
 };
+
+export function usePopularDiscussions(options?: { enabled?: boolean }) {
+  return useQuery<PublicPopularDiscussionsResponse, ApiError>({
+    queryKey: learningInteractionKeys.popularDiscussions(),
+    queryFn: () => learningInteractionsService.listPopularDiscussions(),
+    enabled: options?.enabled ?? true,
+    retry: false,
+    staleTime: 60 * 1000,
+  });
+}
 
 async function fetchLessonInteractionCounts(
   courseId: string,

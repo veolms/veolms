@@ -102,6 +102,7 @@ export function isLearningPath(pathname: string): boolean {
 
 export function isPublicAcademyPath(pathname: string): boolean {
   return (
+    normalizeAppPath(pathname) === "/home" ||
     isSettingsPath(pathname) ||
     isCoursesPublicPath(pathname) ||
     (ALLOW_GUEST_LEARNING && isLearningPath(pathname))
