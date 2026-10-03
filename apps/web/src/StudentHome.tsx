@@ -27,6 +27,7 @@ import {
 } from "./StudentPages";
 import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
 import { formatRelativeTime } from "./learning/learning-notes.adapter";
+import { HomeSectionHeader } from "./home/HomePresentation";
 import { useCourses } from "./services/courses";
 import { useEnrolledCourses } from "./services/enrollments";
 import { useLearningProgressResumeContext } from "./services/learning-progress";
@@ -46,14 +47,6 @@ interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
   onNavigatePage: (page: string) => void;
   studentName?: string;
-  isAuthenticated: boolean;
-}
-
-interface SectionHeaderProps {
-  icon: typeof BookOpen;
-  title: string;
-  action?: string;
-  onAction?: () => void;
 }
 
 function getCourseTimestamp(value: string | Date | null | undefined) {
@@ -88,27 +81,6 @@ function compareContinueLearningCourses(
   }
 
   return left.id.localeCompare(right.id);
-}
-
-function SectionHeader({
-  icon: Icon,
-  title,
-  action,
-  onAction,
-}: SectionHeaderProps) {
-  return (
-    <div className="dashboard-section-heading">
-      <h2>
-        <Icon size={19} weight="duotone" />
-        <span>{title}</span>
-      </h2>
-      {action && (
-        <button type="button" onClick={onAction}>
-          {action} <ArrowRight size={17} />
-        </button>
-      )}
-    </div>
-  );
 }
 
 function StudentHomeThumbnail({
@@ -373,15 +345,7 @@ function ProgressMetricSkeletons() {
   );
 }
 
-export function StudentHome(props: StudentHomeProps) {
-  if (!props.isAuthenticated) {
-    return null;
-  }
-
-  return <AuthenticatedStudentHome {...props} />;
-}
-
-function AuthenticatedStudentHome({
+export function StudentHome({
   onOpenCourse,
   onNavigatePage,
   studentName,
@@ -720,7 +684,7 @@ function AuthenticatedStudentHome({
 
       <div className="home-dashboard-grid">
         <section className="dashboard-panel home-continue-panel">
-          <SectionHeader
+          <HomeSectionHeader
             icon={BookOpen}
             title="Continue Learning"
             action="View All"
@@ -777,7 +741,7 @@ function AuthenticatedStudentHome({
         </section>
 
         <section className="dashboard-panel home-discussions-panel">
-          <SectionHeader
+          <HomeSectionHeader
             icon={ChatCircleDots}
             title="Recent Discussions"
             action="View All"
@@ -822,7 +786,7 @@ function AuthenticatedStudentHome({
         </section>
 
         <section className="dashboard-panel home-progress-panel">
-          <SectionHeader icon={ChartLineUp} title="Your Progress" />
+          <HomeSectionHeader icon={ChartLineUp} title="Your Progress" />
           <div
             className="home-metrics-grid"
             aria-busy={enrolledCoursesLoading || enrolledCoursesFetching}
@@ -860,7 +824,7 @@ function AuthenticatedStudentHome({
         </section>
 
         <section className="dashboard-panel home-updates-panel">
-          <SectionHeader
+          <HomeSectionHeader
             icon={Target}
             title="Recently Updated"
             action="View All"

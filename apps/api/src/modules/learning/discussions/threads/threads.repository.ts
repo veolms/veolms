@@ -101,6 +101,8 @@ export interface PublicPopularThreadRow {
   kind: "comment" | "question";
   title: string | null;
   snippet: string;
+  authorName: string | null;
+  authorAvatarUrl: string | null;
   courseTitle: string;
   lessonTitle: string;
   replyCount: number;
@@ -905,12 +907,17 @@ export function createThreadsRepository(): ThreadsRepository {
         .innerJoin("courses as c", "c.id", "t.course_id")
         .innerJoin("course_lessons as l", "l.id", "t.lesson_id")
         .innerJoin("course_sections as s", "s.id", "l.section_id")
+        .leftJoin("users as u", (join) =>
+          join.onRef("u.id", "=", "t.user_id").on("u.is_deleted", "=", false),
+        )
         .leftJoin("course_pricing as p", "p.course_id", "c.id")
         .select([
           "t.id as id",
           "t.kind as kind",
           "t.title as title",
           sql<string>`left(t.plain_text, 500)`.as("snippet"),
+          "u.display_name as authorName",
+          "u.avatar_data_url as authorAvatarUrl",
           "c.title as courseTitle",
           "l.title as lessonTitle",
           "t.replies_count as replyCount",

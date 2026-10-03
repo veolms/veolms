@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import "../styles/features/discussions.css";
+import type { PublicPopularDiscussion } from "@veolms/contracts";
 import type {
   CSSProperties,
   FormEvent,
@@ -58,6 +59,7 @@ import { ThemedSelect } from "../ThemedSelect";
 import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
 import { DiscussionAvatar } from "../learning/DiscussionAvatar";
 import type { DiscussionContent } from "../learning/discussion-editor/types";
+import { formatRelativeTime } from "../learning/learning-notes.adapter";
 import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
 import {
   Drawer,
@@ -585,7 +587,10 @@ function DiscussionWorkspaceCardContent({
   parentContext,
   expandable = true,
 }: {
-  thread: DiscussionWorkspaceCard;
+  thread: Pick<
+    DiscussionWorkspaceCard,
+    "author" | "plainText" | "excerpt" | "content"
+  >;
   label: string;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -717,7 +722,7 @@ function DiscussionWorkspaceIdentity({
   thread,
   activity,
 }: {
-  thread: DiscussionWorkspaceCard;
+  thread: Pick<DiscussionWorkspaceCard, "author" | "authorUsername" | "isOwn">;
   activity?: string;
 }) {
   return (
@@ -790,6 +795,12 @@ function DiscussionWorkspaceNavigationLink({
 
 type DiscussionWorkspaceRailElement = ReactElement<{ className?: string }>;
 
+type DiscussionWorkspaceCardShellThread = {
+  title?: string | null;
+  avatar?: string | null;
+  avatarSrcSet?: PublicPopularDiscussion["author"]["avatarSrcSet"];
+};
+
 function withDiscussionWorkspaceRailSlot(
   element: DiscussionWorkspaceRailElement,
   slot: "top" | "middle" | "bottom",
@@ -835,7 +846,7 @@ function DiscussionWorkspaceCardShell({
   children,
   rail,
 }: {
-  thread: DiscussionWorkspaceCard;
+  thread: DiscussionWorkspaceCardShellThread;
   className: string;
   expanded: boolean;
   variant?: DiscussionWorkspaceCardVariant;
@@ -920,6 +931,7 @@ function DiscussionWorkspaceCardShell({
         <div className="discussion-thread__avatar">
           <DiscussionAvatar
             src={thread.avatar || null}
+            srcSet={thread.avatarSrcSet}
             className="discussion-thread__avatar-image"
           />
         </div>
@@ -1541,6 +1553,102 @@ export function DiscussionWorkspaceCard({
       variant={variant}
       expandable={expandable}
     />
+  );
+}
+
+function PublicDiscussionMetadata({
+  courseTitle,
+  lessonTitle,
+}: Pick<PublicPopularDiscussion, "courseTitle" | "lessonTitle">) {
+  return (
+    <div className="discussion-thread__context">
+      <span title={courseTitle}>{courseTitle}</span>
+      <span aria-hidden="true" />
+      <small title={lessonTitle}>
+        <BookOpen size={13} aria-hidden="true" />
+        <span>{lessonTitle}</span>
+      </small>
+    </div>
+  );
+}
+
+/**
+ * Read-only public version of the compact workspace discussion card. It uses
+ * the same shell, identity, content, metadata classes, and responsive rules
+ * as Student Home without requiring workspace IDs, permissions, or queries.
+ */
+export function PublicDiscussionWorkspaceCard({
+  discussion,
+}: {
+  discussion: PublicPopularDiscussion;
+}) {
+  const author = discussion.author.displayName.trim() || "Anonymous Learner";
+  const kindLabel = discussion.kind === "question" ? "Question" : "Comment";
+  const title = discussion.title?.trim() || discussion.snippet;
+  const preview = title;
+  const activity = formatRelativeTime(discussion.updatedAt);
+  const shellThread = {
+    title: discussion.title,
+    avatar: discussion.author.avatarUrl,
+    avatarSrcSet: discussion.author.avatarSrcSet,
+  };
+  const contentThread = {
+    author,
+    content: discussion.snippet,
+    plainText: discussion.snippet,
+    excerpt: discussion.snippet,
+  };
+  const identityThread = {
+    author,
+    authorUsername: "",
+    isOwn: false,
+  };
+
+  return (
+    <DiscussionWorkspaceCardShell
+      thread={shellThread}
+      className="discussion-thread--comment"
+      expanded={false}
+      variant="compact"
+      expandable={false}
+      rail={{
+        top: (
+          <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
+            <ThumbsUp size={15} weight="fill" aria-hidden="true" />
+            <span>
+              {discussion.likeCount}{" "}
+              {discussion.likeCount === 1 ? "like" : "likes"}
+            </span>
+          </span>
+        ),
+        middle: (
+          <span>
+            <ChatTeardropText size={17} aria-hidden="true" />{" "}
+            {discussion.replyCount}{" "}
+            {discussion.replyCount === 1 ? "reply" : "replies"}
+          </span>
+        ),
+        bottom: <time dateTime={discussion.updatedAt}>{activity}</time>,
+      }}
+    >
+      <DiscussionWorkspaceIdentity
+        thread={identityThread}
+        activity={activity}
+      />
+      <DiscussionWorkspaceCardContent
+        thread={contentThread}
+        label={kindLabel}
+        expanded={false}
+        onExpandedChange={() => undefined}
+        expandedTitle={null}
+        previewText={preview}
+        expandable={false}
+      />
+      <PublicDiscussionMetadata
+        courseTitle={discussion.courseTitle}
+        lessonTitle={discussion.lessonTitle}
+      />
+    </DiscussionWorkspaceCardShell>
   );
 }
 

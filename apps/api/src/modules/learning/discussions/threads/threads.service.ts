@@ -17,6 +17,7 @@ import type {
   WorkspaceDiscussionItem,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import { avatarSrcSetFromUrl } from "../../../avatars/index.ts";
 import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
   createDiscussionOutbox,
@@ -850,6 +851,11 @@ export function createThreadsService(
           kind: row.kind,
           title: row.title,
           snippet: row.snippet,
+          author: {
+            displayName: row.authorName?.trim() || "Anonymous Learner",
+            avatarUrl: row.authorAvatarUrl,
+            avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
+          },
           courseTitle: row.courseTitle,
           lessonTitle: row.lessonTitle,
           replyCount: row.replyCount,

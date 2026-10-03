@@ -266,6 +266,9 @@ const SettingsPage = lazy(() =>
 const StudentHome = lazy(() =>
   import("./StudentHome").then((module) => ({ default: module.StudentHome })),
 );
+const GuestHome = lazy(() =>
+  import("./GuestHome").then((module) => ({ default: module.GuestHome })),
+);
 const PlaceholderPage = lazy(() =>
   import("./courses/PlaceholderPage").then((module) => ({
     default: module.PlaceholderPage,
@@ -3625,12 +3628,15 @@ export function CoursesPage({
     if (effectiveRole === "student" && surfacePage === "home") {
       return (
         <Suspense fallback={<AcademyPageFallback />}>
-          <StudentHome
-            onOpenCourse={onOpenCourse}
-            onNavigatePage={onNavigatePage}
-            studentName={shellProfileDisplayName}
-            isAuthenticated={isAuthenticated}
-          />
+          {isAuthenticated ? (
+            <StudentHome
+              onOpenCourse={onOpenCourse}
+              onNavigatePage={onNavigatePage}
+              studentName={shellProfileDisplayName}
+            />
+          ) : (
+            <GuestHome />
+          )}
         </Suspense>
       );
     }
