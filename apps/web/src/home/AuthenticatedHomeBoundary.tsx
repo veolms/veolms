@@ -8,6 +8,11 @@ const StudentHome = lazy(() =>
     default: module.StudentHome,
   })),
 );
+const DiscoveryHome = lazy(() =>
+  import("./DiscoveryHome").then((module) => ({
+    default: module.DiscoveryHome,
+  })),
+);
 
 interface AuthenticatedHomeBoundaryProps {
   onOpenCourse: (course: LearningCourse) => void;
@@ -106,12 +111,9 @@ export function AuthenticatedHomeBoundary({
 
   if (enrollmentData.courses.length === 0) {
     return (
-      <HomeState
-        role="status"
-        description="Your discovery Home is coming soon."
-      >
-        No enrolled courses
-      </HomeState>
+      <Suspense fallback={<HomeLoadingState />}>
+        <DiscoveryHome mode="authenticated" studentName={studentName} />
+      </Suspense>
     );
   }
 
