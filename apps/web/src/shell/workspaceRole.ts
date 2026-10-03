@@ -112,3 +112,18 @@ export function getRoleDisplayName(
   }
   return "Instructor";
 }
+
+export function getShellProfileSubtitle(
+  role: CourseRole,
+  userRoles: readonly string[] | null | undefined,
+  username: string | null | undefined,
+  canSwitchWorkspace: boolean,
+): string {
+  if (role === "student" && !canSwitchWorkspace) {
+    const handle = username?.trim();
+    if (handle) {
+      return handle.startsWith("@") ? handle : `@${handle}`;
+    }
+  }
+  return getRoleDisplayName(role, userRoles);
+}

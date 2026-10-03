@@ -10,6 +10,7 @@ import {
   useArchiveNotification,
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
+  useMarkNotificationUnread,
   useNotificationSummary,
   useNotifications,
 } from "../services/notifications";
@@ -43,6 +44,7 @@ export interface UseNotificationsFilterReturn {
   tabCounts: Record<NotificationTabId, number>;
   markAllAsRead: () => void;
   markAsRead: (id: string) => void;
+  markAsUnread: (id: string) => void;
   archiveNotification: (id: string) => void;
   resetFilters: () => void;
   isLoading: boolean;
@@ -91,6 +93,7 @@ export function useNotificationsFilter(
   const mentions = useNotifications({ type: "user.mentioned", limit: 3 });
   const summary = useNotificationSummary();
   const markReadMutation = useMarkNotificationRead();
+  const markUnreadMutation = useMarkNotificationUnread();
   const markAllReadMutation = useMarkAllNotificationsRead();
   const archiveMutation = useArchiveNotification();
 
@@ -168,6 +171,10 @@ export function useNotificationsFilter(
         onSuccess: () => setNotice?.("All notifications marked as read."),
       }),
     markAsRead: (id) => markReadMutation.mutate(id),
+    markAsUnread: (id) =>
+      markUnreadMutation.mutate(id, {
+        onSuccess: () => setNotice?.("Notification marked as unread."),
+      }),
     archiveNotification: (id) =>
       archiveMutation.mutate(id, {
         onSuccess: () => setNotice?.("Notification archived."),

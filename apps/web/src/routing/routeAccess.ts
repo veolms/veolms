@@ -1,10 +1,11 @@
+import { publicProfileUsernameParamsSchema } from "@veolms/contracts";
 import type { MfaGateUser } from "../auth/mfaGate";
 import { resolveMfaSetupView } from "../auth/mfaGate";
 import { normalizeNavigationPath } from "./routeDescriptors";
 import { CREATOR_ROLES, normalizeRoles } from "../shell/workspaceRole";
 import { isCourseEditorPath } from "../courses/courseEditorRouting";
 
-export const APP_HOME_PATH = "/courses";
+export const APP_HOME_PATH = "/";
 export const LOGIN_PATH = "/login";
 export const MFA_CHALLENGE_PATH = "/mfa-setup?mfa=required";
 
@@ -20,6 +21,29 @@ const AUTH_FLOW_PATHS = new Set([
 ]);
 
 const GUEST_LANDING_PATHS = new Set(["/"]);
+const RESERVED_PROFILE_PATHS = new Set([
+  "/home",
+  "/dashboard",
+  "/courses",
+  "/wishlist",
+  "/students",
+  "/reviews",
+  "/quizzes",
+  "/discussions",
+  "/analytics",
+  "/orders",
+  "/messages",
+  "/purchase-history",
+  "/notifications",
+  "/settings",
+  "/coupons",
+  "/logout",
+  LOGIN_PATH,
+  "/register",
+  "/mfa-setup",
+  "/auth",
+  "/explore-courses",
+]);
 const DASHBOARD_PERMISSION = "analytics.revenue.read";
 
 export function hasDashboardAnalyticsPermission(
@@ -72,18 +96,29 @@ export function shouldRedirectFromCourseAuthorPath(
 }
 
 export function resolveCourseAuthorRouteFallback(pathname: string): string {
-  return normalizeAppPath(pathname) === "/dashboard" ? APP_HOME_PATH : "/";
+  const path = normalizeAppPath(pathname);
+  return path === "/dashboard" || path === "/" ? "/courses" : "/";
 }
 
 export function isCoursesPublicPath(pathname: string): boolean {
   const path = normalizeAppPath(pathname);
-  if (path === "/courses") {
-    return true;
-  }
-  if (path === "/explore-courses") {
-    return true;
-  }
-  return /^\/explore-courses\/[^/]+$/.test(path);
+  return (
+    path === "/courses" ||
+    path === "/courses/enrolled" ||
+    path === "/courses/not-enrolled" ||
+    path === "/courses/wishlist"
+  );
+}
+
+export function isPublicProfilePath(pathname: string): boolean {
+  const path = normalizeAppPath(pathname);
+  const match = /^\/([^/]+)$/.exec(path);
+  return Boolean(
+    match?.[1] &&
+    publicProfileUsernameParamsSchema.safeParse({ username: match[1] })
+      .success &&
+    !RESERVED_PROFILE_PATHS.has(path.toLowerCase()),
+  );
 }
 
 export function isLearningPath(pathname: string): boolean {
@@ -104,6 +139,7 @@ export function isPublicAcademyPath(pathname: string): boolean {
   return (
     isSettingsPath(pathname) ||
     isCoursesPublicPath(pathname) ||
+    isPublicProfilePath(pathname) ||
     (ALLOW_GUEST_LEARNING && isLearningPath(pathname))
   );
 }
@@ -181,7 +217,8 @@ export function shouldBlockAcademyRender(
 export function resolveAcademyLandingDestination(
   access: SessionAccess,
 ): string {
-  return access.needsMfaChallenge ? MFA_CHALLENGE_PATH : APP_HOME_PATH;
+  if (access.needsMfaChallenge) return MFA_CHALLENGE_PATH;
+  return APP_HOME_PATH;
 }
 
 export function resolveSessionAccess(input: {

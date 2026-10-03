@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { MouseEvent } from "react";
 import { useParams } from "react-router";
 import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
@@ -36,6 +43,8 @@ import {
   type CourseLifecycleStatus,
   type CourseRole,
 } from "./catalogue";
+import { toggleWishlistCourse, useCourseWishlisted } from "./wishlistStorage";
+import { CourseWishlistHeartButton } from "./CourseWishlistHeartButton";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
 import type { CourseSection } from "../learning/courseContent";
 import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
@@ -1034,29 +1043,18 @@ function CourseHeroSection({
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  className={`inline-flex items-center justify-center w-9.5 h-9.5 shrink-0 rounded-full border border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] text-(--muted) cursor-pointer transition-[border-color,color,background-color,transform] duration-160 ease-out hover:border-[color-mix(in_srgb,var(--text)_32%,transparent)] hover:text-(--text) hover:bg-(--hover) hover:scale-[1.06] ${
-                    wishlisted
-                      ? "border-[#ec4899]! text-[#ec4899]! bg-[rgba(236,72,153,0.14)]!"
-                      : ""
-                  }`}
+                <CourseWishlistHeartButton
+                  variant="overview-surface"
+                  wishlisted={wishlisted}
+                  disabled={isPreview}
                   aria-label={
                     wishlisted ? "Remove from wishlist" : "Add to wishlist"
                   }
-                  aria-pressed={wishlisted}
-                  disabled={isPreview}
-                  onClick={onToggleWishlist}
                   title={
                     wishlisted ? "Remove from wishlist" : "Add to wishlist"
                   }
-                >
-                  <Heart
-                    size={20}
-                    weight={wishlisted ? "fill" : "regular"}
-                    aria-hidden="true"
-                  />
-                </button>
+                  onClick={(event) => onToggleWishlist?.(event)}
+                />
               </div>
             )}
 
@@ -2258,16 +2256,14 @@ function CourseOverviewContent({
     },
     [],
   );
-  const [wishlisted, setWishlisted] = useState(() => {
-    try {
-      const saved: unknown = JSON.parse(
-        localStorage.getItem("veolms-wishlist") || "[]",
-      );
-      return Array.isArray(saved) && saved.includes(course.id);
-    } catch {
-      return false;
-    }
-  });
+  const wishlistTarget = useMemo(
+    (): Pick<Course, "id" | "slug"> => ({
+      id: course?.id ?? courseSlug ?? "",
+      slug: course?.slug ?? courseSlug,
+    }),
+    [course?.id, course?.slug, courseSlug],
+  );
+  const wishlisted = useCourseWishlisted(wishlistTarget);
 
   const cancelPendingSectionScroll = () => {
     if (sectionScrollTimerRef.current !== null) {
@@ -2336,26 +2332,14 @@ function CourseOverviewContent({
     setOpenSections(new Set());
   };
 
-  const toggleWishlist = (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    if (isReadOnlyPreview) return;
-    setWishlisted((prev) => {
-      const next = !prev;
-      try {
-        const saved: unknown = JSON.parse(
-          localStorage.getItem("veolms-wishlist") || "[]",
-        );
-        const list = Array.isArray(saved) ? (saved as string[]) : [];
-        const updated = next
-          ? [...list, course.id]
-          : list.filter((id) => id !== course.id);
-        localStorage.setItem("veolms-wishlist", JSON.stringify(updated));
-      } catch {
-        // best effort
-      }
-      return next;
-    });
-  };
+  const toggleWishlist = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      if (isReadOnlyPreview || !wishlistTarget.id) return;
+      toggleWishlistCourse(wishlistTarget);
+    },
+    [isReadOnlyPreview, wishlistTarget],
+  );
 
   const trailerMediaId =
     adaptedFromPreview?.trailerMediaId ??

@@ -30,6 +30,12 @@
 }
 :root[data-active-fill="false"] .courses-nav button.is-active,
 :root[data-active-fill="false"] .sidebar-appearance > button.is-active,
+:root[data-active-fill="false"]
+  .mobile-menu-sheet__appearance
+  > button.is-active,
+:root[data-active-fill="false"]
+  .mobile-menu-sheet__appearance
+  > button[aria-pressed="true"],
 :root[data-active-fill="false"] .sidebar-palette-trigger[aria-pressed="true"] {
   background: transparent;
   box-shadow: none;

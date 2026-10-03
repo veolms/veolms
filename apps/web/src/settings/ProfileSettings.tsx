@@ -30,6 +30,7 @@ import {
   getDefaultCountry,
 } from "../auth/CountryCodeSelect";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
+import { PublicProfileCard } from "../components/PublicProfileCard";
 import "../styles/features/profile.css";
 import { OtpCodeInput } from "../auth/OtpCodeInput";
 import {
@@ -57,6 +58,7 @@ import {
   useUserAvatars,
   useVerifyEmail,
   useVerifyPhoneNumber,
+  updatePublicProfileCacheFromUser,
 } from "../services/auth";
 import { authStore, useAuthStore, type AuthUser } from "../store/auth.store";
 import type { ProfileUpdateRequest } from "@veolms/contracts";
@@ -394,6 +396,16 @@ export function ProfileSettings({
     userProfileFetched && !userProfileError ? userProfile : storeUser;
   const canEdit = isAuthenticated && Boolean(activeUser);
   const queryClient = useQueryClient();
+  const lastPublicProfileUsername = useRef(activeUser?.username ?? null);
+  useEffect(() => {
+    if (!activeUser) return;
+    updatePublicProfileCacheFromUser(
+      queryClient,
+      activeUser,
+      lastPublicProfileUsername.current,
+    );
+    lastPublicProfileUsername.current = activeUser.username;
+  }, [activeUser, queryClient]);
   const {
     data: storedAvatars = [],
     isPending: storedAvatarsLoading,
@@ -1084,86 +1096,84 @@ export function ProfileSettings({
                 </div>
               </header>
 
-              <div className="settings-profile__public-card">
-                <div
-                  className="settings-profile__public-art"
-                  aria-hidden="true"
-                />
-                <div className="settings-profile__public-content">
-                  <div className="settings-profile__photo">
-                    {avatar(
-                      "settings-profile__avatar settings-profile__avatar--large",
-                    )}
-                    <LockedProfileControl
-                      label="profile photo"
-                      locked={!canEdit}
-                      onBlocked={showBlockedControlFeedback}
-                      className="settings-profile__camera-lock"
-                    >
-                      <button
-                        type="button"
-                        className="settings-profile__camera"
-                        aria-label="Choose a new profile photo"
-                        onClick={() => {
-                          if (canEdit) fileInputRef.current?.click();
-                        }}
-                        disabled={!canEdit || photoUploading}
-                      >
-                        <Camera size={17} weight="fill" />
-                      </button>
-                    </LockedProfileControl>
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    className="settings-profile__file-input"
-                    type="file"
-                    accept="image/*"
-                    aria-label="Profile photo file"
-                    tabIndex={-1}
-                    onChange={handlePhotoChange}
-                    disabled={!canEdit || photoUploading}
+              <PublicProfileCard
+                displayName={displayName}
+                username={username}
+                avatar={avatar(
+                  "settings-profile__avatar settings-profile__avatar--large",
+                )}
+                bio={
+                  draftProfile.bio ||
+                  "Add a short bio so people know what you are learning."
+                }
+                links={publicSocialLinks}
+                verifiedIcon={
+                  <SealCheck
+                    size={21}
+                    weight="fill"
+                    aria-label="Verified profile"
                   />
-                  {canEdit && (
+                }
+                photoAction={
+                  <LockedProfileControl
+                    label="profile photo"
+                    locked={!canEdit}
+                    onBlocked={showBlockedControlFeedback}
+                    className="settings-profile__camera-lock"
+                  >
                     <button
                       type="button"
-                      className="settings-profile__generate-avatar"
-                      disabled={photoUploading}
+                      className="settings-profile__camera"
+                      aria-label="Choose a new profile photo"
                       onClick={() => {
-                        if (!photoUploading) {
-                          setAvatarPickerOpen(true);
-                        }
+                        if (canEdit) fileInputRef.current?.click();
                       }}
+                      disabled={!canEdit || photoUploading}
                     >
-                      {photoUploading ? (
-                        "Saving avatar…"
-                      ) : (
-                        <>
-                          <MagicWand
-                            size={14}
-                            weight="fill"
-                            aria-hidden="true"
-                          />
-                          Generate avatar
-                        </>
-                      )}
+                      <Camera size={17} weight="fill" />
                     </button>
-                  )}
-                  <h3>
-                    {displayName}{" "}
-                    <SealCheck
-                      size={21}
-                      weight="fill"
-                      aria-label="Verified profile"
+                  </LockedProfileControl>
+                }
+                photoActions={
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      className="settings-profile__file-input"
+                      type="file"
+                      accept="image/*"
+                      aria-label="Profile photo file"
+                      tabIndex={-1}
+                      onChange={handlePhotoChange}
+                      disabled={!canEdit || photoUploading}
                     />
-                  </h3>
-                  <p className="settings-profile__username">@{username}</p>
-                  <p className="settings-profile__bio">
-                    {draftProfile.bio ||
-                      "Add a short bio so people know what you are learning."}
-                  </p>
-                  {publicSocialLinks}
-                </div>
-              </div>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        className="settings-profile__generate-avatar"
+                        disabled={photoUploading}
+                        onClick={() => {
+                          if (!photoUploading) {
+                            setAvatarPickerOpen(true);
+                          }
+                        }}
+                      >
+                        {photoUploading ? (
+                          "Saving avatar…"
+                        ) : (
+                          <>
+                            <MagicWand
+                              size={14}
+                              weight="fill"
+                              aria-hidden="true"
+                            />
+                            Generate avatar
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </>
+                }
+              />
               {photoError && (
                 <p className="settings-profile__error" role="alert">
                   {photoError}

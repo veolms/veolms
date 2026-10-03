@@ -182,12 +182,13 @@
 .courses-profile__button {
   display: flex;
   width: 100%;
-  min-height: 89px;
+  min-height: 0;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
   border: 1px solid var(--border);
   border-radius: 11px;
-  padding: 13px;
+  padding-block: 4px;
+  padding-inline: 13px;
   background: color-mix(in srgb, var(--surface) 38%, transparent);
   text-align: left;
   transition:
@@ -196,22 +197,80 @@
 }
 
 .courses-profile__button:hover {
-  border-color: var(--border-strong);
   background: var(--surface);
 }
 
 .courses-profile__button img {
-  width: 49px;
-  height: 49px;
-  flex: 0 0 auto;
-  border-radius: 50%;
   object-fit: cover;
 }
 
-.courses-profile__button > span {
+.courses-profile__avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  padding: 3px;
+  box-shadow: none;
+}
+
+.courses-profile__avatar-wrap > .shell-profile-avatar,
+.courses-profile__avatar-wrap img {
+  width: 100%;
+  height: 100%;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: none;
+}
+
+.courses-profile__presence {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--surface-strong);
+  border-radius: 50%;
+  background: #ff3b30;
+}
+
+.profile-menu__identity {
+  position: relative;
+  box-sizing: border-box;
+  width: calc(100% - 20px);
+  height: 64px;
+  min-height: 64px;
+  margin: 0 10px 8px;
+  padding: 0;
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent),
+    0 2px 5px rgb(0 0 0 / 11%);
+}
+
+.profile-menu__identity-link {
+  border-radius: inherit;
+}
+
+.profile-menu__identity-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.profile-menu__identity-copy {
+  flex: 1 1 auto;
+  margin-right: 32px;
+}
+
+.courses-profile__button > span:not(.courses-profile__avatar-wrap) {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
 }
 
@@ -227,20 +286,28 @@
 .courses-profile__button small {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--muted);
   font-size: 0.76rem;
 }
 
-.courses-profile__button small i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--success);
+.courses-profile__role-icon--student,
+.courses-profile__role-icon--admin,
+.courses-profile__role-icon--creator {
+  color: var(--accent-ink, var(--accent));
 }
 
 .courses-profile__button > svg {
   color: var(--muted);
+}
+
+.courses-profile__button > svg.courses-profile__caret {
+  flex: 0 0 auto;
+  transition: transform 180ms ease;
+}
+
+.courses-profile__button > svg.courses-profile__caret.is-open {
+  transform: rotate(-180deg);
 }
 
 .courses-profile__login-button {
@@ -270,19 +337,7 @@
   transform: translateX(2px);
 }
 
-/* The profile surface can be resized independently of the viewport. Container
-   queries keep its content stable at narrow custom sidebar and drawer widths. */
-@container (max-width: 245px) {
-  .courses-profile__login-icon {
-    width: 39px;
-    height: 39px;
-  }
-
-  .courses-profile__login-button .courses-profile__login-subtitle {
-    display: none;
-  }
-}
-
+/* Keep the login affordance compact when its containing sidebar is very narrow. */
 @container (max-width: 120px) {
   .courses-profile__login-button {
     justify-content: center;
@@ -305,57 +360,287 @@
 .profile-menu {
   position: absolute;
   right: 0;
+  left: 0;
   bottom: calc(100% + 8px);
-  z-index: 40;
-  width: max-content;
-  min-width: 172px;
-  max-width: min(260px, calc(100vw - 32px));
+  z-index: 120;
+  box-sizing: border-box;
+  width: auto;
+  min-width: 0;
+  max-width: none;
   border: 1px solid var(--border-strong);
-  border-radius: 11px;
-  padding: 7px;
-  background: color-mix(in srgb, var(--surface) 96%, black);
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+  border-radius: 17px;
+  padding-top: 15px;
+  padding-bottom: 10px;
+  padding-inline: 0;
+  background: var(--surface-strong);
+  --profile-menu-cast-shadow: 0 1px 5px rgb(0 0 0 / 20%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+    var(--profile-menu-cast-shadow);
 }
 
-.profile-menu p {
-  padding: 7px 9px 5px;
+.courses-profile > .profile-menu--animated {
+  /* Keep the clipping edge at the fixed profile control, then reverse the
+     entrance easing so the last visible slice clears without lingering. */
+  transform: translateY(calc(100% + 8px));
+  clip-path: inset(0 -8px 100% -8px);
+  z-index: 1;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 280ms cubic-bezier(0.7, 0, 0.84, 0),
+    clip-path 280ms cubic-bezier(0.7, 0, 0.84, 0),
+    visibility 0s linear 280ms;
+}
+
+.courses-profile:has(> .profile-menu--animated)
+  > button.courses-profile__button,
+.courses-profile:has(> .profile-menu--animated) > .sidebar-appearance {
+  position: relative;
+  z-index: 130;
+}
+
+.courses-profile > .profile-menu--animated[data-open="true"] {
+  transform: none;
+  clip-path: inset(-8px);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    clip-path 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s;
+}
+
+.courses-app--collapsed .courses-profile > .profile-menu--animated,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile
+  > .profile-menu--animated {
+  /* Match the clip travel so the visible edge stays at the rail boundary. */
+  transform: translateX(-100%);
+  clip-path: inset(0 0 0 100%);
+  transition:
+    transform 280ms cubic-bezier(0.7, 0, 0.84, 0),
+    clip-path 280ms cubic-bezier(0.7, 0, 0.84, 0),
+    visibility 0s linear 280ms;
+}
+
+.courses-app--collapsed
+  .courses-profile
+  > .profile-menu--animated[data-open="true"],
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile
+  > .profile-menu--animated[data-open="true"] {
+  transform: none;
+  clip-path: inset(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    clip-path 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .courses-profile > .profile-menu--animated,
+  .courses-profile > .profile-menu--animated[data-open="true"] {
+    transition: none !important;
+  }
+}
+
+.settings-quick-menu[aria-hidden="true"] {
+  display: none;
+}
+
+.courses-profile:has(> .settings-quick-menu:not([aria-hidden="true"])) {
+  z-index: 2;
+}
+
+.courses-profile > .settings-quick-menu {
+  right: auto;
+  bottom: 0;
+  left: calc(100% + 8px);
+  z-index: 140;
+  min-width: min(200px, calc(100vw - 32px));
+  max-width: min(250px, calc(100vw - 32px));
+}
+
+.settings-quick-menu__item[aria-current="page"] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-strong));
+}
+
+.settings-quick-menu__item[aria-current="page"]:hover {
+  background: color-mix(in srgb, var(--accent) 30%, var(--surface-strong));
+}
+
+.profile-menu__divider {
+  height: 1px;
+  margin: 9px 10px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--text) 10%, var(--surface-strong)) 10%,
+    color-mix(in srgb, var(--text) 15%, var(--surface-strong)) 50%,
+    color-mix(in srgb, var(--text) 10%, var(--surface-strong)) 90%,
+    transparent
+  );
+}
+
+.profile-menu__section {
+  margin-top: 4px;
+  padding: 2px 10px 3px 14px;
   color: var(--muted);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 0.82rem;
+  font-weight: 600;
   white-space: nowrap;
 }
 
-.profile-menu button {
-  display: flex;
+.profile-menu__item {
+  display: grid;
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
-  border-radius: 8px;
-  padding: 0 9px;
+  column-gap: 12px;
+  border: 0;
+  border-radius: 0 !important;
+  padding: 0 10px;
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.84rem;
+  text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
-.profile-menu button:hover {
+.profile-menu__item:hover {
   color: var(--text);
   background: var(--hover);
 }
 
-.profile-menu button > svg:first-child {
-  flex: 0 0 auto;
+.profile-menu__item:focus-visible {
+  outline: 2px solid
+    color-mix(in srgb, var(--accent-ink, var(--accent)) 75%, transparent);
+  outline-offset: 2px;
 }
 
-.profile-menu button > span {
+.profile-menu__item > svg:first-child {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: center;
+}
+
+.profile-menu__item > span:first-of-type {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
-  flex: 1;
   text-align: left;
   white-space: nowrap;
 }
 
-.profile-menu button .profile-menu__check {
-  margin-left: auto;
+.profile-menu__check,
+.profile-menu__trail,
+.profile-menu__badge {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.profile-menu__trail {
+  width: 21px;
+  height: 21px;
+}
+
+.profile-menu__role-icon--student {
+  color: #5da9ff;
+}
+
+.profile-menu__role-icon--admin,
+.profile-menu__role-icon--creator {
+  color: #a16cff;
+}
+
+.profile-menu__item .profile-menu__check {
+  color: var(--accent-ink, var(--accent));
+}
+
+.profile-menu__item-icon--profile {
+  color: #5da9ff;
+}
+
+.profile-menu__item-icon--notifications {
+  color: #f1be4b;
+}
+
+.profile-menu__item-icon--orders {
+  color: #d68eea;
+}
+
+.profile-menu__item-icon--sidebar {
+  color: #63c8d5;
+}
+
+.profile-menu__item--logout {
+  color: var(--danger);
+}
+
+.profile-menu__item--logout:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface-strong));
+}
+
+.profile-menu__item-icon--logout {
+  color: var(--danger);
+}
+
+.profile-menu__badge {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 20px;
+  min-width: 20px;
+  max-width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.profile-menu__badge--overflow {
+  position: relative;
+  width: 21px;
+  min-width: 21px;
+  max-width: 21px;
+  height: 21px;
+}
+
+.profile-menu__badge-count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.profile-menu__badge-plus {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 0.56rem;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .courses-app--collapsed .courses-sidebar {
@@ -383,7 +668,9 @@
 .courses-app--collapsed .courses-sidebar__label,
 .courses-app--collapsed .courses-nav button > span,
 .courses-app--collapsed .courses-nav button > b,
-.courses-app--collapsed .courses-profile__button > span,
+.courses-app--collapsed
+  .courses-profile__button
+  > span:not(.courses-profile__avatar-wrap),
 .courses-app--collapsed .courses-profile__button > svg {
   display: none;
 }
@@ -400,20 +687,25 @@
 }
 
 .courses-app--collapsed .courses-profile__button {
-  min-height: 60px;
+  height: 64px;
+  min-height: 64px;
   justify-content: center;
-  padding: 6px;
+  padding: 4px 0;
 }
 
-.courses-app--collapsed .courses-profile__button img {
-  width: 43px;
-  height: 43px;
+.courses-app--collapsed .courses-profile__avatar-wrap {
+  width: 54px;
+  height: 54px;
+  flex-basis: 54px;
 }
 
 .courses-app--collapsed .profile-menu {
   left: calc(100% + 8px);
   right: auto;
   bottom: 0;
+  width: 250px;
+  min-width: min(250px, calc(100vw - 32px));
+  max-width: min(250px, calc(100vw - 32px));
 }
 
 .courses-app--hidden {
@@ -610,6 +902,18 @@
 .courses-toolbar__filters {
   display: flex;
   gap: 12px;
+}
+
+@media (min-width: 821px) {
+  /* The stateful fade follows horizontal overflow and cannot be expressed as a Tailwind utility. */
+  [data-courses-toolbar] [data-course-quick-filters][data-fade-right="true"] {
+    mask-image: linear-gradient(
+      to right,
+      #000 0%,
+      #000 calc(100% - 1.5rem),
+      transparent 100%
+    );
+  }
 }
 
 .course-select {
@@ -1107,7 +1411,9 @@
   .courses-app:not(.courses-app--hidden) .courses-sidebar__label,
   .courses-app:not(.courses-app--hidden) .courses-nav button > span,
   .courses-app:not(.courses-app--hidden) .courses-nav button > b,
-  .courses-app:not(.courses-app--hidden) .courses-profile__button > span,
+  .courses-app:not(.courses-app--hidden)
+    .courses-profile__button
+    > span:not(.courses-profile__avatar-wrap),
   .courses-app:not(.courses-app--hidden) .courses-profile__button > svg {
     display: none;
   }
@@ -1121,21 +1427,28 @@
     padding: 0;
   }
 
-  .courses-app:not(.courses-app--hidden) .courses-profile__button {
-    min-height: 58px;
+  .courses-app:not(.courses-app--hidden)
+    .courses-profile
+    > .courses-profile__button {
+    height: 64px;
+    min-height: 64px;
     justify-content: center;
-    padding: 5px;
+    padding: 4px 0;
   }
 
-  .courses-app:not(.courses-app--hidden) .courses-profile__button img {
-    width: 42px;
-    height: 42px;
+  .courses-app:not(.courses-app--hidden) .courses-profile__avatar-wrap {
+    width: 54px;
+    height: 54px;
+    flex-basis: 54px;
   }
 
   .courses-app:not(.courses-app--hidden) .profile-menu {
     left: calc(100% + 8px);
     right: auto;
     bottom: 0;
+    width: 250px;
+    min-width: min(250px, calc(100vw - 32px));
+    max-width: min(250px, calc(100vw - 32px));
   }
 
   .courses-main {

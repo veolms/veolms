@@ -44,13 +44,13 @@ const LEGACY_COURSE_PLAYER_STORAGE_KEYS = [
 const COURSE_PLAYER_PARENT_PATHS: Record<CoursePlayerOrigin, string> = {
   home: "/",
   courses: "/courses",
-  wishlist: "/wishlist",
+  wishlist: "/courses/wishlist",
 };
 
 const COURSE_PLAYER_BACK_LABELS: Record<CoursePlayerOrigin, string> = {
   home: "Return to Home",
   courses: "Return to Courses",
-  wishlist: "Return to Wishlist",
+  wishlist: "Return to Courses",
 };
 
 const COURSE_PLAYER_ORIGINS_BY_PATH: Readonly<
@@ -59,6 +59,7 @@ const COURSE_PLAYER_ORIGINS_BY_PATH: Readonly<
   "/": "home",
   "/home": "home",
   "/courses": "courses",
+  "/courses/wishlist": "wishlist",
   "/wishlist": "wishlist",
 };
 

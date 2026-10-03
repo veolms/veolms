@@ -73,10 +73,10 @@ const placeholderContent: Record<string, PlaceholderContent> = {
     message: "Messages are not implemented yet.",
     icon: EnvelopeSimple,
   },
-  "Order History": {
-    title: "Order History",
+  "Purchase History": {
+    title: "Purchase History",
     description: "Review your academy purchases and payment activity.",
-    message: "Order history is not implemented yet.",
+    message: "Purchase history is not implemented yet.",
     icon: Tote,
   },
   Notifications: {

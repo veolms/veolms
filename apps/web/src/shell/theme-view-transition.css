@@ -21,6 +21,16 @@
   animation-timing-function: var(--expo-out);
 }
 
+/* Let controls receive input through the full-screen transition overlay where
+   supported. Palette swatches also handle document-root hits in CoursesPage. */
+::view-transition,
+::view-transition-group(root),
+::view-transition-image-pair(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  pointer-events: none;
+}
+
 /* --theme-reveal-x/y stay unregistered so they inherit from the root's
  * inline style into the view-transition pseudo-element tree. The duration is
  * fixed so center-origin reveals keep the corner-click pacing. */
@@ -42,12 +52,35 @@
     #fff 64%,
     transparent 96%
   );
+  animation-duration: 1.6s;
 }
 
 ::view-transition-old(root) {
   animation: none;
   animation-fill-mode: both;
   z-index: -1;
+}
+
+/* Chromium can report the document root over transition controls. */
+:root[data-theme-control-cursor="pointer"] {
+  cursor: pointer;
+}
+
+:root[data-theme-transition="mode"] [data-appearance-mode-icon] {
+  transform-origin: center;
+  animation: appearance-mode-icon-arrive 280ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+}
+
+@keyframes appearance-mode-icon-arrive {
+  from {
+    opacity: 0.35;
+    transform: rotate(-36deg) scale(0.78);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+  }
 }
 
 /* 220vmax keeps the fully opaque stop (64% of radius, i.e. 141vmax) past the
@@ -65,5 +98,9 @@
   ::view-transition-old(root) {
     animation: none !important;
     mask: none;
+  }
+
+  :root[data-theme-transition="mode"] [data-appearance-mode-icon] {
+    animation: none !important;
   }
 }
