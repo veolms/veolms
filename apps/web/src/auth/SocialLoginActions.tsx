@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cancelGoogleOneTap } from "./GoogleOneTap";
 import { GitHubBrandIcon, GoogleBrandIcon } from "./SocialBrandIcons";
 import {
   OAUTH_PROVIDER_STORAGE_KEY,
@@ -10,11 +11,13 @@ import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 
 interface SocialLoginActionsProps {
   onError?: (message: string) => void;
+  oneTapPending?: boolean;
   returnTo?: string | null;
 }
 
 export function SocialLoginActions({
   onError,
+  oneTapPending = false,
   returnTo,
 }: SocialLoginActionsProps) {
   const [loadingProvider, setLoadingProvider] = useState<
@@ -22,8 +25,12 @@ export function SocialLoginActions({
   >(null);
   const oauthUrlMutation = useOauthUrl();
 
+  const googleBusy = oneTapPending || loadingProvider === "google";
+  const actionsLocked = oneTapPending || loadingProvider !== null;
+
   const handleOauth = async (provider: "google" | "github") => {
-    if (loadingProvider !== null) return;
+    if (actionsLocked) return;
+    cancelGoogleOneTap();
     setLoadingProvider(provider);
 
     try {
@@ -61,20 +68,27 @@ export function SocialLoginActions({
         <span>OR</span>
       </p>
 
+      {oneTapPending ? (
+        <p className="auth-form__pending" role="status">
+          Verifying your Google account…
+        </p>
+      ) : null}
+
       <div className="auth-social__actions">
         <button
-          aria-busy={loadingProvider === "google"}
-          aria-label={
-            loadingProvider === "google" ? "Connecting to Google" : undefined
-          }
+          aria-busy={googleBusy}
+          aria-label={googleBusy ? "Verifying Google sign-in" : undefined}
           className="auth-social__button"
-          disabled={loadingProvider !== null}
+          disabled={actionsLocked}
           onClick={() => handleOauth("google")}
           type="button"
         >
           <GoogleBrandIcon size={18} />
-          {loadingProvider === "google" ? (
-            <LoadingSpinnerIcon size={18} />
+          {googleBusy ? (
+            <>
+              <LoadingSpinnerIcon size={18} />
+              Verifying…
+            </>
           ) : (
             "Continue with Google"
           )}
@@ -82,20 +96,16 @@ export function SocialLoginActions({
 
         <button
           aria-busy={loadingProvider === "github"}
-          aria-label={
-            loadingProvider === "github" ? "Connecting to GitHub" : undefined
-          }
+          aria-label={loadingProvider === "github" ? "Connecting to GitHub" : undefined}
           className="auth-social__button"
-          disabled={loadingProvider !== null}
+          disabled={actionsLocked}
           onClick={() => handleOauth("github")}
           type="button"
         >
           <GitHubBrandIcon size={18} />
-          {loadingProvider === "github" ? (
-            <LoadingSpinnerIcon size={18} />
-          ) : (
-            "Continue with GitHub"
-          )}
+          {loadingProvider === "github"
+            ? <LoadingSpinnerIcon size={18} />
+            : "Continue with GitHub"}
         </button>
       </div>
     </div>

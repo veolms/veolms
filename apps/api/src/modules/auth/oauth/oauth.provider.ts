@@ -1,3 +1,4 @@
+import { OAuth2Client } from "google-auth-library";
 import { z } from "zod";
 
 import { AppError } from "../../../lib/errors.ts";
@@ -246,6 +247,113 @@ async function fetchGithubProfile(
     providerUserId: String(user.id),
     pictureUrl: user.avatar_url,
   };
+}
+
+const GOOGLE_ISSUERS = new Set([
+  "accounts.google.com",
+  "https://accounts.google.com",
+]);
+
+export interface GoogleIdTokenClaims {
+  sub?: string | undefined;
+  email?: string | undefined;
+  email_verified?: boolean | undefined;
+  name?: string | undefined;
+  picture?: string | undefined;
+  aud?: string | string[] | undefined;
+  iss?: string | undefined;
+}
+
+function audienceMatches(
+  audience: string | string[] | undefined,
+  clientId: string,
+): boolean {
+  if (!clientId) return false;
+  const values = Array.isArray(audience)
+    ? audience
+    : audience
+      ? [audience]
+      : [];
+  return values.includes(clientId);
+}
+
+export function googleIdTokenToProfile(
+  claims: GoogleIdTokenClaims,
+  clientId: string,
+): OauthProfile {
+  if (!audienceMatches(claims.aud, clientId)) {
+    throw oauthFailure("Google ID token audience is invalid");
+  }
+
+  if (!claims.iss || !GOOGLE_ISSUERS.has(claims.iss)) {
+    throw oauthFailure("Google ID token issuer is invalid");
+  }
+
+  if (!claims.sub) {
+    throw oauthFailure("Google ID token is missing a subject");
+  }
+
+  if (!claims.email) {
+    throw oauthFailure("Google ID token is missing an email address");
+  }
+
+  if (claims.email_verified !== true) {
+    throw oauthFailure("Google email address is not verified");
+  }
+
+  const localPart = claims.email.split("@")[0] || "";
+  const pictureUrl =
+    claims.picture && claims.picture.startsWith("https://")
+      ? claims.picture
+      : undefined;
+
+  return {
+    email: claims.email,
+    name: claims.name || localPart || "Google User",
+    username: localPart,
+    providerUserId: claims.sub,
+    pictureUrl,
+  };
+}
+
+// Reused across requests so Google's signing certs stay cached in the client.
+const googleClients = new Map<string, OAuth2Client>();
+
+function getGoogleClient(clientId: string): OAuth2Client {
+  let client = googleClients.get(clientId);
+  if (!client) {
+    client = new OAuth2Client(clientId);
+    googleClients.set(clientId, client);
+  }
+  return client;
+}
+
+export async function verifyGoogleIdToken(
+  credential: string,
+  clientId: string,
+): Promise<OauthProfile> {
+  if (!credential || !clientId) {
+    throw oauthFailure("Google ID token verification failed");
+  }
+
+  const client = getGoogleClient(clientId);
+  let claims: GoogleIdTokenClaims | undefined;
+
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: clientId,
+    });
+    claims = ticket.getPayload() ?? undefined;
+  } catch {
+    throw oauthFailure("Google ID token verification failed");
+  }
+
+  if (!claims) {
+    throw oauthFailure("Google ID token is missing a payload");
+  }
+
+  return googleIdTokenToProfile(claims, clientId);
 }
 
 export async function fetchOauthProfile(
