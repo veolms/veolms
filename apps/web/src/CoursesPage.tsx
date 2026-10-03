@@ -1149,7 +1149,7 @@ export function CoursesPage({
   const mobileMoreRef = useRef<HTMLButtonElement>(null);
   const mobileSheetRef = useRef<HTMLDivElement>(null);
   const mobileMenuDismissThenRef = useRef<DrawerDismissThen>(null);
-  useBackDismiss({
+  const dismissSettingsQuickMenuThen = useBackDismiss({
     open: settingsQuickMenu !== null,
     onDismiss: () => setSettingsQuickMenu(null),
   });
@@ -2527,15 +2527,16 @@ export function CoursesPage({
   const navigateSettingsQuickMenu = (tab: SettingsTab) => {
     const surface = settingsQuickMenu;
     rememberSettingsTab(tab);
-    setSettingsQuickMenu(null);
     const navigate = () =>
       onNavigatePage?.(`/settings/${tab}`, { resetScroll: true });
-    if (surface === "mobile") {
-      setEdgeSidebarOpen(false);
-      dismissMobileMenuThen(navigate);
-    } else {
-      navigate();
-    }
+    dismissSettingsQuickMenuThen(() => {
+      if (surface === "mobile") {
+        setEdgeSidebarOpen(false);
+        dismissMobileMenuThen(navigate);
+      } else {
+        navigate();
+      }
+    });
   };
 
   const navigationUsesCompactInteraction =
@@ -5012,7 +5013,7 @@ export function CoursesPage({
                 />
               )}
             </div>
-            <div className="mobile-menu-sheet__scroll pb-11">
+            <div className="mobile-menu-sheet__scroll overflow-x-hidden pb-11">
               {isAuthenticated && (
                 <ProfileMenu
                   id="mobile-profile-menu"
