@@ -7,6 +7,8 @@ import type {
   CurrentUserResponse,
   EmailVerificationSendRequest,
   EmailVerificationVerifyRequest,
+  AuthConfigResponse,
+  GoogleOneTapLoginRequest,
   LoginRequest,
   LoginResponse,
   OauthLoginRequest,
@@ -165,6 +167,20 @@ export const authService = {
 
   oauthLogin: (payload: OauthLoginRequest): Promise<LoginResponse> => {
     return api.post<LoginResponse>("/auth/oauth/login", payload);
+  },
+
+  getAuthConfig: (): Promise<AuthConfigResponse> => {
+    return api.get<AuthConfigResponse>("/auth/config");
+  },
+
+  googleOneTapLogin: (
+    payload: GoogleOneTapLoginRequest,
+  ): Promise<LoginResponse> => {
+    // The client has no global timeout; without one a hung request leaves the
+    // One Tap UI stuck on "Verifying…" with the login buttons locked.
+    return api.post<LoginResponse>("/auth/oauth/google/one-tap", payload, {
+      timeout: 20_000,
+    });
   },
 
   setupTotp: (): Promise<TotpSetupResponse> => {

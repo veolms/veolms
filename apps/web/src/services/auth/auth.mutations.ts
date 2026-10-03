@@ -11,6 +11,7 @@ import type {
   EmailVerificationVerifyRequest,
   PasskeyAuthenticationOptionsResponse,
   PasskeyRegistrationOptionsResponse,
+  GoogleOneTapLoginRequest,
   LoginRequest,
   LoginResponse,
   OauthLoginRequest,
@@ -215,6 +216,17 @@ export function useOauthLogin() {
 
   return useMutation<LoginResponse, ApiError, OauthLoginRequest>({
     mutationFn: (payload) => authService.oauthLogin(payload),
+    onSuccess: (data) => {
+      persistAuthenticatedSession(queryClient, data);
+    },
+  });
+}
+
+export function useGoogleOneTapLogin() {
+  const queryClient = useQueryClient();
+
+  return useMutation<LoginResponse, ApiError, GoogleOneTapLoginRequest>({
+    mutationFn: (payload) => authService.googleOneTapLogin(payload),
     onSuccess: (data) => {
       persistAuthenticatedSession(queryClient, data);
     },
