@@ -891,16 +891,15 @@ export function createMediaService({
     mediaId: string,
     options: { verifyManifest?: boolean } = {},
   ) {
-    const [media, job, outputs] = await Promise.all([
+    const [media, outputs] = await Promise.all([
       mediaRepo.findMediaAssetById(database, mediaId),
-      mediaRepo.findVideoJobByVideoId(database, mediaId),
       mediaRepo.findVideoOutputsByVideoIds(database, [mediaId]),
     ]);
     if (!media || media.type !== "video") {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
     }
 
-    if (!job || job.status !== "completed" || media.status !== "ready") {
+    if (media.status !== "ready") {
       throw new AppError(
         409,
         "MEDIA_NOT_READY",
@@ -908,7 +907,7 @@ export function createMediaService({
       );
     }
 
-    const outputPrefix = normalizeOutputPrefix(job.output_prefix);
+    const outputPrefix = normalizeOutputPrefix(media.storage_key);
     const latestOutput = outputs
       .filter((output) => output.video_id === mediaId)
       .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())[0];
@@ -926,7 +925,7 @@ export function createMediaService({
       }
     }
 
-    return { media, job, outputPrefix, manifestKey };
+    return { media, outputPrefix, manifestKey };
   }
 
   function getDirectDelivery(storageKey: string) {
