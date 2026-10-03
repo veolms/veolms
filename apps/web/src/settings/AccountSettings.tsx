@@ -96,7 +96,9 @@ export function AccountSettings({
             className="settings-action"
             disabled={!isAuthenticated}
             onClick={() =>
-              onNavigatePage?.(role === "creator" ? "orders" : "order-history")
+              onNavigatePage?.(
+                role === "creator" ? "orders" : "purchase-history",
+              )
             }
           >
             <CreditCard size={16} /> View orders

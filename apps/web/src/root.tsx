@@ -32,6 +32,7 @@ import {
   getSidebarShellBootstrapScript,
 } from "./shell/sidebarPreferences";
 import { getAcademyPaletteStylesheetBootstrapScript } from "./shell/academyPaletteStyles";
+import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
 import {
   ACADEMY_THEME_VERSION,
   DEFAULT_ACADEMY_THEME,
@@ -138,9 +139,7 @@ export function Layout({ children }: LayoutProps) {
     pathname === "/login" ||
     pathname === "/mfa-setup" ||
     pathname === "/register" ||
-    pathname === "/auth/callback" ||
-    pathname === "/explore-courses" ||
-    pathname.startsWith("/explore-courses/");
+    pathname === "/auth/callback";
   const shouldPreloadAcademyRoute = import.meta.env.DEV && !isPublicRoute;
 
   // The preference scripts run before hydration so they can prevent visual
@@ -320,6 +319,7 @@ export default function Root() {
     <QueryProvider>
       <HydrationMarker />
       <SessionInitializer>
+        <GlobalGoogleOneTap />
         <Outlet />
       </SessionInitializer>
     </QueryProvider>

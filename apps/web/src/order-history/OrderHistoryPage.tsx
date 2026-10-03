@@ -3,6 +3,7 @@ import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotc
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { NavigateTo } from "../routing/navigation";
+import { PageHeading } from "../components/PageHeading";
 import { OrderHistoryFiltersBar } from "./OrderHistoryFiltersBar";
 import { OrderHistoryInvoiceModal } from "./OrderHistoryInvoiceModal";
 import { OrderHistoryPagination } from "./OrderHistoryPagination";
@@ -13,11 +14,13 @@ import type { OrderHistoryItem } from "./orderHistoryData";
 
 export interface OrderHistoryPageProps {
   onNavigatePage?: NavigateTo;
+  onNavigateBack?: () => void;
   setNotice?: (message: string) => void;
 }
 
 export function OrderHistoryPage({
   onNavigatePage,
+  onNavigateBack,
   setNotice,
 }: OrderHistoryPageProps) {
   const {
@@ -93,17 +96,12 @@ export function OrderHistoryPage({
     >
       {/* Page Header */}
       <header className="flex items-start justify-between gap-5 pt-1">
-        <div>
-          <h1
-            id="order-history-page-title"
-            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
-          >
-            Purchase History
-          </h1>
-          <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
-            View your purchases, invoices, and payment history.
-          </p>
-        </div>
+        <PageHeading
+          id="order-history-page-title"
+          title="Purchase History"
+          description="View your purchases, invoices, and payment history."
+          onNavigateBack={onNavigateBack}
+        />
 
         <span
           className="inline-flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent)"

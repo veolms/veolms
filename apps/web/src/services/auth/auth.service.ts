@@ -20,6 +20,7 @@ import type {
   PasskeyAuthenticationOptionsResponse,
   PasskeyRegistrationOptionsResponse,
   ProfileUpdateRequest,
+  PublicProfileResponse,
   RegisterRequest,
   SessionResponse,
   UserAvatarListResponse,
@@ -32,6 +33,7 @@ import {
   DICEBEAR_BASE_URL,
   passkeyAuthenticationOptionsResponseSchema,
   passkeyRegistrationOptionsResponseSchema,
+  publicProfileResponseSchema,
   sessionResponseSchema,
 } from "@veolms/contracts";
 
@@ -250,6 +252,15 @@ export const authService = {
   getMe: async (): Promise<CurrentUserResponse> => {
     const response = await api.get<CurrentUserResponse>("/auth/me");
     return response;
+  },
+
+  getPublicProfile: async (
+    username: string,
+  ): Promise<PublicProfileResponse> => {
+    const response = await api.get<unknown>(
+      `/auth/profiles/${encodeURIComponent(username)}`,
+    );
+    return publicProfileResponseSchema.parse(response);
   },
 
   updateProfile: (

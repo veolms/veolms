@@ -1,6 +1,4 @@
 import {
-  normalizeSidebarDockItems,
-  normalizeSidebarDockOrder,
   normalizeSidebarGlow,
   normalizeSidebarGlowBlur,
   normalizeSidebarGlowShape,
@@ -16,7 +14,6 @@ import {
   SIDEBAR_HEADER_DEFAULT_VERSION,
 } from "../settings/settingsPreferences";
 import type {
-  SidebarDockItem,
   SidebarMode,
   SidebarPreferences,
 } from "../settings/settingsPreferences";
@@ -32,20 +29,7 @@ const SIDEBAR_MAX_WIDTH_LIMIT = 520;
 export const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH_DEFAULT_VERSION = "300px-v1";
 const SIDEBAR_ICON_DEFAULT_VERSION = "monochrome-theme-v1";
-const SIDEBAR_DOCK_DEFAULT_VERSION = "three-controls-v2";
-const LEGACY_SIDEBAR_DOCK_DEFAULT_ITEMS = [
-  "appearance",
-  "theme",
-  "reading-mode",
-  "fullscreen",
-];
-const LEGACY_SIDEBAR_DOCK_DEFAULT_ORDER = [
-  "appearance",
-  "theme",
-  "reading-mode",
-  "fullscreen",
-  "settings",
-];
+const SIDEBAR_DOCK_DEFAULT_VERSION = "fixed-three-controls-v4";
 
 export interface SidebarShellState {
   mode: SidebarMode;
@@ -274,33 +258,11 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
     preferences.showSidebarOnMobile =
       storedPreferences.showSidebarOnMobile === true;
     delete preferences.alwaysElevateMenus;
-    const legacyDockItems: SidebarDockItem[] =
-      storedPreferences.dockItems === undefined &&
-      storedPreferences.showThemeIcon === false
-        ? ["appearance", "fullscreen"]
-        : normalizeSidebarDockItems(storedPreferences.dockItems);
     const hasCurrentDockDefault =
       localStorage.getItem("veolms-sidebar-dock-default-version") ===
       SIDEBAR_DOCK_DEFAULT_VERSION;
-    const usesKnownLegacyDockDefault =
-      localStorage.getItem("veolms-sidebar-dock-default-version") ===
-        "four-controls-v1" &&
-      JSON.stringify(storedPreferences.dockItems) ===
-        JSON.stringify(LEGACY_SIDEBAR_DOCK_DEFAULT_ITEMS) &&
-      JSON.stringify(storedPreferences.dockOrder) ===
-        JSON.stringify(LEGACY_SIDEBAR_DOCK_DEFAULT_ORDER);
-    const needsDockDefaultMigration =
-      !hasCurrentDockDefault &&
-      (storedPreferences.dockItems === undefined || usesKnownLegacyDockDefault);
-    preferences.dockItems =
-      needsDockDefaultMigration && storedPreferences.showThemeIcon !== false
-        ? [...SIDEBAR_DOCK_DEFAULT_ITEMS]
-        : legacyDockItems;
-    preferences.dockOrder = needsDockDefaultMigration
-      ? [...SIDEBAR_DOCK_DEFAULT_ORDER]
-      : normalizeSidebarDockOrder(
-          storedPreferences.dockOrder ?? storedPreferences.dockItems,
-        );
+    preferences.dockItems = [...SIDEBAR_DOCK_DEFAULT_ITEMS];
+    preferences.dockOrder = [...SIDEBAR_DOCK_DEFAULT_ORDER];
     const needsStructureMigration =
       storedPreferences.headerLayout !== preferences.headerLayout ||
       JSON.stringify(storedPreferences.dockItems) !==

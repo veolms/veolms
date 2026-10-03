@@ -16,15 +16,9 @@ const routes = [
     interaction: ".mobile-bottom-nav button:last-child",
   },
   {
-    name: "My Courses",
-    path: "/my-courses",
-    ready: ".my-courses-page",
-    interaction: ".learning-filter-tabs button:nth-child(2)",
-  },
-  {
-    name: "Explore Courses",
-    path: "/explore-courses",
-    ready: ".courses-grid",
+    name: "Courses",
+    path: "/courses",
+    ready: "[data-course-catalogue-grid]",
     interaction: '[role="tablist"] [role="tab"]:nth-child(2)',
   },
   {
@@ -35,7 +29,7 @@ const routes = [
   },
   {
     name: "Learning",
-    path: "/learn/typescript-course/the-design-mindset?from=my-courses",
+    path: "/learn/typescript-course/the-design-mindset?from=courses",
     ready: ".learning-workspace",
     interaction: ".lesson-tool-tab:nth-child(2)",
   },

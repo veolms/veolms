@@ -26,6 +26,7 @@ export interface NotificationService {
   ): Promise<NotificationListResponse>;
   getSummary(userId: string): Promise<NotificationSummary>;
   markRead(userId: string, notificationId: string): Promise<Notification>;
+  markUnread(userId: string, notificationId: string): Promise<Notification>;
   markAllRead(userId: string): Promise<{ updatedCount: number }>;
   archive(userId: string, notificationId: string): Promise<{ archived: true }>;
   getPreferences(
@@ -151,6 +152,25 @@ export function createNotificationService({
     notificationId: string,
   ): Promise<Notification> {
     const row = await notificationRepository.markRead(
+      database,
+      userId,
+      notificationId,
+    );
+    if (!row) {
+      throw new AppError(
+        404,
+        "NOTIFICATION_NOT_FOUND",
+        "Notification not found.",
+      );
+    }
+    return presentNotification(row);
+  }
+
+  async function markUnread(
+    userId: string,
+    notificationId: string,
+  ): Promise<Notification> {
+    const row = await notificationRepository.markUnread(
       database,
       userId,
       notificationId,
@@ -310,6 +330,7 @@ export function createNotificationService({
     list,
     getSummary,
     markRead,
+    markUnread,
     markAllRead,
     archive,
     getPreferences,

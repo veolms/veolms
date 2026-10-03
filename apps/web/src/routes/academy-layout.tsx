@@ -26,9 +26,10 @@ import {
   type Course,
   type CourseOpenOptions,
 } from "../courses/catalogue";
-import { useCurrentUser, useSignOut } from "../services/auth";
-import { useSidenav } from "../services/navigation";
+import { getStudentCatalogueEnrollmentFilterFromPath } from "../courses/catalogueRoutes";
+import { authKeys, useCurrentUser, useSignOut } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
+import { queryClient } from "../lib/query-client";
 import type { LearningCourse } from "../StudentPages";
 import {
   getCoursePlayerLaunchPath,
@@ -91,16 +92,17 @@ import type { NavigateTo, NavigationOptions } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
 import { buildLoginPath } from "../routing/routeAccess";
 import {
-  getDefaultNavigationOrder,
-  getDefaultNavigationVisibility,
-  getInitialNavigationOrder,
-  getInitialNavigationVisibility,
-  getVisibleOrderedNavigation,
   getNavigationDestination,
-  resolveShellNavigation,
+  getRoleNavigationItems,
   type NavigationItemWithMetadata,
 } from "../shell/navigation";
-import { getWorkspaceRoleStorageKey } from "../shell/workspaceRole";
+import {
+  getUserRoles,
+  getWorkspaceRoleStorageKey,
+  hasAdminRole,
+  isStaffRole,
+  resolveWorkspaceRole,
+} from "../shell/workspaceRole";
 import {
   readApplicationScrollPosition,
   scrollApplicationTo,
@@ -154,6 +156,81 @@ const getApplicationScrollStorageKey = (
   restorationKey?: string,
 ) => (restorationKey ? `${path}\u0000${restorationKey}` : path);
 
+const ACADEMY_NAVIGATION_ORIGIN_PATH = "academyNavigationOriginPath";
+const ACADEMY_NAVIGATION_ORIGIN_SECTION = "academyNavigationOriginSection";
+
+function readAcademyNavigationState(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getNavigationMatch(
+  pathname: string,
+  items: readonly NavigationItemWithMetadata[],
+) {
+  const path = normalizeNavigationPath(pathname.split(/[?#]/, 1)[0] || "/");
+  let bestMatch:
+    { label: string; path: string; exact: boolean; length: number } | undefined;
+
+  for (const [label, , metadata] of items) {
+    const itemPath = normalizeNavigationPath(metadata?.routeLink ?? "/");
+    // The Discussions menu resolves to the last tab visited in this session,
+    // so its tab URLs are still the menu's destination rather than a detail
+    // page that should inherit the previously selected section.
+    const isDiscussionTab =
+      itemPath === "/discussions" && path.startsWith("/discussions/");
+    const exact = path === itemPath || isDiscussionTab;
+    const isChild =
+      itemPath !== "/" && path.startsWith(`${itemPath.replace(/\/$/, "")}/`);
+    if (!exact && !isChild) continue;
+    if (!bestMatch || itemPath.length > bestMatch.length) {
+      bestMatch = { label, path: itemPath, exact, length: itemPath.length };
+    }
+  }
+
+  return bestMatch;
+}
+
+function getWorkspaceNavigationItems(
+  user: { id?: string } | null | undefined,
+  settingsDocked: boolean,
+) {
+  const roles = getUserRoles(user);
+  let storedRole: string | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      storedRole = localStorage.getItem(getWorkspaceRoleStorageKey(user?.id));
+    } catch {
+      storedRole = null;
+    }
+  }
+  const rolePreference =
+    storedRole === "creator" || storedRole === "student"
+      ? storedRole
+      : isStaffRole(roles)
+        ? "creator"
+        : "student";
+  const navigation = getRoleNavigationItems(
+    resolveWorkspaceRole(roles, rolePreference),
+    hasAdminRole(roles),
+  );
+  return navigation.filter(
+    ([label]) => label !== "Settings" || !settingsDocked,
+  );
+}
+
+function getFallbackNavigationPath(
+  path: string,
+  items: readonly NavigationItemWithMetadata[],
+) {
+  const match = getNavigationMatch(path, items);
+  if (match && !match.exact) return match.path;
+  const courses = items.find(([label]) => label === "Courses");
+  if (courses?.[2]?.routeLink) return courses[2].routeLink;
+  return items[0]?.[2]?.routeLink ?? "/";
+}
+
 const clearLearningPlayerMotionProperties = (element: HTMLElement) => {
   element.style.removeProperty("--learning-background-reveal");
   element.style.removeProperty("--learning-background-reveal-duration");
@@ -180,7 +257,7 @@ const resolveLearningBackgroundSurface = (
     }
     if (pathname === "/" || pathname === "/home") return { page: "home" };
     if (pathname === "/wishlist") {
-      return { page: "courses", section: "Wishlist" };
+      return { page: "courses", section: "Courses" };
     }
     if (pathname === "/settings" || pathname.startsWith("/settings/")) {
       return {
@@ -326,11 +403,35 @@ export default function AcademyLayout() {
   } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
-  const { data: sidenavData } = useSidenav();
-  const { items: navigationItems, isDefault: isPublicNavigation } = useMemo(
-    () => resolveShellNavigation(sidenavData?.menus),
-    [sidenavData?.menus],
+  const settingsDocked = normalizeSidebarDockItems(
+    getInitialSidebarPreferences().dockItems,
+  ).includes("settings");
+  const workspaceNavigationItems = useMemo(
+    () => getWorkspaceNavigationItems(activeUser, settingsDocked),
+    [activeUser, settingsDocked],
   );
+  const currentNavigationState = readAcademyNavigationState(location.state);
+  const originPathValue =
+    currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
+  const originSectionValue =
+    currentNavigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
+  const hasValidNavigationOrigin =
+    typeof originPathValue === "string" &&
+    originPathValue.startsWith("/") &&
+    !originPathValue.startsWith("//") &&
+    typeof originSectionValue === "string" &&
+    workspaceNavigationItems.some(([label]) => label === originSectionValue);
+  const currentNavigationMatch = getNavigationMatch(
+    location.pathname,
+    workspaceNavigationItems,
+  );
+  const activeRouteSection = hasValidNavigationOrigin
+    ? originSectionValue
+    : (currentNavigationMatch?.label ??
+      (workspaceNavigationItems.some(([label]) => label === route.section)
+        ? route.section
+        : workspaceNavigationItems[0]?.[0]));
+  const showRouteBackButton = !currentNavigationMatch?.exact;
 
   useLayoutEffect(() => {
     locationPathRef.current = currentLocationPath;
@@ -342,12 +443,14 @@ export default function AcademyLayout() {
   const { signOut } = useSignOut();
 
   useLayoutEffect(() => {
-    if (normalizeNavigationPath(location.pathname) !== "/") return;
+    const pathname = normalizeNavigationPath(location.pathname);
+    if (pathname !== "/home" && pathname !== "/dashboard") return;
+    void navigate(`/${location.search}${location.hash}`, { replace: true });
+  }, [location.hash, location.pathname, location.search, navigate]);
 
-    // The root document already renders the catalogue. Replace only the
-    // client-side URL so navigating to /courses does not request the document
-    // again or briefly mount the future home page.
-    void navigate(`/courses${location.search}${location.hash}`, {
+  useLayoutEffect(() => {
+    if (normalizeNavigationPath(location.pathname) !== "/wishlist") return;
+    void navigate(`/courses/wishlist${location.search}${location.hash}`, {
       replace: true,
     });
   }, [location.hash, location.pathname, location.search, navigate]);
@@ -363,12 +466,7 @@ export default function AcademyLayout() {
       });
       return;
     }
-    const destination =
-      pathname === "/my-learning" ||
-      pathname === "/my-courses" ||
-      pathname === "/explore-courses"
-        ? "/courses"
-        : null;
+    const destination = pathname === "/my-learning" ? "/courses" : null;
     if (destination)
       void navigate(`${destination}${location.search}`, { replace: true });
   }, [location.pathname, location.search, navigate, signOut]);
@@ -420,6 +518,30 @@ export default function AcademyLayout() {
 
   const navigateTo: NavigateTo = useCallback(
     (destination, options) => {
+      const requestedPath = decorateCoursePlayerLaunch(
+        options?.exact ? destination : getDestinationPath(destination),
+        locationPathRef.current,
+      );
+      const requestedPathname = normalizeNavigationPath(
+        requestedPath.split(/[?#]/, 1)[0] || "/",
+      );
+      const isDiscussionsPath =
+        requestedPathname === "/discussions" ||
+        requestedPathname.startsWith("/discussions/");
+
+      if (
+        isDiscussionsPath &&
+        authUserFetched &&
+        !authUserError &&
+        !activeUser
+      ) {
+        // Keep the confirmed signed-out state fresh so the login route can
+        // render immediately without revalidating the same session query.
+        queryClient.setQueryData(authKeys.me(), null);
+        void navigate(buildLoginPath(requestedPath), { replace: true });
+        return;
+      }
+
       const performNavigation = () => {
         const destinationPath = options?.exact
           ? destination
@@ -429,6 +551,48 @@ export default function AcademyLayout() {
           destinationPath,
           activeLocationPath,
         );
+        const navigationState = {
+          ...readAcademyNavigationState(location.state),
+        };
+        const targetNavigationMatch = getNavigationMatch(
+          path,
+          workspaceNavigationItems,
+        );
+        if (targetNavigationMatch?.exact) {
+          delete navigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
+          delete navigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
+        } else {
+          const existingOriginPath =
+            navigationState[ACADEMY_NAVIGATION_ORIGIN_PATH];
+          const existingOriginSection =
+            navigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION];
+          const originIsValid =
+            typeof existingOriginPath === "string" &&
+            existingOriginPath.startsWith("/") &&
+            !existingOriginPath.startsWith("//") &&
+            typeof existingOriginSection === "string" &&
+            workspaceNavigationItems.some(
+              ([label]) => label === existingOriginSection,
+            );
+          const sourceNavigationMatch = getNavigationMatch(
+            activeLocationPath,
+            workspaceNavigationItems,
+          );
+          const originSection = originIsValid
+            ? existingOriginSection
+            : (sourceNavigationMatch?.label ??
+              (workspaceNavigationItems.some(
+                ([label]) => label === route.section,
+              )
+                ? route.section
+                : workspaceNavigationItems[0]?.[0]));
+          if (originSection) {
+            navigationState[ACADEMY_NAVIGATION_ORIGIN_PATH] = originIsValid
+              ? existingOriginPath
+              : activeLocationPath;
+            navigationState[ACADEMY_NAVIGATION_ORIGIN_SECTION] = originSection;
+          }
+        }
         if (
           !restoringPlayerRef.current &&
           shouldRestoreMiniPlayerForMatchingCourse({
@@ -528,17 +692,38 @@ export default function AcademyLayout() {
         void navigate(path, {
           preventScrollReset: true,
           replace: options?.replace,
+          state: navigationState,
         });
       };
 
       void autosyncManager.flushAll().then(performNavigation);
     },
-    [navigate],
+    [
+      activeUser,
+      authUserError,
+      authUserFetched,
+      location.state,
+      navigate,
+      route.section,
+      workspaceNavigationItems,
+    ],
   );
   const navigateToRef = useRef(navigateTo);
   useLayoutEffect(() => {
     navigateToRef.current = navigateTo;
   }, [navigateTo]);
+  const navigateBackToOrigin = useCallback(() => {
+    const targetPath = hasValidNavigationOrigin
+      ? (originPathValue as string)
+      : getFallbackNavigationPath(location.pathname, workspaceNavigationItems);
+    navigateTo(targetPath, { replace: true });
+  }, [
+    hasValidNavigationOrigin,
+    location.pathname,
+    navigateTo,
+    originPathValue,
+    workspaceNavigationItems,
+  ]);
   const exitSettings = useCallback(() => {
     const destination = settingsReturnLocationRef.current;
     const sourcePath = locationPathRef.current;
@@ -580,26 +765,22 @@ export default function AcademyLayout() {
           : null;
       if (cycleDirection === null && numberIndex === null) return;
 
-      const navigationRole =
-        localStorage.getItem(getWorkspaceRoleStorageKey(activeUser?.id)) ||
-        "student";
-      const orderedNavigation = getVisibleOrderedNavigation(
-        isPublicNavigation
-          ? getDefaultNavigationOrder(navigationItems)
-          : getInitialNavigationOrder(
-              navigationRole,
-              navigationItems,
-              activeUser?.id,
-            ),
-        isPublicNavigation
-          ? getDefaultNavigationVisibility(navigationItems)
-          : getInitialNavigationVisibility(
-              navigationRole,
-              navigationItems,
-              activeUser?.id,
-            ),
-        navigationItems,
-      ).filter(
+      const storedWorkspaceRole = localStorage.getItem(
+        getWorkspaceRoleStorageKey(activeUser?.id),
+      );
+      const userRoles = getUserRoles(activeUser);
+      const rolePreference =
+        storedWorkspaceRole === "creator" || storedWorkspaceRole === "student"
+          ? storedWorkspaceRole
+          : isStaffRole(userRoles)
+            ? "creator"
+            : "student";
+      const navigationRole = resolveWorkspaceRole(userRoles, rolePreference);
+      const navigationItems = getRoleNavigationItems(
+        navigationRole,
+        hasAdminRole(userRoles),
+      );
+      const orderedNavigation = navigationItems.filter(
         ([label]) =>
           label !== "Settings" ||
           !normalizeSidebarDockItems(
@@ -674,7 +855,7 @@ export default function AcademyLayout() {
         window.clearTimeout(numberNavigationTimerRef.current);
       }
     };
-  }, [activeUser, isPublicNavigation, navigationItems]);
+  }, [activeUser]);
 
   const openCourse = useCallback(
     (course: Course | LearningCourse, options?: CourseOpenOptions) => {
@@ -1338,17 +1519,19 @@ export default function AcademyLayout() {
   return (
     <AcademyRouteGuard>
       <CoursesPage
-        isDashboardRoute={
-          normalizeNavigationPath(location.pathname) === "/dashboard"
-        }
+        cataloguePathname={location.pathname}
+        routeCatalogueEnrollmentFilter={getStudentCatalogueEnrollmentFilterFromPath(
+          location.pathname,
+        )}
         initialPublishedCoursePage={staticCourseRouteData?.publishedCoursePage}
         initialPublishedCoursePageNeedsRefresh={
           staticCourseRouteData?.publishedCoursePageNeedsRefresh
         }
         initialCourseOverview={staticCourseRouteData?.courseOverview}
         page={route.page}
-        section={route.section}
+        section={activeRouteSection}
         settingsTab={route.settingsTab}
+        showPageBackButton={showRouteBackButton}
         discussionTab={route.discussionTab}
         courseSlug={courseSlug}
         quizId={quizId}
@@ -1366,6 +1549,7 @@ export default function AcademyLayout() {
         learningBackground={learningBackground}
         learningMotionStageRef={learningMotionStageRef}
         onNavigatePage={navigateTo}
+        onNavigateBack={navigateBackToOrigin}
         onExitSettings={exitSettings}
         onOpenCourse={openCourse}
         renderMain={

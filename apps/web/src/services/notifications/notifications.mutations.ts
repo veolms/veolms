@@ -22,6 +22,14 @@ export function useMarkNotificationRead() {
   });
 }
 
+export function useMarkNotificationUnread() {
+  const refresh = useRefreshNotifications();
+  return useMutation({
+    mutationFn: notificationsService.markUnread,
+    onSuccess: refresh,
+  });
+}
+
 export function useMarkAllNotificationsRead() {
   const refresh = useRefreshNotifications();
   return useMutation({

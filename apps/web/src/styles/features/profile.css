@@ -2489,6 +2489,9 @@ html:has(.settings-profile__verification-dialog-overlay) {
   .settings-profile__layout {
     grid-template-columns: minmax(0, 1fr);
   }
+  .settings-profile__form {
+    order: -1;
+  }
   .settings-profile__preview-column {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
@@ -2502,9 +2505,6 @@ html:has(.settings-profile__verification-dialog-overlay) {
   .settings-profile__layout,
   .settings-profile__preview-column {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .settings-profile__form {
-    order: -1;
   }
   .settings-profile__identity {
     grid-row: auto;

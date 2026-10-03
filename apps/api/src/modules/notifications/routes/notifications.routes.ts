@@ -86,6 +86,25 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
     controller.markRead,
   );
 
+  app.patch(
+    "/notifications/:id/unread",
+    {
+      preHandler: requireAuthenticated,
+      schema: {
+        operationId: "markMyNotificationUnread",
+        tags: ["Notifications"],
+        summary: "Mark one notification as unread",
+        params: notificationIdParamsSchema,
+        response: {
+          200: jsonResponse("Notification marked unread", notificationSchema),
+          401: errorResponse("Authentication required"),
+          404: errorResponse("Notification not found"),
+        },
+      },
+    },
+    controller.markUnread,
+  );
+
   app.post(
     "/notifications/read-all",
     {

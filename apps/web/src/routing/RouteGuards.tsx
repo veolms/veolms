@@ -26,9 +26,9 @@ import {
   isGuestLandingPath,
   normalizeAppPath,
   requiresAcademyAuth,
-  resolveAcademyLandingDestination,
   resolveAuthenticatedDestination,
   resolveSessionAccess,
+  hasCourseAuthorRole,
   hasDashboardAnalyticsPermission,
   shouldBlockAcademyRender,
 } from "./routeAccess";
@@ -93,8 +93,8 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const { access, user, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
   const authenticationRequired = requiresAcademyAuth(path);
-  const landingDestination = resolveAcademyLandingDestination(access);
-  const isDashboardPath = path === "/dashboard";
+  const isDashboardPath =
+    path === "/" && access.isAuthenticated && hasCourseAuthorRole(user?.roles);
   const dashboardCapabilities = useCapabilities({
     enabled: access.isSessionReady,
   });
@@ -121,14 +121,14 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (isGuestLandingPath(path)) {
-      navigate(landingDestination, { replace: true });
-      return;
-    }
-
     if (!access.isAuthenticated) {
-      if (requiresAcademyAuth(path)) {
-        navigate(APP_HOME_PATH, { replace: true });
+      if (requiresAcademyAuth(path) && !isGuestLandingPath(path)) {
+        const returnPath = `${location.pathname}${location.search}`;
+        const destination =
+          path === "/discussions" || path.startsWith("/discussions/")
+            ? buildLoginPath(returnPath)
+            : APP_HOME_PATH;
+        navigate(destination, { replace: true });
       }
       return;
     }
@@ -151,18 +151,17 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     courseAuthorRouteDenied,
     location.pathname,
     location.search,
-    landingDestination,
     navigate,
     path,
     pending,
   ]);
 
   const routeContentBlocked =
-    !isGuestLandingPath(path) &&
-    ((pending && authenticationRequired) ||
-      shouldBlockAcademyRender(path, access) ||
-      courseAuthorRouteDenied ||
-      (isDashboardPath && dashboardCapabilityPending));
+    (isDashboardPath && dashboardCapabilityPending) ||
+    (!isGuestLandingPath(path) &&
+      ((pending && authenticationRequired) ||
+        shouldBlockAcademyRender(path, access) ||
+        courseAuthorRouteDenied));
 
   const academyRouteGuardState = useMemo(
     () => ({

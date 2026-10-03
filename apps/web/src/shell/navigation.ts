@@ -1,29 +1,20 @@
-import type { AuthMenuNode } from "@veolms/contracts";
-import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
-import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
-import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { HouseIcon as House } from "@phosphor-icons/react/House";
-import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { ToteIcon as Tote } from "@phosphor-icons/react/Tote";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
-import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import type { Icon } from "@phosphor-icons/react";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 
-import { ChatTeardropDotsIcon as ChatTeardropDots } from "@phosphor-icons/react/ChatTeardropDots";
-import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
-
 export interface NavigationItemMetadata {
   id: string;
   routeLink: string;
   parentId: string | null;
-  source: "server" | "default";
+  source: "default";
 }
 
 export type NavigationItem = readonly [
@@ -32,177 +23,85 @@ export type NavigationItem = readonly [
   metadata?: NavigationItemMetadata,
 ];
 
-export type DynamicNavigationItem = readonly [
-  label: string,
-  icon: Icon,
-  metadata: NavigationItemMetadata,
-];
-
 export type NavigationItemWithMetadata = NavigationItem;
 
-const requiredNavigationLabels = new Set(["Courses", "Settings"]);
-
-const publicNavigation: readonly NavigationItem[] = [
-  [
-    "Courses",
-    GraduationCap,
-    {
-      id: "default-courses",
-      routeLink: "/courses",
-      parentId: null,
-      source: "default",
-    },
-  ],
-  [
-    "Settings",
-    GearSix,
-    {
-      id: "default-settings",
-      routeLink: "/settings",
-      parentId: null,
-      source: "default",
-    },
-  ],
+const createNavigationItem = (
+  id: string,
+  label: string,
+  icon: Icon,
+  routeLink: string,
+): NavigationItem => [
+  label,
+  icon,
+  { id, routeLink, parentId: null, source: "default" },
 ];
 
-const menuIcons: Record<string, Icon> = {
-  Bell,
-  BookOpen,
-  ChartBar,
-  ChatCircleDots,
-  ChatTeardropDots,
-  CheckCircle,
-  EnvelopeSimple,
-  GearSix,
-  GraduationCap,
-  Heart,
-  House,
-  SquaresFour,
-  Star,
-  Tag,
-  Tote,
-  Users,
-};
+// Students and signed-out visitors share the same order. Staff menus preserve
+// the relative order of shared destinations.
+const studentNavigation: readonly NavigationItem[] = [
+  createNavigationItem("student-home", "Home", House, "/"),
+  createNavigationItem("student-courses", "Courses", BookOpen, "/courses"),
+  createNavigationItem(
+    "student-discussions",
+    "Discussions",
+    ChatCircleDots,
+    "/discussions",
+  ),
+  createNavigationItem("student-settings", "Settings", GearSix, "/settings"),
+];
 
-const getMenuIcon = (iconName: string | null): Icon =>
-  (iconName && menuIcons[iconName]) || SquaresFour;
+const creatorNavigation: readonly NavigationItem[] = [
+  createNavigationItem("creator-courses", "Courses", BookOpen, "/courses"),
+  createNavigationItem(
+    "creator-discussions",
+    "Discussions",
+    ChatCircleDots,
+    "/discussions",
+  ),
+  createNavigationItem("creator-dashboard", "Dashboard", SquaresFour, "/"),
+  createNavigationItem("creator-students", "Students", Users, "/students"),
+  createNavigationItem(
+    "creator-analytics",
+    "Analytics",
+    ChartBar,
+    "/analytics",
+  ),
+  createNavigationItem("creator-orders", "Orders", Tote, "/orders"),
+  createNavigationItem("creator-settings", "Settings", GearSix, "/settings"),
+];
 
-/**
- * Converts the server's effective RBAC menu tree to the shell's flat
- * navigation shape.
- */
-export function getNavigationItemsFromMenus(
-  menus: readonly AuthMenuNode[] | null | undefined,
-): DynamicNavigationItem[] {
-  if (!menus?.length) return [];
+const adminNavigation: readonly NavigationItem[] = [
+  createNavigationItem("admin-home", "Home", House, "/"),
+  createNavigationItem("creator-courses", "Courses", BookOpen, "/courses"),
+  createNavigationItem(
+    "creator-discussions",
+    "Discussions",
+    ChatCircleDots,
+    "/discussions",
+  ),
+  createNavigationItem("creator-orders", "Orders", Tote, "/orders"),
+  createNavigationItem("creator-students", "Students", Users, "/students"),
+  createNavigationItem(
+    "creator-analytics",
+    "Analytics",
+    ChartBar,
+    "/analytics",
+  ),
+  createNavigationItem("admin-coupons", "Coupons", Tag, "/coupons"),
+  createNavigationItem("creator-settings", "Settings", GearSix, "/settings"),
+];
 
-  const items: DynamicNavigationItem[] = [];
-  const seenLabels = new Set<string>();
-
-  const visit = (nodes: readonly AuthMenuNode[]) => {
-    for (const menu of nodes) {
-      if (
-        menu.label === "Learning Space" ||
-        menu.routeLink === "/learning-space" ||
-        menu.id === "00000000-0000-4000-9000-000000000009"
-      ) {
-        if (menu.children?.length) visit(menu.children);
-        continue;
-      }
-
-      // The current shell is label-oriented for drag/drop and preference
-      // persistence. Keep the first effective entry when an admin receives
-      // both student and instructor variants of the same menu label.
-      if (!seenLabels.has(menu.label)) {
-        seenLabels.add(menu.label);
-        items.push([
-          menu.label,
-          getMenuIcon(menu.icon),
-          {
-            id: menu.id,
-            routeLink: menu.routeLink,
-            parentId: menu.parentId,
-            source: "server",
-          },
-        ]);
-      }
-
-      if (menu.children?.length) visit(menu.children);
-    }
-  };
-
-  visit(menus);
-  return items;
+export function getRoleNavigationItems(
+  role: "student" | "creator",
+  isAdmin = false,
+): readonly NavigationItem[] {
+  if (role === "student") return studentNavigation;
+  return isAdmin ? adminNavigation : creatorNavigation;
 }
 
-export function hasNavigationMenu(
-  menus: readonly AuthMenuNode[] | null | undefined,
-  label: string,
-): boolean {
-  if (!menus?.length) return false;
-
-  return menus.some(
-    (menu) => menu.label === label || hasNavigationMenu(menu.children, label),
-  );
-}
-
+/** Public visitors get the same navigation as a student while `/auth/me` is resolving. */
 export function getPublicNavigationItems(): readonly NavigationItem[] {
-  return publicNavigation;
-}
-
-/**
- * Sidebar items for the current session. The navigation endpoint is the sole
- * source of truth for effective menus and RBAC visibility; `/auth/me` only
- * supplies identity/session data.
- */
-export function resolveShellNavigation(
-  menus: readonly AuthMenuNode[] | null | undefined,
-): {
-  items: readonly NavigationItemWithMetadata[];
-  isDefault: boolean;
-} {
-  // While the authenticated menu request is in flight, show only the two
-  // public destinations. This keeps the shell usable without briefly exposing
-  // a stale account's role-specific navigation.
-  if (menus == null) {
-    return { items: publicNavigation, isDefault: true };
-  }
-
-  const serverItems = getNavigationItemsFromMenus(menus);
-  const hasStaffMenus = serverItems.some(([label]) =>
-    [
-      "Dashboard",
-      "Courses",
-      "Students",
-      "Analytics",
-      "Orders",
-      "Quizzes",
-      "Reviews",
-    ].includes(label),
-  );
-  const hasCoupons = serverItems.some(([label]) => label === "Coupons");
-  if (hasStaffMenus && !hasCoupons) {
-    const couponsItem: DynamicNavigationItem = [
-      "Coupons",
-      Tag,
-      {
-        id: "default-coupons",
-        routeLink: "/coupons",
-        parentId: null,
-        source: "server",
-      },
-    ];
-    const insertIdx = serverItems.findIndex(
-      ([label]) =>
-        label === "Orders" || label === "Courses" || label === "Analytics",
-    );
-    if (insertIdx !== -1) {
-      serverItems.splice(insertIdx + 1, 0, couponsItem);
-    } else {
-      serverItems.push(couponsItem);
-    }
-  }
-  return { items: serverItems, isDefault: false };
+  return studentNavigation;
 }
 
 const navigationTones: Record<string, string> = {
@@ -211,13 +110,12 @@ const navigationTones: Record<string, string> = {
   Courses: "#8f70ff",
   Coupons: "#fbbf24",
   Students: "#55d98b",
-  Wishlist: "#ff6684",
   Reviews: "#f1be4b",
   "My Quiz": "#47d4d0",
   Discussions: "#58a8ff",
   Analytics: "#f09c4e",
   Orders: "#d68eea",
-  "Order History": "#d68eea",
+  "Purchase History": "#d68eea",
   Messages: "#63c8d5",
   Notifications: "#f1be4b",
   Settings: "#a16cff",
@@ -231,14 +129,8 @@ export function getDefaultNavigationOrder(
   return navigationItems.map(([label]) => label);
 }
 
-export function getDefaultNavigationVisibility(
-  navigationItems: readonly NavigationItemWithMetadata[],
-): string[] {
-  return getDefaultNavigationOrder(navigationItems);
-}
-
 export function getNavigationPreferenceStorageKey(
-  preference: "order" | "visibility",
+  preference: "order",
   role: string,
   userId?: string | null,
 ): string {
@@ -248,16 +140,6 @@ export function getNavigationPreferenceStorageKey(
   return userId
     ? `veolms-navigation-${preference}-${userId}-${role}`
     : `veolms-navigation-${preference}-${role}`;
-}
-
-export function getNavigationMenuSignature(
-  navigationItems: readonly NavigationItemWithMetadata[],
-): string {
-  return navigationItems
-    .map(([label, , metadata]) =>
-      [metadata?.id ?? label, label, metadata?.routeLink ?? ""].join(":"),
-    )
-    .join("|");
 }
 
 export function getInitialNavigationOrder(
@@ -292,85 +174,6 @@ export function getInitialNavigationOrder(
   }
 }
 
-export function getInitialNavigationVisibility(
-  role: string,
-  navigationItems: readonly NavigationItemWithMetadata[],
-  userId?: string | null,
-): string[] {
-  const defaultVisibility = getDefaultNavigationVisibility(navigationItems);
-  if (typeof window === "undefined") return defaultVisibility;
-
-  try {
-    const visibilityKey = getNavigationPreferenceStorageKey(
-      "visibility",
-      role,
-      userId,
-    );
-    const menuSignatureKey = `${visibilityKey}-menu-signature`;
-    const menuSignature = getNavigationMenuSignature(navigationItems);
-    const parsedVisibility: unknown = JSON.parse(
-      localStorage.getItem(visibilityKey) || "null",
-    );
-    const previousMenuSignature = localStorage.getItem(menuSignatureKey);
-    const menuSetChanged = previousMenuSignature !== menuSignature;
-    const previousMenuEntries = new Set(
-      previousMenuSignature?.split("|").filter(Boolean) ?? [],
-    );
-    localStorage.setItem(menuSignatureKey, menuSignature);
-    if (!Array.isArray(parsedVisibility)) {
-      localStorage.setItem(visibilityKey, JSON.stringify(defaultVisibility));
-      return defaultVisibility;
-    }
-
-    const normalizedVisibility = parsedVisibility.filter(
-      (label): label is string =>
-        typeof label === "string" && defaultVisibility.includes(label),
-    );
-    const savedVisibility = normalizedVisibility.filter(
-      (label, index) =>
-        defaultVisibility.includes(label) &&
-        normalizedVisibility.indexOf(label) === index,
-    );
-    if (!menuSetChanged) {
-      return ensureRequiredNavigationVisibility(
-        savedVisibility,
-        navigationItems,
-      );
-    }
-
-    const newlyAvailableLabels = navigationItems
-      .filter(([label, , metadata]) => {
-        const entry = [
-          metadata?.id ?? label,
-          label,
-          metadata?.routeLink ?? "",
-        ].join(":");
-        return !previousMenuEntries.has(entry);
-      })
-      .map(([label]) => label);
-    const nextVisibility = ensureRequiredNavigationVisibility(
-      [...savedVisibility, ...newlyAvailableLabels],
-      navigationItems,
-    );
-    localStorage.setItem(visibilityKey, JSON.stringify(nextVisibility));
-    return nextVisibility;
-  } catch {
-    return defaultVisibility;
-  }
-}
-
-export function ensureRequiredNavigationVisibility(
-  visibleLabels: readonly string[],
-  navigationItems: readonly NavigationItemWithMetadata[],
-): string[] {
-  const visible = new Set(visibleLabels);
-  return navigationItems
-    .map(([label]) => label)
-    .filter(
-      (label) => visible.has(label) || requiredNavigationLabels.has(label),
-    );
-}
-
 export function getOrderedNavigation(
   order: readonly string[] | undefined,
   navigationItems: readonly NavigationItemWithMetadata[],
@@ -386,17 +189,33 @@ export function getOrderedNavigation(
   return orderedLabels.map((label) => itemByLabel.get(label)!);
 }
 
-export function getVisibleOrderedNavigation(
-  order: readonly string[] | undefined,
-  visibleLabels: readonly string[] | undefined,
-  navigationItems: readonly NavigationItemWithMetadata[],
-): NavigationItemWithMetadata[] {
-  const visible = new Set(
-    visibleLabels ?? getDefaultNavigationVisibility(navigationItems),
+export type NavigationOrderPosition = "before" | "after";
+
+export function reorderNavigationOrder(
+  order: readonly string[],
+  sourceLabel: string,
+  targetLabel: string,
+  position: NavigationOrderPosition = "before",
+): string[] {
+  if (
+    !sourceLabel ||
+    !targetLabel ||
+    sourceLabel === targetLabel ||
+    !order.includes(sourceLabel) ||
+    !order.includes(targetLabel)
+  ) {
+    return [...order];
+  }
+
+  const nextOrder = [...order];
+  nextOrder.splice(nextOrder.indexOf(sourceLabel), 1);
+  const targetIndex = nextOrder.indexOf(targetLabel);
+  nextOrder.splice(
+    targetIndex + (position === "after" ? 1 : 0),
+    0,
+    sourceLabel,
   );
-  return getOrderedNavigation(order, navigationItems).filter(([label]) =>
-    visible.has(label),
-  );
+  return nextOrder;
 }
 
 export function getMobilePrimaryNavigation(
