@@ -3,7 +3,7 @@ name: Deploy development UI
 on:
   push:
     branches:
-      - development
+      - dev
     paths:
       - "apps/web/**"
       - "packages/contracts/**"
