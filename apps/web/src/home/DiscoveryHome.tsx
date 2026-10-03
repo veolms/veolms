@@ -1,7 +1,6 @@
-import type { CourseSummary, PublicPopularDiscussion } from "@veolms/contracts";
+import type { CourseSummary } from "@veolms/contracts";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
-import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
@@ -12,14 +11,12 @@ import { adaptCourseSummaryToCatalogueCourse } from "../courses/courseAdapter";
 import { useHomeDiscovery } from "../services/home";
 import { usePopularDiscussions } from "../services/learning-interactions";
 import { PublicDiscussionWorkspaceCard } from "../workspace/DiscussionsWorkspace";
-import { DashboardDiscussionCardSkeletons } from "../workspace/DashboardDiscussionPreview";
 import { HomeCourseRow } from "./HomeCourseRow";
 import { HomeSectionHeader } from "./HomePresentation";
+import { PopularDiscussionsPanel } from "./PopularDiscussionsPanel";
 import "../styles/features/student-learning.css";
 import "../styles/features/home.css";
 import "../styles/features/guest-home.css";
-
-const HOME_DISCUSSION_LIMIT = 20;
 
 export type DiscoveryHomeMode = "guest" | "authenticated";
 
@@ -150,61 +147,6 @@ function DiscoveryCourseSection({
   );
 }
 
-function PopularDiscussionsPanel({
-  isLoading,
-  isError,
-  isFetching,
-  discussions,
-  onRetry,
-}: {
-  isLoading: boolean;
-  isError: boolean;
-  isFetching: boolean;
-  discussions: readonly PublicPopularDiscussion[];
-  onRetry: () => void;
-}) {
-  return (
-    <section
-      aria-labelledby="guest-home-popular-discussions"
-      className="dashboard-panel home-discussions-panel guest-home__discussion-panel"
-    >
-      <HomeSectionHeader
-        icon={ChatCircleDots}
-        title="Popular Discussions"
-        id="guest-home-popular-discussions"
-      />
-
-      {isLoading ? (
-        <DashboardDiscussionCardSkeletons />
-      ) : isError ? (
-        <DiscoveryHomeState
-          title="Discussions are unavailable"
-          message="Courses are still available to explore."
-          onRetry={onRetry}
-          isRetrying={isFetching}
-        />
-      ) : discussions.length === 0 ? (
-        <DiscoveryHomeState
-          title="No public discussions yet"
-          message="Check back soon for learner conversations."
-        />
-      ) : (
-        <div
-          className="home-discussion-workspace-list creator-discussion-list discussion-hub"
-          data-dashboard-discussion-preview
-        >
-          {discussions.slice(0, HOME_DISCUSSION_LIMIT).map((discussion) => (
-            <PublicDiscussionWorkspaceCard
-              key={discussion.id}
-              discussion={discussion}
-            />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
 function DiscoveryHomeHeader({ mode, studentName }: DiscoveryHomeProps) {
   const displayName = studentName?.trim() || "there";
 
@@ -314,6 +256,7 @@ export function DiscoveryHome({ mode, studentName }: DiscoveryHomeProps) {
 
         <aside className="guest-home__discussion-column">
           <PopularDiscussionsPanel
+            className="guest-home__discussion-panel"
             isLoading={discussionsQuery.isLoading}
             isError={discussionsQuery.isError}
             isFetching={discussionsQuery.isFetching}

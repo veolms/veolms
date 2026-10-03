@@ -496,6 +496,195 @@
   margin-top: 16px;
 }
 
+.student-home-zero-progress__hero-visual {
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  align-self: center;
+}
+
+.student-home-zero-progress__hero-visual img {
+  object-fit: cover;
+  object-position: center;
+}
+
+.student-home-zero-progress__hero-copy > strong {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.student-home-zero-progress__hero-copy > p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.student-home-zero-progress__hero-status {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  min-height: 26px;
+  white-space: nowrap;
+}
+
+.student-home-zero-progress__hero .learning-status.not-started {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.student-home-zero-progress__hero {
+  padding: 10px 12px;
+}
+
+.student-home-zero-progress__hero .home-resume-copy {
+  padding: 2px 4px;
+}
+
+.student-home-zero-progress__hero .home-resume-copy h2 {
+  margin-top: 8px;
+}
+
+.student-home-zero-progress__hero .home-resume-copy > strong {
+  margin-top: 8px;
+}
+
+.student-home-zero-progress__hero .home-resume-copy > p {
+  margin-top: 10px;
+}
+
+.student-home-zero-progress__hero .home-resume-copy > small {
+  margin-top: 6px;
+}
+
+.student-home-zero-progress__hero .home-resume-copy > div {
+  margin-top: 10px;
+}
+
+.student-home-zero-progress__up-next-panel {
+  padding: 8px 10px;
+}
+
+.student-home-zero-progress__up-next-panel .dashboard-section-heading {
+  min-height: 24px;
+}
+
+.student-home-zero-progress__up-next-panel > .mt-3 {
+  margin-top: 6px;
+}
+
+.student-home-zero-progress__up-next-panel > .grid {
+  gap: 5px;
+}
+
+.student-home-zero-progress__up-next-panel > .grid > a {
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.student-home-zero-progress__up-next-panel > .grid > a > span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.student-home-zero-progress__up-next-panel > .grid > a > span > strong {
+  overflow: hidden;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-home-zero-progress__up-next-panel > .grid > a > span > small {
+  margin-top: 2px;
+  line-height: 1.2;
+}
+
+.student-home-zero-progress__up-next-panel > .grid > a > svg {
+  flex: 0 0 16px;
+}
+
+.student-home-zero-progress__up-next-panel > .grid > div {
+  height: 40px;
+}
+
+.student-home-zero-progress__more-courses-panel {
+  overflow: hidden;
+}
+
+.student-home-zero-progress__more-courses-panel
+  .home-course-row__viewport-shell {
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.student-home-zero-progress__popular-discussions-panel
+  .creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact {
+  border-color: color-mix(in srgb, var(--text) 18%, var(--border));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent),
+    var(
+      --card-compact-shadow,
+      0 2px 4px color-mix(in srgb, var(--text) 18%, transparent)
+    ),
+    0 3px 0 color-mix(in srgb, var(--canvas) 66%, transparent);
+}
+
+.student-home-zero-progress__popular-discussions-panel
+  .creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
+  border-color: color-mix(in srgb, var(--text) 24%, var(--border));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent),
+    var(
+      --card-hover-shadow,
+      var(
+        --card-compact-shadow,
+        0 3px 8px color-mix(in srgb, var(--text) 20%, transparent)
+      )
+    ),
+    0 3px 0 color-mix(in srgb, var(--canvas) 66%, transparent);
+}
+
+@media (min-width: 1181px) {
+  .home-dashboard-grid.student-home-zero-progress__dashboard-grid {
+    grid-template-columns: minmax(0, 1.12fr) minmax(16rem, 0.84fr);
+    grid-template-rows: auto;
+    min-height: 0;
+  }
+
+  .student-home-zero-progress__course-column {
+    min-height: 0;
+  }
+
+  .student-home-zero-progress__discussion-column {
+    display: flex;
+    align-self: stretch;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .student-home-zero-progress__discussion-column > .home-discussions-panel {
+    display: flex;
+    align-self: stretch;
+    width: 100%;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .student-home-zero-progress__discussion-column
+    .home-discussion-workspace-list[data-dashboard-discussion-preview] {
+    flex: 1 1 0;
+    min-height: 0;
+    height: 0;
+    max-height: none;
+    overflow-y: auto;
+    padding-block: 6px;
+    padding-inline: 2px 6px;
+    scrollbar-gutter: stable;
+  }
+}
+
 .home-dashboard-grid > .home-progress-panel,
 .home-dashboard-grid > .home-updates-panel {
   align-self: stretch;

@@ -1,4 +1,3 @@
-import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
@@ -6,19 +5,12 @@ import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/Chat
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
-import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import type {
   CourseSummary,
   EnrolledCoursesResponse,
   LearningProgressResumeContextResponse,
 } from "@veolms/contracts";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-  type ImgHTMLAttributes,
-} from "react";
+import { lazy, Suspense, useMemo, type CSSProperties } from "react";
 import { useNavigate } from "react-router";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
@@ -27,8 +19,9 @@ import {
   type LearningCourse,
 } from "./StudentPages";
 import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
-import { formatRelativeTime } from "./learning/learning-notes.adapter";
 import { HomeSectionHeader } from "./home/HomePresentation";
+import { RecentUpdatesPanel } from "./home/RecentUpdatesPanel";
+import { StudentHomeThumbnail } from "./home/StudentHomeThumbnail";
 import { useCourses } from "./services/courses";
 import { useLearningProgressResumeContext } from "./services/learning-progress";
 import { useDashboardRecentDiscussions } from "./services/learning-interactions";
@@ -42,6 +35,12 @@ import {
 import "./styles/features/student-learning.css";
 import "./styles/features/home.css";
 import "./styles/features/dashboard-discussion-preview.css";
+
+const StudentHomeZeroProgress = lazy(() =>
+  import("./StudentHomeZeroProgress").then((module) => ({
+    default: module.StudentHomeZeroProgress,
+  })),
+);
 
 interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
@@ -92,57 +91,6 @@ function compareContinueLearningCourses(
   return left.id.localeCompare(right.id);
 }
 
-function StudentHomeThumbnail({
-  src,
-  fallbackSrcs = [],
-  alt,
-  loading = "lazy",
-  decoding = "async",
-  fetchPriority,
-}: {
-  src?: string | null;
-  fallbackSrcs?: readonly (string | null | undefined)[];
-  alt: string;
-  loading?: ImgHTMLAttributes<HTMLImageElement>["loading"];
-  decoding?: ImgHTMLAttributes<HTMLImageElement>["decoding"];
-  fetchPriority?: ImgHTMLAttributes<HTMLImageElement>["fetchPriority"];
-}) {
-  const imageSources = [src, ...fallbackSrcs]
-    .map((candidate) => candidate?.trim() ?? "")
-    .filter((candidate, index, candidates) =>
-      candidate ? candidates.indexOf(candidate) === index : false,
-    );
-  const imageSourcesKey = imageSources.join("\u0000");
-  const [imageSourceIndex, setImageSourceIndex] = useState(0);
-
-  useEffect(() => {
-    setImageSourceIndex(0);
-  }, [imageSourcesKey]);
-
-  const imageSrc = imageSources[imageSourceIndex] ?? "";
-
-  return (
-    <div className="student-home-thumbnail">
-      {imageSrc ? (
-        <img
-          src={imageSrc}
-          alt={alt}
-          loading={loading}
-          decoding={decoding}
-          fetchPriority={fetchPriority}
-          onError={() =>
-            setImageSourceIndex((current) =>
-              Math.min(current + 1, imageSources.length),
-            )
-          }
-        />
-      ) : (
-        <CourseThumbnailPlaceholder />
-      )}
-    </div>
-  );
-}
-
 function ProgressBar({ value }: { value: number }) {
   const normalizedValue = Number.isFinite(value)
     ? Math.min(100, Math.max(0, value))
@@ -159,54 +107,6 @@ function ProgressBar({ value }: { value: number }) {
     >
       <span style={{ width: `${normalizedValue}%` }} />
     </span>
-  );
-}
-
-function RecentUpdatesSkeletons() {
-  return (
-    <>
-      {[0, 1].map((item) => (
-        <div className="home-update-skeleton" key={item} aria-hidden="true">
-          <span />
-          <span>
-            <i />
-            <i />
-            <i />
-          </span>
-        </div>
-      ))}
-    </>
-  );
-}
-
-function RecentUpdatesState({
-  error,
-  isRetrying,
-  onRetry,
-}: {
-  error?: boolean;
-  isRetrying?: boolean;
-  onRetry?: () => void;
-}) {
-  if (error) {
-    return (
-      <div className="home-update-state" role="alert">
-        <strong>Couldn&apos;t load recent updates</strong>
-        <small>Something went wrong while loading course updates.</small>
-        <button type="button" onClick={onRetry} disabled={isRetrying}>
-          {isRetrying ? "Retrying…" : "Retry"}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="home-update-state" role="status">
-      <strong>No recent updates</strong>
-      <small>
-        New lesson updates from your enrolled courses will appear here.
-      </small>
-    </div>
   );
 }
 
@@ -424,13 +324,20 @@ export function StudentHome({
     ] as const;
   }, [enrolledData?.courses]);
 
+  const hasMeaningfulLearningProgress = enrolledCourses.some(
+    (course) => course.progress > 0,
+  );
+
   const {
     data: discussionsResponse,
     isLoading: discussionsLoading,
     isError: discussionsError,
     isFetching: discussionsFetching,
     refetch: refetchDiscussions,
-  } = useDashboardRecentDiscussions({ mine: true });
+  } = useDashboardRecentDiscussions({
+    mine: true,
+    enabled: hasMeaningfulLearningProgress,
+  });
   const hasDiscussionData = discussionsResponse !== undefined;
   const discussionCards = useMemo(
     () =>
@@ -466,9 +373,6 @@ export function StudentHome({
   const initialEnrollmentLoading =
     enrolledCoursesLoading && !hasEnrolledCourseData;
   const initialEnrollmentError = enrolledCoursesError && !hasEnrolledCourseData;
-  const hasMeaningfulLearningProgress = enrolledCourses.some(
-    (course) => course.progress > 0,
-  );
   const { data: publishedCoursesData, isLoading: publishedCoursesLoading } =
     useCourses({
       enabled:
@@ -492,6 +396,40 @@ export function StudentHome({
       ? resumeContextData
       : null;
   }, [heroCourse, primaryCourseKey, resumeContextData]);
+
+  if (
+    hasEnrolledCourseData &&
+    !initialEnrollmentLoading &&
+    !initialEnrollmentError &&
+    enrolledCourses.length > 0 &&
+    !hasMeaningfulLearningProgress
+  ) {
+    return (
+      <Suspense
+        fallback={
+          <section className="home-resume-card home-resume-card--state">
+            <div className="home-resume-state" role="status" aria-busy="true">
+              <strong>Preparing your learning Home…</strong>
+            </div>
+          </section>
+        }
+      >
+        <StudentHomeZeroProgress
+          studentName={studentName}
+          enrolledCourses={enrolledData?.courses ?? []}
+          publishedCourses={publishedCoursesData?.courses ?? []}
+          publishedCoursesLoading={publishedCoursesLoading}
+          recentUpdateCourses={recentUpdateCourses}
+          hasRecentUpdatesData={hasRecentUpdatesData}
+          recentUpdatesLoading={recentUpdatesLoading}
+          recentUpdatesError={recentUpdatesError}
+          recentUpdatesFetching={recentUpdatesFetching}
+          refetchRecentUpdates={() => refetchRecentUpdates()}
+          onNavigatePage={onNavigatePage}
+        />
+      </Suspense>
+    );
+  }
 
   return (
     <div className="student-home">
@@ -833,80 +771,16 @@ export function StudentHome({
           </div>
         </section>
 
-        <section className="dashboard-panel home-updates-panel">
-          <HomeSectionHeader
-            icon={Target}
-            title="Recently Updated"
-            action="View All"
-            onAction={() => onNavigatePage("courses")}
-          />
-          <div
-            className="home-update-list"
-            aria-busy={recentUpdatesLoading || recentUpdatesFetching}
-          >
-            {recentUpdatesLoading && !hasRecentUpdatesData ? (
-              <RecentUpdatesSkeletons />
-            ) : recentUpdatesError && !hasRecentUpdatesData ? (
-              <RecentUpdatesState
-                error
-                isRetrying={recentUpdatesFetching}
-                onRetry={() => void refetchRecentUpdates()}
-              />
-            ) : recentUpdateCourses.length === 0 ? (
-              <RecentUpdatesState />
-            ) : (
-              recentUpdateCourses.map((course) => {
-                return (
-                  <div className="home-update-course" key={course.courseId}>
-                    <div className="home-update-course-header">
-                      <StudentHomeThumbnail
-                        src={course.courseThumbnailUrl}
-                        fallbackSrcs={[
-                          getCourseThumbnailCdnUrl(
-                            course.courseThumbnailMediaId,
-                          ),
-                        ]}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                      />
-                      <span>
-                        <strong>{course.courseTitle}</strong>
-                        <small>
-                          Updated {formatRelativeTime(course.latestUpdatedAt)}
-                        </small>
-                      </span>
-                    </div>
-                    {course.lessons.length > 0 && (
-                      <div className="home-update-lessons">
-                        {course.lessons.map((lesson) => (
-                          <button
-                            type="button"
-                            className="home-update-lesson"
-                            key={lesson.lessonId}
-                            onClick={() =>
-                              navigate(
-                                getCoursePlayerPath(
-                                  course.courseSlug,
-                                  "home",
-                                  lesson.lessonNumber,
-                                  "/home",
-                                ),
-                              )
-                            }
-                          >
-                            <span>{lesson.lessonTitle}</span>
-                            <ArrowRight size={15} aria-hidden="true" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
+        <RecentUpdatesPanel
+          courses={recentUpdateCourses}
+          title="Recently Updated"
+          hasData={hasRecentUpdatesData}
+          isLoading={recentUpdatesLoading}
+          isError={recentUpdatesError}
+          isFetching={recentUpdatesFetching}
+          onRetry={() => void refetchRecentUpdates()}
+          onNavigatePage={onNavigatePage}
+        />
       </div>
     </div>
   );
