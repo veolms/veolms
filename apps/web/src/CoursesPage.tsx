@@ -3637,10 +3637,11 @@ export function CoursesPage({
             <AuthenticatedHomeBoundary
               onOpenCourse={onOpenCourse}
               onNavigatePage={onNavigatePage}
+              setNotice={setNotice}
               studentName={shellProfileDisplayName}
             />
           ) : (
-            <GuestHome />
+            <GuestHome onNavigatePage={onNavigatePage} setNotice={setNotice} />
           )}
         </Suspense>
       );

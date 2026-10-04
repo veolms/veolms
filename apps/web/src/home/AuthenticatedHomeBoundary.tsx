@@ -1,6 +1,9 @@
+import type { EnrolledCoursesResponse } from "@veolms/contracts";
 import type { LearningCourse } from "../StudentPages";
 import { lazy, Suspense, type ReactNode } from "react";
 import { useEnrolledCourses } from "../services/enrollments";
+import { useCourses } from "../services/courses";
+import { useRecentLearningUpdates } from "../services/recent-updates";
 import type { StudentHomeEnrollmentState } from "../StudentHome";
 
 const StudentHome = lazy(() =>
@@ -13,10 +16,16 @@ const DiscoveryHome = lazy(() =>
     default: module.DiscoveryHome,
   })),
 );
+const StudentHomeZeroProgress = lazy(() =>
+  import("../StudentHomeZeroProgress").then((module) => ({
+    default: module.StudentHomeZeroProgress,
+  })),
+);
 
 interface AuthenticatedHomeBoundaryProps {
   onOpenCourse: (course: LearningCourse) => void;
   onNavigatePage: (page: string) => void;
+  setNotice?: (message: string) => void;
   studentName?: string;
 }
 
@@ -79,9 +88,59 @@ function HomeEnrollmentErrorState({
   );
 }
 
+function AuthenticatedZeroProgressHome({
+  enrolledData,
+  onNavigatePage,
+  setNotice,
+  studentName,
+}: {
+  enrolledData: EnrolledCoursesResponse;
+  onNavigatePage: (page: string) => void;
+  setNotice?: (message: string) => void;
+  studentName?: string;
+}) {
+  const { data: publishedCoursesData, isLoading: publishedCoursesLoading } =
+    useCourses();
+  const {
+    data: recentUpdatesResponse,
+    isLoading: recentUpdatesLoading,
+    isError: recentUpdatesError,
+    isFetching: recentUpdatesFetching,
+    refetch: refetchRecentUpdates,
+  } = useRecentLearningUpdates();
+
+  return (
+    <Suspense
+      fallback={
+        <section className="home-resume-card home-resume-card--state">
+          <div className="home-resume-state" role="status" aria-busy="true">
+            <strong>Preparing your learning Home…</strong>
+          </div>
+        </section>
+      }
+    >
+      <StudentHomeZeroProgress
+        studentName={studentName}
+        enrolledCourses={enrolledData.courses}
+        publishedCourses={publishedCoursesData?.courses ?? []}
+        publishedCoursesLoading={publishedCoursesLoading}
+        recentUpdateCourses={recentUpdatesResponse?.courses ?? []}
+        hasRecentUpdatesData={recentUpdatesResponse !== undefined}
+        recentUpdatesLoading={recentUpdatesLoading}
+        recentUpdatesError={recentUpdatesError}
+        recentUpdatesFetching={recentUpdatesFetching}
+        refetchRecentUpdates={() => refetchRecentUpdates()}
+        onNavigatePage={onNavigatePage}
+        setNotice={setNotice}
+      />
+    </Suspense>
+  );
+}
+
 export function AuthenticatedHomeBoundary({
   onOpenCourse,
   onNavigatePage,
+  setNotice,
   studentName,
 }: AuthenticatedHomeBoundaryProps) {
   const enrollmentQuery = useEnrolledCourses();
@@ -112,8 +171,31 @@ export function AuthenticatedHomeBoundary({
   if (enrollmentData.courses.length === 0) {
     return (
       <Suspense fallback={<HomeLoadingState />}>
-        <DiscoveryHome mode="authenticated" studentName={studentName} />
+        <DiscoveryHome
+          mode="authenticated"
+          studentName={studentName}
+          accessibleCourseIds={new Set()}
+          onDiscussionNavigatePage={onNavigatePage}
+          onDiscussionAccessDenied={() =>
+            setNotice?.("You don't have access to this course.")
+          }
+        />
       </Suspense>
+    );
+  }
+
+  const hasMeaningfulLearningProgress = enrollmentData.courses.some(
+    (course) => (course.progress ?? 0) > 0,
+  );
+
+  if (!hasMeaningfulLearningProgress) {
+    return (
+      <AuthenticatedZeroProgressHome
+        enrolledData={enrollmentData}
+        onNavigatePage={onNavigatePage}
+        setNotice={setNotice}
+        studentName={studentName}
+      />
     );
   }
 
@@ -130,6 +212,7 @@ export function AuthenticatedHomeBoundary({
       <StudentHome
         onOpenCourse={onOpenCourse}
         onNavigatePage={onNavigatePage}
+        setNotice={setNotice}
         studentName={studentName}
         enrollment={enrollment}
       />

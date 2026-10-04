@@ -14,6 +14,8 @@ export const publicPopularDiscussionSchema = z.strictObject({
   title: z.string().max(255).nullable(),
   snippet: z.string().max(500),
   author: publicDiscussionAuthorSchema,
+  courseId: z.uuid(),
+  lessonId: z.uuid(),
   courseTitle: z.string().min(1).max(255),
   lessonTitle: z.string().min(1).max(255),
   replyCount: z.number().int().nonnegative(),

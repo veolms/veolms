@@ -856,6 +856,8 @@ export function createThreadsService(
             avatarUrl: row.authorAvatarUrl,
             avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
           },
+          courseId: row.courseId,
+          lessonId: row.lessonId,
           courseTitle: row.courseTitle,
           lessonTitle: row.lessonTitle,
           replyCount: row.replyCount,

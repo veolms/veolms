@@ -10,20 +10,18 @@ import type {
 } from "@veolms/contracts";
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
-import { CourseCardSkeleton } from "./courses/CourseCardSkeleton";
-import { courseCatalogueHorizontalRowClasses } from "./courses/CourseCatalogueSkeleton";
-import { PublicCourseCard } from "./courses/CourseCard";
-import {
-  adaptCourseSummaryToCatalogueCourse,
-  formatDuration,
-} from "./courses/courseAdapter";
+import { formatDuration } from "./courses/courseAdapter";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
 import { formatMediaTime } from "./learning/courseContent";
 import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
 import { useCourseOverview } from "./services/courses";
 import { usePopularDiscussions } from "./services/learning-interactions";
-import { HomeCourseRow } from "./home/HomeCourseRow";
 import { HomeSectionHeader } from "./home/HomePresentation";
+import {
+  getEnrolledCourseKeys,
+  getRecommendedCourses,
+  MoreCoursesPanel,
+} from "./home/MoreCoursesPanel";
 import { PopularDiscussionsPanel } from "./home/PopularDiscussionsPanel";
 import { RecentUpdatesPanel } from "./home/RecentUpdatesPanel";
 import { StudentHomeThumbnail } from "./home/StudentHomeThumbnail";
@@ -184,61 +182,6 @@ function UpNextPanel({
   );
 }
 
-function MoreCoursesPanel({
-  courses,
-  isLoading,
-  onNavigatePage,
-}: {
-  courses: readonly CourseSummary[];
-  isLoading: boolean;
-  onNavigatePage: (destination: string) => void;
-}) {
-  return (
-    <section
-      className="dashboard-panel student-home-zero-progress__more-courses-panel min-w-0"
-      aria-labelledby="more-courses-title"
-    >
-      <HomeSectionHeader
-        icon={BookOpen}
-        title="More Courses for You"
-        id="more-courses-title"
-        action="Explore all"
-        onAction={() => onNavigatePage("/courses")}
-      />
-      <div className="mt-2 min-w-0">
-        <HomeCourseRow
-          id="student-home-more-courses"
-          label="More Courses for You"
-          isBusy={isLoading}
-          viewportClassName={courseCatalogueHorizontalRowClasses}
-        >
-          {isLoading ? (
-            Array.from({ length: 3 }, (_, index) => (
-              <CourseCardSkeleton
-                key={`more-courses-skeleton-${index}`}
-                variant="public"
-              />
-            ))
-          ) : courses.length === 0 ? (
-            <div className="grid min-h-40 min-w-full place-items-center rounded-lg border border-(--border) px-4 py-6 text-center text-sm text-(--muted)">
-              There are no additional courses to recommend right now.
-            </div>
-          ) : (
-            courses.map((course, index) => (
-              <PublicCourseCard
-                key={course.id}
-                course={adaptCourseSummaryToCatalogueCourse(course)}
-                imagePriority={index < 2}
-                onNavigatePage={onNavigatePage}
-              />
-            ))
-          )}
-        </HomeCourseRow>
-      </div>
-    </section>
-  );
-}
-
 export function StudentHomeZeroProgress({
   studentName,
   enrolledCourses,
@@ -251,6 +194,7 @@ export function StudentHomeZeroProgress({
   recentUpdatesFetching,
   refetchRecentUpdates,
   onNavigatePage,
+  setNotice,
 }: {
   studentName?: string;
   enrolledCourses: readonly EnrolledCourse[];
@@ -263,6 +207,7 @@ export function StudentHomeZeroProgress({
   recentUpdatesFetching: boolean;
   refetchRecentUpdates: () => Promise<unknown>;
   onNavigatePage: (destination: string) => void;
+  setNotice?: (message: string) => void;
 }) {
   const navigate = useNavigate();
   const primaryEnrollment = useMemo(
@@ -279,39 +224,16 @@ export function StudentHomeZeroProgress({
     () => getPublishedLessons(overviewQuery.data),
     [overviewQuery.data],
   );
-  const enrolledCourseKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const course of enrolledCourses) {
-      keys.add(course.courseId);
-      if (course.courseSlug) keys.add(course.courseSlug);
-    }
-    return keys;
-  }, [enrolledCourses]);
-  const moreCourses = useMemo(() => {
-    const availableCourses = publishedCourses.filter(
-      (course) =>
-        !enrolledCourseKeys.has(course.id) &&
-        !enrolledCourseKeys.has(course.slug),
-    );
-    return availableCourses
-      .map((course, index) => ({
-        course,
-        index,
-        paidRank: course.pricing.pricingType === "paid" ? 0 : 1,
-      }))
-      .sort(
-        (left, right) =>
-          left.paidRank - right.paidRank || left.index - right.index,
-      )
-      .map(({ course }) => course);
-  }, [enrolledCourseKeys, publishedCourses]);
+  const enrolledCourseKeys = useMemo(
+    () => getEnrolledCourseKeys(enrolledCourses),
+    [enrolledCourses],
+  );
+  const moreCourses = useMemo(
+    () => getRecommendedCourses(publishedCourses, enrolledCourseKeys),
+    [enrolledCourseKeys, publishedCourses],
+  );
   const discussionList = discussionsQuery.data?.discussions ?? [];
   const overviewCourse = overviewQuery.data?.course;
-  const description =
-    primaryEnrollment?.courseDescription?.trim() ||
-    overviewCourse?.shortDescription?.trim() ||
-    overviewCourse?.description?.trim() ||
-    "Start with the first lesson and build your learning momentum.";
   const viewCourseKey = overviewCourse?.slug || courseKey;
   const curriculumPath = `/courses/${encodeURIComponent(viewCourseKey)}/overview`;
   const firstLesson = lessons[0];
@@ -354,7 +276,6 @@ export function StudentHomeZeroProgress({
               {primaryEnrollment.totalLessons} Lessons <i />{" "}
               {formatDuration(primaryEnrollment.totalDurationSeconds)}
             </strong>
-            <p>{description}</p>
             <small className="mt-2 text-xs text-(--muted)">
               Enrolled {formatRelativeTime(primaryEnrollment.enrolledAt)}
             </small>
@@ -372,7 +293,7 @@ export function StudentHomeZeroProgress({
               </button>
               <button
                 type="button"
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-(--control-radius-action) border border-(--border) px-4 text-sm font-semibold text-(--text) transition-colors hover:border-(--border-strong) hover:bg-(--surface-strong) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-(--control-radius-action) border border-(--border) px-4 text-sm font-semibold text-(--text) hover:border-(--border-strong) hover:text-(--accent-ink,var(--accent)) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
                 onClick={() => onNavigatePage(curriculumPath)}
               >
                 <BookOpen size={18} aria-hidden="true" />
@@ -420,6 +341,11 @@ export function StudentHomeZeroProgress({
             onRetry={() => void discussionsQuery.refetch()}
             action="View Discussions"
             onAction={() => onNavigatePage("/discussions")}
+            accessibleCourseIds={enrolledCourseKeys}
+            onDiscussionNavigatePage={onNavigatePage}
+            onDiscussionAccessDenied={() =>
+              setNotice?.("You don't have access to this course.")
+            }
           />
         </aside>
       </div>

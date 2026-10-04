@@ -10,7 +10,7 @@ import { courseCatalogueHorizontalRowClasses } from "../courses/CourseCatalogueS
 import { adaptCourseSummaryToCatalogueCourse } from "../courses/courseAdapter";
 import { useHomeDiscovery } from "../services/home";
 import { usePopularDiscussions } from "../services/learning-interactions";
-import { PublicDiscussionWorkspaceCard } from "../workspace/DiscussionsWorkspace";
+import type { NavigateTo } from "../routing/navigation";
 import { HomeCourseRow } from "./HomeCourseRow";
 import { HomeSectionHeader } from "./HomePresentation";
 import { PopularDiscussionsPanel } from "./PopularDiscussionsPanel";
@@ -23,6 +23,9 @@ export type DiscoveryHomeMode = "guest" | "authenticated";
 interface DiscoveryHomeProps {
   mode: DiscoveryHomeMode;
   studentName?: string;
+  accessibleCourseIds?: ReadonlySet<string>;
+  onDiscussionNavigatePage?: NavigateTo;
+  onDiscussionAccessDenied?: () => void;
 }
 
 function getDiscoveryGreeting(hour = new Date().getHours()) {
@@ -205,7 +208,13 @@ function DiscoveryEnrollmentBanner({ onExplore }: { onExplore: () => void }) {
   );
 }
 
-export function DiscoveryHome({ mode, studentName }: DiscoveryHomeProps) {
+export function DiscoveryHome({
+  mode,
+  studentName,
+  accessibleCourseIds,
+  onDiscussionNavigatePage,
+  onDiscussionAccessDenied,
+}: DiscoveryHomeProps) {
   const discoveryQuery = useHomeDiscovery();
   const discussionsQuery = usePopularDiscussions();
   const navigate = useNavigate();
@@ -262,6 +271,9 @@ export function DiscoveryHome({ mode, studentName }: DiscoveryHomeProps) {
             isFetching={discussionsQuery.isFetching}
             discussions={discussions}
             onRetry={() => void discussionsQuery.refetch()}
+            accessibleCourseIds={accessibleCourseIds}
+            onDiscussionNavigatePage={onDiscussionNavigatePage}
+            onDiscussionAccessDenied={onDiscussionAccessDenied}
           />
         </aside>
       </div>

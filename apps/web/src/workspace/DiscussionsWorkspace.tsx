@@ -390,11 +390,13 @@ function getVisibilityLabel(
 }
 
 function getDiscussionThreadDestination(
-  thread: DiscussionWorkspaceCard,
+  thread:
+    | DiscussionWorkspaceCard
+    | Pick<PublicPopularDiscussion, "id" | "courseId" | "lessonId">,
   returnPath = "/discussions/q-and-a",
 ): string {
   const threadId =
-    thread.itemType === "reply" && thread.parentThreadId
+    "itemType" in thread && thread.itemType === "reply" && thread.parentThreadId
       ? thread.parentThreadId
       : thread.id;
   const basePath = getCoursePlayerPath(
@@ -762,10 +764,12 @@ function DiscussionWorkspaceNavigationLink({
   destination,
   label,
   onNavigatePage,
+  onBlocked,
 }: {
   destination: string;
   label: string;
   onNavigatePage?: NavigateTo;
+  onBlocked?: () => void;
 }) {
   return (
     <a
@@ -785,7 +789,11 @@ function DiscussionWorkspaceNavigationLink({
         }
         const card = event.currentTarget.parentElement;
         if (card && hasTextSelectionWithin(card)) return;
-        if (!onNavigatePage) return;
+        if (!onNavigatePage) {
+          event.preventDefault();
+          onBlocked?.();
+          return;
+        }
         event.preventDefault();
         onNavigatePage(destination, { exact: true });
       }}
@@ -1579,8 +1587,14 @@ function PublicDiscussionMetadata({
  */
 export function PublicDiscussionWorkspaceCard({
   discussion,
+  onNavigatePage,
+  hasCourseAccess = true,
+  onAccessDenied,
 }: {
   discussion: PublicPopularDiscussion;
+  onNavigatePage?: NavigateTo;
+  hasCourseAccess?: boolean;
+  onAccessDenied?: () => void;
 }) {
   const author = discussion.author.displayName.trim() || "Anonymous Learner";
   const kindLabel = discussion.kind === "question" ? "Question" : "Comment";
@@ -1603,6 +1617,18 @@ export function PublicDiscussionWorkspaceCard({
     authorUsername: "",
     isOwn: false,
   };
+  const destination = onNavigatePage
+    ? getDiscussionThreadDestination(
+        discussion,
+        discussion.kind === "question"
+          ? "/discussions/q-and-a"
+          : "/discussions/comments",
+      )
+    : null;
+  const canNavigate = Boolean(destination && hasCourseAccess);
+  const handleNavigation = canNavigate
+    ? () => onNavigatePage?.(destination!, { exact: true })
+    : onAccessDenied;
 
   return (
     <DiscussionWorkspaceCardShell
@@ -1611,6 +1637,17 @@ export function PublicDiscussionWorkspaceCard({
       expanded={false}
       variant="compact"
       expandable={false}
+      navigation={
+        destination ? (
+          <DiscussionWorkspaceNavigationLink
+            destination={canNavigate ? destination : "#"}
+            label={`Open discussion in ${discussion.courseTitle}`}
+            onNavigatePage={canNavigate ? onNavigatePage : undefined}
+            onBlocked={canNavigate ? undefined : onAccessDenied}
+          />
+        ) : undefined
+      }
+      onNavigate={destination ? handleNavigation : undefined}
       rail={{
         top: (
           <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">

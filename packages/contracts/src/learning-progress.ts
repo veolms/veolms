@@ -41,9 +41,12 @@ export const learningProgressResumeLessonSchema = z.strictObject({
 export const learningProgressResumeContextResponseSchema = z.strictObject({
   courseId: z.uuid(),
   courseSlug: z.string().min(1).max(160),
+  totalLessons: z.number().int().nonnegative(),
+  completedLessons: z.number().int().nonnegative(),
   resumeLesson: learningProgressResumeLessonSchema.nullable(),
   previousLesson: learningProgressResumeLessonSchema.nullable(),
   nextLesson: learningProgressResumeLessonSchema.nullable(),
+  upcomingLessons: z.array(learningProgressResumeLessonSchema).max(3),
 });
 
 export const learningProgressSyncResponseSchema = z.strictObject({

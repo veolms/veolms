@@ -3,6 +3,7 @@ import type { PublicPopularDiscussion } from "@veolms/contracts";
 import { HomeSectionHeader } from "./HomePresentation";
 import { PublicDiscussionWorkspaceCard } from "../workspace/DiscussionsWorkspace";
 import { DashboardDiscussionCardSkeletons } from "../workspace/DashboardDiscussionPreview";
+import type { NavigateTo } from "../routing/navigation";
 
 function PublicDiscussionState({
   title,
@@ -50,6 +51,9 @@ export function PopularDiscussionsPanel({
   className,
   action,
   onAction,
+  accessibleCourseIds,
+  onDiscussionNavigatePage,
+  onDiscussionAccessDenied,
 }: {
   isLoading: boolean;
   isError: boolean;
@@ -59,6 +63,9 @@ export function PopularDiscussionsPanel({
   className?: string;
   action?: string;
   onAction?: () => void;
+  accessibleCourseIds?: ReadonlySet<string>;
+  onDiscussionNavigatePage?: NavigateTo;
+  onDiscussionAccessDenied?: () => void;
 }) {
   return (
     <section
@@ -98,6 +105,11 @@ export function PopularDiscussionsPanel({
             <PublicDiscussionWorkspaceCard
               key={discussion.id}
               discussion={discussion}
+              onNavigatePage={onDiscussionNavigatePage}
+              hasCourseAccess={
+                accessibleCourseIds?.has(discussion.courseId) ?? false
+              }
+              onAccessDenied={onDiscussionAccessDenied}
             />
           ))}
         </div>

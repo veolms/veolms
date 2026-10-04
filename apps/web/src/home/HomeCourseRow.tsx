@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import "../styles/features/guest-home.css";
 
 interface HomeCourseRowProps {
   children: ReactNode;

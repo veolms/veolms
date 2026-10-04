@@ -103,6 +103,8 @@ export interface PublicPopularThreadRow {
   snippet: string;
   authorName: string | null;
   authorAvatarUrl: string | null;
+  courseId: string;
+  lessonId: string;
   courseTitle: string;
   lessonTitle: string;
   replyCount: number;
@@ -918,6 +920,8 @@ export function createThreadsRepository(): ThreadsRepository {
           sql<string>`left(t.plain_text, 500)`.as("snippet"),
           "u.display_name as authorName",
           "u.avatar_data_url as authorAvatarUrl",
+          "c.id as courseId",
+          "l.id as lessonId",
           "c.title as courseTitle",
           "l.title as lessonTitle",
           "t.replies_count as replyCount",
