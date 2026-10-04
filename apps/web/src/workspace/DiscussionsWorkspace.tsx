@@ -1588,11 +1588,13 @@ function PublicDiscussionMetadata({
 export function PublicDiscussionWorkspaceCard({
   discussion,
   onNavigatePage,
+  allowPublicRead = false,
   hasCourseAccess = true,
   onAccessDenied,
 }: {
   discussion: PublicPopularDiscussion;
   onNavigatePage?: NavigateTo;
+  allowPublicRead?: boolean;
   hasCourseAccess?: boolean;
   onAccessDenied?: () => void;
 }) {
@@ -1625,7 +1627,9 @@ export function PublicDiscussionWorkspaceCard({
           : "/discussions/comments",
       )
     : null;
-  const canNavigate = Boolean(destination && hasCourseAccess);
+  const canNavigate = Boolean(
+    destination && (allowPublicRead || hasCourseAccess),
+  );
   const handleNavigation = canNavigate
     ? () => onNavigatePage?.(destination!, { exact: true })
     : onAccessDenied;

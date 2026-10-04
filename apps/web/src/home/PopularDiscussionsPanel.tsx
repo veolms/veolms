@@ -106,6 +106,7 @@ export function PopularDiscussionsPanel({
               key={discussion.id}
               discussion={discussion}
               onNavigatePage={onDiscussionNavigatePage}
+              allowPublicRead
               hasCourseAccess={
                 accessibleCourseIds?.has(discussion.courseId) ?? false
               }

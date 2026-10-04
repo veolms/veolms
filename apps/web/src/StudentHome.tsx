@@ -66,7 +66,7 @@ function getCourseTimestamp(value: string | Date | null | undefined) {
 
 const DEFAULT_PROGRESS_MESSAGE = "Ready to continue your learning journey?";
 
-function getProgressedHomeMessage(
+function getRemainingLessonCount(
   context: LearningProgressResumeContextResponse | null | undefined,
 ) {
   if (
@@ -75,26 +75,37 @@ function getProgressedHomeMessage(
     !Number.isInteger(context.completedLessons) ||
     context.totalLessons <= 0 ||
     context.completedLessons < 0 ||
-    context.completedLessons > context.totalLessons ||
+    context.completedLessons > context.totalLessons
+  ) {
+    return null;
+  }
+
+  return Math.max(0, context.totalLessons - context.completedLessons);
+}
+
+function getProgressedHomeMessage(
+  context: LearningProgressResumeContextResponse | null | undefined,
+) {
+  const remainingLessons = getRemainingLessonCount(context);
+  if (
+    remainingLessons === null ||
+    !context ||
     !Array.isArray(context.upcomingLessons)
   ) {
     return DEFAULT_PROGRESS_MESSAGE;
   }
 
-  if (context.completedLessons === context.totalLessons) {
+  if (remainingLessons === 0) {
     return "Great work — you've completed this course.";
   }
 
   if (!context.resumeLesson) return DEFAULT_PROGRESS_MESSAGE;
 
-  if (context.upcomingLessons.length === 0) {
+  if (remainingLessons === 1 && context.upcomingLessons.length === 0) {
     return "One last lesson to go. Finish strong!";
   }
 
-  if (
-    context.upcomingLessons.length === 1 ||
-    context.upcomingLessons.length === 2
-  ) {
+  if (remainingLessons === 2 || remainingLessons === 3) {
     return "You're almost there — keep going!";
   }
 
@@ -275,15 +286,18 @@ function ProgressedUpNextPanel({
   isLoading: boolean;
 }) {
   const upcomingLessons = context?.upcomingLessons ?? [];
-  const hasCompletedCourse =
-    context !== undefined &&
-    context !== null &&
-    context.totalLessons > 0 &&
-    context.completedLessons === context.totalLessons;
+  const remainingLessons = getRemainingLessonCount(context);
+  const hasCompletedCourse = remainingLessons === 0;
   const hasFinalIncompleteLesson =
     Boolean(context?.resumeLesson) &&
+    remainingLessons === 1 &&
     upcomingLessons.length === 0 &&
     !hasCompletedCourse;
+  const hasResumeFallback =
+    Boolean(context?.resumeLesson) &&
+    upcomingLessons.length === 0 &&
+    !hasCompletedCourse &&
+    !hasFinalIncompleteLesson;
 
   if (
     !isLoading &&
@@ -331,6 +345,32 @@ function ProgressedUpNextPanel({
             You&apos;re on the last lesson of this course.
           </small>
         </div>
+      ) : hasResumeFallback && context?.resumeLesson ? (
+        <a
+          href={getCoursePlayerPath(
+            context.courseSlug,
+            "home",
+            context.resumeLesson.lessonNumber,
+            "/home",
+          )}
+          className="group mt-2 flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-lg border border-(--border) bg-(--surface-strong) px-2.5 py-2 transition-colors hover:border-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+          aria-label={`Continue current lesson: ${context.resumeLesson.title}`}
+        >
+          <span className="min-w-0">
+            <strong className="block truncate text-xs font-semibold text-(--text)">
+              Continue current lesson
+            </strong>
+            <small className="mt-0.5 block truncate text-[0.65rem] text-(--muted)">
+              {context.resumeLesson.title} ·{" "}
+              {context.resumeLesson.progressPercent}% complete
+            </small>
+          </span>
+          <ArrowRight
+            size={15}
+            className="shrink-0 text-(--accent-ink,var(--accent)) transition-transform group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
+        </a>
       ) : context && upcomingLessons.length > 0 ? (
         <div className="mt-2 grid gap-1.5">
           {upcomingLessons.slice(0, 3).map((lesson) => (
