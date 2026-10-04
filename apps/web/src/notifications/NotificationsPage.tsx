@@ -4,6 +4,7 @@ import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { ArrowClockwiseIcon as ArrowClockwise } from "@phosphor-icons/react/ArrowClockwise";
 import type { NavigateTo } from "../routing/navigation";
+import { PageHeading } from "../components/PageHeading";
 import { NotificationCard } from "./NotificationCard";
 import { NotificationFiltersBar } from "./NotificationFiltersBar";
 import { NotificationSummaryWidget } from "./NotificationSummaryWidget";
@@ -17,6 +18,7 @@ import {
 
 export interface NotificationsPageProps {
   onNavigatePage?: NavigateTo;
+  onNavigateBack?: () => void;
   setNotice?: (message: string) => void;
 }
 
@@ -33,6 +35,7 @@ const tabsConfig: readonly {
 
 export function NotificationsPage({
   onNavigatePage,
+  onNavigateBack,
   setNotice,
 }: NotificationsPageProps) {
   const {
@@ -52,6 +55,7 @@ export function NotificationsPage({
     tabCounts,
     markAllAsRead,
     markAsRead,
+    markAsUnread,
     archiveNotification,
     resetFilters,
     isLoading,
@@ -92,18 +96,12 @@ export function NotificationsPage({
     >
       {/* Top Header Row with Title, Badge, Subtitle, and Mark All as Read Button */}
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1
-            id="notifications-page-title"
-            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
-          >
-            Notifications
-          </h1>
-          <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
-            Stay updated with course activity, replies, reminders, and
-            announcements.
-          </p>
-        </div>
+        <PageHeading
+          id="notifications-page-title"
+          title="Notifications"
+          description="Stay updated with course activity, replies, reminders, and announcements."
+          onNavigateBack={onNavigateBack}
+        />
 
         {/* Mark All as Read Action Button */}
         <button
@@ -233,6 +231,7 @@ export function NotificationsPage({
                         key={item.id}
                         notification={item}
                         onMarkRead={markAsRead}
+                        onMarkUnread={markAsUnread}
                         onArchive={archiveNotification}
                         onOpen={onNavigatePage}
                         setNotice={setNotice}
@@ -257,6 +256,7 @@ export function NotificationsPage({
                         key={item.id}
                         notification={item}
                         onMarkRead={markAsRead}
+                        onMarkUnread={markAsUnread}
                         onArchive={archiveNotification}
                         onOpen={onNavigatePage}
                         setNotice={setNotice}
@@ -281,6 +281,7 @@ export function NotificationsPage({
                         key={item.id}
                         notification={item}
                         onMarkRead={markAsRead}
+                        onMarkUnread={markAsUnread}
                         onArchive={archiveNotification}
                         onOpen={onNavigatePage}
                         setNotice={setNotice}

@@ -10,6 +10,35 @@ export function findUserById(database: Executor, userId: string) {
     .executeTakeFirst();
 }
 
+export function findPublicProfileByUsername(
+  database: Executor,
+  username: string,
+) {
+  return database
+    .selectFrom("users")
+    .select([
+      "username",
+      "display_name",
+      "avatar_data_url",
+      "bio",
+      "email",
+      "email_verified_at",
+      "email_public",
+      "phone_no",
+      "phone_verified_at",
+      "mobile_public",
+      "linkedin_url",
+      "linkedin_public",
+      "github_url",
+      "github_public",
+      "website_url",
+      "website_public",
+    ])
+    .where("username", "=", username)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
 /** Used only by durable notification delivery after an account is deactivated. */
 export function findUserByIdIncludingDeleted(
   database: Executor,

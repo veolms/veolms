@@ -138,6 +138,21 @@ export async function markRead(
     .executeTakeFirst();
 }
 
+export async function markUnread(
+  database: DatabaseExecutor,
+  userId: string,
+  notificationId: string,
+) {
+  return await database
+    .updateTable("notifications")
+    .set({ read_at: null })
+    .where("id", "=", notificationId)
+    .where("recipient_user_id", "=", userId)
+    .where("archived_at", "is", null)
+    .returningAll()
+    .executeTakeFirst();
+}
+
 export async function markAllRead(
   database: DatabaseExecutor,
   userId: string,

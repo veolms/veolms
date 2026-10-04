@@ -3,8 +3,7 @@
   --student-surface-block-start: 22px;
 }
 
-.student-home,
-.my-courses-page {
+.student-home {
   min-width: 0;
 }
 
@@ -1921,11 +1920,9 @@
 }
 
 @media (max-width: 820px) {
-  /* Only the first enrolled-course card can enter the initial mobile
-     viewport. Keep the remaining cards in the document for scrolling and
-     accessibility, while deferring their style/layout/paint work until they
-     approach the viewport. This avoids a long first-render layout task on
-     the My Courses route without changing its rendered content. */
+  /* Keep off-screen enrolled-course cards in the document for scrolling and
+     accessibility while deferring their style/layout/paint work until they
+     approach the viewport. */
   @supports (content-visibility: auto) {
     .learning-course-grid > .learning-card:nth-child(n + 2) {
       content-visibility: auto;

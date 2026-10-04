@@ -36,11 +36,12 @@ export function createLearningHlsPreloadSource(options: {
     options.mediaKey && shouldResumeFromLastPosition()
       ? readResumePosition(options.mediaKey)
       : 0;
+  const isDash = /\.mpd(?:$|[?#])/i.test(options.manifestUrl);
   return {
     id: options.mediaKey,
     src: toAbsoluteLearningMediaUrl(options.manifestUrl),
-    type: LEARNING_HLS_MIME_TYPE,
-    kind: "hls" as const,
+    type: isDash ? "application/dash+xml" : LEARNING_HLS_MIME_TYPE,
+    kind: isDash ? ("dash" as const) : ("hls" as const),
     startTime,
     streaming: { ...LEARNING_HLS_STREAMING },
     networking: {

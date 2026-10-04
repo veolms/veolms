@@ -2,7 +2,13 @@ export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
 export type CourseRole = "student" | "creator";
 export type CourseEnrollmentFilter =
-  "all" | "enrolled" | "not-enrolled" | "published" | "draft" | "bin";
+  | "all"
+  | "enrolled"
+  | "not-enrolled"
+  | "wishlist"
+  | "published"
+  | "draft"
+  | "bin";
 export type CourseSort = "latest" | "title" | "progress";
 export type CourseStatusFilter =
   | "all"
@@ -75,7 +81,6 @@ export function getApiCourseSlugForLegacyKey(
 }
 
 export interface CourseCatalogueFilters {
-  activeSection: string;
   wishlisted: ReadonlySet<string>;
   role: CourseRole;
   enrollmentFilter: CourseEnrollmentFilter;
@@ -84,10 +89,112 @@ export interface CourseCatalogueFilters {
   sort: CourseSort;
 }
 
+export function courseMatchesWishlist(
+  course: Pick<Course, "id" | "slug">,
+  wishlisted: ReadonlySet<string>,
+): boolean {
+  if (wishlisted.has(course.id)) return true;
+  const slug = course.slug?.trim();
+  return Boolean(slug && wishlisted.has(slug));
+}
+
+function matchesCourseSearch(
+  course: Course,
+  normalizedSearch: string,
+): boolean {
+  return (
+    !normalizedSearch ||
+    `${course.title} ${course.description}`
+      .toLowerCase()
+      .includes(normalizedSearch)
+  );
+}
+
+function matchesCourseStatusFilter(
+  course: Course,
+  role: CourseRole,
+  statusFilter: CourseStatusFilter,
+): boolean {
+  if (statusFilter === "all" || role !== "student") return true;
+  const progress = course.progress ?? 0;
+  if (
+    statusFilter === "in-progress" &&
+    (!course.enrolled || progress <= 0 || progress >= 100)
+  )
+    return false;
+  if (statusFilter === "not-started" && (!course.enrolled || progress !== 0))
+    return false;
+  if (statusFilter === "completed" && (!course.enrolled || progress < 100))
+    return false;
+  return true;
+}
+
+export interface CourseQuickFilterCounts {
+  all: number;
+  enrolled: number;
+  "not-enrolled": number;
+  published: number;
+  draft: number;
+  bin: number;
+  wishlist: number;
+}
+
+export function getCourseQuickFilterCounts(
+  catalogue: readonly Course[],
+  {
+    wishlisted,
+    role,
+    statusFilter,
+    search,
+  }: Pick<
+    CourseCatalogueFilters,
+    "wishlisted" | "role" | "statusFilter" | "search"
+  >,
+): CourseQuickFilterCounts {
+  const normalizedSearch = search.trim().toLowerCase();
+  const pool = catalogue.filter((course) => {
+    if (!matchesCourseSearch(course, normalizedSearch)) return false;
+    return matchesCourseStatusFilter(course, role, statusFilter);
+  });
+
+  const wishlistPool = pool.filter((course) =>
+    courseMatchesWishlist(course, wishlisted),
+  );
+
+  if (role === "student") {
+    const enrolled = pool.filter((course) => course.enrolled).length;
+    return {
+      all: pool.length,
+      enrolled,
+      "not-enrolled": pool.length - enrolled,
+      published: 0,
+      draft: 0,
+      bin: 0,
+      wishlist: wishlistPool.length,
+    };
+  }
+
+  const published = pool.filter(
+    (course) => course.lifecycleStatus === "published",
+  ).length;
+  const draft = pool.filter(
+    (course) => course.lifecycleStatus === "draft",
+  ).length;
+
+  return {
+    all: pool.length,
+    enrolled: 0,
+    "not-enrolled": 0,
+    published,
+    draft,
+    bin: 0,
+    wishlist: wishlistPool.length,
+  };
+}
+
 export function getVisibleCourses(
   catalogue: readonly Course[],
   {
-    activeSection,
     wishlisted,
     role,
     enrollmentFilter,
@@ -98,7 +205,11 @@ export function getVisibleCourses(
 ): Course[] {
   const normalizedSearch = search.trim().toLowerCase();
   let result = catalogue.filter((course) => {
-    if (activeSection === "Wishlist" && !wishlisted.has(course.id))
+    if (
+      role === "student" &&
+      enrollmentFilter === "wishlist" &&
+      !courseMatchesWishlist(course, wishlisted)
+    )
       return false;
     if (
       role === "student" &&

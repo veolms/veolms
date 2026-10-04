@@ -62,13 +62,13 @@ export const SIDEBAR_DOCK_DEFAULT_ORDER: readonly SidebarDockItem[] = [
   "appearance",
   "theme",
   "reading-mode",
-  "fullscreen",
   "settings",
+  "fullscreen",
 ];
 export const SIDEBAR_DOCK_DEFAULT_ITEMS: readonly SidebarDockItem[] = [
   "appearance",
   "reading-mode",
-  "fullscreen",
+  "settings",
 ];
 
 export const PAGE_TAB_COLORS_KEY = "veolms-page-tab-colors";

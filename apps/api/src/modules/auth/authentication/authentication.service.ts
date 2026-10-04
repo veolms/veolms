@@ -124,6 +124,21 @@ export function createAuthService({
     return userRepository.findUserByIdIncludingDeleted(database, userId);
   }
 
+  async function getPublicProfile(username: string) {
+    const user = await userRepository.findPublicProfileByUsername(
+      database,
+      username.trim().toLowerCase(),
+    );
+    if (!user) {
+      throw new AppError(
+        404,
+        "USER_NOT_FOUND",
+        "This profile isn't available.",
+      );
+    }
+    return user;
+  }
+
   function findUserByIdentifier(
     identifier: string,
     identifierType: IdentifierType,
@@ -1043,8 +1058,8 @@ export function createAuthService({
         }
 
         const avatarDataUrl =
-          avatarStorage.getPublicObjectUrl(storageKey) ??
-          avatarCdnUrl(avatarStorage, userId, 160, input.uploadId);
+          avatarCdnUrl(avatarStorage, userId, 160, input.uploadId) ??
+          avatarStorage.getPublicObjectUrl(storageKey);
         if (!avatarDataUrl) {
           throw new AppError(
             503,
@@ -1282,6 +1297,7 @@ export function createAuthService({
   return {
     findUserById,
     findUserByIdForNotification,
+    getPublicProfile,
     findUserByIdentifier,
     findUserByIdentifierIncludingDeleted,
     findVerifiedUserByEmail,

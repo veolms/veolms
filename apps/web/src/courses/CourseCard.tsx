@@ -1,11 +1,11 @@
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { CertificateIcon as Certificate } from "@phosphor-icons/react/Certificate";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
-import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
@@ -30,42 +30,12 @@ export {
 const courseOverviewPath = (course: Course) =>
   `/courses/${encodeURIComponent(getCourseRouteKey(course))}/overview`;
 
-const creatorStatusStyles = {
-  published: "course-tag--published",
-  draft: "course-tag--draft",
-  archived: "course-tag--archived",
-  bin: "course-tag--bin",
-} as const;
-
-const studentStatusStyles = {
-  "not-enrolled": "course-tag--not-enrolled",
-  "not-started": "course-tag--not-started",
-  "in-progress": "course-tag--in-progress",
-  completed: "course-tag--completed",
-} as const;
-
-const getStudentStatus = (course: Course) => {
-  if (!course.enrolled) return "not-enrolled" as const;
-  const progress = course.progress ?? 0;
-  if (progress >= 100) return "completed" as const;
-  if (progress > 0) return "in-progress" as const;
-  return "not-started" as const;
-};
-
-const getStudentStatusLabel = (course: Course) => {
-  const status = getStudentStatus(course);
-  if (status === "not-enrolled") return "Not Enrolled";
-  if (status === "completed") return "Completed";
-  if (status === "in-progress") return "In Progress";
-  return "Not Started";
-};
-
 export interface CourseCardProps {
   course: Course;
   role: CourseRole;
   variant?: "catalogue" | "public";
   wishlisted: boolean;
-  onWishlist: (courseId: string) => void;
+  onWishlist: (course: Course) => void;
   onOpen: (course: Course) => void;
   onExplore: (course: Course) => void;
   onEdit?: (course: Course) => void;
@@ -115,7 +85,6 @@ export function CourseCard({
     (Boolean(currentUserId) &&
       Boolean(course.creatorId) &&
       course.creatorId === currentUserId);
-  const studentStatus = getStudentStatus(course);
   const progress = course.progress ?? 0;
   const overviewPath = courseOverviewPath(course);
   const absoluteCourseUrl =
@@ -196,7 +165,7 @@ export function CourseCard({
 
   return (
     <article
-      className={`group relative min-w-0 overflow-hidden rounded-xl border transition-[background-color,box-shadow,opacity,border-color] duration-200 ${
+      className={`group relative min-w-0 overflow-hidden rounded-2xl border transition-[background-color,box-shadow,opacity,border-color] duration-200 ${
         isDeleting
           ? "border-(--border) bg-(--card-surface,var(--surface)) opacity-60 pointer-events-none select-none"
           : "border-(--border) bg-(--card-surface,var(--surface)) shadow-(--card-shadow) hover:bg-(--card-surface-hover,var(--hover)) hover:shadow-(--card-hover-shadow)"
@@ -207,7 +176,7 @@ export function CourseCard({
       data-deleting={isDeleting ? "true" : undefined}
     >
       <div
-        className="relative aspect-video overflow-hidden rounded-t-[11px] bg-(--track)"
+        className="relative aspect-video overflow-hidden rounded-t-2xl bg-(--track)"
         data-course-card-media
       >
         {course.thumbnail ? (
@@ -241,56 +210,16 @@ export function CourseCard({
               <span>Deleting...</span>
             </span>
           </div>
-        ) : role === "creator" ? (
-          <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
-            <span
-              className={`course-tag ${isBin || course.deletedAt ? creatorStatusStyles.bin : creatorStatusStyles[course.lifecycleStatus]}`}
-              data-course-card-tag
-            >
-              {isBin || course.deletedAt ? "Deleted" : course.lifecycleStatus}
-            </span>
-          </div>
-        ) : (
-          <>
-            {!isPublic && (
-              <>
-                <div className="absolute left-3.5 top-3.5 z-20 flex flex-wrap items-center gap-1.5">
-                  <span
-                    className={`course-tag ${studentStatusStyles[studentStatus]}`}
-                    data-course-card-tag
-                  >
-                    {getStudentStatusLabel(course)}
-                  </span>
-                </div>
-                {!course.enrolled && (
-                  <button
-                    type="button"
-                    className={`absolute right-3 top-3 z-20 flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/15 bg-slate-950/70 text-white shadow-lg transition-colors hover:bg-slate-950/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${wishlisted ? "text-rose-400" : ""}`}
-                    aria-label={
-                      wishlisted
-                        ? `Remove ${course.title} from wishlist`
-                        : `Add ${course.title} to wishlist`
-                    }
-                    aria-pressed={wishlisted}
-                    disabled={isDeleting}
-                    onClick={() => onWishlist(course.id)}
-                  >
-                    <Heart size={21} weight={wishlisted ? "fill" : "regular"} />
-                  </button>
-                )}
-              </>
-            )}
-          </>
-        )}
+        ) : null}
       </div>
 
       <div
-        className="relative flex min-h-46 flex-col p-4"
+        className="relative flex min-h-46 flex-col px-4 pt-3 pb-4"
         data-course-card-details
       >
         <a
           href={overviewPath}
-          className="absolute inset-0 z-10 cursor-pointer rounded-b-[11px] outline-none transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+          className="absolute inset-0 z-10 cursor-pointer rounded-b-2xl outline-none transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
           aria-label={`View course overview for ${course.title}`}
           title="View Course Overview"
           data-course-card-curriculum
@@ -316,8 +245,8 @@ export function CourseCard({
           className="-mx-2 flex min-w-0 items-start"
           data-course-card-info-row
         >
-          <div className="min-w-0 flex-1 px-2 py-1.5 text-left">
-            <h2 className="truncate text-[0.92rem] font-semibold leading-8 tracking-[-0.015em] text-(--text) lg:text-[0.98rem]">
+          <div className="min-w-0 flex-1 px-2 text-left">
+            <h2 className="truncate text-base font-semibold leading-10 tracking-[-0.015em] text-(--text) lg:text-lg">
               {course.title}
             </h2>
             <p className="mt-0.5 truncate text-[0.75rem] leading-6 text-(--muted)">
@@ -510,7 +439,19 @@ export function CourseCard({
                     label="Course Overview"
                     onClick={() => closeThen(() => onExplore(course))}
                   />
-                  <MenuDivider />
+                  <MenuAction
+                    icon={
+                      <Heart
+                        size={17}
+                        weight={wishlisted ? "fill" : "regular"}
+                        aria-hidden="true"
+                      />
+                    }
+                    label={
+                      wishlisted ? "Remove from Wishlist" : "Add to Wishlist"
+                    }
+                    onClick={() => closeThen(() => onWishlist(course))}
+                  />
                   <MenuAction
                     Icon={ShareNetwork}
                     label="Share Course"
@@ -588,7 +529,7 @@ export function CourseCard({
                   Boolean(isBin || course.deletedAt) &&
                   (!onRestoreRequested || !canEdit))
               }
-              className={`relative z-20 min-h-11 w-full items-center rounded-(--control-radius-action) border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-3.25 text-[14px]! font-[650]! text-(--on-accent) shadow-[0_10px_22px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${
+              className={`relative z-20 min-h-11 w-full items-center !rounded-[10px] border border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-(--accent) px-3.25 text-[15px]! font-semibold! text-(--on-accent) shadow-[0_10px_22px_color-mix(in_srgb,var(--accent-shadow)_48%,transparent)] transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) ${
                 role === "creator"
                   ? "flex justify-center gap-2 hover:bg-(--accent-hover)"
                   : "flex justify-center gap-3 hover:bg-(--accent-hover)"
@@ -682,29 +623,40 @@ export function CourseCard({
                   </>
                 )
               ) : (
-                <span className="flex min-w-0 items-center gap-3">
+                <span
+                  className={`flex min-w-0 items-center ${course.enrolled ? "gap-3" : "gap-2.5"}`}
+                >
                   {course.enrolled ? (
-                    <Play
-                      className="shrink-0"
-                      size={17}
-                      weight="fill"
-                      aria-hidden="true"
-                    />
+                    <>
+                      <Play
+                        className="shrink-0"
+                        size={17}
+                        weight="fill"
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">Continue Learning</span>
+                    </>
+                  ) : isPublic ? (
+                    <>
+                      <ListBullets
+                        className="shrink-0"
+                        size={17}
+                        weight="regular"
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">View Course</span>
+                    </>
                   ) : (
-                    <ListBullets
-                      className="shrink-0"
-                      size={17}
-                      weight="regular"
-                      aria-hidden="true"
-                    />
+                    <>
+                      <span className="truncate">Enroll Now</span>
+                      <ArrowRight
+                        className="shrink-0 translate-y-[0.5px]"
+                        size={18}
+                        weight="bold"
+                        aria-hidden="true"
+                      />
+                    </>
                   )}
-                  <span className="truncate">
-                    {course.enrolled
-                      ? "Continue Learning"
-                      : isPublic
-                        ? "View Course"
-                        : "View Curriculum"}
-                  </span>
                 </span>
               )}
             </button>

@@ -140,6 +140,7 @@ export function AcademyPaletteMenu({
       role="menu"
       aria-label="Choose a color theme"
       aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home End Enter Escape"
+      data-sidebar-swipe-ignore
       onKeyDown={handleKeyDown}
     >
       {themes.map((item, index) => (
@@ -152,7 +153,11 @@ export function AcademyPaletteMenu({
           aria-label={`${item.name}. ${item.note}`}
           aria-checked={item.id === activeTheme}
           tabIndex={item.id === activeTheme ? 0 : -1}
-          className={item.id === activeTheme ? "is-selected" : ""}
+          className={
+            item.id === activeTheme
+              ? "is-selected cursor-pointer"
+              : "cursor-pointer"
+          }
           key={item.id}
           title={item.name}
           data-theme-swatch={item.id}

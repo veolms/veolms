@@ -1,10 +1,20 @@
 import { Navigate, useLocation, useParams } from "react-router";
+import { isStudentCatalogueFilterSubpath } from "../courses/catalogueRoutes";
+import { normalizeNavigationPath } from "../routing/routeDescriptors";
 
 export default function LegacyLearningRoute() {
   const { courseSlug, lectureSlug } = useParams();
   const location = useLocation();
 
   if (!courseSlug) return <Navigate replace to="/courses" />;
+  if (
+    !lectureSlug &&
+    isStudentCatalogueFilterSubpath(
+      normalizeNavigationPath(`/courses/${courseSlug}`),
+    )
+  ) {
+    return null;
+  }
   if (lectureSlug === "overview")
     return (
       <Navigate

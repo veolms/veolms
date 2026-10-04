@@ -1,19 +1,5 @@
-import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
-import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
-import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
-import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
-import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
-import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentType,
-} from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   handleRovingTabKeyDown,
   scrollKeyboardFocusedTabIntoView,
@@ -34,7 +20,7 @@ import type {
   SidebarPreferences,
 } from "./settings/settingsPreferences";
 import type { NavigateTo } from "./routing/navigation";
-import type { NavigationItemWithMetadata } from "./shell/navigation";
+import { PageHeading } from "./components/PageHeading";
 import {
   normalizeSettingsTab,
   readSettingsTab,
@@ -47,51 +33,10 @@ import {
 } from "./keyboardShortcuts";
 import { SwipeableTabPanel } from "./navigation/SwipeableTabPanel";
 import { useAuthStore } from "./store/auth.store";
+import { SETTINGS_TABS } from "./settings/settingsTabs";
 import "./styles/features/settings/foundation.css";
 import "./styles/features/settings/preferences-responsive.css";
 export type { SettingsTab } from "./routing/tabSessionState";
-
-type SettingsTabIcon = ComponentType<{
-  size?: number;
-  weight?: "duotone" | "fill" | "regular";
-}>;
-
-interface SettingsTabDefinition {
-  id: SettingsTab;
-  label: string;
-  Icon: SettingsTabIcon;
-  tone: "blue" | "cyan" | "gold" | "green" | "orange" | "rose" | "violet";
-}
-
-const SETTINGS_TABS: readonly SettingsTabDefinition[] = [
-  { id: "profile", label: "Profile", Icon: UserCircle, tone: "blue" },
-  {
-    id: "appearance",
-    label: "Appearance",
-    Icon: Palette,
-    tone: "orange",
-  },
-  { id: "sidebar", label: "Sidebar", Icon: SidebarSimple, tone: "violet" },
-  {
-    id: "learning",
-    label: "Learning",
-    Icon: GraduationCap,
-    tone: "green",
-  },
-  {
-    id: "notifications",
-    label: "Notifications",
-    Icon: Bell,
-    tone: "gold",
-  },
-  {
-    id: "security",
-    label: "Privacy & Security",
-    Icon: ShieldCheck,
-    tone: "cyan",
-  },
-  { id: "account", label: "Account", Icon: GearSix, tone: "rose" },
-];
 
 const SETTINGS_TAB_IDS = SETTINGS_TABS.map(({ id }) => id);
 const SETTINGS_ARROW_KEY_OWNER_SELECTOR = [
@@ -112,8 +57,11 @@ export interface SettingsPageProps {
   isAuthenticated: boolean;
   onNavigatePage?: NavigateTo;
   onExitSettings?: () => void;
+  showBackButton?: boolean;
   onProfileSaved?: (profile: ProfilePreferences) => void;
   theme: DisplayMode;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
   onThemeChange: (theme: DisplayMode, origin?: ThemeRevealOrigin) => void;
   academyTheme: string;
   onAcademyThemeChange: (themeId: string, origin?: ThemeRevealOrigin) => void;
@@ -123,9 +71,6 @@ export interface SettingsPageProps {
   onSidebarPreferencesChange: (preferences: SidebarPreferences) => void;
   sidebarMode: SidebarMode;
   onSidebarModeChange: (mode: SidebarMode) => void;
-  navigationItems?: readonly NavigationItemWithMetadata[];
-  navigationVisibleItems?: readonly string[];
-  onNavigationVisibilityChange?: (visibleItems: string[]) => void;
   userRoles?: readonly string[] | null;
 }
 
@@ -149,6 +94,8 @@ const SettingsTabContent = memo(function SettingsTabContent({
       return (
         <AppearanceSettings
           theme={pageProps.theme}
+          isFullscreen={pageProps.isFullscreen}
+          onToggleFullscreen={pageProps.onToggleFullscreen}
           onThemeChange={pageProps.onThemeChange}
           academyTheme={pageProps.academyTheme}
           onAcademyThemeChange={pageProps.onAcademyThemeChange}
@@ -164,11 +111,6 @@ const SettingsTabContent = memo(function SettingsTabContent({
           academyTheme={pageProps.academyTheme}
           sidebarMode={pageProps.sidebarMode}
           onSidebarModeChange={pageProps.onSidebarModeChange}
-          navigationItems={pageProps.navigationItems}
-          role={pageProps.role}
-          userRoles={pageProps.userRoles}
-          navigationVisibleItems={pageProps.navigationVisibleItems}
-          onNavigationVisibilityChange={pageProps.onNavigationVisibilityChange}
         />
       );
     case "learning":
@@ -197,8 +139,11 @@ export function SettingsPage({
   isAuthenticated,
   onNavigatePage,
   onExitSettings,
+  showBackButton = false,
   onProfileSaved,
   theme,
+  isFullscreen,
+  onToggleFullscreen,
   onThemeChange,
   academyTheme,
   onAcademyThemeChange,
@@ -208,9 +153,6 @@ export function SettingsPage({
   onSidebarPreferencesChange,
   sidebarMode,
   onSidebarModeChange,
-  navigationItems,
-  navigationVisibleItems,
-  onNavigationVisibilityChange,
 }: SettingsPageProps) {
   const activeTab = normalizeSettingsTab(tab);
   const storeIsAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -232,6 +174,8 @@ export function SettingsPage({
       onExitSettings,
       onProfileSaved,
       theme,
+      isFullscreen,
+      onToggleFullscreen,
       onThemeChange,
       academyTheme,
       onAcademyThemeChange,
@@ -241,24 +185,20 @@ export function SettingsPage({
       onSidebarPreferencesChange,
       sidebarMode,
       onSidebarModeChange,
-      navigationItems,
-      navigationVisibleItems,
-      onNavigationVisibilityChange,
     }),
     [
       academyTheme,
       canEditAuthenticatedSettings,
-      navigationItems,
-      navigationVisibleItems,
+      isFullscreen,
       onAcademyThemeChange,
       onExitSettings,
       onNavigatePage,
-      onNavigationVisibilityChange,
       onPageTabColorsChange,
       onProfileSaved,
       onSidebarModeChange,
       onSidebarPreferencesChange,
       onThemeChange,
+      onToggleFullscreen,
       pageTabColors,
       role,
       sidebarMode,
@@ -358,7 +298,7 @@ export function SettingsPage({
       if (event.defaultPrevented || isEditingShortcutTarget(event.target))
         return;
 
-      let destination: SettingsTabDefinition | undefined;
+      let destination: (typeof SETTINGS_TABS)[number] | undefined;
       if (event.altKey) {
         const index = getNumberShortcutIndex(event);
         destination = index === null ? undefined : SETTINGS_TABS[index];
@@ -392,17 +332,13 @@ export function SettingsPage({
     <div className="settings-page" aria-labelledby="settings-page-title">
       <header className="settings-page__topbar">
         <div className="settings-page__heading">
-          <div className="settings-page__heading-copy">
-            <h1
-              id="settings-page-title"
-              className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
-            >
-              Settings
-            </h1>
-            <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
-              Manage your personal preferences and interface experience.
-            </p>
-          </div>
+          <PageHeading
+            id="settings-page-title"
+            title="Settings"
+            description="Manage your personal preferences and interface experience."
+            onNavigateBack={showBackButton ? leaveSettings : undefined}
+            copyClassName="settings-page__heading-copy"
+          />
           <div className="settings-page__icon" aria-hidden="true">
             <GearSix size={25} weight="regular" />
           </div>

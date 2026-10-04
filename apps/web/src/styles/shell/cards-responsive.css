@@ -204,7 +204,7 @@
 
   .courses-nav button > .courses-nav__text,
   .courses-nav button > b,
-  .courses-profile__button > span,
+  .courses-profile__button > span:not(.courses-profile__avatar-wrap),
   .courses-profile__button > svg,
   .sidebar-appearance > button > span {
     max-width: 190px;
@@ -239,12 +239,12 @@
   }
 
   .courses-app--collapsed .courses-profile__button {
-    justify-content: flex-start;
-    padding: 7px;
+    justify-content: center;
+    padding: 4px 0;
   }
 
   .courses-nav button > .courses-nav__text,
-  .courses-profile__button > span,
+  .courses-profile__button > span:not(.courses-profile__avatar-wrap),
   .sidebar-appearance > button > span {
     display: block;
     overflow: hidden;
@@ -305,7 +305,9 @@
 
   .courses-app--collapsed .courses-nav button > .courses-nav__text,
   .courses-app--collapsed .courses-nav button > b,
-  .courses-app--collapsed .courses-profile__button > span,
+  .courses-app--collapsed
+    .courses-profile__button
+    > span:not(.courses-profile__avatar-wrap),
   .courses-app--collapsed .courses-profile__button > svg,
   .courses-app--collapsed .sidebar-appearance > button > span {
     display: block;
@@ -323,7 +325,9 @@
     padding-inline: 0;
   }
 
-  .courses-app--collapsed .courses-profile__button > span {
+  .courses-app--collapsed
+    .courses-profile__button
+    > span:not(.courses-profile__avatar-wrap) {
     display: grid;
   }
 
@@ -544,6 +548,18 @@
     overflow: hidden;
   }
 
+  .courses-app--resizing.courses-app--collapsed
+    .courses-profile
+    > .courses-profile__button,
+  :root[data-sidebar-state="collapsed"]
+    .courses-app.courses-app--resizing:not(.courses-app--collapsed)
+    .courses-profile
+    > .courses-profile__button {
+    height: 56px;
+    min-height: 56px;
+    aspect-ratio: auto;
+  }
+
   .courses-app--resize-content-visible.courses-app--collapsed
     .courses-profile__button {
     /* Keep the expanded profile rhythm while the remaining text width clips. */
@@ -623,18 +639,6 @@
     overflow: visible;
     border: 0;
     border-radius: 0;
-  }
-
-  .mobile-menu-sheet .mobile-palette-menu {
-    --mobile-palette-menu-width: min(216px, calc(100% - 24px));
-    right: auto;
-    bottom: calc(100% + 10px);
-    left: clamp(
-      0px,
-      calc(var(--mobile-palette-anchor-x, 50%) - 108px),
-      calc(100% - var(--mobile-palette-menu-width))
-    );
-    width: var(--mobile-palette-menu-width);
   }
 }
 
