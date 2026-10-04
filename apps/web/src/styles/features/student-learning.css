@@ -808,6 +808,21 @@
     align-self: start;
   }
 
+  .home-dashboard-grid.student-home-progressed__dashboard-grid--without-learning {
+    grid-template-rows: auto auto;
+  }
+
+  .home-dashboard-grid.student-home-progressed__dashboard-grid--without-learning
+    > .home-progress-panel {
+    grid-row: 1;
+  }
+
+  .home-dashboard-grid.student-home-progressed__dashboard-grid--without-learning
+    > .home-updates-panel {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
   .home-dashboard-grid.student-home-progressed__dashboard-grid
     > .student-home-progressed__popular-discussions-panel {
     display: flex;
@@ -1054,8 +1069,7 @@
   );
 }
 
-.home-update-list,
-.home-discussion-list {
+.home-update-list {
   margin-top: 8px;
 }
 
@@ -1286,27 +1300,17 @@
   }
 }
 
-.home-update-list strong,
-.home-discussion-list strong {
+.home-update-list strong {
   color: var(--text);
   font-size: 0.71rem;
   font-weight: 650;
 }
 
 .home-update-list small,
-.home-update-list time,
-.home-discussion-list p,
-.home-discussion-list time {
+.home-update-list time {
   color: var(--muted);
   font-size: 0.63rem;
   font-style: normal;
-}
-
-.home-discussion-list article > i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
 }
 
 .home-mini-course-grid {
@@ -1528,67 +1532,6 @@
 .home-mini-course > button:hover {
   background: var(--accent-hover);
   box-shadow: 0 11px 24px var(--accent-shadow);
-}
-
-.home-discussion-list article {
-  display: grid;
-  min-height: 84px;
-  grid-template-columns: 42px minmax(0, 1fr) auto 7px;
-  align-items: start;
-  gap: 10px;
-  border-top: 1px solid var(--border);
-  padding: 11px 3px;
-}
-
-.home-discussion-list article > img,
-.home-discussion-list article > span {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-}
-
-.home-discussion-list article > img {
-  object-fit: cover;
-}
-
-.home-discussion-list article > span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent-ink, var(--accent));
-  background: var(--accent-soft);
-}
-
-.home-discussion-list article > div {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.home-discussion-list strong b {
-  margin-left: 5px;
-  border-radius: 4px;
-  padding: 1px 4px;
-  color: var(--on-accent);
-  background: var(--accent);
-  font-size: 0.54rem;
-}
-
-.home-discussion-list p {
-  display: -webkit-box;
-  overflow: hidden;
-  line-height: 1.5;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.home-discussion-list small {
-  color: var(--accent-ink, var(--accent));
-  font-size: 0.59rem;
-}
-
-.home-discussion-list time {
-  white-space: nowrap;
 }
 
 .learning-page-header {
@@ -2098,14 +2041,6 @@
   .home-update-skeleton > span:first-child {
     width: 48px;
     height: 48px;
-  }
-
-  .home-discussion-list article {
-    grid-template-columns: 38px minmax(0, 1fr) 7px;
-  }
-
-  .home-discussion-list article > time {
-    display: none;
   }
 
   .learning-page-header {

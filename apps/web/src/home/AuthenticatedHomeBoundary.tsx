@@ -1,10 +1,12 @@
 import type { EnrolledCoursesResponse } from "@veolms/contracts";
 import type { LearningCourse } from "../StudentPages";
 import { lazy, Suspense, type ReactNode } from "react";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import { useEnrolledCourses } from "../services/enrollments";
 import { useCourses } from "../services/courses";
 import { useRecentLearningUpdates } from "../services/recent-updates";
 import type { StudentHomeEnrollmentState } from "../StudentHome";
+import "../styles/features/home.css";
 
 const StudentHome = lazy(() =>
   import("../StudentHome").then((module) => ({
@@ -57,9 +59,10 @@ function HomeState({
 
 function HomeLoadingState() {
   return (
-    <HomeState role="status" description="Preparing your Home.">
-      Loading your courses…
-    </HomeState>
+    <div className="home-boundary-loading" role="status" aria-busy="true">
+      <LoadingSpinnerIcon size={22} />
+      <span>Preparing your Home…</span>
+    </div>
   );
 }
 

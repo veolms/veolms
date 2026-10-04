@@ -259,6 +259,45 @@
   }
 }
 
+@media (min-width: 1181px) {
+  .guest-home--guest .home-dashboard-grid.guest-home__layout,
+  :root[data-content-layout="framed"] .guest-home--guest .guest-home__layout {
+    grid-template-columns: minmax(0, 2.05fr) minmax(18rem, 1fr);
+  }
+}
+
+/* Keep the light Discovery Home layered without changing shared Home or card
+   surfaces used by authenticated variants. */
+:root[data-theme="light"] .guest-home--guest {
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 24%, var(--main-surface));
+}
+
+:root[data-theme="light"]
+  .guest-home--guest
+  :is(.guest-home__course-section, .guest-home__discussion-panel) {
+  border-color: color-mix(in srgb, var(--text) 9%, transparent);
+  background: var(--card-surface-soft, var(--surface));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+:root[data-theme="light"] .guest-home--guest .course-card:not(:hover) {
+  border-color: color-mix(in srgb, var(--text) 9%, transparent);
+  background: var(--card-surface, var(--surface));
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+:root[data-theme="light"]
+  .guest-home--guest
+  .guest-home__discussion-panel
+  .discussion-thread--workspace-card.is-compact:not(
+    :is(:hover, :focus-within)
+  ) {
+  border-color: color-mix(in srgb, var(--text) 9%, transparent);
+  background: var(--card-surface, var(--surface));
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--text) 8%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .guest-home__course-column {
     scroll-behavior: auto;

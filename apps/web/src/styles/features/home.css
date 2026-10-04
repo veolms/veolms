@@ -1,4 +1,17 @@
 /* Home dashboard refinement and responsive student navigation */
+.home-boundary-loading {
+  display: flex;
+  min-height: clamp(18rem, 40vh, 28rem);
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 16px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 550;
+  text-align: center;
+}
+
 .home-resume-card {
   padding: 14px 15px;
 }
@@ -149,20 +162,8 @@
   overflow: hidden;
 }
 
-.home-discussion-list {
-  min-width: 0;
-  max-height: none;
-  overflow: visible;
-  padding-right: 0;
-  overscroll-behavior: auto;
-}
-
 .home-discussion-workspace-list {
   margin-top: 8px;
-}
-
-.home-discussion-list article:nth-child(n + 4) {
-  display: none;
 }
 
 @media (max-width: 640px) {

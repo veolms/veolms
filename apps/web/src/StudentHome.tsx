@@ -11,7 +11,7 @@ import type {
   EnrolledCoursesResponse,
   LearningProgressResumeContextResponse,
 } from "@veolms/contracts";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { useNavigate } from "react-router";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
@@ -25,6 +25,7 @@ import { courseCatalogueHorizontalRowClasses } from "./courses/CourseCatalogueSk
 import { HomeCourseRow } from "./home/HomeCourseRow";
 import { HomeEnrolledCourseCard } from "./home/HomeEnrolledCourseCard";
 import { HomeSectionHeader } from "./home/HomePresentation";
+import { useHomeTimeGreeting } from "./home/homeGreeting";
 import {
   getEnrolledCourseKeys,
   getRecommendedCourses,
@@ -64,22 +65,6 @@ function getCourseTimestamp(value: string | Date | null | undefined) {
 }
 
 const DEFAULT_PROGRESS_MESSAGE = "Ready to continue your learning journey?";
-
-function getTimeGreeting(hour: number) {
-  if (hour < 12) return "Good morning";
-  if (hour < 16) return "Good afternoon";
-  return "Good evening";
-}
-
-function useLocalTimeGreeting() {
-  const [greeting, setGreeting] = useState("Good morning");
-
-  useEffect(() => {
-    setGreeting(getTimeGreeting(new Date().getHours()));
-  }, []);
-
-  return greeting;
-}
 
 function getProgressedHomeMessage(
   context: LearningProgressResumeContextResponse | null | undefined,
@@ -412,7 +397,7 @@ export function StudentHome({
   const goalCompletion = 72;
   const firstName =
     (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
-  const timeGreeting = useLocalTimeGreeting();
+  const timeGreeting = useHomeTimeGreeting();
 
   const {
     data: enrolledData,
@@ -497,9 +482,16 @@ export function StudentHome({
       .sort(compareContinueLearningCourses);
   }, [enrolledCourses]);
 
+  const completedCourses = useMemo(() => {
+    return enrolledCourses
+      .filter((course) => course.progress >= 100)
+      .sort(compareContinueLearningCourses);
+  }, [enrolledCourses]);
+
   const heroCourse = useMemo(() => {
-    return continueLearningCourses[0] || null;
-  }, [continueLearningCourses]);
+    return continueLearningCourses[0] || completedCourses[0] || null;
+  }, [completedCourses, continueLearningCourses]);
+  const isCompletedHero = heroCourse ? heroCourse.progress >= 100 : false;
 
   const remainingEnrolledCourses = useMemo(() => {
     const heroCourseId = heroCourse?.id;
@@ -541,6 +533,11 @@ export function StudentHome({
       ),
     [enrolledCourseKeys, publishedCoursesData?.courses],
   );
+  const shouldRenderMoreCourses =
+    shouldLoadRecommendations &&
+    (publishedCoursesLoading || moreCourses.length > 0);
+  const hasLearningSection =
+    remainingEnrolledCourses.length >= 2 || shouldRenderMoreCourses;
   const primaryCourseKey = heroCourse?.slug ?? heroCourse?.id;
   const { data: resumeContextData, isLoading: resumeContextLoading } =
     useLearningProgressResumeContext(primaryCourseKey, {
@@ -632,7 +629,7 @@ export function StudentHome({
       ) : heroCourse ? (
         <section
           className="home-resume-card home-resume-card--progressed"
-          aria-labelledby="continue-learning-title"
+          aria-labelledby="home-hero-course-title"
         >
           <div className="home-resume-layout home-resume-layout--progressed">
             <div className="home-resume-visual home-resume-visual--16-9">
@@ -648,7 +645,7 @@ export function StudentHome({
               />
             </div>
             <div className="home-resume-copy">
-              <h2 id="continue-learning-title">{heroCourse.title}</h2>
+              <h2 id="home-hero-course-title">{heroCourse.title}</h2>
               <strong>
                 {heroCourse.sections} Sections <i /> {heroCourse.lectures}{" "}
                 Lectures <i /> {heroCourse.duration}
@@ -676,8 +673,12 @@ export function StudentHome({
                 className="primary-learning-action"
                 onClick={() => onOpenCourse(heroCourse)}
               >
-                <Play size={18} weight="fill" />
-                Continue Learning
+                {isCompletedHero ? (
+                  <BookOpen size={18} weight="regular" />
+                ) : (
+                  <Play size={18} weight="fill" />
+                )}
+                {isCompletedHero ? "Review Course" : "Continue Learning"}
               </button>
             </div>
             <ProgressedUpNextPanel
@@ -765,7 +766,15 @@ export function StudentHome({
         </section>
       )}
 
-      <div className="home-dashboard-grid student-home-progressed__dashboard-grid">
+      <div
+        className={[
+          "home-dashboard-grid student-home-progressed__dashboard-grid",
+          !hasLearningSection &&
+            "student-home-progressed__dashboard-grid--without-learning",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
         {initialEnrollmentLoading || initialEnrollmentError ? (
           <section className="dashboard-panel home-continue-panel">
             <HomeSectionHeader
@@ -814,7 +823,7 @@ export function StudentHome({
               </HomeCourseRow>
             </div>
           </section>
-        ) : (
+        ) : shouldRenderMoreCourses ? (
           <MoreCoursesPanel
             id="student-home-progressed-more-courses"
             className="student-home-progressed__more-courses-panel"
@@ -822,7 +831,7 @@ export function StudentHome({
             isLoading={publishedCoursesLoading}
             onNavigatePage={onNavigatePage}
           />
-        )}
+        ) : null}
 
         <PopularDiscussionsPanel
           className="student-home-progressed__popular-discussions-panel"

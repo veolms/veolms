@@ -17,6 +17,7 @@ import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
 import { useCourseOverview } from "./services/courses";
 import { usePopularDiscussions } from "./services/learning-interactions";
 import { HomeSectionHeader } from "./home/HomePresentation";
+import { useHomeTimeGreeting } from "./home/homeGreeting";
 import {
   getEnrolledCourseKeys,
   getRecommendedCourses,
@@ -84,12 +85,13 @@ function getPublishedLessons(
 
 function ZeroProgressHeader({ studentName }: { studentName?: string }) {
   const firstName = (studentName?.trim() || "there").split(/\s+/)[0] || "there";
+  const timeGreeting = useHomeTimeGreeting();
 
   return (
     <header className="home-greeting-row">
       <div>
         <h1>
-          Good evening, {firstName}{" "}
+          {timeGreeting}, {firstName}{" "}
           <span className="home-wave" aria-hidden="true">
             👋
           </span>

@@ -14,6 +14,7 @@ import type { NavigateTo } from "../routing/navigation";
 import { HomeCourseRow } from "./HomeCourseRow";
 import { HomeSectionHeader } from "./HomePresentation";
 import { PopularDiscussionsPanel } from "./PopularDiscussionsPanel";
+import { useHomeTimeGreeting } from "./homeGreeting";
 import "../styles/features/student-learning.css";
 import "../styles/features/home.css";
 import "../styles/features/guest-home.css";
@@ -26,13 +27,6 @@ interface DiscoveryHomeProps {
   accessibleCourseIds?: ReadonlySet<string>;
   onDiscussionNavigatePage?: NavigateTo;
   onDiscussionAccessDenied?: () => void;
-}
-
-function getDiscoveryGreeting(hour = new Date().getHours()) {
-  if (hour >= 5 && hour < 12) return "Good morning";
-  if (hour >= 12 && hour < 17) return "Good afternoon";
-  if (hour >= 17 && hour < 21) return "Good evening";
-  return "Good night";
 }
 
 function DiscoveryHomeState({
@@ -152,6 +146,7 @@ function DiscoveryCourseSection({
 
 function DiscoveryHomeHeader({ mode, studentName }: DiscoveryHomeProps) {
   const displayName = studentName?.trim() || "there";
+  const timeGreeting = useHomeTimeGreeting();
 
   return (
     <header className="home-greeting-row guest-home__greeting">
@@ -159,7 +154,7 @@ function DiscoveryHomeHeader({ mode, studentName }: DiscoveryHomeProps) {
         <h1>
           {mode === "authenticated" ? (
             <>
-              {getDiscoveryGreeting()}, {displayName}{" "}
+              {timeGreeting}, {displayName}{" "}
             </>
           ) : (
             <>Start learning </>
@@ -225,7 +220,7 @@ export function DiscoveryHome({
   );
 
   return (
-    <main className="student-home guest-home">
+    <main className={`student-home guest-home guest-home--${mode}`}>
       <DiscoveryHomeHeader mode={mode} studentName={studentName} />
 
       <div className="home-dashboard-grid guest-home__layout">
