@@ -1,13 +1,10 @@
-import {
-  useCallback,
-  useRef,
-  type CSSProperties,
-  type KeyboardEvent,
-  type PointerEvent,
-} from "react";
+import { type KeyboardEvent, type PointerEvent, useCallback, useRef } from "react";
+
 import { formatMediaTime } from "../accessibility/formatMediaTime";
+import type { Chapter } from "../chapters/chapterTypes";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
+
 import {
   clamp,
   normalizeBufferedRanges,
@@ -18,6 +15,39 @@ import {
 import { TimelinePreview } from "./TimelinePreview";
 
 const KEYBOARD_SEEK_SECONDS = 5;
+/** Visual gap between two chapter segments of the track, in pixels. */
+const SEGMENT_GAP_PX = 3;
+const TRACK_CLASS =
+  "absolute top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height,scale] duration-150 group-hover/timeline:h-1.5 group-focus-within/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5";
+
+interface TimelineSegment {
+  id: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * Splits the track into one segment per chapter. Anything that cannot be
+ * split meaningfully (no chapters, a single chapter, unknown duration) stays
+ * one continuous track.
+ */
+function getTimelineSegments(chapters: readonly Chapter[], duration: number): TimelineSegment[] {
+  const whole = [{ id: "timeline", start: 0, end: duration }];
+  if (!Number.isFinite(duration) || duration <= 0 || chapters.length < 2) {
+    return whole;
+  }
+
+  const segments = chapters.flatMap((chapter, index) => {
+    const start = clamp(chapter.startTime, 0, duration);
+    const end = clamp(chapters[index + 1]?.startTime ?? duration, start, duration);
+    return end > start ? [{ id: chapter.id, start, end }] : [];
+  });
+  const first = segments[0];
+  if (!first || segments.length < 2) return whole;
+  // The track always starts at zero even if the first chapter does not.
+  first.start = 0;
+  return segments;
+}
 
 export interface TimelineProps {
   className?: string;
@@ -136,7 +166,8 @@ export function Timeline({
   const progress = timeToPositionPercent(currentTime, duration);
   const bufferedRanges = normalizeBufferedRanges(buffered, duration);
   const positionedMarkers = positionTimelineMarkers(markers, duration);
-  const chapterDivisions = chapters.slice(1);
+  const segments = getTimelineSegments(chapters, duration);
+  const segmented = segments.length > 1;
   const timelineAvailable = Number.isFinite(duration) && duration > 0;
 
   return (
@@ -181,38 +212,57 @@ export function Timeline({
           data-timeline-visual=""
           className="pointer-events-none absolute inset-0"
         >
-          <div
-            data-timeline-track=""
-            className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height] duration-150 group-focus-within/timeline:h-1.5 group-hover/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5"
-          >
-            {bufferedRanges.map((range) => (
-              <span
-                key={`${range.start}-${range.end}`}
-                data-timeline-buffered-range=""
-                className="absolute inset-y-0 rounded-full bg-white/45"
+          {segments.map((segment, index) => {
+            const span = segment.end - segment.start;
+            const leadingGap = index === 0 ? 0 : SEGMENT_GAP_PX / 2;
+            const trailingGap = index === segments.length - 1 ? 0 : SEGMENT_GAP_PX / 2;
+            const hovered =
+              segmented &&
+              previewTime !== null &&
+              previewTime >= segment.start &&
+              (previewTime < segment.end || index === segments.length - 1);
+            return (
+              <div
+                key={segment.id}
+                data-timeline-track=""
+                data-timeline-segment={segmented ? "" : undefined}
+                data-hovered={hovered ? "true" : undefined}
+                className={`${TRACK_CLASS} data-[hovered=true]:scale-y-[1.7]`}
                 style={{
-                  left: `${timeToPositionPercent(range.start, duration)}%`,
-                  width: `${timeToPositionPercent(range.end - range.start, duration)}%`,
+                  left: `calc(${timeToPositionPercent(segment.start, duration)}% + ${leadingGap}px)`,
+                  width: segmented
+                    ? `max(1px, calc(${timeToPositionPercent(span, duration)}% - ${leadingGap + trailingGap}px))`
+                    : "100%",
                 }}
-              />
-            ))}
-            <span
-              data-timeline-progress=""
-              className="absolute inset-y-0 left-0 rounded-full bg-[var(--video-player-accent,#ff7a1a)]"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-
-          {chapterDivisions.map((chapter) => (
-            <span
-              key={chapter.id}
-              aria-hidden="true"
-              className="absolute top-1/2 z-10 h-2.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-950/90"
-              style={{
-                left: `${timeToPositionPercent(chapter.startTime, duration)}%`,
-              }}
-            />
-          ))}
+              >
+                {bufferedRanges.map((range) => {
+                  const start = Math.max(range.start, segment.start);
+                  const end = Math.min(range.end, segment.end);
+                  if (end <= start) return null;
+                  return (
+                    <span
+                      key={`${range.start}-${range.end}`}
+                      data-timeline-buffered-range=""
+                      className="absolute inset-y-0 rounded-full bg-white/45"
+                      style={{
+                        left: `${timeToPositionPercent(start - segment.start, span)}%`,
+                        width: `${timeToPositionPercent(end - start, span)}%`,
+                      }}
+                    />
+                  );
+                })}
+                {currentTime > segment.start || !segmented ? (
+                  <span
+                    data-timeline-progress=""
+                    className="absolute inset-y-0 left-0 rounded-full bg-[var(--video-player-accent,#ff7a1a)]"
+                    style={{
+                      width: `${timeToPositionPercent(currentTime - segment.start, span)}%`,
+                    }}
+                  />
+                ) : null}
+              </div>
+            );
+          })}
 
           <span
             aria-hidden="true"

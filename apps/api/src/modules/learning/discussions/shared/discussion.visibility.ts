@@ -1,10 +1,11 @@
+import type { RawBuilder } from "kysely";
 import { sql } from "kysely";
 
 export function discussionVisibilityPredicate(
   alias: "t" | "n",
   userId: string | null | undefined,
   mine: boolean,
-) {
+): RawBuilder<boolean> {
   const userColumn = sql.ref(`${alias}.user_id`);
   const visibilityColumn = sql.ref(`${alias}.visibility`);
   if (mine && userId) return sql`${userColumn} = ${userId}`;

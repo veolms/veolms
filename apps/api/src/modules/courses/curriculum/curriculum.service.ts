@@ -1,21 +1,26 @@
 import crypto from "node:crypto";
-import type { FastifyBaseLogger } from "fastify";
-import type { Kysely } from "kysely";
-import type { Database } from "@veolms/database";
+
 import type {
   CreateCourseLessonRequest,
-  UpdateCourseLessonRequest,
   CreateLessonResourceRequest,
+  UpdateCourseLessonRequest,
 } from "@veolms/contracts";
+import type { Database } from "@veolms/database";
+
+import type { FastifyBaseLogger } from "fastify";
+import type { Kysely } from "kysely";
+
 import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
-import * as curriculumRepo from "./curriculum.repository.ts";
-import * as courseRepo from "../course/course.repository.ts";
 import { createMediaService } from "../../media/index.ts";
+import { createChapterSyncService } from "../chapters/chapters.service.ts";
+import * as courseRepo from "../course/course.repository.ts";
 import {
   assertOptimisticUpdate,
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
+
+import * as curriculumRepo from "./curriculum.repository.ts";
 
 export interface CurriculumServiceOptions {
   database: Kysely<Database>;
@@ -24,6 +29,40 @@ export interface CurriculumServiceOptions {
 
 export function createCurriculumService({ database, services }: CurriculumServiceOptions) {
   const mediaService = createMediaService({ database, services });
+  const chapterSyncService = createChapterSyncService({ database, services });
+
+  /**
+   * Re-derives a lesson's chapters from its description. Chapters are a
+   * convenience on top of the lesson, so a failure here never fails the save.
+   */
+  async function syncLessonChapters(
+    lessonId: string,
+    description: string | null,
+    videoMediaId: string | null,
+    logger?: FastifyBaseLogger,
+  ) {
+    try {
+      const media = videoMediaId ? await mediaService.getMediaAsset(videoMediaId) : undefined;
+      await chapterSyncService.syncLessonChapters({
+        lessonId,
+        description,
+        media: media
+          ? {
+              id: media.id,
+              status: media.status,
+              durationSeconds:
+                media.duration_seconds === null || media.duration_seconds === undefined
+                  ? null
+                  : Number(media.duration_seconds),
+              storageKey: media.storage_key,
+            }
+          : null,
+        logger,
+      });
+    } catch (err) {
+      logger?.warn({ err, lessonId }, "Failed to sync lesson chapters");
+    }
+  }
 
   function getCourseAndVerifyOwner(
     courseId: string,
@@ -247,6 +286,15 @@ export function createCurriculumService({ database, services }: CurriculumServic
       is_published: payload.isPublished,
       updated_at: now,
     });
+
+    if (payload.description !== undefined || mediaChanged || typeChanged) {
+      await syncLessonChapters(
+        lessonId,
+        payload.description !== undefined ? payload.description : lesson.description,
+        effectiveContentType === "video" ? (effectiveMediaId ?? null) : null,
+        logger,
+      );
+    }
 
     let transcodeJobInfo: {
       should202: boolean;

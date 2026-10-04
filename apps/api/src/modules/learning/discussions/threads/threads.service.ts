@@ -1,6 +1,3 @@
-import type { DatabaseExecutor, LearningAttachmentTable } from "@veolms/database";
-import type { Selectable } from "kysely";
-import { sql } from "kysely";
 import type {
   CreateLearningThreadRequest,
   DiscussionAttachmentSummary,
@@ -8,11 +5,35 @@ import type {
   LearningThread,
   LearningThreadsListResponse,
   ListLearningThreadsQuery,
+  PublicPopularDiscussionsResponse,
   QuestionFilterStatus,
   UpdateLearningThreadRequest,
   WorkspaceDiscussionItem,
 } from "@veolms/contracts";
+import type { DatabaseExecutor, LearningAttachmentTable } from "@veolms/database";
+import type { S3StorageService } from "@veolms/storage";
+
+import type { Selectable } from "kysely";
+import { sql } from "kysely";
+
 import { httpError } from "../../../../lib/errors.ts";
+import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
+import { avatarSrcSetFromUrl } from "../../../avatars/index.ts";
+import type {
+  AttachmentsRepository,
+  AttachmentSummaryRow,
+} from "../attachments/attachments.repository.ts";
+import {
+  BOOKMARKS_WORKSPACE_SORT,
+  type BookmarksRepository,
+  type BookmarkWorkspaceRow,
+  createBookmarksRepository,
+} from "../bookmarks/bookmarks.repository.ts";
+import {
+  createDiscussionAccess,
+  type DiscussionAccess,
+  type DiscussionActor,
+} from "../shared/discussion.access.ts";
 import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
   createDiscussionOutbox,
@@ -32,33 +53,17 @@ import {
   toDate,
   updatedAtIdDescSql,
 } from "../shared/discussion.utils.ts";
-import {
-  createDiscussionAccess,
-  type DiscussionAccess,
-  type DiscussionActor,
-} from "../shared/discussion.access.ts";
+import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import {
   createLessonDiscussionAccess,
   type LessonDiscussionAccess,
 } from "../shared/lesson-discussion-access.ts";
-import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
+
 import type {
-  MentionWorkspaceRow,
-  ThreadsRepository,
+  PublicPopularThreadRow,
   ThreadRowWithAuthor,
+  ThreadsRepository,
 } from "./threads.repository.ts";
-import {
-  BOOKMARKS_WORKSPACE_SORT,
-  createBookmarksRepository,
-  type BookmarkWorkspaceRow,
-  type BookmarksRepository,
-} from "../bookmarks/bookmarks.repository.ts";
-import type {
-  AttachmentsRepository,
-  AttachmentSummaryRow,
-} from "../attachments/attachments.repository.ts";
-import type { S3StorageService } from "@veolms/storage";
-import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
 
 type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
 
@@ -125,6 +130,8 @@ export interface ThreadsService {
       roles?: readonly string[];
     },
   ): Promise<DiscussionsWorkspaceResponse>;
+
+  listPublicPopularDiscussions(db: DatabaseExecutor): Promise<PublicPopularDiscussionsResponse>;
 }
 
 export function createThreadsService(
@@ -738,6 +745,37 @@ export function createThreadsService(
       await withWriteTransaction(db, async (trx) => {
         await threadsRepo.deleteThread(trx, threadId);
       });
+    },
+
+    async listPublicPopularDiscussions(db) {
+      const academyId = await resolveAcademyId(db);
+      const rows: PublicPopularThreadRow[] = await threadsRepo.listPublicPopularThreads(db, {
+        academyId,
+        limit: 20,
+      });
+
+      return {
+        discussions: rows.map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          title: row.title,
+          snippet: row.snippet,
+          author: {
+            displayName: row.authorName?.trim() || "Anonymous Learner",
+            avatarUrl: row.authorAvatarUrl,
+            avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
+          },
+          courseId: row.courseId,
+          lessonId: row.lessonId,
+          courseTitle: row.courseTitle,
+          lessonTitle: row.lessonTitle,
+          replyCount: row.replyCount,
+          likeCount: row.likeCount,
+          engagementScore: row.engagementScore,
+          createdAt: toDate(row.createdAt).toISOString(),
+          updatedAt: toDate(row.updatedAt).toISOString(),
+        })),
+      };
     },
 
     async getDiscussionsWorkspace(db, query) {

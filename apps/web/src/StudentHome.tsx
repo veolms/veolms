@@ -1,31 +1,43 @@
+import type {
+  CourseSummary,
+  EnrolledCoursesResponse,
+  LearningProgressResumeContextResponse,
+} from "@veolms/contracts";
+
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
-import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
+import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
-import { TargetIcon as Target } from "@phosphor-icons/react/Target";
-import type { CourseSummary, LearningProgressResumeContextResponse } from "@veolms/contracts";
-import { useEffect, useMemo, useState, type CSSProperties, type ImgHTMLAttributes } from "react";
+import { type CSSProperties, useMemo } from "react";
 import { useNavigate } from "react-router";
-import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
+
+import { formatDuration } from "./courses/courseAdapter";
+import { courseCatalogueHorizontalRowClasses } from "./courses/CourseCatalogueSkeleton";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
-import { adaptEnrolledCourseToLearningCourse, type LearningCourse } from "./StudentPages";
-import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
-import { formatRelativeTime } from "./learning/learning-notes.adapter";
-import { useCourses } from "./services/courses";
-import { useEnrolledCourses } from "./services/enrollments";
-import { useLearningProgressResumeContext } from "./services/learning-progress";
-import { useDashboardRecentDiscussions } from "./services/learning-interactions";
-import { useRecentLearningUpdates } from "./services/recent-updates";
-import { adaptDiscussionWorkspaceItem } from "./workspace/discussions-workspace.adapter";
-import { DiscussionWorkspaceCard } from "./workspace/DiscussionsWorkspace";
+import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
+import { HomeCourseRow } from "./home/HomeCourseRow";
+import { HomeEnrolledCourseCard } from "./home/HomeEnrolledCourseCard";
+import { useHomeTimeGreeting } from "./home/homeGreeting";
+import { HomeSectionHeader } from "./home/HomePresentation";
 import {
-  DashboardDiscussionCardSkeletons,
-  DashboardDiscussionRetryContent,
-} from "./workspace/DashboardDiscussionPreview";
+  getEnrolledCourseKeys,
+  getRecommendedCourses,
+  MoreCoursesPanel,
+} from "./home/MoreCoursesPanel";
+import { PopularDiscussionsPanel } from "./home/PopularDiscussionsPanel";
+import { RecentUpdatesPanel } from "./home/RecentUpdatesPanel";
+import { StudentHomeThumbnail } from "./home/StudentHomeThumbnail";
+import { getCoursePlayerPath } from "./learning/coursePlayerNavigation";
+import { useCourses } from "./services/courses";
+import { usePopularDiscussions } from "./services/learning-interactions";
+import { useLearningProgressResumeContext } from "./services/learning-progress";
+import { useRecentLearningUpdates } from "./services/recent-updates";
+import { adaptEnrolledCourseToLearningCourse, type LearningCourse } from "./StudentPages";
+
 import "./styles/features/student-learning.css";
 import "./styles/features/home.css";
 import "./styles/features/dashboard-discussion-preview.css";
@@ -33,20 +45,67 @@ import "./styles/features/dashboard-discussion-preview.css";
 interface StudentHomeProps {
   onOpenCourse: (course: LearningCourse) => void;
   onNavigatePage: (page: string) => void;
+  setNotice?: (message: string) => void;
   studentName?: string;
+  enrollment: StudentHomeEnrollmentState;
 }
 
-interface SectionHeaderProps {
-  icon: typeof BookOpen;
-  title: string;
-  action?: string;
-  onAction?: () => void;
+export interface StudentHomeEnrollmentState {
+  data: EnrolledCoursesResponse | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  isFetching: boolean;
+  refetch: () => Promise<unknown>;
 }
 
 function getCourseTimestamp(value: string | Date | null | undefined) {
   if (!value) return null;
   const timestamp = value instanceof Date ? value.getTime() : Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+const DEFAULT_PROGRESS_MESSAGE = "Ready to continue your learning journey?";
+
+function getRemainingLessonCount(
+  context: LearningProgressResumeContextResponse | null | undefined,
+) {
+  if (
+    !context ||
+    !Number.isInteger(context.totalLessons) ||
+    !Number.isInteger(context.completedLessons) ||
+    context.totalLessons <= 0 ||
+    context.completedLessons < 0 ||
+    context.completedLessons > context.totalLessons
+  ) {
+    return null;
+  }
+
+  return Math.max(0, context.totalLessons - context.completedLessons);
+}
+
+function getProgressedHomeMessage(
+  context: LearningProgressResumeContextResponse | null | undefined,
+) {
+  const remainingLessons = getRemainingLessonCount(context);
+  if (remainingLessons === null || !context || !Array.isArray(context.upcomingLessons)) {
+    return DEFAULT_PROGRESS_MESSAGE;
+  }
+
+  if (remainingLessons === 0) {
+    return "Great work — you've completed this course.";
+  }
+
+  if (!context.resumeLesson) return DEFAULT_PROGRESS_MESSAGE;
+
+  if (remainingLessons === 1 && context.upcomingLessons.length === 0) {
+    return "One last lesson to go. Finish strong!";
+  }
+
+  if (remainingLessons === 2 || remainingLessons === 3) {
+    return "You're almost there — keep going!";
+  }
+
+  return DEFAULT_PROGRESS_MESSAGE;
 }
 
 function compareContinueLearningCourses(left: LearningCourse, right: LearningCourse) {
@@ -74,69 +133,19 @@ function compareContinueLearningCourses(left: LearningCourse, right: LearningCou
   return left.id.localeCompare(right.id);
 }
 
-function SectionHeader({ icon: Icon, title, action, onAction }: SectionHeaderProps) {
-  return (
-    <div className="dashboard-section-heading">
-      <h2>
-        <Icon size={19} weight="duotone" />
-        <span>{title}</span>
-      </h2>
-      {action && (
-        <button type="button" onClick={onAction}>
-          {action} <ArrowRight size={17} />
-        </button>
-      )}
-    </div>
-  );
-}
+function compareZeroProgressCourses(left: LearningCourse, right: LearningCourse) {
+  const leftEnrolledAt = getCourseTimestamp(left.enrolledAt);
+  const rightEnrolledAt = getCourseTimestamp(right.enrolledAt);
 
-function StudentHomeThumbnail({
-  src,
-  fallbackSrcs = [],
-  alt,
-  loading = "lazy",
-  decoding = "async",
-  fetchPriority,
-}: {
-  src?: string | null;
-  fallbackSrcs?: readonly (string | null | undefined)[];
-  alt: string;
-  loading?: ImgHTMLAttributes<HTMLImageElement>["loading"];
-  decoding?: ImgHTMLAttributes<HTMLImageElement>["decoding"];
-  fetchPriority?: ImgHTMLAttributes<HTMLImageElement>["fetchPriority"];
-}) {
-  const imageSources = [src, ...fallbackSrcs]
-    .map((candidate) => candidate?.trim() ?? "")
-    .filter((candidate, index, candidates) =>
-      candidate ? candidates.indexOf(candidate) === index : false,
-    );
-  const imageSourcesKey = imageSources.join("\u0000");
-  const [imageSourceIndex, setImageSourceIndex] = useState(0);
+  if (leftEnrolledAt !== null || rightEnrolledAt !== null) {
+    if (leftEnrolledAt === null) return 1;
+    if (rightEnrolledAt === null) return -1;
+    if (leftEnrolledAt !== rightEnrolledAt) {
+      return rightEnrolledAt - leftEnrolledAt;
+    }
+  }
 
-  useEffect(() => {
-    setImageSourceIndex(0);
-  }, [imageSourcesKey]);
-
-  const imageSrc = imageSources[imageSourceIndex] ?? "";
-
-  return (
-    <div className="student-home-thumbnail">
-      {imageSrc ? (
-        <img
-          src={imageSrc}
-          alt={alt}
-          loading={loading}
-          decoding={decoding}
-          fetchPriority={fetchPriority}
-          onError={() =>
-            setImageSourceIndex((current) => Math.min(current + 1, imageSources.length))
-          }
-        />
-      ) : (
-        <CourseThumbnailPlaceholder />
-      )}
-    </div>
-  );
+  return left.id.localeCompare(right.id);
 }
 
 function ProgressBar({ value }: { value: number }) {
@@ -153,52 +162,6 @@ function ProgressBar({ value }: { value: number }) {
     >
       <span style={{ width: `${normalizedValue}%` }} />
     </span>
-  );
-}
-
-function RecentUpdatesSkeletons() {
-  return (
-    <>
-      {[0, 1].map((item) => (
-        <div className="home-update-skeleton" key={item} aria-hidden="true">
-          <span />
-          <span>
-            <i />
-            <i />
-            <i />
-          </span>
-        </div>
-      ))}
-    </>
-  );
-}
-
-function RecentUpdatesState({
-  error,
-  isRetrying,
-  onRetry,
-}: {
-  error?: boolean;
-  isRetrying?: boolean;
-  onRetry?: () => void;
-}) {
-  if (error) {
-    return (
-      <div className="home-update-state" role="alert">
-        <strong>Couldn&apos;t load recent updates</strong>
-        <small>Something went wrong while loading course updates.</small>
-        <button type="button" onClick={onRetry} disabled={isRetrying}>
-          {isRetrying ? "Retrying…" : "Retry"}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="home-update-state" role="status">
-      <strong>No recent updates</strong>
-      <small>New lesson updates from your enrolled courses will appear here.</small>
-    </div>
   );
 }
 
@@ -228,30 +191,19 @@ function ContinueLearningSkeletons() {
 }
 
 function ContinueLearningState({
-  error = false,
   isRetrying = false,
   onRetry,
 }: {
-  error?: boolean;
   isRetrying?: boolean;
   onRetry?: () => void;
 }) {
-  if (error) {
-    return (
-      <div className="home-continue-state" role="alert">
-        <strong>Couldn&apos;t load your courses</strong>
-        <small>Something went wrong while loading your learning courses.</small>
-        <button type="button" onClick={onRetry} disabled={isRetrying}>
-          {isRetrying ? "Retrying…" : "Retry"}
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="home-continue-state" role="status">
-      <strong>You&apos;re all caught up here</strong>
-      <small>Your other courses will appear here as you start making progress.</small>
+    <div className="home-continue-state" role="alert">
+      <strong>Couldn&apos;t load your courses</strong>
+      <small>Something went wrong while loading your learning courses.</small>
+      <button type="button" onClick={onRetry} disabled={isRetrying}>
+        {isRetrying ? "Retrying…" : "Retry"}
+      </button>
     </div>
   );
 }
@@ -265,7 +217,7 @@ function ResumeLessonContext({
   courseKey: string;
   onNavigate: (path: string) => void;
 }) {
-  const { resumeLesson, previousLesson, nextLesson } = context;
+  const { resumeLesson, previousLesson } = context;
   if (!resumeLesson) return null;
 
   const lessonPath = (lessonNumber: number) =>
@@ -273,35 +225,27 @@ function ResumeLessonContext({
 
   return (
     <div className="home-resume-lesson-context">
-      <div className="home-resume-lesson-focus">
+      <a
+        href={lessonPath(resumeLesson.lessonNumber)}
+        className="home-resume-lesson-focus"
+        aria-label={`Continue with lesson: ${resumeLesson.title}`}
+      >
         <span>Continue With</span>
         <strong>{resumeLesson.title}</strong>
         <small>
           {resumeLesson.sectionTitle} · {resumeLesson.progressPercent}% complete
         </small>
-      </div>
-      {(previousLesson || nextLesson) && (
+      </a>
+      {previousLesson && (
         <div className="home-resume-lesson-links">
-          {previousLesson && (
-            <button
-              type="button"
-              onClick={() => onNavigate(lessonPath(previousLesson.lessonNumber))}
-              aria-label={`Previous lesson: ${previousLesson.title}`}
-            >
-              <span>Previous</span>
-              <strong>{previousLesson.title}</strong>
-            </button>
-          )}
-          {nextLesson && (
-            <button
-              type="button"
-              onClick={() => onNavigate(lessonPath(nextLesson.lessonNumber))}
-              aria-label={`Up next lesson: ${nextLesson.title}`}
-            >
-              <span>Up Next</span>
-              <strong>{nextLesson.title}</strong>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onNavigate(lessonPath(previousLesson.lessonNumber))}
+            aria-label={`Previous lesson: ${previousLesson.title}`}
+          >
+            <span>Previous</span>
+            <strong>{previousLesson.title}</strong>
+          </button>
         </div>
       )}
     </div>
@@ -322,6 +266,115 @@ function ResumeLessonContextSkeleton() {
   );
 }
 
+function ProgressedUpNextPanel({
+  context,
+  isLoading,
+}: {
+  context: LearningProgressResumeContextResponse | null | undefined;
+  isLoading: boolean;
+}) {
+  const upcomingLessons = context?.upcomingLessons ?? [];
+  const remainingLessons = getRemainingLessonCount(context);
+  const hasCompletedCourse = remainingLessons === 0;
+  const hasFinalIncompleteLesson =
+    Boolean(context?.resumeLesson) &&
+    remainingLessons === 1 &&
+    upcomingLessons.length === 0 &&
+    !hasCompletedCourse;
+  const hasResumeFallback =
+    Boolean(context?.resumeLesson) &&
+    upcomingLessons.length === 0 &&
+    !hasCompletedCourse &&
+    !hasFinalIncompleteLesson;
+
+  if (
+    !isLoading &&
+    (!context || context.totalLessons === 0 || (!context.resumeLesson && !hasCompletedCourse))
+  ) {
+    return null;
+  }
+
+  return (
+    <section
+      className="dashboard-panel home-resume-up-next-panel min-w-0"
+      aria-labelledby="progressed-up-next-title"
+    >
+      <HomeSectionHeader icon={BookOpen} title="Up Next" id="progressed-up-next-title" />
+      {isLoading ? (
+        <div className="mt-2 grid gap-1.5" role="status" aria-busy="true">
+          {[0, 1, 2].map((item) => (
+            <div key={item} className="h-12 animate-pulse rounded-lg bg-(--surface-strong)" />
+          ))}
+        </div>
+      ) : hasCompletedCourse ? (
+        <div className="mt-2 rounded-lg border border-(--border) px-2.5 py-2">
+          <strong className="block text-xs font-semibold text-(--text)">Course completed</strong>
+          <small className="mt-0.5 block text-[0.65rem] text-(--muted)">
+            You&apos;ve completed every lesson in this course.
+          </small>
+        </div>
+      ) : hasFinalIncompleteLesson ? (
+        <div className="mt-2 rounded-lg border border-(--border) px-2.5 py-2">
+          <strong className="block text-xs font-semibold text-(--text)">Final lesson</strong>
+          <small className="mt-0.5 block text-[0.65rem] text-(--muted)">
+            You&apos;re on the last lesson of this course.
+          </small>
+        </div>
+      ) : hasResumeFallback && context?.resumeLesson ? (
+        <a
+          href={getCoursePlayerPath(
+            context.courseSlug,
+            "home",
+            context.resumeLesson.lessonNumber,
+            "/home",
+          )}
+          className="group mt-2 flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-lg border border-(--border) bg-(--surface-strong) px-2.5 py-2 transition-colors hover:border-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+          aria-label={`Continue current lesson: ${context.resumeLesson.title}`}
+        >
+          <span className="min-w-0">
+            <strong className="block truncate text-xs font-semibold text-(--text)">
+              Continue current lesson
+            </strong>
+            <small className="mt-0.5 block truncate text-[0.65rem] text-(--muted)">
+              {context.resumeLesson.title} · {context.resumeLesson.progressPercent}% complete
+            </small>
+          </span>
+          <ArrowRight
+            size={15}
+            className="shrink-0 text-(--accent-ink,var(--accent)) transition-transform group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
+        </a>
+      ) : context && upcomingLessons.length > 0 ? (
+        <div className="mt-2 grid gap-1.5">
+          {upcomingLessons.slice(0, 3).map((lesson) => (
+            <a
+              key={lesson.lessonId}
+              href={getCoursePlayerPath(context.courseSlug, "home", lesson.lessonNumber, "/home")}
+              className="group flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-lg border border-(--border) bg-(--surface-strong) px-2.5 py-2 transition-colors hover:border-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              aria-label={`Up next lesson: ${lesson.title}`}
+            >
+              <span className="min-w-0">
+                <strong className="block truncate text-xs font-semibold text-(--text)">
+                  {lesson.title}
+                </strong>
+                <small className="mt-0.5 block truncate text-[0.65rem] text-(--muted)">
+                  {lesson.sectionTitle}
+                </small>
+              </span>
+              <ArrowRight
+                size={15}
+                className="shrink-0 text-(--accent-ink,var(--accent)) transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function ProgressMetricSkeletons() {
   return (
     <>
@@ -338,10 +391,17 @@ function ProgressMetricSkeletons() {
   );
 }
 
-export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: StudentHomeProps) {
+export function StudentHome({
+  onOpenCourse,
+  onNavigatePage,
+  setNotice,
+  studentName,
+  enrollment,
+}: StudentHomeProps) {
   const navigate = useNavigate();
   const goalCompletion = 72;
   const firstName = (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
+  const timeGreeting = useHomeTimeGreeting();
 
   const {
     data: enrolledData,
@@ -349,16 +409,21 @@ export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: Stude
     isError: enrolledCoursesError,
     isFetching: enrolledCoursesFetching,
     refetch: refetchEnrolledCourses,
-  } = useEnrolledCourses();
+  } = enrollment;
   const hasEnrolledCourseData = enrolledData !== undefined;
   const enrolledCourses = useMemo(() => {
     return (enrolledData?.courses || []).map((course) => ({
       ...adaptEnrolledCourseToLearningCourse(course),
+      duration: formatDuration(course.totalDurationSeconds),
       thumbnailUrl:
         course.courseThumbnailUrl || getCourseThumbnailCdnUrl(course.courseThumbnailMediaId),
       thumbnailMediaId: course.courseThumbnailMediaId,
     }));
   }, [enrolledData?.courses]);
+  const accessibleCourseIds = useMemo(
+    () => new Set((enrolledData?.courses ?? []).map((course) => course.courseId)),
+    [enrolledData?.courses],
+  );
 
   const progressMetrics = useMemo(() => {
     const courses = enrolledData?.courses ?? [];
@@ -393,18 +458,7 @@ export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: Stude
     ] as const;
   }, [enrolledData?.courses]);
 
-  const {
-    data: discussionsResponse,
-    isLoading: discussionsLoading,
-    isError: discussionsError,
-    isFetching: discussionsFetching,
-    refetch: refetchDiscussions,
-  } = useDashboardRecentDiscussions({ mine: true });
-  const hasDiscussionData = discussionsResponse !== undefined;
-  const discussionCards = useMemo(
-    () => discussionsResponse?.items.map((item) => adaptDiscussionWorkspaceItem(item)) ?? [],
-    [discussionsResponse?.items],
-  );
+  const discussionsQuery = usePopularDiscussions();
 
   const {
     data: recentUpdatesResponse,
@@ -422,23 +476,50 @@ export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: Stude
       .sort(compareContinueLearningCourses);
   }, [enrolledCourses]);
 
-  const heroCourse = useMemo(() => {
-    return continueLearningCourses[0] || null;
-  }, [continueLearningCourses]);
+  const completedCourses = useMemo(() => {
+    return enrolledCourses
+      .filter((course) => course.progress >= 100)
+      .sort(compareContinueLearningCourses);
+  }, [enrolledCourses]);
 
-  const miniCourses = useMemo(() => {
-    return continueLearningCourses.slice(1, 3);
-  }, [continueLearningCourses]);
+  const heroCourse = useMemo(() => {
+    return continueLearningCourses[0] || completedCourses[0] || null;
+  }, [completedCourses, continueLearningCourses]);
+  const isCompletedHero = heroCourse ? heroCourse.progress >= 100 : false;
+
+  const remainingEnrolledCourses = useMemo(() => {
+    const heroCourseId = heroCourse?.id;
+    const remainingProgressedCourses = continueLearningCourses.filter(
+      (course) => course.id !== heroCourseId,
+    );
+    const zeroProgressCourses = enrolledCourses
+      .filter((course) => course.id !== heroCourseId && course.progress === 0)
+      .sort(compareZeroProgressCourses);
+
+    return [...remainingProgressedCourses, ...zeroProgressCourses];
+  }, [continueLearningCourses, enrolledCourses, heroCourse?.id]);
+
   const initialEnrollmentLoading = enrolledCoursesLoading && !hasEnrolledCourseData;
   const initialEnrollmentError = enrolledCoursesError && !hasEnrolledCourseData;
-  const hasMeaningfulLearningProgress = enrolledCourses.some((course) => course.progress > 0);
+  const shouldLoadRecommendations = hasEnrolledCourseData && remainingEnrolledCourses.length < 2;
   const { data: publishedCoursesData, isLoading: publishedCoursesLoading } = useCourses({
-    enabled: hasEnrolledCourseData && !initialEnrollmentError && !hasMeaningfulLearningProgress,
+    enabled: shouldLoadRecommendations,
   });
   const discoveryCourse = useMemo<CourseSummary | null>(
-    () => publishedCoursesData?.courses.at(-1) ?? null,
-    [publishedCoursesData?.courses],
+    () => (shouldLoadRecommendations ? null : (publishedCoursesData?.courses.at(-1) ?? null)),
+    [publishedCoursesData?.courses, shouldLoadRecommendations],
   );
+  const enrolledCourseKeys = useMemo(
+    () => getEnrolledCourseKeys(enrolledData?.courses ?? []),
+    [enrolledData?.courses],
+  );
+  const moreCourses = useMemo(
+    () => getRecommendedCourses(publishedCoursesData?.courses ?? [], enrolledCourseKeys),
+    [enrolledCourseKeys, publishedCoursesData?.courses],
+  );
+  const shouldRenderMoreCourses =
+    shouldLoadRecommendations && (publishedCoursesLoading || moreCourses.length > 0);
+  const hasLearningSection = remainingEnrolledCourses.length >= 2 || shouldRenderMoreCourses;
   const primaryCourseKey = heroCourse?.slug ?? heroCourse?.id;
   const { data: resumeContextData, isLoading: resumeContextLoading } =
     useLearningProgressResumeContext(primaryCourseKey, {
@@ -451,18 +532,21 @@ export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: Stude
       ? resumeContextData
       : null;
   }, [heroCourse, primaryCourseKey, resumeContextData]);
+  const secondaryGreeting = getProgressedHomeMessage(
+    resumeContextLoading ? undefined : resumeContext,
+  );
 
   return (
     <div className="student-home">
       <header className="home-greeting-row">
         <div>
           <h1>
-            Good evening, {firstName}{" "}
+            {timeGreeting}, {firstName}{" "}
             <span className="home-wave" aria-hidden="true">
               👋
             </span>
           </h1>
-          <p>Ready to continue your learning journey?</p>
+          <p>{secondaryGreeting}</p>
         </div>
         <div
           className="home-goal-summary"
@@ -488,6 +572,14 @@ export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: Stude
               <span>{goalCompletion}%</span>
             </i>
           </div>
+          <button
+            type="button"
+            className="home-goal-summary__info"
+            aria-label="Streaks and goals coming soon"
+            data-tooltip="Coming soon"
+          >
+            <Info size={14} weight="bold" aria-hidden="true" />
+          </button>
         </div>
       </header>
 
@@ -513,9 +605,12 @@ export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: Stude
           </div>
         </section>
       ) : heroCourse ? (
-        <section className="home-resume-card" aria-labelledby="continue-learning-title">
-          <div className="home-resume-layout">
-            <div className="home-resume-visual">
+        <section
+          className="home-resume-card home-resume-card--progressed"
+          aria-labelledby="home-hero-course-title"
+        >
+          <div className="home-resume-layout home-resume-layout--progressed">
+            <div className="home-resume-visual home-resume-visual--16-9">
               <StudentHomeThumbnail
                 src={heroCourse.thumbnailUrl}
                 fallbackSrcs={[getCourseThumbnailCdnUrl(heroCourse.thumbnailMediaId)]}
@@ -526,10 +621,10 @@ export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: Stude
               />
             </div>
             <div className="home-resume-copy">
-              <span className="learning-status in-progress">Continue Learning</span>
-              <h2 id="continue-learning-title">{heroCourse.title}</h2>
+              <h2 id="home-hero-course-title">{heroCourse.title}</h2>
               <strong>
-                {heroCourse.sections} Sections <i /> {heroCourse.lectures} Lectures
+                {heroCourse.sections} Sections <i /> {heroCourse.lectures} Lectures <i />{" "}
+                {heroCourse.duration}
               </strong>
               <p>
                 {heroCourse.enrolledOn
@@ -554,13 +649,18 @@ export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: Stude
                 className="primary-learning-action"
                 onClick={() => onOpenCourse(heroCourse)}
               >
-                <Play size={18} weight="fill" />
-                Continue Learning
+                {isCompletedHero ? (
+                  <BookOpen size={18} weight="regular" />
+                ) : (
+                  <Play size={18} weight="fill" />
+                )}
+                {isCompletedHero ? "Review Course" : "Continue Learning"}
               </button>
             </div>
+            <ProgressedUpNextPanel context={resumeContext} isLoading={resumeContextLoading} />
           </div>
         </section>
-      ) : publishedCoursesLoading ? (
+      ) : !shouldLoadRecommendations && publishedCoursesLoading ? (
         <section className="home-resume-card home-resume-card--state">
           <div className="home-resume-state" role="status" aria-busy="true">
             <strong>Loading courses to explore…</strong>
@@ -628,106 +728,88 @@ export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: Stude
         </section>
       )}
 
-      <div className="home-dashboard-grid">
-        <section className="dashboard-panel home-continue-panel">
-          <SectionHeader
-            icon={BookOpen}
-            title="Continue Learning"
-            action="View All"
-            onAction={() => onNavigatePage("courses")}
-          />
-          <div
-            className="home-mini-course-grid"
-            aria-busy={enrolledCoursesLoading || enrolledCoursesFetching}
-          >
-            {initialEnrollmentLoading ? (
-              <ContinueLearningSkeletons />
-            ) : initialEnrollmentError ? (
-              <ContinueLearningState
-                error
-                isRetrying={enrolledCoursesFetching}
-                onRetry={() => void refetchEnrolledCourses()}
-              />
-            ) : miniCourses.length > 0 ? (
-              miniCourses.map((course) => (
-                <article key={course.id} className="home-mini-course">
-                  <StudentHomeThumbnail
-                    src={course.thumbnailUrl}
-                    fallbackSrcs={[getCourseThumbnailCdnUrl(course.thumbnailMediaId)]}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
+      <div
+        className={[
+          "home-dashboard-grid student-home-progressed__dashboard-grid",
+          !hasLearningSection && "student-home-progressed__dashboard-grid--without-learning",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {initialEnrollmentLoading || initialEnrollmentError ? (
+          <section className="dashboard-panel home-continue-panel">
+            <HomeSectionHeader
+              icon={BookOpen}
+              title="Continue Learning"
+              action="View All"
+              onAction={() => onNavigatePage("courses")}
+            />
+            <div
+              className="home-mini-course-grid"
+              aria-busy={enrolledCoursesLoading || enrolledCoursesFetching}
+            >
+              {initialEnrollmentLoading ? (
+                <ContinueLearningSkeletons />
+              ) : (
+                <ContinueLearningState
+                  isRetrying={enrolledCoursesFetching}
+                  onRetry={() => void refetchEnrolledCourses()}
+                />
+              )}
+            </div>
+          </section>
+        ) : remainingEnrolledCourses.length >= 2 ? (
+          <section className="dashboard-panel home-continue-panel min-w-0">
+            <HomeSectionHeader
+              icon={BookOpen}
+              title="Continue Learning"
+              action="View All"
+              onAction={() => onNavigatePage("courses")}
+            />
+            <div className="mt-2 min-w-0">
+              <HomeCourseRow
+                id="student-home-continue-learning"
+                label="Continue Learning"
+                isBusy={enrolledCoursesLoading || enrolledCoursesFetching}
+                viewportClassName={courseCatalogueHorizontalRowClasses}
+              >
+                {remainingEnrolledCourses.map((course, index) => (
+                  <HomeEnrolledCourseCard
+                    key={course.id}
+                    course={course}
+                    imagePriority={index < 2}
+                    onOpenCourse={onOpenCourse}
                   />
-                  <div>
-                    <h3>{course.title}</h3>
-                    <p>
-                      {course.sections} Sections · {course.lectures} Lectures
-                    </p>
-                  </div>
-                  <div className="home-mini-progress">
-                    <ProgressBar value={course.progress} />
-                    <span aria-hidden="true">{course.progress}%</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="primary-learning-action home-mini-action"
-                    onClick={() => onOpenCourse(course)}
-                  >
-                    <Play size={16} weight="fill" />
-                    <span>Continue Learning</span>
-                  </button>
-                </article>
-              ))
-            ) : (
-              <ContinueLearningState />
-            )}
-          </div>
-        </section>
-
-        <section className="dashboard-panel home-discussions-panel">
-          <SectionHeader
-            icon={ChatCircleDots}
-            title="Recent Discussions"
-            action="View All"
-            onAction={() => onNavigatePage("discussions")}
+                ))}
+              </HomeCourseRow>
+            </div>
+          </section>
+        ) : shouldRenderMoreCourses ? (
+          <MoreCoursesPanel
+            id="student-home-progressed-more-courses"
+            className="student-home-progressed__more-courses-panel"
+            courses={moreCourses}
+            isLoading={publishedCoursesLoading}
+            onNavigatePage={onNavigatePage}
           />
-          <div
-            className="home-discussion-workspace-list creator-discussion-list discussion-hub"
-            data-dashboard-discussion-preview
-            aria-busy={discussionsLoading || discussionsFetching}
-          >
-            {discussionsLoading && !hasDiscussionData ? (
-              <DashboardDiscussionCardSkeletons />
-            ) : discussionsError && !hasDiscussionData ? (
-              <div className="creator-discussion-state" role="alert">
-                <DashboardDiscussionRetryContent
-                  title="Couldn't load discussions"
-                  message="Something went wrong while loading your discussions."
-                  isRetrying={discussionsFetching}
-                  onRetry={() => void refetchDiscussions()}
-                />
-              </div>
-            ) : discussionCards.length === 0 ? (
-              <div className="creator-discussion-state" role="status">
-                <strong>No discussions yet</strong>
-                <small>Questions and comments you create while learning will appear here.</small>
-              </div>
-            ) : (
-              discussionCards.map((item) => (
-                <DiscussionWorkspaceCard
-                  key={`${item.itemType}:${item.id}`}
-                  card={item}
-                  onNavigatePage={onNavigatePage}
-                  variant="compact"
-                  expandable={false}
-                />
-              ))
-            )}
-          </div>
-        </section>
+        ) : null}
+
+        <PopularDiscussionsPanel
+          className="student-home-progressed__popular-discussions-panel"
+          isLoading={discussionsQuery.isLoading}
+          isError={discussionsQuery.isError}
+          isFetching={discussionsQuery.isFetching}
+          discussions={discussionsQuery.data?.discussions ?? []}
+          onRetry={() => void discussionsQuery.refetch()}
+          action="View Discussions"
+          onAction={() => onNavigatePage("/discussions")}
+          accessibleCourseIds={accessibleCourseIds}
+          onDiscussionNavigatePage={onNavigatePage}
+          onDiscussionAccessDenied={() => setNotice?.("You don't have access to this course.")}
+        />
 
         <section className="dashboard-panel home-progress-panel">
-          <SectionHeader icon={ChartLineUp} title="Your Progress" />
+          <HomeSectionHeader icon={ChartLineUp} title="Your Progress" />
           <div
             className="home-metrics-grid"
             aria-busy={enrolledCoursesLoading || enrolledCoursesFetching}
@@ -762,74 +844,16 @@ export function StudentHome({ onOpenCourse, onNavigatePage, studentName }: Stude
           </div>
         </section>
 
-        <section className="dashboard-panel home-updates-panel">
-          <SectionHeader
-            icon={Target}
-            title="Recently Updated"
-            action="View All"
-            onAction={() => onNavigatePage("courses")}
-          />
-          <div
-            className="home-update-list"
-            aria-busy={recentUpdatesLoading || recentUpdatesFetching}
-          >
-            {recentUpdatesLoading && !hasRecentUpdatesData ? (
-              <RecentUpdatesSkeletons />
-            ) : recentUpdatesError && !hasRecentUpdatesData ? (
-              <RecentUpdatesState
-                error
-                isRetrying={recentUpdatesFetching}
-                onRetry={() => void refetchRecentUpdates()}
-              />
-            ) : recentUpdateCourses.length === 0 ? (
-              <RecentUpdatesState />
-            ) : (
-              recentUpdateCourses.map((course) => {
-                return (
-                  <div className="home-update-course" key={course.courseId}>
-                    <div className="home-update-course-header">
-                      <StudentHomeThumbnail
-                        src={course.courseThumbnailUrl}
-                        fallbackSrcs={[getCourseThumbnailCdnUrl(course.courseThumbnailMediaId)]}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                      />
-                      <span>
-                        <strong>{course.courseTitle}</strong>
-                        <small>Updated {formatRelativeTime(course.latestUpdatedAt)}</small>
-                      </span>
-                    </div>
-                    {course.lessons.length > 0 && (
-                      <div className="home-update-lessons">
-                        {course.lessons.map((lesson) => (
-                          <button
-                            type="button"
-                            className="home-update-lesson"
-                            key={lesson.lessonId}
-                            onClick={() =>
-                              navigate(
-                                getCoursePlayerPath(
-                                  course.courseSlug,
-                                  "home",
-                                  lesson.lessonNumber,
-                                  "/home",
-                                ),
-                              )
-                            }
-                          >
-                            <span>{lesson.lessonTitle}</span>
-                            <ArrowRight size={15} aria-hidden="true" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
+        <RecentUpdatesPanel
+          courses={recentUpdateCourses}
+          title="Recently Updated"
+          hasData={hasRecentUpdatesData}
+          isLoading={recentUpdatesLoading}
+          isError={recentUpdatesError}
+          isFetching={recentUpdatesFetching}
+          onRetry={() => void refetchRecentUpdates()}
+          onNavigatePage={onNavigatePage}
+        />
       </div>
     </div>
   );

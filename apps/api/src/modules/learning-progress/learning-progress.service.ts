@@ -1,20 +1,23 @@
 import crypto from "node:crypto";
+
 import type {
   LearningProgressBatchRequest,
+  LearningProgressResponse,
   LearningProgressResumeContextResponse,
   LearningProgressResumeLesson,
-  LearningProgressResponse,
   LearningProgressSyncResponse,
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
+
 import type { Kysely } from "kysely";
 
-import { ADMIN_ROLE } from "../auth/index.ts";
-import { createAccessService, type AccessService } from "../access/index.ts";
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
-import { createCurriculumService, type CurriculumService } from "../courses/index.ts";
+import { type AccessService, createAccessService } from "../access/index.ts";
+import { ADMIN_ROLE } from "../auth/index.ts";
 import * as courseRepository from "../courses/course/course.repository.ts";
+import { createCurriculumService, type CurriculumService } from "../courses/index.ts";
+
 import * as learningProgressRepository from "./learning-progress.repository.ts";
 
 type UserContext = { id: string; roles: readonly string[] };
@@ -29,7 +32,7 @@ interface OrderedLesson {
   id: string;
 }
 
-interface ResumeCurriculumLesson {
+export interface ResumeCurriculumLesson {
   id: string;
   sectionId: string;
   title: string;
@@ -37,7 +40,7 @@ interface ResumeCurriculumLesson {
   contentType: "video" | "document" | "quiz";
 }
 
-type ResumeProgressRow = {
+export type ResumeProgressRow = {
   lesson_id: string;
   progress_percent: number;
   updated_at: Date;
@@ -102,7 +105,7 @@ function progressUpdatedAt(row: ResumeProgressRow): number {
  * course curriculum. The progress timestamp is used as a recency signal, not
  * as literal last-viewed telemetry.
  */
-function resolveResumeContext(
+export function resolveResumeContext(
   courseId: string,
   courseSlug: string,
   lessons: ResumeCurriculumLesson[],
@@ -132,9 +135,13 @@ function resolveResumeContext(
   const emptyResponse = (): LearningProgressResumeContextResponse => ({
     courseId,
     courseSlug,
+    totalLessons: lessons.length,
+    completedLessons: lessons.filter((lesson) => (progressByLessonId.get(lesson.id) ?? 0) >= 100)
+      .length,
     resumeLesson: null,
     previousLesson: null,
     nextLesson: null,
+    upcomingLessons: [],
   });
 
   if (lessons.length === 0) return emptyResponse();
@@ -170,9 +177,16 @@ function resolveResumeContext(
     if (resumeIndex === -1) return emptyResponse();
   }
 
+  const upcomingLessons = lessons
+    .slice(resumeIndex + 1, resumeIndex + 4)
+    .map((lesson, index) => toResponseLesson(lesson, resumeIndex + 1 + index));
+
   return {
     courseId,
     courseSlug,
+    totalLessons: lessons.length,
+    completedLessons: lessons.filter((lesson) => (progressByLessonId.get(lesson.id) ?? 0) >= 100)
+      .length,
     resumeLesson: toResponseLesson(lessons[resumeIndex]!, resumeIndex),
     previousLesson:
       resumeIndex > 0 ? toResponseLesson(lessons[resumeIndex - 1]!, resumeIndex - 1) : null,
@@ -180,6 +194,7 @@ function resolveResumeContext(
       resumeIndex < lessons.length - 1
         ? toResponseLesson(lessons[resumeIndex + 1]!, resumeIndex + 1)
         : null,
+    upcomingLessons,
   };
 }
 

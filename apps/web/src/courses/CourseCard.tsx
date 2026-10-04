@@ -12,13 +12,13 @@ import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullet
 import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
-import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
-import { getCourseRouteKey } from "./catalogue";
+
 import type { Course, CourseRole } from "./catalogue";
+import { getCourseRouteKey } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
 import { CourseCardThumbnail } from "./CourseCardThumbnail";
 import { CourseThumbnailPlaceholder } from "./CourseThumbnailPlaceholder";
@@ -30,6 +30,7 @@ const courseOverviewPath = (course: Course) =>
 export interface CourseCardProps {
   course: Course;
   role: CourseRole;
+  variant?: "catalogue" | "public";
   wishlisted: boolean;
   onWishlist: (course: Course) => void;
   onOpen: (course: Course) => void;
@@ -54,6 +55,7 @@ export interface CourseCardProps {
 export function CourseCard({
   course,
   role,
+  variant = "catalogue",
   wishlisted,
   onWishlist,
   onOpen,
@@ -74,6 +76,7 @@ export function CourseCard({
   isAdmin = false,
   currentUserId,
 }: CourseCardProps) {
+  const isPublic = variant === "public";
   const canEdit =
     isAdmin ||
     (Boolean(currentUserId) && Boolean(course.creatorId) && course.creatorId === currentUserId);
@@ -121,33 +124,27 @@ export function CourseCard({
 
   const openThumbnail = () => {
     if (isDeleting) return;
+    if (isPublic) {
+      onNavigatePage(overviewPath);
+      return;
+    }
     onOpen(course);
   };
 
-  const thumbnailActionLabel =
-    role === "creator"
+  const thumbnailActionLabel = isPublic
+    ? `View ${course.title}`
+    : role === "creator"
       ? `Play ${course.title}`
       : course.enrolled
         ? `${progress > 0 && progress < 100 ? "Resume" : progress >= 100 ? "Review" : "Start"} ${course.title}`
         : `Play free preview for ${course.title}`;
-  const thumbnailActionTooltip =
-    role === "creator"
+  const thumbnailActionTooltip = isPublic
+    ? "View Course"
+    : role === "creator"
       ? "Play Course"
       : course.enrolled
         ? "Continue Learning"
         : "Play Free Preview";
-
-  const lifecycleAction = () => {
-    if (course.lifecycleStatus === "published") {
-      setNotice(`${course.title} was unpublished.`);
-      return;
-    }
-    if (course.lifecycleStatus === "draft") {
-      setNotice(`${course.title} was published.`);
-      return;
-    }
-    setNotice(`${course.title} was restored.`);
-  };
 
   return (
     <article
@@ -156,7 +153,7 @@ export function CourseCard({
           ? "pointer-events-none border-(--border) bg-(--card-surface,var(--surface)) opacity-60 select-none"
           : "border-(--border) bg-(--card-surface,var(--surface)) shadow-(--card-shadow) hover:bg-(--card-surface-hover,var(--hover)) hover:shadow-(--card-hover-shadow)"
       }`}
-      aria-label={`${course.title}${isDeleting ? ", deleting..." : role === "creator" ? `, ${course.lifecycleStatus}` : course.enrolled ? `, ${progress}% complete` : ", not enrolled"}`}
+      aria-label={`${course.title}${isDeleting ? ", deleting..." : isPublic ? ", public course" : role === "creator" ? `, ${course.lifecycleStatus}` : course.enrolled ? `, ${progress}% complete` : ", not enrolled"}`}
       aria-busy={isDeleting}
       data-course-card
       data-deleting={isDeleting ? "true" : undefined}
@@ -242,7 +239,7 @@ export function CourseCard({
             </p>
           </div>
 
-          {!isDeleting && (
+          {!isDeleting && !isPublic && (
             <CourseActionMenu
               open={menuOpen}
               onOpenChange={(open) => setMenuOpen(open ? course.id : null)}
@@ -564,6 +561,16 @@ export function CourseCard({
                       <Play className="shrink-0" size={17} weight="fill" aria-hidden="true" />
                       <span className="truncate">Continue Learning</span>
                     </>
+                  ) : isPublic ? (
+                    <>
+                      <ListBullets
+                        className="shrink-0"
+                        size={17}
+                        weight="regular"
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">View Course</span>
+                    </>
                   ) : (
                     <>
                       <span className="truncate">Enroll Now</span>
@@ -598,5 +605,32 @@ export function CourseCard({
         </div>
       )}
     </article>
+  );
+}
+
+export function PublicCourseCard({
+  course,
+  onNavigatePage,
+  imagePriority = false,
+}: {
+  course: Course;
+  onNavigatePage: (destination: string) => void;
+  imagePriority?: boolean;
+}) {
+  return (
+    <CourseCard
+      course={course}
+      role="student"
+      variant="public"
+      wishlisted={false}
+      onWishlist={() => undefined}
+      onOpen={() => undefined}
+      onExplore={() => undefined}
+      onNavigatePage={onNavigatePage}
+      menuOpen={false}
+      setMenuOpen={() => undefined}
+      setNotice={() => undefined}
+      imagePriority={imagePriority}
+    />
   );
 }

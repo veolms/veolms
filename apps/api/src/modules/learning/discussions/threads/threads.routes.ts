@@ -1,18 +1,22 @@
-import { z } from "zod";
 import {
   createLearningThreadRequestSchema,
   discussionsWorkspaceResponseSchema,
   learningThreadSchema,
   learningThreadsListResponseSchema,
   listLearningThreadsQuerySchema,
+  publicPopularDiscussionsResponseSchema,
   updateLearningThreadRequestSchema,
 } from "@veolms/contracts";
+
+import { z } from "zod";
+
 import { errorResponse } from "../../../../lib/errors.ts";
 import { jsonResponse } from "../../../../lib/responses.ts";
 import type { RoutePlugin } from "../../../../lib/route-plugin.ts";
-import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
 import { createAttachmentsRepository } from "../attachments/attachments.repository.ts";
 import { createBookmarksRepository } from "../bookmarks/bookmarks.repository.ts";
+import { createDiscussionPermissions } from "../shared/discussion.permissions.ts";
+
 import { createThreadsController } from "./threads.controller.ts";
 import { createThreadsRepository } from "./threads.repository.ts";
 import { createThreadsService } from "./threads.service.ts";
@@ -128,6 +132,25 @@ const threadsRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.getDiscussionsWorkspace,
+  );
+
+  // 3c. GET /discussions/popular - Public Home discussion preview
+  app.get(
+    "/discussions/popular",
+    {
+      schema: {
+        operationId: "getPublicPopularDiscussions",
+        tags: ["Learning Discussions"],
+        summary: "List public discussions ranked by engagement",
+        response: {
+          200: jsonResponse(
+            "Public discussion previews for Home discovery",
+            publicPopularDiscussionsResponseSchema,
+          ),
+        },
+      },
+    },
+    controller.listPublicPopularDiscussions,
   );
 
   // 6. GET /threads/:threadId - Get thread details

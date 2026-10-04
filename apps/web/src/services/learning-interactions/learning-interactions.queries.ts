@@ -1,52 +1,55 @@
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  DiscussionsWorkspaceResponse,
   LearningNotesListResponse,
   LearningRepliesListResponse,
+  LearningThreadsListResponse,
+  LessonDiscussionCountsResponse,
+  LessonDiscussionsListResponse,
   ListLearningNotesQuery,
   ListLearningRepliesQuery,
   ListLearningThreadsQuery,
-  ListReportsQuery,
-  DiscussionsWorkspaceResponse,
-  LearningThreadsListResponse,
-  LessonDiscussionsListResponse,
-  LessonDiscussionCountsResponse,
   ListLessonDiscussionsQuery,
+  ListReportsQuery,
+  PublicPopularDiscussionsResponse,
   ReportsListResponse,
   UserAutocompleteQuery,
   UserAutocompleteResponse,
 } from "@veolms/contracts";
+
+import type { InfiniteData } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import type { ApiError } from "../../lib/api-error";
-import { learningInteractionKeys } from "./learning-interactions.keys";
-import { learningInteractionsService } from "./learning-interactions.service";
-import { interactionCreationCoordinator } from "./interaction-creation-coordinator";
-import { desiredStateCoordinator } from "./desired-state-coordinator";
+
 import { calculateNextLikesCount } from "./cache-updaters";
+import { desiredStateCoordinator } from "./desired-state-coordinator";
 import { applyOptimisticEditFields } from "./edit-cache-updaters";
-import { optimisticEditCoordinator } from "./optimistic-edit-coordinator";
-import {
-  optimisticDeletionCoordinator,
-  useOptimisticDeletionRevision,
-} from "./optimistic-deletion-coordinator";
-import {
-  toLearningThreadEntity,
-  getClientEntityId,
-  isClientEntityId,
-  getServerEntityId,
-  type LearningReplyCacheItem,
-  type LearningNoteCacheItem,
-  type LearningNotesCacheResponse,
-  type LearningRepliesCacheResponse,
-  type LearningThreadCacheResponse,
-  type LearningThreadEntity,
-} from "./interaction-entities";
 import type {
   NoteCreationRecord,
   ReplyCreationRecord,
   ThreadCreationRecord,
 } from "./interaction-creation-coordinator";
+import { interactionCreationCoordinator } from "./interaction-creation-coordinator";
+import {
+  getClientEntityId,
+  getServerEntityId,
+  isClientEntityId,
+  type LearningNoteCacheItem,
+  type LearningNotesCacheResponse,
+  type LearningRepliesCacheResponse,
+  type LearningReplyCacheItem,
+  type LearningThreadCacheResponse,
+  type LearningThreadEntity,
+  toLearningThreadEntity,
+} from "./interaction-entities";
+import { learningInteractionKeys } from "./learning-interactions.keys";
+import { learningInteractionsService } from "./learning-interactions.service";
+import {
+  optimisticDeletionCoordinator,
+  useOptimisticDeletionRevision,
+} from "./optimistic-deletion-coordinator";
+import { optimisticEditCoordinator } from "./optimistic-edit-coordinator";
 import { isInfiniteCacheData } from "./paginated-cache";
-import type { InfiniteData } from "@tanstack/react-query";
-import { flattenReplyPages, getReplyTotalCount } from "./reply-pagination";
 
 export { flattenReplyPages, getReplyTotalCount } from "./reply-pagination";
 
@@ -67,6 +70,16 @@ export interface LessonInteractionCounts {
 export type LessonInteractionCountsOptions = {
   enabled?: boolean;
 };
+
+export function usePopularDiscussions(options?: { enabled?: boolean }) {
+  return useQuery<PublicPopularDiscussionsResponse, ApiError>({
+    queryKey: learningInteractionKeys.popularDiscussions(),
+    queryFn: () => learningInteractionsService.listPopularDiscussions(),
+    enabled: options?.enabled ?? true,
+    retry: false,
+    staleTime: 60 * 1000,
+  });
+}
 
 async function fetchLessonInteractionCounts(
   courseId: string,

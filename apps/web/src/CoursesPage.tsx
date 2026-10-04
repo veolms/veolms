@@ -72,8 +72,8 @@ import {
   isFullLearningPlayerSwipeTarget,
   subscribeToPointerGestureClaims,
 } from "./gestures/pointerGestureOwnership";
+import { useEmptyAreaDoubleTap } from "./gestures/useEmptyAreaDoubleTap";
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
-import { useTripleTap } from "./gestures/useTripleTap";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "./hooks/useDebounce";
 import { isStoredString, useSessionStorageState } from "./learning/useSessionStorageState";
 import { useBackDismiss } from "./navigation/useBackDismiss";
@@ -246,8 +246,13 @@ const SettingsPage = lazy(() =>
   })),
 );
 
-const StudentHome = lazy(() =>
-  import("./StudentHome").then((module) => ({ default: module.StudentHome })),
+const AuthenticatedHomeBoundary = lazy(() =>
+  import("./home/AuthenticatedHomeBoundary").then((module) => ({
+    default: module.AuthenticatedHomeBoundary,
+  })),
+);
+const GuestHome = lazy(() =>
+  import("./GuestHome").then((module) => ({ default: module.GuestHome })),
 );
 const PlaceholderPage = lazy(() =>
   import("./courses/PlaceholderPage").then((module) => ({
@@ -2414,7 +2419,7 @@ export function CoursesPage({
       setNotice("Fullscreen is not available in this browser.");
     }
   }, [setNotice]);
-  useTripleTap(() => void toggleFullscreen());
+  const handleEmptyAreaDoubleTap = useEmptyAreaDoubleTap(() => void toggleFullscreen());
 
   useEffect(() => {
     const syncFullscreenState = () =>
@@ -3317,11 +3322,18 @@ export function CoursesPage({
     if (effectiveRole === "student" && surfacePage === "home") {
       return (
         <Suspense fallback={<AcademyPageFallback />}>
-          <StudentHome
-            onOpenCourse={onOpenCourse}
-            onNavigatePage={onNavigatePage}
-            studentName={shellProfileDisplayName}
-          />
+          {!isAuthReady ? (
+            <AcademyPageFallback />
+          ) : isAuthenticated ? (
+            <AuthenticatedHomeBoundary
+              onOpenCourse={onOpenCourse}
+              onNavigatePage={onNavigatePage}
+              setNotice={setNotice}
+              studentName={shellProfileDisplayName}
+            />
+          ) : (
+            <GuestHome onNavigatePage={onNavigatePage} setNotice={setNotice} />
+          )}
         </Suspense>
       );
     }
@@ -3642,6 +3654,7 @@ export function CoursesPage({
               event.preventDefault();
               event.stopPropagation();
             }}
+            onClick={handleEmptyAreaDoubleTap}
           >
             {((!compactNavigation && !sidebarPresentedAsOverlay) ||
               (sidebarPresentedAsOverlay && edgeSidebarOpen)) && (
@@ -3693,6 +3706,7 @@ export function CoursesPage({
             <div
               className="courses-sidebar__brand"
               title={sidebarBrandTitle}
+              data-double-tap-ignore
               onMouseDown={preventSidebarBrandTextSelection}
               onDoubleClick={handleSidebarBrandDoubleClick}
             >
@@ -4368,7 +4382,7 @@ export function CoursesPage({
               setMobilePaletteMenu(false);
           }}
         >
-          <div className="mobile-menu-sheet__body">
+          <div className="mobile-menu-sheet__body" onClick={handleEmptyAreaDoubleTap}>
             <DrawerTitle id="mobile-navigation-title" className="sr-only">
               Profile and navigation
             </DrawerTitle>

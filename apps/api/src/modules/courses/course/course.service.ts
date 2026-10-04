@@ -1,40 +1,44 @@
 import crypto from "node:crypto";
-import type { FastifyBaseLogger } from "fastify";
-import type { Kysely } from "kysely";
-import type { Database, AccessType, AccessDurationType, PricingType } from "@veolms/database";
+
 import type {
-  CreateCourseRequest,
-  UpdateCourseBasicsRequest,
   CourseListQuery,
   CourseListResponse,
-  CourseSummary,
   CoursePricingSummary,
+  CourseSummary,
+  CreateCourseRequest,
+  UpdateCourseBasicsRequest,
 } from "@veolms/contracts";
+import type { AccessDurationType, AccessType, Database, PricingType } from "@veolms/database";
+
+import type { FastifyBaseLogger } from "fastify";
+import type { Kysely } from "kysely";
+
 import { AppError } from "../../../lib/errors.ts";
 import type { AppServices } from "../../../services/index.ts";
 import {
-  slugify,
-  assertOptimisticUpdate,
-  getCourseAndVerifyOwner as verifyCourseOwner,
-} from "../shared/courses.utils.ts";
-import {
   ADMIN_ROLE,
-  INSTRUCTOR_ROLE,
-  createAuthService,
   type AuthService,
+  createAuthService,
+  INSTRUCTOR_ROLE,
 } from "../../auth/index.ts";
-import * as courseRepo from "./course.repository.ts";
-import { createCategoryService, type CategoryService } from "../category/category.service.ts";
+import { createMediaService, type MediaService } from "../../media/index.ts";
+import { type CategoryService, createCategoryService } from "../category/category.service.ts";
+import {
+  type ConfigurationService,
+  createConfigurationService,
+} from "../configuration/configuration.service.ts";
 import {
   createCurriculumService,
   type CurriculumService,
 } from "../curriculum/curriculum.service.ts";
-import {
-  createConfigurationService,
-  type ConfigurationService,
-} from "../configuration/configuration.service.ts";
 import { createIncludesService, type IncludesService } from "../includes/includes.service.ts";
-import { createMediaService, type MediaService } from "../../media/index.ts";
+import {
+  assertOptimisticUpdate,
+  getCourseAndVerifyOwner as verifyCourseOwner,
+  slugify,
+} from "../shared/courses.utils.ts";
+
+import * as courseRepo from "./course.repository.ts";
 
 const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
   "image/jpeg",
@@ -43,6 +47,11 @@ const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
   "image/gif",
   "image/avif",
 ]);
+
+type PublishedCourseSummaryRow = Awaited<
+  ReturnType<typeof courseRepo.listPublishedCourses>
+>[number];
+type PublicCourseSummaryRow = Omit<PublishedCourseSummaryRow, "created_at" | "created_at_cursor">;
 
 function decodePublishedCourseCursor(cursor: string, sort: "latest" | "title") {
   const separator = cursor.lastIndexOf("~");
@@ -183,8 +192,8 @@ function resolvePublicThumbnailUrls(
   };
 }
 import {
-  createCourseDeletionService,
   type CourseDeletionService,
+  createCourseDeletionService,
 } from "../lifecycle/course-deletion.service.ts";
 
 export interface CourseServiceOptions {
@@ -213,6 +222,55 @@ export function createCourseService({
     storage: services.storage,
   }),
 }: CourseServiceOptions) {
+  async function toPublicCourseSummary(row: PublicCourseSummaryRow) {
+    const lessonDuration = Number(row.lesson_duration_seconds ?? 0);
+    const totalDurationSeconds =
+      lessonDuration > 0
+        ? lessonDuration
+        : row.estimated_duration && row.estimated_duration > 0
+          ? row.estimated_duration * 60
+          : 0;
+
+    const pricing: CoursePricingSummary = row.pricing_type
+      ? {
+          pricingType: row.pricing_type as "free" | "paid",
+          price: Number(row.price ?? 0),
+          currency: row.currency ?? "INR",
+          salePrice:
+            row.sale_price !== null && row.sale_price !== undefined ? Number(row.sale_price) : null,
+        }
+      : {
+          pricingType: "free",
+          price: 0,
+          currency: "INR",
+          salePrice: null,
+        };
+
+    const { thumbnailUrl, thumbnailSrcSet } = resolvePublicThumbnailUrls(
+      services,
+      row.thumbnail_metadata,
+      row.thumbnail_media_id,
+      row.thumbnail_storage_key,
+    );
+
+    return {
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      shortDescription: row.short_description ?? "",
+      difficulty: (row.difficulty as "beginner" | "intermediate" | "advanced" | null) ?? null,
+      thumbnailUrl,
+      thumbnailSrcSet,
+      instructorName: row.instructor_alias || row.creator_display_name || null,
+      categoryName: row.category_name ?? null,
+      totalSections: Number(row.total_sections ?? 0),
+      totalLessons: Number(row.total_lessons ?? 0),
+      totalDurationSeconds,
+      pricing,
+      certificateEnabled: Boolean(row.certificate_enabled ?? false),
+    } satisfies CourseSummary;
+  }
+
   /**
    * Verifies course existence and owner permissions.
    */
@@ -313,60 +371,7 @@ export function createCourseService({
     const pageLimit = filters?.limit;
     const hasNextPage = pageLimit !== undefined && rows.length > pageLimit;
     const pageRows = hasNextPage ? rows.slice(0, pageLimit) : rows;
-    const courses = await Promise.all(
-      pageRows.map(async (row) => {
-        const lessonDuration = Number(row.lesson_duration_seconds ?? 0);
-        const totalDurationSeconds =
-          lessonDuration > 0
-            ? lessonDuration
-            : row.estimated_duration && row.estimated_duration > 0
-              ? row.estimated_duration * 60
-              : 0;
-
-        const pricing: CoursePricingSummary = row.pricing_type
-          ? {
-              pricingType: row.pricing_type as "free" | "paid",
-              price: Number(row.price ?? 0),
-              currency: row.currency ?? "INR",
-              salePrice:
-                row.sale_price !== null && row.sale_price !== undefined
-                  ? Number(row.sale_price)
-                  : null,
-            }
-          : {
-              pricingType: "free",
-              price: 0,
-              currency: "INR",
-              salePrice: null,
-            };
-
-        const { thumbnailUrl, thumbnailSrcSet } = resolvePublicThumbnailUrls(
-          services,
-          row.thumbnail_metadata,
-          row.thumbnail_media_id,
-          row.thumbnail_storage_key,
-        );
-
-        const instructorName = row.instructor_alias || row.creator_display_name || null;
-
-        return {
-          id: row.id,
-          slug: row.slug,
-          title: row.title,
-          shortDescription: row.short_description ?? "",
-          difficulty: (row.difficulty as "beginner" | "intermediate" | "advanced" | null) ?? null,
-          thumbnailUrl,
-          thumbnailSrcSet,
-          instructorName,
-          categoryName: row.category_name ?? null,
-          totalSections: Number(row.total_sections ?? 0),
-          totalLessons: Number(row.total_lessons ?? 0),
-          totalDurationSeconds,
-          pricing,
-          certificateEnabled: Boolean(row.certificate_enabled ?? false),
-        };
-      }),
-    );
+    const courses = await Promise.all(pageRows.map(toPublicCourseSummary));
     const lastRow = pageRows.at(-1);
     return {
       courses,
@@ -378,6 +383,33 @@ export function createCourseService({
     return {
       courses: await courseRepo.listPublishedCourseOptions(database),
     };
+  }
+
+  async function getHomeDiscovery() {
+    const limit = 8;
+    const [popularRows, freeRows, recentRows] = await Promise.all([
+      courseRepo.listHomeDiscoveryCourses(database, {
+        limit,
+        order: "popular",
+      }),
+      courseRepo.listHomeDiscoveryCourses(database, {
+        limit,
+        order: "popular",
+        freeOnly: true,
+      }),
+      courseRepo.listHomeDiscoveryCourses(database, {
+        limit,
+        order: "recent",
+      }),
+    ]);
+
+    const [popularCourses, freeCourses, recentCourses] = await Promise.all([
+      Promise.all(popularRows.map(toPublicCourseSummary)),
+      Promise.all(freeRows.map(toPublicCourseSummary)),
+      Promise.all(recentRows.map(toPublicCourseSummary)),
+    ]);
+
+    return { popularCourses, freeCourses, recentCourses };
   }
 
   /**
@@ -1229,6 +1261,7 @@ export function createCourseService({
     listMyCourses,
     listMyCourseScope,
     listPublishedCourses,
+    getHomeDiscovery,
     listPublishedCourseOptions,
     getPublishedCourseBySlug,
     listAvailableCoursesByCreator,

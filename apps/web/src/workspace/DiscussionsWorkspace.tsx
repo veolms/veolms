@@ -1,20 +1,5 @@
-import {
-  Fragment,
-  cloneElement,
-  useCallback,
-  useEffect,
-  lazy,
-  useMemo,
-  useRef,
-  Suspense,
-  useState,
-  useSyncExternalStore,
-} from "react";
-import "../styles/features/discussions.css";
-import type { CSSProperties, FormEvent, MouseEvent as ReactMouseEvent } from "react";
-import type { ReactElement, ReactNode } from "react";
-import { useLocation, useSearchParams } from "react-router";
-import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
+import type { PublicPopularDiscussion } from "@veolms/contracts";
+
 import { AtIcon as At } from "@phosphor-icons/react/At";
 import { BookmarkSimpleIcon as BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
@@ -29,29 +14,34 @@ import { GlobeIcon as Globe } from "@phosphor-icons/react/Globe";
 import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { NoteIcon as Note } from "@phosphor-icons/react/Note";
-import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { PaperclipIcon as Paperclip } from "@phosphor-icons/react/Paperclip";
+import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
 import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
 import { ThumbsUpIcon as ThumbsUp } from "@phosphor-icons/react/ThumbsUp";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
-import type { CourseRole } from "../courses/catalogue";
-import { formatRelativeDate } from "../settings/sessionDisplay";
+import type { CSSProperties, FormEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { ReactElement, ReactNode } from "react";
+import {
+  cloneElement,
+  Fragment,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { useLocation, useSearchParams } from "react-router";
+
 import {
   handleRovingTabKeyDown,
   scrollKeyboardFocusedTabIntoView,
 } from "../accessibility/rovingTabFocus";
-import type { NavigateTo } from "../routing/navigation";
-import { normalizeDiscussionTab, rememberDiscussionTab } from "../routing/tabSessionState";
-import type { DiscussionTab } from "../routing/tabSessionState";
-import { useDiscussionsWorkspace } from "../services/learning-interactions";
-import { ThemedSelect } from "../ThemedSelect";
-import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
-import { DiscussionAvatar } from "../learning/DiscussionAvatar";
-import type { DiscussionContent } from "../learning/discussion-editor/types";
-import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import {
   Drawer,
   DrawerContent,
@@ -59,7 +49,25 @@ import {
   DrawerOverlay,
   DrawerTitle,
 } from "../components/ui/drawer";
+import type { CourseRole } from "../courses/catalogue";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
+import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
+import type { DiscussionContent } from "../learning/discussion-editor/types";
+import { DiscussionAvatar } from "../learning/DiscussionAvatar";
+import { formatRelativeTime } from "../learning/learning-notes.adapter";
+import { SwipeableTabPanel } from "../navigation/SwipeableTabPanel";
+import type { NavigateTo } from "../routing/navigation";
+import type { DiscussionTab } from "../routing/tabSessionState";
+import { normalizeDiscussionTab, rememberDiscussionTab } from "../routing/tabSessionState";
 import { SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS, SearchShortcutHint } from "../searchShortcut";
+import { useDiscussionsWorkspace } from "../services/learning-interactions";
+import { formatRelativeDate } from "../settings/sessionDisplay";
+import {
+  type ApplicationScrollPosition,
+  getApplicationScrollElement,
+} from "../shell/applicationScroll";
+import { ThemedSelect } from "../ThemedSelect";
+
 import {
   adaptDiscussionWorkspaceItem,
   type DiscussionWorkspaceCard,
@@ -69,10 +77,8 @@ import { DiscussionWorkspaceMobileActionSheet } from "./DiscussionWorkspaceMobil
 import { DiscussionWorkspaceSkeletonList } from "./DiscussionWorkspaceSkeleton";
 import { DiscussionWorkspaceVirtualFeed } from "./DiscussionWorkspaceVirtualFeed";
 import { useDiscussionWorkspaceCardLongPress } from "./useDiscussionWorkspaceCardLongPress";
-import {
-  getApplicationScrollElement,
-  type ApplicationScrollPosition,
-} from "../shell/applicationScroll";
+
+import "../styles/features/discussions.css";
 
 const loadDiscussionMarkdown = () => import("../learning/discussion-editor/DiscussionMarkdown");
 const DiscussionMarkdown = lazy(() =>
@@ -347,11 +353,13 @@ function getVisibilityLabel(visibility: DiscussionWorkspaceCard["visibility"]): 
 }
 
 function getDiscussionThreadDestination(
-  thread: DiscussionWorkspaceCard,
+  thread: DiscussionWorkspaceCard | Pick<PublicPopularDiscussion, "id" | "courseId" | "lessonId">,
   returnPath = "/discussions/q-and-a",
 ): string {
   const threadId =
-    thread.itemType === "reply" && thread.parentThreadId ? thread.parentThreadId : thread.id;
+    "itemType" in thread && thread.itemType === "reply" && thread.parentThreadId
+      ? thread.parentThreadId
+      : thread.id;
   const basePath = getCoursePlayerPath(thread.courseId, "courses", 1, returnPath, { threadId });
   if (!thread.lessonId) return basePath;
 
@@ -520,7 +528,7 @@ function DiscussionWorkspaceCardContent({
   parentContext,
   expandable = true,
 }: {
-  thread: DiscussionWorkspaceCard;
+  thread: Pick<DiscussionWorkspaceCard, "author" | "plainText" | "excerpt" | "content">;
   label: string;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -643,7 +651,7 @@ function DiscussionWorkspaceIdentity({
   thread,
   activity,
 }: {
-  thread: DiscussionWorkspaceCard;
+  thread: Pick<DiscussionWorkspaceCard, "author" | "authorUsername" | "isOwn">;
   activity?: string;
 }) {
   return (
@@ -675,10 +683,12 @@ function DiscussionWorkspaceNavigationLink({
   destination,
   label,
   onNavigatePage,
+  onBlocked,
 }: {
   destination: string;
   label: string;
   onNavigatePage?: NavigateTo;
+  onBlocked?: () => void;
 }) {
   return (
     <a
@@ -698,7 +708,11 @@ function DiscussionWorkspaceNavigationLink({
         }
         const card = event.currentTarget.parentElement;
         if (card && hasTextSelectionWithin(card)) return;
-        if (!onNavigatePage) return;
+        if (!onNavigatePage) {
+          event.preventDefault();
+          onBlocked?.();
+          return;
+        }
         event.preventDefault();
         onNavigatePage(destination, { exact: true });
       }}
@@ -707,6 +721,12 @@ function DiscussionWorkspaceNavigationLink({
 }
 
 type DiscussionWorkspaceRailElement = ReactElement<{ className?: string }>;
+
+type DiscussionWorkspaceCardShellThread = {
+  title?: string | null;
+  avatar?: string | null;
+  avatarSrcSet?: PublicPopularDiscussion["author"]["avatarSrcSet"];
+};
 
 function withDiscussionWorkspaceRailSlot(
   element: DiscussionWorkspaceRailElement,
@@ -750,7 +770,7 @@ function DiscussionWorkspaceCardShell({
   children,
   rail,
 }: {
-  thread: DiscussionWorkspaceCard;
+  thread: DiscussionWorkspaceCardShellThread;
   className: string;
   expanded: boolean;
   variant?: DiscussionWorkspaceCardVariant;
@@ -826,6 +846,7 @@ function DiscussionWorkspaceCardShell({
         <div className="discussion-thread__avatar">
           <DiscussionAvatar
             src={thread.avatar || null}
+            srcSet={thread.avatarSrcSet}
             className="discussion-thread__avatar-image"
           />
         </div>
@@ -1363,6 +1384,126 @@ export function DiscussionWorkspaceCard({
       variant={variant}
       expandable={expandable}
     />
+  );
+}
+
+function PublicDiscussionMetadata({
+  courseTitle,
+  lessonTitle,
+}: Pick<PublicPopularDiscussion, "courseTitle" | "lessonTitle">) {
+  return (
+    <div className="discussion-thread__context">
+      <span title={courseTitle}>{courseTitle}</span>
+      <span aria-hidden="true" />
+      <small title={lessonTitle}>
+        <BookOpen size={13} aria-hidden="true" />
+        <span>{lessonTitle}</span>
+      </small>
+    </div>
+  );
+}
+
+/**
+ * Read-only public version of the compact workspace discussion card. It uses
+ * the same shell, identity, content, metadata classes, and responsive rules
+ * as Student Home without requiring workspace IDs, permissions, or queries.
+ */
+export function PublicDiscussionWorkspaceCard({
+  discussion,
+  onNavigatePage,
+  allowPublicRead = false,
+  hasCourseAccess = true,
+  onAccessDenied,
+}: {
+  discussion: PublicPopularDiscussion;
+  onNavigatePage?: NavigateTo;
+  allowPublicRead?: boolean;
+  hasCourseAccess?: boolean;
+  onAccessDenied?: () => void;
+}) {
+  const author = discussion.author.displayName.trim() || "Anonymous Learner";
+  const kindLabel = discussion.kind === "question" ? "Question" : "Comment";
+  const title = discussion.title?.trim() || discussion.snippet;
+  const preview = title;
+  const activity = formatRelativeTime(discussion.updatedAt);
+  const shellThread = {
+    title: discussion.title,
+    avatar: discussion.author.avatarUrl,
+    avatarSrcSet: discussion.author.avatarSrcSet,
+  };
+  const contentThread = {
+    author,
+    content: discussion.snippet,
+    plainText: discussion.snippet,
+    excerpt: discussion.snippet,
+  };
+  const identityThread = {
+    author,
+    authorUsername: "",
+    isOwn: false,
+  };
+  const destination = onNavigatePage
+    ? getDiscussionThreadDestination(
+        discussion,
+        discussion.kind === "question" ? "/discussions/q-and-a" : "/discussions/comments",
+      )
+    : null;
+  const canNavigate = Boolean(destination && (allowPublicRead || hasCourseAccess));
+  const handleNavigation = canNavigate
+    ? () => onNavigatePage?.(destination!, { exact: true })
+    : onAccessDenied;
+
+  return (
+    <DiscussionWorkspaceCardShell
+      thread={shellThread}
+      className="discussion-thread--comment"
+      expanded={false}
+      variant="compact"
+      expandable={false}
+      navigation={
+        destination ? (
+          <DiscussionWorkspaceNavigationLink
+            destination={canNavigate ? destination : "#"}
+            label={`Open discussion in ${discussion.courseTitle}`}
+            onNavigatePage={canNavigate ? onNavigatePage : undefined}
+            onBlocked={canNavigate ? undefined : onAccessDenied}
+          />
+        ) : undefined
+      }
+      onNavigate={destination ? handleNavigation : undefined}
+      rail={{
+        top: (
+          <span className="discussion-thread__engagement discussion-thread__rail-badge discussion-thread__likes-badge">
+            <ThumbsUp size={15} weight="fill" aria-hidden="true" />
+            <span>
+              {discussion.likeCount} {discussion.likeCount === 1 ? "like" : "likes"}
+            </span>
+          </span>
+        ),
+        middle: (
+          <span>
+            <ChatTeardropText size={17} aria-hidden="true" /> {discussion.replyCount}{" "}
+            {discussion.replyCount === 1 ? "reply" : "replies"}
+          </span>
+        ),
+        bottom: <time dateTime={discussion.updatedAt}>{activity}</time>,
+      }}
+    >
+      <DiscussionWorkspaceIdentity thread={identityThread} activity={activity} />
+      <DiscussionWorkspaceCardContent
+        thread={contentThread}
+        label={kindLabel}
+        expanded={false}
+        onExpandedChange={() => undefined}
+        expandedTitle={null}
+        previewText={preview}
+        expandable={false}
+      />
+      <PublicDiscussionMetadata
+        courseTitle={discussion.courseTitle}
+        lessonTitle={discussion.lessonTitle}
+      />
+    </DiscussionWorkspaceCardShell>
   );
 }
 
@@ -1974,7 +2115,8 @@ export function DiscussionsWorkspace({
 
   const renderDiscussionCard = useCallback(
     (thread: DiscussionWorkspaceCard) => {
-      if (isBookmarksTab) {
+      const selectedTab = normalizeDiscussionTab(tab);
+      if (selectedTab === "saved") {
         return (
           <DiscussionWorkspaceBookmarkCard
             bookmark={thread}
@@ -1986,7 +2128,7 @@ export function DiscussionsWorkspace({
         );
       }
 
-      if (isNotesTab) {
+      if (selectedTab === "notes") {
         return (
           <DiscussionWorkspaceNoteCard
             note={thread}
@@ -1998,7 +2140,7 @@ export function DiscussionsWorkspace({
         );
       }
 
-      if (isMentionsTab) {
+      if (selectedTab === "mentions") {
         return (
           <DiscussionWorkspaceMentionCard
             mention={thread}
@@ -2010,7 +2152,7 @@ export function DiscussionsWorkspace({
         );
       }
 
-      if (isFollowingTab) {
+      if (selectedTab === "following") {
         return (
           <DiscussionWorkspaceFollowingCard
             thread={thread}
@@ -2024,7 +2166,7 @@ export function DiscussionsWorkspace({
 
       const discussionStatus = thread.status ?? "open";
       const StatusIcon = statusIcons[discussionStatus];
-      return activeTab === "q-and-a" ? (
+      return selectedTab === "q-and-a" ? (
         <DiscussionWorkspaceQuestionCard
           thread={thread}
           onNavigatePage={onNavigatePage}
@@ -2032,7 +2174,7 @@ export function DiscussionsWorkspace({
           onRequestMobileActions={showDiscussionSwipePreviews ? openMobileActions : undefined}
           setNotice={setNotice}
         />
-      ) : isCommentsTab ? (
+      ) : selectedTab === "comments" ? (
         <DiscussionWorkspaceCommentCard
           thread={thread}
           onNavigatePage={onNavigatePage}
@@ -2092,19 +2234,7 @@ export function DiscussionsWorkspace({
         </article>
       );
     },
-    [
-      activeTab,
-      isBookmarksTab,
-      isCommentsTab,
-      isFollowingTab,
-      isMentionsTab,
-      isNotesTab,
-      onNavigatePage,
-      openThread,
-      openMobileActions,
-      setNotice,
-      showDiscussionSwipePreviews,
-    ],
+    [tab, onNavigatePage, openThread, openMobileActions, setNotice, showDiscussionSwipePreviews],
   );
 
   const renderDiscussionFilterControls = (inSheet = false) => {

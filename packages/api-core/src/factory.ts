@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import type { Database } from "@veolms/database";
+
 import fastifyAutoload from "@fastify/autoload";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
 import fastifyRateLimit from "@fastify/rate-limit";
-import type { Database } from "@veolms/database";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 
 import { createCorsMatcher } from "./cors.ts";
@@ -133,7 +134,12 @@ export async function createVeoLMSApi<
   registerErrorHandler(app);
 
   app.addHook("preSerialization", async (request, reply, payload) => {
-    if (request.url.startsWith("/docs")) {
+    if (
+      request.url.startsWith("/docs") ||
+      request.routeOptions?.config?.rawResponse ||
+      reply.getHeader("x-veolms-raw-response") === "true" ||
+      Buffer.isBuffer(payload)
+    ) {
       return payload;
     }
 

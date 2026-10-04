@@ -3,114 +3,110 @@ import type { Kysely, Transaction } from "kysely";
 // Re-export all domain schema types
 export * from "./auth.schema.ts";
 export * from "./authorization.schema.ts";
-export * from "./courses.schema.ts";
-export * from "./media.schema.ts";
+export * from "./chapters.schema.ts";
 export * from "./commerce.schema.ts";
-export * from "./learning-interactions.schema.ts";
-export * from "./webhooks.schema.ts";
-export * from "./notifications.schema.ts";
+export * from "./courses.schema.ts";
 export * from "./json.schema.ts";
-export * from "./quizzes.schema.ts";
+export * from "./learning-interactions.schema.ts";
 export * from "./learning-progress.schema.ts";
+export * from "./media.schema.ts";
+export * from "./notifications.schema.ts";
+export * from "./quizzes.schema.ts";
+export * from "./webhooks.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
   AcademyTable,
-  UserTable,
-  UserRoleTable,
-  MenuTable,
   MenuPermissionTable,
-  SessionTable,
+  MenuTable,
+  MfaBackupCodeTable,
   OauthAccountTable,
   OtpCodeTable,
   PasskeyTable,
-  UserTotpCredentialTable,
-  MfaBackupCodeTable,
-  WebauthnChallengeTable,
+  SessionTable,
   UserAvatarTable,
+  UserRoleTable,
+  UserTable,
+  UserTotpCredentialTable,
+  WebauthnChallengeTable,
 } from "./auth.schema.ts";
-
 import type {
-  PermissionTable,
-  RoleTable,
-  RolePermissionTable,
-  RoleAssignmentTable,
   FeatureTable,
+  PermissionTable,
+  RoleAssignmentTable,
+  RolePermissionTable,
+  RoleTable,
 } from "./authorization.schema.ts";
-
+import type { LessonChapterTable } from "./chapters.schema.ts";
 import type {
-  CourseTable,
+  AccessGrantTable,
+  CartItemTable,
+  CartTable,
+  CouponRedemptionTable,
+  CouponTable,
+  CourseBundleItemTable,
+  CourseBundleTable,
+  CreatorPaymentConfigTable,
+  CreditNoteTable,
+  EnrollmentTable,
+  ManualPaymentRequestTable,
+  OrderItemTable,
+  OrderTable,
+  PaymentAttemptTable,
+  PaymentTable,
+  RefundRequestTable,
+  RefundTable,
+} from "./commerce.schema.ts";
+import type {
   CategoryTable,
-  CourseSectionTable,
-  CourseLessonTable,
-  LessonResourceTable,
   CourseAccessRuleTable,
-  CoursePricingTable,
-  CourseSettingsTable,
-  CourseIncludeTable,
   CourseDeletionJobTable,
   CourseDeletionStorageItemTable,
+  CourseIncludeTable,
+  CourseLessonTable,
+  CoursePricingTable,
+  CourseSectionTable,
+  CourseSettingsTable,
+  CourseTable,
+  LessonResourceTable,
 } from "./courses.schema.ts";
+import type {
+  LearningAttachmentTable,
+  LearningAuditLogTable,
+  LearningBookmarkTable,
+  LearningFollowTable,
+  LearningLikeTable,
+  LearningMentionTable,
+  LearningNoteTable,
+  LearningReplyTable,
+  LearningReportTable,
+  LearningSuspensionTable,
+  LearningThreadTable,
+} from "./learning-interactions.schema.ts";
+import type { LearningProgressTable } from "./learning-progress.schema.ts";
 import type {
   ImageJobTable,
   MediaAssetTable,
   VideoJobTable,
   VideoOutputTable,
 } from "./media.schema.ts";
-
 import type {
-  CourseBundleTable,
-  CourseBundleItemTable,
-  CartTable,
-  CartItemTable,
-  CouponTable,
-  CouponRedemptionTable,
-  OrderTable,
-  OrderItemTable,
-  PaymentTable,
-  PaymentAttemptTable,
-  RefundTable,
-  AccessGrantTable,
-  EnrollmentTable,
-  CreatorPaymentConfigTable,
-  RefundRequestTable,
-  ManualPaymentRequestTable,
-  CreditNoteTable,
-} from "./commerce.schema.ts";
-
-import type {
-  LearningThreadTable,
-  LearningReplyTable,
-  LearningLikeTable,
-  LearningBookmarkTable,
-  LearningFollowTable,
-  LearningMentionTable,
-  LearningNoteTable,
-  LearningAttachmentTable,
-  LearningReportTable,
-  LearningSuspensionTable,
-  LearningAuditLogTable,
-} from "./learning-interactions.schema.ts";
-
-import type { WebhookEventTable, CallbackInboxTable, OutboxEventTable } from "./webhooks.schema.ts";
-import type {
-  NotificationTable,
   NotificationDeliveryTable,
   NotificationPreferenceTable,
+  NotificationTable,
 } from "./notifications.schema.ts";
-
 import type {
+  CourseQuizAccessGrantTable,
+  CourseQuizPricingTable,
+  QuizAssignmentTable,
+  QuizAttemptAnswerTable,
+  QuizAttemptTable,
+  QuizQuestionOptionTable,
+  QuizQuestionTable,
   QuizTable,
   QuizVersionTable,
-  QuizQuestionTable,
-  QuizQuestionOptionTable,
-  QuizAssignmentTable,
-  CourseQuizPricingTable,
-  CourseQuizAccessGrantTable,
-  QuizAttemptTable,
-  QuizAttemptAnswerTable,
 } from "./quizzes.schema.ts";
-import type { LearningProgressTable } from "./learning-progress.schema.ts";
+import type { CallbackInboxTable, OutboxEventTable, WebhookEventTable } from "./webhooks.schema.ts";
 
 export interface Database {
   // Auth & Roles
@@ -205,6 +201,9 @@ export interface Database {
   quiz_attempts: QuizAttemptTable;
   quiz_attempt_answers: QuizAttemptAnswerTable;
   learning_progress: LearningProgressTable;
+
+  // Derived from lesson descriptions
+  lesson_chapters: LessonChapterTable;
 }
 
 export type PurchaseTable = OrderTable;

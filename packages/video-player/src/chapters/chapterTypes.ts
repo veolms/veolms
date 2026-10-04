@@ -3,6 +3,7 @@ export interface ChapterInput {
   title: string;
   startTime: number;
   endTime?: number;
+  thumbnailUrl?: string;
 }
 
 /** Source metadata for a chapter candidate without changing parser output. */
@@ -22,6 +23,8 @@ export interface Chapter {
   title: string;
   startTime: number;
   endTime?: number;
+  /** A still from the start of the chapter, when one has been extracted. */
+  thumbnailUrl?: string;
 }
 
 export type ChapterSource = "manual" | "metadata" | "description";

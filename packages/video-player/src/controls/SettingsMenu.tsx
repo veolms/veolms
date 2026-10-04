@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
-import { formatMediaTime } from "../accessibility/formatMediaTime";
+
 import { formatPlaybackRate } from "../playback/playbackRates";
 import { usePlayerController } from "../react/context";
+import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerTheme } from "../themes/PlayerThemeContext";
+
 import {
   PlayerMenuItem,
   PopoverMenu,
@@ -11,7 +13,6 @@ import {
   type PopoverMenuSide,
 } from "./menus";
 import { PlaybackRateSlider } from "./PlaybackRateSlider";
-import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 const SETTINGS_OPEN_TURN_DEGREES = 30;
 
@@ -42,32 +43,20 @@ export function SettingsMenu({
     audio: AudioIcon,
     back: BackIcon,
     captions: CaptionsIcon,
-    chapters: ChaptersIcon,
     disclosure: DisclosureIcon,
     pictureInPicture: PictureInPictureIcon,
     playbackRate: PlaybackRateIcon,
     quality: QualityIcon,
     settings: SettingsIcon,
   } = theme.icons;
-  const {
-    activeChapterId,
-    chapters,
-    media,
-    pictureInPictureActive,
-    pictureInPictureAvailable,
-    view,
-  } = usePlayerState(
+  const { media, pictureInPictureActive, pictureInPictureAvailable, view } = usePlayerState(
     (snapshot) => ({
-      activeChapterId: snapshot.activeChapterId,
-      chapters: snapshot.chapters,
       media: snapshot.media,
       pictureInPictureActive: snapshot.ui.pictureInPicture,
       pictureInPictureAvailable: snapshot.capabilities.pictureInPicture,
       view: snapshot.ui.settingsView,
     }),
     (left, right) =>
-      left.activeChapterId === right.activeChapterId &&
-      left.chapters === right.chapters &&
       left.media === right.media &&
       left.pictureInPictureActive === right.pictureInPictureActive &&
       left.pictureInPictureAvailable === right.pictureInPictureAvailable &&
@@ -149,9 +138,7 @@ export function SettingsMenu({
                   ? "Quality"
                   : view === "captions"
                     ? "Captions"
-                    : view === "audio"
-                      ? "Audio"
-                      : "Chapters"}
+                    : "Audio"}
             </button>
           ) : null}
 
@@ -198,16 +185,6 @@ export function SettingsMenu({
                   leading={<AudioIcon size={19} />}
                   trailing={<DisclosureIcon size={17} />}
                   onClick={() => openView("audio")}
-                />
-              ) : null}
-              {chapters.length > 0 ? (
-                <PlayerMenuItem
-                  data-menu-keep-open=""
-                  label="Chapters"
-                  description={chapters.find((item) => item.id === activeChapterId)?.title}
-                  leading={<ChaptersIcon size={19} />}
-                  trailing={<DisclosureIcon size={17} />}
-                  onClick={() => openView("chapters")}
                 />
               ) : null}
               {includePictureInPicture && pictureInPictureAvailable ? (
@@ -298,20 +275,6 @@ export function SettingsMenu({
                   selected={track.id === media.selectedAudioTrackId}
                   onClick={() => {
                     controller.selectAudioTrack(track.id);
-                  }}
-                />
-              ))
-            : null}
-
-          {view === "chapters"
-            ? chapters.map((chapter) => (
-                <PlayerMenuItem
-                  key={chapter.id}
-                  label={chapter.title}
-                  description={formatMediaTime(chapter.startTime)}
-                  selected={chapter.id === activeChapterId}
-                  onClick={() => {
-                    controller.seekTo(chapter.startTime);
                   }}
                 />
               ))

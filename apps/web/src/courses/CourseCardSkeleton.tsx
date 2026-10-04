@@ -2,9 +2,15 @@ import type { CourseRole } from "./catalogue";
 
 export interface CourseCardSkeletonProps {
   role?: CourseRole;
+  variant?: "catalogue" | "public";
 }
 
-export function CourseCardSkeleton({ role = "student" }: CourseCardSkeletonProps) {
+export function CourseCardSkeleton({
+  role = "student",
+  variant = "catalogue",
+}: CourseCardSkeletonProps) {
+  const isPublic = variant === "public";
+
   return (
     <article
       className="group relative min-w-0 animate-pulse overflow-visible rounded-xl border border-(--border) bg-(--card-surface,var(--surface)) shadow-(--card-shadow)"
@@ -14,10 +20,12 @@ export function CourseCardSkeleton({ role = "student" }: CourseCardSkeletonProps
       {/* Thumbnail Aspect Ratio Box */}
       <div className="relative aspect-video overflow-hidden rounded-t-[11px] bg-(--track)">
         {/* Status Badge Placeholder */}
-        <div className="absolute top-3.5 left-3.5 h-7 w-20 rounded-lg bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))]" />
+        {!isPublic && (
+          <div className="absolute top-3.5 left-3.5 h-7 w-20 rounded-lg bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))]" />
+        )}
 
         {/* Wishlist Button Placeholder for Students */}
-        {role === "student" && (
+        {role === "student" && !isPublic && (
           <div className="absolute top-3 right-3 h-11 w-11 rounded-full bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))]" />
         )}
       </div>

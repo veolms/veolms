@@ -1,9 +1,11 @@
-import { useEffect, type RefObject } from "react";
+import { useEffect } from "react";
+
 import type { ChapterInput } from "../chapters/chapterTypes";
 import { resolveChapters } from "../chapters/resolveChapters";
+import type { VideoNetworkRequest, VideoNetworkResponse, VideoSource } from "../core/types";
 import { parseStoryboard } from "../storyboard/parseStoryboard";
 import type { StoryboardFrame, StoryboardTrack } from "../storyboard/storyboardTypes";
-import type { VideoNetworkRequest, VideoNetworkResponse, VideoSource } from "../core/types";
+
 import { usePlayerController } from "./context";
 import { useDuration, usePlayerState } from "./usePlayerState";
 
@@ -20,6 +22,11 @@ export interface PlayerMetadataBridgeProps {
   chapters?: readonly ChapterInput[];
   manualChapters?: readonly ChapterInput[];
   description?: string;
+  /**
+   * Thumbnails keyed by chapter start in whole seconds. Applied to whichever
+   * chapter source wins, so description chapters can carry stills too.
+   */
+  chapterThumbnails?: Readonly<Record<number, string>>;
   storyboard?: StoryboardSource;
   storyboardLoader?: StoryboardLoader;
   onStoryboardError?: (error: unknown) => void;
@@ -96,6 +103,7 @@ export const defaultStoryboardLoader: StoryboardLoader = async (url, { signal, s
 
 export function PlayerMetadataBridge({
   chapters,
+  chapterThumbnails,
   description,
   manualChapters,
   onStoryboardError,
@@ -113,8 +121,16 @@ export function PlayerMetadataBridge({
       description,
       duration: duration > 0 ? duration : undefined,
     });
-    controller.setChapters(resolved.chapters);
-  }, [chapters, controller, description, duration, manualChapters]);
+    controller.setChapters(
+      chapterThumbnails
+        ? resolved.chapters.map((chapter) => {
+            const thumbnailUrl =
+              chapter.thumbnailUrl ?? chapterThumbnails[Math.floor(chapter.startTime)];
+            return thumbnailUrl ? { ...chapter, thumbnailUrl } : chapter;
+          })
+        : resolved.chapters,
+    );
+  }, [chapterThumbnails, chapters, controller, description, duration, manualChapters]);
 
   useEffect(() => {
     if (!storyboard) {

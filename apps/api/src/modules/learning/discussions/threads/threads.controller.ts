@@ -1,12 +1,15 @@
-import type { FastifyReply, FastifyRequest } from "fastify";
-import type { DatabaseExecutor } from "@veolms/database";
 import type {
   CreateLearningThreadRequest,
   ListLearningThreadsQuery,
   UpdateLearningThreadRequest,
 } from "@veolms/contracts";
-import type { ThreadsService } from "./threads.service.ts";
+import type { DatabaseExecutor } from "@veolms/database";
+
+import type { FastifyReply, FastifyRequest } from "fastify";
+
 import { discussionActor } from "../shared/discussion.access.ts";
+
+import type { ThreadsService } from "./threads.service.ts";
 
 export interface ThreadsController {
   createLessonThread(
@@ -60,6 +63,8 @@ export interface ThreadsController {
     }>,
     reply: FastifyReply,
   ): Promise<void>;
+
+  listPublicPopularDiscussions(request: FastifyRequest, reply: FastifyReply): Promise<void>;
 }
 
 export function createThreadsController({
@@ -117,6 +122,11 @@ export function createThreadsController({
         roles: user.roles,
       });
 
+      return reply.status(200).send(result);
+    },
+
+    async listPublicPopularDiscussions(_request, reply) {
+      const result = await service.listPublicPopularDiscussions(database);
       return reply.status(200).send(result);
     },
 

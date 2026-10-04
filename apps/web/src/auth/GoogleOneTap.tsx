@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
+
 import type { ApiError } from "../lib/api-client";
+import { normalizeAppPath, sanitizeReturnTo } from "../routing/routeAccess";
 import { useAuthConfig, useCurrentUser, useGoogleOneTapLogin } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
-import { normalizeAppPath, sanitizeReturnTo } from "../routing/routeAccess";
-import { resolvePostAuthPath } from "./postAuthNavigation";
 import { ToastNotification } from "../ToastNotification";
+
+import { resolvePostAuthPath } from "./postAuthNavigation";
 import { GoogleBrandIcon } from "./SocialBrandIcons";
 
 const GOOGLE_IDENTITY_SCRIPT = "https://accounts.google.com/gsi/client";
@@ -177,7 +179,6 @@ function OneTapVerifyingOverlay() {
     </div>
   );
 }
-
 const EXCLUDED_ONE_TAP_PATHS = new Set(["/mfa-setup", "/auth/callback", "/logout"]);
 
 /**

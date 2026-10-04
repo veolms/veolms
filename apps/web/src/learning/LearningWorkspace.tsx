@@ -1,3 +1,13 @@
+import type { MyQuizAssignment, VideoPlaybackBootstrap } from "@veolms/contracts";
+
+import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   useCallback,
   useEffect,
@@ -6,95 +16,83 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type ReactNode,
 } from "react";
-import "./learning-feature.css";
-import type {
-  CSSProperties,
-  KeyboardEvent as ReactKeyboardEvent,
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-} from "react";
-import type { MyQuizAssignment, VideoPlaybackBootstrap } from "@veolms/contracts";
+
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import {
-  DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS,
   claimPointerGesture,
+  DRAWER_SWIPE_THROUGH_VIEWPORT_CLASS,
   getLearningPlayerSwipeSplitX,
   isFullLearningPlayerSwipeTarget,
   subscribeToPointerGestureClaims,
 } from "../gestures/pointerGestureOwnership";
 import { useSecondPressHold } from "../gestures/useSecondPressHold";
+import { isEditingShortcutTarget } from "../keyboardShortcuts";
+import { QuizAttemptPanel } from "../quizzes/QuizAttemptPanel";
+import { ALLOW_GUEST_LEARNING } from "../routing/routeAccess";
+import { useCurrentUser } from "../services/auth";
+import { useCourseOverview } from "../services/courses";
+import { useEnrolledCourses } from "../services/enrollments";
+import { mediaService } from "../services/media";
+import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
+import { scrollApplicationTo } from "../shell/applicationScroll";
+import type { FloatingScrollbarHorizontalDragDetail } from "../shell/FloatingScrollbar";
 import {
   FLOATING_SCROLLBAR_HORIZONTAL_DRAG_EVENT,
   FloatingScrollbar,
 } from "../shell/FloatingScrollbar";
-import type { FloatingScrollbarHorizontalDragDetail } from "../shell/FloatingScrollbar";
-import { scrollApplicationTo } from "../shell/applicationScroll";
-import { isEditingShortcutTarget } from "../keyboardShortcuts";
-import { ALLOW_GUEST_LEARNING } from "../routing/routeAccess";
+import { useAuthStore } from "../store/auth.store";
 import { useShortcutPlatform } from "../useShortcutPlatform";
-import { LessonVideoPlayer } from "./player/LessonVideoPlayer";
-import { LessonPlayerChromePlaceholder } from "./player/LessonPlayerChromePlaceholder";
-import type {
-  LessonPlayerMinimizeGestureState,
-  LessonVideoPlayerProps,
-  NextLessonInfo,
-  RegisterPersistentLearningPlayer,
-} from "./player";
+
 import type { LearningMiniPlayerRequest } from "./player/learningMiniPlayerTypes";
 import {
   isDesktopLearningMinimizeViewport,
   LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY,
 } from "./player/learningPlayerMotion";
+import { LessonPlayerChromePlaceholder } from "./player/LessonPlayerChromePlaceholder";
+import { writeAutoplayPreference } from "./player/lessonPlayerPersistence";
+import { LessonVideoPlayer } from "./player/LessonVideoPlayer";
+import { createLessonsById, createLessonVideo, type Lesson } from "./courseContent";
+import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
+import { getCourseThumbnail, getCourseThumbnailSrcSet, getCourseTitle } from "./courseMetadata";
+import { canPlayCourseLesson, getPublicPreviewLessonNumbers } from "./coursePlayerAccess";
+import { Curriculum } from "./Curriculum";
+import {
+  Discussion,
+  type InteractionCapabilities,
+  type LessonContentAccessState,
+  type LessonParticipationState,
+  PrerenderedMobileCommentComposer,
+} from "./Discussion";
+import {
+  FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
+  FullscreenLandscapeCurriculumPanel,
+} from "./FullscreenLandscapeCurriculumPanel";
 import {
   DEFAULT_LEARNING_PLAYER_PREFERENCES,
   getInitialLearningPlayerPreferences,
   publishLearningPlayerBootstrap,
 } from "./learningPlayerPreferences";
-import { writeAutoplayPreference } from "./player/lessonPlayerPersistence";
-import { type Lesson, createLessonVideo, createLessonsById } from "./courseContent";
-import { mediaService } from "../services/media";
-import { Curriculum } from "./Curriculum";
 import {
-  FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
-  FullscreenLandscapeCurriculumPanel,
-} from "./FullscreenLandscapeCurriculumPanel";
-import { getCourseThumbnail, getCourseThumbnailSrcSet, getCourseTitle } from "./courseMetadata";
-import { canPlayCourseLesson, getPublicPreviewLessonNumbers } from "./coursePlayerAccess";
-import { useAuthStore } from "../store/auth.store";
-import { QuizAttemptPanel } from "../quizzes/QuizAttemptPanel";
-import { useCourseOverview } from "../services/courses";
-import { useCurrentUser } from "../services/auth";
-import { useEnrolledCourses } from "../services/enrollments";
-import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
-import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
-import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
-import {
-  getCachedVideoPlaybackBootstrap,
-  getVideoPlaybackBootstrap,
-  refreshVideoPlaybackToken,
-  VideoPlaybackBootstrapError,
-} from "./videoPlaybackBootstrap";
-import {
-  Discussion,
-  PrerenderedMobileCommentComposer,
-  type InteractionCapabilities,
-  type LessonContentAccessState,
-  type LessonParticipationState,
-} from "./Discussion";
-import {
+  applyLearningShellToDocument,
   clampLearningCurriculumWidth,
   CURRICULUM_COLLAPSED_STORAGE_KEY,
   CURRICULUM_COLLAPSED_WIDTH,
   CURRICULUM_MAX_WIDTH,
   CURRICULUM_MIN_WIDTH,
   CURRICULUM_WIDTH_STORAGE_KEY,
-  applyLearningShellToDocument,
   getInitialLearningShellState,
 } from "./learningShellPreferences";
+import type {
+  LessonPlayerMinimizeGestureState,
+  LessonVideoPlayerProps,
+  NextLessonInfo,
+  RegisterPersistentLearningPlayer,
+} from "./player";
 import { useLearningProgress } from "./useLearningProgress";
+import type { LessonDrawerViewportBounds } from "./useLessonDrawerHeroControl";
 import {
   getPhoneLessonDrawerCollapsedSnapPoint,
   getSideLessonDrawerBounds,
@@ -103,8 +101,14 @@ import {
   LESSON_DRAWER_MIN_FLOATING_WIDTH,
   useLessonDrawerHeroControl,
 } from "./useLessonDrawerHeroControl";
-import type { LessonDrawerViewportBounds } from "./useLessonDrawerHeroControl";
-import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+import {
+  getCachedVideoPlaybackBootstrap,
+  getVideoPlaybackBootstrap,
+  refreshVideoPlaybackToken,
+  VideoPlaybackBootstrapError,
+} from "./videoPlaybackBootstrap";
+
+import "./learning-feature.css";
 
 const CURRICULUM_SNAP_WIDTH = CURRICULUM_MIN_WIDTH / 2;
 const FLOATING_LESSON_DRAWER_SNAP_WIDTH = LESSON_DRAWER_MIN_FLOATING_WIDTH / 2;
@@ -511,6 +515,7 @@ export function LearningWorkspace({
   }, [courseContentDrawerViewport, curriculumCollapsed]);
 
   const [theaterMode, setTheaterMode] = useState(false);
+  const [chaptersPanelHost, setChaptersPanelHost] = useState<HTMLDivElement | null>(null);
   const mainRef = useRef<HTMLElement>(null);
   const playerWrapRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -720,10 +725,7 @@ export function LearningWorkspace({
   ]);
 
   const isDedicatedQuizLesson = currentLesson[5] === "quiz";
-  const hasQuizContent =
-    Boolean(currentQuizAssignment) || (isDedicatedQuizLesson && !currentLessonUuid);
   const showingQuiz = activeLessonView === "quiz";
-  const isQuizLesson = showingQuiz;
 
   useLayoutEffect(() => {
     const main = playerWrapRef.current?.closest<HTMLElement>(".courses-main");
@@ -2279,6 +2281,12 @@ export function LearningWorkspace({
       courseLessonsShortcutLabel: curriculumShortcutLabel,
       courseLessonsSidePanel: playerCourseLessonsSidePanel,
       courseLessonsVideoWidthPercent: fullscreenVideoLayoutWidthPercent,
+      // Only a visible content column can host the chapters panel; otherwise
+      // the player slides it over its own right edge.
+      chaptersPanelHost:
+        curriculumCollapsed || theaterMode || courseContentDrawerViewport
+          ? null
+          : chaptersPanelHost,
       onAutoplayEnabledChange: updateAutoplayEnabled,
       onCourseLessonsToggle: toggleLessonDrawerFromPlayer,
       onGoNext: goToNextLesson,
@@ -2303,9 +2311,12 @@ export function LearningWorkspace({
     [
       autoPlayOnLessonChange,
       autoplayEnabled,
+      chaptersPanelHost,
+      courseContentDrawerViewport,
       coursePersistenceKey,
       courseSlug,
       courseTitle,
+      curriculumCollapsed,
       currentLesson,
       currentLessonMedia,
       currentLessonIndex,
@@ -2707,6 +2718,13 @@ export function LearningWorkspace({
                 isLoading={isApiRoute && isCourseOverviewLoading}
               />
             </div>
+            {/* The lesson player portals its chapters panel here so it
+                overlays the course content. It sits below the resize rail. */}
+            <div
+              ref={setChaptersPanelHost}
+              data-learning-chapters-panel-host=""
+              className="pointer-events-none absolute inset-0 z-11 overflow-hidden"
+            />
           </div>
         </div>
       </main>

@@ -1,9 +1,11 @@
 import { publicProfileUsernameParamsSchema } from "@veolms/contracts";
+
 import type { MfaGateUser } from "../auth/mfaGate";
 import { resolveMfaSetupView } from "../auth/mfaGate";
-import { normalizeNavigationPath } from "./routeDescriptors";
-import { CREATOR_ROLES, normalizeRoles } from "../shell/workspaceRole";
 import { isCourseEditorPath } from "../courses/courseEditorRouting";
+import { CREATOR_ROLES, normalizeRoles } from "../shell/workspaceRole";
+
+import { normalizeNavigationPath } from "./routeDescriptors";
 
 export const APP_HOME_PATH = "/";
 export const LOGIN_PATH = "/login";
@@ -128,6 +130,7 @@ export function isLearningPath(pathname: string): boolean {
 
 export function isPublicAcademyPath(pathname: string): boolean {
   return (
+    normalizeAppPath(pathname) === "/home" ||
     isSettingsPath(pathname) ||
     isCoursesPublicPath(pathname) ||
     isPublicProfilePath(pathname) ||

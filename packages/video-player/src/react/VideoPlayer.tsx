@@ -1,40 +1,41 @@
 import {
+  type CSSProperties,
   forwardRef,
+  type HTMLAttributes,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
-  type HTMLAttributes,
-  type ReactNode,
-  type VideoHTMLAttributes,
 } from "react";
+
 import type { ChapterInput } from "../chapters/chapterTypes";
 import { BufferingIndicator } from "../controls/BufferingIndicator";
 import { CentralPlayButton } from "../controls/CentralPlayButton";
 import { DefaultControls } from "../controls/DefaultControls";
 import { ErrorOverlay } from "../controls/ErrorOverlay";
+import { PlaybackFeedback } from "../controls/PlaybackFeedback";
 import { PlayerGestureSurface } from "../controls/PlayerGestureSurface";
 import { PlayerHud } from "../controls/PlayerHud";
-import { PlaybackFeedback } from "../controls/PlaybackFeedback";
 import { ZoomLevelIndicator } from "../controls/ZoomLevelIndicator";
-import type { VideoEngine } from "../core/VideoEngine";
 import type { VideoSource } from "../core/types";
+import type { VideoEngine } from "../core/VideoEngine";
 import { NativeVideoEngine } from "../engines/native/NativeVideoEngine";
 import { ShakaVideoEngine } from "../engines/shaka/ShakaVideoEngine";
 import type { PlayerShortcutOverrides } from "../keyboard";
-import type { StoryboardLoader, StoryboardSource } from "./PlayerMetadataBridge";
+import { getPlayerThemeStyle, type PlayerTheme, resolvePlayerTheme } from "../themes/playerThemes";
+import type { TimelineMarker } from "../timeline/timelineMath";
+import { classNames } from "../utils/classNames";
+
 import { PlayerBehaviorBridge } from "./PlayerBehaviorBridge";
+import type { VideoPlayerEvent, VideoPlayerEventListener } from "./playerEvents";
+import type { PlayerInteractionMode } from "./PlayerInteractionMode";
 import type { PlayerMediaProps } from "./PlayerMedia";
+import type { StoryboardLoader, StoryboardSource } from "./PlayerMetadataBridge";
 import { PlayerMetadataBridge } from "./PlayerMetadataBridge";
 import { PlayerRoot, type VideoPlayerHandle } from "./PlayerRoot";
 import { PlayerZoomMedia, type PlayerZoomOverflowBoundary } from "./PlayerZoomMedia";
-import type { VideoPlayerEvent, VideoPlayerEventListener } from "./playerEvents";
-import { classNames } from "../utils/classNames";
-import type { TimelineMarker } from "../timeline/timelineMath";
-import { getPlayerThemeStyle, resolvePlayerTheme, type PlayerTheme } from "../themes/playerThemes";
-import type { PlayerInteractionMode } from "./PlayerInteractionMode";
 
 export interface VideoPlayerProgress {
   currentTime: number;
@@ -58,6 +59,8 @@ export interface VideoPlayerProps extends Omit<
   chapters?: readonly ChapterInput[];
   manualChapters?: readonly ChapterInput[];
   description?: string;
+  /** Thumbnails keyed by chapter start in whole seconds. */
+  chapterThumbnails?: Readonly<Record<number, string>>;
   storyboard?: StoryboardSource;
   storyboardLoader?: StoryboardLoader;
   markers?: readonly TimelineMarker[];
@@ -134,6 +137,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     ariaLabel = "Video player",
     autoPlay = false,
     chapters,
+    chapterThumbnails,
     centralControl,
     className,
     controls,
@@ -336,6 +340,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         />
         <PlayerMetadataBridge
           chapters={chapters}
+          chapterThumbnails={chapterThumbnails}
           manualChapters={manualChapters}
           description={description}
           storyboard={storyboard}

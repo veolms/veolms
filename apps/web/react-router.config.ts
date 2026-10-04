@@ -1,5 +1,7 @@
-import type { Config } from "@react-router/dev/config";
 import { courseListResponseSchema } from "@veolms/contracts";
+
+import type { Config } from "@react-router/dev/config";
+
 import { createLearningPrerenderPaths } from "./src/learning/prerenderLearningPaths";
 
 const staticApplicationPages = [
@@ -12,6 +14,7 @@ const staticApplicationPages = [
   "/register",
   "/auth/callback",
   "/courses",
+  "/home",
   "/settings",
   "/settings/profile",
   "/settings/appearance",

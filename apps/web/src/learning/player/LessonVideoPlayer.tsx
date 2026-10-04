@@ -1,39 +1,43 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { VideoPlaybackBootstrap, VideoPlaybackToken } from "@veolms/contracts";
 import {
+  type VideoEngine,
+  VideoLoadingSpinner,
   VideoPlayer as VeoVideoPlayer,
   VideoPlayerCloseButton,
-  VideoLoadingSpinner,
   type VideoPlayerEvent,
   type VideoPlayerHandle,
-  type VideoEngine,
   type VideoSource,
 } from "@veolms/video-player";
-import type { VideoPlaybackBootstrap, VideoPlaybackToken } from "@veolms/contracts";
-import type { CourseVideo } from "../courseContent";
+
+import type { CSSProperties, ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+
+import { cn } from "../../lib/utils";
 import {
   LEARNING_SEEK_INTERVAL_DEFAULT,
   readLearningPreferences,
 } from "../../settings/settingsPreferences";
-import { LessonAmbientProjection } from "./LessonAmbientProjection";
-import { LessonEndScreenOverlay, type NextLessonInfo } from "./LessonEndScreenOverlay";
-import {
-  LessonCentralControls,
-  LessonPlayerControls,
-  LessonPlayerMinimizeControl,
-  type CourseLessonsSecondPressHoldProps,
-} from "./LessonPlayerControls";
-import { MiniPlayerRestoreControl } from "./MiniPlayerControls";
-import type { LearningMiniPlayerRequest } from "./learningMiniPlayerTypes";
+import type { CourseVideo } from "../courseContent";
 import {
   DEFAULT_LEARNING_PLAYER_PREFERENCES,
   getInitialLearningPlayerPreferences,
   publishLearningPlayerBootstrap,
 } from "../learningPlayerPreferences";
+
+import { LearningMiniPlayerBufferingIndicator } from "./learningMiniPlayerBufferingIndicator";
 import {
   getLearningMiniPlayerRuntimeSnapshot,
   prepareLearningMiniPlayerPlaybackHandoff,
 } from "./learningMiniPlayerStore";
+import type { LearningMiniPlayerRequest } from "./learningMiniPlayerTypes";
+import { LessonAmbientProjection } from "./LessonAmbientProjection";
+import { LessonEndScreenOverlay, type NextLessonInfo } from "./LessonEndScreenOverlay";
+import {
+  type CourseLessonsSecondPressHoldProps,
+  LessonCentralControls,
+  LessonPlayerControls,
+  LessonPlayerMinimizeControl,
+} from "./LessonPlayerControls";
 import {
   clampPlayerVolume,
   consumeMiniPlayerRestore,
@@ -47,15 +51,14 @@ import {
   writeVolumePreference,
 } from "./lessonPlayerPersistence";
 import { createLearningLessonVideoSource } from "./lessonVideoSource";
-import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
+import { MiniPlayerRestoreControl } from "./MiniPlayerControls";
 import { MiniPlayerControls } from "./MiniPlayerControls";
-import { LearningMiniPlayerBufferingIndicator } from "./learningMiniPlayerBufferingIndicator";
-import {
-  useLessonPlayerMinimizeGesture,
-  type LessonPlayerMinimizeGestureState,
-} from "./useLessonPlayerMinimizeGesture";
 import { useLearningPlayerMinimizeShortcut } from "./useLearningPlayerMinimizeShortcut";
-import { cn } from "../../lib/utils";
+import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
+import {
+  type LessonPlayerMinimizeGestureState,
+  useLessonPlayerMinimizeGesture,
+} from "./useLessonPlayerMinimizeGesture";
 
 const RESUME_PERSIST_INTERVAL_MS = 5_000;
 const LESSON_PLAYER_CONTROLS_IDLE_DELAY_MS = 1_000;
@@ -101,6 +104,8 @@ export interface LessonVideoPlayerProps {
   courseLessonsShortcutLabel?: string;
   courseLessonsSidePanel?: boolean;
   courseLessonsVideoWidthPercent?: number;
+  /** Element over the course content column that hosts the chapters panel. */
+  chaptersPanelHost?: HTMLElement | null;
   onAutoplayEnabledChange?: (enabled: boolean) => void;
   onCourseLessonsToggle?: (presentation: "drawer" | "side") => void;
   onGoNext?: () => void;
@@ -159,6 +164,7 @@ export function LessonVideoPlayer({
   courseLessonsShortcutLabel,
   courseLessonsSidePanel = false,
   courseLessonsVideoWidthPercent = 60,
+  chaptersPanelHost,
   courseTitle,
   engineFactory,
   description,
@@ -262,6 +268,18 @@ export function LessonVideoPlayer({
         : media,
     [media, playbackBootstrap],
   );
+
+  // Chapters are parsed from the description; the API only adds the still
+  // captured at each chapter's first second.
+  const chapterThumbnails = useMemo(() => {
+    const thumbnails: Record<number, string> = {};
+    for (const chapter of playbackBootstrap?.chapters ?? []) {
+      if (chapter.thumbnailUrl) {
+        thumbnails[chapter.startSeconds] = chapter.thumbnailUrl;
+      }
+    }
+    return thumbnails;
+  }, [playbackBootstrap?.chapters]);
 
   const source = useMemo<VideoSource>(() => {
     const resumeFromLastPosition = readLearningPreferences().resumeFromLastPosition;
@@ -575,7 +593,17 @@ export function LessonVideoPlayer({
         playerRef.current?.setMuted(true);
       },
     });
-  }, [lessonTitle, mediaKey, muted, onMinimize, persistResumePosition, source]);
+  }, [
+    courseTitle,
+    lessonIndex,
+    lessonTitle,
+    mediaKey,
+    muted,
+    onMinimize,
+    persistResumePosition,
+    source,
+    totalLessons,
+  ]);
 
   const minimizeGesture = useLessonPlayerMinimizeGesture({
     enabled: presentation === "full" && Boolean(onMinimize),
@@ -858,6 +886,7 @@ export function LessonVideoPlayer({
       ref={playerRef}
       source={source}
       description={description ?? undefined}
+      chapterThumbnails={chapterThumbnails}
       theme={playerTheme}
       engine="shaka"
       engineFactory={engineFactory}
@@ -948,6 +977,8 @@ export function LessonVideoPlayer({
             courseLessonsSecondPressHold={courseLessonsSecondPressHold}
             courseLessonsShortcutLabel={courseLessonsShortcutLabel}
             courseLessonsSidePanel={courseLessonsSidePanel}
+            lessonTitle={lessonTitle}
+            chaptersPanelHost={chaptersPanelHost}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}
             onCourseLessonsToggle={onCourseLessonsToggle}

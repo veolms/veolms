@@ -7,6 +7,7 @@ import type {
   CreateLearningReplyRequest,
   CreateLearningThreadRequest,
   CreateReportRequest,
+  DiscussionsWorkspaceResponse,
   InitiateAttachmentUploadRequest,
   InitiateAttachmentUploadResponse,
   LearningAttachment,
@@ -16,22 +17,21 @@ import type {
   LearningReply,
   LearningThread,
   LearningThreadsListResponse,
-  LessonDiscussionsListResponse,
-  LessonDiscussionCountsResponse,
-  ListLessonDiscussionsQuery,
   LearningUploadResponse,
+  LessonDiscussionCountsResponse,
+  LessonDiscussionsListResponse,
   LinkPreviewResponse,
-  ListAuditLogsQuery,
   ListLearningNotesQuery,
   ListLearningRepliesQuery,
   ListLearningThreadsQuery,
+  ListLessonDiscussionsQuery,
   ListReportsQuery,
   LockThreadRequest,
   LockThreadResponse,
   ModerateReplyRequest,
   ModerateThreadRequest,
+  PublicPopularDiscussionsResponse,
   ReportsListResponse,
-  DiscussionsWorkspaceResponse,
   SuspendUserRequest,
   ToggleBookmarkResponse,
   ToggleFollowResponse,
@@ -45,8 +45,10 @@ import type {
   UserAutocompleteResponse,
   UserSuspension,
 } from "@veolms/contracts";
+
 import { api } from "../../lib/api-client";
 import { mediaService } from "../media/media.service";
+
 import { requireServerEntityId } from "./interaction-entities";
 
 export interface AttachmentUploadProgress {
@@ -60,6 +62,10 @@ export interface DiscussionAttachmentUploadContext {
 }
 
 export const learningInteractionsService = {
+  listPopularDiscussions(): Promise<PublicPopularDiscussionsResponse> {
+    return api.get<PublicPopularDiscussionsResponse>("/discussions/popular");
+  },
+
   getLessonInteractionCounts(
     courseId: string,
     lessonId: string,

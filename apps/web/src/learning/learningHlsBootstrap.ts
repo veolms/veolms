@@ -1,5 +1,6 @@
-import { resolveLessonIdentifier } from "./courseContent";
 import { serializeForInlineJson } from "../lib/serializeForInlineJson";
+
+import { resolveLessonIdentifier } from "./courseContent";
 
 export const LEARNING_HLS_MANIFEST_META_NAME = "veo-hls-manifest";
 export const LEARNING_HLS_MEDIA_KEY_META_NAME = "veo-hls-media-key";
@@ -51,7 +52,7 @@ export function readLearningHlsBootstrapFromDocument(
     .querySelector(`meta[name="${LEARNING_HLS_MANIFEST_META_NAME}"]`)
     ?.getAttribute("content")
     ?.trim();
-  if (!manifestUrl || !/\.m3u8(?:$|[?#])/i.test(manifestUrl)) return null;
+  if (!manifestUrl || !/\.(?:m3u8|mpd)(?:$|[?#])/i.test(manifestUrl)) return null;
   const mediaKey =
     root
       .querySelector(`meta[name="${LEARNING_HLS_MEDIA_KEY_META_NAME}"]`)
