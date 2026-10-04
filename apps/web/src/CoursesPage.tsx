@@ -54,7 +54,7 @@ import {
   subscribeToPointerGestureClaims,
 } from "./gestures/pointerGestureOwnership";
 import { useSecondPressHold } from "./gestures/useSecondPressHold";
-import { useTripleTap } from "./gestures/useTripleTap";
+import { useEmptyAreaDoubleTap } from "./gestures/useEmptyAreaDoubleTap";
 import {
   getCourseQuickFilterCounts,
   getVisibleCourses,
@@ -2715,7 +2715,9 @@ export function CoursesPage({
       setNotice("Fullscreen is not available in this browser.");
     }
   }, [setNotice]);
-  useTripleTap(() => void toggleFullscreen());
+  const handleEmptyAreaDoubleTap = useEmptyAreaDoubleTap(
+    () => void toggleFullscreen(),
+  );
 
   useEffect(() => {
     const syncFullscreenState = () =>
@@ -4162,6 +4164,7 @@ export function CoursesPage({
               event.preventDefault();
               event.stopPropagation();
             }}
+            onClick={handleEmptyAreaDoubleTap}
           >
             {((!compactNavigation && !sidebarPresentedAsOverlay) ||
               (sidebarPresentedAsOverlay && edgeSidebarOpen)) && (
@@ -4215,6 +4218,7 @@ export function CoursesPage({
             <div
               className="courses-sidebar__brand"
               title={sidebarBrandTitle}
+              data-double-tap-ignore
               onMouseDown={preventSidebarBrandTextSelection}
               onDoubleClick={handleSidebarBrandDoubleClick}
             >
@@ -4974,7 +4978,10 @@ export function CoursesPage({
               setMobilePaletteMenu(false);
           }}
         >
-          <div className="mobile-menu-sheet__body">
+          <div
+            className="mobile-menu-sheet__body"
+            onClick={handleEmptyAreaDoubleTap}
+          >
             <DrawerTitle id="mobile-navigation-title" className="sr-only">
               Profile and navigation
             </DrawerTitle>

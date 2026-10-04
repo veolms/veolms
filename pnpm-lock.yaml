@@ -110,6 +110,9 @@ importers:
       '@veolms/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@veolms/video-player':
+        specifier: workspace:*
+        version: link:../../packages/video-player
       fastify:
         specifier: ^5.11.0
         version: 5.11.0

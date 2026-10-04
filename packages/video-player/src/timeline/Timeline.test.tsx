@@ -26,10 +26,16 @@ describe("Timeline", () => {
     fireEvent.click(marker);
     expect(actions.seekTo).toHaveBeenCalledWith(90);
 
-    expect(container.querySelectorAll("span[aria-hidden='true']")).toHaveLength(
+    // One track segment per chapter; progress fills half of the first.
+    expect(container.querySelectorAll("[data-timeline-segment]")).toHaveLength(
       2,
     );
-    expect(container.querySelector("span[style*='width: 25%']")).toBeTruthy();
+    expect(
+      container.querySelector("[data-timeline-progress][style*='width: 50%']"),
+    ).toBeTruthy();
+    expect(container.querySelectorAll("[data-timeline-progress]")).toHaveLength(
+      1,
+    );
     expect(container.querySelector("[data-timeline-track]")).toBeTruthy();
     expect(container.querySelector("[data-timeline-visual]")).toHaveClass(
       "pointer-events-none",

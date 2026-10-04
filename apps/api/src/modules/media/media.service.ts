@@ -13,6 +13,8 @@ import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
 import { ADMIN_ROLE } from "../auth/index.ts";
 import { createAccessService } from "../access/index.ts";
+import { listLessonChaptersForPlayback } from "../courses/chapters/chapters.playback.service.ts";
+import { createChapterSyncService } from "../courses/chapters/chapters.service.ts";
 import * as mediaRepo from "./media.repository.ts";
 import { enqueueImageJob } from "@veolms/database";
 import { probeVideoSource } from "../../lib/video-prober.ts";
@@ -140,6 +142,8 @@ export function createMediaService({
   database,
   services,
 }: MediaServiceOptions) {
+  const chapterSyncService = createChapterSyncService({ database, services });
+
   /**
    * Pre-signs an S3/storage upload URL for media asset creation.
    */
@@ -1084,6 +1088,26 @@ export function createMediaService({
       );
     }
     const playbackToken = createPlaybackSegmentToken(manifestKey);
+    // Chapter stills are an enhancement; never let them block playback.
+    const chapterRows = await listLessonChaptersForPlayback(
+      database,
+      context.lesson_id,
+    ).catch(() => []);
+    const chapters = chapterRows.map((chapter) => {
+      let thumbnailUrl: string | undefined;
+      if (chapter.thumbnail_key) {
+        try {
+          thumbnailUrl = getDirectDelivery(chapter.thumbnail_key).url;
+        } catch {
+          // Thumbnails are optional; play without one.
+        }
+      }
+      return {
+        title: chapter.title,
+        startSeconds: chapter.start_seconds,
+        ...(thumbnailUrl ? { thumbnailUrl } : {}),
+      };
+    });
     return {
       version: 1,
       courseSlug: context.course_slug,
@@ -1100,6 +1124,7 @@ export function createMediaService({
       media.duration_seconds !== undefined
         ? { duration: Number(media.duration_seconds) }
         : {}),
+      ...(chapters.length > 0 ? { chapters } : {}),
       title: context.lesson_title,
       source: "paid-bootstrap-api",
     };
@@ -1342,6 +1367,26 @@ export function createMediaService({
     const errorMessage =
       eventDetail?.errorMessage || body?.errorMessage || null;
 
+    // Chapter thumbnail captures are not transcode jobs: they have no
+    // video_jobs row and must never touch media or job status.
+    if (userMetadata.jobKind === "chapter-thumbnails") {
+      const isComplete = statusRaw === "COMPLETE" || statusRaw === "COMPLETED";
+      const times = String(userMetadata.chapterThumbnailTimes ?? "")
+        .split(",")
+        .filter((value) => value.trim() !== "")
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value >= 0);
+      if (isComplete && videoId && times.length > 0) {
+        await chapterSyncService.completeThumbnailCapture(videoId, times);
+      } else if (!isComplete) {
+        logger?.warn(
+          { videoId, status: statusRaw, error: errorMessage },
+          "[mediaconvert-webhook] Chapter thumbnail capture did not complete",
+        );
+      }
+      return { success: true, status: statusRaw.toLowerCase() };
+    }
+
     if (!jobId && !videoId) {
       throw new AppError(
         400,
@@ -1440,6 +1485,36 @@ export function createMediaService({
         master_playlist_path: normalizedMaster,
         created_at: new Date(),
       });
+
+      // The duration is only reliable now, so chapters authored before the
+      // upload finished are derived (and their frames requested) here.
+      try {
+        const readyMedia = await mediaRepo.findMediaAssetById(
+          database,
+          job.video_id,
+        );
+        if (readyMedia) {
+          await chapterSyncService.syncChaptersForMedia(
+            {
+              id: readyMedia.id,
+              status: "ready",
+              durationSeconds:
+                readyMedia.duration_seconds === null ||
+                readyMedia.duration_seconds === undefined
+                  ? null
+                  : Number(readyMedia.duration_seconds),
+              storageKey: readyMedia.storage_key,
+              masterPlaylistKey: normalizedMaster,
+            },
+            logger,
+          );
+        }
+      } catch (err) {
+        logger?.warn(
+          { err, videoId: job.video_id },
+          "[mediaconvert-webhook] Failed to sync lesson chapters",
+        );
+      }
 
       logger?.info(
         {

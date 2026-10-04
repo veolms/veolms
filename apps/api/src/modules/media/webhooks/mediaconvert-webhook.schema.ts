@@ -30,6 +30,10 @@ export const mediaConvertUserMetadataSchema = z
     outputPrefix: z.string().optional(),
     webhookUrl: z.string().optional(),
     webhookSecret: z.string().optional(),
+    // Set on chapter thumbnail capture jobs; see mediaconvert.dispatcher.ts.
+    jobKind: z.string().optional(),
+    chapterThumbnailTimes: z.string().optional(),
+    chapterThumbnailDestination: z.string().optional(),
     s3Config: z
       .union([
         z.string(),

@@ -114,6 +114,8 @@ export interface LessonVideoPlayerProps {
   courseLessonsShortcutLabel?: string;
   courseLessonsSidePanel?: boolean;
   courseLessonsVideoWidthPercent?: number;
+  /** Element over the course content column that hosts the chapters panel. */
+  chaptersPanelHost?: HTMLElement | null;
   onAutoplayEnabledChange?: (enabled: boolean) => void;
   onCourseLessonsToggle?: (presentation: "drawer" | "side") => void;
   onGoNext?: () => void;
@@ -174,6 +176,7 @@ export function LessonVideoPlayer({
   courseLessonsShortcutLabel,
   courseLessonsSidePanel = false,
   courseLessonsVideoWidthPercent = 60,
+  chaptersPanelHost,
   courseTitle,
   engineFactory,
   description,
@@ -282,6 +285,18 @@ export function LessonVideoPlayer({
         : media,
     [media, playbackBootstrap],
   );
+
+  // Chapters are parsed from the description; the API only adds the still
+  // captured at each chapter's first second.
+  const chapterThumbnails = useMemo(() => {
+    const thumbnails: Record<number, string> = {};
+    for (const chapter of playbackBootstrap?.chapters ?? []) {
+      if (chapter.thumbnailUrl) {
+        thumbnails[chapter.startSeconds] = chapter.thumbnailUrl;
+      }
+    }
+    return thumbnails;
+  }, [playbackBootstrap?.chapters]);
 
   const source = useMemo<VideoSource>(() => {
     const resumeFromLastPosition =
@@ -925,6 +940,7 @@ export function LessonVideoPlayer({
       ref={playerRef}
       source={source}
       description={description ?? undefined}
+      chapterThumbnails={chapterThumbnails}
       theme={playerTheme}
       engine="shaka"
       engineFactory={engineFactory}
@@ -1026,6 +1042,8 @@ export function LessonVideoPlayer({
             courseLessonsSecondPressHold={courseLessonsSecondPressHold}
             courseLessonsShortcutLabel={courseLessonsShortcutLabel}
             courseLessonsSidePanel={courseLessonsSidePanel}
+            lessonTitle={lessonTitle}
+            chaptersPanelHost={chaptersPanelHost}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}
             onCourseLessonsToggle={onCourseLessonsToggle}

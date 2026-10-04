@@ -241,6 +241,20 @@ export type PersistedVideoMetadata = z.infer<
   typeof persistedVideoMetadataSchema
 >;
 
+/**
+ * Asks the transcoding fleet to capture one frame per chapter start. The
+ * fleet writes `<destinationPrefix><startSeconds>.webp` for every entry in
+ * `times` and reports completion through the MediaConvert webhook.
+ */
+export const chapterThumbnailCaptureSchema = z.strictObject({
+  times: z.array(z.number().int().nonnegative()).min(1),
+  destinationPrefix: z.string().min(1),
+  masterPlaylistKey: z.string().min(1).optional(),
+});
+export type ChapterThumbnailCapture = z.infer<
+  typeof chapterThumbnailCaptureSchema
+>;
+
 export const videoJobEventSchema = z.looseObject({
   action: lambdaActionSchema.optional(),
   status: videoJobStatusSchema.optional(),
@@ -254,6 +268,7 @@ export const videoJobEventSchema = z.looseObject({
   deleteFiles: z.boolean().optional(),
   deleteMedia: z.boolean().optional(),
   thumbnailDestination: z.string().optional(),
+  chapterThumbnails: chapterThumbnailCaptureSchema.optional(),
 });
 
 export const lambdaResponseSchema = z.object({

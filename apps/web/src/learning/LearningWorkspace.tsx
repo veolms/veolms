@@ -555,6 +555,8 @@ export function LearningWorkspace({
   }, [courseContentDrawerViewport, curriculumCollapsed]);
 
   const [theaterMode, setTheaterMode] = useState(false);
+  const [chaptersPanelHost, setChaptersPanelHost] =
+    useState<HTMLDivElement | null>(null);
   const mainRef = useRef<HTMLElement>(null);
   const playerWrapRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -2507,6 +2509,12 @@ export function LearningWorkspace({
       courseLessonsShortcutLabel: curriculumShortcutLabel,
       courseLessonsSidePanel: playerCourseLessonsSidePanel,
       courseLessonsVideoWidthPercent: fullscreenVideoLayoutWidthPercent,
+      // Only a visible content column can host the chapters panel; otherwise
+      // the player slides it over its own right edge.
+      chaptersPanelHost:
+        curriculumCollapsed || theaterMode || courseContentDrawerViewport
+          ? null
+          : chaptersPanelHost,
       onAutoplayEnabledChange: updateAutoplayEnabled,
       onCourseLessonsToggle: toggleLessonDrawerFromPlayer,
       onGoNext: goToNextLesson,
@@ -2531,9 +2539,12 @@ export function LearningWorkspace({
     [
       autoPlayOnLessonChange,
       autoplayEnabled,
+      chaptersPanelHost,
+      courseContentDrawerViewport,
       coursePersistenceKey,
       courseSlug,
       courseTitle,
+      curriculumCollapsed,
       currentLesson,
       currentLessonMedia,
       currentLessonIndex,
@@ -2971,6 +2982,13 @@ export function LearningWorkspace({
                 isLoading={isApiRoute && isCourseOverviewLoading}
               />
             </div>
+            {/* The lesson player portals its chapters panel here so it
+                overlays the course content. It sits below the resize rail. */}
+            <div
+              ref={setChaptersPanelHost}
+              data-learning-chapters-panel-host=""
+              className="pointer-events-none absolute inset-0 z-11 overflow-hidden"
+            />
           </div>
         </div>
       </main>

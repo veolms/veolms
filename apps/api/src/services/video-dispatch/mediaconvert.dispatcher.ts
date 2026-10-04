@@ -6,6 +6,7 @@ import {
 } from "@aws-sdk/client-mediaconvert";
 import {
   QUALITY_PROFILES,
+  type ChapterThumbnailCapture,
   type QualityProfile,
   type VideoJobEvent,
   type VideoQualityLevel,
@@ -61,6 +62,89 @@ export function createMediaConvertDispatcher(options: {
     return clientInstance;
   }
 
+  /**
+   * Chapter thumbnail capture contract with the fleet.
+   *
+   * The job is a single FRAME_CAPTURE output whose UserMetadata carries:
+   * - `jobKind`: "chapter-thumbnails"
+   * - `chapterThumbnailTimes`: comma-separated chapter starts, in seconds
+   * - `chapterThumbnailDestination`: storage prefix for the frames
+   * - `masterPlaylistKey` (optional): the transcoded HLS master, usable as a
+   *   cheaper seek source than the original upload in `sourceKey`
+   *
+   * The fleet writes `<destination><seconds>.webp` (first frame at or after
+   * each time) and then calls the webhook with status COMPLETE and the same
+   * UserMetadata. No video_jobs row exists for these jobs.
+   */
+  async function dispatchChapterThumbnails(
+    client: MediaConvertClient,
+    payload: VideoJobEvent,
+    capture: ChapterThumbnailCapture,
+    videoKey: string,
+    roleArn: string,
+  ): Promise<void> {
+    const bucket = config.STORAGE_BUCKET;
+    const toUri = (key: string) =>
+      key.startsWith("s3://") ? key : `s3://${bucket}/${key}`;
+    const userMetadata: Record<string, string> = {
+      jobKind: "chapter-thumbnails",
+      videoId: payload.videoId || "",
+      sourceKey: videoKey,
+      chapterThumbnailTimes: capture.times.join(","),
+      chapterThumbnailDestination: capture.destinationPrefix,
+    };
+    if (capture.masterPlaylistKey) {
+      userMetadata.masterPlaylistKey = capture.masterPlaylistKey;
+    }
+    if (config.MEDIACONVERT_WEBHOOK_URL) {
+      userMetadata.webhookUrl = config.MEDIACONVERT_WEBHOOK_URL;
+      if (config.MEDIACONVERT_WEBHOOK_SECRET) {
+        userMetadata.webhookSecret = config.MEDIACONVERT_WEBHOOK_SECRET;
+      }
+    }
+
+    const result = await client.send(
+      new CreateJobCommand({
+        Role: roleArn,
+        Queue: config.MEDIACONVERT_QUEUE_ARN || undefined,
+        UserMetadata: userMetadata,
+        Settings: {
+          Inputs: [{ FileInput: toUri(videoKey) }],
+          OutputGroups: [
+            {
+              Name: "Chapter_Thumbnail_Group",
+              OutputGroupSettings: {
+                Type: "FILE_GROUP_SETTINGS",
+                FileGroupSettings: {
+                  Destination: toUri(capture.destinationPrefix),
+                },
+              },
+              Outputs: [
+                {
+                  ContainerSettings: { Container: "RAW" },
+                  VideoDescription: {
+                    Width: 480,
+                    CodecSettings: { Codec: "FRAME_CAPTURE" },
+                  },
+                  Extension: "webp",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    logger.info(
+      {
+        videoId: payload.videoId,
+        chapters: capture.times.length,
+        mediaConvertJobId: result.Job?.Id,
+      },
+      "[video-dispatch:mediaconvert] Chapter thumbnail capture submitted",
+    );
+  }
+
   async function dispatch(payload: VideoJobEvent): Promise<void> {
     const client = getClient();
 
@@ -106,6 +190,17 @@ export function createMediaConvertDispatcher(options: {
     const roleArn =
       config.MEDIACONVERT_ROLE_ARN ||
       "arn:aws:iam::123456789012:role/MediaConvertRole";
+
+    if (payload.chapterThumbnails) {
+      await dispatchChapterThumbnails(
+        client,
+        payload,
+        payload.chapterThumbnails,
+        videoKey,
+        roleArn,
+      );
+      return;
+    }
 
     const userMetadata: Record<string, string> = {
       jobId: payload.jobId || "",
