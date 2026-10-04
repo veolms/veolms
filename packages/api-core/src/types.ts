@@ -5,6 +5,12 @@ import type { FastifyInstance, FastifyServerOptions } from "fastify";
 import type { Kysely } from "kysely";
 import type { ApiPlugin } from "@veolms/plugin-sdk";
 
+declare module "fastify" {
+  interface FastifyContextConfig {
+    rawResponse?: boolean;
+  }
+}
+
 export type { ApiPlugin, WebExtension } from "@veolms/plugin-sdk";
 export type { ErrorResponse, ValidationIssue };
 

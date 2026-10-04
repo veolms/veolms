@@ -27,6 +27,14 @@ export function isHlsUrl(src: string): boolean {
   return /\.m3u8(?:$|[?#])/i.test(src);
 }
 
+export function isDashUrl(src: string): boolean {
+  return /\.mpd(?:$|[?#])/i.test(src);
+}
+
+export function isStreamingUrl(src: string): boolean {
+  return isHlsUrl(src) || isDashUrl(src);
+}
+
 export function createLearningLessonVideoSource(options: {
   media: CourseVideo;
   lessonTitle: string;
@@ -41,13 +49,19 @@ export function createLearningLessonVideoSource(options: {
   } | null>;
 }): VideoSource {
   const hls = isHlsUrl(options.media.src);
+  const dash = isDashUrl(options.media.src);
+  const streaming = hls || dash;
   return {
     id: options.mediaKey,
-    src: hls
+    src: streaming
       ? toAbsoluteLearningMediaUrl(options.media.src)
       : options.media.src,
-    type: hls ? LEARNING_HLS_MIME_TYPE : "video/mp4",
-    kind: hls ? "hls" : "file",
+    type: hls
+      ? LEARNING_HLS_MIME_TYPE
+      : dash
+        ? "application/dash+xml"
+        : "video/mp4",
+    kind: hls ? "hls" : dash ? "dash" : "file",
     // The catalog duration can be stale after an asset replacement. Shaka
     // receives the stored position and the loaded event clamps it against
     // the actual media duration before progress is reported.
@@ -56,8 +70,8 @@ export function createLearningLessonVideoSource(options: {
       duration: options.media.duration,
       title: options.lessonTitle,
     },
-    streaming: hls ? { ...LEARNING_HLS_STREAMING } : undefined,
-    networking: hls
+    streaming: streaming ? { ...LEARNING_HLS_STREAMING } : undefined,
+    networking: streaming
       ? {
           requestFilter: createLearningHlsRequestFilter({
             protectedPlayback: options.protectedPlayback,
