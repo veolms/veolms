@@ -27,6 +27,7 @@ import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 import { MiniPlayerControls } from "./MiniPlayerControls";
 import { LearningMiniPlayerBufferingIndicator } from "./learningMiniPlayerBufferingIndicator";
 import { MiniPlayerInfoBar } from "./MiniPlayerInfoBar";
+import { MiniPlayerReadingModeEffects } from "./MiniPlayerReadingModeEffects";
 import { MiniPlayerResizeHandles } from "./MiniPlayerResizeHandles";
 import { useLearningPlayerMinimizeShortcut } from "./useLearningPlayerMinimizeShortcut";
 import { resolveLearningMiniPlayerLessonPath } from "./persistentMiniPlayerLesson";
@@ -371,6 +372,7 @@ export function LearningMiniPlayer({
         quickly to close.
       </span>
       <MiniPlayerResizeHandles expanded={isExpanded} />
+      <MiniPlayerReadingModeEffects />
       <VideoPlayer
         ref={playerRef}
         source={{ ...session.source, startTime: session.currentTime }}

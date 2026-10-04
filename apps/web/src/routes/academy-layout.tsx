@@ -1268,6 +1268,37 @@ export default function AcademyLayout() {
       }
 
       const version = surfaceMotionVersionRef.current;
+      if (isDesktopLearningMinimizeViewport()) {
+        // Desktop motion is always a timed settle, so the page behind the
+        // player gets one CSS opacity transition instead of a value written
+        // on every frame. The compositor runs it, nothing is measured, and
+        // the stage's custom properties (which restyle the whole app when
+        // they change) are written once.
+        learningMotionOffsetYRef.current = toOffsetY;
+        learningMotionViewportHeightRef.current = viewportHeight;
+        if (forceMount) mountLearningBackground();
+        const motionStage = learningMotionStageRef.current;
+        if (motionStage) {
+          motionStage.style.setProperty(
+            "--learning-background-reveal-duration",
+            `${LEARNING_PLAYER_MOTION_DURATION_MS}ms`,
+          );
+          // Minimizing reveals the page behind the player; restoring and
+          // settling back cover it again.
+          motionStage.style.setProperty(
+            "--learning-background-reveal",
+            toOffsetY > fromOffsetY ? "1" : "0",
+          );
+          motionStage.dataset.learningPlayerMotion = phase;
+        }
+        surfaceMotionTimerRef.current = window.setTimeout(() => {
+          if (surfaceMotionVersionRef.current !== version) return;
+          surfaceMotionTimerRef.current = null;
+          onComplete?.();
+        }, LEARNING_PLAYER_MOTION_DURATION_MS + 80);
+        return;
+      }
+
       const startedAt = performance.now();
       const complete = () => {
         if (surfaceMotionVersionRef.current !== version) return;
@@ -1322,7 +1353,11 @@ export default function AcademyLayout() {
         LEARNING_PLAYER_MOTION_DURATION_MS + 80,
       );
     },
-    [applyLearningSurfaceMotion, cancelLearningSurfaceMotion],
+    [
+      applyLearningSurfaceMotion,
+      cancelLearningSurfaceMotion,
+      mountLearningBackground,
+    ],
   );
 
   const finishLearningPlayerRestoreMotion = useCallback(() => {
@@ -1375,6 +1410,9 @@ export default function AcademyLayout() {
       const motionStage = learningMotionStageRef.current;
       if (!motionStage) return;
       if (state.phase === "idle") {
+        // Idle with the full player showing also ends any restore that was
+        // still winding down.
+        restoringPlayerRef.current = false;
         cancelLearningSurfaceMotion();
         clearLearningPlayerMotionProperties(motionStage);
         unmountLearningBackground();
@@ -1487,7 +1525,14 @@ export default function AcademyLayout() {
         }
       }
     }
-    const alreadyOnLearningRoute = isLearningRoutePath(locationPathRef.current);
+    // The lesson page counts as "already here" while it is still the page
+    // on screen, even if a navigation away from it has been requested: a
+    // minimize asks to leave, and an expand right behind it cancels that
+    // before the route ever changes. Without this the route never changes,
+    // so nothing would switch the player back to the page.
+    const alreadyOnLearningRoute =
+      isLearningRoutePath(locationPathRef.current) ||
+      isLearningRoutePath(renderedLocationPathRef.current);
     navigateTo(lessonPath, { exact: true });
     if (alreadyOnLearningRoute) {
       commitPersistentPlayerRestore();

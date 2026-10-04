@@ -2720,7 +2720,7 @@ export function CoursesPage({
       setNotice("Fullscreen is not available in this browser.");
     }
   }, [setNotice]);
-  const handleEmptyAreaDoubleTap = useEmptyAreaDoubleTap(
+  const emptyAreaDoubleTapHandlers = useEmptyAreaDoubleTap(
     () => void toggleFullscreen(),
   );
 
@@ -4176,7 +4176,7 @@ export function CoursesPage({
               event.preventDefault();
               event.stopPropagation();
             }}
-            onClick={handleEmptyAreaDoubleTap}
+            {...emptyAreaDoubleTapHandlers}
           >
             {((!compactNavigation && !sidebarPresentedAsOverlay) ||
               (sidebarPresentedAsOverlay && edgeSidebarOpen)) && (
@@ -4788,7 +4788,7 @@ export function CoursesPage({
                 />
               ) : learningBackground ? (
                 <div
-                  className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
+                  className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none starting:opacity-0! ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
                   style={{
                     contain: "strict",
                     opacity: "var(--learning-background-reveal, 0)",
@@ -4992,7 +4992,7 @@ export function CoursesPage({
         >
           <div
             className="mobile-menu-sheet__body"
-            onClick={handleEmptyAreaDoubleTap}
+            {...emptyAreaDoubleTapHandlers}
           >
             <DrawerTitle id="mobile-navigation-title" className="sr-only">
               Profile and navigation

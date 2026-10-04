@@ -14,8 +14,11 @@ import {
   clearLearningPlayerMinimizeMotionStyles,
   clearLearningPlayerMinimizeClipSurfaceStyles,
   applyLearningPlayerMinimizeCornerRadius,
+  applyLearningPlayerWindowMinimizeMotion,
+  clearLearningPlayerWindowMinimizeMotion,
   getLearningMinimizeGeometry,
   getLearningMotionSurfaceElement,
+  getLearningPersistentPlayerElement,
   isUnifiedDesktopPlayerMinimize,
   syncUnifiedDesktopChildExitMotion,
 } from "./learningPlayerMotion";
@@ -89,6 +92,22 @@ const isExcludedTarget = (target: EventTarget | null) =>
   target instanceof Element &&
   Boolean(target.closest("[data-video-player-mobile-sheet]"));
 
+/**
+ * On desktop the motion target is the player's slot in the lesson layout,
+ * which only supplies the geometry. The window that actually moves is the
+ * persistent host: transforming it keeps the motion on the compositor,
+ * whereas transforming the slot re-lays out the anchored player every frame.
+ */
+const getDesktopWindowHost = (motionTarget: HTMLElement): HTMLElement | null =>
+  isUnifiedDesktopPlayerMinimize(motionTarget)
+    ? getLearningPersistentPlayerElement()
+    : null;
+
+const clearDesktopWindowHostMotion = () => {
+  const host = getLearningPersistentPlayerElement();
+  if (host) clearLearningPlayerWindowMinimizeMotion(host);
+};
+
 const blurFocusedPlayerControl = () => {
   const activeElement = document.activeElement;
   if (
@@ -129,6 +148,7 @@ export function useLessonPlayerMinimizeGesture({
     typeof setTimeout
   > | null>(null);
   const suppressClickRef = useRef(false);
+  const committingRef = useRef(false);
   const commitRef = useRef(onCommit);
   const onGestureStartRef = useRef(onGestureStart);
   const onSettlingMiniPressRef = useRef(onSettlingMiniPress);
@@ -150,6 +170,7 @@ export function useLessonPlayerMinimizeGesture({
 
       if (nextState.phase === "idle") {
         clearLearningPlayerMinimizeMotionStyles(element);
+        clearDesktopWindowHostMotion();
         const clipSurface = getLearningMotionSurfaceElement();
         if (clipSurface && isUnifiedDesktopPlayerMinimize(element)) {
           clearLearningPlayerMinimizeClipSurfaceStyles(clipSurface);
@@ -161,35 +182,47 @@ export function useLessonPlayerMinimizeGesture({
       const geometry = geometryRef.current;
       const scale =
         1 - (1 - geometry.targetScale) * clamp(nextState.progress, 0, 1);
+      const durationMs =
+        nextState.phase === "dragging" ? 0 : settleDurationMsRef.current;
       const clipSurface = isUnifiedDesktopPlayerMinimize(element)
         ? getLearningMotionSurfaceElement()
         : null;
-      applyLearningPlayerMinimizeCornerRadius();
+      const windowHost = getDesktopWindowHost(element);
       element.dataset.learningPlayerMotionPhase = nextState.phase;
-      element.style.overflow = "hidden";
-      element.style.transform = `translate3d(${(
-        geometry.targetX * nextState.progress
-      ).toFixed(
-        3,
-      )}px, ${nextState.offsetY.toFixed(3)}px, 0) scale(${scale.toFixed(5)})`;
-      element.style.transformOrigin = "top left";
-      element.style.transitionDuration = `${
-        nextState.phase === "dragging" ? 0 : settleDurationMsRef.current
-      }ms`;
-      element.style.transitionProperty = "transform";
-      element.style.transitionTimingFunction = LEARNING_PLAYER_MOTION_EASING;
-      element.style.willChange = "transform";
-      element.style.zIndex = "190";
-      if (!clipSurface) {
-        element.style.borderRadius = "13px";
+      if (windowHost) {
+        applyLearningPlayerWindowMinimizeMotion(windowHost, {
+          durationMs,
+          offsetX: geometry.targetX * nextState.progress,
+          offsetY: nextState.offsetY,
+          progress: clamp(nextState.progress, 0, 1),
+          returning: nextState.phase === "settling-back",
+          scale,
+          targetScale: geometry.targetScale,
+        });
+      } else {
+        applyLearningPlayerMinimizeCornerRadius();
+        element.style.overflow = "hidden";
+        element.style.transform = `translate3d(${(
+          geometry.targetX * nextState.progress
+        ).toFixed(
+          3,
+        )}px, ${nextState.offsetY.toFixed(3)}px, 0) scale(${scale.toFixed(5)})`;
+        element.style.transformOrigin = "top left";
+        element.style.transitionDuration = `${durationMs}ms`;
+        element.style.transitionProperty = "transform";
+        element.style.transitionTimingFunction = LEARNING_PLAYER_MOTION_EASING;
+        element.style.willChange = "transform";
+        element.style.zIndex = "190";
+        if (!clipSurface) {
+          element.style.borderRadius = "13px";
+        }
       }
       if (clipSurface) {
         clipSurface.dataset.learningPlayerMotionPhase = nextState.phase;
         clipSurface.style.zIndex = "190";
         const progress = clamp(nextState.progress, 0, 1);
         syncUnifiedDesktopChildExitMotion(clipSurface, {
-          durationMs:
-            nextState.phase === "dragging" ? 0 : settleDurationMsRef.current,
+          durationMs,
           exitX: geometry.targetX * progress,
           exitY: nextState.offsetY,
         });
@@ -242,11 +275,15 @@ export function useLessonPlayerMinimizeGesture({
         "(prefers-reduced-motion: reduce)",
       ).matches;
       if (!element || reducedMotion) {
+        // Nothing animates here, so the state must not arm a transition.
+        settleDurationMsRef.current = 0;
         applyState(nextState);
         onSettled();
         return;
       }
 
+      // Listen on whichever element carries the motion.
+      const transitionElement = getDesktopWindowHost(element) ?? element;
       let settled = false;
       const finish = () => {
         if (settled) return;
@@ -254,10 +291,20 @@ export function useLessonPlayerMinimizeGesture({
         cleanup();
         settleCleanupRef.current = null;
         settleFinishRef.current = null;
+        // The motion is over: hold the window at its resting values with no
+        // transition left armed. The mini presentation forces its own corner
+        // radius, and an armed transition would animate that hand-off.
+        if (transitionElement !== element) {
+          transitionElement.style.transitionProperty = "none";
+        }
         onSettled();
       };
       const handleTransitionEnd = (event: TransitionEvent) => {
-        if (event.target === element && event.propertyName === "transform") {
+        if (
+          event.target === transitionElement &&
+          (event.propertyName === "transform" ||
+            event.propertyName === "translate")
+        ) {
           finish();
         }
       };
@@ -267,15 +314,23 @@ export function useLessonPlayerMinimizeGesture({
       );
       const cleanup = () => {
         window.clearTimeout(timeout);
-        element.removeEventListener("transitionend", handleTransitionEnd);
+        transitionElement.removeEventListener(
+          "transitionend",
+          handleTransitionEnd,
+        );
       };
       settleCleanupRef.current = cleanup;
       settleFinishRef.current = finish;
-      element.addEventListener("transitionend", handleTransitionEnd);
+      transitionElement.addEventListener("transitionend", handleTransitionEnd);
       scheduleState(nextState);
     },
     [applyState, clearSettle, flushPendingState, scheduleState],
   );
+
+  const commitMinimize = useCallback(() => {
+    committingRef.current = true;
+    commitRef.current();
+  }, []);
 
   const settleBack = useCallback(() => {
     const current = pendingStateRef.current ?? currentStateRef.current;
@@ -292,6 +347,25 @@ export function useLessonPlayerMinimizeGesture({
     }
 
     const current = pendingStateRef.current ?? currentStateRef.current;
+    // Asking again mid-motion turns the motion around from wherever it has
+    // reached, rather than making the user wait for it to finish. Once the
+    // mini presentation has been committed there is nothing left to turn.
+    if (committingRef.current) return;
+    if (current.phase === "settling-mini") {
+      settleBack();
+      return;
+    }
+    if (current.phase === "settling-back") {
+      settleTo(
+        {
+          offsetY: geometryRef.current.targetY,
+          phase: "settling-mini",
+          progress: 1,
+        },
+        commitMinimize,
+      );
+      return;
+    }
     if (current.phase !== "idle") return;
 
     onGestureStartRef.current?.();
@@ -306,15 +380,37 @@ export function useLessonPlayerMinimizeGesture({
     geometryRef.current = geometry;
     blurFocusedPlayerControl();
     setControlsSuppressed(true);
-    applyLearningPlayerMinimizeCornerRadius();
+    const windowHost = getDesktopWindowHost(element);
+    // An interrupted expand leaves the window part-way; the minimize then
+    // starts from there instead of snapping back to the full player first.
+    const displaced =
+      windowHost !== null &&
+      windowHost.style.getPropertyValue("translate") !== "";
+    if (windowHost) {
+      // Stage the resting state so the window already owns a compositor
+      // layer, and shows its info bar, when the transition begins.
+      applyLearningPlayerWindowMinimizeMotion(windowHost, {
+        durationMs: 0,
+        keepPosition: displaced,
+        offsetX: 0,
+        offsetY: 0,
+        progress: 0,
+        scale: 1,
+        targetScale: geometry.targetScale,
+      });
+    } else {
+      applyLearningPlayerMinimizeCornerRadius();
+    }
     const clipSurface = getLearningMotionSurfaceElement();
     if (clipSurface && isUnifiedDesktopPlayerMinimize(element)) {
       clipSurface.dataset.learningPlayerMotionPhase = "settling-mini";
-      syncUnifiedDesktopChildExitMotion(clipSurface, {
-        durationMs: 0,
-        exitX: 0,
-        exitY: 0,
-      });
+      if (!displaced) {
+        syncUnifiedDesktopChildExitMotion(clipSurface, {
+          durationMs: 0,
+          exitX: 0,
+          exitY: 0,
+        });
+      }
     }
     settleTo(
       {
@@ -322,9 +418,9 @@ export function useLessonPlayerMinimizeGesture({
         phase: "settling-mini",
         progress: 1,
       },
-      () => commitRef.current(),
+      commitMinimize,
     );
-  }, [enabled, motionTarget, settleTo]);
+  }, [commitMinimize, enabled, motionTarget, settleBack, settleTo]);
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -519,7 +615,11 @@ export function useLessonPlayerMinimizeGesture({
   useLayoutEffect(() => {
     if (enabled) return;
 
+    committingRef.current = false;
     clearSettle();
+    // A state that never reached a frame is applied at its resting values;
+    // the presentation is changing now, so nothing may animate toward it.
+    settleDurationMsRef.current = 0;
     flushPendingState();
     if (clickSuppressionTimerRef.current !== null) {
       clearTimeout(clickSuppressionTimerRef.current);
@@ -542,6 +642,10 @@ export function useLessonPlayerMinimizeGesture({
     pendingStateRef.current = null;
     if (preserveTerminalStateOnDisable) {
       currentStateRef.current = IDLE_STATE;
+      // The host becomes the mini window in this same commit and takes its
+      // geometry from layout from here on. Clearing before the mini player
+      // measures itself keeps that measurement free of the motion transform.
+      clearDesktopWindowHostMotion();
       const element = motionElementRef.current;
       if (element && !isUnifiedDesktopPlayerMinimize(element)) {
         clearLearningPlayerMinimizeMotionStyles(element);
@@ -556,6 +660,21 @@ export function useLessonPlayerMinimizeGesture({
     flushPendingState,
     preserveTerminalStateOnDisable,
   ]);
+
+  // A finished minimize leaves the lesson page slid away and inert, on the
+  // assumption that the page is about to be torn down. If the player comes
+  // straight back to that same page instead, put the page back.
+  useLayoutEffect(() => {
+    if (!enabled) return;
+    const element = motionElementRef.current;
+    if (
+      !element?.isConnected ||
+      element.dataset.learningPlayerMotionPhase === undefined
+    ) {
+      return;
+    }
+    applyState(IDLE_STATE);
+  }, [applyState, enabled]);
 
   useEffect(
     () => () => {
@@ -577,6 +696,7 @@ export function useLessonPlayerMinimizeGesture({
           clearLearningPlayerMinimizeClipSurfaceStyles(clipSurface);
         }
       }
+      clearDesktopWindowHostMotion();
       activePointerIdsRef.current.clear();
       gestureRef.current = null;
     },

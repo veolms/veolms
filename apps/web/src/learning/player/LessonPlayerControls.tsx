@@ -584,7 +584,7 @@ export function LessonPlayerControls({
     <div
       data-player-timeline-wrap=""
       data-player-timeline-layer=""
-      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-14 sm:translate-y-0 ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-12 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-12 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-12 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-12 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
     >
@@ -729,6 +729,10 @@ export function LessonPlayerControls({
     ? mobileSettingsSheetHost
     : undefined;
 
+  // On desktop, fullscreen sits in the same pill as autoplay and settings.
+  // The circular settings variant is a single round button, so it keeps the
+  // separate fullscreen button.
+  const fullscreenInActionsPill = desktopLayout && !circularSettingsControl;
   const playerActions = (
     <PlayerControlSurface
       cluster="player-actions"
@@ -776,6 +780,12 @@ export function LessonPlayerControls({
         }
         side={desktopLayout ? "top" : "bottom"}
       />
+      {fullscreenInActionsPill ? (
+        <FullscreenButton
+          className={getPlayerIconPillClass(mobileInteraction)}
+          iconSize={22}
+        />
+      ) : null}
     </PlayerControlSurface>
   );
 
@@ -942,7 +952,7 @@ export function LessonPlayerControls({
                 </div>
               ) : null}
               {desktopLayout ? playerActions : null}
-              <CircularFullscreenButton />
+              {fullscreenInActionsPill ? null : <CircularFullscreenButton />}
             </div>
           ) : null}
 

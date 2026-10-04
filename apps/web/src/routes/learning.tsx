@@ -20,6 +20,7 @@ import {
   LEARNING_LESSON_NUMBER_META_NAME,
 } from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
+import { LearningWorkspaceFallback } from "../learning/LearningWorkspaceFallback";
 import {
   getCoursePlayerOrigin,
   getCoursePlayerNote,
@@ -337,13 +338,7 @@ export default function LearningRoute() {
   );
 
   return (
-    <Suspense
-      fallback={
-        <div className="grid min-h-52 place-items-center" role="status">
-          Loading learning space…
-        </div>
-      }
-    >
+    <Suspense fallback={<LearningWorkspaceFallback />}>
       <LearningWorkspace
         key={courseSlug}
         courseSlug={courseSlug}
