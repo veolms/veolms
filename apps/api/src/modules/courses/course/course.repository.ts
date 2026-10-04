@@ -215,6 +215,126 @@ export async function listPublishedCourses(
   return await query.execute();
 }
 
+export async function listHomeDiscoveryCourses(
+  database: Kysely<Database>,
+  options: {
+    limit: number;
+    order: "popular" | "recent";
+    freeOnly?: boolean;
+  },
+) {
+  const enrollmentCounts = database
+    .selectFrom("enrollments")
+    .select(["course_id", sql<number>`count(*)::int`.as("enrollment_count")])
+    .groupBy("course_id")
+    .as("enrollment_counts");
+
+  let query = database
+    .selectFrom("courses")
+    .leftJoin("categories", (join) =>
+      join
+        .onRef("categories.id", "=", "courses.category_id")
+        .on("categories.deleted_at", "is", null),
+    )
+    .leftJoin("users", (join) =>
+      join
+        .onRef("users.id", "=", "courses.creator_id")
+        .on("users.is_deleted", "=", false),
+    )
+    .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
+    .leftJoin("course_settings", "course_settings.course_id", "courses.id")
+    .leftJoin(enrollmentCounts, "enrollment_counts.course_id", "courses.id")
+    .select((eb) => [
+      "courses.id",
+      "courses.slug",
+      "courses.title",
+      "courses.short_description",
+      "courses.difficulty",
+      "courses.thumbnail_media_id",
+      eb
+        .selectFrom("media_assets as thumbnail_media")
+        .select("thumbnail_media.metadata")
+        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
+        .as("thumbnail_metadata"),
+      eb
+        .selectFrom("media_assets as thumbnail_media")
+        .select("thumbnail_media.storage_key")
+        .whereRef("thumbnail_media.id", "=", "courses.thumbnail_media_id")
+        .as("thumbnail_storage_key"),
+      "categories.name as category_name",
+      "users.display_name as creator_display_name",
+      "courses.instructor_alias",
+      "course_pricing.pricing_type",
+      "course_pricing.price",
+      "course_pricing.currency",
+      "course_pricing.sale_price",
+      "course_settings.certificate_enabled",
+      "course_settings.estimated_duration",
+      eb
+        .selectFrom("course_sections")
+        .select((sub) => sub.fn.count("id").as("count"))
+        .whereRef("course_sections.course_id", "=", "courses.id")
+        .where("course_sections.deleted_at", "is", null)
+        .as("total_sections"),
+      eb
+        .selectFrom("course_lessons")
+        .select((sub) => sub.fn.count("id").as("count"))
+        .whereRef("course_lessons.course_id", "=", "courses.id")
+        .where("course_lessons.is_published", "=", true)
+        .where("course_lessons.deleted_at", "is", null)
+        .as("total_lessons"),
+      eb
+        .selectFrom("course_lessons")
+        .leftJoin(
+          "media_assets as lesson_media",
+          "lesson_media.id",
+          "course_lessons.content_media_id",
+        )
+        .select((sub) =>
+          sub.fn
+            .coalesce(
+              sub.fn.sum("lesson_media.duration_seconds"),
+              sql<number>`0`,
+            )
+            .as("sum"),
+        )
+        .whereRef("course_lessons.course_id", "=", "courses.id")
+        .where("course_lessons.is_published", "=", true)
+        .where("course_lessons.deleted_at", "is", null)
+        .as("lesson_duration_seconds"),
+    ])
+    .where("courses.status", "=", "published")
+    .where("courses.deleted_at", "is", null);
+
+  if (options.freeOnly) {
+    query = query.where(
+      sql<boolean>`coalesce(course_pricing.pricing_type, 'free') = 'free'`,
+    );
+  }
+
+  if (options.order === "popular") {
+    query = query
+      .orderBy(
+        sql<number>`coalesce(enrollment_counts.enrollment_count, 0)`,
+        "desc",
+      )
+      .orderBy(
+        sql<Date>`coalesce(courses.published_at, courses.created_at)`,
+        "desc",
+      )
+      .orderBy("courses.id", "desc");
+  } else {
+    query = query
+      .orderBy(
+        sql<Date>`coalesce(courses.published_at, courses.created_at)`,
+        "desc",
+      )
+      .orderBy("courses.id", "desc");
+  }
+
+  return await query.limit(options.limit).execute();
+}
+
 export async function listPublishedCourseOptions(database: Kysely<Database>) {
   return await database
     .selectFrom("courses")

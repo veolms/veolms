@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import type { ApiError } from "../lib/api-client";
-import { useAuthConfig, useCurrentUser, useGoogleOneTapLogin } from "../services/auth";
+import {
+  useAuthConfig,
+  useCurrentUser,
+  useGoogleOneTapLogin,
+} from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
 import { normalizeAppPath, sanitizeReturnTo } from "../routing/routeAccess";
 import { resolvePostAuthPath } from "./postAuthNavigation";
@@ -182,7 +186,6 @@ function OneTapVerifyingOverlay() {
     </div>
   );
 }
-
 const EXCLUDED_ONE_TAP_PATHS = new Set([
   "/mfa-setup",
   "/auth/callback",
@@ -209,7 +212,8 @@ export function GlobalGoogleOneTap() {
 
   const isUserAuthenticated = isAuthenticated || Boolean(user);
   const isExcludedRoute = EXCLUDED_ONE_TAP_PATHS.has(normalizedPath);
-  const shouldPrompt = !isUserAuthenticated && !isExcludedRoute && (!isLoading || isFetched);
+  const shouldPrompt =
+    !isUserAuthenticated && !isExcludedRoute && (!isLoading || isFetched);
 
   // Compute return target
   let returnTo: string | null = null;
@@ -217,7 +221,9 @@ export function GlobalGoogleOneTap() {
     const searchParams = new URLSearchParams(location.search);
     returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   } else {
-    returnTo = sanitizeReturnTo(`${location.pathname}${location.search}`) || location.pathname;
+    returnTo =
+      sanitizeReturnTo(`${location.pathname}${location.search}`) ||
+      location.pathname;
   }
 
   const returnToRef = useRef(returnTo);
@@ -293,4 +299,3 @@ export function GlobalGoogleOneTap() {
     </>
   );
 }
-

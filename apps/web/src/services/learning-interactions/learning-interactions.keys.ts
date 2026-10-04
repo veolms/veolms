@@ -78,6 +78,8 @@ export const learningInteractionKeys = {
           ...learningInteractionKeys.all,
           "dashboard-recent-discussions",
         ] as const),
+  popularDiscussions: () =>
+    [...learningInteractionKeys.all, "popular-discussions"] as const,
   threadDetails: (threadId: string) =>
     [...learningInteractionKeys.all, "thread", threadId] as const,
   threadRepliesRoot: (threadId: string) =>

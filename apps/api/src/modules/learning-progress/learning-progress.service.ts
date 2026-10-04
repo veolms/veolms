@@ -33,7 +33,7 @@ interface OrderedLesson {
   id: string;
 }
 
-interface ResumeCurriculumLesson {
+export interface ResumeCurriculumLesson {
   id: string;
   sectionId: string;
   title: string;
@@ -41,7 +41,7 @@ interface ResumeCurriculumLesson {
   contentType: "video" | "document" | "quiz";
 }
 
-type ResumeProgressRow = {
+export type ResumeProgressRow = {
   lesson_id: string;
   progress_percent: number;
   updated_at: Date;
@@ -108,7 +108,7 @@ function progressUpdatedAt(row: ResumeProgressRow): number {
  * course curriculum. The progress timestamp is used as a recency signal, not
  * as literal last-viewed telemetry.
  */
-function resolveResumeContext(
+export function resolveResumeContext(
   courseId: string,
   courseSlug: string,
   lessons: ResumeCurriculumLesson[],
@@ -141,9 +141,14 @@ function resolveResumeContext(
   const emptyResponse = (): LearningProgressResumeContextResponse => ({
     courseId,
     courseSlug,
+    totalLessons: lessons.length,
+    completedLessons: lessons.filter(
+      (lesson) => (progressByLessonId.get(lesson.id) ?? 0) >= 100,
+    ).length,
     resumeLesson: null,
     previousLesson: null,
     nextLesson: null,
+    upcomingLessons: [],
   });
 
   if (lessons.length === 0) return emptyResponse();
@@ -182,9 +187,17 @@ function resolveResumeContext(
     if (resumeIndex === -1) return emptyResponse();
   }
 
+  const upcomingLessons = lessons
+    .slice(resumeIndex + 1, resumeIndex + 4)
+    .map((lesson, index) => toResponseLesson(lesson, resumeIndex + 1 + index));
+
   return {
     courseId,
     courseSlug,
+    totalLessons: lessons.length,
+    completedLessons: lessons.filter(
+      (lesson) => (progressByLessonId.get(lesson.id) ?? 0) >= 100,
+    ).length,
     resumeLesson: toResponseLesson(lessons[resumeIndex]!, resumeIndex),
     previousLesson:
       resumeIndex > 0
@@ -194,6 +207,7 @@ function resolveResumeContext(
       resumeIndex < lessons.length - 1
         ? toResponseLesson(lessons[resumeIndex + 1]!, resumeIndex + 1)
         : null,
+    upcomingLessons,
   };
 }
 

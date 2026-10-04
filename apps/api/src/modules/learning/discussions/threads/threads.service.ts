@@ -12,10 +12,12 @@ import type {
   LearningThreadsListResponse,
   ListLearningThreadsQuery,
   QuestionFilterStatus,
+  PublicPopularDiscussionsResponse,
   UpdateLearningThreadRequest,
   WorkspaceDiscussionItem,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import { avatarSrcSetFromUrl } from "../../../avatars/index.ts";
 import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
   createDiscussionOutbox,
@@ -47,6 +49,7 @@ import {
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type {
   MentionWorkspaceRow,
+  PublicPopularThreadRow,
   ThreadsRepository,
   ThreadRowWithAuthor,
 } from "./threads.repository.ts";
@@ -141,6 +144,10 @@ export interface ThreadsService {
       roles?: readonly string[];
     },
   ): Promise<DiscussionsWorkspaceResponse>;
+
+  listPublicPopularDiscussions(
+    db: DatabaseExecutor,
+  ): Promise<PublicPopularDiscussionsResponse>;
 }
 
 export function createThreadsService(
@@ -828,6 +835,38 @@ export function createThreadsService(
       await withWriteTransaction(db, async (trx) => {
         await threadsRepo.deleteThread(trx, threadId);
       });
+    },
+
+    async listPublicPopularDiscussions(db) {
+      const academyId = await resolveAcademyId(db);
+      const rows: PublicPopularThreadRow[] =
+        await threadsRepo.listPublicPopularThreads(db, {
+          academyId,
+          limit: 20,
+        });
+
+      return {
+        discussions: rows.map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          title: row.title,
+          snippet: row.snippet,
+          author: {
+            displayName: row.authorName?.trim() || "Anonymous Learner",
+            avatarUrl: row.authorAvatarUrl,
+            avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
+          },
+          courseId: row.courseId,
+          lessonId: row.lessonId,
+          courseTitle: row.courseTitle,
+          lessonTitle: row.lessonTitle,
+          replyCount: row.replyCount,
+          likeCount: row.likeCount,
+          engagementScore: row.engagementScore,
+          createdAt: toDate(row.createdAt).toISOString(),
+          updatedAt: toDate(row.updatedAt).toISOString(),
+        })),
+      };
     },
 
     async getDiscussionsWorkspace(db, query) {

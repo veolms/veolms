@@ -275,8 +275,13 @@ const SettingsPage = lazy(() =>
   })),
 );
 
-const StudentHome = lazy(() =>
-  import("./StudentHome").then((module) => ({ default: module.StudentHome })),
+const AuthenticatedHomeBoundary = lazy(() =>
+  import("./home/AuthenticatedHomeBoundary").then((module) => ({
+    default: module.AuthenticatedHomeBoundary,
+  })),
+);
+const GuestHome = lazy(() =>
+  import("./GuestHome").then((module) => ({ default: module.GuestHome })),
 );
 const PlaceholderPage = lazy(() =>
   import("./courses/PlaceholderPage").then((module) => ({
@@ -3792,11 +3797,18 @@ export function CoursesPage({
     if (effectiveRole === "student" && surfacePage === "home") {
       return (
         <Suspense fallback={<AcademyPageFallback />}>
-          <StudentHome
-            onOpenCourse={onOpenCourse}
-            onNavigatePage={onNavigatePage}
-            studentName={shellProfileDisplayName}
-          />
+          {!isAuthReady ? (
+            <AcademyPageFallback />
+          ) : isAuthenticated ? (
+            <AuthenticatedHomeBoundary
+              onOpenCourse={onOpenCourse}
+              onNavigatePage={onNavigatePage}
+              setNotice={setNotice}
+              studentName={shellProfileDisplayName}
+            />
+          ) : (
+            <GuestHome onNavigatePage={onNavigatePage} setNotice={setNotice} />
+          )}
         </Suspense>
       );
     }
