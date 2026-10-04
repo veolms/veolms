@@ -945,13 +945,19 @@
   corner-shape: round;
 }
 
-.courses-app--collapsed .sidebar-palette-menu {
+.courses-app--collapsed .sidebar-palette-menu,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-palette-menu {
   right: auto;
   bottom: -9px;
   left: calc(100% + 2px);
 }
 
-.courses-app--collapsed .sidebar-palette-menu--dock-attached.sidebar-palette-menu--collapsed {
+.courses-app--collapsed .sidebar-palette-menu--dock-attached.sidebar-palette-menu--collapsed,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-palette-menu--dock-attached {
   top: auto;
   bottom: calc(
     -5px + (var(--sidebar-dock-count, 1) - var(--palette-menu-dock-index, 0) - 1) * 42px

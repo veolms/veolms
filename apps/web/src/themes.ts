@@ -137,6 +137,18 @@ const SESSION_THEME_KEY = "veolms-session-academy-theme";
 const paletteIds = new Set<string>(academyThemes.map((theme) => theme.id));
 const allThemeIds = academyThemes.map((theme) => theme.id);
 
+/**
+ * Selects the same appearance and palette as the client preference readers
+ * before the browser paints the document. The selected palette is also used
+ * by the root layout to load its CSS before the page becomes visible.
+ */
+export function getThemeBootstrapScript(): string {
+  const themeIds = JSON.stringify(allThemeIds);
+  const defaultTheme = JSON.stringify(DEFAULT_ACADEMY_THEME);
+  const themeVersion = JSON.stringify(ACADEMY_THEME_VERSION);
+  return `(()=>{const r=document.documentElement,p=${themeIds},d=${defaultTheme};try{const t=localStorage.getItem("veolms-theme")||"dark",m=t==="device"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t==="light"?"light":"dark";r.dataset.theme=m}catch{r.dataset.theme="dark"}try{const saved=localStorage.getItem("veolms-academy-theme"),savedVersion=localStorage.getItem("veolms-academy-theme-version"),current=savedVersion===${themeVersion}&&p.includes(saved||"")?saved:d,enabled=localStorage.getItem("veolms-randomize-academy-theme")==="true";let palette=current;if(enabled){let pool;try{const value=JSON.parse(localStorage.getItem("veolms-random-academy-theme-pool")||"null");if(Array.isArray(value))pool=value.filter((id,i)=>typeof id==="string"&&p.includes(id)&&value.indexOf(id)===i)}catch{}if(!pool||pool.length<2)pool=p;const session=sessionStorage.getItem("veolms-session-academy-theme");if(session&&p.includes(session)){palette=session}else{const choices=pool.length>1?pool.filter(id=>id!==current):pool,source=choices.length?choices:pool,index=Math.min(source.length-1,Math.floor(Math.max(0,Math.random())*source.length));palette=source[index]||d;sessionStorage.setItem("veolms-session-academy-theme",palette)}}else{sessionStorage.removeItem("veolms-session-academy-theme")}r.dataset.palette=palette}catch{r.dataset.palette=d}})();`;
+}
+
 function normalizeThemePool(value: unknown): string[] {
   if (!Array.isArray(value)) return [...allThemeIds];
 

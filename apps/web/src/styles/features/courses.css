@@ -691,7 +691,8 @@
   flex-basis: 54px;
 }
 
-.courses-app--collapsed .profile-menu {
+.courses-app--collapsed .profile-menu,
+:root[data-sidebar-state="collapsed"] .courses-app:not(.courses-app--collapsed) .profile-menu {
   left: calc(100% + 8px);
   right: auto;
   bottom: 0;

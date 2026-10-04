@@ -1,5 +1,6 @@
 import type { AvatarImageVariant } from "@veolms/contracts";
-import { useEffect, useMemo, useState, type ImgHTMLAttributes } from "react";
+
+import { type ImgHTMLAttributes, useMemo, useState } from "react";
 
 type ResponsiveAvatarProps = Omit<
   ImgHTMLAttributes<HTMLImageElement>,
@@ -30,7 +31,16 @@ function getCandidateExtensions(prefix: string): readonly string[] {
  * converted here so every real avatar render uses the same src/srcSet rules,
  * with automatic fallback to original CDN files if WebP variants fail.
  */
-export function ResponsiveAvatar({
+export function ResponsiveAvatar(props: ResponsiveAvatarProps) {
+  const sourceKey = JSON.stringify([
+    props.src,
+    props.srcSet?.map(({ url, width }) => [url, width]) ?? null,
+  ]);
+
+  return <ResponsiveAvatarImage key={sourceKey} {...props} />;
+}
+
+function ResponsiveAvatarImage({
   src,
   srcSet,
   sizes,
@@ -49,11 +59,6 @@ export function ResponsiveAvatar({
   // Fallback candidate index: -1 means initial attempt
   const [candidateIndex, setCandidateIndex] = useState<number>(-1);
   const [useRawSrcOnly, setUseRawSrcOnly] = useState<boolean>(false);
-
-  useEffect(() => {
-    setCandidateIndex(-1);
-    setUseRawSrcOnly(false);
-  }, [src]);
 
   const candidates = useMemo(() => {
     if (!avatarPrefix) return [];

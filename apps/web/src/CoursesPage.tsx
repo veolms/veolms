@@ -1,3 +1,29 @@
+import type { CourseListResponse, CourseOverviewResponse } from "@veolms/contracts";
+
+import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
+import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
+import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
+import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
+import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
+import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
+import { StudentIcon as Student } from "@phosphor-icons/react/Student";
+import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
+import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
+import { UsersIcon as Users } from "@phosphor-icons/react/Users";
+import { useQueryClient } from "@tanstack/react-query";
+import type {
+  CSSProperties,
+  FocusEvent as ReactFocusEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+  Ref,
+} from "react";
 import {
   Fragment,
   lazy,
@@ -9,56 +35,18 @@ import {
   useRef,
   useState,
 } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { flushSync } from "react-dom";
-import type {
-  CSSProperties,
-  FocusEvent as ReactFocusEvent,
-  KeyboardEvent as ReactKeyboardEvent,
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-  ReactNode,
-  Ref,
-} from "react";
-import type { CourseListResponse, CourseOverviewResponse } from "@veolms/contracts";
+
 import {
-  normalizeSettingsTab,
-  rememberSettingsTab,
-  type SettingsTab,
-} from "./routing/tabSessionState";
-import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
-import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
-import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
-import { CenteredLoadingSpinner } from "./components/LoadingSpinner";
-import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
-import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
-import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
-import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
-import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
-import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
-import { QuestionIcon as Question } from "@phosphor-icons/react/Question";
-import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
-import { StudentIcon as Student } from "@phosphor-icons/react/Student";
-import { ToastNotification, type ToastMessage } from "./ToastNotification";
-import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
-import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
-import { UsersIcon as Users } from "@phosphor-icons/react/Users";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  type DrawerDismissThen,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
-import type { LearningCourse } from "./StudentPages";
-import {
-  getLearningPlayerSwipeSplitX,
-  isFullLearningPlayerSwipeTarget,
-  subscribeToPointerGestureClaims,
-} from "./gestures/pointerGestureOwnership";
-import { useSecondPressHold } from "./gestures/useSecondPressHold";
-import { useTripleTap } from "./gestures/useTripleTap";
-import { getCourseQuickFilterCounts, getVisibleCourses } from "./courses/catalogue";
-import {
-  getStudentCataloguePathForEnrollmentFilter,
-  isStudentCatalogueFilterSubpath,
-} from "./courses/catalogueRoutes";
-import { toggleWishlistCourse, useWishlistIds } from "./courses/wishlistStorage";
-import { CourseCatalogue } from "./courses/CourseCatalogue";
+import { CenteredLoadingSpinner } from "./components/LoadingSpinner";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -67,59 +55,97 @@ import type {
   CourseSort,
   CourseStatusFilter,
 } from "./courses/catalogue";
-import { AcademyPaletteMenu } from "./shell/AcademyPaletteMenu";
-import { AcademyRouteSkeleton } from "./routing/AcademyRouteSkeleton";
-import { FloatingScrollbar } from "./shell/FloatingScrollbar";
-import { useMobileProfileDrawerSize } from "./shell/useMobileProfileDrawerSize";
-import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
-import { ProfileMenu, ProfileMenuIdentity, ShellProfileAvatar } from "./shell/ProfileMenu";
-import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
-import { useCurrentUser, useSignOut } from "./services/auth";
-import { authStore, useAuthIdentityHint, useAuthStore } from "./store/auth.store";
-
+import { getCourseQuickFilterCounts, getVisibleCourses } from "./courses/catalogue";
 import {
-  useCourses,
-  useInfiniteCourses,
-  useDeleteCourse,
-  useDeletedCourses,
-  useMyCourses,
-  prefetchCourseEditor,
-  useRestoreCourse,
-} from "./services/courses";
-import { useEnrolledCourses } from "./services/enrollments";
+  getStudentCataloguePathForEnrollmentFilter,
+  isStudentCatalogueFilterSubpath,
+} from "./courses/catalogueRoutes";
 import {
   adaptApiCourseToCatalogueCourse,
   adaptCourseSummaryToCatalogueCourse,
   adaptDeletedCourseToCatalogueCourse,
 } from "./courses/courseAdapter";
+import { CourseCatalogue } from "./courses/CourseCatalogue";
+import { toggleWishlistCourse, useWishlistIds } from "./courses/wishlistStorage";
+import {
+  getLearningPlayerSwipeSplitX,
+  isFullLearningPlayerSwipeTarget,
+  subscribeToPointerGestureClaims,
+} from "./gestures/pointerGestureOwnership";
+import { useSecondPressHold } from "./gestures/useSecondPressHold";
+import { useTripleTap } from "./gestures/useTripleTap";
+import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "./hooks/useDebounce";
+import { isStoredString, useSessionStorageState } from "./learning/useSessionStorageState";
+import { useBackDismiss } from "./navigation/useBackDismiss";
+import type { ReadingModePreferences } from "./reading-mode/readingModePreferences";
+import {
+  persistReadingModePreferences,
+  READING_MODE_CHANGE_EVENT,
+  READING_MODE_DEFAULTS,
+  readReadingModePreferences,
+} from "./reading-mode/readingModePreferences";
+import { AcademyRouteSkeleton } from "./routing/AcademyRouteSkeleton";
+import type { NavigateTo } from "./routing/navigation";
+import { useAcademyRouteGuardState } from "./routing/RouteGuards";
+import {
+  normalizeSettingsTab,
+  rememberSettingsTab,
+  type SettingsTab,
+} from "./routing/tabSessionState";
+import { useCurrentUser, useSignOut } from "./services/auth";
+import {
+  prefetchCourseEditor,
+  useCourses,
+  useDeleteCourse,
+  useDeletedCourses,
+  useInfiniteCourses,
+  useMyCourses,
+  useRestoreCourse,
+} from "./services/courses";
+import { useEnrolledCourses } from "./services/enrollments";
+import { useNotificationSummary } from "./services/notifications";
+import type { PageTabColors, SidebarDockItem, SidebarMode } from "./settings/settingsPreferences";
+import {
+  applySidebarGlowShapeSize,
+  ELEVATED_SURFACES_KEY,
+  normalizeSidebarDockItems,
+  normalizeSidebarDockOrder,
+  normalizeSidebarGlow,
+  normalizeSidebarGlowBlur,
+  normalizeSidebarGlowIntensity,
+  normalizeSidebarGlowShape,
+  PAGE_TAB_COLORS_DEFAULT,
+  PAGE_TAB_COLORS_KEY,
+  readPageTabColors,
+} from "./settings/settingsPreferences";
+import { AcademyPaletteMenu } from "./shell/AcademyPaletteMenu";
+import {
+  ensureAcademyPaletteCatalogStylesheet,
+  ensureAcademyPaletteStylesheets,
+} from "./shell/academyPaletteStyles";
+import { readApplicationScrollPosition, scrollApplicationTo } from "./shell/applicationScroll";
+import { FloatingScrollbar } from "./shell/FloatingScrollbar";
+import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
+import type { NavigationItemWithMetadata } from "./shell/navigation";
 import {
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
-  getRoleNavigationItems,
   getNavigationDestination,
   getNavigationIconColor,
+  getRoleNavigationItems,
 } from "./shell/navigation";
-import type { NavigationItemWithMetadata } from "./shell/navigation";
+import { ProfileMenu, ProfileMenuIdentity, ShellProfileAvatar } from "./shell/ProfileMenu";
 import {
-  getUserRoles,
-  getVisibleWorkspaceRoles,
-  hasAdminRole,
-  isStaffRole,
-  resolveWorkspaceRole,
-  getWorkspaceRoleStorageKey,
-  getShellProfileSubtitle,
-} from "./shell/workspaceRole";
-import { useNotificationSummary } from "./services/notifications";
-
-import {
-  SIDEBAR_MIN_WIDTH,
   applySidebarShellToDocument,
   clampSidebarMaxWidth,
   clampSidebarWidth,
   getDefaultSidebarPreferences,
   getInitialSidebarPreferences,
   getInitialSidebarShellState,
+  SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_MIN_WIDTH,
 } from "./shell/sidebarPreferences";
+import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import {
   canStartSidebarTouchGesture,
   COMPACT_NAVIGATION_QUERY,
@@ -127,72 +153,40 @@ import {
   getSidebarPresentation,
   SIDEBAR_RESPONSIVE_COLLAPSE_QUERY,
 } from "./shell/sidebarVisibility";
-import { readApplicationScrollPosition, scrollApplicationTo } from "./shell/applicationScroll";
+import type { ThemeRevealOrigin } from "./shell/themeViewTransition";
 import {
   applyRootPalette,
   applyWithThemeViewTransition,
   skipActiveThemeViewTransitions,
   themeRevealOriginFromClick,
 } from "./shell/themeViewTransition";
+import { useMobileProfileDrawerSize } from "./shell/useMobileProfileDrawerSize";
 import {
-  ensureAcademyPaletteCatalogStylesheet,
-  ensureAcademyPaletteStylesheets,
-} from "./shell/academyPaletteStyles";
-import type { ThemeRevealOrigin } from "./shell/themeViewTransition";
+  getShellProfileSubtitle,
+  getUserRoles,
+  getVisibleWorkspaceRoles,
+  getWorkspaceRoleStorageKey,
+  hasAdminRole,
+  isStaffRole,
+  resolveWorkspaceRole,
+} from "./shell/workspaceRole";
+import { authStore, useAuthIdentityHint, useAuthStore } from "./store/auth.store";
+import {
+  canToggleDocumentFullscreen,
+  getDocumentFullscreenElement,
+  toggleDocumentFullscreen,
+} from "./fullscreen";
+import { isEditingShortcutTarget } from "./keyboardShortcuts";
+import { useGlobalSearchShortcut } from "./searchShortcut";
+import type { LearningCourse } from "./StudentPages";
 import {
   academyThemes,
   DEFAULT_ACADEMY_THEME,
   getInitialAcademyTheme,
   persistAcademyTheme,
 } from "./themes";
-import type {
-  PageTabColors,
-  SidebarDockItem,
-  SidebarMode,
-  SidebarPreferences,
-} from "./settings/settingsPreferences";
-import {
-  applySidebarGlowShapeSize,
-  normalizeSidebarDockItems,
-  normalizeSidebarDockOrder,
-  normalizeSidebarGlow,
-  normalizeSidebarGlowBlur,
-  normalizeSidebarGlowShape,
-  normalizeSidebarGlowIntensity,
-  ELEVATED_SURFACES_KEY,
-  PAGE_TAB_COLORS_DEFAULT,
-  PAGE_TAB_COLORS_KEY,
-  readPageTabColors,
-} from "./settings/settingsPreferences";
-import type { NavigateTo } from "./routing/navigation";
-import { useAcademyRouteGuardState } from "./routing/RouteGuards";
-import type { SettingsPageProps } from "./SettingsPage";
-import { isEditingShortcutTarget } from "./keyboardShortcuts";
-import { useGlobalSearchShortcut } from "./searchShortcut";
-import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "./hooks/useDebounce";
-import { useBackDismiss } from "./navigation/useBackDismiss";
+import { type ToastMessage, ToastNotification } from "./ToastNotification";
 import { useShortcutPlatform } from "./useShortcutPlatform";
-import {
-  canToggleDocumentFullscreen,
-  getDocumentFullscreenElement,
-  toggleDocumentFullscreen,
-} from "./fullscreen";
-import { isStoredString, useSessionStorageState } from "./learning/useSessionStorageState";
-import {
-  persistReadingModePreferences,
-  readReadingModePreferences,
-  READING_MODE_DEFAULTS,
-  READING_MODE_CHANGE_EVENT,
-} from "./reading-mode/readingModePreferences";
-import type { ReadingModePreferences } from "./reading-mode/readingModePreferences";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-  type DrawerDismissThen,
-} from "@/components/ui/drawer";
-import type { ProfilePreferences } from "./settings/profileTypes";
 const OrdersPageRoute = lazy(() =>
   import("./orders/OrdersPage").then((module) => ({
     default: module.OrdersPage,
@@ -637,7 +631,6 @@ export function CoursesPage({
   assignmentId,
   username,
   couponId,
-  miniPlayerCourseId = null,
   learningBackground = null,
   learningMotionStageRef,
   renderMain = null,
@@ -653,18 +646,14 @@ export function CoursesPage({
     },
     [queryClient, warmCourseEditorChunk],
   );
-  // Keep the first client render identical to the prerender. Restore the
-  // account-specific workspace role only after `/auth/me` identifies the
-  // account below.
+  // Keep the first client render identical to the prerender. The head
+  // bootstrap styles the saved shell state, which is restored in a layout
+  // effect below before the first client paint. Restore the account-specific
+  // workspace role only after `/auth/me` identifies the account.
   const [role, setRole] = useState<CourseRole>("student");
   const [hydratedWorkspaceRoleKey, setHydratedWorkspaceRoleKey] = useState<string | null>(null);
-  const [savedShellProfiles, setSavedShellProfiles] = useState<
-    Record<CourseRole, ProfilePreferences | null>
-  >({ student: null, creator: null });
-  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(
-    () => getInitialSidebarShellState().mode,
-  );
-  const [sidebarWidth, setSidebarWidth] = useState(() => getInitialSidebarShellState().width);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>("expanded");
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const sidebarShellHydratedRef = useRef(false);
 
   const [sidebarResizing, setSidebarResizing] = useState(false);
@@ -672,9 +661,7 @@ export function CoursesPage({
   const [sidebarOverlaySwipeOffset, setSidebarOverlaySwipeOffset] = useState<number | null>(null);
   // Browser-only input capabilities are applied after startup so the loading
   // boundary remains deterministic across the build and the first client pass.
-  const [compactNavigation, setCompactNavigation] = useState(
-    () => typeof window !== "undefined" && Boolean(window.__VEO_BOOTSTRAP__?.navigation?.compact),
-  );
+  const [compactNavigation, setCompactNavigation] = useState(false);
   const [coarseNavigationInput, setCoarseNavigationInput] = useState(false);
   const [edgeSidebarOpen, setEdgeSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>("dark");
@@ -1050,6 +1037,70 @@ export function CoursesPage({
   const dockLongPressRef = useRef<DockLongPress | null>(null);
   const dockLongPressConsumedUntilRef = useRef(0);
   const longPressAudioContextRef = useRef<AudioContext | null>(null);
+  const activateAppearanceOption = useCallback(
+    (option: AppearanceOption, mobile = false, source: "appearance" | "theme" = "theme") => {
+      setReadingModeMenu(null);
+      if (option === "theme") {
+        if (document.documentElement.dataset.themeTransition) {
+          skipActiveThemeViewTransitions();
+        }
+        setPaletteMenuSource(source);
+        if (mobile) setMobilePaletteMenu(true);
+        else setPaletteMenu(true);
+        return;
+      }
+      setTheme(option);
+      revertPalettePreviewRef.current?.();
+      if (mobile) setMobilePaletteMenu(false);
+      else setPaletteMenu(false);
+    },
+    [setMobilePaletteMenu, setPaletteMenu, setPaletteMenuSource, setReadingModeMenu, setTheme],
+  );
+  const getLongPressAudioContext = useCallback(() => {
+    if (longPressAudioContextRef.current) {
+      return longPressAudioContextRef.current;
+    }
+    const AudioContextConstructor =
+      window.AudioContext ??
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return null;
+    const context = new AudioContextConstructor();
+    longPressAudioContextRef.current = context;
+    return context;
+  }, []);
+  const playLongPressPop = useCallback((context: AudioContext) => {
+    const now = context.currentTime;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(460, now);
+    oscillator.frequency.exponentialRampToValueAtTime(280, now + 0.065);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.025, now + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.08);
+  }, []);
+  const acknowledgeLongPress = useCallback(() => {
+    try {
+      if (navigator.vibrate?.(18)) return;
+    } catch {
+      // Use the audio acknowledgement when haptics are unavailable or rejected.
+    }
+
+    const context = getLongPressAudioContext();
+    if (!context) return;
+    if (context.state === "suspended") {
+      void context
+        .resume()
+        .then(() => playLongPressPop(context))
+        .catch(() => undefined);
+      return;
+    }
+    playLongPressPop(context);
+  }, [getLongPressAudioContext, playLongPressPop]);
   const sidebarTooltipTimerRef = useRef<number | null>(null);
   const usesMacShortcutStyle = shortcutPlatform === "mac";
   const primaryShortcutModifier = usesMacShortcutStyle ? "Meta" : "Control";
@@ -1074,18 +1125,31 @@ export function CoursesPage({
     [],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     try {
       const shellState = getInitialSidebarShellState();
       setSidebarMode(shellState.mode);
       setSidebarWidth(shellState.width);
       const storedTheme = localStorage.getItem("veolms-theme");
-      setTheme(
+      const nextTheme: ThemePreference =
         storedTheme === "light" || storedTheme === "dark" || storedTheme === "device"
           ? storedTheme
-          : "dark",
-      );
-      setAcademyTheme(getInitialAcademyTheme());
+          : "dark";
+      const nextResolvedTheme =
+        nextTheme === "device"
+          ? window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light"
+          : nextTheme;
+      document.documentElement.dataset.theme = nextResolvedTheme;
+      document.documentElement.dataset.appearance = nextTheme;
+      setTheme(nextTheme);
+      setResolvedTheme(nextResolvedTheme);
+      const initialAcademyTheme = getInitialAcademyTheme();
+      applyRootPalette(initialAcademyTheme);
+      appliedPaletteRef.current = initialAcademyTheme;
+      setAcademyTheme(initialAcademyTheme);
+      setAppliedAcademyTheme(initialAcademyTheme);
       setSidebarPreferences(getInitialSidebarPreferences());
       setPageTabColors(readPageTabColors());
       setReadingModePreferences(readReadingModePreferences());
@@ -1389,7 +1453,7 @@ export function CoursesPage({
     };
   }, [storedPreferencesReady]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const media = window.matchMedia(COMPACT_NAVIGATION_QUERY);
     const coarseInput = window.matchMedia("(hover: none), (pointer: coarse)");
     const syncNavigationMode = () => {
@@ -1903,7 +1967,13 @@ export function CoursesPage({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onEscape);
     };
-  }, [edgeSidebarOpen, onNavigatePage, sidebarMode]);
+  }, [
+    acknowledgeLongPress,
+    activateAppearanceOption,
+    edgeSidebarOpen,
+    onNavigatePage,
+    sidebarMode,
+  ]);
 
   const navigation = roleNavigationItems.filter(
     ([label]) => label !== "Settings" || !settingsInSidebarDock,
@@ -2509,27 +2579,6 @@ export function CoursesPage({
     );
   };
 
-  const activateAppearanceOption = (
-    option: AppearanceOption,
-    mobile = false,
-    source: "appearance" | "theme" = "theme",
-  ) => {
-    setReadingModeMenu(null);
-    if (option === "theme") {
-      if (document.documentElement.dataset.themeTransition) {
-        skipActiveThemeViewTransitions();
-      }
-      setPaletteMenuSource(source);
-      if (mobile) setMobilePaletteMenu(true);
-      else setPaletteMenu(true);
-      return;
-    }
-    setTheme(option);
-    revertPalettePreview();
-    if (mobile) setMobilePaletteMenu(false);
-    else setPaletteMenu(false);
-  };
-
   const openAppearanceThemeMenu = (event: ReactMouseEvent<HTMLButtonElement>, mobile = false) => {
     event.preventDefault();
     event.stopPropagation();
@@ -2546,59 +2595,11 @@ export function CoursesPage({
     activateAppearanceOption("theme", mobile, "appearance");
   };
 
-  const getLongPressAudioContext = () => {
-    if (longPressAudioContextRef.current) {
-      return longPressAudioContextRef.current;
-    }
-    const AudioContextConstructor =
-      window.AudioContext ??
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextConstructor) return null;
-    const context = new AudioContextConstructor();
-    longPressAudioContextRef.current = context;
-    return context;
-  };
-
   const primeLongPressFeedback = () => {
     const context = getLongPressAudioContext();
     if (context?.state === "suspended") {
       void context.resume().catch(() => undefined);
     }
-  };
-
-  const playLongPressPop = (context: AudioContext) => {
-    const now = context.currentTime;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "triangle";
-    oscillator.frequency.setValueAtTime(460, now);
-    oscillator.frequency.exponentialRampToValueAtTime(280, now + 0.065);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.025, now + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(now);
-    oscillator.stop(now + 0.08);
-  };
-
-  const acknowledgeLongPress = () => {
-    try {
-      if (navigator.vibrate?.(18)) return;
-    } catch {
-      // Use the audio acknowledgement when haptics are unavailable or rejected.
-    }
-
-    const context = getLongPressAudioContext();
-    if (!context) return;
-    if (context.state === "suspended") {
-      void context
-        .resume()
-        .then(() => playLongPressPop(context))
-        .catch(() => undefined);
-      return;
-    }
-    playLongPressPop(context);
   };
 
   const startDockLongPress = (

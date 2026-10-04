@@ -1,17 +1,20 @@
+import type { AvatarImageVariant } from "@veolms/contracts";
+
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
-import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
+import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
-import type { AvatarImageVariant } from "@veolms/contracts";
+import { type MouseEvent, type ReactNode, useState } from "react";
+
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import type { CourseRole } from "../courses/catalogue";
+
 import { getRoleDisplayName } from "./workspaceRole";
 
 const FALLBACK_AVATAR_CLASS = "shell-profile-avatar shell-profile-avatar--fallback";
@@ -112,13 +115,13 @@ export function ShellProfileAvatar({
   avatarUrl: string | null;
   avatarSrcSet?: readonly AvatarImageVariant[] | null;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const showImage = Boolean(avatarUrl) && !imageFailed;
+  const sourceIdentity = JSON.stringify([
+    avatarUrl,
+    avatarSrcSet?.map(({ url, width }) => [url, width]) ?? null,
+  ]);
+  const [failedSourceIdentity, setFailedSourceIdentity] = useState<string | null>(null);
+  const showImage = Boolean(avatarUrl) && failedSourceIdentity !== sourceIdentity;
   const avatarSources = avatarSrcSet?.length ? avatarSrcSet : undefined;
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [avatarUrl, avatarSources]);
 
   return (
     <i
@@ -136,7 +139,7 @@ export function ShellProfileAvatar({
           loading="lazy"
           decoding="async"
           fetchPriority="low"
-          onError={() => setImageFailed(true)}
+          onError={() => setFailedSourceIdentity(sourceIdentity)}
         />
       ) : (
         <UserCircle size={28} weight="duotone" />

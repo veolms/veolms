@@ -1,12 +1,12 @@
-import { getActiveChapter } from "../chapters/getChapterAtTime";
 import type { Chapter } from "../chapters/chapterTypes";
+import { getActiveChapter } from "../chapters/getChapterAtTime";
 import { VideoEngineError } from "../core/errors";
 import type { VideoEngineEvent, VideoEngineEventMap } from "../core/events";
-import type { VideoEngineSnapshot } from "../core/snapshot";
-import type { VideoEngine } from "../core/VideoEngine";
 import type { VideoEngineCapabilities, VideoLoadOptions, VideoSource } from "../core/types";
+import type { VideoEngine } from "../core/VideoEngine";
 import type { StoryboardFrame } from "../storyboard/storyboardTypes";
 import type { TimelineMarker } from "../timeline/timelineMath";
+
 import {
   forwardedVideoEngineEvents,
   type VideoPlayerEvent,
@@ -87,6 +87,7 @@ export class PlayerController {
   #pendingMediaProperties: PendingMediaProperties = {};
   #activated = false;
   #destroyed = false;
+  #destroyPromise: Promise<void> | null = null;
   #loadGeneration = 0;
   #playRequestGeneration = 0;
   #hudId = 0;
@@ -105,6 +106,16 @@ export class PlayerController {
       storyboard: [],
       markers: [],
     };
+  }
+
+  /** True as soon as teardown starts, so React owners do not reconnect this controller. */
+  get isDestroyed(): boolean {
+    return this.#destroyed;
+  }
+
+  /** Resolves after media detachment and engine destruction finish. */
+  whenDestroyed(): Promise<void> {
+    return this.#destroyPromise ?? Promise.resolve();
   }
 
   /**
@@ -192,6 +203,7 @@ export class PlayerController {
   }
 
   attachMedia(media: HTMLVideoElement): Promise<void> {
+    if (this.#destroyed) return Promise.resolve();
     this.assertActive();
     if (this.#requestedMedia === media) {
       if (this.isMediaReady(media)) return Promise.resolve();
@@ -498,7 +510,7 @@ export class PlayerController {
   }
 
   async destroy(): Promise<void> {
-    if (this.#destroyed) return;
+    if (this.#destroyPromise) return this.#destroyPromise;
     this.#destroyed = true;
     this.#loadGeneration += 1;
     this.#playRequestGeneration += 1;
@@ -517,12 +529,17 @@ export class PlayerController {
     this.deactivate();
     this.#listeners.clear();
     this.#eventListeners.clear();
-    await this.#mediaTransition;
-    this.#media?.removeEventListener("enterpictureinpicture", this.handlePictureInPictureChange);
-    this.#media?.removeEventListener("leavepictureinpicture", this.handlePictureInPictureChange);
-    this.#media = null;
-    this.#mediaAttached = false;
-    await this.engine.destroy();
+
+    this.#destroyPromise = (async () => {
+      await this.#mediaTransition;
+      this.#media?.removeEventListener("enterpictureinpicture", this.handlePictureInPictureChange);
+      this.#media?.removeEventListener("leavepictureinpicture", this.handlePictureInPictureChange);
+      this.#media = null;
+      this.#mediaAttached = false;
+      await this.engine.destroy();
+    })();
+
+    return this.#destroyPromise;
   }
 
   private readonly handleFullscreenChange = (): void => this.syncFullscreen();

@@ -1,48 +1,46 @@
-import { useLayoutEffect, type ReactNode } from "react";
+import { type ReactNode, useLayoutEffect } from "react";
 import { Links, Meta, Outlet, Scripts, useLocation } from "react-router";
+
 import type { Route } from "./+types/root";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
-import { appBaseStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
+import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
+import {
+  EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
+  getEarlyHlsPreloadInlineScript,
+} from "./learning/learningHlsBootstrap";
 import { getLearningPlayerBootstrapScript } from "./learning/learningPlayerPreferences";
 import {
   applyLearningShellToDocument,
   getInitialLearningShellState,
   getLearningShellBootstrapScript,
 } from "./learning/learningShellPreferences";
-import {
-  EARLY_HLS_PRELOAD_URL_PLACEHOLDER,
-  getEarlyHlsPreloadInlineScript,
-} from "./learning/learningHlsBootstrap";
 import { getVideoPlaybackCdnOrigin } from "./learning/videoPlaybackBootstrap";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
+import { useCurrentUser } from "./services/auth";
 import {
   getControlRadiusBootstrapScript,
   getScrollbarBootstrapScript,
   getSurfaceDepthBootstrapScript,
 } from "./settings/settingsPreferences";
-import { useCurrentUser } from "./services/auth";
+import { getAcademyPaletteStylesheetBootstrapScript } from "./shell/academyPaletteStyles";
 import {
   applySidebarShellToDocument,
   getInitialSidebarShellState,
   getSidebarPresentationBootstrapScript,
   getSidebarShellBootstrapScript,
 } from "./shell/sidebarPreferences";
-import { getAcademyPaletteStylesheetBootstrapScript } from "./shell/academyPaletteStyles";
-import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
-import { ACADEMY_THEME_VERSION, DEFAULT_ACADEMY_THEME, academyThemes } from "./themes";
+import { appBaseStylesheet } from "./appStylesheet";
+import { getThemeBootstrapScript } from "./themes";
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-const academyThemeIds = JSON.stringify(academyThemes.map(({ id }) => id));
 const videoPlaybackCdnOrigin = getVideoPlaybackCdnOrigin();
-const getAppearanceBootstrapScript = () =>
-  `(()=>{const r=document.documentElement,p=${academyThemeIds};try{const t=localStorage.getItem("veolms-theme")||"dark";r.dataset.theme=t==="device"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t==="light"?"light":"dark"}catch{}try{const e=localStorage.getItem("veolms-randomize-academy-theme")==="true",s=sessionStorage.getItem("veolms-session-academy-theme"),l=localStorage.getItem("veolms-academy-theme"),c=localStorage.getItem("veolms-academy-theme-version")===${JSON.stringify(ACADEMY_THEME_VERSION)},v=e&&p.includes(s||"")?s:c&&p.includes(l||"")?l:${JSON.stringify(DEFAULT_ACADEMY_THEME)};r.dataset.palette=v}catch{}})();`;
 
 const DEFAULT_ROOT_ATTRIBUTES: Record<string, string> = {
   lang: "en",
@@ -201,7 +199,7 @@ export function Layout({ children }: LayoutProps) {
             __html: getEarlyHlsPreloadInlineScript(EARLY_HLS_PRELOAD_URL_PLACEHOLDER),
           }}
         />
-        <script dangerouslySetInnerHTML={{ __html: getAppearanceBootstrapScript() }} />
+        <script dangerouslySetInnerHTML={{ __html: getThemeBootstrapScript() }} />
         <script dangerouslySetInnerHTML={{ __html: getReadingModeBootstrapScript() }} />
         <script dangerouslySetInnerHTML={{ __html: getSurfaceDepthBootstrapScript() }} />
         <script dangerouslySetInnerHTML={{ __html: getScrollbarBootstrapScript() }} />

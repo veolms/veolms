@@ -1,23 +1,28 @@
 import {
   forwardRef,
+  type HTMLAttributes,
+  type ReactNode,
+  type Ref,
+  type RefObject,
   useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
+  useReducer,
   useRef,
-  type HTMLAttributes,
-  type Ref,
-  type RefObject,
-  type ReactNode,
 } from "react";
+
 import type { Chapter } from "../chapters/chapterTypes";
-import type { VideoEngine } from "../core/VideoEngine";
 import type { VideoLoadOptions, VideoSource } from "../core/types";
+import type { VideoEngine } from "../core/VideoEngine";
+import { usePlayerFullscreenSwipe } from "../hooks/usePlayerFullscreenSwipe";
+import { usePlayerZoomGestures } from "../hooks/usePlayerZoomGestures";
 import type { StoryboardFrame } from "../storyboard/storyboardTypes";
-import type { TimelineMarker } from "../timeline/timelineMath";
-import { getPlayerThemeStyle, resolvePlayerTheme, type PlayerTheme } from "../themes/playerThemes";
 import { PlayerThemeProvider } from "../themes/PlayerThemeContext";
+import { getPlayerThemeStyle, type PlayerTheme, resolvePlayerTheme } from "../themes/playerThemes";
+import type { TimelineMarker } from "../timeline/timelineMath";
 import { classNames } from "../utils/classNames";
+
 import { PlayerControllerContext } from "./context";
 import {
   areVideoLoadOptionsEquivalent,
@@ -25,14 +30,12 @@ import {
 } from "./loadRequestEquality";
 import { PlayerController } from "./PlayerController";
 import type { VideoPlayerEventListener } from "./playerEvents";
-import type { PlayerSnapshot } from "./playerState";
-import { usePlayerZoomGestures } from "../hooks/usePlayerZoomGestures";
-import { usePlayerFullscreenSwipe } from "../hooks/usePlayerFullscreenSwipe";
 import {
+  type PlayerInteractionMode,
   PlayerInteractionModeProvider,
   useResolvedPlayerMobileInteraction,
-  type PlayerInteractionMode,
 } from "./PlayerInteractionMode";
+import type { PlayerSnapshot } from "./playerState";
 
 export type VideoEngineFactory = () => VideoEngine;
 
@@ -129,6 +132,9 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(functio
   ref,
 ) {
   const controllerRef = useRef<PlayerController | null>(null);
+  const engineFactoryRef = useRef(engineFactory);
+  engineFactoryRef.current = engineFactory;
+  const [, requestControllerReplacement] = useReducer((revision: number) => revision + 1, 0);
   if (!controllerRef.current) {
     controllerRef.current = new PlayerController(engineFactory());
   }
@@ -152,6 +158,20 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(functio
   const stableLoadOptions = stableLoadOptionsRef.current;
 
   useLayoutEffect(() => {
+    if (controller.isDestroyed) {
+      let shouldReplaceController = true;
+      const replaceController = () => {
+        if (!shouldReplaceController || controllerRef.current !== controller) return;
+        controllerRef.current = new PlayerController(engineFactoryRef.current());
+        requestControllerReplacement();
+      };
+
+      void controller.whenDestroyed().then(replaceController, replaceController);
+      return () => {
+        shouldReplaceController = false;
+      };
+    }
+
     lifecycleVersionRef.current += 1;
     controller.activate();
 
@@ -254,6 +274,8 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(functio
     ...getPlayerThemeStyle(resolvedTheme),
     ...style,
   };
+
+  if (controller.isDestroyed) return null;
 
   return (
     <PlayerThemeProvider theme={resolvedTheme}>

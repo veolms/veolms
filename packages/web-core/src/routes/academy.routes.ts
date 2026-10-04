@@ -103,7 +103,7 @@ export function getAcademyRoutes(): RouteConfigEntry {
       caseSensitive: true,
     }),
     route("logout", marker, { id: "logout", caseSensitive: true }),
-    route(":username", marker, {
+    route(":username", "routes/public-profile-marker.tsx", {
       id: "public-profile",
       caseSensitive: true,
     }),
