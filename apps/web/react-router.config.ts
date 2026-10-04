@@ -12,6 +12,7 @@ const staticApplicationPages = [
   "/register",
   "/auth/callback",
   "/courses",
+  "/home",
   "/settings",
   "/settings/profile",
   "/settings/appearance",

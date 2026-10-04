@@ -60,6 +60,11 @@ export interface ThreadsController {
     }>,
     reply: FastifyReply,
   ): Promise<void>;
+
+  listPublicPopularDiscussions(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void>;
 }
 
 export function createThreadsController({
@@ -117,6 +122,11 @@ export function createThreadsController({
         roles: user.roles,
       });
 
+      return reply.status(200).send(result);
+    },
+
+    async listPublicPopularDiscussions(_request, reply) {
+      const result = await service.listPublicPopularDiscussions(database);
       return reply.status(200).send(result);
     },
 

@@ -1,9 +1,11 @@
+import type { AvatarImageVariant } from "@veolms/contracts";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import { useEffect, useState } from "react";
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 
 interface DiscussionAvatarProps {
   src?: string | null;
+  srcSet?: readonly AvatarImageVariant[] | null;
   className: string;
   loading?: "eager" | "lazy";
   width?: number;
@@ -12,6 +14,7 @@ interface DiscussionAvatarProps {
 
 export function DiscussionAvatar({
   src,
+  srcSet,
   className,
   loading = "eager",
   width = 44,
@@ -32,6 +35,7 @@ export function DiscussionAvatar({
       {normalizedSrc && !imageFailed ? (
         <ResponsiveAvatar
           src={normalizedSrc}
+          srcSet={srcSet}
           alt=""
           width={width}
           height={height}

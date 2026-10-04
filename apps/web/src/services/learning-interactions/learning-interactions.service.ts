@@ -16,6 +16,7 @@ import type {
   LearningReply,
   LearningThread,
   LearningThreadsListResponse,
+  PublicPopularDiscussionsResponse,
   LessonDiscussionsListResponse,
   LessonDiscussionCountsResponse,
   ListLessonDiscussionsQuery,
@@ -60,6 +61,10 @@ export interface DiscussionAttachmentUploadContext {
 }
 
 export const learningInteractionsService = {
+  listPopularDiscussions(): Promise<PublicPopularDiscussionsResponse> {
+    return api.get<PublicPopularDiscussionsResponse>("/discussions/popular");
+  },
+
   getLessonInteractionCounts(
     courseId: string,
     lessonId: string,
