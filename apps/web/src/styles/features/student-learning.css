@@ -716,11 +716,7 @@
   border-color: color-mix(in srgb, var(--text) 18%, var(--border));
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent),
-    var(
-      --card-compact-shadow,
-      0 2px 4px color-mix(in srgb, var(--text) 18%, transparent)
-    ),
-    0 3px 0 color-mix(in srgb, var(--canvas) 66%, transparent);
+    var(--card-compact-shadow);
 }
 
 :is(
@@ -729,17 +725,15 @@
   )
   .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
-  border-color: color-mix(in srgb, var(--text) 24%, var(--border));
+  border-color: color-mix(in srgb, var(--text) 18%, var(--border));
+  background: color-mix(
+    in srgb,
+    var(--creator-discussion-card-surface, var(--surface-strong)) 92%,
+    var(--text) 8%
+  );
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent),
-    var(
-      --card-hover-shadow,
-      var(
-        --card-compact-shadow,
-        0 3px 8px color-mix(in srgb, var(--text) 20%, transparent)
-      )
-    ),
-    0 3px 0 color-mix(in srgb, var(--canvas) 66%, transparent);
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+    var(--card-compact-shadow);
 }
 
 @media (min-width: 1181px) {
@@ -777,7 +771,7 @@
     max-height: none;
     overflow-y: auto;
     padding-block: 6px;
-    padding-inline: 2px 6px;
+    padding-inline: 0;
     scrollbar-gutter: stable;
   }
 }
@@ -785,6 +779,23 @@
 .home-dashboard-grid > .home-progress-panel,
 .home-dashboard-grid > .home-updates-panel {
   align-self: stretch;
+}
+
+:is(
+    .student-home-zero-progress__popular-discussions-panel,
+    .student-home-progressed__popular-discussions-panel
+  )
+  > .creator-discussion-list[data-dashboard-discussion-preview] {
+  padding-inline: 0;
+}
+
+:is(
+    .student-home-zero-progress__popular-discussions-panel,
+    .student-home-progressed__popular-discussions-panel
+  )
+  > .creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact {
+  margin-inline: 12px;
 }
 
 @media (min-width: 1181px) {
@@ -844,7 +855,7 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     padding-block: 6px;
-    padding-inline: 2px 6px;
+    padding-inline: 0;
     scrollbar-gutter: stable;
   }
 }

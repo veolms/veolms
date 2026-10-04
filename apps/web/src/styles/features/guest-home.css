@@ -192,7 +192,7 @@
     overflow-x: hidden;
     overflow-y: auto;
     padding-block: 6px;
-    padding-inline: 2px 6px;
+    padding-inline: 0;
     scrollbar-gutter: stable;
     -webkit-overflow-scrolling: touch;
   }
@@ -254,7 +254,7 @@
     max-height: none;
     overflow-y: auto;
     padding-block: 6px;
-    padding-inline: 2px 6px;
+    padding-inline: 0;
     scrollbar-gutter: stable;
   }
 }
@@ -264,6 +264,42 @@
   :root[data-content-layout="framed"] .guest-home--guest .guest-home__layout {
     grid-template-columns: minmax(0, 2.05fr) minmax(18rem, 1fr);
   }
+}
+
+.guest-home
+  .guest-home__discussion-panel
+  > .creator-discussion-list[data-dashboard-discussion-preview] {
+  padding-inline: 0;
+}
+
+.guest-home
+  .guest-home__discussion-panel
+  > .creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact {
+  margin-inline: 12px;
+}
+
+.guest-home
+  .guest-home__discussion-panel
+  > .creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact:not(
+    :is(:hover, :focus-within)
+  ) {
+  border-color: color-mix(in srgb, var(--text) 12%, var(--border));
+  background: var(--card-surface-raised, var(--surface-strong));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent),
+    var(--card-compact-shadow);
+}
+
+.guest-home
+  .guest-home__discussion-panel
+  > .creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
+  border-color: color-mix(in srgb, var(--text) 18%, var(--border));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+    var(--card-compact-shadow);
 }
 
 /* Keep the light Discovery Home layered without changing shared Home or card
@@ -282,17 +318,6 @@
 }
 
 :root[data-theme="light"] .guest-home--guest .course-card:not(:hover) {
-  border-color: color-mix(in srgb, var(--text) 9%, transparent);
-  background: var(--card-surface, var(--surface));
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--text) 8%, transparent);
-}
-
-:root[data-theme="light"]
-  .guest-home--guest
-  .guest-home__discussion-panel
-  .discussion-thread--workspace-card.is-compact:not(
-    :is(:hover, :focus-within)
-  ) {
   border-color: color-mix(in srgb, var(--text) 9%, transparent);
   background: var(--card-surface, var(--surface));
   box-shadow: 0 3px 10px color-mix(in srgb, var(--text) 8%, transparent);
