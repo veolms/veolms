@@ -5,6 +5,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useSyncExternalStore,
 } from "react";
 import {
   useLocation,
@@ -22,16 +23,18 @@ import {
 import { resolveLessonIdentifier } from "../learning/courseContent";
 import { LearningWorkspaceFallback } from "../learning/LearningWorkspaceFallback";
 import {
-  getCoursePlayerOrigin,
   getCoursePlayerNote,
   getCoursePlayerPath,
-  getCoursePlayerReturnPath,
-  getCoursePlayerSession,
   getCoursePlayerThread,
   getStoredCourseLessonId,
   migrateCoursePlayerSessionKey,
   upsertCoursePlayerSessionFromRoute,
 } from "../learning/coursePlayerNavigation";
+import {
+  getLearningReturnLocation,
+  getLearningReturnLocationServerSnapshot,
+  subscribeToLearningReturnLocation,
+} from "../learning/learningReturnLocation";
 import { getRouteMeta } from "../routing/routeDescriptors";
 import { buildLoginPath } from "../routing/routeAccess";
 import { useCurrentUser } from "../services/auth";
@@ -105,8 +108,12 @@ export default function LearningRoute() {
   const { data: authUser } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUser || storeUser;
-  const origin = getCoursePlayerOrigin(location.search);
-  const routeReturnPath = getCoursePlayerReturnPath(location.search);
+  // The page the player was opened from. Minimizing goes back to it.
+  const playerReturnPath = useSyncExternalStore(
+    subscribeToLearningReturnLocation,
+    getLearningReturnLocation,
+    getLearningReturnLocationServerSnapshot,
+  ).path;
   const { data: courseOverview, isLoading: isCourseOverviewLoading } =
     useCourseOverview(courseSlug, {
       enabled: Boolean(courseSlug),
@@ -128,17 +135,7 @@ export default function LearningRoute() {
       ? targetLessonUuid
       : null;
   const isQuizViewRequested = searchParams.get("view") === "quiz";
-  const storedSessionReturnPath = courseSlug
-    ? getCoursePlayerSession(courseSlug)?.returnPath
-    : null;
-  const playerReturnPath =
-    searchParams.has("returnTo") ||
-    !storedSessionReturnPath ||
-    isDiscussionsReturnPath(storedSessionReturnPath)
-      ? routeReturnPath
-      : storedSessionReturnPath;
-  const hasDiscussionReturnPath =
-    searchParams.has("returnTo") && isDiscussionsReturnPath(routeReturnPath);
+  const hasDiscussionReturnPath = isDiscussionsReturnPath(playerReturnPath);
 
   const canonicalCourseSlug = courseOverview?.course.slug;
   const hasExplicitLectureSlug = lectureSlug !== undefined;
@@ -226,7 +223,7 @@ export default function LearningRoute() {
           location.search,
           lessonId,
         )
-      : routeReturnPath;
+      : playerReturnPath;
     if (currentPath !== nextPath) {
       void navigate(nextPath, { replace: true });
     }
@@ -240,7 +237,7 @@ export default function LearningRoute() {
     location.pathname,
     location.search,
     navigate,
-    routeReturnPath,
+    playerReturnPath,
   ]);
 
   // Older saved sessions and shared links may still contain a course UUID.
@@ -256,17 +253,11 @@ export default function LearningRoute() {
 
     migrateCoursePlayerSessionKey(courseSlug, canonicalCourseSlug);
     const threadId = noteDeepLinkId ? null : threadDeepLinkId;
-    const nextPath = getCoursePlayerPath(
-      canonicalCourseSlug,
-      origin,
-      lessonId,
-      routeReturnPath,
-      {
-        threadId,
-        noteId: noteDeepLinkId,
-        view: isQuizViewRequested ? "quiz" : undefined,
-      },
-    );
+    const nextPath = getCoursePlayerPath(canonicalCourseSlug, lessonId, {
+      threadId,
+      noteId: noteDeepLinkId,
+      view: isQuizViewRequested ? "quiz" : undefined,
+    });
     void navigate(nextPath, { replace: true });
   }, [
     canonicalCourseSlug,
@@ -278,8 +269,6 @@ export default function LearningRoute() {
     location.search,
     navigate,
     noteDeepLinkId,
-    origin,
-    routeReturnPath,
     threadDeepLinkId,
   ]);
 
@@ -290,32 +279,23 @@ export default function LearningRoute() {
       const noteId = isSameLesson ? getCoursePlayerNote(location.search) : null;
       const threadId =
         isSameLesson && !noteId ? getCoursePlayerThread(location.search) : null;
-      const path = getCoursePlayerPath(
-        courseSlug,
-        origin,
-        nextLessonId,
-        playerReturnPath,
-        { threadId, noteId, view },
-      );
+      const path = getCoursePlayerPath(courseSlug, nextLessonId, {
+        threadId,
+        noteId,
+        view,
+      });
       navigateTo(path, { exact: true });
     },
-    [
-      courseSlug,
-      lessonId,
-      location.search,
-      navigateTo,
-      origin,
-      playerReturnPath,
-    ],
+    [courseSlug, lessonId, location.search, navigateTo],
   );
   const openCourseOverview = useCallback(() => {
     if (!courseSlug) return;
     if (hasDiscussionReturnPath) {
-      navigateTo(routeReturnPath, { exact: true, replace: true });
+      navigateTo(playerReturnPath, { exact: true, replace: true });
       return;
     }
     navigateTo(`/courses/${encodeURIComponent(courseSlug)}/overview`);
-  }, [courseSlug, hasDiscussionReturnPath, navigateTo, routeReturnPath]);
+  }, [courseSlug, hasDiscussionReturnPath, navigateTo, playerReturnPath]);
   const openLogin = useCallback(() => {
     navigateTo(buildLoginPath(`${location.pathname}${location.search}`), {
       exact: true,

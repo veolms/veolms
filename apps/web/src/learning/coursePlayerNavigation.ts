@@ -1,18 +1,12 @@
 import { getLessonSlug, resolveLessonIdentifier } from "./courseContent";
-
-export type CoursePlayerOrigin = "home" | "courses" | "wishlist";
-
-type LegacyCoursePlayerOrigin =
-  "explore-courses" | "my-courses" | "my-learning";
+import { clearLearningReturnLocation } from "./learningReturnLocation";
 
 type CoursePlayerStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export interface CoursePlayerSession {
   courseId: string;
   lessonId: number;
-  origin: CoursePlayerOrigin;
   path: string;
-  returnPath: string;
   updatedAt: number;
   courseTitle?: string;
   lessonTitle?: string | null;
@@ -32,8 +26,11 @@ export const COURSE_PLAYER_SESSION_CHANGE_EVENT =
   "veolms-course-player-session-change";
 
 const LEGACY_COURSE_PLAYER_SESSION_STORAGE_KEY = "veolms-active-course-player";
-const DEFAULT_COURSE_PLAYER_ORIGIN: CoursePlayerOrigin = "courses";
 const INTERNAL_URL_ORIGIN = "https://procodrr.local";
+// Lesson links used to say where the player was opened from. That now lives
+// in the learning return location, so these are only tolerated on old links
+// and stored sessions, and are dropped when the path is rebuilt.
+const LEGACY_LAUNCH_CONTEXT_PARAMS = ["from", "returnTo"] as const;
 const LEGACY_COURSE_PLAYER_STORAGE_KEYS = [
   "veolms-resume-course-player-home",
   "veolms-resume-course-player-courses",
@@ -41,96 +38,12 @@ const LEGACY_COURSE_PLAYER_STORAGE_KEYS = [
   "veolms-resume-course-player-wishlist",
 ] as const;
 
-const COURSE_PLAYER_PARENT_PATHS: Record<CoursePlayerOrigin, string> = {
-  home: "/",
-  courses: "/courses",
-  wishlist: "/courses/wishlist",
-};
-
-const COURSE_PLAYER_BACK_LABELS: Record<CoursePlayerOrigin, string> = {
-  home: "Return to Home",
-  courses: "Return to Courses",
-  wishlist: "Return to Courses",
-};
-
-const COURSE_PLAYER_ORIGINS_BY_PATH: Readonly<
-  Record<string, CoursePlayerOrigin>
-> = {
-  "/": "home",
-  "/home": "home",
-  "/courses": "courses",
-  "/courses/wishlist": "wishlist",
-  "/wishlist": "wishlist",
-};
-
-const isCoursePlayerOrigin = (value: unknown): value is CoursePlayerOrigin =>
-  value === "home" || value === "courses" || value === "wishlist";
-
-const normalizeCoursePlayerOrigin = (
-  value: unknown,
-): CoursePlayerOrigin | null => {
-  if (isCoursePlayerOrigin(value)) return value;
-  if (
-    value === "explore-courses" ||
-    value === "my-courses" ||
-    value === "my-learning"
-  )
-    return "courses";
-  return null;
-};
-
 const getBrowserStorage = (): CoursePlayerStorage | null => {
   if (typeof window === "undefined") return null;
   try {
     return window.localStorage;
   } catch {
     return null;
-  }
-};
-
-const normalizePathname = (pathname: string) =>
-  pathname.replace(/\/+$/, "") || "/";
-
-const getCoursePlayerOriginForPath = (
-  path: string,
-): CoursePlayerOrigin | null => {
-  try {
-    const url = new URL(path, INTERNAL_URL_ORIGIN);
-    if (url.origin !== INTERNAL_URL_ORIGIN) return null;
-    return (
-      COURSE_PLAYER_ORIGINS_BY_PATH[normalizePathname(url.pathname)] ?? null
-    );
-  } catch {
-    return null;
-  }
-};
-
-const normalizeInternalReturnPath = (
-  value: unknown,
-  fallback: string,
-): string => {
-  if (typeof value !== "string") return fallback;
-  const candidate = value.trim();
-  if (
-    !candidate.startsWith("/") ||
-    candidate.startsWith("//") ||
-    candidate.includes("\\") ||
-    /^[a-z][a-z\d+.-]*:/i.test(candidate)
-  )
-    return fallback;
-
-  try {
-    const url = new URL(candidate, INTERNAL_URL_ORIGIN);
-    if (url.origin !== INTERNAL_URL_ORIGIN) return fallback;
-    const decodedPathname = decodeURIComponent(url.pathname);
-    if (
-      decodedPathname.includes("\\") ||
-      /^\/+learn(?:\/|$)/i.test(decodedPathname)
-    )
-      return fallback;
-    return `${url.pathname}${url.search}${url.hash}`;
-  } catch {
-    return fallback;
   }
 };
 
@@ -174,21 +87,12 @@ const parseCoursePlayerSessionCandidate = (
       return null;
 
     const lessonId = resolveLessonIdentifier(pathParts[2]);
-    const pathOrigin = normalizeCoursePlayerOrigin(
-      pathUrl.searchParams.get("from"),
-    );
-    const candidateOrigin = normalizeCoursePlayerOrigin(candidate.origin);
-    const origin = candidateOrigin ?? pathOrigin;
     if (
       lessonId === null ||
-      !origin ||
-      !pathOrigin ||
-      pathOrigin !== origin ||
       pathUrl.searchParams.size > 5 ||
       [...pathUrl.searchParams.keys()].some(
         (key) =>
-          key !== "from" &&
-          key !== "returnTo" &&
+          !LEGACY_LAUNCH_CONTEXT_PARAMS.some((legacy) => legacy === key) &&
           key !== "thread" &&
           key !== "noteId" &&
           key !== "view",
@@ -196,11 +100,6 @@ const parseCoursePlayerSessionCandidate = (
     )
       return null;
 
-    const fallbackReturnPath = COURSE_PLAYER_PARENT_PATHS[origin];
-    const returnPath = normalizeInternalReturnPath(
-      candidate.returnPath ?? pathUrl.searchParams.get("returnTo"),
-      fallbackReturnPath,
-    );
     const threadId = getCoursePlayerThread(pathUrl.search);
     const noteId = getCoursePlayerNote(pathUrl.search);
     if (threadId && noteId) return null;
@@ -209,15 +108,11 @@ const parseCoursePlayerSessionCandidate = (
     return {
       courseId: candidate.courseId,
       lessonId,
-      origin,
-      path: getCoursePlayerPath(
-        candidate.courseId,
-        origin,
-        lessonId,
-        returnPath,
-        { threadId, noteId, view },
-      ),
-      returnPath,
+      path: getCoursePlayerPath(candidate.courseId, lessonId, {
+        threadId,
+        noteId,
+        view,
+      }),
       updatedAt: candidate.updatedAt,
     };
   } catch {
@@ -344,29 +239,6 @@ const persistCoursePlayerSessions = (
   if (didWrite) notifyCoursePlayerSessionChange();
 };
 
-export function getCoursePlayerOrigin(search: string): CoursePlayerOrigin {
-  const origin = new URLSearchParams(search).get("from");
-  return normalizeCoursePlayerOrigin(origin) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
-}
-
-export function getCoursePlayerOriginFromPathname(
-  pathname: string,
-): CoursePlayerOrigin {
-  return getCoursePlayerOriginForPath(pathname) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
-}
-
-export function getCoursePlayerParentPath(origin: CoursePlayerOrigin): string {
-  return COURSE_PLAYER_PARENT_PATHS[origin];
-}
-
-export function getCoursePlayerReturnPath(search: string): string {
-  const origin = getCoursePlayerOrigin(search);
-  return normalizeInternalReturnPath(
-    new URLSearchParams(search).get("returnTo"),
-    COURSE_PLAYER_PARENT_PATHS[origin],
-  );
-}
-
 export function getCoursePlayerThread(search: string): string | null {
   const thread = new URLSearchParams(search).get("thread");
   const normalized = thread?.trim();
@@ -393,24 +265,18 @@ export interface CoursePlayerPathOptions {
   view?: "video" | "quiz";
 }
 
+/**
+ * Builds the address of a lesson. It carries only what identifies the lesson
+ * view itself; the page the player was opened from is kept in the learning
+ * return location, not in the URL.
+ */
 export function getCoursePlayerPath(
   courseId: string,
-  origin: CoursePlayerOrigin | LegacyCoursePlayerOrigin,
   lessonIdentifier: string | number = 1,
-  returnPath?: string,
   options?: CoursePlayerPathOptions,
 ): string {
-  const normalizedOrigin =
-    normalizeCoursePlayerOrigin(origin) ?? DEFAULT_COURSE_PLAYER_ORIGIN;
   const lessonId = resolveLessonIdentifier(lessonIdentifier) ?? 1;
-  const fallbackReturnPath = COURSE_PLAYER_PARENT_PATHS[normalizedOrigin];
-  const normalizedReturnPath = normalizeInternalReturnPath(
-    returnPath,
-    fallbackReturnPath,
-  );
-  const search = new URLSearchParams({ from: normalizedOrigin });
-  if (normalizedReturnPath !== fallbackReturnPath)
-    search.set("returnTo", normalizedReturnPath);
+  const search = new URLSearchParams();
   const threadId = options?.threadId?.trim();
   const noteId = options?.noteId?.trim();
   if (noteId && !noteId.startsWith("client-")) {
@@ -419,17 +285,8 @@ export function getCoursePlayerPath(
     search.set("thread", threadId);
   }
   if (options?.view === "quiz") search.set("view", "quiz");
-  return `/learn/${encodeURIComponent(courseId)}/${getLessonSlug(lessonId)}?${search.toString()}`;
-}
-
-export function getCoursePlayerLaunchPath(
-  courseId: string,
-  sourcePath: string,
-  lessonIdentifier: string | number = getStoredCourseLessonId(courseId),
-): string {
-  const returnPath = normalizeInternalReturnPath(sourcePath, "/courses");
-  const origin = getCoursePlayerOriginFromPathname(returnPath);
-  return getCoursePlayerPath(courseId, origin, lessonIdentifier, returnPath);
+  const query = search.toString();
+  return `/learn/${encodeURIComponent(courseId)}/${getLessonSlug(lessonId)}${query ? `?${query}` : ""}`;
 }
 
 export function getStoredCourseLessonId(
@@ -497,17 +354,11 @@ export function migrateCoursePlayerSessionKey(
   const migratedSession: CoursePlayerSession = {
     ...previousSession,
     courseId: nextCourseId,
-    path: getCoursePlayerPath(
-      nextCourseId,
-      previousSession.origin,
-      previousSession.lessonId,
-      previousSession.returnPath,
-      {
-        threadId: getCoursePlayerThread(previousSearch),
-        noteId: getCoursePlayerNote(previousSearch),
-        view: getCoursePlayerView(previousSearch),
-      },
-    ),
+    path: getCoursePlayerPath(nextCourseId, previousSession.lessonId, {
+      threadId: getCoursePlayerThread(previousSearch),
+      noteId: getCoursePlayerNote(previousSearch),
+      view: getCoursePlayerView(previousSearch),
+    }),
     updatedAt: Date.now(),
   };
   const remainingSessions = state.sessions.filter(
@@ -529,24 +380,11 @@ export function upsertCoursePlayerSessionFromRoute(
   const existingIndex = state.sessions.findIndex(
     (openSession) => openSession.courseId === courseId,
   );
-  const existingSession =
-    existingIndex === -1 ? null : (state.sessions[existingIndex] ?? null);
-  const searchParams = new URLSearchParams(search);
-  const hasLaunchContext =
-    searchParams.has("from") || searchParams.has("returnTo");
-  const origin =
-    !hasLaunchContext && existingSession
-      ? existingSession.origin
-      : getCoursePlayerOrigin(search);
   const lessonId = resolveLessonIdentifier(lessonIdentifier) ?? 1;
-  const returnPath =
-    !hasLaunchContext && existingSession
-      ? existingSession.returnPath
-      : getCoursePlayerReturnPath(search);
   const noteId = getCoursePlayerNote(search);
   const threadId = noteId ? null : getCoursePlayerThread(search);
   const view = getCoursePlayerView(search);
-  const path = getCoursePlayerPath(courseId, origin, lessonId, returnPath, {
+  const path = getCoursePlayerPath(courseId, lessonId, {
     threadId,
     noteId,
     view,
@@ -554,9 +392,7 @@ export function upsertCoursePlayerSessionFromRoute(
   const session: CoursePlayerSession = {
     courseId,
     lessonId,
-    origin,
     path,
-    returnPath,
     updatedAt: Date.now(),
   };
   if (existingIndex === -1) state.sessions.push(session);
@@ -610,6 +446,8 @@ export function closeCoursePlayerSession(
 export function clearCoursePlayerSessions(
   storage: CoursePlayerStorage | null = getBrowserStorage(),
 ): void {
+  // The page behind the player belongs to the account that opened it.
+  clearLearningReturnLocation();
   if (!storage) return;
   try {
     storage.removeItem(COURSE_PLAYER_SESSIONS_STORAGE_KEY);
@@ -619,22 +457,6 @@ export function clearCoursePlayerSessions(
   } catch {
     // Storage is an optional fallback and may be unavailable in private mode.
   }
-}
-
-export function getCoursePlayerBackLabel(
-  source: CoursePlayerOrigin | string,
-): string {
-  if (isCoursePlayerOrigin(source)) return COURSE_PLAYER_BACK_LABELS[source];
-  const returnPath = normalizeInternalReturnPath(source, "/courses");
-  const pathname = normalizePathname(
-    new URL(returnPath, INTERNAL_URL_ORIGIN).pathname,
-  );
-  if (/^\/courses\/[^/]+\/overview$/.test(pathname))
-    return "Return to Course Overview";
-  const origin = getCoursePlayerOriginForPath(pathname);
-  return origin
-    ? COURSE_PLAYER_BACK_LABELS[origin]
-    : "Return to the previous page";
 }
 
 export function getPendingCourseCommentDraft(

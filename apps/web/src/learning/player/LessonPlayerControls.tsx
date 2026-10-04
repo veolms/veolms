@@ -159,6 +159,8 @@ export interface LessonPlayerControlsProps {
   courseLessonsSecondPressHold?: CourseLessonsSecondPressHoldProps;
   courseLessonsShortcutLabel?: string;
   courseLessonsSidePanel?: boolean;
+  /** The lessons drawer is a bottom sheet rather than a side drawer. */
+  courseLessonsBottomSheet?: boolean;
   /** Shown as the heading of the chapters panel. */
   lessonTitle?: string;
   /**
@@ -206,6 +208,7 @@ function CourseLessonsButton({
   secondPressHold,
   shortcutLabel,
   sidePanel,
+  opensFromBottom,
   textSize = "xs",
   scrollportId,
 }: {
@@ -214,6 +217,12 @@ function CourseLessonsButton({
   secondPressHold?: CourseLessonsSecondPressHoldProps;
   shortcutLabel?: string;
   sidePanel: boolean;
+  /**
+   * The lessons open as a bottom sheet. Only then does the arrow point
+   * down and flip while the sheet is open; everywhere else the lessons come
+   * in from the right, so the arrow points right and stays put.
+   */
+  opensFromBottom: boolean;
   textSize?: "xs" | "sm";
   scrollportId?: string;
 }) {
@@ -258,13 +267,13 @@ function CourseLessonsButton({
       <span className={labelRowClass}>
         <span className="inline-flex items-center leading-none">Lessons</span>
         <span
-          className={`learning-curriculum__section-arrow inline-flex items-center justify-center leading-none [&_svg]:block${open && !sidePanel ? " is-open" : ""}`}
+          className={`learning-curriculum__section-arrow inline-flex items-center justify-center leading-none [&_svg]:block${open && opensFromBottom ? " is-open" : ""}`}
           aria-hidden="true"
         >
-          {sidePanel ? (
-            <CaretRight size={15} className="-mb-[2.5px]" />
-          ) : (
+          {opensFromBottom ? (
             <CaretDown size={15} className="-mb-[2.5px]" />
+          ) : (
+            <CaretRight size={15} className="-mb-[2.5px]" />
           )}
         </span>
       </span>
@@ -464,6 +473,7 @@ export function LessonPlayerControls({
   courseLessonsSecondPressHold,
   courseLessonsShortcutLabel,
   courseLessonsSidePanel = false,
+  courseLessonsBottomSheet = false,
   lessonTitle,
   chaptersPanelHost,
   onAmbientEnabledChange,
@@ -675,6 +685,9 @@ export function LessonPlayerControls({
               )
             }
             sidePanel={mobileLandscapeFullscreen}
+            opensFromBottom={
+              !mobileLandscapeFullscreen && courseLessonsBottomSheet
+            }
           />
         ) : null}
         <CircularFullscreenButton />
@@ -942,6 +955,9 @@ export function LessonPlayerControls({
                     secondPressHold={courseLessonsSecondPressHold}
                     shortcutLabel={courseLessonsShortcutLabel}
                     sidePanel={courseLessonsSidePanel}
+                    opensFromBottom={
+                      !courseLessonsSidePanel && courseLessonsBottomSheet
+                    }
                     textSize="sm"
                     scrollportId={
                       courseLessonsSidePanel

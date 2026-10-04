@@ -86,12 +86,15 @@ import {
   ProfileMenuIdentity,
   ShellProfileAvatar,
 } from "./shell/ProfileMenu";
+import { ProfileButtonPlaceholder } from "./shell/ProfileButtonPlaceholder";
+import { SidebarResizeReadout } from "./shell/SidebarResizeReadout";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { useCurrentUser, useSignOut } from "./services/auth";
 import {
   authStore,
   useAuthIdentityHint,
   useAuthStore,
+  type AuthIdentityHint,
 } from "./store/auth.store";
 
 import {
@@ -201,6 +204,7 @@ import {
   isStoredString,
   useSessionStorageState,
 } from "./learning/useSessionStorageState";
+import { LearningBackgroundSurface } from "./learning/LearningBackgroundSurface";
 import {
   persistReadingModePreferences,
   readReadingModePreferences,
@@ -387,9 +391,17 @@ interface CoursesPageProps {
     courseSlug?: string;
     discussionTab?: string;
     page: string;
+    scrollLeft: number;
+    scrollTop: number;
     section?: string;
     settingsTab?: string;
   } | null;
+  /**
+   * While a lesson fills the screen: the page and navigation section the
+   * player was opened from, which the shell keeps highlighted.
+   */
+  learningOriginPage?: string | null;
+  learningOriginSection?: string | null;
   learningMotionStageRef?: Ref<HTMLDivElement>;
   renderMain?: ((context: CoursesPageRenderContext) => ReactNode) | null;
 }
@@ -630,17 +642,149 @@ const isFocusedSidebarSwipeInput = (target: EventTarget | null) => {
   return focused === editable || Boolean(focused && editable.contains(focused));
 };
 
+// The sidebar's profile button keeps one fixed corner radius while the
+// sidebar is expanded. The `!` is needed because the app-wide roundness
+// setting otherwise resizes every button's corners.
+//
+// On the collapsed rail it is a clearly visible squircle, but only once the
+// sidebar has actually finished narrowing: the collapsed state is switched on
+// at the start of that animation, so the squircle is tied to the width of the
+// surrounding container (the profile block here, the nav for menu items)
+// instead. Until the rail is narrow the ordinary rounded corners stay. The
+// same goes for dragging the rail wider: holding the resize handle changes
+// nothing until the rail actually grows.
+//
+// The button's height and the picture's inset from its left edge are tied
+// to the width of the profile block (a size container): 64px tall with the
+// picture 7px in when wide, easing to a 57px square with the picture centred
+// by the time the block is rail-width. The stylesheet instead switches
+// between two fixed layouts when the collapsed state changes, which left the
+// picture off-centre at the end of a drag until release, and made the button
+// balloon into a huge square at the start of a collapse.
+//
+// While the sidebar is being dragged, the profile button and the menu items
+// clip their own contents, so the profile arrow and a menu item's shortcut
+// badge are cut off at the button's edge instead of hanging outside it.
+//
+// The picture has no outline in any theme: neither the frame's border nor
+// the picture's own border and inner edge light are drawn.
+//
+// While the collapsed rail is being dragged wider, the name and the arrow
+// are laid out exactly as in the expanded button (same gap, same right
+// padding, both present) and simply come into view as the button widens,
+// the reverse of how they are cut off while it narrows.
+const SIDEBAR_PROFILE_BUTTON_CLASS =
+  "courses-profile__button h-[clamp(57px,calc(57px+(100cqw-57px)*0.07),64px)]! min-h-0! aspect-auto! justify-start! pl-[clamp(0.7px,calc(0.7px+(100cqw-57px)*0.063),7px)]! [:root:not([data-sidebar-state=collapsed])_.courses-app:not(.courses-app--collapsed)_&]:rounded-xl! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:rounded-xl! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:[corner-shape:round]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:rounded-[28.5px]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[corner-shape:squircle]! [.courses-app--resizing_&]:overflow-hidden! [&_strong]:text-[15px]! [&>span:first-child]:border-transparent! [&_i]:border-transparent! [&_i]:shadow-none! [.courses-app--collapsed.courses-app--resizing_&]:gap-1! [.courses-app--collapsed.courses-app--resizing_&]:pr-[9px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>span:not(:first-child)]:block! [.courses-app--collapsed.courses-app--resizing_&]:[&>span:not(:first-child)]:max-w-[190px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>span:not(:first-child)]:opacity-100! [.courses-app--collapsed.courses-app--resizing_&]:[&>span:not(:first-child)]:[clip-path:none]! [.courses-app--collapsed.courses-app--resizing_&]:[&>svg]:block! [.courses-app--collapsed.courses-app--resizing_&]:[&>svg]:w-[19px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>svg]:min-w-[19px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>svg]:shrink-0! [.courses-app--collapsed.courses-app--resizing_&]:[&>svg]:max-w-[190px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>svg]:opacity-100! [.courses-app--collapsed.courses-app--resizing_&]:[&>svg]:[clip-path:none]!";
+// Menu items are as tall as the collapsed profile button, with the dock's
+// icon size and a matching label size, in both sidebar states. On the
+// collapsed rail they are squares and become the same squircle. The left
+// padding centres the icon in the collapsed square, which also keeps it on
+// the same vertical line in the expanded row.
+// Idle items carry a faint fill, about half as strong as the hover fill.
+const SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS =
+  "[:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:rounded-[50%]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[corner-shape:squircle] h-[57px]! min-h-[57px]! pl-4! [&_svg]:size-[25px]! [&_svg]:basis-[25px]! text-base! [:root:not([data-sidebar-state=collapsed])_.courses-app:not(.courses-app--collapsed)_&]:rounded-xl! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:rounded-xl! [&:not(.is-active):not(:hover)]:bg-[color-mix(in_srgb,var(--surface)_35%,transparent)]! [.courses-app--resizing_&]:overflow-hidden!";
+
+/** At this sidebar width or narrower, a drag stacks the dock vertically. */
+const SIDEBAR_DOCK_VERTICAL_MAX_WIDTH = 160;
+
+// The dock has no box of its own (background, padding, shadow): its buttons
+// stand directly on the sidebar at the menu items' height and icon size, and
+// idle ones carry the same faint fill as an idle menu item, and the same
+// hover fill (dark and light themes each have their own), with no outline. Stacked
+// vertically, each button takes the dock's full width, which makes it a
+// square on the collapsed rail. There the buttons also take the same
+// squircle as the profile button and menu items, under the same rule: only
+// once the rail is narrow, and unaffected by holding the resize handle.
+// The colour menu opens inside the dock, so its swatches are excluded from
+// every button rule here.
+// The dark/light and reading-mode icons take their own colours from the same
+// source as the menu icons (so they follow the icon style setting), and each
+// icon's glow follows its own colour instead of the theme accent.
+const SIDEBAR_DOCK_CLASS =
+  "[&.sidebar-appearance--vertical_button:not([data-theme-swatch])]:w-full! [&.sidebar-appearance--vertical_button:not([data-theme-swatch])]:basis-auto! [&.sidebar-appearance--vertical_.sidebar-palette-wrap]:w-full! [&.sidebar-appearance--vertical_.sidebar-palette-wrap]:h-auto! [&.sidebar-appearance--vertical_.sidebar-palette-wrap]:basis-auto! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[&_button:not([data-theme-swatch])]:rounded-[50%]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[&_button:not([data-theme-swatch])]:[corner-shape:squircle]! bg-transparent! p-0! shadow-none! [&_button:not([data-theme-swatch],.is-active,[aria-expanded=true],[aria-pressed=true])]:bg-[color-mix(in_srgb,var(--surface)_35%,transparent)]! [&_button:not([data-theme-swatch],.is-active,[aria-expanded=true],[aria-pressed=true])]:hover:bg-[color-mix(in_srgb,var(--surface)_72%,transparent)]! in-data-[theme=light]:[&_button:not([data-theme-swatch],.is-active,[aria-expanded=true],[aria-pressed=true])]:hover:bg-[color-mix(in_srgb,var(--selected)_68%,var(--surface))]! [&_button>svg]:size-[25px] [&_button:not([data-theme-swatch])]:h-[57px]! [&_button:not([data-theme-swatch])]:min-h-[57px]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:[&_button>svg]:size-[25px] [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:[&_button:not([data-theme-swatch])]:rounded-xl! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:[&_button:not([data-theme-swatch])]:[corner-shape:round]! [:root:not([data-sidebar-state=collapsed])_.courses-app:not(.courses-app--collapsed)_&]:[&_button:not([data-theme-swatch])]:rounded-xl! [&_button:not([data-theme-swatch])]:hover:border-transparent! mt-2! gap-2! [&_[data-appearance-mode-toggle]>svg]:text-(--dock-appearance-icon-color)! [&_[data-reading-mode-trigger]>svg]:text-(--dock-reading-mode-icon-color)! [&_button>svg]:[filter:drop-shadow(0_2px_6px_color-mix(in_srgb,currentColor_38%,transparent))]!";
+
+// While the sidebar is animating or being dragged between its two states it
+// still counts as collapsed but is no longer narrow. In that in-between
+// stretch every piece shows the corners it has at rest when expanded, so
+// nothing changes shape when the motion ends.
+
+// While the expanded sidebar is being dragged narrower, the collapse button
+// rides the sidebar's right edge all the way down to the collapsed width, and
+// the logo is cut exactly where the button begins. Left to the stylesheet,
+// the button sits after the logo in a row with a gap: the gap hid the logo
+// early, and the row's left padding stopped the button short of its place.
+//
+// Dragging the collapsed rail wider does the reverse, and from the first
+// pixel: the button leaves with the sidebar's edge and the logo is revealed
+// behind it, starting at its first letter, which never moves sideways. The
+// stylesheet otherwise keeps the rail layout until the drag passes a
+// threshold and then jumps to the expanded one.
+//
+// The button keeps one line through all of this: the same height in the
+// header at rest, on the rail at rest and during either drag, and a
+// horizontal position that meets the resting one at both ends (the half-pixel
+// offsets absorb the nudge the stylesheet gives the icon on the rail).
+// On the rail the icon is centred over the menu icons, which is a few pixels
+// left of where the sidebar's edge alone would leave it, so the drag
+// positions ease across that difference over the last stretch before the
+// rail (the `clamp` terms) rather than stepping at release.
+// The collapse icon is drawn larger too, scaled about its centre and set
+// half a pixel lower, so its rounded bottom edge reads as level with the
+// bottom of the wordmark while it still covers the first letter on the rail.
+// The logo is drawn 10% larger than the stylesheet's slot for it, scaled
+// from its left edge so the first letter keeps its place; the rail's slot
+// for that letter is widened to match.
+// The gap before the collapse button is tightened so the larger wordmark
+// still fits whole at the narrowest expanded width.
+//
+// The collapse button and shortcut animate the same way as a drag. The
+// header keeps one layout for every collapsed state, positioned from the
+// sidebar's right edge, so while the sidebar narrows the button travels in
+// and covers the logo instead of jumping to the rail. On the rail the button
+// is hidden unless the sidebar is hovered; that fade is held back for the
+// length of the collapse so the button is seen arriving.
+//
+// The logo sits 4px lower than the stylesheet puts it, in every state. That
+// centres it on the collapse icon's line, and on the rail it puts the first
+// letter wholly behind the icon when the icon shows.
+//
+// The header keeps the rail's height for as long as the sidebar counts as
+// collapsed. The stylesheet makes it 2px taller once an outward drag passes
+// its content threshold, which pushed the whole menu down mid-drag.
+//
+// At rest on the rail the icon carries a 2px pad in the sidebar's own
+// background colour, so no edge of the logo's first letter shows around it.
+// On hover, in both sidebar states, the button's own hover background and
+// glow are switched off and the icon gets a single outline in the theme's
+// accent colour. The pad behind the icon takes the same colour then, so no
+// second, darker line shows between the icon and its outline.
+const SIDEBAR_BRAND_CLASS =
+  "courses-sidebar__brand [.courses-app:not(.courses-app--collapsed)_&]:[&>.courses-logo-clip]:max-w-[min(156px,calc(100%-36px))]! [.courses-app--collapsed_&]:flex-row! [.courses-app--collapsed_&]:items-end! [.courses-app--collapsed_&]:justify-start! [.courses-app--collapsed_&]:pl-[19.375px]! [.courses-app--collapsed_&]:pr-[7px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:static! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:block! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:w-[156px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:opacity-100! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:transform-none! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:[clip-path:inset(0)]! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:max-w-[min(156px,max(0px,calc(100%-36px)))]! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:static! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:block! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:w-[156px]! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:opacity-100! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:transform-none! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:[clip-path:inset(0)]! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:max-w-[min(156px,max(24px,calc(100%-36px)))]! [&>.courses-logo-clip>svg]:origin-left [&>.courses-logo-clip>svg]:scale-110 [&>.courses-logo-clip]:translate-y-[4px] [&>.courses-logo-clip]:-translate-x-[0.5px] [.courses-app--collapsed_&]:h-12! [.courses-app--collapsed_&]:min-h-12! [.courses-app--collapsed_&]:[&>.courses-logo-clip]:translate-y-[6px]";
+const SIDEBAR_COLLAPSE_BUTTON_CLASS =
+  "sidebar-collapse [.courses-app:not(.courses-app--collapsed)_&]:absolute! [.courses-app:not(.courses-app--collapsed)_&]:top-[14px]! [.courses-app:not(.courses-app--collapsed)_&]:bottom-auto! [.courses-app:not(.courses-app--collapsed)_&]:left-[calc(100%-39px-clamp(0px,(112px-100%)*0.1,4px))]! [.courses-app--collapsed_&]:absolute! [.courses-app--collapsed_&]:top-[14px]! [.courses-app--collapsed_&]:bottom-auto! [.courses-app--collapsed_&]:left-auto! [.courses-app--collapsed_&]:right-[calc(7.5px+clamp(0px,(120px-100%)*0.1,4px))]! [.courses-app--collapsed.courses-app--resizing_&]:opacity-100! [.courses-app--collapsed.courses-app--resizing_&]:pointer-events-auto! [.courses-app--collapsed:not(.courses-app--resizing)_.courses-sidebar:not(:hover)_&]:delay-[220ms]! [&>span]:scale-[1.16] [&>span]:translate-y-[0.5px] [.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>span]:rounded-[24%] [.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>span]:bg-(--app-shell) [.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>span]:shadow-[0_0_0_2px_var(--app-shell)] hover:bg-transparent! hover:shadow-none! hover:[&>span]:rounded-[24%]! hover:[&>span]:bg-[color-mix(in_srgb,var(--accent)_55%,var(--app-shell))]! hover:[&>span]:shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_55%,var(--app-shell))]!";
+
 function LoginProfileButton({
   className,
   arrowSize,
   onLogin,
-  displayName,
+  remembered,
 }: {
   className: string;
   arrowSize: number;
   onLogin: () => void;
-  displayName?: string;
+  /**
+   * The profile remembered from the previous page load, shown while the
+   * session is still being checked so the button already looks like the
+   * signed-in one.
+   */
+  remembered?: AuthIdentityHint | null;
 }) {
+  const displayName = remembered?.displayName;
+  const handle = remembered?.username
+    ? remembered.username.startsWith("@")
+      ? remembered.username
+      : `@${remembered.username}`
+    : null;
   return (
     <button
       type="button"
@@ -653,12 +797,22 @@ function LoginProfileButton({
       data-auth-identity-button=""
       onClick={onLogin}
     >
-      <i
-        aria-hidden="true"
-        className="courses-profile__login-icon flex shrink-0 items-center justify-center text-(--accent)"
-      >
-        <UserCircle size={45.36} weight="thin" />
-      </i>
+      {/* The box is as large as the profile picture's frame, so the name
+          beside it does not move when the picture replaces the icon. The
+          icon is drawn a little larger than its default, its circle about
+          midway between that default and the picture's size. */}
+      {remembered?.avatarUrl ? (
+        <span className="courses-profile__avatar-wrap">
+          <ShellProfileAvatar avatarUrl={remembered.avatarUrl} />
+        </span>
+      ) : (
+        <i
+          aria-hidden="true"
+          className="courses-profile__login-icon flex size-13.5 shrink-0 items-center justify-center text-(--accent) [.mobile-menu-sheet\_\_profile_&]:size-13 [&>svg]:size-[52px] [&>svg]:shrink-0"
+        >
+          <UserCircle size={45.36} weight="thin" />
+        </i>
+      )}
       <span className="courses-profile__login-copy">
         <strong
           className="courses-profile__login-title"
@@ -670,15 +824,23 @@ function LoginProfileButton({
           className="courses-profile__login-subtitle"
           data-auth-identity-subtitle=""
         >
-          {displayName ? "Account" : "Sign in for more"}
+          {displayName ? (handle ?? "Account") : "Sign in for more"}
         </small>
       </span>
-      <i
-        aria-hidden="true"
-        className="courses-profile__login-arrow ml-auto flex shrink-0 items-center justify-center text-(--accent)"
-      >
-        <CaretRight size={arrowSize} weight="bold" />
-      </i>
+      {remembered ? (
+        <CaretDown
+          size={19}
+          aria-hidden="true"
+          className="courses-profile__caret"
+        />
+      ) : (
+        <i
+          aria-hidden="true"
+          className="courses-profile__login-arrow ml-auto flex shrink-0 items-center justify-center text-(--accent)"
+        >
+          <CaretRight size={arrowSize} weight="bold" />
+        </i>
+      )}
     </button>
   );
 }
@@ -705,6 +867,8 @@ export function CoursesPage({
   couponId,
   miniPlayerCourseId = null,
   learningBackground = null,
+  learningOriginPage = null,
+  learningOriginSection = null,
   learningMotionStageRef,
   renderMain = null,
 }: CoursesPageProps) {
@@ -773,8 +937,9 @@ export function CoursesPage({
   const [pageTabColors, setPageTabColors] = useState<PageTabColors>(
     PAGE_TAB_COLORS_DEFAULT,
   );
-  const sidebarHeaderLayout =
-    sidebarPreferences.headerLayout === "fixed" ? "fixed" : "inline";
+  // The "fixed" header layout no longer has a setting; a stored value from
+  // before is ignored.
+  const sidebarHeaderLayout = "inline";
   const selectedSidebarDockItems = normalizeSidebarDockItems(
     sidebarPreferences.dockItems,
   );
@@ -877,6 +1042,10 @@ export function CoursesPage({
   // same-page navigation after login; it is never persisted across reloads.
   const activeUser = authUserFetched && !authUserError ? authUser : storeUser;
   const isAuthenticated = Boolean(activeUser);
+  // The session has not been checked yet and nothing is remembered about the
+  // account, so it is too early to offer "Login".
+  const accountStatusUnknown =
+    !isAuthenticated && !authUserFetched && !authIdentityHint;
   const userRoles = getUserRoles(activeUser);
   const isAdmin = hasAdminRole(userRoles);
   const allowedWorkspaceRoles = useMemo(
@@ -1172,7 +1341,7 @@ export function CoursesPage({
       contentKey: `${isAuthenticated}:${canSwitchWorkspace}:${effectiveRole}:${sidebarDockItems.length}`,
     });
   const activeNavigationSection = isLearningSurface
-    ? null
+    ? learningOriginSection
     : (requestedSection ??
       (page === "home"
         ? effectiveRole === "creator" && !isAdmin
@@ -1421,11 +1590,10 @@ export function CoursesPage({
     const scrollPosition = contentLayoutChanged
       ? readApplicationScrollPosition()
       : null;
-    root.dataset.sidebarIconStyle = next.iconStyle || "monochrome";
+    root.dataset.sidebarIconStyle = next.iconStyle || "multicolor";
     root.dataset.sidebarMonochromeMode = next.monochromeMode || "theme";
     root.dataset.contentLayout = nextContentLayout;
-    root.dataset.sidebarHeaderLayout =
-      next.headerLayout === "fixed" ? "fixed" : "inline";
+    root.dataset.sidebarHeaderLayout = "inline";
     root.dataset.sidebarGlow = normalizeSidebarGlow(next.glowPalette);
     root.dataset.sidebarGlowShape = normalizeSidebarGlowShape(next.glowShape);
     applySidebarGlowShapeSize(next.glowShapeSize, root);
@@ -2579,11 +2747,14 @@ export function CoursesPage({
     : sidebarHidden
       ? "Double-click to pin sidebar"
       : "Double-click to float sidebar";
-  const appearanceControlsHorizontal =
-    !sidebarVisuallyCollapsed ||
-    (sidebarResizing &&
-      (sidebarResizePreviewWidth ?? SIDEBAR_COLLAPSED_WIDTH) >=
-        SIDEBAR_MIN_WIDTH);
+  // At rest the dock is a row when expanded and a column on the rail. During
+  // a drag, in either direction, it switches at one fixed sidebar width.
+  const appearanceControlsHorizontal = sidebarResizing
+    ? (sidebarResizePreviewWidth ??
+        (sidebarVisuallyCollapsed
+          ? SIDEBAR_COLLAPSED_WIDTH
+          : renderedSidebarWidth)) > SIDEBAR_DOCK_VERTICAL_MAX_WIDTH
+    : !sidebarVisuallyCollapsed;
 
   useLayoutEffect(() => {
     const group = appearanceControlsRef.current;
@@ -3134,6 +3305,12 @@ export function CoursesPage({
     sidebarResizing &&
     (sidebarResizePreviewWidth ?? SIDEBAR_COLLAPSED_WIDTH) >=
       SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE;
+  // The toggle's arrow flips as soon as a drag brings the sidebar down to the
+  // collapsed width, without waiting for the pointer to be released.
+  const sidebarDraggedToCollapsedWidth =
+    sidebarResizing &&
+    (sidebarResizePreviewWidth ?? renderedSidebarWidth) <=
+      SIDEBAR_COLLAPSED_WIDTH;
   const sidebarClassName = [
     "courses-app",
     isDashboardRoute ? "courses-app--dashboard" : "",
@@ -4228,7 +4405,7 @@ export function CoursesPage({
               />
             )}
             <div
-              className="courses-sidebar__brand"
+              className={SIDEBAR_BRAND_CLASS}
               title={sidebarBrandTitle}
               data-double-tap-ignore
               onMouseDown={preventSidebarBrandTextSelection}
@@ -4247,7 +4424,7 @@ export function CoursesPage({
               />
               <button
                 type="button"
-                className="sidebar-collapse"
+                className={SIDEBAR_COLLAPSE_BUTTON_CLASS}
                 aria-label={sidebarControlAction}
                 aria-pressed={compactNavigation ? undefined : sidebarCollapsed}
                 aria-keyshortcuts={`${primaryShortcutModifier}+B`}
@@ -4262,7 +4439,9 @@ export function CoursesPage({
                     direction={
                       compactNavigation
                         ? "left"
-                        : sidebarVisuallyCollapsed || sidebarPresentedAsOverlay
+                        : sidebarVisuallyCollapsed ||
+                            sidebarPresentedAsOverlay ||
+                            sidebarDraggedToCollapsedWidth
                           ? "right"
                           : "left"
                     }
@@ -4274,7 +4453,15 @@ export function CoursesPage({
             <nav
               id="courses-sidebar-nav-scrollport"
               className={[
-                "courses-nav",
+                // A size container, so menu items can tell when the rail
+                // has finished narrowing. The side padding lines the menu
+                // items up with the profile button's left and right edges.
+                // The top padding is 6px more than the stylesheet's in both
+                // states, which keeps the first item on the same row in each.
+                // It is padding rather than margin because the list clips at
+                // its own edge: the room has to be inside it, or the first
+                // item's shadow is cut off at the top.
+                "courses-nav @container gap-2! px-[9.5px]! pt-[11px]! [.courses-app--collapsed_&]:pt-[22px]!",
                 navigationScrollFade.top ? "has-scroll-top" : "",
                 navigationScrollFade.bottom ? "has-scroll-bottom" : "",
               ]
@@ -4296,7 +4483,7 @@ export function CoursesPage({
                   <Fragment key={label}>
                     <button
                       type="button"
-                      className={active ? "is-active" : ""}
+                      className={`${active ? "is-active " : ""}${SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS}`}
                       style={
                         {
                           "--nav-icon-color": getNavigationIconColor(
@@ -4343,6 +4530,14 @@ export function CoursesPage({
                   </Fragment>
                 );
               })}
+              {sidebarResizing &&
+              sidebarPreferences.showResizeDimensions === true ? (
+                <SidebarResizeReadout
+                  sidebarWidth={
+                    sidebarResizePreviewWidth ?? renderedSidebarWidth
+                  }
+                />
+              ) : null}
             </nav>
 
             <div className="courses-profile" ref={profileRef}>
@@ -4387,7 +4582,7 @@ export function CoursesPage({
               {isAuthenticated ? (
                 <button
                   type="button"
-                  className="courses-profile__button"
+                  className={SIDEBAR_PROFILE_BUTTON_CLASS}
                   aria-label={`${shellProfileDisplayName}, ${shellProfileSubtitle}. Open profile menu`}
                   aria-expanded={profileMenu}
                   aria-controls="desktop-profile-menu"
@@ -4407,7 +4602,14 @@ export function CoursesPage({
                   </span>
                   <span>
                     <strong>{shellProfileDisplayName}</strong>
-                    <small>
+                    {/* A role label sits slightly lower than a username. */}
+                    <small
+                      className={
+                        shellProfileSubtitle.startsWith("@")
+                          ? undefined
+                          : "mt-0.5!"
+                      }
+                    >
                       {shellProfileSubtitle}
                       {canSwitchWorkspace ? (
                         <ProfileSubtitleIcon
@@ -4429,22 +4631,34 @@ export function CoursesPage({
                     }
                   />
                 </button>
+              ) : accountStatusUnknown ? (
+                <ProfileButtonPlaceholder
+                  className={SIDEBAR_PROFILE_BUTTON_CLASS}
+                />
               ) : (
                 <LoginProfileButton
-                  className="courses-profile__button"
+                  className={SIDEBAR_PROFILE_BUTTON_CLASS}
                   arrowSize={16}
-                  displayName={authIdentityHint?.displayName}
+                  remembered={authUserFetched ? null : authIdentityHint}
                   onLogin={() => onNavigatePage("/login")}
                 />
               )}
               <div
                 ref={appearanceControlsRef}
-                className={`sidebar-appearance sidebar-appearance--mobile-dock sidebar-appearance--${appearanceControlsHorizontal ? "horizontal" : "vertical"}`}
+                className={`sidebar-appearance sidebar-appearance--mobile-dock sidebar-appearance--${appearanceControlsHorizontal ? "horizontal" : "vertical"} ${SIDEBAR_DOCK_CLASS}`}
                 role="group"
                 aria-label="Appearance controls"
                 data-control-radius-surface
                 style={
                   {
+                    "--dock-appearance-icon-color": getNavigationIconColor(
+                      "Appearance",
+                      sidebarPreferences,
+                    ),
+                    "--dock-reading-mode-icon-color": getNavigationIconColor(
+                      "Reading mode",
+                      sidebarPreferences,
+                    ),
                     "--reading-mode-dock-index": Math.max(
                       0,
                       readingModeDockIndex,
@@ -4613,7 +4827,8 @@ export function CoursesPage({
                   }
 
                   if (item === "settings") {
-                    const settingsActive = page === "settings";
+                    const settingsActive =
+                      page === "settings" || learningOriginPage === "settings";
                     return (
                       <button
                         key={item}
@@ -4787,17 +5002,16 @@ export function CoursesPage({
                   quizId={quizId}
                 />
               ) : learningBackground ? (
-                <div
-                  className={`courses-main pointer-events-none sticky top-0 z-0 h-dvh max-h-dvh min-h-0! self-start overflow-clip! transition-opacity ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none starting:opacity-0! ${learningBackground.page !== "courses" ? "student-surface-main" : ""}`}
-                  style={{
-                    contain: "strict",
-                    opacity: "var(--learning-background-reveal, 0)",
-                    transitionDuration:
-                      "var(--learning-background-reveal-duration, 0ms)",
-                  }}
-                  aria-hidden="true"
-                  data-learning-background-surface=""
-                  inert
+                <LearningBackgroundSurface
+                  className={
+                    learningBackground.page === "courses"
+                      ? "max-[640px]:px-0!"
+                      : learningBackground.page === "settings"
+                        ? "student-surface-main courses-main--settings"
+                        : "student-surface-main"
+                  }
+                  scrollLeft={learningBackground.scrollLeft}
+                  scrollTop={learningBackground.scrollTop}
                 >
                   {renderPageContent({
                     surfaceCourseSlug: learningBackground.courseSlug,
@@ -4806,7 +5020,7 @@ export function CoursesPage({
                     surfaceSection: learningBackground.section,
                     surfaceSettingsTab: learningBackground.settingsTab,
                   })}
-                </div>
+                </LearningBackgroundSurface>
               ) : null
             ) : routeContentBlocked ? (
               <AcademyRouteSkeleton
@@ -5023,11 +5237,13 @@ export function CoursesPage({
                     });
                   }}
                 />
+              ) : accountStatusUnknown ? (
+                <ProfileButtonPlaceholder className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]!" />
               ) : (
                 <LoginProfileButton
                   className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]! hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,white_10%)]!"
                   arrowSize={17}
-                  displayName={authIdentityHint?.displayName}
+                  remembered={authUserFetched ? null : authIdentityHint}
                   onLogin={() => onNavigatePage("/login")}
                 />
               )}
@@ -5250,7 +5466,8 @@ export function CoursesPage({
                 }
 
                 if (item === "settings") {
-                  const settingsActive = page === "settings";
+                  const settingsActive =
+                    page === "settings" || learningOriginPage === "settings";
                   return (
                     <button
                       key={item}

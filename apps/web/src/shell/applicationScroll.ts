@@ -27,6 +27,45 @@ export const readApplicationScrollPosition = (): ApplicationScrollPosition => {
     : { left: window.scrollX, top: window.scrollY };
 };
 
+/** How long a restored position waits for a page that is still loading. */
+const SCROLL_FOLLOW_TIMEOUT_MS = 4000;
+const SCROLL_FOLLOW_INTERVAL_MS = 120;
+
+/**
+ * Keeps moving toward a restored position that the page cannot reach yet
+ * because its code or data is still loading, so the page does not open at
+ * the top and stay there. It gives up as soon as the position is reached,
+ * the scroll moves for any other reason (the learner, or the page itself),
+ * or the page has had long enough to load. Returns a function that stops it.
+ */
+export const followApplicationScrollPosition = (
+  position: ApplicationScrollPosition,
+): (() => void) => {
+  const isReached = (current: ApplicationScrollPosition) =>
+    Math.abs(current.top - position.top) < 1 &&
+    Math.abs(current.left - position.left) < 1;
+  let lastApplied = readApplicationScrollPosition();
+  if (isReached(lastApplied)) return () => undefined;
+
+  const startedAt = performance.now();
+  const stop = () => window.clearInterval(interval);
+  const interval = window.setInterval(() => {
+    const current = readApplicationScrollPosition();
+    if (
+      current.top !== lastApplied.top ||
+      current.left !== lastApplied.left ||
+      performance.now() - startedAt > SCROLL_FOLLOW_TIMEOUT_MS
+    ) {
+      stop();
+      return;
+    }
+    scrollApplicationTo({ ...position, behavior: "auto" });
+    lastApplied = readApplicationScrollPosition();
+    if (isReached(lastApplied)) stop();
+  }, SCROLL_FOLLOW_INTERVAL_MS);
+  return stop;
+};
+
 export const scrollApplicationTo = (options: ScrollToOptions): void => {
   const scrollElement = getApplicationScrollElement();
   const behaviorElement = scrollElement ?? document.documentElement;

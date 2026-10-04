@@ -464,22 +464,21 @@ describe("VideoPlayer integration", () => {
     expect(playFeedback).toHaveClass("hidden", "sm:grid");
     expect(playFeedback).toHaveAttribute("aria-hidden", "true");
     expect(playSurface).toHaveClass(
-      "size-20",
-      "lg:size-22",
-      "border-0",
-      "bg-transparent",
-      "shadow-none",
+      "size-[78px]",
+      "rounded-full",
+      "bg-black/60",
+      "backdrop-blur-[16px]",
     );
-    expect(playSurface).not.toHaveClass("backdrop-blur-sm");
+    expect(playSurface).toHaveAttribute("data-playback-feedback-bezel");
     expect(playSurface).toHaveAttribute(
       "data-playback-feedback-duration",
-      "850",
+      "1000",
     );
     expect(
       playSurface?.querySelector('[data-playback-feedback-icon="play"]'),
-    ).toHaveClass("size-10", "lg:size-11", "translate-x-0.5");
+    ).toHaveClass("size-10", "translate-x-0.5");
 
-    act(() => vi.advanceTimersByTime(849));
+    act(() => vi.advanceTimersByTime(999));
     expect(
       container.querySelector('[data-video-player-playback-feedback="play"]'),
     ).toBeInTheDocument();

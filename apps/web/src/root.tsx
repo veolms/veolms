@@ -51,7 +51,7 @@ const getAppearanceBootstrapScript = () =>
 const DEFAULT_ROOT_ATTRIBUTES: Record<string, string> = {
   lang: "en",
   "data-theme": "dark",
-  "data-palette": "codex",
+  "data-palette": DEFAULT_ACADEMY_THEME,
   "data-reading-mode": "false",
   "data-reading-mode-texture": "false",
   "data-reading-mode-temperature": "false",
@@ -151,7 +151,7 @@ export function Layout({ children }: LayoutProps) {
     <html
       lang="en"
       data-theme="dark"
-      data-palette="codex"
+      data-palette={DEFAULT_ACADEMY_THEME}
       data-reading-mode="false"
       data-reading-mode-texture="false"
       data-reading-mode-temperature="false"

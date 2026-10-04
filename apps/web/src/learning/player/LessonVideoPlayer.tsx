@@ -113,6 +113,8 @@ export interface LessonVideoPlayerProps {
   courseLessonsSecondPressHold?: CourseLessonsSecondPressHoldProps;
   courseLessonsShortcutLabel?: string;
   courseLessonsSidePanel?: boolean;
+  /** The lessons drawer is a bottom sheet rather than a side drawer. */
+  courseLessonsBottomSheet?: boolean;
   courseLessonsVideoWidthPercent?: number;
   /** Element over the course content column that hosts the chapters panel. */
   chaptersPanelHost?: HTMLElement | null;
@@ -180,6 +182,7 @@ export function LessonVideoPlayer({
   courseLessonsSecondPressHold,
   courseLessonsShortcutLabel,
   courseLessonsSidePanel = false,
+  courseLessonsBottomSheet = false,
   courseLessonsVideoWidthPercent = 60,
   chaptersPanelHost,
   courseTitle,
@@ -1055,6 +1058,7 @@ export function LessonVideoPlayer({
             courseLessonsSecondPressHold={courseLessonsSecondPressHold}
             courseLessonsShortcutLabel={courseLessonsShortcutLabel}
             courseLessonsSidePanel={courseLessonsSidePanel}
+            courseLessonsBottomSheet={courseLessonsBottomSheet}
             lessonTitle={lessonTitle}
             chaptersPanelHost={chaptersPanelHost}
             onAmbientEnabledChange={handleAmbientEnabledChange}
@@ -1095,11 +1099,7 @@ export function LessonVideoPlayer({
           ? false
           : undefined
       }
-      bufferingIndicator={
-        presentation === "mini" ? (
-          <LearningMiniPlayerBufferingIndicator />
-        ) : undefined
-      }
+      bufferingIndicator={<LearningMiniPlayerBufferingIndicator />}
     />
   );
 }

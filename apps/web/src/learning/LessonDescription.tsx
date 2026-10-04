@@ -15,6 +15,34 @@ export const DESCRIPTION_SURFACE = `rounded-xl ${DESCRIPTION_SURFACE_BASE}`;
 
 const DESCRIPTION_PREVIEW_TYPOGRAPHY = "text-sm leading-6 sm:text-[15px]";
 
+const DESCRIPTION_LINK_TEXT = "font-normal text-(--accent-ink,var(--accent))";
+
+const DESCRIPTION_PREVIEW_LINE_COUNT = 2;
+
+/**
+ * The collapsed preview keeps the description's own line breaks: each
+ * written line gets one row, and only the first couple are shown.
+ */
+function getDescriptionPreviewLines(markdown: string) {
+  return markdown
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .replace(/^[#\s>*-]+/, "")
+        .replace(/[`*_[\]()]/g, "")
+        .trim(),
+    )
+    .filter((line) => line.length > 0);
+}
+
+function LessonDescriptionHeading() {
+  return (
+    <h2 className="mt-0 mb-2 text-lg font-bold leading-tight text-(--text)">
+      Description
+    </h2>
+  );
+}
+
 function handleCollapsedKeyDown(
   event: KeyboardEvent<HTMLElement>,
   onExpand: () => void,
@@ -81,11 +109,22 @@ export function LessonDescription({
         accepted.has(`${declaration.startTime}\u0000${declaration.title}`),
     );
   }, [rawMarkdown]);
+  const previewLines = useMemo(
+    () => getDescriptionPreviewLines(rawMarkdown),
+    [rawMarkdown],
+  );
   const hasDescription = rawMarkdown.length > 0;
 
   if (!isLoading && !hasDescription) {
     return null;
   }
+
+  const visiblePreviewLines = previewLines.slice(
+    0,
+    DESCRIPTION_PREVIEW_LINE_COUNT,
+  );
+  const hasHiddenPreviewLines =
+    previewLines.length > visiblePreviewLines.length;
 
   const expand = () => {
     if (isLoading || !hasDescription) return;
@@ -134,59 +173,46 @@ export function LessonDescription({
         aria-hidden={expanded ? undefined : true}
         className="relative z-10"
       >
+        <LessonDescriptionHeading />
         {isLoading ? (
-          <div>
-            <h2 className="mt-0 mb-2 text-lg font-bold leading-tight text-(--text)">
-              Description
-            </h2>
-            <CenteredLoadingSpinner
-              label="Loading lesson description"
-              className="min-h-20 w-full"
-              size={20}
-            />
-          </div>
+          <CenteredLoadingSpinner
+            label="Loading lesson description"
+            className="min-h-20 w-full"
+            size={20}
+          />
         ) : expanded ? (
-          hasDescription ? (
-            <DiscussionMarkdown
-              content={draftContent}
-              label="Lesson description content"
-              chapterDeclarations={chapterDeclarations}
-              onSeekToTimestamp={onSeekToTimestamp}
-              preserveSoftBreaks
-              className="wrap-anywhere [&>:first-child]:mt-0"
-            />
-          ) : (
-            <p className="m-0 text-(--muted) text-sm italic">
-              No description provided for this lesson.
-            </p>
-          )
+          <DiscussionMarkdown
+            content={draftContent}
+            label="Lesson description content"
+            chapterDeclarations={chapterDeclarations}
+            onSeekToTimestamp={onSeekToTimestamp}
+            preserveSoftBreaks
+            className="wrap-anywhere [&>:first-child]:mt-0"
+          />
         ) : (
-          <div>
-            <h2 className="mt-0 mb-2 text-lg font-bold leading-tight text-(--text)">
-              Description
-            </h2>
-            <p
-              data-lesson-description-preview
-              className={`line-clamp-2 overflow-hidden ${DESCRIPTION_PREVIEW_TYPOGRAPHY} text-(--text-secondary) sm:line-clamp-3`}
-            >
-              <span>
-                {hasDescription
-                  ? rawMarkdown
-                      .replace(/^[#\s>*-]+/gm, "")
-                      .replace(/[`*_[\]()]/g, "")
-                      .trim()
-                  : "No description provided for this lesson."}
-              </span>{" "}
-              {hasDescription ? (
-                <span
-                  data-lesson-description-more
-                  aria-hidden="true"
-                  className="text-(--accent-ink,var(--accent))"
-                >
-                  more
-                </span>
-              ) : null}
-            </p>
+          <div
+            data-lesson-description-preview
+            className={`${DESCRIPTION_PREVIEW_TYPOGRAPHY} text-(--text-secondary)`}
+          >
+            {visiblePreviewLines.map((line, index) =>
+              index < visiblePreviewLines.length - 1 ? (
+                <p key={index} className="m-0 truncate">
+                  {line}
+                </p>
+              ) : (
+                <p key={index} className="m-0 flex min-w-0">
+                  <span className="min-w-0 truncate">
+                    {hasHiddenPreviewLines ? `${line}…` : line}
+                  </span>
+                  <span
+                    data-lesson-description-more
+                    className={`ml-1 shrink-0 ${DESCRIPTION_LINK_TEXT}`}
+                  >
+                    more
+                  </span>
+                </p>
+              ),
+            )}
           </div>
         )}
       </div>
@@ -199,7 +225,7 @@ export function LessonDescription({
             aria-controls={contentId}
             aria-label="Show less of the lesson description"
             onClick={() => collapse()}
-            className="inline rounded-lg pl-0 ml-0 pr-1 font-normal text-(--accent-ink,var(--accent)) transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+            className={`inline rounded-lg pl-0 ml-0 pr-1 ${DESCRIPTION_LINK_TEXT} transition-colors hover:text-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)`}
           >
             Show less
           </button>

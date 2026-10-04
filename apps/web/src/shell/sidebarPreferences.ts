@@ -188,7 +188,7 @@ export const getSidebarPresentationBootstrapScript = () =>
   `(()=>{const r=document.documentElement;try{const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");r.dataset.collapsedTooltips=String(p.showCollapsedLabels!==false);r.dataset.collapsedSidebarLogo=String(p.showCollapsedLogo!==false);r.dataset.activeFill=String(p.highlightActive!==false);r.dataset.sidebarMonochromeMode=p.monochromeMode==="neutral"||p.monochromeMode==="custom"?p.monochromeMode:"theme";r.style.setProperty("--sidebar-monochrome-color",typeof p.monochromeColor==="string"&&p.monochromeColor?p.monochromeColor:"#6c78ff")}catch{r.dataset.collapsedTooltips="true";r.dataset.collapsedSidebarLogo="true";r.dataset.activeFill="true";r.dataset.sidebarMonochromeMode="theme";r.style.setProperty("--sidebar-monochrome-color","#6c78ff")}})();`;
 
 export const getDefaultSidebarPreferences = (): SidebarPreferences => ({
-  iconStyle: "monochrome",
+  iconStyle: "multicolor",
   monochromeMode: "theme",
   monochromeColor: "#6c78ff",
   contentLayout: "framed",
@@ -200,6 +200,7 @@ export const getDefaultSidebarPreferences = (): SidebarPreferences => ({
   showCollapsedLabels: true,
   showCollapsedLogo: true,
   showSidebarOnMobile: false,
+  showResizeDimensions: false,
   glowPalette: SIDEBAR_GLOW_DEFAULT,
   glowShape: SIDEBAR_GLOW_SHAPE_DEFAULT,
   glowShapeSize: SIDEBAR_GLOW_SHAPE_SIZE_DEFAULT,
@@ -234,8 +235,9 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
     // missing preference to the new fallback.
     const needsHeaderDefaultMigration =
       !hasCurrentHeaderDefault && storedPreferences.headerLayout === undefined;
-    preferences.headerLayout =
-      storedPreferences.headerLayout === "fixed" ? "fixed" : "inline";
+    // The "fixed" header layout no longer has a setting, so a stored value
+    // from before is reset.
+    preferences.headerLayout = "inline";
     preferences.glowPalette = normalizeSidebarGlow(
       storedPreferences.glowPalette,
     );
@@ -292,8 +294,11 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
       localStorage.getItem("veolms-sidebar-icon-default-version") ===
       SIDEBAR_ICON_DEFAULT_VERSION;
     const needsIconMigration = !hasCurrentIconDefault;
+    // The marker's name dates from when monochrome was the default. A
+    // browser without it has never had the icon defaults applied, so it gets
+    // the current default; one that has it keeps whatever is stored.
     if (needsIconMigration) {
-      preferences.iconStyle = "monochrome";
+      preferences.iconStyle = "multicolor";
       preferences.monochromeMode = "theme";
     }
 

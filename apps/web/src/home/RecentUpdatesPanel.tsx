@@ -135,9 +135,7 @@ export function RecentUpdatesPanel({
                         navigate(
                           getCoursePlayerPath(
                             course.courseSlug,
-                            "home",
                             lesson.lessonNumber,
-                            "/home",
                           ),
                         )
                       }

@@ -6,19 +6,22 @@ export interface AcademyTheme {
   darkInk: boolean;
 }
 
+// The order here is the order everywhere themes are listed: the appearance
+// settings, the sidebar's colour menu and the theme rotation pool. The first
+// entry is the default theme.
 export const academyThemes: readonly AcademyTheme[] = [
-  {
-    id: "codex",
-    name: "Veo Onyx",
-    note: "Default - charcoal & soft white",
-    preview: "#f4f4f5",
-    darkInk: true,
-  },
   {
     id: "ocean",
     name: "Ocean Blue",
-    note: "Clear & confident",
+    note: "Default - clear & confident",
     preview: "#7193ff",
+    darkInk: true,
+  },
+  {
+    id: "codex",
+    name: "Veo Onyx",
+    note: "Charcoal & soft white",
+    preview: "#f4f4f5",
     darkInk: true,
   },
   {
@@ -126,7 +129,7 @@ export interface ThemeRotationPreferences {
   pool: string[];
 }
 
-export const DEFAULT_ACADEMY_THEME = "codex";
+export const DEFAULT_ACADEMY_THEME = "ocean";
 export const ACADEMY_THEME_VERSION = "veo-onyx-default-v2";
 
 const THEME_KEY = "veolms-academy-theme";

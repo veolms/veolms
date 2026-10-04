@@ -205,6 +205,9 @@ export default defineConfig(({ command, mode }) => {
         // their default export is missing when served as native ESM.
         "iso-639-1",
         "qrcode.react",
+        // The analytics charts. Recharts imports CommonJS lodash modules
+        // (`lodash/get` and others) by their default export.
+        "recharts",
         "@veolms/video-player > shaka-player",
       ],
       holdUntilCrawlEnd: false,
