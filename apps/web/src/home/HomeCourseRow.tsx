@@ -121,6 +121,7 @@ export function HomeCourseRow({
         <button
           type="button"
           className="home-course-row__control home-course-row__control--previous"
+          data-triple-tap-ignore=""
           aria-label={"Scroll " + label + " courses left"}
           aria-controls={id}
           disabled={!scrollState.canScrollPrevious}
@@ -131,12 +132,15 @@ export function HomeCourseRow({
             scrollByCard(-1);
           }}
         >
-          <CaretLeft size={20} weight="bold" aria-hidden="true" />
+          <span className="home-course-row__control-circle" aria-hidden="true">
+            <CaretLeft size={20} weight="bold" aria-hidden="true" />
+          </span>
         </button>
 
         <button
           type="button"
           className="home-course-row__control home-course-row__control--next"
+          data-triple-tap-ignore=""
           aria-label={"Scroll " + label + " courses right"}
           aria-controls={id}
           disabled={!scrollState.canScrollNext}
@@ -147,7 +151,9 @@ export function HomeCourseRow({
             scrollByCard(1);
           }}
         >
-          <CaretRight size={20} weight="bold" aria-hidden="true" />
+          <span className="home-course-row__control-circle" aria-hidden="true">
+            <CaretRight size={20} weight="bold" aria-hidden="true" />
+          </span>
         </button>
       </div>
     </div>

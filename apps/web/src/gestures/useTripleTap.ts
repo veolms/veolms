@@ -12,6 +12,13 @@ interface ActiveTap {
   startedAt: number;
 }
 
+function isTripleTapIgnoredTarget(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    target.closest("[data-triple-tap-ignore]") !== null
+  );
+}
+
 export function useTripleTap(onTripleTap: () => void) {
   const onTripleTapRef = useRef(onTripleTap);
   onTripleTapRef.current = onTripleTap;
@@ -33,6 +40,11 @@ export function useTripleTap(onTripleTap: () => void) {
 
     const onPointerDown = (event: PointerEvent) => {
       if (!event.isPrimary || event.button !== 0) return;
+      if (isTripleTapIgnoredTarget(event.target)) {
+        activeTap = null;
+        recentTaps = [];
+        return;
+      }
       activeTap = {
         pointerId: event.pointerId,
         pointerType: event.pointerType,
@@ -56,6 +68,11 @@ export function useTripleTap(onTripleTap: () => void) {
     };
 
     const onPointerUp = (event: PointerEvent) => {
+      if (isTripleTapIgnoredTarget(event.target)) {
+        activeTap = null;
+        recentTaps = [];
+        return;
+      }
       const tap = activeTap;
       if (!tap || tap.pointerId !== event.pointerId) return;
       activeTap = null;

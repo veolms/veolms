@@ -57,8 +57,24 @@
   transition:
     color 150ms ease,
     opacity 150ms ease,
-    transform 150ms ease,
     background 150ms ease;
+}
+
+.home-course-row__control-circle {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid
+    color-mix(in srgb, var(--border-strong) 76%, var(--text) 24%);
+  border-radius: 50%;
+  background: var(--surface-strong);
+  color: inherit;
+  pointer-events: none;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
 }
 
 .home-course-row__control--previous {
@@ -95,6 +111,13 @@
   opacity: 1;
 }
 
+.home-course-row__control:hover:not(:disabled) .home-course-row__control-circle,
+.home-course-row__control:focus-visible:not(:disabled)
+  .home-course-row__control-circle {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-strong));
+  background: color-mix(in srgb, var(--surface-strong) 88%, var(--accent) 12%);
+}
+
 .home-course-row__control:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
   outline-offset: -2px;
@@ -106,13 +129,17 @@
   pointer-events: none;
 }
 
-.home-course-row__control--previous:hover:not(:disabled),
-.home-course-row__control--previous:focus-visible:not(:disabled) {
+.home-course-row__control--previous:hover:not(:disabled)
+  .home-course-row__control-circle,
+.home-course-row__control--previous:focus-visible:not(:disabled)
+  .home-course-row__control-circle {
   transform: translateX(-3px);
 }
 
-.home-course-row__control--next:hover:not(:disabled),
-.home-course-row__control--next:focus-visible:not(:disabled) {
+.home-course-row__control--next:hover:not(:disabled)
+  .home-course-row__control-circle,
+.home-course-row__control--next:focus-visible:not(:disabled)
+  .home-course-row__control-circle {
   transform: translateX(3px);
 }
 
