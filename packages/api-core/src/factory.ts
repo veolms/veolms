@@ -146,7 +146,12 @@ export async function createVeoLMSApi<
   registerErrorHandler(app);
 
   app.addHook("preSerialization", async (request, reply, payload) => {
-    if (request.url.startsWith("/docs")) {
+    if (
+      request.url.startsWith("/docs") ||
+      request.routeOptions?.config?.rawResponse ||
+      reply.getHeader("x-veolms-raw-response") === "true" ||
+      Buffer.isBuffer(payload)
+    ) {
       return payload;
     }
 

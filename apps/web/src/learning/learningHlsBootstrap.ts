@@ -54,7 +54,8 @@ export function readLearningHlsBootstrapFromDocument(
     .querySelector(`meta[name="${LEARNING_HLS_MANIFEST_META_NAME}"]`)
     ?.getAttribute("content")
     ?.trim();
-  if (!manifestUrl || !/\.m3u8(?:$|[?#])/i.test(manifestUrl)) return null;
+  if (!manifestUrl || !/\.(?:m3u8|mpd)(?:$|[?#])/i.test(manifestUrl))
+    return null;
   const mediaKey =
     root
       .querySelector(`meta[name="${LEARNING_HLS_MEDIA_KEY_META_NAME}"]`)
