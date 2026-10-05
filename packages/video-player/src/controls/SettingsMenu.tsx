@@ -62,10 +62,20 @@ export function SettingsMenu({
         left.view === right.view,
     );
 
+  const activeQuality =
+    media.qualities.find((item) => item.active) ??
+    media.qualities.find((item) => item.id === media.selectedQualityId);
+  const selectedQuality = media.qualities.find(
+    (item) => item.id === media.selectedQualityId,
+  );
+
+  const autoQualityLabel = activeQuality?.label
+    ? `Auto (${activeQuality.label})`
+    : "Auto";
+
   const qualityLabel = media.autoQuality
-    ? "Auto"
-    : (media.qualities.find((item) => item.id === media.selectedQualityId)
-        ?.label ?? "Auto");
+    ? autoQualityLabel
+    : (selectedQuality?.label ?? activeQuality?.label ?? "Auto");
   const audioLabel =
     media.audioTracks.find((item) => item.id === media.selectedAudioTrackId)
       ?.label ??
@@ -221,7 +231,7 @@ export function SettingsMenu({
           {view === "quality" ? (
             <>
               <PlayerMenuItem
-                label="Auto"
+                label={media.autoQuality ? autoQualityLabel : "Auto"}
                 selected={media.autoQuality}
                 onClick={() => {
                   controller.selectQuality(null);
@@ -241,7 +251,8 @@ export function SettingsMenu({
                     label={quality.label}
                     selected={
                       !media.autoQuality &&
-                      quality.id === media.selectedQualityId
+                      (quality.id === media.selectedQualityId ||
+                        quality.label === selectedQuality?.label)
                     }
                     onClick={() => {
                       controller.selectQuality(quality.id);
