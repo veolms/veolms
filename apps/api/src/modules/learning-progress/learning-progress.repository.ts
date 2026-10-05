@@ -63,7 +63,14 @@ export async function getAverageProgressAndCompletionRate(
   filters: { courseId?: string | string[]; asOf?: Date } = {},
 ): Promise<{ averageProgressPercent: number; completionRate: number }> {
   const courseIds = toIdList(filters.courseId);
-  let query = database
+
+  // Both reductions happen in SQL. The previous shape returned one row per
+  // (user, course) pair and reduced in JS — tens of thousands of rows PER
+  // CALL at modest scale, and the dashboard/overview issue several of
+  // these per request (measured: 1,200ms row-shipping vs 105ms SQL-side on
+  // a 1M-row dataset). The math is identical: average of per-(user,course)
+  // averages, completion = share of pairs at >= 100.
+  let inner = database
     .selectFrom("learning_progress")
     .select([
       "user_id",
@@ -72,22 +79,74 @@ export async function getAverageProgressAndCompletionRate(
     ])
     .groupBy(["user_id", "course_id"]);
   if (courseIds.length > 0) {
-    query = query.where("course_id", "in", courseIds);
+    inner = inner.where("course_id", "in", courseIds);
   }
   if (filters.asOf) {
-    query = query.where("created_at", "<=", filters.asOf);
+    inner = inner.where("created_at", "<=", filters.asOf);
   }
 
-  const rows = await query.execute();
-  if (rows.length === 0) {
-    return { averageProgressPercent: 0, completionRate: 0 };
-  }
-  const total = rows.reduce((sum, row) => sum + Number(row.avg_percent), 0);
-  const completed = rows.filter((row) => Number(row.avg_percent) >= 100).length;
+  const row = await database
+    .selectFrom(inner.as("per_user_course"))
+    .select([
+      sql<number>`coalesce(avg(avg_percent), 0)`.as("average_progress"),
+      sql<number>`coalesce(
+        100.0 * count(*) filter (where avg_percent >= 100) / nullif(count(*), 0),
+        0
+      )`.as("completion_rate"),
+    ])
+    .executeTakeFirst();
+
   return {
-    averageProgressPercent: total / rows.length,
-    completionRate: (completed / rows.length) * 100,
+    averageProgressPercent: Number(row?.average_progress ?? 0),
+    completionRate: Number(row?.completion_rate ?? 0),
   };
+}
+
+/**
+ * Per-course variant of getAverageProgressAndCompletionRate, one grouped
+ * query for the whole id list — the course-performance table previously
+ * called the scalar variant once per course.
+ */
+export async function getAverageProgressAndCompletionRateByCourse(
+  database: LearningProgressExecutor,
+  courseId: string | string[],
+): Promise<
+  Array<{
+    courseId: string;
+    averageProgressPercent: number;
+    completionRate: number;
+  }>
+> {
+  const courseIds = toIdList(courseId);
+  if (courseIds.length === 0) return [];
+
+  const inner = database
+    .selectFrom("learning_progress")
+    .select([
+      "course_id",
+      "user_id",
+      sql<number>`avg(progress_percent)`.as("avg_percent"),
+    ])
+    .where("course_id", "in", courseIds)
+    .groupBy(["course_id", "user_id"]);
+
+  const rows = await database
+    .selectFrom(inner.as("per_user_course"))
+    .select([
+      "course_id",
+      sql<number>`avg(avg_percent)`.as("average_progress"),
+      sql<number>`100.0 * count(*) filter (where avg_percent >= 100) / count(*)`.as(
+        "completion_rate",
+      ),
+    ])
+    .groupBy("course_id")
+    .execute();
+
+  return rows.map((row) => ({
+    courseId: row.course_id,
+    averageProgressPercent: Number(row.average_progress),
+    completionRate: Number(row.completion_rate),
+  }));
 }
 
 export async function getAverageProgressByCourse(
@@ -97,7 +156,9 @@ export async function getAverageProgressByCourse(
   const courseIds = toIdList(filters.courseId);
   if (courseIds.length === 0) return [];
 
-  const rows = await database
+  // Outer average computed in SQL — see getAverageProgressAndCompletionRate
+  // for why (this used to ship one row per user x course to Node).
+  const inner = database
     .selectFrom("learning_progress")
     .select([
       "course_id",
@@ -105,20 +166,17 @@ export async function getAverageProgressByCourse(
       sql<number>`avg(progress_percent)`.as("avg_percent"),
     ])
     .where("course_id", "in", courseIds)
-    .groupBy(["course_id", "user_id"])
+    .groupBy(["course_id", "user_id"]);
+
+  const rows = await database
+    .selectFrom(inner.as("per_user_course"))
+    .select(["course_id", sql<number>`avg(avg_percent)`.as("average_progress")])
+    .groupBy("course_id")
     .execute();
 
-  const totals = new Map<string, { total: number; count: number }>();
-  for (const row of rows) {
-    const current = totals.get(row.course_id) ?? { total: 0, count: 0 };
-    current.total += Number(row.avg_percent);
-    current.count += 1;
-    totals.set(row.course_id, current);
-  }
-
-  return Array.from(totals, ([courseId, value]) => ({
-    courseId,
-    averageProgressPercent: value.total / value.count,
+  return rows.map((row) => ({
+    courseId: row.course_id,
+    averageProgressPercent: Number(row.average_progress),
   }));
 }
 

@@ -370,9 +370,16 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         ? topByEnrollment.map((row) => row.courseId)
         : courses.map((course) => course.id).slice(0, TOP_COURSES_LIMIT);
 
-    return await Promise.all(
-      targetIds.map(async (courseId) => {
-        const [orderStats, progress] = await Promise.all([
+    // Progress for all target courses in ONE grouped query (this used to
+    // run the scalar aggregate once per course); order stats stay per
+    // course because each is a cheap filtered aggregate and the currency
+    // must be pinned per row — see the comment below.
+    const [progressByCourse, orderStatsList] = await Promise.all([
+      learningProgressService
+        .getAverageProgressAndCompletionRateByCourse(targetIds)
+        .then((rows) => new Map(rows.map((row) => [row.courseId, row]))),
+      Promise.all(
+        targetIds.map((courseId) =>
           // `currency` pinned so every row in the table is expressed in the
           // same currency as the headline totals — without it, each course
           // would independently resolve to whichever currency it sells the
@@ -384,20 +391,22 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
             to,
             currency,
           }),
-          learningProgressService.getAverageProgressAndCompletionRate({
-            courseId,
-          }),
-        ]);
-        return {
-          courseId,
-          title: titleById.get(courseId) ?? "Untitled course",
-          enrollments: enrollmentByCourse.get(courseId) ?? 0,
-          netRevenue: orderStats.grossPaid - orderStats.refundedAgainstPaid,
-          completionRate: progress.completionRate,
-          averageProgressPercent: progress.averageProgressPercent,
-        };
-      }),
-    );
+        ),
+      ),
+    ]);
+
+    return targetIds.map((courseId, index) => {
+      const orderStats = orderStatsList[index]!;
+      const progress = progressByCourse.get(courseId);
+      return {
+        courseId,
+        title: titleById.get(courseId) ?? "Untitled course",
+        enrollments: enrollmentByCourse.get(courseId) ?? 0,
+        netRevenue: orderStats.grossPaid - orderStats.refundedAgainstPaid,
+        completionRate: progress?.completionRate ?? 0,
+        averageProgressPercent: progress?.averageProgressPercent ?? 0,
+      };
+    });
   }
 
   async function buildOverview(
@@ -828,16 +837,83 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     };
   }
 
+  /**
+   * Short-TTL response cache (same pattern as order.service's stats cache,
+   * including in-flight promise dedupe so concurrent identical requests
+   * share one computation). Analytics responses are aggregate snapshots;
+   * serving one up to 30s old is an accepted tradeoff — without it, every
+   * dashboard poll re-runs ~15 full-table aggregates, and a single admin
+   * tab was measured degrading all other traffic ~10x. Keys include the
+   * actor's id and sorted roles, so a permission change can widen/narrow
+   * the scope at most one TTL late.
+   */
+  const RESPONSE_CACHE_TTL_MS = 30_000;
+  const RESPONSE_CACHE_MAX_ENTRIES = 100;
+  const responseCache = new Map<
+    string,
+    { expiresAt: number; promise: Promise<unknown> }
+  >();
+
+  function cachedResponse<T>(key: string, build: () => Promise<T>): Promise<T> {
+    const now = Date.now();
+    const hit = responseCache.get(key);
+    if (hit && hit.expiresAt > now) {
+      return hit.promise as Promise<T>;
+    }
+    if (
+      responseCache.size >= RESPONSE_CACHE_MAX_ENTRIES &&
+      !responseCache.has(key)
+    ) {
+      const oldest = responseCache.keys().next().value;
+      if (oldest !== undefined) responseCache.delete(oldest);
+    }
+    const promise = build().catch((error: unknown) => {
+      // Never cache a failure.
+      responseCache.delete(key);
+      throw error;
+    });
+    responseCache.set(key, {
+      expiresAt: now + RESPONSE_CACHE_TTL_MS,
+      promise,
+    });
+    return promise;
+  }
+
+  function actorKey(actor: AnalyticsActor): string {
+    return `${actor.id}:${[...actor.roles].sort().join(",")}`;
+  }
+
+  function overviewKey(
+    actor: AnalyticsActor,
+    query: AnalyticsFilterQuery,
+  ): string {
+    return [
+      "overview",
+      actorKey(actor),
+      query.courseId ?? "",
+      query.from?.toISOString() ?? "",
+      query.to?.toISOString() ?? "",
+    ].join("|");
+  }
+
   return {
     adminOverview: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
-      buildOverview(actor, query),
+      cachedResponse(overviewKey(actor, query), () =>
+        buildOverview(actor, query),
+      ),
     instructorOverview: (actor: AnalyticsActor, query: AnalyticsFilterQuery) =>
-      buildOverview(actor, query),
+      cachedResponse(overviewKey(actor, query), () =>
+        buildOverview(actor, query),
+      ),
     dashboard: (
       actor: AnalyticsActor,
       dashboardScope: AnalyticsDashboardScope,
       range: DashboardRange = "30d",
-    ) => buildDashboard(actor, dashboardScope, range),
+    ) =>
+      cachedResponse(
+        ["dashboard", actorKey(actor), dashboardScope, range].join("|"),
+        () => buildDashboard(actor, dashboardScope, range),
+      ),
   };
 }
 
