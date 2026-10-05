@@ -37,6 +37,45 @@
   margin: 14px 14px 0;
 }
 
+.home-course-section > .dashboard-section-heading h2 {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.home-course-section > .dashboard-section-heading button {
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.home-course-section
+  > .dashboard-section-heading
+  > .dashboard-section-heading__copy {
+  min-width: 0;
+}
+
+.home-course-section > .dashboard-section-heading--with-subtitle {
+  align-items: center;
+}
+
+.home-course-section
+  > .dashboard-section-heading
+  > .dashboard-section-heading__copy
+  > .dashboard-section-heading__subtitle {
+  min-width: 0;
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-course-section > .dashboard-section-heading--with-subtitle > button {
+  padding-top: 0;
+}
+
 .home-course-section__row,
 .home-course-section > .home-mini-course-grid {
   min-width: 0;

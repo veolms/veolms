@@ -34,6 +34,7 @@ export interface CourseCardProps {
   course: Course;
   role: CourseRole;
   variant?: "catalogue" | "public";
+  publicAction?: "view" | "enroll";
   wishlisted: boolean;
   onWishlist: (course: Course) => void;
   onOpen: (course: Course) => void;
@@ -59,6 +60,7 @@ export function CourseCard({
   course,
   role,
   variant = "catalogue",
+  publicAction = "view",
   wishlisted,
   onWishlist,
   onOpen,
@@ -80,6 +82,7 @@ export function CourseCard({
   currentUserId,
 }: CourseCardProps) {
   const isPublic = variant === "public";
+  const isPublicEnrollmentAction = isPublic && publicAction === "enroll";
   const canEdit =
     isAdmin ||
     (Boolean(currentUserId) &&
@@ -137,14 +140,18 @@ export function CourseCard({
   };
 
   const thumbnailActionLabel = isPublic
-    ? `View ${course.title}`
+    ? isPublicEnrollmentAction
+      ? `Enroll in ${course.title}`
+      : `View ${course.title}`
     : role === "creator"
       ? `Play ${course.title}`
       : course.enrolled
         ? `${progress > 0 && progress < 100 ? "Resume" : progress >= 100 ? "Review" : "Start"} ${course.title}`
         : `Play free preview for ${course.title}`;
   const thumbnailActionTooltip = isPublic
-    ? "View Course"
+    ? isPublicEnrollmentAction
+      ? "Enroll Now"
+      : "View Course"
     : role === "creator"
       ? "Play Course"
       : course.enrolled
@@ -636,7 +643,7 @@ export function CourseCard({
                       />
                       <span className="truncate">Continue Learning</span>
                     </>
-                  ) : isPublic ? (
+                  ) : isPublic && !isPublicEnrollmentAction ? (
                     <>
                       <ListBullets
                         className="shrink-0"
@@ -689,10 +696,12 @@ export function CourseCard({
 export function PublicCourseCard({
   course,
   onNavigatePage,
+  publicAction = "view",
   imagePriority = false,
 }: {
   course: Course;
   onNavigatePage: (destination: string) => void;
+  publicAction?: "view" | "enroll";
   imagePriority?: boolean;
 }) {
   return (
@@ -700,6 +709,7 @@ export function PublicCourseCard({
       course={course}
       role="student"
       variant="public"
+      publicAction={publicAction}
       wishlisted={false}
       onWishlist={() => undefined}
       onOpen={() => undefined}

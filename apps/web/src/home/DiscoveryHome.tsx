@@ -3,7 +3,6 @@ import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
 import { useMemo } from "react";
-import { useNavigate } from "react-router";
 import { PublicCourseCard } from "../courses/CourseCard";
 import { CourseCardSkeleton } from "../courses/CourseCardSkeleton";
 import { courseCatalogueHorizontalRowClasses } from "../courses/CourseCatalogueSkeleton";
@@ -18,11 +17,13 @@ import { useHomeTimeGreeting } from "./homeGreeting";
 import "../styles/features/student-learning.css";
 import "../styles/features/home.css";
 import "../styles/features/guest-home.css";
+import "../styles/features/dashboard-discussion-preview.css";
 
 export type DiscoveryHomeMode = "guest" | "authenticated";
 
 interface DiscoveryHomeProps {
   mode: DiscoveryHomeMode;
+  onNavigatePage: (destination: string) => void;
   studentName?: string;
   accessibleCourseIds?: ReadonlySet<string>;
   onDiscussionNavigatePage?: NavigateTo;
@@ -72,6 +73,8 @@ function DiscoveryCourseSection({
   isFetching,
   onRetry,
   onNavigatePage,
+  publicAction,
+  subtitle,
   viewAllLabel = "View all",
 }: {
   title: string;
@@ -81,6 +84,8 @@ function DiscoveryCourseSection({
   isFetching: boolean;
   onRetry: () => void;
   onNavigatePage: (destination: string) => void;
+  publicAction: "view" | "enroll";
+  subtitle?: string;
   viewAllLabel?: string;
 }) {
   const sectionId =
@@ -95,6 +100,7 @@ function DiscoveryCourseSection({
         icon={BookOpen}
         title={title}
         id={sectionId}
+        subtitle={subtitle}
         action={viewAllLabel}
         onAction={() => onNavigatePage("/courses")}
       />
@@ -134,6 +140,7 @@ function DiscoveryCourseSection({
                 key={course.id}
                 course={adaptCourseSummaryToCatalogueCourse(course)}
                 imagePriority={index < 2}
+                publicAction={publicAction}
                 onNavigatePage={onNavigatePage}
               />
             ))
@@ -144,7 +151,10 @@ function DiscoveryCourseSection({
   );
 }
 
-function DiscoveryHomeHeader({ mode, studentName }: DiscoveryHomeProps) {
+function DiscoveryHomeHeader({
+  mode,
+  studentName,
+}: Pick<DiscoveryHomeProps, "mode" | "studentName">) {
   const displayName = studentName?.trim() || "there";
   const timeGreeting = useHomeTimeGreeting();
 
@@ -205,6 +215,7 @@ function DiscoveryEnrollmentBanner({ onExplore }: { onExplore: () => void }) {
 
 export function DiscoveryHome({
   mode,
+  onNavigatePage,
   studentName,
   accessibleCourseIds,
   onDiscussionNavigatePage,
@@ -212,7 +223,6 @@ export function DiscoveryHome({
 }: DiscoveryHomeProps) {
   const discoveryQuery = useHomeDiscovery();
   const discussionsQuery = usePopularDiscussions();
-  const navigate = useNavigate();
   const discovery = discoveryQuery.data;
   const discussions = useMemo(
     () => discussionsQuery.data?.discussions ?? [],
@@ -226,7 +236,9 @@ export function DiscoveryHome({
       <div className="home-dashboard-grid guest-home__layout">
         <div className="guest-home__course-column">
           {mode === "authenticated" ? (
-            <DiscoveryEnrollmentBanner onExplore={() => navigate("/courses")} />
+            <DiscoveryEnrollmentBanner
+              onExplore={() => onNavigatePage("/courses")}
+            />
           ) : null}
           <DiscoveryCourseSection
             title="Popular Courses"
@@ -235,7 +247,9 @@ export function DiscoveryHome({
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
             onRetry={() => void discoveryQuery.refetch()}
-            onNavigatePage={(destination) => navigate(destination)}
+            onNavigatePage={onNavigatePage}
+            publicAction={mode === "authenticated" ? "enroll" : "view"}
+            subtitle="Explore courses learners are enjoying right now."
           />
           <DiscoveryCourseSection
             title="Free Courses"
@@ -244,7 +258,9 @@ export function DiscoveryHome({
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
             onRetry={() => void discoveryQuery.refetch()}
-            onNavigatePage={(destination) => navigate(destination)}
+            onNavigatePage={onNavigatePage}
+            publicAction={mode === "authenticated" ? "enroll" : "view"}
+            subtitle="Start learning with courses available at no cost."
             viewAllLabel="Explore all"
           />
           <DiscoveryCourseSection
@@ -254,7 +270,9 @@ export function DiscoveryHome({
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
             onRetry={() => void discoveryQuery.refetch()}
-            onNavigatePage={(destination) => navigate(destination)}
+            onNavigatePage={onNavigatePage}
+            publicAction={mode === "authenticated" ? "enroll" : "view"}
+            subtitle="Discover the latest courses added to the catalogue."
           />
         </div>
 

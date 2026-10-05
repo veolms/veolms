@@ -10,6 +10,7 @@ export function GuestHome({
   return (
     <DiscoveryHome
       mode="guest"
+      onNavigatePage={onNavigatePage}
       accessibleCourseIds={new Set()}
       onDiscussionNavigatePage={onNavigatePage}
       onDiscussionAccessDenied={() =>
