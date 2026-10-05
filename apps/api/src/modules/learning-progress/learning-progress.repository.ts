@@ -260,6 +260,9 @@ export interface DailyActivityAccrual {
   /** Day totals AFTER this batch (not the batch's own contribution). */
   seconds: number;
   completions: number;
+  /** Day totals BEFORE this batch (0 on the day's first credit). */
+  previous_seconds: number;
+  previous_completions: number;
 }
 
 /**
@@ -345,9 +348,11 @@ export async function upsertProgressAndAccrueActivity(
       seconds = learning_daily_activity.seconds + EXCLUDED.seconds,
       completions = learning_daily_activity.completions + EXCLUDED.completions
     returning
-      to_char(activity_date, 'YYYY-MM-DD') as activity_date,
-      seconds,
-      completions
+      to_char(new.activity_date, 'YYYY-MM-DD') as activity_date,
+      new.seconds as seconds,
+      new.completions as completions,
+      coalesce(old.seconds, 0) as previous_seconds,
+      coalesce(old.completions, 0) as previous_completions
   `.execute(database);
 
   const accrual = result.rows[0];
@@ -356,6 +361,8 @@ export async function upsertProgressAndAccrueActivity(
     activity_date: accrual.activity_date,
     seconds: Number(accrual.seconds),
     completions: Number(accrual.completions),
+    previous_seconds: Number(accrual.previous_seconds),
+    previous_completions: Number(accrual.previous_completions),
   };
 }
 

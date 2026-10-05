@@ -24,7 +24,9 @@ export type NotificationTemplateKey =
   | "moderation.report_resolved"
   | "quiz.attempt_passed"
   | "quiz.attempt_failed_final"
-  | "quiz.assigned";
+  | "quiz.assigned"
+  | "learning.goal_completed"
+  | "learning.streak_milestone";
 
 export type NotificationTemplateData = Record<
   string,

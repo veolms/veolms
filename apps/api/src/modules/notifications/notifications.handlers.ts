@@ -7,6 +7,8 @@ import {
   coursePublishedEventSchema,
   discussionAnswerAcceptedEventSchema,
   discussionReplyCreatedEventSchema,
+  learningGoalCompletedEventSchema,
+  learningStreakMilestoneEventSchema,
   moderationContentModeratedEventSchema,
   moderationReportResolvedEventSchema,
   moderationUserSuspendedEventSchema,
@@ -406,7 +408,43 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       deepLink: event.deepLink,
     }));
   },
+  "learning.goal_completed": async (payload) => {
+    const event = learningGoalCompletedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "learning.goal_completed",
+        category: "learning",
+        templateKey: "learning.goal_completed",
+        templateData: { goalLabel: formatGoalLabel(event.dailyGoalMinutes) },
+        channels: commonChannels,
+        mandatory: false,
+        deepLink: "/",
+      },
+    ];
+  },
+  "learning.streak_milestone": async (payload) => {
+    const event = learningStreakMilestoneEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "learning.streak_milestone",
+        category: "learning",
+        templateKey: "learning.streak_milestone",
+        templateData: { streakDays: event.streakDays },
+        channels: commonChannels,
+        mandatory: false,
+        deepLink: "/",
+      },
+    ];
+  },
 };
+
+function formatGoalLabel(minutes: number): string {
+  if (minutes < 60) return `${minutes}-minute`;
+  const hours = minutes / 60;
+  return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}-hour`;
+}
 
 export async function createNotificationIntents(
   eventType: string,

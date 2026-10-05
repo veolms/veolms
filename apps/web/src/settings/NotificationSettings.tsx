@@ -30,6 +30,8 @@ const optionalNotificationTypes = [
   "assignment.reminder",
   "learning.reminder",
   "certificate.generated",
+  "learning.goal_completed",
+  "learning.streak_milestone",
 ] as const;
 
 const courseUpdateTypes = [
@@ -43,7 +45,11 @@ const discussionTypes = [
   "qa.answered",
 ] as const;
 const reminderTypes = ["assignment.reminder", "learning.reminder"] as const;
-const achievementTypes = ["certificate.generated"] as const;
+const achievementTypes = [
+  "certificate.generated",
+  "learning.goal_completed",
+  "learning.streak_milestone",
+] as const;
 const channels = ["in_app", "email"] as const;
 
 function preferenceKey(type: string, channel: NotificationChannel): string {
