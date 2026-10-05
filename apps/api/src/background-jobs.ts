@@ -11,6 +11,7 @@ import {
   type PaymentEventQueue,
 } from "./modules/commerce/webhooks/payment-event.queue.ts";
 import { CommerceFulfillmentScheduler } from "./modules/commerce/fulfillment/fulfillment.scheduler.ts";
+import { LearningReminderWorker } from "./modules/learning-progress/learning-reminder.worker.ts";
 import { createNotificationProcessor } from "./modules/notifications/index.ts";
 import { getDatabasePoolMetrics } from "@veolms/database";
 import * as webhookRepo from "./modules/commerce/webhooks/webhook.repository.ts";
@@ -64,6 +65,12 @@ export function registerBackgroundJobs(
   });
   fulfillmentScheduler.start();
 
+  const learningReminderWorker = new LearningReminderWorker({
+    database,
+    logger: app.log,
+  });
+  learningReminderWorker.start();
+
   const stopNotificationLoop = config.NOTIFICATION_INLINE_WORKER
     ? startInlineNotificationLoop(app, database, services)
     : null;
@@ -76,6 +83,7 @@ export function registerBackgroundJobs(
     // Awaited so an in-flight reconciliation cycle finishes before the
     // shared Kysely instance is destroyed right after these hooks.
     await fulfillmentScheduler.stop();
+    await learningReminderWorker.stop();
     await stopNotificationLoop?.();
     stopHeartbeat?.();
   });

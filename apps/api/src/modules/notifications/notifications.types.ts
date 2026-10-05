@@ -26,7 +26,8 @@ export type NotificationTemplateKey =
   | "quiz.attempt_failed_final"
   | "quiz.assigned"
   | "learning.goal_completed"
-  | "learning.streak_milestone";
+  | "learning.streak_milestone"
+  | "learning.reminder";
 
 export type NotificationTemplateData = Record<
   string,
