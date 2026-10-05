@@ -12,6 +12,7 @@ export * from "./webhooks.schema.ts";
 export * from "./notifications.schema.ts";
 export * from "./json.schema.ts";
 export * from "./quizzes.schema.ts";
+export * from "./learning-goals.schema.ts";
 export * from "./learning-progress.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
@@ -116,6 +117,10 @@ import type {
   QuizAttemptTable,
   QuizAttemptAnswerTable,
 } from "./quizzes.schema.ts";
+import type {
+  LearningDailyActivityTable,
+  UserLearningSettingsTable,
+} from "./learning-goals.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 
 export interface Database {
@@ -210,7 +215,9 @@ export interface Database {
   course_quiz_access_grants: CourseQuizAccessGrantTable;
   quiz_attempts: QuizAttemptTable;
   quiz_attempt_answers: QuizAttemptAnswerTable;
+  learning_daily_activity: LearningDailyActivityTable;
   learning_progress: LearningProgressTable;
+  user_learning_settings: UserLearningSettingsTable;
 
   // Derived from lesson descriptions
   lesson_chapters: LessonChapterTable;
