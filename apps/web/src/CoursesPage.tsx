@@ -25,6 +25,7 @@ import type {
   CourseListResponse,
   CourseOverviewResponse,
   HomeDiscoveryResponse,
+  PublicPopularDiscussion,
 } from "@veolms/contracts";
 import {
   normalizeSettingsTab,
@@ -427,6 +428,7 @@ interface CoursesPageProps {
   initialPublishedCoursePageNeedsRefresh?: boolean;
   initialCourseOverview?: CourseOverviewResponse;
   initialHomeDiscovery?: HomeDiscoveryResponse;
+  initialHomePopularDiscussions?: PublicPopularDiscussion[];
   onOpenCourse: (
     course: Course | LearningCourse,
     options?: CourseOpenOptions,
@@ -915,6 +917,7 @@ export function CoursesPage({
   initialPublishedCoursePageNeedsRefresh = false,
   initialCourseOverview,
   initialHomeDiscovery,
+  initialHomePopularDiscussions,
   onOpenCourse,
   onNavigatePage,
   onNavigateBack,
@@ -4295,6 +4298,7 @@ export function CoursesPage({
                     onNavigatePage={onNavigatePage}
                     setNotice={setNotice}
                     initialDiscovery={initialHomeDiscovery}
+                    initialPopularDiscussions={initialHomePopularDiscussions}
                   />
                 </div>
                 <div className="session-pending-home">
@@ -4319,6 +4323,7 @@ export function CoursesPage({
                     onNavigatePage={onNavigatePage}
                     setNotice={setNotice}
                     initialDiscovery={initialHomeDiscovery}
+                    initialPopularDiscussions={initialHomePopularDiscussions}
                   />
                 ) : (
                   <AcademyPageFallback />
@@ -4330,6 +4335,7 @@ export function CoursesPage({
               onNavigatePage={onNavigatePage}
               setNotice={setNotice}
               initialDiscovery={initialHomeDiscovery}
+              initialPopularDiscussions={initialHomePopularDiscussions}
             />
           )}
         </Suspense>

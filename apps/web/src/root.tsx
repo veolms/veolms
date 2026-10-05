@@ -47,6 +47,19 @@ interface LayoutProps {
 
 const academyThemeIds = JSON.stringify(academyThemes.map(({ id }) => id));
 const videoPlaybackCdnOrigin = getVideoPlaybackCdnOrigin();
+// The API lives on its own origin in deployed builds. Opening that connection
+// while the document loads keeps the first API request (the session check)
+// from paying for DNS and TLS on top of its own round trip.
+const apiOrigin = (() => {
+  try {
+    const configured = import.meta.env.VITE_API_BASE_URL;
+    return configured && /^https?:\/\//u.test(configured)
+      ? new URL(configured).origin
+      : null;
+  } catch {
+    return null;
+  }
+})();
 const getAppearanceBootstrapScript = () =>
   `(()=>{const r=document.documentElement,p=${academyThemeIds};try{const t=localStorage.getItem("veolms-theme")||"dark";r.dataset.theme=t==="device"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t==="light"?"light":"dark"}catch{}try{const e=localStorage.getItem("veolms-randomize-academy-theme")==="true",s=sessionStorage.getItem("veolms-session-academy-theme"),l=localStorage.getItem("veolms-academy-theme"),c=localStorage.getItem("veolms-academy-theme-version")===${JSON.stringify(ACADEMY_THEME_VERSION)},v=e&&p.includes(s||"")?s:c&&p.includes(l||"")?l:${JSON.stringify(DEFAULT_ACADEMY_THEME)};r.dataset.palette=v}catch{}})();`;
 
@@ -200,6 +213,7 @@ export function Layout({ children }: LayoutProps) {
             crossOrigin="anonymous"
           />
         ) : null}
+        {apiOrigin ? <link rel="preconnect" href={apiOrigin} /> : null}
         <link rel="icon" type="image/svg+xml" href={procodrrLogoMark} />
         <link
           rel="preload"

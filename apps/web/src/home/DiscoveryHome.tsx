@@ -1,18 +1,29 @@
-import type { CourseSummary, HomeDiscoveryResponse } from "@veolms/contracts";
+import type {
+  CourseSummary,
+  HomeDiscoveryResponse,
+  PublicPopularDiscussion,
+} from "@veolms/contracts";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { PublicCourseCard } from "../courses/CourseCard";
 import { CourseCardSkeleton } from "../courses/CourseCardSkeleton";
-import { courseCatalogueHorizontalRowClasses } from "../courses/CourseCatalogueSkeleton";
+import {
+  courseCatalogueHorizontalRowClasses,
+  courseCatalogueStaticRowClasses,
+} from "../courses/CourseCatalogueSkeleton";
 import { adaptCourseSummaryToCatalogueCourse } from "../courses/courseAdapter";
 import { useHomeDiscovery } from "../services/home";
 import { usePopularDiscussions } from "../services/learning-interactions";
 import type { NavigateTo } from "../routing/navigation";
-import { HomeCourseRow } from "./HomeCourseRow";
+import { HomeCourseRow, HomeStaticCourseRow } from "./HomeCourseRow";
 import { HomeSectionHeader } from "./HomePresentation";
 import { PopularDiscussionsPanel } from "./PopularDiscussionsPanel";
+import {
+  GUEST_HOME_COURSES_PER_SECTION,
+  GUEST_HOME_DISCUSSION_COUNT,
+} from "./guestHomeLimits";
 import { useHomeTimeGreeting } from "./homeGreeting";
 import "../styles/features/student-learning.css";
 import "../styles/features/home.css";
@@ -29,6 +40,7 @@ interface DiscoveryHomeProps {
   onDiscussionNavigatePage?: NavigateTo;
   onDiscussionAccessDenied?: () => void;
   initialDiscovery?: HomeDiscoveryResponse;
+  initialPopularDiscussions?: PublicPopularDiscussion[];
 }
 
 function DiscoveryHomeState({
@@ -78,6 +90,8 @@ function DiscoveryCourseSection({
   subtitle,
   viewAllLabel = "View all",
   hideWhenEmpty = false,
+  staticRow = false,
+  prioritizeImages = true,
 }: {
   title: string;
   courses: readonly CourseSummary[];
@@ -90,6 +104,10 @@ function DiscoveryCourseSection({
   subtitle?: string;
   viewAllLabel?: string;
   hideWhenEmpty?: boolean;
+  /** A fixed grid of the given cards instead of the horizontal scroller. */
+  staticRow?: boolean;
+  /** Load the leading thumbnails eagerly; only the first section needs it. */
+  prioritizeImages?: boolean;
 }) {
   const sectionId =
     "guest-home-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -97,6 +115,38 @@ function DiscoveryCourseSection({
   if (hideWhenEmpty && !isLoading && !isError && courses.length === 0) {
     return null;
   }
+
+  const rowContent = isLoading ? (
+    Array.from({ length: 3 }, (_, index) => (
+      <CourseCardSkeleton
+        key={sectionId + "-skeleton-" + index}
+        variant="public"
+      />
+    ))
+  ) : isError ? (
+    <DiscoveryHomeState
+      title="Courses are unavailable right now"
+      message="We couldn't load this discovery section."
+      onRetry={onRetry}
+      isRetrying={isFetching}
+    />
+  ) : courses.length === 0 ? (
+    <DiscoveryHomeState
+      title={"No " + title.toLowerCase() + " yet"}
+      message="Check back soon for more courses to explore."
+    />
+  ) : (
+    courses.map((course, index) => (
+      <PublicCourseCard
+        key={course.id}
+        course={adaptCourseSummaryToCatalogueCourse(course)}
+        imagePriority={prioritizeImages && index < 2}
+        publicAction={publicAction}
+        onNavigatePage={onNavigatePage}
+        studentHome
+      />
+    ))
+  );
 
   return (
     <section
@@ -116,44 +166,24 @@ function DiscoveryCourseSection({
         className="guest-home__course-row min-w-0 max-w-full"
         data-course-grid-section
       >
-        <HomeCourseRow
-          id={sectionId + "-courses"}
-          label={title}
-          isBusy={isLoading || isFetching}
-          viewportClassName={courseCatalogueHorizontalRowClasses}
-        >
-          {isLoading ? (
-            Array.from({ length: 3 }, (_, index) => (
-              <CourseCardSkeleton
-                key={sectionId + "-skeleton-" + index}
-                variant="public"
-              />
-            ))
-          ) : isError ? (
-            <DiscoveryHomeState
-              title="Courses are unavailable right now"
-              message="We couldn't load this discovery section."
-              onRetry={onRetry}
-              isRetrying={isFetching}
-            />
-          ) : courses.length === 0 ? (
-            <DiscoveryHomeState
-              title={"No " + title.toLowerCase() + " yet"}
-              message="Check back soon for more courses to explore."
-            />
-          ) : (
-            courses.map((course, index) => (
-              <PublicCourseCard
-                key={course.id}
-                course={adaptCourseSummaryToCatalogueCourse(course)}
-                imagePriority={index < 2}
-                publicAction={publicAction}
-                onNavigatePage={onNavigatePage}
-                studentHome
-              />
-            ))
-          )}
-        </HomeCourseRow>
+        {staticRow ? (
+          <HomeStaticCourseRow
+            id={sectionId + "-courses"}
+            label={title}
+            viewportClassName={courseCatalogueStaticRowClasses}
+          >
+            {rowContent}
+          </HomeStaticCourseRow>
+        ) : (
+          <HomeCourseRow
+            id={sectionId + "-courses"}
+            label={title}
+            isBusy={isLoading || isFetching}
+            viewportClassName={courseCatalogueHorizontalRowClasses}
+          >
+            {rowContent}
+          </HomeCourseRow>
+        )}
       </div>
     </section>
   );
@@ -221,18 +251,6 @@ function DiscoveryEnrollmentBanner({ onExplore }: { onExplore: () => void }) {
   );
 }
 
-const FINAL_RENDER_STAGE = 3;
-const INITIAL_POPULAR_CARD_COUNT = 4;
-
-function scheduleDeferredRenderStep(step: () => void): () => void {
-  if (typeof window.requestIdleCallback === "function") {
-    const handle = window.requestIdleCallback(step, { timeout: 500 });
-    return () => window.cancelIdleCallback(handle);
-  }
-  const handle = window.setTimeout(step, 80);
-  return () => window.clearTimeout(handle);
-}
-
 export function DiscoveryHome({
   mode,
   onNavigatePage,
@@ -241,28 +259,35 @@ export function DiscoveryHome({
   onDiscussionNavigatePage,
   onDiscussionAccessDenied,
   initialDiscovery,
+  initialPopularDiscussions,
 }: DiscoveryHomeProps) {
-  const discoveryQuery = useHomeDiscovery({ initialData: initialDiscovery });
-  const discussionsQuery = usePopularDiscussions();
-  const discovery = discoveryQuery.data;
-  // With build-time discovery data every card would otherwise mount in the
-  // first commit, which is one long main-thread task on mobile. Stage the
-  // below-fold rows across idle callbacks instead: the first commit paints
-  // the visible popular cards (the LCP), later commits fill in the rest.
-  // Without seeded data the rows already mount after the runtime fetch, so
-  // rendering starts at the final stage and behavior is unchanged.
-  const [renderStage, setRenderStage] = useState(
-    initialDiscovery ? 0 : FINAL_RENDER_STAGE,
-  );
-  useEffect(() => {
-    if (renderStage >= FINAL_RENDER_STAGE) return;
-    return scheduleDeferredRenderStep(() =>
-      setRenderStage((stage) => stage + 1),
-    );
-  }, [renderStage]);
+  // The guest home is a fixed page: a few courses per section in a plain
+  // grid and a short discussion list. In the production build both come from
+  // build-time data, so the whole page is prerendered and no request is made
+  // here; without that data (the dev server) the same layout loads them.
+  const isGuest = mode === "guest";
+  const discoveryQuery = useHomeDiscovery({
+    enabled: !(isGuest && initialDiscovery),
+  });
+  const discussionsQuery = usePopularDiscussions({
+    enabled: !(isGuest && initialPopularDiscussions),
+  });
+  const discovery =
+    isGuest && initialDiscovery ? initialDiscovery : discoveryQuery.data;
+  const popularDiscussions =
+    isGuest && initialPopularDiscussions
+      ? initialPopularDiscussions
+      : discussionsQuery.data?.discussions;
+  const sectionCourses = (courses: readonly CourseSummary[] | undefined) =>
+    isGuest
+      ? (courses ?? []).slice(0, GUEST_HOME_COURSES_PER_SECTION)
+      : (courses ?? []);
   const discussions = useMemo(
-    () => discussionsQuery.data?.discussions ?? [],
-    [discussionsQuery.data?.discussions],
+    () =>
+      isGuest
+        ? (popularDiscussions ?? []).slice(0, GUEST_HOME_DISCUSSION_COUNT)
+        : (popularDiscussions ?? []),
+    [isGuest, popularDiscussions],
   );
 
   return (
@@ -278,14 +303,7 @@ export function DiscoveryHome({
           ) : null}
           <DiscoveryCourseSection
             title="Popular Courses"
-            courses={
-              renderStage >= 1
-                ? (discovery?.popularCourses ?? [])
-                : (discovery?.popularCourses ?? []).slice(
-                    0,
-                    INITIAL_POPULAR_CARD_COUNT,
-                  )
-            }
+            courses={sectionCourses(discovery?.popularCourses)}
             isLoading={discoveryQuery.isLoading}
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
@@ -293,30 +311,35 @@ export function DiscoveryHome({
             onNavigatePage={onNavigatePage}
             publicAction={mode === "authenticated" ? "enroll" : "view"}
             subtitle="Explore courses learners are enjoying right now."
+            staticRow={isGuest}
           />
           <DiscoveryCourseSection
             title="Free Courses"
-            courses={discovery?.freeCourses ?? []}
-            isLoading={discoveryQuery.isLoading || renderStage < 2}
+            courses={sectionCourses(discovery?.freeCourses)}
+            isLoading={discoveryQuery.isLoading}
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
             onRetry={() => void discoveryQuery.refetch()}
             onNavigatePage={onNavigatePage}
             publicAction={mode === "authenticated" ? "enroll" : "view"}
             subtitle="Start learning with courses available at no cost."
+            staticRow={isGuest}
+            prioritizeImages={!isGuest}
             viewAllLabel="Explore all"
             hideWhenEmpty
           />
           <DiscoveryCourseSection
             title="Recently Added"
-            courses={discovery?.recentCourses ?? []}
-            isLoading={discoveryQuery.isLoading || renderStage < 3}
+            courses={sectionCourses(discovery?.recentCourses)}
+            isLoading={discoveryQuery.isLoading}
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
             onRetry={() => void discoveryQuery.refetch()}
             onNavigatePage={onNavigatePage}
             publicAction={mode === "authenticated" ? "enroll" : "view"}
             subtitle="Discover the latest courses added to the catalogue."
+            staticRow={isGuest}
+            prioritizeImages={!isGuest}
           />
         </div>
 

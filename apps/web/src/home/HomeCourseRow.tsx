@@ -17,6 +17,34 @@ interface HomeCourseRowProps {
   viewportClassName?: string;
 }
 
+/**
+ * The same row frame without the scroller: a plain grid for sections that
+ * show a fixed handful of cards (the prerendered guest home).
+ */
+export function HomeStaticCourseRow({
+  children,
+  id,
+  label,
+  viewportClassName,
+}: Omit<HomeCourseRowProps, "isBusy">) {
+  return (
+    <div className="home-course-row">
+      <div className="home-course-row__viewport-shell">
+        <div
+          id={id}
+          className={["home-course-row__viewport", viewportClassName]
+            .filter(Boolean)
+            .join(" ")}
+          data-course-catalogue-grid
+          aria-label={label + " courses"}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface HomeCourseRowScrollState {
   canScrollPrevious: boolean;
   canScrollNext: boolean;

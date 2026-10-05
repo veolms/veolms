@@ -2,10 +2,16 @@ import {
   courseListResponseSchema,
   courseOverviewSchema,
   homeDiscoveryResponseSchema,
+  publicPopularDiscussionsResponseSchema,
   type CourseListResponse,
   type CourseOverviewResponse,
   type HomeDiscoveryResponse,
+  type PublicPopularDiscussion,
 } from "@veolms/contracts";
+import {
+  GUEST_HOME_COURSES_PER_SECTION,
+  GUEST_HOME_DISCUSSION_COUNT,
+} from "../home/guestHomeLimits";
 import { fetchStaticBuildApi } from "./staticBuildApi";
 
 export interface AcademyStaticPageData {
@@ -13,6 +19,7 @@ export interface AcademyStaticPageData {
   publishedCoursePageNeedsRefresh?: boolean;
   courseOverview?: CourseOverviewResponse;
   homeDiscovery?: HomeDiscoveryResponse;
+  homePopularDiscussions?: PublicPopularDiscussion[];
 }
 
 const PUBLISHED_COURSE_PAGE_SIZE = 24;
@@ -67,9 +74,51 @@ function loadHomeDiscovery() {
         "The build API returned invalid home discovery sections.",
       );
     }
-    return result.data as HomeDiscoveryResponse;
+    // The guest home shows a fixed number of courses per section, so only
+    // those are serialized into the prerendered document.
+    const discovery = result.data as HomeDiscoveryResponse;
+    return {
+      ...discovery,
+      popularCourses: discovery.popularCourses.slice(
+        0,
+        GUEST_HOME_COURSES_PER_SECTION,
+      ),
+      freeCourses: discovery.freeCourses.slice(
+        0,
+        GUEST_HOME_COURSES_PER_SECTION,
+      ),
+      recentCourses: discovery.recentCourses.slice(
+        0,
+        GUEST_HOME_COURSES_PER_SECTION,
+      ),
+    };
   });
   return homeDiscoveryPromise;
+}
+
+let homePopularDiscussionsPromise:
+  Promise<PublicPopularDiscussion[] | undefined> | undefined;
+
+function loadHomePopularDiscussions() {
+  homePopularDiscussionsPromise ??= fetchStaticApiData(
+    "/discussions/popular",
+    (value) => {
+      const result = publicPopularDiscussionsResponseSchema.safeParse(value);
+      if (!result.success) {
+        throw new Error("The build API returned invalid popular discussions.");
+      }
+      return result.data.discussions.slice(0, GUEST_HOME_DISCUSSION_COUNT);
+    },
+  ).catch((error: unknown) => {
+    // The panel is secondary content: without build-time data the guest home
+    // falls back to loading it in the browser instead of failing the build.
+    console.warn(
+      "Guest home popular discussions were not prerendered:",
+      error instanceof Error ? error.message : error,
+    );
+    return undefined;
+  });
+  return homePopularDiscussionsPromise;
 }
 
 function loadPublishedCourses() {
@@ -107,16 +156,19 @@ export async function loadAcademyStaticPageData(
       .replace(/(?:_)?\.data$/u, "")
       .replace(/\/$/u, "") || "/";
   if (pathname === "/" || pathname === "/courses") {
-    const [publishedCourses, homeDiscovery] = await Promise.all([
-      loadPublishedCourses(),
-      // The guest home paints its course rows from this data at hydration,
-      // so its LCP image can be preloaded from the prerendered document.
-      pathname === "/" ? loadHomeDiscovery() : undefined,
-    ]);
+    const [publishedCourses, homeDiscovery, homePopularDiscussions] =
+      await Promise.all([
+        loadPublishedCourses(),
+        // The guest home is rendered entirely from this build-time data, so
+        // it is prerendered whole and needs no API request in the browser.
+        pathname === "/" ? loadHomeDiscovery() : undefined,
+        pathname === "/" ? loadHomePopularDiscussions() : undefined,
+      ]);
     return {
       publishedCoursePage: publishedCourses.page,
       publishedCoursePageNeedsRefresh: publishedCourses.needsRefresh,
       ...(homeDiscovery ? { homeDiscovery } : {}),
+      ...(homePopularDiscussions ? { homePopularDiscussions } : {}),
     } satisfies AcademyStaticPageData;
   }
   if (pathname.startsWith("/courses/") && pathname.endsWith("/overview")) {

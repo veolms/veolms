@@ -1670,6 +1670,9 @@ export default function AcademyLayout() {
         }
         initialCourseOverview={staticCourseRouteData?.courseOverview}
         initialHomeDiscovery={staticCourseRouteData?.homeDiscovery}
+        initialHomePopularDiscussions={
+          staticCourseRouteData?.homePopularDiscussions
+        }
         page={route.page}
         section={activeRouteSection}
         settingsTab={route.settingsTab}

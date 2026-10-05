@@ -1,14 +1,19 @@
-import type { HomeDiscoveryResponse } from "@veolms/contracts";
+import type {
+  HomeDiscoveryResponse,
+  PublicPopularDiscussion,
+} from "@veolms/contracts";
 import { DiscoveryHome } from "./home/DiscoveryHome";
 
 export function GuestHome({
   onNavigatePage,
   setNotice,
   initialDiscovery,
+  initialPopularDiscussions,
 }: {
   onNavigatePage: (page: string) => void;
   setNotice?: (message: string) => void;
   initialDiscovery?: HomeDiscoveryResponse;
+  initialPopularDiscussions?: PublicPopularDiscussion[];
 }) {
   return (
     <DiscoveryHome
@@ -20,6 +25,7 @@ export function GuestHome({
         setNotice?.("You don't have access to this course.")
       }
       initialDiscovery={initialDiscovery}
+      initialPopularDiscussions={initialPopularDiscussions}
     />
   );
 }
