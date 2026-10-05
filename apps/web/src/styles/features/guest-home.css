@@ -376,6 +376,11 @@
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
   border-color: color-mix(in srgb, var(--text) 18%, var(--border));
+  background: color-mix(
+    in srgb,
+    var(--creator-discussion-card-surface, var(--surface-strong)) 92%,
+    var(--text) 8%
+  );
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
     var(--card-compact-shadow);
@@ -393,13 +398,13 @@
   :is(.guest-home__course-section, .guest-home__discussion-panel) {
   border-color: color-mix(in srgb, var(--text) 9%, transparent);
   background: var(--card-surface-soft, var(--surface));
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--text) 6%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 :root[data-theme="light"] .guest-home--guest .course-card:not(:hover) {
   border-color: color-mix(in srgb, var(--text) 9%, transparent);
   background: var(--card-surface, var(--surface));
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {
