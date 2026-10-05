@@ -240,6 +240,128 @@ describe("SettingsMenu playback speed", () => {
     );
     expect(togglePictureInPicture).toHaveBeenCalledOnce();
   });
+
+  it("displays active quality in brackets on the main settings menu in auto mode", () => {
+    const snapshot: PlayerSnapshot = {
+      media: {
+        ...createInitialVideoEngineSnapshot(),
+        playbackRate: 1,
+        autoQuality: true,
+        selectedQualityId: "1080",
+        qualities: [
+          {
+            id: "1080",
+            label: "1080p",
+            active: true,
+            width: 1920,
+            height: 1080,
+            frameRate: 30,
+          },
+          {
+            id: "720",
+            label: "720p",
+            active: false,
+            width: 1280,
+            height: 720,
+            frameRate: 30,
+          },
+        ],
+        textTracks: [],
+      },
+      capabilities: {
+        browserSupported: true,
+        adaptiveStreaming: true,
+        drm: false,
+        nativeHls: false,
+        pictureInPicture: false,
+      },
+      ui: {
+        ...createInitialPlayerUiState(),
+        settingsView: "main",
+      },
+      chapters: [],
+      activeChapterId: null,
+      storyboard: [],
+      markers: [],
+    };
+    const controller = {
+      getSnapshot: () => snapshot,
+      subscribe: () => () => undefined,
+      setSettingsView: vi.fn(),
+    } as unknown as PlayerController;
+
+    render(
+      <PlayerControllerContext.Provider value={controller}>
+        <SettingsMenu />
+      </PlayerControllerContext.Provider>,
+    );
+
+    expect(
+      screen.getByRole("menuitem", { name: /^Quality.*Auto \(1080p\)/ }),
+    ).toBeVisible();
+  });
+
+  it("shows Auto (1080p) in the quality submenu when Auto is selected", () => {
+    const snapshot: PlayerSnapshot = {
+      media: {
+        ...createInitialVideoEngineSnapshot(),
+        playbackRate: 1,
+        autoQuality: true,
+        selectedQualityId: null,
+        qualities: [
+          {
+            id: "1080",
+            label: "1080p",
+            active: true,
+            width: 1920,
+            height: 1080,
+            frameRate: 30,
+          },
+          {
+            id: "720",
+            label: "720p",
+            active: false,
+            width: 1280,
+            height: 720,
+            frameRate: 30,
+          },
+        ],
+        textTracks: [],
+      },
+      capabilities: {
+        browserSupported: true,
+        adaptiveStreaming: true,
+        drm: false,
+        nativeHls: false,
+        pictureInPicture: false,
+      },
+      ui: {
+        ...createInitialPlayerUiState(),
+        settingsView: "quality",
+      },
+      chapters: [],
+      activeChapterId: null,
+      storyboard: [],
+      markers: [],
+    };
+    const controller = {
+      getSnapshot: () => snapshot,
+      subscribe: () => () => undefined,
+      setSettingsView: vi.fn(),
+    } as unknown as PlayerController;
+
+    render(
+      <PlayerControllerContext.Provider value={controller}>
+        <SettingsMenu />
+      </PlayerControllerContext.Provider>,
+    );
+
+    const autoItem = screen.getByRole("menuitemradio", {
+      name: "Auto (1080p)",
+    });
+    expect(autoItem).toBeVisible();
+    expect(autoItem).toHaveAttribute("aria-checked", "true");
+  });
 });
 
 function renderPlaybackRateSettings(
