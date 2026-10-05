@@ -410,7 +410,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             ? null
             : (bufferingIndicator ?? <BufferingIndicator />)}
           <PlayerHud />
-          <ErrorOverlay onClose={onErrorOverlayClose} />
+          <ErrorOverlay onClose={onErrorOverlayClose} source={source} />
           {controls === false
             ? null
             : (controls ?? (

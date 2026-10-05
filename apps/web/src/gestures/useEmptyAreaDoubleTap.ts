@@ -1,4 +1,4 @@
-import { useCallback, useRef, type MouseEvent } from "react";
+import { useCallback, useMemo, useRef, type MouseEvent } from "react";
 
 const MAX_TAP_GAP_MS = 400;
 const MAX_TAP_DISTANCE_PX = 32;
@@ -22,8 +22,18 @@ interface PreviousTap {
   at: number;
 }
 
+// Only controls inside the container count; its ancestors (e.g. a focusable
+// dialog wrapper) must not mark the whole area as occupied.
+function isEmptyAreaEvent(event: MouseEvent<HTMLElement>) {
+  const target = event.target;
+  if (!(target instanceof Element)) return false;
+  const container = event.currentTarget;
+  const occupied = target.closest(OCCUPIED_AREA_SELECTOR);
+  return !occupied || occupied === container || !container.contains(occupied);
+}
+
 /**
- * Returns a click handler for a container that fires `onDoubleTap` only when
+ * Returns handlers for a container that fires `onDoubleTap` only when
  * both taps land on the container's empty space, never on its controls.
  */
 export function useEmptyAreaDoubleTap(onDoubleTap: () => void) {
@@ -31,13 +41,8 @@ export function useEmptyAreaDoubleTap(onDoubleTap: () => void) {
   onDoubleTapRef.current = onDoubleTap;
   const previousTapRef = useRef<PreviousTap | null>(null);
 
-  return useCallback((event: MouseEvent<HTMLElement>) => {
-    const target = event.target;
-    if (
-      event.button !== 0 ||
-      !(target instanceof Element) ||
-      target.closest(OCCUPIED_AREA_SELECTOR)
-    ) {
+  const onClick = useCallback((event: MouseEvent<HTMLElement>) => {
+    if (event.button !== 0 || !isEmptyAreaEvent(event)) {
       previousTapRef.current = null;
       return;
     }
@@ -57,4 +62,11 @@ export function useEmptyAreaDoubleTap(onDoubleTap: () => void) {
     previousTapRef.current = null;
     onDoubleTapRef.current();
   }, []);
+
+  // A repeated press would otherwise select the nearest text.
+  const onMouseDown = useCallback((event: MouseEvent<HTMLElement>) => {
+    if (event.detail > 1 && isEmptyAreaEvent(event)) event.preventDefault();
+  }, []);
+
+  return useMemo(() => ({ onClick, onMouseDown }), [onClick, onMouseDown]);
 }

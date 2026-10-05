@@ -2157,15 +2157,9 @@ function CourseOverviewContent({
     if (isReadOnlyPreview) return;
     onSelectLesson?.(lessonNumber);
     if (!onNavigatePage) return;
-    const courseRouteKey = getCourseRouteKey(course);
-    const returnPath = `/courses/${encodeURIComponent(courseRouteKey)}/overview`;
-    const targetUrl = getCoursePlayerPath(
-      courseRouteKey,
-      "courses",
-      lessonNumber,
-      returnPath,
+    onNavigatePage(
+      getCoursePlayerPath(getCourseRouteKey(course), lessonNumber),
     );
-    onNavigatePage(targetUrl);
   };
   const locationHash =
     typeof window === "undefined" ? "" : window.location.hash;

@@ -1,6 +1,10 @@
 import type { Config } from "@react-router/dev/config";
 import { courseListResponseSchema } from "@veolms/contracts";
-import { createLearningPrerenderPaths } from "./src/learning/prerenderLearningPaths";
+import {
+  createLearningPrerenderPaths,
+  type LearningPrerenderScope,
+} from "./src/learning/prerenderLearningPaths";
+import { fetchStaticBuildApi } from "./src/routes/staticBuildApi";
 
 const staticApplicationPages = [
   "/",
@@ -23,9 +27,12 @@ const staticApplicationPages = [
   "/settings/account",
 ];
 
-const learningPrerenderScope =
-  process.env.VEO_LEARNING_PRERENDER_SCOPE === "first-section"
-    ? "first-section"
+const requestedLearningPrerenderScope =
+  process.env.VEO_LEARNING_PRERENDER_SCOPE;
+const learningPrerenderScope: LearningPrerenderScope =
+  requestedLearningPrerenderScope === "none" ||
+  requestedLearningPrerenderScope === "first-section"
+    ? requestedLearningPrerenderScope
     : "all-lectures";
 
 // React Router evaluates this config through Vite's config runner, whose
@@ -50,10 +57,12 @@ function getStaticApiBaseUrl() {
 }
 
 async function getStaticCataloguePaths() {
-  const response = await fetch(`${getStaticApiBaseUrl()}/courses`, {
-    signal: AbortSignal.timeout(30_000),
-    headers: { accept: "application/json" },
-  });
+  // Discovery runs before prerendering starts, so it can outwait a full API
+  // restart; nothing times this call out.
+  const response = await fetchStaticBuildApi(
+    `${getStaticApiBaseUrl()}/courses`,
+    90_000,
+  );
   if (!response.ok) {
     throw new Error(
       `Unable to discover course overview pages from the build API (${response.status}).`,

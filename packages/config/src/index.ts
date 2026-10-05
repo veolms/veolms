@@ -63,6 +63,12 @@ const serverConfigSchema = z.object({
     .default("development"),
   API_DEV_PRETTY_LOGS: booleanEnvironmentValueSchema.default(true),
   API_DOCS_ENABLED: booleanEnvironmentValueSchema.default(true),
+  /**
+   * Development aid: every API call waits this many milliseconds before it
+   * is handled, to see how the app behaves on a slow connection. Ignored
+   * when `NODE_ENV` is `production`.
+   */
+  API_RESPONSE_DELAY_MS: z.coerce.number().int().min(0).max(60_000).default(0),
   API_PUBLIC_URL: z.string().optional(),
   COURSE_STATIC_REFRESH_GITHUB_TOKEN: z.string().optional(),
   COURSE_STATIC_REFRESH_REPOSITORY: z.string().optional(),

@@ -14,6 +14,59 @@ export interface AuthIdentityHint {
   // and authenticated state still come from `/auth/me`.
   displayName: string;
   userId?: string;
+  username?: string;
+  /** A hosted picture address only; pictures embedded as data are skipped. */
+  avatarUrl?: string;
+}
+
+const MAX_HINT_AVATAR_URL_LENGTH = 2_000;
+
+function readOptionalText(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function readHostedAvatarUrl(value: unknown): string | undefined {
+  const url = readOptionalText(value);
+  return url &&
+    url.length <= MAX_HINT_AVATAR_URL_LENGTH &&
+    /^https?:\/\//i.test(url)
+    ? url
+    : undefined;
+}
+
+function createIdentityHint(source: {
+  displayName?: unknown;
+  userId?: unknown;
+  username?: unknown;
+  avatarUrl?: unknown;
+}): AuthIdentityHint | null {
+  const displayName = readOptionalText(source.displayName);
+  if (!displayName) return null;
+  const userId = readOptionalText(source.userId);
+  const username = readOptionalText(source.username);
+  const avatarUrl = readHostedAvatarUrl(source.avatarUrl);
+  return {
+    displayName,
+    ...(userId ? { userId } : {}),
+    ...(username ? { username } : {}),
+    ...(avatarUrl ? { avatarUrl } : {}),
+  };
+}
+
+function createIdentityHintFromUser(
+  user: AuthUser | null,
+): AuthIdentityHint | null {
+  if (!user) return null;
+  const fields = user as {
+    username?: unknown;
+    avatarDataUrl?: unknown;
+  };
+  return createIdentityHint({
+    displayName: user.displayName,
+    userId: user.id,
+    username: fields.username,
+    avatarUrl: fields.avatarDataUrl,
+  });
 }
 
 const AUTH_IDENTITY_HINT_KEY = "veolms-auth-identity";
@@ -27,16 +80,8 @@ function readIdentityHint(): AuthIdentityHint | null {
     try {
       const parsed: unknown = JSON.parse(savedHint);
       if (parsed && typeof parsed === "object") {
-        const hint = parsed as Partial<AuthIdentityHint>;
-        const displayName = hint.displayName?.trim();
-        if (displayName) {
-          return {
-            displayName,
-            ...(typeof hint.userId === "string" && hint.userId.trim()
-              ? { userId: hint.userId.trim() }
-              : {}),
-          };
-        }
+        const hint = createIdentityHint(parsed as Record<string, unknown>);
+        if (hint) return hint;
       }
     } catch {
       // Support the display-name-only value written by older app versions.
@@ -48,18 +93,13 @@ function readIdentityHint(): AuthIdentityHint | null {
   }
 }
 
-function writeIdentityHint(user: AuthUser | null) {
+function writeIdentityHint(hint: AuthIdentityHint | null) {
   if (typeof window === "undefined") return;
   try {
-    const displayName = user?.displayName?.trim();
-    if (displayName) {
-      const userId = typeof user?.id === "string" ? user.id.trim() : "";
+    if (hint) {
       window.sessionStorage.setItem(
         AUTH_IDENTITY_HINT_KEY,
-        JSON.stringify({
-          displayName,
-          ...(userId ? { userId } : {}),
-        } satisfies AuthIdentityHint),
+        JSON.stringify(hint),
       );
     } else {
       window.sessionStorage.removeItem(AUTH_IDENTITY_HINT_KEY);
@@ -115,15 +155,8 @@ export const authStore = {
 
   setUser(user: AuthUser | null) {
     writeGeneration += 1;
-    const displayName = user?.displayName?.trim();
-    const userId = typeof user?.id === "string" ? user.id.trim() : "";
-    identityHint = displayName
-      ? {
-          displayName,
-          ...(userId ? { userId } : {}),
-        }
-      : null;
-    writeIdentityHint(user);
+    identityHint = createIdentityHintFromUser(user);
+    writeIdentityHint(identityHint);
     state = {
       ...state,
       user,

@@ -215,6 +215,107 @@ export function clearLearningPlayerMinimizeClipSurfaceStyles(
 export const getLearningMotionSurfaceElement = (): HTMLElement | null =>
   document.querySelector<HTMLElement>("[data-learning-motion-surface]");
 
+export const getLearningPersistentPlayerElement = (): HTMLElement | null =>
+  document.querySelector<HTMLElement>("[data-learning-persistent-player]");
+
+/** Matches the mini window's `rounded-xl` corners. */
+export const LEARNING_MINI_PLAYER_CORNER_RADIUS_PX = 12;
+const WINDOW_INVERSE_SCALE_PROPERTY = "--learning-player-window-inverse-scale";
+
+/**
+ * Marks the persistent player as a window in motion. While marked, the host
+ * lays the mini info bar out under the video, enlarged by the inverse of
+ * `scale` so it reads at its real size once the window has been scaled down.
+ */
+function markLearningPlayerWindowMotion(
+  host: HTMLElement,
+  scale: number,
+  returning: boolean,
+) {
+  // "returning" is a minimize that was turned around: the info bar that was
+  // fading in under the video fades back out.
+  host.dataset.learningPlayerWindowMotion = returning
+    ? "returning"
+    : "minimizing";
+  host.style.setProperty(
+    WINDOW_INVERSE_SCALE_PROPERTY,
+    (1 / Math.max(scale, 0.01)).toFixed(5),
+  );
+}
+
+function unmarkLearningPlayerWindowMotion(host: HTMLElement) {
+  delete host.dataset.learningPlayerWindowMotion;
+  host.style.removeProperty(WINDOW_INVERSE_SCALE_PROPERTY);
+}
+
+/**
+ * Moves the desktop player window toward its mini position by transforming
+ * the persistent host itself. Only `translate`, `scale` and the corner
+ * radius change, so the compositor carries the motion and the video is never
+ * re-laid out mid-flight. `translate`/`scale` are used instead of `transform`
+ * because the mini presentation owns the host's inline `transform`.
+ */
+export function applyLearningPlayerWindowMinimizeMotion(
+  host: HTMLElement,
+  options: {
+    durationMs: number;
+    offsetX: number;
+    offsetY: number;
+    progress: number;
+    scale: number;
+    targetScale: number;
+    /** The window is heading back to the full player. */
+    returning?: boolean;
+    /**
+     * Leave the window where it currently is. Used to stage a minimize that
+     * starts from wherever an interrupted expand had reached.
+     */
+    keepPosition?: boolean;
+  },
+) {
+  markLearningPlayerWindowMotion(
+    host,
+    options.targetScale,
+    options.returning === true,
+  );
+  // The radius is scaled with the window, so it is authored at layout size:
+  // it lands on the mini window's radius exactly when the scale does.
+  const radius =
+    (LEARNING_MINI_PLAYER_CORNER_RADIUS_PX /
+      Math.max(options.targetScale, 0.01)) *
+    options.progress;
+  if (!options.keepPosition) {
+    host.style.setProperty(
+      "translate",
+      `${options.offsetX.toFixed(3)}px ${options.offsetY.toFixed(3)}px`,
+    );
+    host.style.setProperty("scale", options.scale.toFixed(5));
+  }
+  host.style.transformOrigin = "top left";
+  host.style.transitionProperty = "translate, scale, border-radius";
+  host.style.transitionDuration = `${Math.max(0, options.durationMs)}ms`;
+  host.style.transitionTimingFunction = LEARNING_PLAYER_MOTION_EASING;
+  host.style.willChange = "translate, scale";
+  host.style.zIndex = "190";
+  host.style.overflow = "hidden";
+  host.style.borderRadius = `${radius.toFixed(2)}px`;
+}
+
+export function clearLearningPlayerWindowMinimizeMotion(host: HTMLElement) {
+  if (host.dataset.learningPlayerWindowMotion === undefined) return;
+  unmarkLearningPlayerWindowMotion(host);
+  host.style.removeProperty("translate");
+  host.style.removeProperty("scale");
+  host.style.removeProperty("transform-origin");
+  host.style.removeProperty("transition-property");
+  host.style.removeProperty("transition-duration");
+  host.style.removeProperty("transition-timing-function");
+  host.style.removeProperty("will-change");
+  host.style.removeProperty("z-index");
+  host.style.removeProperty("overflow");
+  host.style.removeProperty("border-radius");
+}
+
 export function getLearningMinimizeGeometry(
   element: HTMLElement,
   options: {
@@ -260,7 +361,11 @@ export function runLearningPlayerFlipRestore(
     3,
   )}px, 0) scale(${scale.toFixed(5)})`;
   element.dataset.learningPlayerRestorePhase = "expanding";
-  element.style.borderRadius = "13px";
+  // Authored at layout size so the scaled-down window starts with the mini
+  // window's corners, then squares off as it reaches full size.
+  element.style.borderRadius = `${(
+    LEARNING_MINI_PLAYER_CORNER_RADIUS_PX / Math.max(scale, 0.01)
+  ).toFixed(2)}px`;
   element.style.overflow = "hidden";
   element.style.transform = inverseTransform;
   element.style.transformOrigin = "top left";
@@ -271,8 +376,9 @@ export function runLearningPlayerFlipRestore(
   let finished = false;
   let frame = window.requestAnimationFrame(() => {
     frame = 0;
-    element.style.transition = `transform ${LEARNING_PLAYER_MOTION_DURATION_MS}ms ${LEARNING_PLAYER_MOTION_EASING}`;
+    element.style.transition = `transform ${LEARNING_PLAYER_MOTION_DURATION_MS}ms ${LEARNING_PLAYER_MOTION_EASING}, border-radius ${LEARNING_PLAYER_MOTION_DURATION_MS}ms ${LEARNING_PLAYER_MOTION_EASING}`;
     element.style.transform = "translate3d(0, 0, 0) scale(1)";
+    element.style.borderRadius = "0px";
   });
   const finish = () => {
     if (finished) return;

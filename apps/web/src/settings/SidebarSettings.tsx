@@ -6,6 +6,7 @@ import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { KeyboardIcon as Keyboard } from "@phosphor-icons/react/Keyboard";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { RulerIcon as Ruler } from "@phosphor-icons/react/Ruler";
 import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
 import { StackIcon as Stack } from "@phosphor-icons/react/Stack";
 import { TextTIcon as TextT } from "@phosphor-icons/react/TextT";
@@ -17,6 +18,7 @@ import { useShortcutPlatform } from "../useShortcutPlatform";
 import {
   ChoiceCard,
   RadioGroup,
+  RecommendedBadge,
   SettingRow,
   SettingsToggle,
 } from "./SettingsControls";
@@ -140,7 +142,7 @@ export function SidebarSettings({
   onSidebarModeChange,
 }: SidebarSettingsProps) {
   const preferences = sidebarPreferences || {};
-  const iconStyle = preferences.iconStyle || "monochrome";
+  const iconStyle = preferences.iconStyle || "multicolor";
   const colorMode = preferences.monochromeMode || "theme";
   const customColor = HEX_COLOR_PATTERN.test(preferences.monochromeColor || "")
     ? (preferences.monochromeColor ?? "#6366f1")
@@ -155,12 +157,11 @@ export function SidebarSettings({
         : customColor;
   const layout = preferences.contentLayout || "framed";
   const sidebarMaxWidth = normalizeSidebarMaxWidth(preferences.sidebarMaxWidth);
-  const headerLayout =
-    preferences.headerLayout === "fixed" ? "fixed" : "inline";
   const showKeyboardShortcuts = preferences.showKeyboardShortcuts !== false;
   const showLabels = preferences.showCollapsedLabels !== false;
   const showCollapsedLogo = preferences.showCollapsedLogo !== false;
   const showSidebarOnMobile = preferences.showSidebarOnMobile === true;
+  const showResizeDimensions = preferences.showResizeDimensions === true;
   const highlightActive = preferences.highlightActive !== false;
   const elevateMenus = preferences.elevateMenus !== false;
   const glowPalette = normalizeSidebarGlow(preferences.glowPalette);
@@ -219,25 +220,10 @@ export function SidebarSettings({
         <div className="settings-section__heading-row">
           <div>
             <h2>Header behavior</h2>
-            <p>
-              Choose which header item stays anchored while the sidebar resizes.
-            </p>
+            <p>Choose what the sidebar header shows.</p>
           </div>
         </div>
         <div className="settings-row-list settings-sidebar-header-options__rows">
-          <SettingRow
-            icon={SidebarSimple}
-            label="Fixed collapse control"
-            note="Keep the collapse control on the menu icon axis while the logo moves and clips"
-          >
-            <SettingsToggle
-              checked={headerLayout === "fixed"}
-              onChange={(value) =>
-                update({ headerLayout: value ? "fixed" : "inline" })
-              }
-              label="Fixed collapse control"
-            />
-          </SettingRow>
           <SettingRow
             icon={SidebarSimple}
             label="Show logo when collapsed"
@@ -283,7 +269,9 @@ export function SidebarSettings({
               note="Each icon is displayed with its own color"
               className="settings-choice-card--horizontal settings-choice-card--sidebar-style"
               preview={<SidebarIconPreview />}
-            />
+            >
+              <RecommendedBadge />
+            </ChoiceCard>
             <ChoiceCard
               checked={iconStyle === "monochrome"}
               onChange={() => update({ iconStyle: "monochrome" })}
@@ -736,6 +724,19 @@ export function SidebarSettings({
                 aria-label="Sidebar max width in pixels"
               />
             </label>
+          </div>
+          <div className="settings-row-list mt-4">
+            <SettingRow
+              icon={Ruler}
+              label="Show sizes while resizing"
+              note="Display the sidebar width and the main content width in the sidebar's empty space while you drag to resize"
+            >
+              <SettingsToggle
+                checked={showResizeDimensions}
+                onChange={(value) => update({ showResizeDimensions: value })}
+                label="Show sizes while resizing"
+              />
+            </SettingRow>
           </div>
         </section>
 

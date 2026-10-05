@@ -10,7 +10,7 @@ export const PRERENDERED_LEARNING_COURSE_SLUGS = [
   "mongodb-database-design",
 ] as const;
 
-export type LearningPrerenderScope = "first-section" | "all-lectures";
+export type LearningPrerenderScope = "none" | "first-section" | "all-lectures";
 
 interface CreateLearningPrerenderPathsOptions {
   courseSlugs?: readonly string[];
@@ -21,7 +21,7 @@ interface CreateLearningPrerenderPathsOptions {
 // the API at runtime, so prerendering only needs the route shells.
 const FIRST_SECTION_LECTURE_COUNT = 5;
 
-const getLectureIds = (scope: LearningPrerenderScope) =>
+const getLectureIds = (scope: Exclude<LearningPrerenderScope, "none">) =>
   Array.from(
     {
       length:
@@ -36,6 +36,9 @@ export const createLearningPrerenderPaths = ({
   courseSlugs = PRERENDERED_LEARNING_COURSE_SLUGS,
   scope,
 }: CreateLearningPrerenderPathsOptions) => {
+  // `none` skips every learning route, including the course player shells.
+  if (scope === "none") return [];
+
   const lectureIds = getLectureIds(scope);
 
   return courseSlugs.flatMap((courseSlug) => {

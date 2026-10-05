@@ -393,19 +393,12 @@ function getDiscussionThreadDestination(
   thread:
     | DiscussionWorkspaceCard
     | Pick<PublicPopularDiscussion, "id" | "courseId" | "lessonId">,
-  returnPath = "/discussions/q-and-a",
 ): string {
   const threadId =
     "itemType" in thread && thread.itemType === "reply" && thread.parentThreadId
       ? thread.parentThreadId
       : thread.id;
-  const basePath = getCoursePlayerPath(
-    thread.courseId,
-    "courses",
-    1,
-    returnPath,
-    { threadId },
-  );
+  const basePath = getCoursePlayerPath(thread.courseId, 1, { threadId });
   if (!thread.lessonId) return basePath;
 
   const [pathname, query = ""] = basePath.split("?", 2);
@@ -416,7 +409,6 @@ function getDiscussionThreadDestination(
 
 function getDiscussionNoteDestination(
   note: DiscussionWorkspaceCard,
-  returnPath = "/discussions/notes",
 ): string | null {
   if (
     !note.id ||
@@ -426,13 +418,7 @@ function getDiscussionNoteDestination(
   )
     return null;
 
-  const basePath = getCoursePlayerPath(
-    note.courseId,
-    "courses",
-    1,
-    returnPath,
-    { noteId: note.id },
-  );
+  const basePath = getCoursePlayerPath(note.courseId, 1, { noteId: note.id });
   const [pathname, query = ""] = basePath.split("?", 2);
   const search = new URLSearchParams(query);
   search.set("lessonId", note.lessonId);
@@ -1096,10 +1082,7 @@ function DiscussionWorkspaceCommentCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
-  const destination = getDiscussionThreadDestination(
-    thread,
-    "/discussions/comments",
-  );
+  const destination = getDiscussionThreadDestination(thread);
   const destinationLabel = [thread.course, thread.lesson]
     .filter(Boolean)
     .join(", ");
@@ -1191,10 +1174,7 @@ function DiscussionWorkspaceFollowingCard({
   const [expanded, setExpanded] = useState(false);
   const isQuestion = thread.kind === "question" || thread.kind === "qna";
   const metadataItems = getDiscussionWorkspaceMetadataItems(thread);
-  const destination = getDiscussionThreadDestination(
-    thread,
-    "/discussions/following",
-  );
+  const destination = getDiscussionThreadDestination(thread);
   const destinationLabel = [thread.course, thread.lesson]
     .filter(Boolean)
     .join(", ");
@@ -1312,8 +1292,8 @@ function DiscussionWorkspaceMentionCard({
       : `Reply in ${parentKindLabel}`
     : null;
   const destination = isNote
-    ? getDiscussionNoteDestination(mention, "/discussions/mentions")
-    : getDiscussionThreadDestination(mention, "/discussions/mentions");
+    ? getDiscussionNoteDestination(mention)
+    : getDiscussionThreadDestination(mention);
   const destinationLabel = [mention.course, mention.lesson]
     .filter(Boolean)
     .join(", ");
@@ -1620,12 +1600,7 @@ export function PublicDiscussionWorkspaceCard({
     isOwn: false,
   };
   const destination = onNavigatePage
-    ? getDiscussionThreadDestination(
-        discussion,
-        discussion.kind === "question"
-          ? "/discussions/q-and-a"
-          : "/discussions/comments",
-      )
+    ? getDiscussionThreadDestination(discussion)
     : null;
   const canNavigate = Boolean(
     destination && (allowPublicRead || hasCourseAccess),
@@ -1717,8 +1692,8 @@ function DiscussionWorkspaceBookmarkCard({
   const SourceIcon = isNote ? Note : isQuestion ? Question : ChatTeardropText;
   const metadataItems = getDiscussionWorkspaceMetadataItems(bookmark);
   const destination = isNote
-    ? getDiscussionNoteDestination(bookmark, "/discussions/saved")
-    : getDiscussionThreadDestination(bookmark, "/discussions/saved");
+    ? getDiscussionNoteDestination(bookmark)
+    : getDiscussionThreadDestination(bookmark);
   const destinationLabel = [bookmark.course, bookmark.lesson]
     .filter(Boolean)
     .join(", ");

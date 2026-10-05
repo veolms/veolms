@@ -153,12 +153,7 @@ function UpNextPanel({
           {lessons.slice(0, 3).map((lesson) => (
             <a
               key={lesson.id}
-              href={getCoursePlayerPath(
-                courseKey,
-                "home",
-                lesson.lessonNumber,
-                "/home",
-              )}
+              href={getCoursePlayerPath(courseKey, lesson.lessonNumber)}
               className="group flex min-w-0 items-center justify-between gap-3 rounded-lg border border-(--border) bg-(--surface-strong) px-3 py-2.5 transition-colors hover:border-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
             >
               <span className="min-w-0">
@@ -240,7 +235,7 @@ export function StudentHomeZeroProgress({
   const curriculumPath = `/courses/${encodeURIComponent(viewCourseKey)}/overview`;
   const firstLesson = lessons[0];
   const startPath = firstLesson
-    ? getCoursePlayerPath(courseKey, "home", firstLesson.lessonNumber, "/home")
+    ? getCoursePlayerPath(courseKey, firstLesson.lessonNumber)
     : null;
 
   if (!primaryEnrollment) return null;

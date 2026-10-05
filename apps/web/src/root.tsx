@@ -28,6 +28,7 @@ import { useCurrentUser } from "./services/auth";
 import {
   applySidebarShellToDocument,
   getInitialSidebarShellState,
+  getSidebarCollapsedMarkupBootstrapScript,
   getSidebarPresentationBootstrapScript,
   getSidebarShellBootstrapScript,
 } from "./shell/sidebarPreferences";
@@ -51,7 +52,7 @@ const getAppearanceBootstrapScript = () =>
 const DEFAULT_ROOT_ATTRIBUTES: Record<string, string> = {
   lang: "en",
   "data-theme": "dark",
-  "data-palette": "codex",
+  "data-palette": DEFAULT_ACADEMY_THEME,
   "data-reading-mode": "false",
   "data-reading-mode-texture": "false",
   "data-reading-mode-temperature": "false",
@@ -151,7 +152,7 @@ export function Layout({ children }: LayoutProps) {
     <html
       lang="en"
       data-theme="dark"
-      data-palette="codex"
+      data-palette={DEFAULT_ACADEMY_THEME}
       data-reading-mode="false"
       data-reading-mode-texture="false"
       data-reading-mode-temperature="false"
@@ -208,7 +209,7 @@ export function Layout({ children }: LayoutProps) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `${getSidebarShellBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}`,
+            __html: `${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}`,
           }}
         />
         <Meta />

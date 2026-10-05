@@ -1,9 +1,10 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, Ref } from "react";
 
 type ButtonMotion = "lift" | "static";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   motion?: ButtonMotion;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 const motionClasses: Record<ButtonMotion, string> = {

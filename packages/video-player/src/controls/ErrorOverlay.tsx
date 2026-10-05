@@ -1,6 +1,7 @@
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerTheme } from "../themes/PlayerThemeContext";
+import type { VideoSource } from "../core/types";
 import type { ReactNode } from "react";
 
 const messages: Record<string, string> = {
@@ -32,9 +33,19 @@ export function VideoPlayerCloseButton({
   );
 }
 
-export function ErrorOverlay({ onClose }: { onClose?: () => void }) {
+export interface ErrorOverlayProps {
+  onClose?: () => void;
+  /**
+   * The source the player was asked to play. Retrying falls back to it when
+   * the failure happened before the engine had taken a source on.
+   */
+  source?: VideoSource;
+}
+
+export function ErrorOverlay({ onClose, source }: ErrorOverlayProps) {
   const controller = usePlayerController();
   const error = usePlayerState(({ media }) => media.error);
+  const loadedSource = usePlayerState(({ media }) => media.source);
   const {
     close: CloseIcon,
     retry: RetryIcon,
@@ -61,11 +72,21 @@ export function ErrorOverlay({ onClose }: { onClose?: () => void }) {
             {messages[error.category] ?? error.message}
           </p>
         </div>
-        {error.recoverable ? (
+        {/* Offered for every error, not only the ones the engine marks as
+            recoverable: a failure it could not classify is often transient,
+            and a retry costs the viewer nothing. */}
+        {loadedSource || source ? (
           <button
             type="button"
             className="mx-auto inline-flex min-h-10 items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-white/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            onClick={() => void controller.reload().catch(() => undefined)}
+            onClick={() => {
+              const attempt = loadedSource
+                ? controller.reload()
+                : source
+                  ? controller.load({ source })
+                  : Promise.resolve();
+              void attempt.catch(() => undefined);
+            }}
           >
             <RetryIcon size={18} />
             Try again

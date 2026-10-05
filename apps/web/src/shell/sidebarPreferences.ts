@@ -184,11 +184,19 @@ export const getInitialSidebarShellState = (): SidebarShellState => {
 export const getSidebarShellBootstrapScript = () =>
   `(()=>{const r=document.documentElement,d=${SIDEBAR_DEFAULT_WIDTH},n=${SIDEBAR_MIN_WIDTH},x=${SIDEBAR_MAX_WIDTH_LIMIT},q=matchMedia(${JSON.stringify(COMPACT_NAVIGATION_QUERY)}).matches;let m="expanded",w=d,a=${SIDEBAR_MAX_WIDTH};try{const s=localStorage.getItem("veolms-sidebar-mode"),l=localStorage.getItem("veolms-sidebar-collapsed");m=s==="expanded"||s==="collapsed"||s==="hidden"?s:l!==null?(l==="true"?"collapsed":"expanded"):(matchMedia(${JSON.stringify(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY)}).matches?"collapsed":"expanded");if(localStorage.getItem("veolms-sidebar-max-width-default-version")===${JSON.stringify(SIDEBAR_MAX_WIDTH_DEFAULT_VERSION)}){const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}"),v=Number(p&&p.sidebarMaxWidth);if(Number.isFinite(v))a=Math.min(x,Math.max(n,v))}const v=Number(localStorage.getItem("veolms-sidebar-width"));if(Number.isFinite(v)&&String(localStorage.getItem("veolms-sidebar-width")||"").trim())w=Math.min(a,Math.max(n,v))}catch{}const s={mode:m,width:w};window.__VEO_BOOTSTRAP__={sidebar:s,navigation:{compact:q}};r.dataset.sidebarState=m;r.dataset.navigationLayout=q?"compact":"wide";r.style.setProperty("--sidebar-width",w+"px");r.style.setProperty("--sidebar-expanded-width",w+"px")})();`;
 
+// The prerendered document is always built for the expanded sidebar, and
+// hydration does not patch a mismatched className. When the stored mode is the
+// collapsed rail, apply the rail classes as the parser inserts the shell, so
+// the first paint already has the collapsed layout instead of jumping to it
+// once React hydrates. Must run after getSidebarShellBootstrapScript.
+export const getSidebarCollapsedMarkupBootstrapScript = () =>
+  `(()=>{const r=document.documentElement,c=()=>r.dataset.sidebarState==="collapsed"&&r.dataset.navigationLayout!=="compact";if(!c())return;const s=()=>{if(!c())return;const a=document.querySelector(".courses-app"),k=document.querySelector(".courses-app .sidebar-appearance--horizontal");if(a)a.classList.add("courses-app--collapsed");if(k)k.classList.replace("sidebar-appearance--horizontal","sidebar-appearance--vertical")},o=new MutationObserver(s);o.observe(r,{childList:true,subtree:true});addEventListener("DOMContentLoaded",()=>{s();o.disconnect()},{once:true})})();`;
+
 export const getSidebarPresentationBootstrapScript = () =>
   `(()=>{const r=document.documentElement;try{const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");r.dataset.collapsedTooltips=String(p.showCollapsedLabels!==false);r.dataset.collapsedSidebarLogo=String(p.showCollapsedLogo!==false);r.dataset.activeFill=String(p.highlightActive!==false);r.dataset.sidebarMonochromeMode=p.monochromeMode==="neutral"||p.monochromeMode==="custom"?p.monochromeMode:"theme";r.style.setProperty("--sidebar-monochrome-color",typeof p.monochromeColor==="string"&&p.monochromeColor?p.monochromeColor:"#6c78ff")}catch{r.dataset.collapsedTooltips="true";r.dataset.collapsedSidebarLogo="true";r.dataset.activeFill="true";r.dataset.sidebarMonochromeMode="theme";r.style.setProperty("--sidebar-monochrome-color","#6c78ff")}})();`;
 
 export const getDefaultSidebarPreferences = (): SidebarPreferences => ({
-  iconStyle: "monochrome",
+  iconStyle: "multicolor",
   monochromeMode: "theme",
   monochromeColor: "#6c78ff",
   contentLayout: "framed",
@@ -200,6 +208,7 @@ export const getDefaultSidebarPreferences = (): SidebarPreferences => ({
   showCollapsedLabels: true,
   showCollapsedLogo: true,
   showSidebarOnMobile: false,
+  showResizeDimensions: false,
   glowPalette: SIDEBAR_GLOW_DEFAULT,
   glowShape: SIDEBAR_GLOW_SHAPE_DEFAULT,
   glowShapeSize: SIDEBAR_GLOW_SHAPE_SIZE_DEFAULT,
@@ -234,8 +243,9 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
     // missing preference to the new fallback.
     const needsHeaderDefaultMigration =
       !hasCurrentHeaderDefault && storedPreferences.headerLayout === undefined;
-    preferences.headerLayout =
-      storedPreferences.headerLayout === "fixed" ? "fixed" : "inline";
+    // The "fixed" header layout no longer has a setting, so a stored value
+    // from before is reset.
+    preferences.headerLayout = "inline";
     preferences.glowPalette = normalizeSidebarGlow(
       storedPreferences.glowPalette,
     );
@@ -292,8 +302,11 @@ export const getInitialSidebarPreferences = (): SidebarPreferences => {
       localStorage.getItem("veolms-sidebar-icon-default-version") ===
       SIDEBAR_ICON_DEFAULT_VERSION;
     const needsIconMigration = !hasCurrentIconDefault;
+    // The marker's name dates from when monochrome was the default. A
+    // browser without it has never had the icon defaults applied, so it gets
+    // the current default; one that has it keeps whatever is stored.
     if (needsIconMigration) {
-      preferences.iconStyle = "monochrome";
+      preferences.iconStyle = "multicolor";
       preferences.monochromeMode = "theme";
     }
 

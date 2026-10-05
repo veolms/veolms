@@ -159,6 +159,8 @@ export interface LessonPlayerControlsProps {
   courseLessonsSecondPressHold?: CourseLessonsSecondPressHoldProps;
   courseLessonsShortcutLabel?: string;
   courseLessonsSidePanel?: boolean;
+  /** The lessons drawer is a bottom sheet rather than a side drawer. */
+  courseLessonsBottomSheet?: boolean;
   /** Shown as the heading of the chapters panel. */
   lessonTitle?: string;
   /**
@@ -206,6 +208,7 @@ function CourseLessonsButton({
   secondPressHold,
   shortcutLabel,
   sidePanel,
+  opensFromBottom,
   textSize = "xs",
   scrollportId,
 }: {
@@ -214,6 +217,12 @@ function CourseLessonsButton({
   secondPressHold?: CourseLessonsSecondPressHoldProps;
   shortcutLabel?: string;
   sidePanel: boolean;
+  /**
+   * The lessons open as a bottom sheet. Only then does the arrow point
+   * down and flip while the sheet is open; everywhere else the lessons come
+   * in from the right, so the arrow points right and stays put.
+   */
+  opensFromBottom: boolean;
   textSize?: "xs" | "sm";
   scrollportId?: string;
 }) {
@@ -258,13 +267,13 @@ function CourseLessonsButton({
       <span className={labelRowClass}>
         <span className="inline-flex items-center leading-none">Lessons</span>
         <span
-          className={`learning-curriculum__section-arrow inline-flex items-center justify-center leading-none [&_svg]:block${open && !sidePanel ? " is-open" : ""}`}
+          className={`learning-curriculum__section-arrow inline-flex items-center justify-center leading-none [&_svg]:block${open && opensFromBottom ? " is-open" : ""}`}
           aria-hidden="true"
         >
-          {sidePanel ? (
-            <CaretRight size={15} className="-mb-[2.5px]" />
-          ) : (
+          {opensFromBottom ? (
             <CaretDown size={15} className="-mb-[2.5px]" />
+          ) : (
+            <CaretRight size={15} className="-mb-[2.5px]" />
           )}
         </span>
       </span>
@@ -464,6 +473,7 @@ export function LessonPlayerControls({
   courseLessonsSecondPressHold,
   courseLessonsShortcutLabel,
   courseLessonsSidePanel = false,
+  courseLessonsBottomSheet = false,
   lessonTitle,
   chaptersPanelHost,
   onAmbientEnabledChange,
@@ -584,7 +594,7 @@ export function LessonPlayerControls({
     <div
       data-player-timeline-wrap=""
       data-player-timeline-layer=""
-      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-14 sm:translate-y-0 ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-12 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-12 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-12 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-12 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
     >
@@ -675,6 +685,9 @@ export function LessonPlayerControls({
               )
             }
             sidePanel={mobileLandscapeFullscreen}
+            opensFromBottom={
+              !mobileLandscapeFullscreen && courseLessonsBottomSheet
+            }
           />
         ) : null}
         <CircularFullscreenButton />
@@ -729,6 +742,10 @@ export function LessonPlayerControls({
     ? mobileSettingsSheetHost
     : undefined;
 
+  // On desktop, fullscreen sits in the same pill as autoplay and settings.
+  // The circular settings variant is a single round button, so it keeps the
+  // separate fullscreen button.
+  const fullscreenInActionsPill = desktopLayout && !circularSettingsControl;
   const playerActions = (
     <PlayerControlSurface
       cluster="player-actions"
@@ -776,6 +793,12 @@ export function LessonPlayerControls({
         }
         side={desktopLayout ? "top" : "bottom"}
       />
+      {fullscreenInActionsPill ? (
+        <FullscreenButton
+          className={getPlayerIconPillClass(mobileInteraction)}
+          iconSize={22}
+        />
+      ) : null}
     </PlayerControlSurface>
   );
 
@@ -932,6 +955,9 @@ export function LessonPlayerControls({
                     secondPressHold={courseLessonsSecondPressHold}
                     shortcutLabel={courseLessonsShortcutLabel}
                     sidePanel={courseLessonsSidePanel}
+                    opensFromBottom={
+                      !courseLessonsSidePanel && courseLessonsBottomSheet
+                    }
                     textSize="sm"
                     scrollportId={
                       courseLessonsSidePanel
@@ -942,7 +968,7 @@ export function LessonPlayerControls({
                 </div>
               ) : null}
               {desktopLayout ? playerActions : null}
-              <CircularFullscreenButton />
+              {fullscreenInActionsPill ? null : <CircularFullscreenButton />}
             </div>
           ) : null}
 
