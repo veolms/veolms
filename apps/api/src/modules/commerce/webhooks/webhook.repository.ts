@@ -79,6 +79,30 @@ export async function claimDueWebhookEvents(
     .execute();
 }
 
+/** Queue-depth gauges for the ops heartbeat. */
+export async function getWebhookQueueDepth(
+  database: Executor,
+): Promise<{ unprocessed: number; dead: number }> {
+  const row = await database
+    .selectFrom("webhook_events")
+    .select([
+      sql<number>`(count(*) filter (where processed_at is null and dead_at is null))::int`.as(
+        "unprocessed",
+      ),
+      sql<number>`(count(*) filter (where dead_at is not null))::int`.as(
+        "dead",
+      ),
+    ])
+    .where((eb) =>
+      eb.or([eb("processed_at", "is", null), eb("dead_at", "is not", null)]),
+    )
+    .executeTakeFirst();
+  return {
+    unprocessed: Number(row?.unprocessed ?? 0),
+    dead: Number(row?.dead ?? 0),
+  };
+}
+
 /**
  * Deletes successfully processed webhook events older than the retention
  * window, in bounded batches so a large first run cannot hold a long

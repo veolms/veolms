@@ -43,6 +43,37 @@ function intFromEnv(name: string): number | undefined {
  *   (and locks) indefinitely. Set higher for one-off CLI/migration work if
  *   needed; migrations pass 0/unset to disable via env.
  */
+export interface DatabasePoolMetrics {
+  /** The pool's application_name, to tell multiple pools apart. */
+  name: string;
+  /** Configured maximum connections for this pool. */
+  max: number;
+  /** Connections currently open (in use + idle). */
+  total: number;
+  /** Open connections sitting idle. */
+  idle: number;
+  /** Queries queued waiting for a free connection — sustained non-zero
+   * values mean the pool is the bottleneck. */
+  waiting: number;
+}
+
+const poolRegistry: Array<{ name: string; max: number; pool: Pool }> = [];
+
+/**
+ * Point-in-time metrics for every pool this process created. Intended for
+ * a periodic ops log line — pool starvation was previously invisible
+ * (requests queued silently with no signal anywhere).
+ */
+export function getDatabasePoolMetrics(): DatabasePoolMetrics[] {
+  return poolRegistry.map((entry) => ({
+    name: entry.name,
+    max: entry.max,
+    total: entry.pool.totalCount,
+    idle: entry.pool.idleCount,
+    waiting: entry.pool.waitingCount,
+  }));
+}
+
 export function createDatabase(
   databaseUrl: string,
   options: DatabasePoolOptions = {},
@@ -73,6 +104,15 @@ export function createDatabase(
   // replacement for the next query after this is handled.
   pool.on("error", (error) => {
     console.error("Unexpected PostgreSQL pool error", error);
+  });
+
+  poolRegistry.push({
+    name:
+      options.applicationName ??
+      process.env.DATABASE_APPLICATION_NAME ??
+      "veolms",
+    max: options.max ?? intFromEnv("DATABASE_POOL_MAX") ?? 10,
+    pool,
   });
 
   return new Kysely<Database>({
