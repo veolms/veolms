@@ -32,7 +32,10 @@ const analyticsRoutes: RoutePlugin = async (app, options) => {
   const service = createAnalyticsService({
     database: options.database,
     orderService: createOrderService({ database: options.database }),
-    enrollmentService: createEnrollmentService({ database: options.database }),
+    enrollmentService: createEnrollmentService({
+      database: options.database,
+      courseService,
+    }),
     studentsService: createStudentsService({ database: options.database }),
     courseService,
     learningProgressService: createLearningProgressService({

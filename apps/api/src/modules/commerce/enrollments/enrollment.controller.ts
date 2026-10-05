@@ -9,7 +9,10 @@ export function createEnrollmentController({
 }) {
   async function listEnrolledCourses(request: FastifyRequest) {
     const userId = request.user!.id;
-    const courses = await service.listEnrolledCourses(userId);
+    const courses = await service.listEnrolledCourses(
+      userId,
+      request.user!.roles,
+    );
     return { courses };
   }
 

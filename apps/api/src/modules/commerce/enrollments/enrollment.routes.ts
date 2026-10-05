@@ -6,13 +6,20 @@ import {
 import { jsonResponse } from "../../../lib/responses.ts";
 import { errorResponse } from "../../../lib/errors.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
+import { createCourseService } from "../../courses/index.ts";
 import { createCommerceContext } from "../shared/commerce.context.ts";
 import { createEnrollmentService } from "./enrollment.service.ts";
 import { createEnrollmentController } from "./enrollment.controller.ts";
 
 const enrollmentRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCommerceContext(options);
-  const service = createEnrollmentService({ database: options.database });
+  const service = createEnrollmentService({
+    database: options.database,
+    courseService: createCourseService({
+      database: options.database,
+      services: options.services,
+    }),
+  });
   const controller = createEnrollmentController({ service });
 
   app.get(

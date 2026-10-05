@@ -26,10 +26,7 @@ export function HomeEnrolledCourseCard({
       <div className="home-mini-course__media">
         <StudentHomeThumbnail
           src={course.thumbnailUrl}
-          fallbackSrcs={[
-            getCourseThumbnailCdnUrl(course.thumbnailMediaId),
-            course.thumbnail,
-          ]}
+          fallbackSrcs={[getCourseThumbnailCdnUrl(course.thumbnailMediaId)]}
           alt=""
           loading={imagePriority ? "eager" : "lazy"}
           decoding="async"

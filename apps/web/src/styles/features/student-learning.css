@@ -762,9 +762,20 @@
 
 @media (min-width: 1181px) {
   .home-dashboard-grid.student-home-progressed__dashboard-grid {
+    position: relative;
+    z-index: 1;
     grid-template-columns: minmax(0, 1.08fr) minmax(18rem, 0.92fr);
     grid-template-rows: auto auto auto;
     align-items: start;
+  }
+
+  .home-dashboard-grid.student-home-progressed__dashboard-grid
+    > :is(
+      .home-continue-panel,
+      .student-home-progressed__more-courses-panel,
+      .student-home-progressed__popular-discussions-panel
+    ) {
+    background: var(--card-surface, var(--surface));
   }
 
   .home-dashboard-grid.student-home-progressed__dashboard-grid
