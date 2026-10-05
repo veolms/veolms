@@ -114,7 +114,7 @@ const SettingsTabContent = memo(function SettingsTabContent({
         />
       );
     case "learning":
-      return <LearningSettings />;
+      return <LearningSettings isAuthenticated={pageProps.isAuthenticated} />;
     case "notifications":
       return (
         <NotificationSettings isAuthenticated={pageProps.isAuthenticated} />

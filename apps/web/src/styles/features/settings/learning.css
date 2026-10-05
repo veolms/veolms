@@ -70,6 +70,16 @@
   color: var(--accent-ink, var(--accent));
 }
 
+.settings-learning-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
 .settings-learning-card__heading h3 {
   margin: 0;
   color: var(--text);
