@@ -161,6 +161,122 @@ function earlyHlsPreloadPlugin(): Plugin {
   };
 }
 
+// Lazy route-body chunks whose final URLs are baked into the shell so the
+// prerendered document can modulepreload them (see
+// src/routing/routeChunkPreloads.ts for why). Follows the same
+// placeholder-replacement mechanics as earlyHlsPreloadPlugin above.
+const ROUTE_CHUNK_PRELOADS = [
+  {
+    placeholder: "__VEO_CATALOGUE_CHUNK_URL__",
+    facadeSuffix: "/src/courses/CourseCatalogue.tsx",
+    manifestSrcSuffix: "courses/CourseCatalogue.tsx",
+    devUrl: "/src/courses/CourseCatalogue.tsx",
+  },
+  {
+    placeholder: "__VEO_GUEST_HOME_CHUNK_URL__",
+    facadeSuffix: "/src/GuestHome.tsx",
+    manifestSrcSuffix: "src/GuestHome.tsx",
+    devUrl: "/src/GuestHome.tsx",
+  },
+];
+
+function routeChunkPreloadPlugin(): Plugin {
+  let publicBase = "/";
+  let command: "build" | "serve" = "build";
+
+  return {
+    name: "veo-route-chunk-preload",
+    configResolved(config) {
+      command = config.command;
+      publicBase = config.base || "/";
+    },
+    transform(code) {
+      if (command !== "serve") return undefined;
+      let next = code;
+      let changed = false;
+      for (const entry of ROUTE_CHUNK_PRELOADS) {
+        if (next.includes(entry.placeholder)) {
+          next = next.replaceAll(entry.placeholder, entry.devUrl);
+          changed = true;
+        }
+      }
+      return changed ? { code: next, map: null } : undefined;
+    },
+    generateBundle(_outputOptions, bundle) {
+      const isSsrPass = Boolean(this.environment?.config.build.ssr);
+      const urls = new Map<string, string>();
+      // Facade matching is only valid in the client pass: the SSR bundle
+      // emits its own chunk for these modules under a different hash, and
+      // baking that name into the prerendered HTML points the preload at a
+      // file that does not exist under client/assets.
+      if (!isSsrPass) {
+        for (const item of Object.values(bundle)) {
+          if (item.type !== "chunk" || !item.facadeModuleId) continue;
+          const facade = item.facadeModuleId.replaceAll("\\", "/");
+          for (const entry of ROUTE_CHUNK_PRELOADS) {
+            if (facade.endsWith(entry.facadeSuffix)) {
+              urls.set(
+                entry.placeholder,
+                joinPublicPath(publicBase, item.fileName),
+              );
+            }
+          }
+        }
+      }
+
+      if (urls.size < ROUTE_CHUNK_PRELOADS.length) {
+        // The SSR pass does not emit the client chunks; read their URLs from
+        // the client manifest the way earlyHlsPreloadPlugin does.
+        const manifestPath = path.resolve(
+          this.environment?.config.build.outDir ?? "",
+          "../client/.vite/manifest.json",
+        );
+        try {
+          const manifest = JSON.parse(
+            fs.readFileSync(manifestPath, "utf8"),
+          ) as Record<string, { file?: string; src?: string }>;
+          for (const entry of ROUTE_CHUNK_PRELOADS) {
+            if (urls.has(entry.placeholder)) continue;
+            const manifestEntry = Object.entries(manifest).find(
+              ([key, value]) =>
+                key.replaceAll("\\", "/").endsWith(entry.manifestSrcSuffix) ||
+                value.src
+                  ?.replaceAll("\\", "/")
+                  .endsWith(entry.manifestSrcSuffix),
+            );
+            if (manifestEntry?.[1]?.file) {
+              urls.set(
+                entry.placeholder,
+                joinPublicPath(publicBase, manifestEntry[1].file),
+              );
+            }
+          }
+        } catch {
+          // Leave unresolved placeholders untouched; the links then point at
+          // a non-module URL and the preload is simply wasted, never fatal.
+        }
+      }
+
+      if (!urls.size) return;
+      for (const item of Object.values(bundle)) {
+        if (item.type === "chunk") {
+          for (const [placeholder, url] of urls) {
+            if (item.code.includes(placeholder)) {
+              item.code = item.code.replaceAll(placeholder, url);
+            }
+          }
+        } else if (typeof item.source === "string") {
+          for (const [placeholder, url] of urls) {
+            if (item.source.includes(placeholder)) {
+              item.source = item.source.replaceAll(placeholder, url);
+            }
+          }
+        }
+      }
+    },
+  };
+}
+
 // Writes a module-to-chunk report for the client build when
 // VEO_BUNDLE_REPORT is set, so bundle composition can be audited offline.
 // No effect on normal builds.
@@ -263,6 +379,7 @@ export default defineConfig(({ command, mode }) => {
     },
     plugins: [
       earlyHlsPreloadPlugin(),
+      routeChunkPreloadPlugin(),
       bundleReportPlugin(),
       tailwindcss(),
       reactRouter(),

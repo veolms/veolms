@@ -114,6 +114,10 @@ import {
   getCourseThumbnailSrcSet,
 } from "./courses/courseThumbnail";
 import {
+  CATALOGUE_CHUNK_URL_PLACEHOLDER,
+  GUEST_HOME_CHUNK_URL_PLACEHOLDER,
+} from "./routing/routeChunkPreloads";
+import {
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
   getRoleNavigationItems,
@@ -2796,6 +2800,21 @@ export function CoursesPage({
     wishlisted,
   ]);
 
+  // Latch whether enrollment data was already present when the catalogue
+  // page first rendered this visit. When it arrives later (the prerendered
+  // public grid has painted and /auth/me resolved seconds after), the
+  // contrasting-enrollment promotion would reorder painted cards and score
+  // a large layout shift, so it is suppressed until the next visit.
+  const enrollmentPromotionAllowedRef = useRef<boolean | null>(null);
+  if (isCourseCataloguePage) {
+    enrollmentPromotionAllowedRef.current ??= Boolean(enrolledCoursesData);
+  } else {
+    enrollmentPromotionAllowedRef.current = null;
+  }
+  const enrollmentPromotionAllowed = isCourseCataloguePage
+    ? (enrollmentPromotionAllowedRef.current ?? true)
+    : true;
+
   const visibleCourses = useMemo(
     () =>
       getVisibleCourses(allCourses, {
@@ -2808,11 +2827,13 @@ export function CoursesPage({
             ? ""
             : debouncedSearch,
         sort,
+        enrollmentPromotionAllowed,
       }),
     [
       allCourses,
       effectiveRole,
       enrollmentFilter,
+      enrollmentPromotionAllowed,
       debouncedSearch,
       needsCompleteCourseList,
       pagedCourseQuery.isPlaceholderData,
@@ -4215,6 +4236,11 @@ export function CoursesPage({
         : undefined;
       return (
         <Suspense fallback={<AcademyPageFallback />}>
+          {/* Having the lazy guest-home chunk preloaded by the document
+              keeps React from discarding the prerendered markup (and
+              flashing the fallback) when a state update lands before the
+              chunk would otherwise have downloaded. */}
+          <link rel="modulepreload" href={GUEST_HOME_CHUNK_URL_PLACEHOLDER} />
           {homeLcpCourse?.thumbnail ? (
             <link
               rel="preload"
@@ -4246,6 +4272,18 @@ export function CoursesPage({
               onNavigatePage={onNavigatePage}
               setNotice={setNotice}
               studentName={shellProfileDisplayName}
+              pendingContent={
+                initialHomeDiscovery ? (
+                  // Keep the already-painted guest home on screen until the
+                  // dashboard is ready: one content swap instead of flashing
+                  // spinner states between them.
+                  <GuestHome
+                    onNavigatePage={onNavigatePage}
+                    setNotice={setNotice}
+                    initialDiscovery={initialHomeDiscovery}
+                  />
+                ) : undefined
+              }
             />
           ) : (
             <GuestHome
@@ -4515,6 +4553,10 @@ export function CoursesPage({
       <Suspense
         fallback={<CourseCatalogueLoadingSkeleton role={effectiveRole} />}
       >
+        {/* See the guest-home modulepreload note: without this, an early
+            state update makes React drop the prerendered catalogue for the
+            skeleton fallback — a full-viewport layout shift. */}
+        <link rel="modulepreload" href={CATALOGUE_CHUNK_URL_PLACEHOLDER} />
         <CourseCatalogue
           activeSection={surfaceActiveSection}
           role={effectiveRole}
