@@ -76,6 +76,7 @@ function DiscoveryCourseSection({
   publicAction,
   subtitle,
   viewAllLabel = "View all",
+  hideWhenEmpty = false,
 }: {
   title: string;
   courses: readonly CourseSummary[];
@@ -87,9 +88,14 @@ function DiscoveryCourseSection({
   publicAction: "view" | "enroll";
   subtitle?: string;
   viewAllLabel?: string;
+  hideWhenEmpty?: boolean;
 }) {
   const sectionId =
     "guest-home-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+  if (hideWhenEmpty && !isLoading && !isError && courses.length === 0) {
+    return null;
+  }
 
   return (
     <section
@@ -142,6 +148,7 @@ function DiscoveryCourseSection({
                 imagePriority={index < 2}
                 publicAction={publicAction}
                 onNavigatePage={onNavigatePage}
+                studentHome
               />
             ))
           )}
@@ -262,6 +269,7 @@ export function DiscoveryHome({
             publicAction={mode === "authenticated" ? "enroll" : "view"}
             subtitle="Start learning with courses available at no cost."
             viewAllLabel="Explore all"
+            hideWhenEmpty
           />
           <DiscoveryCourseSection
             title="Recently Added"

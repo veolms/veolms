@@ -361,7 +361,7 @@
     --home-mobile-course-inline-inset: 8px;
   }
 
-  .guest-home--authenticated .home-course-section {
+  .student-home .home-course-section {
     padding: 0;
   }
 

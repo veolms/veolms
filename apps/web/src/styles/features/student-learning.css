@@ -1958,6 +1958,11 @@
 }
 
 @media (max-width: 640px) {
+  .home-dashboard-grid.student-home-progressed__dashboard-grid {
+    position: relative;
+    z-index: 1;
+  }
+
   .home-resume-card--progressed .home-resume-copy h2 {
     display: block;
     overflow: visible;

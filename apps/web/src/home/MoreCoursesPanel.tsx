@@ -103,6 +103,7 @@ export function MoreCoursesPanel({
                 imagePriority={index < 2}
                 publicAction="enroll"
                 onNavigatePage={onNavigatePage}
+                studentHome
               />
             ))
           )}
