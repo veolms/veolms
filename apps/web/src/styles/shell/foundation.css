@@ -412,3 +412,22 @@
     left: 21px;
   }
 }
+
+/* The prerendered home is the guest home. A browser that was signed in last
+   time (data-session-hint, set by the head bootstrap script) shows the
+   loading state from the first paint instead of flashing guest content. */
+.guest-home-preview {
+  display: contents;
+}
+
+.session-pending-home {
+  display: none;
+}
+
+html[data-session-hint="signed-in"] .guest-home-preview {
+  display: none;
+}
+
+html[data-session-hint="signed-in"] .session-pending-home {
+  display: block;
+}

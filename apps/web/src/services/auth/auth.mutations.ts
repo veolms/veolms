@@ -27,18 +27,17 @@ import type {
   UserProfileResponse,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
-import { autosyncManager } from "../../lib/autosync";
+import { autosyncManager } from "../../lib/autosync/manager";
 import { authStore } from "../../store/auth.store";
 import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { authKeys } from "./auth.keys";
 import { updatePublicProfileCacheFromUser } from "./auth.queries";
 import { authService, type TotpSetupResponse } from "./auth.service";
-import {
-  learningInteractionKeys,
-  desiredStateCoordinator,
-  interactionCreationCoordinator,
-  optimisticDeletionCoordinator,
-} from "../learning-interactions";
+// Deliberately not the learning-interactions barrel: these two modules are
+// dependency-light, while the barrel drags the optimistic cache coordinators
+// into the startup bundle of every page.
+import { learningInteractionKeys } from "../learning-interactions/learning-interactions.keys";
+import { resetRegisteredInteractionState } from "../learning-interactions/interaction-reset-registry";
 
 function persistAuthenticatedSession(
   queryClient: QueryClient,
@@ -75,9 +74,7 @@ function persistAuthenticatedSession(
   // associated with the newly authenticated account.
   clearCoursePlayerSessions();
   authStore.setUser(data.user);
-  desiredStateCoordinator.reset();
-  interactionCreationCoordinator.reset();
-  optimisticDeletionCoordinator.reset();
+  resetRegisteredInteractionState();
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   queryClient.removeQueries({ queryKey: authKeys.avatars() });
   queryClient.setQueryData(authKeys.me(), currentUser);
@@ -357,9 +354,7 @@ export function useLogout() {
     mutationFn: () => authService.logout(),
     onSettled: () => {
       authStore.clearAuth();
-      desiredStateCoordinator.reset();
-      interactionCreationCoordinator.reset();
-      optimisticDeletionCoordinator.reset();
+      resetRegisteredInteractionState();
       clearCoursePlayerSessions();
       queryClient.setQueryData(authKeys.me(), null);
       queryClient.removeQueries({ queryKey: authKeys.me() });
@@ -377,9 +372,7 @@ export function useDeactivateAccount() {
     mutationFn: () => authService.deactivateAccount(),
     onSettled: () => {
       authStore.clearAuth();
-      desiredStateCoordinator.reset();
-      interactionCreationCoordinator.reset();
-      optimisticDeletionCoordinator.reset();
+      resetRegisteredInteractionState();
       clearCoursePlayerSessions();
 
       // A deactivated account must not leave protected data in the client

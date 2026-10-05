@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { registerInteractionResetHandler } from "./interaction-reset-registry";
 import { useSyncExternalStore } from "react";
 import { queryClient as defaultQueryClient } from "../../lib/query-client";
 import { authStore } from "../../store/auth.store";
@@ -451,6 +452,10 @@ export class OptimisticDeletionCoordinator {
 
 export const optimisticDeletionCoordinator =
   new OptimisticDeletionCoordinator();
+
+// See interaction-reset-registry: keeps the API client from bundling this
+// module on pages that never load learning interactions.
+registerInteractionResetHandler(() => optimisticDeletionCoordinator.reset());
 
 /** React bridge for projections and tombstone presentation. */
 export function useOptimisticDeletionRevision(): number {

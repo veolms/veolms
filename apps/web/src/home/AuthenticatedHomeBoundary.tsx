@@ -29,6 +29,14 @@ interface AuthenticatedHomeBoundaryProps {
   onNavigatePage: (page: string) => void;
   setNotice?: (message: string) => void;
   studentName?: string;
+  /**
+   * Rendered while enrollments load and while the lazy dashboard chunk
+   * resolves, instead of the spinner states. The shell passes the seeded
+   * guest home here so a signed-in load swaps content exactly once
+   * (guest home -> dashboard) rather than flashing spinners in between,
+   * which scored large layout shifts in Lighthouse.
+   */
+  pendingContent?: ReactNode;
 }
 
 function HomeState({
@@ -145,6 +153,7 @@ export function AuthenticatedHomeBoundary({
   onNavigatePage,
   setNotice,
   studentName,
+  pendingContent,
 }: AuthenticatedHomeBoundaryProps) {
   const enrollmentQuery = useEnrolledCourses();
   const enrollmentData = enrollmentQuery.data;
@@ -159,7 +168,7 @@ export function AuthenticatedHomeBoundary({
       );
     }
 
-    return <HomeLoadingState />;
+    return <>{pendingContent ?? <HomeLoadingState />}</>;
   }
 
   if (enrollmentQuery.isError && enrollmentData.courses.length === 0) {
@@ -173,7 +182,7 @@ export function AuthenticatedHomeBoundary({
 
   if (enrollmentData.courses.length === 0) {
     return (
-      <Suspense fallback={<HomeLoadingState />}>
+      <Suspense fallback={pendingContent ?? <HomeLoadingState />}>
         <DiscoveryHome
           mode="authenticated"
           onNavigatePage={onNavigatePage}
@@ -212,7 +221,7 @@ export function AuthenticatedHomeBoundary({
   };
 
   return (
-    <Suspense fallback={<HomeLoadingState />}>
+    <Suspense fallback={pendingContent ?? <HomeLoadingState />}>
       <StudentHome
         onOpenCourse={onOpenCourse}
         onNavigatePage={onNavigatePage}

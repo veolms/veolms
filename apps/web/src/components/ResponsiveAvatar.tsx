@@ -79,6 +79,23 @@ export function ResponsiveAvatar({
       // Direct optimization for Google avatars: avoid known 401 on 160.webp
       activeSrc = `${avatarPrefix}/original.jpg${querySuffix}`;
       activeSrcSet = undefined;
+    } else if (
+      !activeSrcSet &&
+      !avatarPrefix.endsWith("--google") &&
+      width <= 64
+    ) {
+      // Some API responses carry only the original file, which can be
+      // hundreds of kilobytes for a small avatar slot. The CDN publishes
+      // fixed-width WebP variants next to it, so offer those for small
+      // slots (the largest variant is 160px, which cannot serve large
+      // avatars sharply); a failed load falls back through the original
+      // files via onError.
+      activeSrcSet = [45, 96, 160]
+        .map(
+          (variantWidth) =>
+            `${avatarPrefix}/${variantWidth}.webp${querySuffix} ${variantWidth}w`,
+        )
+        .join(", ");
     }
   } else if (useRawSrcOnly) {
     activeSrcSet = undefined;

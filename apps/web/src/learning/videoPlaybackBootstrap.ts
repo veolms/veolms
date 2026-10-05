@@ -1,9 +1,13 @@
-import {
-  videoPlaybackBootstrapSchema,
-  videoPlaybackTokenSchema,
-  type VideoPlaybackBootstrap,
-  type VideoPlaybackToken,
-} from "@veolms/contracts";
+// This module loads with the root shell, so the playback schemas (and zod
+// with them) are imported dynamically inside the async requests below; the
+// validation itself is unchanged.
+import type {
+  VideoPlaybackBootstrap,
+  VideoPlaybackToken,
+} from "@veolms/contracts/video-playback";
+
+const loadVideoPlaybackSchemas = () =>
+  import("@veolms/contracts/video-playback");
 import { getApiBaseUrl } from "../lib/api-client";
 
 const API_BASE_URL = getApiBaseUrl();
@@ -149,6 +153,7 @@ async function requestBootstrap(
     );
   }
 
+  const { videoPlaybackBootstrapSchema } = await loadVideoPlaybackSchemas();
   const parsed = videoPlaybackBootstrapSchema.safeParse(data);
   if (!parsed.success) {
     throw new VideoPlaybackBootstrapError(
@@ -188,6 +193,7 @@ async function requestPlaybackToken(
     );
   }
 
+  const { videoPlaybackTokenSchema } = await loadVideoPlaybackSchemas();
   const parsed = videoPlaybackTokenSchema.safeParse(
     unwrapResponseData(payload),
   );

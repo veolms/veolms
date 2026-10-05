@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { readSessionPresence, writeSessionPresence } from "./sessionPresence";
 import type { LoginResponse, UserProfileResponse } from "@veolms/contracts";
 
 export type AuthUser = UserProfileResponse | LoginResponse["user"];
@@ -95,6 +96,7 @@ function readIdentityHint(): AuthIdentityHint | null {
 
 function writeIdentityHint(hint: AuthIdentityHint | null) {
   if (typeof window === "undefined") return;
+  writeSessionPresence(hint !== null);
   try {
     if (hint) {
       window.sessionStorage.setItem(
@@ -110,6 +112,9 @@ function writeIdentityHint(hint: AuthIdentityHint | null) {
 }
 
 let identityHint = readIdentityHint();
+// Captured once at startup: whether this browser looked signed in before the
+// session check ran.
+const sessionPresentAtBoot = readSessionPresence();
 
 let state: AuthState = {
   // The session cookie and `/auth/me` are the source of truth. Persisting the
@@ -217,6 +222,18 @@ export function useAuthStore<T = AuthState>(
     authStore.subscribe,
     () => selector(authStore.getState()),
     () => selector(serverState),
+  );
+}
+
+/**
+ * Whether this browser looked signed in when the page started. False during
+ * hydration so the first client render matches the prerendered guest markup.
+ */
+export function useSessionPresentAtBoot(): boolean {
+  return useSyncExternalStore(
+    authStore.subscribe,
+    () => sessionPresentAtBoot,
+    () => false,
   );
 }
 

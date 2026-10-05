@@ -15,9 +15,7 @@ import type { ApiError } from "../../lib/api-error";
 import { authStore } from "../../store/auth.store";
 import { authKeys } from "./auth.keys";
 import { authService } from "./auth.service";
-import { interactionCreationCoordinator } from "../learning-interactions/interaction-creation-coordinator";
-import { desiredStateCoordinator } from "../learning-interactions/desired-state-coordinator";
-import { optimisticDeletionCoordinator } from "../learning-interactions/optimistic-deletion-coordinator";
+import { resetRegisteredInteractionState } from "../learning-interactions/interaction-reset-registry";
 
 export function currentUserQueryOptions(queryClient: QueryClient) {
   return {
@@ -40,9 +38,7 @@ export function currentUserQueryOptions(queryClient: QueryClient) {
       } else {
         authStore.clearAuth();
         queryClient.removeQueries({ queryKey: authKeys.avatars() });
-        desiredStateCoordinator.reset();
-        interactionCreationCoordinator.reset();
-        optimisticDeletionCoordinator.reset();
+        resetRegisteredInteractionState();
       }
 
       return profile;

@@ -87,6 +87,14 @@ export interface CourseCatalogueFilters {
   statusFilter: CourseStatusFilter;
   search: string;
   sort: CourseSort;
+  /**
+   * The "contrasting enrollment" promotion moves one card to position 1,
+   * shifting every already-painted card below it. When enrollment data
+   * arrives only after the prerendered grid has painted, the caller passes
+   * false so the visible order stays stable (the promotion applies again on
+   * the next catalogue visit). Defaults to true.
+   */
+  enrollmentPromotionAllowed?: boolean;
 }
 
 export function courseMatchesWishlist(
@@ -201,6 +209,7 @@ export function getVisibleCourses(
     statusFilter,
     search,
     sort,
+    enrollmentPromotionAllowed = true,
   }: CourseCatalogueFilters,
 ): Course[] {
   const normalizedSearch = search.trim().toLowerCase();
@@ -253,6 +262,7 @@ export function getVisibleCourses(
     );
   });
   if (
+    enrollmentPromotionAllowed &&
     role === "student" &&
     enrollmentFilter === "all" &&
     sort === "latest" &&

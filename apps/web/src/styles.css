@@ -2,6 +2,9 @@
    live with their route or component owner and are loaded when that feature
    is rendered. */
 @import "tailwindcss" source("./");
+/* The video player package's utilities are generated here, in the one
+   utilities build, so base and responsive variants keep Tailwind's order. */
+@source "../../../packages/video-player/src";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "./styles/base/theme-contract.css";

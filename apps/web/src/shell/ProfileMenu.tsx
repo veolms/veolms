@@ -6,16 +6,12 @@ import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
-import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
+import { ShellProfileAvatar } from "./ShellProfileAvatar";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import type { AvatarImageVariant } from "@veolms/contracts";
-import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import type { CourseRole } from "../courses/catalogue";
 import { getRoleDisplayName } from "./workspaceRole";
-
-const FALLBACK_AVATAR_CLASS =
-  "shell-profile-avatar shell-profile-avatar--fallback";
 
 export interface ProfileIdentityData {
   displayName: string;
@@ -117,47 +113,7 @@ export function ProfileMenuIdentity({
   );
 }
 
-export function ShellProfileAvatar({
-  avatarUrl,
-  avatarSrcSet,
-}: {
-  avatarUrl: string | null;
-  avatarSrcSet?: readonly AvatarImageVariant[] | null;
-}) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const showImage = Boolean(avatarUrl) && !imageFailed;
-  const avatarSources = avatarSrcSet?.length ? avatarSrcSet : undefined;
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [avatarUrl, avatarSources]);
-
-  return (
-    <i
-      className={
-        showImage && avatarUrl ? "shell-profile-avatar" : FALLBACK_AVATAR_CLASS
-      }
-      aria-hidden="true"
-    >
-      {showImage && avatarUrl ? (
-        <ResponsiveAvatar
-          src={avatarUrl}
-          srcSet={avatarSources}
-          sizes="43px"
-          alt=""
-          width={43}
-          height={43}
-          loading="lazy"
-          decoding="async"
-          fetchPriority="low"
-          onError={() => setImageFailed(true)}
-        />
-      ) : (
-        <UserCircle size={28} weight="duotone" />
-      )}
-    </i>
-  );
-}
+export { ShellProfileAvatar };
 
 interface ProfileMenuProps {
   role: CourseRole;

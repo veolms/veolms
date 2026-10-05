@@ -24,6 +24,7 @@ import type {
 import type {
   CourseListResponse,
   CourseOverviewResponse,
+  HomeDiscoveryResponse,
 } from "@veolms/contracts";
 import {
   normalizeSettingsTab,
@@ -68,7 +69,7 @@ import {
   toggleWishlistCourse,
   useWishlistIds,
 } from "./courses/wishlistStorage";
-import { CourseCatalogue } from "./courses/CourseCatalogue";
+import { CourseCatalogueLoadingSkeleton } from "./courses/CourseCatalogueSkeleton";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -81,12 +82,7 @@ import { AcademyPaletteMenu } from "./shell/AcademyPaletteMenu";
 import { AcademyRouteSkeleton } from "./routing/AcademyRouteSkeleton";
 import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { useMobileProfileDrawerSize } from "./shell/useMobileProfileDrawerSize";
-import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
-import {
-  ProfileMenu,
-  ProfileMenuIdentity,
-  ShellProfileAvatar,
-} from "./shell/ProfileMenu";
+import { ShellProfileAvatar } from "./shell/ShellProfileAvatar";
 import { ProfileButtonPlaceholder } from "./shell/ProfileButtonPlaceholder";
 import { SidebarResizeReadout } from "./shell/SidebarResizeReadout";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
@@ -94,6 +90,7 @@ import { useCurrentUser, useSignOut } from "./services/auth";
 import {
   authStore,
   useAuthIdentityHint,
+  useSessionPresentAtBoot,
   useAuthStore,
   type AuthIdentityHint,
 } from "./store/auth.store";
@@ -113,6 +110,22 @@ import {
   adaptCourseSummaryToCatalogueCourse,
   adaptDeletedCourseToCatalogueCourse,
 } from "./courses/courseAdapter";
+import {
+  courseThumbnailSizes,
+  getCourseThumbnailSrcSet,
+} from "./courses/courseThumbnail";
+import {
+  CATALOGUE_CHUNK_URL_PLACEHOLDER,
+  CATALOGUE_CSS_URLS_PLACEHOLDER,
+  GUEST_HOME_CHUNK_URL_PLACEHOLDER,
+  GUEST_HOME_CSS_URLS_PLACEHOLDER,
+  splitChunkCssUrls,
+} from "./routing/routeChunkPreloads";
+
+// Resolved at module scope: the placeholders are replaced with literal URL
+// lists at build time, so these arrays are constants.
+const GUEST_HOME_CSS_URLS = splitChunkCssUrls(GUEST_HOME_CSS_URLS_PLACEHOLDER);
+const CATALOGUE_CSS_URLS = splitChunkCssUrls(CATALOGUE_CSS_URLS_PLACEHOLDER);
 import {
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
@@ -213,14 +226,62 @@ import {
   READING_MODE_CHANGE_EVENT,
 } from "./reading-mode/readingModePreferences";
 import type { ReadingModePreferences } from "./reading-mode/readingModePreferences";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-  type DrawerDismissThen,
-} from "@/components/ui/drawer";
+import type { DrawerDismissThen } from "@/components/ui/drawer";
 import type { ProfilePreferences } from "./settings/profileTypes";
+// The mobile navigation sheet is the only shell consumer of the Base UI
+// drawer stack (~70KB). Loading it lazily keeps that out of the startup
+// bundle of every page; the sheet is warmed on idle for compact viewports so
+// the first tap still opens instantly. All pieces come from one module, so
+// the compound-component context stays intact.
+// The catalogue is the /courses page body; every other page only pays for
+// it on navigation. Static prerender resolves the lazy module, so the
+// /courses document still ships with catalogue markup, and an idle warm-up
+// keeps client-side navigation instant.
+const loadCourseCatalogueModule = () => import("./courses/CourseCatalogue");
+const CourseCatalogue = lazy(() =>
+  loadCourseCatalogueModule().then((module) => ({
+    default: module.CourseCatalogue,
+  })),
+);
+
+// Profile menu and logout modal open on explicit user actions, so their
+// modules load lazily (menu warmed on idle for signed-in sessions) instead
+// of riding in the startup bundle of every page.
+const loadProfileMenuModule = () => import("./shell/ProfileMenu");
+const ProfileMenu = lazy(() =>
+  loadProfileMenuModule().then((module) => ({ default: module.ProfileMenu })),
+);
+const ProfileMenuIdentity = lazy(() =>
+  loadProfileMenuModule().then((module) => ({
+    default: module.ProfileMenuIdentity,
+  })),
+);
+const LogoutConfirmModal = lazy(() =>
+  import("./shell/LogoutConfirmModal").then((module) => ({
+    default: module.LogoutConfirmModal,
+  })),
+);
+
+const loadMobileMenuDrawerModule = () => import("@/components/ui/drawer");
+const Drawer = lazy(() =>
+  loadMobileMenuDrawerModule().then((module) => ({ default: module.Drawer })),
+);
+const DrawerContent = lazy(() =>
+  loadMobileMenuDrawerModule().then((module) => ({
+    default: module.DrawerContent,
+  })),
+);
+const DrawerTitle = lazy(() =>
+  loadMobileMenuDrawerModule().then((module) => ({
+    default: module.DrawerTitle,
+  })),
+);
+const DrawerDescription = lazy(() =>
+  loadMobileMenuDrawerModule().then((module) => ({
+    default: module.DrawerDescription,
+  })),
+);
+
 const OrdersPageRoute = lazy(() =>
   import("./orders/OrdersPage").then((module) => ({
     default: module.OrdersPage,
@@ -365,6 +426,7 @@ interface CoursesPageProps {
   initialPublishedCoursePage?: CourseListResponse;
   initialPublishedCoursePageNeedsRefresh?: boolean;
   initialCourseOverview?: CourseOverviewResponse;
+  initialHomeDiscovery?: HomeDiscoveryResponse;
   onOpenCourse: (
     course: Course | LearningCourse,
     options?: CourseOpenOptions,
@@ -852,6 +914,7 @@ export function CoursesPage({
   initialPublishedCoursePage,
   initialPublishedCoursePageNeedsRefresh = false,
   initialCourseOverview,
+  initialHomeDiscovery,
   onOpenCourse,
   onNavigatePage,
   onNavigateBack,
@@ -923,11 +986,13 @@ export function CoursesPage({
   >(null);
   // Browser-only input capabilities are applied after startup so the loading
   // boundary remains deterministic across the build and the first client pass.
-  const [compactNavigation, setCompactNavigation] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      Boolean(window.__VEO_BOOTSTRAP__?.navigation?.compact),
-  );
+  // Compact navigation must start as the prerendered "wide" value: it gates
+  // whole elements (mobile dock, sidebar controls), so reading the viewport
+  // here makes hydration fail on phones (React #418) and React then discards
+  // and re-renders the entire prerendered tree. The pre-hydration layout is
+  // CSS-driven via data-navigation-layout, and the mount effect below applies
+  // the real matchMedia value immediately after hydration.
+  const [compactNavigation, setCompactNavigation] = useState(false);
   const [coarseNavigationInput, setCoarseNavigationInput] = useState(false);
   const [edgeSidebarOpen, setEdgeSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>("dark");
@@ -1015,6 +1080,16 @@ export function CoursesPage({
     bottom: false,
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // The sheet (and the drawer stack it lazy-loads) mounts on the first open
+  // request, or ahead of time on idle for compact viewports. Starting false
+  // also keeps the first client render identical to the prerender.
+  const [mobileNavigationSheetMounted, setMobileNavigationSheetMounted] =
+    useState(false);
+  const [pendingMobileMenuOpen, setPendingMobileMenuOpen] = useState(false);
+  const [profileMenuSurfaceMounted, setProfileMenuSurfaceMounted] =
+    useState(false);
+  const [pendingProfileMenuOpen, setPendingProfileMenuOpen] = useState(false);
+  const [logoutModalMounted, setLogoutModalMounted] = useState(false);
   const [mobilePaletteMenu, setMobilePaletteMenu] = useState(false);
   const [mobileMenuCollapsedSnapPoint, setMobileMenuCollapsedSnapPoint] =
     useState(MOBILE_DRAWER_INITIAL_SNAP_POINT);
@@ -1049,6 +1124,20 @@ export function CoursesPage({
       return null;
     }
   })();
+  // Post-hydration view of the stored role hint. The server snapshot stays
+  // null so the first client render matches the prerendered guest markup;
+  // right after hydration it switches, letting creator/admin sessions hide
+  // the guest-home preview without a hydration mismatch.
+  const hydratedWorkspaceRoleHint = useSyncExternalStore(
+    subscribeToNothing,
+    () => workspaceRoleHint,
+    () => null,
+  );
+  // Same idea for any signed-in browser: its home is not the guest home, so
+  // a loading state stands in until the session check answers.
+  const sessionPresentAtBoot = useSessionPresentAtBoot();
+  const showGuestHomeWhilePending =
+    hydratedWorkspaceRoleHint !== "creator" && !sessionPresentAtBoot;
   const storeUser = useAuthStore((s) => s.user);
   // Once `/auth/me` has completed, its null result must win over any
   // in-memory login snapshot. Before that, the snapshot is useful only for
@@ -1276,7 +1365,11 @@ export function CoursesPage({
         : Users;
   const shellProfileAvatarUrl = activeUser?.avatarDataUrl ?? null;
   const shellProfileAvatarSrcSet = activeUser?.avatarSrcSet ?? [];
-  const { data: notificationSummary } = useNotificationSummary();
+  // Guests have no notifications endpoint access; an unauthenticated request
+  // would only log a 401 console error on every public page.
+  const { data: notificationSummary } = useNotificationSummary({
+    enabled: isAuthenticated,
+  });
   const unreadNotificationCount = notificationSummary?.unreadCount ?? 0;
   const profileRef = useRef<HTMLDivElement>(null);
   const coursesAppRef = useRef<HTMLDivElement>(null);
@@ -1777,7 +1870,11 @@ export function CoursesPage({
     };
   }, [storedPreferencesReady]);
 
-  useEffect(() => {
+  // Layout effect so the real navigation mode is applied in the same frame
+  // as hydration: the first render pass must use the prerendered "wide"
+  // markup (see the compactNavigation state above), and painting that markup
+  // on a phone would flash the wrong controls for a frame.
+  useLayoutEffect(() => {
     const media = window.matchMedia(COMPACT_NAVIGATION_QUERY);
     const coarseInput = window.matchMedia("(hover: none), (pointer: coarse)");
     const syncNavigationMode = () => {
@@ -1795,6 +1892,108 @@ export function CoursesPage({
       coarseInput.removeEventListener("change", syncNavigationMode);
     };
   }, []);
+
+  useEffect(() => {
+    if (!pendingMobileMenuOpen || !mobileNavigationSheetMounted) {
+      return undefined;
+    }
+    // A tap arrived before the sheet was warmed. Open only after the lazy
+    // drawer module has resolved and its closed state has committed (two
+    // frames after the Suspense retry), so the open transition runs from a
+    // mounted drawer instead of being dismissed during its first mount.
+    let cancelled = false;
+    void loadMobileMenuDrawerModule().then(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          setPendingMobileMenuOpen(false);
+          setMobileMenuOpen(true);
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingMobileMenuOpen, mobileNavigationSheetMounted]);
+
+  useEffect(() => {
+    if (!isAuthenticated || profileMenuSurfaceMounted) return undefined;
+    if (profileMenu) {
+      setProfileMenuSurfaceMounted(true);
+      return undefined;
+    }
+    const mount = () => {
+      void loadProfileMenuModule();
+      setProfileMenuSurfaceMounted(true);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(mount, { timeout: 4000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = window.setTimeout(mount, 2000);
+    return () => window.clearTimeout(handle);
+  }, [isAuthenticated, profileMenu, profileMenuSurfaceMounted]);
+
+  useEffect(() => {
+    if (!pendingProfileMenuOpen || !profileMenuSurfaceMounted) {
+      return undefined;
+    }
+    // A click arrived before the menu surface was warmed. Open only after
+    // the lazy module resolves and the closed menu has committed, so the
+    // opening click cannot race the menu's own dismiss listeners.
+    let cancelled = false;
+    void loadProfileMenuModule().then(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          setPendingProfileMenuOpen(false);
+          setProfileMenu(true);
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingProfileMenuOpen, profileMenuSurfaceMounted]);
+
+  useEffect(() => {
+    if (logoutConfirmOpen) setLogoutModalMounted(true);
+  }, [logoutConfirmOpen]);
+
+  useEffect(() => {
+    // The catalogue module is behind a route-body lazy(); warm it once the
+    // shell is idle so navigating to /courses never shows its fallback.
+    const warm = () => void loadCourseCatalogueModule();
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(warm, { timeout: 5000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = window.setTimeout(warm, 2500);
+    return () => window.clearTimeout(handle);
+  }, []);
+
+  useEffect(() => {
+    if (mobileNavigationSheetMounted) return undefined;
+    if (mobileMenuOpen) {
+      setMobileNavigationSheetMounted(true);
+      return undefined;
+    }
+    if (!compactNavigation) return undefined;
+    // Warm the sheet while the main thread is idle so the first tap on the
+    // "You" button opens it without waiting for the drawer chunk. The sheet
+    // body renders the profile identity/menu, so warm that module with it.
+    const mount = () => {
+      void loadMobileMenuDrawerModule();
+      void loadProfileMenuModule();
+      setMobileNavigationSheetMounted(true);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(mount, { timeout: 3000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = window.setTimeout(mount, 1500);
+    return () => window.clearTimeout(handle);
+  }, [compactNavigation, mobileMenuOpen, mobileNavigationSheetMounted]);
 
   useEffect(() => {
     setMobileBottomNavHidden(false);
@@ -2311,11 +2510,13 @@ export function CoursesPage({
 
       if (event.key === "Escape") {
         setCourseMenu(null);
+        setPendingProfileMenuOpen(false);
         setProfileMenu(false);
         revertPalettePreviewRef.current?.();
         setPaletteMenu(false);
         setReadingModeMenu(null);
         setSettingsQuickMenu(null);
+        setPendingMobileMenuOpen(false);
         setMobileMenuOpen(false);
         setMobilePaletteMenu(false);
         setEdgeSidebarOpen(false);
@@ -2622,6 +2823,21 @@ export function CoursesPage({
     wishlisted,
   ]);
 
+  // Latch whether enrollment data was already present when the catalogue
+  // page first rendered this visit. When it arrives later (the prerendered
+  // public grid has painted and /auth/me resolved seconds after), the
+  // contrasting-enrollment promotion would reorder painted cards and score
+  // a large layout shift, so it is suppressed until the next visit.
+  const enrollmentPromotionAllowedRef = useRef<boolean | null>(null);
+  if (isCourseCataloguePage) {
+    enrollmentPromotionAllowedRef.current ??= Boolean(enrolledCoursesData);
+  } else {
+    enrollmentPromotionAllowedRef.current = null;
+  }
+  const enrollmentPromotionAllowed = isCourseCataloguePage
+    ? (enrollmentPromotionAllowedRef.current ?? true)
+    : true;
+
   const visibleCourses = useMemo(
     () =>
       getVisibleCourses(allCourses, {
@@ -2634,11 +2850,13 @@ export function CoursesPage({
             ? ""
             : debouncedSearch,
         sort,
+        enrollmentPromotionAllowed,
       }),
     [
       allCourses,
       effectiveRole,
       enrollmentFilter,
+      enrollmentPromotionAllowed,
       debouncedSearch,
       needsCompleteCourseList,
       pagedCourseQuery.isPlaceholderData,
@@ -2663,6 +2881,7 @@ export function CoursesPage({
   };
 
   const closeMobileMenu = () => {
+    setPendingMobileMenuOpen(false);
     setMobileMenuOpen(false);
     setProfileMenu(false);
     setMobilePaletteMenu(false);
@@ -2677,6 +2896,14 @@ export function CoursesPage({
     setMobilePaletteMenu(false);
     setMobileMenuCollapsedSnapPoint(nextSnapPoint);
     setMobileMenuSnapPoint(nextSnapPoint);
+    if (!mobileNavigationSheetMounted) {
+      // The drawer must commit once in its closed state before it can run an
+      // open transition; mounting it directly with open=true makes Base UI
+      // dismiss itself. Mount first, then the pending-open effect opens it.
+      setMobileNavigationSheetMounted(true);
+      setPendingMobileMenuOpen(true);
+      return;
+    }
     setMobileMenuOpen(true);
   };
   const dismissMobileMenuThen = (action: () => void) => {
@@ -3962,6 +4189,16 @@ export function CoursesPage({
     (item) => item.id === academyTheme,
   );
 
+  // The guest home is a nested lazy chunk that normally starts downloading
+  // only after the auth check resolves. Fetching it as soon as the home page
+  // is active removes that extra network round trip from the first paint of
+  // the course rows (the page's LCP) on cold loads.
+  useEffect(() => {
+    if (page === "home") {
+      void import("./GuestHome");
+    }
+  }, [page]);
+
   const renderPageContent = ({
     surfaceCourseSlug = courseSlug,
     surfaceDiscussionTab = discussionTab,
@@ -4011,19 +4248,89 @@ export function CoursesPage({
       );
     }
     if (effectiveRole === "student" && surfacePage === "home") {
+      // The guest home's first popular-course thumbnail is the page's LCP
+      // image. Emitting its preload here (not inside the lazy GuestHome)
+      // places it in the prerendered document head, so the browser starts
+      // the download before hydration instead of after the auth check.
+      const homeLcpCourse = initialHomeDiscovery?.popularCourses?.[0]
+        ? adaptCourseSummaryToCatalogueCourse(
+            initialHomeDiscovery.popularCourses[0],
+          )
+        : undefined;
       return (
         <Suspense fallback={<AcademyPageFallback />}>
+          {/* Having the lazy guest-home chunk preloaded by the document
+              keeps React from discarding the prerendered markup (and
+              flashing the fallback) when a state update lands before the
+              chunk would otherwise have downloaded. Its feature stylesheets
+              are linked too: the prerendered guest-home markup must not
+              paint before the CSS that styles it. They are deliberately
+              plain in-place links (no `precedence`): React would hoist
+              those above the global stylesheets and flip the cascade. */}
+          <link rel="modulepreload" href={GUEST_HOME_CHUNK_URL_PLACEHOLDER} />
+          {GUEST_HOME_CSS_URLS.map((href) => (
+            <link key={href} rel="stylesheet" href={href} />
+          ))}
+          {homeLcpCourse?.thumbnail ? (
+            <link
+              rel="preload"
+              as="image"
+              href={homeLcpCourse.thumbnail}
+              imageSrcSet={getCourseThumbnailSrcSet(homeLcpCourse)}
+              imageSizes={courseThumbnailSizes}
+              fetchPriority="high"
+            />
+          ) : null}
           {!isAuthReady ? (
-            <AcademyPageFallback />
+            initialHomeDiscovery && showGuestHomeWhilePending ? (
+              // Paint the seeded guest home while the session check runs so
+              // the prerendered document carries real content (and the LCP
+              // image) instead of a blank fallback. This is also the
+              // prerendered markup, so a browser that was signed in last
+              // time hides it from the first paint (data-session-hint, set
+              // by the head bootstrap) and shows the loading state instead.
+              <>
+                <div className="guest-home-preview">
+                  <GuestHome
+                    onNavigatePage={onNavigatePage}
+                    setNotice={setNotice}
+                    initialDiscovery={initialHomeDiscovery}
+                  />
+                </div>
+                <div className="session-pending-home">
+                  <AcademyPageFallback />
+                </div>
+              </>
+            ) : (
+              <AcademyPageFallback />
+            )
           ) : isAuthenticated ? (
             <AuthenticatedHomeBoundary
               onOpenCourse={onOpenCourse}
               onNavigatePage={onNavigatePage}
               setNotice={setNotice}
               studentName={shellProfileDisplayName}
+              pendingContent={
+                initialHomeDiscovery && showGuestHomeWhilePending ? (
+                  // Keep the already-painted guest home on screen until the
+                  // dashboard is ready: one content swap instead of flashing
+                  // spinner states between them.
+                  <GuestHome
+                    onNavigatePage={onNavigatePage}
+                    setNotice={setNotice}
+                    initialDiscovery={initialHomeDiscovery}
+                  />
+                ) : (
+                  <AcademyPageFallback />
+                )
+              }
             />
           ) : (
-            <GuestHome onNavigatePage={onNavigatePage} setNotice={setNotice} />
+            <GuestHome
+              onNavigatePage={onNavigatePage}
+              setNotice={setNotice}
+              initialDiscovery={initialHomeDiscovery}
+            />
           )}
         </Suspense>
       );
@@ -4285,52 +4592,64 @@ export function CoursesPage({
       );
     }
     return (
-      <CourseCatalogue
-        activeSection={surfaceActiveSection}
-        role={effectiveRole}
-        isAdmin={isAdmin}
-        currentUserId={activeUser?.id}
-        isLoading={isLoadingCourses}
-        hasLoadError={isCourseCatalogueLoadError}
-        onRetryLoad={() => {
-          if (effectiveRole === "student") {
-            void (needsCompleteCourseList
-              ? completeCourseQuery.refetch()
-              : pagedCourseQuery.refetch());
-          } else if (enrollmentFilter === "bin") {
-            void deletedCoursesQuery.refetch();
-          } else {
-            void myCoursesQuery.refetch();
-          }
-        }}
-        preloadFirstCourseImage={Boolean(initialPublishedCoursePage)}
-        wishlisted={wishlisted}
-        quickFilterCounts={quickFilterCounts}
-        enrollmentFilter={enrollmentFilter}
-        onEnrollmentFilterChange={handleEnrollmentFilterChange}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        search={search}
-        onSearchChange={setSearch}
-        sort={sort}
-        onSortChange={setSort}
-        visibleCourses={visibleCourses}
-        totalCoursesCount={totalCoursesCount}
-        hasNextPage={!needsCompleteCourseList && pagedCourseQuery.hasNextPage}
-        isFetchingNextPage={pagedCourseQuery.isFetchingNextPage}
-        onLoadMore={() => void pagedCourseQuery.fetchNextPage()}
-        onWishlist={toggleWishlist}
-        onOpenCourse={onOpenCourse}
-        onEditIntent={prepareCourseEditorEdit}
-        courseMenu={courseMenu}
-        setCourseMenu={setCourseMenu}
-        setNotice={setNotice}
-        onNavigatePage={onNavigatePage}
-        onResetCatalogue={resetCatalogue}
-        onDeleteCourse={handleDeleteCourse}
-        onRestoreCourse={handleRestoreCourse}
-        deletingCourseIds={deletingCourseIds}
-      />
+      <Suspense
+        fallback={<CourseCatalogueLoadingSkeleton role={effectiveRole} />}
+      >
+        {/* See the guest-home modulepreload note: without this, an early
+            state update makes React drop the prerendered catalogue for the
+            skeleton fallback — a full-viewport layout shift. The chunk's
+            stylesheets are linked so prerendered markup paints styled. */}
+        <link rel="modulepreload" href={CATALOGUE_CHUNK_URL_PLACEHOLDER} />
+        {CATALOGUE_CSS_URLS.map((href) => (
+          <link key={href} rel="stylesheet" href={href} />
+        ))}
+        <CourseCatalogue
+          activeSection={surfaceActiveSection}
+          role={effectiveRole}
+          isAdmin={isAdmin}
+          currentUserId={activeUser?.id}
+          isLoading={isLoadingCourses}
+          hasLoadError={isCourseCatalogueLoadError}
+          onRetryLoad={() => {
+            if (effectiveRole === "student") {
+              void (needsCompleteCourseList
+                ? completeCourseQuery.refetch()
+                : pagedCourseQuery.refetch());
+            } else if (enrollmentFilter === "bin") {
+              void deletedCoursesQuery.refetch();
+            } else {
+              void myCoursesQuery.refetch();
+            }
+          }}
+          preloadFirstCourseImage={Boolean(initialPublishedCoursePage)}
+          wishlisted={wishlisted}
+          quickFilterCounts={quickFilterCounts}
+          enrollmentFilter={enrollmentFilter}
+          onEnrollmentFilterChange={handleEnrollmentFilterChange}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          search={search}
+          onSearchChange={setSearch}
+          sort={sort}
+          onSortChange={setSort}
+          visibleCourses={visibleCourses}
+          totalCoursesCount={totalCoursesCount}
+          hasNextPage={!needsCompleteCourseList && pagedCourseQuery.hasNextPage}
+          isFetchingNextPage={pagedCourseQuery.isFetchingNextPage}
+          onLoadMore={() => void pagedCourseQuery.fetchNextPage()}
+          onWishlist={toggleWishlist}
+          onOpenCourse={onOpenCourse}
+          onEditIntent={prepareCourseEditorEdit}
+          courseMenu={courseMenu}
+          setCourseMenu={setCourseMenu}
+          setNotice={setNotice}
+          onNavigatePage={onNavigatePage}
+          onResetCatalogue={resetCatalogue}
+          onDeleteCourse={handleDeleteCourse}
+          onRestoreCourse={handleRestoreCourse}
+          deletingCourseIds={deletingCourseIds}
+        />
+      </Suspense>
     );
   };
 
@@ -4582,43 +4901,45 @@ export function CoursesPage({
             </nav>
 
             <div className="courses-profile" ref={profileRef}>
-              {isAuthenticated && (
-                <ProfileMenu
-                  id="desktop-profile-menu"
-                  className="profile-menu--animated"
-                  isOpen={profileMenu}
-                  role={effectiveRole}
-                  allowedRoles={allowedWorkspaceRoles}
-                  userRoles={userRoles}
-                  identity={
-                    activeUser?.username
-                      ? {
-                          displayName: shellProfileDisplayName,
-                          username: activeUser.username,
-                          avatarUrl: shellProfileAvatarUrl,
-                          avatarSrcSet: shellProfileAvatarSrcSet,
-                        }
-                      : undefined
-                  }
-                  unreadNotificationCount={
-                    isAuthenticated ? unreadNotificationCount : 0
-                  }
-                  sidebarHidden={sidebarPresentedAsOverlay}
-                  includeSidebarControl={!compactNavigation}
-                  onClose={() => setProfileMenu(false)}
-                  onRoleChange={setRole}
-                  onNavigate={(path) => {
-                    setEdgeSidebarOpen(false);
-                    dismissProfileMenuThen(() => {
-                      dismissMobileMenuThen(() => onNavigatePage(path));
-                    });
-                  }}
-                  onToggleSidebar={() => {
-                    setSidebarMode(sidebarHidden ? "expanded" : "hidden");
-                    setEdgeSidebarOpen(false);
-                  }}
-                  onLogout={openLogoutConfirm}
-                />
+              {isAuthenticated && profileMenuSurfaceMounted && (
+                <Suspense fallback={null}>
+                  <ProfileMenu
+                    id="desktop-profile-menu"
+                    className="profile-menu--animated"
+                    isOpen={profileMenu}
+                    role={effectiveRole}
+                    allowedRoles={allowedWorkspaceRoles}
+                    userRoles={userRoles}
+                    identity={
+                      activeUser?.username
+                        ? {
+                            displayName: shellProfileDisplayName,
+                            username: activeUser.username,
+                            avatarUrl: shellProfileAvatarUrl,
+                            avatarSrcSet: shellProfileAvatarSrcSet,
+                          }
+                        : undefined
+                    }
+                    unreadNotificationCount={
+                      isAuthenticated ? unreadNotificationCount : 0
+                    }
+                    sidebarHidden={sidebarPresentedAsOverlay}
+                    includeSidebarControl={!compactNavigation}
+                    onClose={() => setProfileMenu(false)}
+                    onRoleChange={setRole}
+                    onNavigate={(path) => {
+                      setEdgeSidebarOpen(false);
+                      dismissProfileMenuThen(() => {
+                        dismissMobileMenuThen(() => onNavigatePage(path));
+                      });
+                    }}
+                    onToggleSidebar={() => {
+                      setSidebarMode(sidebarHidden ? "expanded" : "hidden");
+                      setEdgeSidebarOpen(false);
+                    }}
+                    onLogout={openLogoutConfirm}
+                  />
+                </Suspense>
               )}
               {isAuthenticated ? (
                 <button
@@ -4627,7 +4948,17 @@ export function CoursesPage({
                   aria-label={`${shellProfileDisplayName}, ${shellProfileSubtitle}. Open profile menu`}
                   aria-expanded={profileMenu}
                   aria-controls="desktop-profile-menu"
-                  onClick={() => setProfileMenu((current) => !current)}
+                  onClick={() => {
+                    if (!profileMenuSurfaceMounted) {
+                      // Mount the lazy menu closed first; the pending-open
+                      // effect opens it a frame later so this click cannot
+                      // race the menu's dismiss listeners.
+                      setProfileMenuSurfaceMounted(true);
+                      setPendingProfileMenuOpen(true);
+                      return;
+                    }
+                    setProfileMenu((current) => !current);
+                  }}
                 >
                   <span className="courses-profile__avatar-wrap">
                     <ShellProfileAvatar
@@ -5166,428 +5497,448 @@ export function CoursesPage({
         </nav>
       )}
 
-      <Drawer
-        open={mobileMenuOpen}
-        dismissThenRef={mobileMenuDismissThenRef}
-        onOpenChange={(open) => {
-          if (open) setMobileMenuOpen(true);
-          else closeMobileMenu();
-        }}
-        onOpenChangeComplete={(open) => {
-          if (!open) setMobileMenuSnapPoint(mobileMenuCollapsedSnapPoint);
-        }}
-        snapPoints={mobileMenuSnapPoints}
-        snapPoint={mobileMenuSnapPoint}
-        onSnapPointChange={setMobileMenuSnapPoint}
-        snapToSequentialPoints
-        showSwipeHandle
-        triggerId="mobile-navigation-trigger"
-      >
-        <DrawerContent
-          ref={mobileSheetSizeRef}
-          id="mobile-navigation-sheet"
-          aria-labelledby="mobile-navigation-title"
-          aria-describedby="mobile-navigation-description"
-          initialFocus={mobileSheetRef}
-          finalFocus={mobileMoreRef}
-          tabIndex={-1}
-          className="mobile-menu-sheet [--mobile-menu-sheet-top-space:3px] data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] rounded-t-[22px] px-3 pb-[max(14px,var(--app-safe-area-bottom))]"
-          floatingContent={
-            <>
-              {mobilePaletteMenu && (
-                <AcademyPaletteMenu
-                  themes={academyThemes}
-                  selectedTheme={displayedAcademyTheme}
-                  id="mobile-theme-menu"
-                  className="sidebar-palette-menu mobile-palette-menu absolute! right-auto bottom-[calc(68px_+_var(--app-viewport-safe-area-bottom))] left-3 z-[190]! w-[min(216px,calc(100vw_-_24px))]! max-h-[calc(100dvh_-_92px_-_env(safe-area-inset-top))] overflow-y-auto"
-                  mobile
-                  onSelect={changePalette}
-                  onPreview={previewAcademyTheme}
-                  onConfirm={confirmMobilePaletteTheme}
-                  onCancel={cancelMobilePalettePreview}
-                />
-              )}
-              {settingsQuickMenuLoaded && (
-                <Suspense fallback={null}>
-                  <SettingsQuickMenu
-                    id="mobile-settings-quick-menu"
-                    className="settings-quick-menu--mobile absolute! right-3 bottom-[calc(68px_+_var(--app-viewport-safe-area-bottom))] left-auto z-[190]! w-[min(250px,calc(100vw_-_24px))]! min-w-[min(200px,calc(100vw_-_24px))]! max-h-[calc(100dvh_-_92px_-_env(safe-area-inset-top))] overflow-y-auto"
-                    isOpen={settingsQuickMenu === "mobile"}
-                    activeTab={
-                      page === "settings"
-                        ? normalizeSettingsTab(settingsTab)
-                        : null
-                    }
-                    onNavigate={navigateSettingsQuickMenu}
-                  />
-                </Suspense>
-              )}
-              {readingModeMenu === "mobile" && (
-                <Suspense fallback={null}>
-                  <ReadingModeQuickMenu
-                    id="mobile-reading-mode-quick-settings"
-                    className="reading-mode-quick-menu--mobile"
-                    preferences={readingModePreferences}
-                    onChange={updateReadingMode}
-                  />
-                </Suspense>
-              )}
-            </>
-          }
-          data-sidebar-swipe-ignore
-          onPointerDownCapture={(event) => {
-            if (
-              mobilePaletteMenu &&
-              (!(event.target instanceof Element) ||
-                (!event.target.closest("[data-mobile-palette-menu]") &&
-                  !event.target.closest("[data-mobile-palette-trigger]")))
-            )
-              setMobilePaletteMenu(false);
-          }}
-        >
-          <div
-            className="mobile-menu-sheet__body"
-            {...emptyAreaDoubleTapHandlers}
+      {mobileNavigationSheetMounted ? (
+        <Suspense fallback={null}>
+          <Drawer
+            open={mobileMenuOpen}
+            dismissThenRef={mobileMenuDismissThenRef}
+            onOpenChange={(open) => {
+              if (open) setMobileMenuOpen(true);
+              else closeMobileMenu();
+            }}
+            onOpenChangeComplete={(open) => {
+              if (!open) setMobileMenuSnapPoint(mobileMenuCollapsedSnapPoint);
+            }}
+            snapPoints={mobileMenuSnapPoints}
+            snapPoint={mobileMenuSnapPoint}
+            onSnapPointChange={setMobileMenuSnapPoint}
+            snapToSequentialPoints
+            showSwipeHandle
+            triggerId="mobile-navigation-trigger"
           >
-            <DrawerTitle id="mobile-navigation-title" className="sr-only">
-              Profile and navigation
-            </DrawerTitle>
-            <DrawerDescription
-              id="mobile-navigation-description"
-              className="sr-only"
+            <DrawerContent
+              ref={mobileSheetSizeRef}
+              id="mobile-navigation-sheet"
+              aria-labelledby="mobile-navigation-title"
+              aria-describedby="mobile-navigation-description"
+              initialFocus={mobileSheetRef}
+              finalFocus={mobileMoreRef}
+              tabIndex={-1}
+              className="mobile-menu-sheet [--mobile-menu-sheet-top-space:3px] data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] rounded-t-[22px] px-3 pb-[max(14px,var(--app-safe-area-bottom))]"
+              floatingContent={
+                <>
+                  {mobilePaletteMenu && (
+                    <AcademyPaletteMenu
+                      themes={academyThemes}
+                      selectedTheme={displayedAcademyTheme}
+                      id="mobile-theme-menu"
+                      className="sidebar-palette-menu mobile-palette-menu absolute! right-auto bottom-[calc(68px_+_var(--app-viewport-safe-area-bottom))] left-3 z-[190]! w-[min(216px,calc(100vw_-_24px))]! max-h-[calc(100dvh_-_92px_-_env(safe-area-inset-top))] overflow-y-auto"
+                      mobile
+                      onSelect={changePalette}
+                      onPreview={previewAcademyTheme}
+                      onConfirm={confirmMobilePaletteTheme}
+                      onCancel={cancelMobilePalettePreview}
+                    />
+                  )}
+                  {settingsQuickMenuLoaded && (
+                    <Suspense fallback={null}>
+                      <SettingsQuickMenu
+                        id="mobile-settings-quick-menu"
+                        className="settings-quick-menu--mobile absolute! right-3 bottom-[calc(68px_+_var(--app-viewport-safe-area-bottom))] left-auto z-[190]! w-[min(250px,calc(100vw_-_24px))]! min-w-[min(200px,calc(100vw_-_24px))]! max-h-[calc(100dvh_-_92px_-_env(safe-area-inset-top))] overflow-y-auto"
+                        isOpen={settingsQuickMenu === "mobile"}
+                        activeTab={
+                          page === "settings"
+                            ? normalizeSettingsTab(settingsTab)
+                            : null
+                        }
+                        onNavigate={navigateSettingsQuickMenu}
+                      />
+                    </Suspense>
+                  )}
+                  {readingModeMenu === "mobile" && (
+                    <Suspense fallback={null}>
+                      <ReadingModeQuickMenu
+                        id="mobile-reading-mode-quick-settings"
+                        className="reading-mode-quick-menu--mobile"
+                        preferences={readingModePreferences}
+                        onChange={updateReadingMode}
+                      />
+                    </Suspense>
+                  )}
+                </>
+              }
+              data-sidebar-swipe-ignore
+              onPointerDownCapture={(event) => {
+                if (
+                  mobilePaletteMenu &&
+                  (!(event.target instanceof Element) ||
+                    (!event.target.closest("[data-mobile-palette-menu]") &&
+                      !event.target.closest("[data-mobile-palette-trigger]")))
+                )
+                  setMobilePaletteMenu(false);
+              }}
             >
-              Profile actions, additional navigation, and appearance controls
-            </DrawerDescription>
-            <div
-              className="mobile-menu-sheet__profile-wrap mt-2"
-              data-profile-surface
-            >
-              {isAuthenticated && activeUser?.username ? (
-                <ProfileMenuIdentity
-                  variant="mobile"
-                  displayName={shellProfileDisplayName}
-                  username={activeUser.username}
-                  avatarUrl={shellProfileAvatarUrl}
-                  avatarSrcSet={shellProfileAvatarSrcSet}
-                  unreadNotificationCount={unreadNotificationCount}
-                  onClose={() => setProfileMenu(false)}
-                  onNavigate={(path) => {
-                    setEdgeSidebarOpen(false);
-                    dismissProfileMenuThen(() => {
-                      dismissMobileMenuThen(() => onNavigatePage(path));
-                    });
-                  }}
-                />
-              ) : accountStatusUnknown ? (
-                <ProfileButtonPlaceholder className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]!" />
-              ) : (
-                <LoginProfileButton
-                  className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]! hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,white_10%)]!"
-                  arrowSize={17}
-                  remembered={authUserFetched ? null : authIdentityHint}
-                  onLogin={() => onNavigatePage("/login")}
-                />
-              )}
-            </div>
-            <div className="mobile-menu-sheet__scroll overflow-x-hidden pb-11">
-              {isAuthenticated && (
-                <ProfileMenu
-                  id="mobile-profile-menu"
-                  className="mobile-menu-sheet__profile-menu"
-                  role={effectiveRole}
-                  allowedRoles={allowedWorkspaceRoles}
-                  userRoles={userRoles}
-                  unreadNotificationCount={unreadNotificationCount}
-                  includeSidebarControl={false}
-                  beforeAccountContent={
-                    <div
-                      className="mobile-menu-sheet__list mobile-menu-sheet__profile-navigation"
-                      role="group"
-                      aria-label="Additional navigation"
-                    >
-                      {mobileMoreNavigation.map((item) => {
-                        const [label, Icon] = item;
-                        const active = isNavigationItemActive(item);
-                        return (
-                          <button
-                            type="button"
-                            key={label}
-                            className={active ? "is-active" : ""}
-                            style={
-                              {
-                                "--nav-icon-color": getNavigationIconColor(
-                                  label,
-                                  sidebarPreferences,
-                                ),
-                              } as CSSProperties
-                            }
-                            role="menuitem"
-                            aria-current={active ? "page" : undefined}
-                            data-sidebar-swipe-ignore
-                            aria-label={label}
-                            onClick={() => selectNavigation(label, item)}
-                          >
-                            <Icon
-                              size={23}
-                              weight={active ? "fill" : "regular"}
-                            />
-                            <span>{label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  }
-                  onClose={() => setProfileMenu(false)}
-                  onRoleChange={setRole}
-                  onNavigate={(path) => {
-                    setEdgeSidebarOpen(false);
-                    dismissProfileMenuThen(() => {
-                      dismissMobileMenuThen(() => onNavigatePage(path));
-                    });
-                  }}
-                  onLogout={() => {
-                    closeMobileMenu();
-                    setLogoutConfirmOpen(true);
-                  }}
-                />
-              )}
-            </div>
-            <div
-              className={`mobile-menu-sheet__appearance sidebar-appearance--mobile-dock${mobilePaletteMenu ? " mobile-menu-sheet__appearance--palette-open" : ""}`}
-              role="group"
-              aria-label="Appearance controls"
-            >
-              {sidebarDockItems.map((item) => {
-                if (item === "appearance") {
-                  return (
-                    <button
-                      key={item}
-                      ref={mobileAppearanceModeTriggerRef}
-                      data-dock-item={item}
-                      data-appearance-mode-toggle
-                      data-mobile-palette-trigger
-                      type="button"
-                      className="is-active"
-                      aria-haspopup="menu"
-                      aria-expanded={
-                        mobilePaletteMenu && paletteMenuSource === "appearance"
-                      }
-                      aria-controls="mobile-theme-menu"
-                      aria-label={`${resolvedTheme === "dark" ? "Dark" : "Light"} mode active. Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
-                      title={`${resolvedTheme === "dark" ? "Dark" : "Light"} mode - switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
-                      onClick={(event) => {
-                        if (consumeAppearanceGestureClick(event)) return;
-                        themeRevealOriginRef.current =
-                          themeRevealOriginFromClick(event);
-                        toggleAppearance(true);
-                      }}
-                      onContextMenu={(event) =>
-                        openAppearanceThemeMenu(event, true)
-                      }
-                      onPointerDown={(event) =>
-                        startDockLongPress(event, () =>
-                          activateAppearanceOption("theme", true, "appearance"),
-                        )
-                      }
-                      onPointerMove={moveDockLongPress}
-                      onPointerUp={finishDockLongPress}
-                      onPointerCancel={finishDockLongPress}
-                    >
-                      {resolvedTheme === "dark" ? (
-                        <Moon
-                          size={20}
-                          weight="fill"
-                          className="appearance-mode-icon"
-                          data-appearance-mode-icon
-                        />
-                      ) : (
-                        <Sun
-                          size={20}
-                          weight="fill"
-                          className="appearance-mode-icon"
-                          data-appearance-mode-icon
-                        />
-                      )}
-                    </button>
-                  );
-                }
-
-                if (item === "theme") {
-                  return (
-                    <button
-                      key={item}
-                      data-dock-item={item}
-                      ref={mobilePaletteTriggerRef}
-                      data-palette-trigger
-                      data-mobile-palette-trigger
-                      type="button"
-                      className={mobilePaletteMenu ? "is-active" : ""}
-                      aria-haspopup="menu"
-                      aria-expanded={
-                        mobilePaletteMenu && paletteMenuSource === "theme"
-                      }
-                      aria-controls="mobile-theme-menu"
-                      aria-label={`Choose color theme. Current theme: ${academyThemes[currentAcademyThemeIndex]?.name}`}
-                      title={`Choose color theme - ${academyThemes[currentAcademyThemeIndex]?.name}`}
-                      onClick={(event) => {
-                        if (consumeAppearanceGestureClick(event)) return;
-                        setReadingModeMenu(null);
-                        setPaletteMenuSource("theme");
-                        if (mobilePaletteMenu)
-                          cancelMobilePalettePreview(
-                            themeRevealOriginFromClick(event) ?? undefined,
-                          );
-                        else setMobilePaletteMenu(true);
-                      }}
-                      onPointerDown={(event) =>
-                        startAppearanceSwipe(event, "theme")
-                      }
-                      onPointerUp={(event) =>
-                        finishAppearanceSwipe(event, "theme", true)
-                      }
-                      onPointerCancel={cancelAppearanceSwipe}
-                    >
-                      <Palette size={20} />
-                      <i
-                        style={{
-                          background: academyThemes.find(
-                            (themeOption) =>
-                              themeOption.id === displayedAcademyTheme,
-                          )?.preview,
+              <div
+                className="mobile-menu-sheet__body"
+                {...emptyAreaDoubleTapHandlers}
+              >
+                <DrawerTitle id="mobile-navigation-title" className="sr-only">
+                  Profile and navigation
+                </DrawerTitle>
+                <DrawerDescription
+                  id="mobile-navigation-description"
+                  className="sr-only"
+                >
+                  Profile actions, additional navigation, and appearance
+                  controls
+                </DrawerDescription>
+                <div
+                  className="mobile-menu-sheet__profile-wrap mt-2"
+                  data-profile-surface
+                >
+                  {isAuthenticated && activeUser?.username ? (
+                    <Suspense fallback={null}>
+                      <ProfileMenuIdentity
+                        variant="mobile"
+                        displayName={shellProfileDisplayName}
+                        username={activeUser.username}
+                        avatarUrl={shellProfileAvatarUrl}
+                        avatarSrcSet={shellProfileAvatarSrcSet}
+                        unreadNotificationCount={unreadNotificationCount}
+                        onClose={() => setProfileMenu(false)}
+                        onNavigate={(path) => {
+                          setEdgeSidebarOpen(false);
+                          dismissProfileMenuThen(() => {
+                            dismissMobileMenuThen(() => onNavigatePage(path));
+                          });
                         }}
                       />
-                    </button>
-                  );
-                }
-
-                if (item === "reading-mode") {
-                  return (
-                    <button
-                      key={item}
-                      data-dock-item={item}
-                      data-reading-mode-trigger
-                      type="button"
-                      className={`sidebar-appearance__reading-mode${readingModeEnabled ? " is-active" : ""}`}
-                      aria-label={`${readingModeEnabled ? "Reading mode active. Turn reading mode off" : "Turn reading mode on"}`}
-                      title={`Reading mode - ${readingModeEnabled ? "on" : "off"}`}
-                      aria-pressed={readingModeEnabled}
-                      aria-haspopup="dialog"
-                      aria-expanded={readingModeMenu === "mobile"}
-                      aria-controls="mobile-reading-mode-quick-settings"
-                      onClick={(event) => {
-                        if (consumeAppearanceGestureClick(event)) return;
-                        toggleReadingMode();
-                      }}
-                      onContextMenu={(event) =>
-                        openReadingModeMenu(event, true)
-                      }
-                      onPointerDown={(event) =>
-                        startDockLongPress(event, () =>
-                          showReadingModeMenu(true),
-                        )
-                      }
-                      onPointerMove={moveDockLongPress}
-                      onPointerUp={finishDockLongPress}
-                      onPointerCancel={finishDockLongPress}
-                    >
-                      <Eye
-                        aria-hidden="true"
-                        data-reading-mode-icon="off"
-                        size={20}
-                        weight="regular"
+                    </Suspense>
+                  ) : accountStatusUnknown ? (
+                    <ProfileButtonPlaceholder className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]!" />
+                  ) : (
+                    <LoginProfileButton
+                      className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]! hover:bg-[color-mix(in_srgb,var(--surface-strong)_90%,white_10%)]!"
+                      arrowSize={17}
+                      remembered={authUserFetched ? null : authIdentityHint}
+                      onLogin={() => onNavigatePage("/login")}
+                    />
+                  )}
+                </div>
+                <div className="mobile-menu-sheet__scroll overflow-x-hidden pb-11">
+                  {isAuthenticated && (
+                    <Suspense fallback={null}>
+                      <ProfileMenu
+                        id="mobile-profile-menu"
+                        className="mobile-menu-sheet__profile-menu"
+                        role={effectiveRole}
+                        allowedRoles={allowedWorkspaceRoles}
+                        userRoles={userRoles}
+                        unreadNotificationCount={unreadNotificationCount}
+                        includeSidebarControl={false}
+                        beforeAccountContent={
+                          <div
+                            className="mobile-menu-sheet__list mobile-menu-sheet__profile-navigation"
+                            role="group"
+                            aria-label="Additional navigation"
+                          >
+                            {mobileMoreNavigation.map((item) => {
+                              const [label, Icon] = item;
+                              const active = isNavigationItemActive(item);
+                              return (
+                                <button
+                                  type="button"
+                                  key={label}
+                                  className={active ? "is-active" : ""}
+                                  style={
+                                    {
+                                      "--nav-icon-color":
+                                        getNavigationIconColor(
+                                          label,
+                                          sidebarPreferences,
+                                        ),
+                                    } as CSSProperties
+                                  }
+                                  role="menuitem"
+                                  aria-current={active ? "page" : undefined}
+                                  data-sidebar-swipe-ignore
+                                  aria-label={label}
+                                  onClick={() => selectNavigation(label, item)}
+                                >
+                                  <Icon
+                                    size={23}
+                                    weight={active ? "fill" : "regular"}
+                                  />
+                                  <span>{label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        }
+                        onClose={() => setProfileMenu(false)}
+                        onRoleChange={setRole}
+                        onNavigate={(path) => {
+                          setEdgeSidebarOpen(false);
+                          dismissProfileMenuThen(() => {
+                            dismissMobileMenuThen(() => onNavigatePage(path));
+                          });
+                        }}
+                        onLogout={() => {
+                          closeMobileMenu();
+                          setLogoutConfirmOpen(true);
+                        }}
                       />
-                      <Eye
-                        aria-hidden="true"
-                        data-reading-mode-icon="on"
-                        size={20}
-                        weight="fill"
-                      />
-                    </button>
-                  );
-                }
+                    </Suspense>
+                  )}
+                </div>
+                <div
+                  className={`mobile-menu-sheet__appearance sidebar-appearance--mobile-dock${mobilePaletteMenu ? " mobile-menu-sheet__appearance--palette-open" : ""}`}
+                  role="group"
+                  aria-label="Appearance controls"
+                >
+                  {sidebarDockItems.map((item) => {
+                    if (item === "appearance") {
+                      return (
+                        <button
+                          key={item}
+                          ref={mobileAppearanceModeTriggerRef}
+                          data-dock-item={item}
+                          data-appearance-mode-toggle
+                          data-mobile-palette-trigger
+                          type="button"
+                          className="is-active"
+                          aria-haspopup="menu"
+                          aria-expanded={
+                            mobilePaletteMenu &&
+                            paletteMenuSource === "appearance"
+                          }
+                          aria-controls="mobile-theme-menu"
+                          aria-label={`${resolvedTheme === "dark" ? "Dark" : "Light"} mode active. Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
+                          title={`${resolvedTheme === "dark" ? "Dark" : "Light"} mode - switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
+                          onClick={(event) => {
+                            if (consumeAppearanceGestureClick(event)) return;
+                            themeRevealOriginRef.current =
+                              themeRevealOriginFromClick(event);
+                            toggleAppearance(true);
+                          }}
+                          onContextMenu={(event) =>
+                            openAppearanceThemeMenu(event, true)
+                          }
+                          onPointerDown={(event) =>
+                            startDockLongPress(event, () =>
+                              activateAppearanceOption(
+                                "theme",
+                                true,
+                                "appearance",
+                              ),
+                            )
+                          }
+                          onPointerMove={moveDockLongPress}
+                          onPointerUp={finishDockLongPress}
+                          onPointerCancel={finishDockLongPress}
+                        >
+                          {resolvedTheme === "dark" ? (
+                            <Moon
+                              size={20}
+                              weight="fill"
+                              className="appearance-mode-icon"
+                              data-appearance-mode-icon
+                            />
+                          ) : (
+                            <Sun
+                              size={20}
+                              weight="fill"
+                              className="appearance-mode-icon"
+                              data-appearance-mode-icon
+                            />
+                          )}
+                        </button>
+                      );
+                    }
 
-                if (item === "settings") {
-                  const settingsActive =
-                    page === "settings" || learningOriginPage === "settings";
-                  return (
-                    <button
-                      key={item}
-                      data-dock-item={item}
-                      type="button"
-                      className={settingsActive ? "is-active" : ""}
-                      style={
-                        {
-                          "--nav-icon-color": getNavigationIconColor(
-                            "Settings",
-                            sidebarPreferences,
-                          ),
-                        } as CSSProperties
-                      }
-                      aria-label="Open settings"
-                      title={settingsControlTitle}
-                      aria-current={settingsActive ? "page" : undefined}
-                      aria-keyshortcuts={`${primaryShortcutModifier}+Comma`}
-                      aria-haspopup="menu"
-                      aria-expanded={settingsQuickMenu === "mobile"}
-                      aria-controls="mobile-settings-quick-menu"
-                      data-settings-quick-trigger
-                      onClick={(event) => {
-                        if (consumeAppearanceGestureClick(event)) return;
-                        toggleSettingsNavigation();
-                      }}
-                      onContextMenu={(event) =>
-                        openSettingsQuickMenu(event, true)
-                      }
-                      onPointerDown={(event) =>
-                        startDockLongPress(
-                          event,
-                          () => showSettingsQuickMenu(true),
-                          true,
-                        )
-                      }
-                      onPointerMove={moveDockLongPress}
-                      onPointerUp={finishDockLongPress}
-                      onPointerCancel={finishDockLongPress}
-                    >
-                      <GearSix
-                        size={21}
-                        weight={settingsActive ? "fill" : "regular"}
-                      />
-                    </button>
-                  );
-                }
+                    if (item === "theme") {
+                      return (
+                        <button
+                          key={item}
+                          data-dock-item={item}
+                          ref={mobilePaletteTriggerRef}
+                          data-palette-trigger
+                          data-mobile-palette-trigger
+                          type="button"
+                          className={mobilePaletteMenu ? "is-active" : ""}
+                          aria-haspopup="menu"
+                          aria-expanded={
+                            mobilePaletteMenu && paletteMenuSource === "theme"
+                          }
+                          aria-controls="mobile-theme-menu"
+                          aria-label={`Choose color theme. Current theme: ${academyThemes[currentAcademyThemeIndex]?.name}`}
+                          title={`Choose color theme - ${academyThemes[currentAcademyThemeIndex]?.name}`}
+                          onClick={(event) => {
+                            if (consumeAppearanceGestureClick(event)) return;
+                            setReadingModeMenu(null);
+                            setPaletteMenuSource("theme");
+                            if (mobilePaletteMenu)
+                              cancelMobilePalettePreview(
+                                themeRevealOriginFromClick(event) ?? undefined,
+                              );
+                            else setMobilePaletteMenu(true);
+                          }}
+                          onPointerDown={(event) =>
+                            startAppearanceSwipe(event, "theme")
+                          }
+                          onPointerUp={(event) =>
+                            finishAppearanceSwipe(event, "theme", true)
+                          }
+                          onPointerCancel={cancelAppearanceSwipe}
+                        >
+                          <Palette size={20} />
+                          <i
+                            style={{
+                              background: academyThemes.find(
+                                (themeOption) =>
+                                  themeOption.id === displayedAcademyTheme,
+                              )?.preview,
+                            }}
+                          />
+                        </button>
+                      );
+                    }
 
-                return (
-                  <button
-                    key={item}
-                    data-dock-item={item}
-                    type="button"
-                    className={`sidebar-appearance__fullscreen${isFullscreen ? " is-active" : ""}`}
-                    aria-label={fullscreenActionLabel}
-                    title={fullscreenActionLabel}
-                    aria-pressed={isFullscreen}
-                    aria-keyshortcuts="F11"
-                    onClick={() => void toggleFullscreen()}
-                  >
-                    {isFullscreen ? (
-                      <CornersIn size={21} weight="bold" />
-                    ) : (
-                      <CornersOut size={21} weight="bold" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </DrawerContent>
-      </Drawer>
+                    if (item === "reading-mode") {
+                      return (
+                        <button
+                          key={item}
+                          data-dock-item={item}
+                          data-reading-mode-trigger
+                          type="button"
+                          className={`sidebar-appearance__reading-mode${readingModeEnabled ? " is-active" : ""}`}
+                          aria-label={`${readingModeEnabled ? "Reading mode active. Turn reading mode off" : "Turn reading mode on"}`}
+                          title={`Reading mode - ${readingModeEnabled ? "on" : "off"}`}
+                          aria-pressed={readingModeEnabled}
+                          aria-haspopup="dialog"
+                          aria-expanded={readingModeMenu === "mobile"}
+                          aria-controls="mobile-reading-mode-quick-settings"
+                          onClick={(event) => {
+                            if (consumeAppearanceGestureClick(event)) return;
+                            toggleReadingMode();
+                          }}
+                          onContextMenu={(event) =>
+                            openReadingModeMenu(event, true)
+                          }
+                          onPointerDown={(event) =>
+                            startDockLongPress(event, () =>
+                              showReadingModeMenu(true),
+                            )
+                          }
+                          onPointerMove={moveDockLongPress}
+                          onPointerUp={finishDockLongPress}
+                          onPointerCancel={finishDockLongPress}
+                        >
+                          <Eye
+                            aria-hidden="true"
+                            data-reading-mode-icon="off"
+                            size={20}
+                            weight="regular"
+                          />
+                          <Eye
+                            aria-hidden="true"
+                            data-reading-mode-icon="on"
+                            size={20}
+                            weight="fill"
+                          />
+                        </button>
+                      );
+                    }
 
-      <LogoutConfirmModal
-        isOpen={logoutConfirmOpen}
-        isPending={isSigningOut}
-        onClose={() => setLogoutConfirmOpen(false)}
-        onConfirm={() => void signOutAfterSync()}
-      />
+                    if (item === "settings") {
+                      const settingsActive =
+                        page === "settings" ||
+                        learningOriginPage === "settings";
+                      return (
+                        <button
+                          key={item}
+                          data-dock-item={item}
+                          type="button"
+                          className={settingsActive ? "is-active" : ""}
+                          style={
+                            {
+                              "--nav-icon-color": getNavigationIconColor(
+                                "Settings",
+                                sidebarPreferences,
+                              ),
+                            } as CSSProperties
+                          }
+                          aria-label="Open settings"
+                          title={settingsControlTitle}
+                          aria-current={settingsActive ? "page" : undefined}
+                          aria-keyshortcuts={`${primaryShortcutModifier}+Comma`}
+                          aria-haspopup="menu"
+                          aria-expanded={settingsQuickMenu === "mobile"}
+                          aria-controls="mobile-settings-quick-menu"
+                          data-settings-quick-trigger
+                          onClick={(event) => {
+                            if (consumeAppearanceGestureClick(event)) return;
+                            toggleSettingsNavigation();
+                          }}
+                          onContextMenu={(event) =>
+                            openSettingsQuickMenu(event, true)
+                          }
+                          onPointerDown={(event) =>
+                            startDockLongPress(
+                              event,
+                              () => showSettingsQuickMenu(true),
+                              true,
+                            )
+                          }
+                          onPointerMove={moveDockLongPress}
+                          onPointerUp={finishDockLongPress}
+                          onPointerCancel={finishDockLongPress}
+                        >
+                          <GearSix
+                            size={21}
+                            weight={settingsActive ? "fill" : "regular"}
+                          />
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <button
+                        key={item}
+                        data-dock-item={item}
+                        type="button"
+                        className={`sidebar-appearance__fullscreen${isFullscreen ? " is-active" : ""}`}
+                        aria-label={fullscreenActionLabel}
+                        title={fullscreenActionLabel}
+                        aria-pressed={isFullscreen}
+                        aria-keyshortcuts="F11"
+                        onClick={() => void toggleFullscreen()}
+                      >
+                        {isFullscreen ? (
+                          <CornersIn size={21} weight="bold" />
+                        ) : (
+                          <CornersOut size={21} weight="bold" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </DrawerContent>
+          </Drawer>
+        </Suspense>
+      ) : null}
+
+      {logoutModalMounted ? (
+        <Suspense fallback={null}>
+          <LogoutConfirmModal
+            isOpen={logoutConfirmOpen}
+            isPending={isSigningOut}
+            onClose={() => setLogoutConfirmOpen(false)}
+            onConfirm={() => void signOutAfterSync()}
+          />
+        </Suspense>
+      ) : null}
 
       {notice && (
         <ToastNotification

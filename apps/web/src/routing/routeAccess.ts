@@ -1,4 +1,6 @@
-import { publicProfileUsernameParamsSchema } from "@veolms/contracts";
+// The subpath import matters: this module is in the API client's startup
+// graph, and the contracts barrel would pull zod plus every schema with it.
+import { isValidPublicProfileUsername } from "@veolms/contracts/username-rules";
 import type { MfaGateUser } from "../auth/mfaGate";
 import { resolveMfaSetupView } from "../auth/mfaGate";
 import { normalizeNavigationPath } from "./routeDescriptors";
@@ -122,8 +124,7 @@ export function isPublicProfilePath(pathname: string): boolean {
   const match = /^\/([^/]+)$/.exec(path);
   return Boolean(
     match?.[1] &&
-    publicProfileUsernameParamsSchema.safeParse({ username: match[1] })
-      .success &&
+    isValidPublicProfileUsername(match[1]) &&
     !RESERVED_PROFILE_PATHS.has(path.toLowerCase()),
   );
 }
