@@ -113,7 +113,11 @@ export interface LessonVideoPlayerProps {
   courseLessonsSecondPressHold?: CourseLessonsSecondPressHoldProps;
   courseLessonsShortcutLabel?: string;
   courseLessonsSidePanel?: boolean;
+  /** The lessons drawer is a bottom sheet rather than a side drawer. */
+  courseLessonsBottomSheet?: boolean;
   courseLessonsVideoWidthPercent?: number;
+  /** Element over the course content column that hosts the chapters panel. */
+  chaptersPanelHost?: HTMLElement | null;
   onAutoplayEnabledChange?: (enabled: boolean) => void;
   onCourseLessonsToggle?: (presentation: "drawer" | "side") => void;
   onGoNext?: () => void;
@@ -121,6 +125,11 @@ export interface LessonVideoPlayerProps {
   onLessonEnded?: () => void;
   onMinimize?: (request: LearningMiniPlayerRequest) => void;
   onMinimizeGestureStart?: () => void;
+  /**
+   * Hands the owner a way to start the animated minimize itself, so it can
+   * turn an expand around before it has finished.
+   */
+  onMinimizeTriggerReady?: (trigger: (() => void) | null) => void;
   onMinimizeGestureChange?: (state: LessonPlayerMinimizeGestureState) => void;
   minimizeMotionTarget?: () => HTMLElement | null;
   onMiniPlayerRestoreReady?: () => void;
@@ -173,7 +182,9 @@ export function LessonVideoPlayer({
   courseLessonsSecondPressHold,
   courseLessonsShortcutLabel,
   courseLessonsSidePanel = false,
+  courseLessonsBottomSheet = false,
   courseLessonsVideoWidthPercent = 60,
+  chaptersPanelHost,
   courseTitle,
   engineFactory,
   description,
@@ -189,6 +200,7 @@ export function LessonVideoPlayer({
   onLessonEnded,
   onMinimize,
   onMinimizeGestureStart,
+  onMinimizeTriggerReady,
   onMinimizeGestureChange,
   minimizeMotionTarget,
   onMiniPlayerRestoreReady,
@@ -282,6 +294,18 @@ export function LessonVideoPlayer({
         : media,
     [media, playbackBootstrap],
   );
+
+  // Chapters are parsed from the description; the API only adds the still
+  // captured at each chapter's first second.
+  const chapterThumbnails = useMemo(() => {
+    const thumbnails: Record<number, string> = {};
+    for (const chapter of playbackBootstrap?.chapters ?? []) {
+      if (chapter.thumbnailUrl) {
+        thumbnails[chapter.startSeconds] = chapter.thumbnailUrl;
+      }
+    }
+    return thumbnails;
+  }, [playbackBootstrap?.chapters]);
 
   const source = useMemo<VideoSource>(() => {
     const resumeFromLastPosition =
@@ -662,6 +686,16 @@ export function LessonVideoPlayer({
     },
   });
 
+  const minimizeFromControlRef = useRef(minimizePlayerFromControl);
+  minimizeFromControlRef.current = minimizePlayerFromControl;
+  useEffect(() => {
+    if (!onMinimizeTriggerReady) return undefined;
+    onMinimizeTriggerReady(() => {
+      void minimizeFromControlRef.current();
+    });
+    return () => onMinimizeTriggerReady(null);
+  }, [onMinimizeTriggerReady]);
+
   const handleAmbientEnabledChange = useCallback((enabled: boolean) => {
     setAmbientEnabled(enabled);
     writeAmbientPreference(enabled);
@@ -806,7 +840,7 @@ export function LessonVideoPlayer({
     const isPending = !playbackAccessError;
     return (
       <div
-        className="video-shell relative isolate aspect-video w-full overflow-hidden rounded-xl bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)]"
+        className="video-shell relative isolate aspect-video w-full overflow-hidden bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)]"
         data-learning-playback-gate={playbackAccessError?.kind ?? "pending"}
         role={isPending ? "status" : "alert"}
         aria-label={isPending ? "Loading video" : undefined}
@@ -881,10 +915,7 @@ export function LessonVideoPlayer({
             ? undefined
             : `Preparing video for ${lessonTitle}`
         }
-        className={cn(
-          "relative aspect-video w-full overflow-hidden bg-black",
-          presentation === "mini" ? "rounded-none" : "rounded-xl",
-        )}
+        className="relative aspect-video w-full overflow-hidden bg-black"
       >
         {media.thumbnailSrc ? (
           <img
@@ -925,6 +956,7 @@ export function LessonVideoPlayer({
       ref={playerRef}
       source={source}
       description={description ?? undefined}
+      chapterThumbnails={chapterThumbnails}
       theme={playerTheme}
       engine="shaka"
       engineFactory={engineFactory}
@@ -981,7 +1013,7 @@ export function LessonVideoPlayer({
           ? "!rounded-none !shadow-none"
           : fullscreenCoursePanelActive
             ? "border-0 !h-auto !max-h-full !w-(--learning-fullscreen-video-width) !max-w-none !translate-x-(--learning-fullscreen-video-offset-x) !shrink-0 !rounded-none !shadow-none"
-            : "border-0 !rounded-xl"
+            : "border-0 !rounded-none"
       }
       centralControl={
         presentation === "mini" ? (
@@ -1026,6 +1058,9 @@ export function LessonVideoPlayer({
             courseLessonsSecondPressHold={courseLessonsSecondPressHold}
             courseLessonsShortcutLabel={courseLessonsShortcutLabel}
             courseLessonsSidePanel={courseLessonsSidePanel}
+            courseLessonsBottomSheet={courseLessonsBottomSheet}
+            lessonTitle={lessonTitle}
+            chaptersPanelHost={chaptersPanelHost}
             onAmbientEnabledChange={handleAmbientEnabledChange}
             onAutoplayEnabledChange={onAutoplayEnabledChange}
             onCourseLessonsToggle={onCourseLessonsToggle}
@@ -1064,11 +1099,7 @@ export function LessonVideoPlayer({
           ? false
           : undefined
       }
-      bufferingIndicator={
-        presentation === "mini" ? (
-          <LearningMiniPlayerBufferingIndicator />
-        ) : undefined
-      }
+      bufferingIndicator={<LearningMiniPlayerBufferingIndicator />}
     />
   );
 }

@@ -140,6 +140,22 @@ export async function createVeoLMSApi<
     );
   });
 
+  const responseDelayMs =
+    config.NODE_ENV === "production" ? 0 : config.API_RESPONSE_DELAY_MS;
+  if (responseDelayMs > 0) {
+    app.log.warn(
+      { responseDelayMs },
+      "API_RESPONSE_DELAY_MS is set: every API call is delayed",
+    );
+    app.addHook("onRequest", async (request) => {
+      // Preflight checks and the docs pages are not API calls.
+      if (request.method === "OPTIONS" || request.url.startsWith("/docs")) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, responseDelayMs));
+    });
+  }
+
   // Await this: installs Zod compilers and the route-discovery hook that
   // everything registered below depends on.
   await registerOpenApi(app, config);

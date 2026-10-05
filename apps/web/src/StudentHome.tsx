@@ -233,7 +233,7 @@ function ResumeLessonContext({
   if (!resumeLesson) return null;
 
   const lessonPath = (lessonNumber: number) =>
-    getCoursePlayerPath(courseKey, "home", lessonNumber, "/home");
+    getCoursePlayerPath(courseKey, lessonNumber);
 
   return (
     <div className="home-resume-lesson-context">
@@ -349,9 +349,7 @@ function ProgressedUpNextPanel({
         <a
           href={getCoursePlayerPath(
             context.courseSlug,
-            "home",
             context.resumeLesson.lessonNumber,
-            "/home",
           )}
           className="group mt-2 flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-lg border border-(--border) bg-(--surface-strong) px-2.5 py-2 transition-colors hover:border-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
           aria-label={`Continue current lesson: ${context.resumeLesson.title}`}
@@ -378,9 +376,7 @@ function ProgressedUpNextPanel({
               key={lesson.lessonId}
               href={getCoursePlayerPath(
                 context.courseSlug,
-                "home",
                 lesson.lessonNumber,
-                "/home",
               )}
               className="group flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-lg border border-(--border) bg-(--surface-strong) px-2.5 py-2 transition-colors hover:border-(--accent) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
               aria-label={`Up next lesson: ${lesson.title}`}

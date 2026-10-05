@@ -32,10 +32,11 @@ import { useAuthStore } from "../store/auth.store";
 import { queryClient } from "../lib/query-client";
 import type { LearningCourse } from "../StudentPages";
 import {
-  getCoursePlayerLaunchPath,
-  getCoursePlayerReturnPath,
-  getCoursePlayerSession,
-} from "../learning/coursePlayerNavigation";
+  getLearningReturnLocation,
+  getLearningReturnLocationServerSnapshot,
+  rememberLearningReturnLocation,
+  subscribeToLearningReturnLocation,
+} from "../learning/learningReturnLocation";
 import type {
   LearningPlayerPresentation,
   PersistentLearningPlayerRegistration,
@@ -104,6 +105,7 @@ import {
   resolveWorkspaceRole,
 } from "../shell/workspaceRole";
 import {
+  followApplicationScrollPosition,
   readApplicationScrollPosition,
   scrollApplicationTo,
   type ApplicationScrollPosition,
@@ -118,6 +120,7 @@ import {
 import {
   getDestinationPath,
   getMatchedRouteDescriptor,
+  getStaticRouteDescriptor,
   normalizeNavigationPath,
 } from "../routing/routeDescriptors";
 
@@ -142,6 +145,7 @@ interface LearningBackgroundSurface {
   courseSlug?: string;
   discussionTab?: string;
   page: string;
+  pathname: string;
   section?: string;
   settingsTab?: string;
 }
@@ -241,9 +245,14 @@ const clearLearningPlayerMotionProperties = (element: HTMLElement) => {
   delete element.dataset.learningPlayerRestoring;
 };
 
+/**
+ * Describes the page behind the player so the shell can draw it while the
+ * player shrinks. A page whose address cannot be resolved without a router
+ * match gets no preview rather than the preview of a different page.
+ */
 const resolveLearningBackgroundSurface = (
   returnPath: string,
-): LearningBackgroundSurface => {
+): LearningBackgroundSurface | null => {
   try {
     const url = new URL(returnPath, "https://procodrr.local");
     const pathname = normalizeNavigationPath(url.pathname);
@@ -252,31 +261,24 @@ const resolveLearningBackgroundSurface = (
       return {
         courseSlug: decodeURIComponent(overviewMatch[1]),
         page: "course-overview",
+        pathname,
         section: "Courses",
       };
     }
-    if (pathname === "/" || pathname === "/home") return { page: "home" };
-    if (pathname === "/wishlist") {
-      return { page: "courses", section: "Courses" };
-    }
-    if (pathname === "/settings" || pathname.startsWith("/settings/")) {
-      return {
-        page: "settings",
-        section: "Settings",
-        settingsTab: pathname.split("/").filter(Boolean)[1] ?? "profile",
-      };
-    }
-    if (pathname.startsWith("/discussions")) {
-      return {
-        discussionTab: pathname.split("/").filter(Boolean)[1] ?? "q-and-a",
-        page: "workspace",
-        section: "Discussions",
-      };
-    }
+    const descriptor = getStaticRouteDescriptor(pathname);
+    if (descriptor?.kind !== "shell") return null;
+    return {
+      discussionTab: descriptor.discussionTab,
+      page: descriptor.page,
+      pathname,
+      section:
+        descriptor.section ??
+        (descriptor.page === "courses" ? "Courses" : undefined),
+      settingsTab: descriptor.settingsTab,
+    };
   } catch {
-    // Fall back to the catalogue for an invalid or retired return path.
+    return null;
   }
-  return { page: "courses", section: "Courses" };
 };
 
 const isSettingsPath = (path: string) => {
@@ -289,6 +291,19 @@ const isLearningRoutePath = (path: string) =>
     "/learn/",
   );
 
+/** A page the player can go back to: not a lesson, and not the sign-out step. */
+const isLearningReturnCandidate = (path: string) =>
+  !isLearningRoutePath(path) &&
+  normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/") !== "/logout";
+
+/**
+ * A lesson opened from settings still counts as being inside settings: when
+ * the player is minimized back, leaving settings must go to wherever settings
+ * was opened from, not back into the lesson.
+ */
+const isLessonOpenedFromSettings = (path: string) =>
+  isLearningRoutePath(path) && isSettingsPath(getLearningReturnLocation().path);
+
 const getLearningCourseRouteKey = (path: string) => {
   const pathname = normalizeNavigationPath(path.split(/[?#]/, 1)[0] || "/");
   const parts = pathname.split("/").filter(Boolean);
@@ -297,42 +312,6 @@ const getLearningCourseRouteKey = (path: string) => {
     return decodeURIComponent(parts[1]);
   } catch {
     return parts[1];
-  }
-};
-
-const decorateCoursePlayerLaunch = (
-  destinationPath: string,
-  sourcePath: string,
-) => {
-  const sourcePathname = normalizeNavigationPath(
-    sourcePath.split(/[?#]/, 1)[0] || "/",
-  );
-  if (sourcePathname.startsWith("/learn/")) return destinationPath;
-
-  try {
-    const localOrigin = "https://procodrr.local";
-    const destinationUrl = new URL(destinationPath, localOrigin);
-    const pathParts = destinationUrl.pathname.split("/").filter(Boolean);
-    if (
-      destinationUrl.origin !== localOrigin ||
-      pathParts[0] !== "learn" ||
-      pathParts.length < 2 ||
-      pathParts.length > 3
-    )
-      return destinationPath;
-    if (
-      destinationUrl.searchParams.has("from") ||
-      destinationUrl.searchParams.has("returnTo")
-    )
-      return destinationPath;
-
-    const courseId = decodeURIComponent(pathParts[1]!);
-    const lessonIdentifier = pathParts[2]
-      ? decodeURIComponent(pathParts[2])
-      : undefined;
-    return getCoursePlayerLaunchPath(courseId, sourcePath, lessonIdentifier);
-  } catch {
-    return destinationPath;
   }
 };
 
@@ -364,6 +343,11 @@ export default function AcademyLayout() {
     subscribeToLearningMiniPlayer,
     getLearningMiniPlayerSnapshot,
     getLearningMiniPlayerServerSnapshot,
+  );
+  const learningReturnLocation = useSyncExternalStore(
+    subscribeToLearningReturnLocation,
+    getLearningReturnLocation,
+    getLearningReturnLocationServerSnapshot,
   );
   const [learningBackgroundMounted, setLearningBackgroundMounted] =
     useState(false);
@@ -406,9 +390,15 @@ export default function AcademyLayout() {
   const settingsDocked = normalizeSidebarDockItems(
     getInitialSidebarPreferences().dockItems,
   ).includes("settings");
+  // The menu depends on the workspace role ("view as"), which is kept in
+  // local storage and can be switched without the user object changing. It is
+  // therefore re-read on every navigation; held for the whole session, a role
+  // switch left this list on the old role's menu, so the new role's extra
+  // pages were not recognised as menu pages and never showed as selected.
   const workspaceNavigationItems = useMemo(
     () => getWorkspaceNavigationItems(activeUser, settingsDocked),
-    [activeUser, settingsDocked],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- location.key is the re-read trigger
+    [activeUser, settingsDocked, location.key],
   );
   const currentNavigationState = readAcademyNavigationState(location.state);
   const originPathValue =
@@ -435,10 +425,38 @@ export default function AcademyLayout() {
 
   useLayoutEffect(() => {
     locationPathRef.current = currentLocationPath;
-    if (!isSettingsPath(currentLocationPath)) {
+    if (
+      !isSettingsPath(currentLocationPath) &&
+      !isLessonOpenedFromSettings(currentLocationPath)
+    ) {
       settingsReturnLocationRef.current.path = currentLocationPath;
     }
   }, [currentLocationPath]);
+
+  // Every page that is not a lesson is where the player would go back to, so
+  // it is recorded on arrival together with its highlighted section. Its
+  // scroll position is added when the learner leaves it.
+  useLayoutEffect(() => {
+    if (!isLearningReturnCandidate(currentLocationPath)) return;
+    rememberLearningReturnLocation({
+      path: currentLocationPath,
+      section: activeRouteSection ?? null,
+    });
+  }, [activeRouteSection, currentLocationPath]);
+
+  useEffect(() => {
+    // A plain link reloads the document, so nothing else sees the page go.
+    const rememberScrollPosition = () => {
+      const path = renderedLocationPathRef.current;
+      if (!isLearningReturnCandidate(path)) return;
+      rememberLearningReturnLocation({
+        path,
+        ...readApplicationScrollPosition(),
+      });
+    };
+    window.addEventListener("pagehide", rememberScrollPosition);
+    return () => window.removeEventListener("pagehide", rememberScrollPosition);
+  }, []);
 
   const { signOut } = useSignOut();
 
@@ -478,9 +496,21 @@ export default function AcademyLayout() {
 
     if (previousPath !== currentLocationPath) {
       if (pending?.sourcePath !== previousPath) {
+        const previousPosition = readApplicationScrollPosition();
         applicationScrollPositionsRef.current.set(previousPath, {
-          position: readApplicationScrollPosition(),
+          position: previousPosition,
         });
+        // A lesson reached by a plain route change or the browser history
+        // never passes through navigateTo, which is what records this.
+        if (
+          isLearningRoutePath(currentLocationPath) &&
+          isLearningReturnCandidate(previousPath)
+        ) {
+          rememberLearningReturnLocation({
+            path: previousPath,
+            ...previousPosition,
+          });
+        }
       }
       renderedLocationPathRef.current = currentLocationPath;
     }
@@ -505,7 +535,16 @@ export default function AcademyLayout() {
     };
     restorePosition();
     const frame = window.requestAnimationFrame(restorePosition);
-    return () => window.cancelAnimationFrame(frame);
+    // After a reload the page is still loading its code and data, so it may
+    // not be tall enough for the position yet.
+    const stopFollowingPosition =
+      (canRestoreScroll?.(position) ?? true)
+        ? followApplicationScrollPosition(position)
+        : undefined;
+    return () => {
+      window.cancelAnimationFrame(frame);
+      stopFollowingPosition?.();
+    };
   }, [currentLocationPath]);
 
   useEffect(() => {
@@ -518,10 +557,9 @@ export default function AcademyLayout() {
 
   const navigateTo: NavigateTo = useCallback(
     (destination, options) => {
-      const requestedPath = decorateCoursePlayerLaunch(
-        options?.exact ? destination : getDestinationPath(destination),
-        locationPathRef.current,
-      );
+      const requestedPath = options?.exact
+        ? destination
+        : getDestinationPath(destination);
       const requestedPathname = normalizeNavigationPath(
         requestedPath.split(/[?#]/, 1)[0] || "/",
       );
@@ -543,17 +581,17 @@ export default function AcademyLayout() {
       }
 
       const performNavigation = () => {
-        const destinationPath = options?.exact
-          ? destination
-          : getDestinationPath(destination);
+        const path = requestedPath;
         const activeLocationPath = locationPathRef.current;
-        const path = decorateCoursePlayerLaunch(
-          destinationPath,
-          activeLocationPath,
-        );
         const navigationState = {
           ...readAcademyNavigationState(location.state),
         };
+        // Read the menu afresh: the role may have been switched since the
+        // last navigation, which is the only time the list above is rebuilt.
+        const workspaceNavigationItems = getWorkspaceNavigationItems(
+          activeUser,
+          settingsDocked,
+        );
         const targetNavigationMatch = getNavigationMatch(
           path,
           workspaceNavigationItems,
@@ -604,7 +642,11 @@ export default function AcademyLayout() {
           restoreLearningMiniPlayerRef.current();
           return;
         }
-        if (isSettingsPath(path) && !isSettingsPath(locationPathRef.current)) {
+        if (
+          isSettingsPath(path) &&
+          !isSettingsPath(locationPathRef.current) &&
+          !isLessonOpenedFromSettings(locationPathRef.current)
+        ) {
           const currentScrollPosition = readApplicationScrollPosition();
           settingsReturnLocationRef.current = {
             path: locationPathRef.current,
@@ -617,8 +659,9 @@ export default function AcademyLayout() {
           normalizeNavigationPath(path) !==
           normalizeNavigationPath(locationPathRef.current);
         const resetDestinationScroll =
-          options?.resetScroll ||
-          (isSettingsPath(path) && !isSettingsPath(sourcePath));
+          !options?.scrollPosition &&
+          (options?.resetScroll ||
+            (isSettingsPath(path) && !isSettingsPath(sourcePath)));
         const sourceStorageKey = getApplicationScrollStorageKey(
           sourcePath,
           options?.sourceScrollRestorationKey,
@@ -672,11 +715,26 @@ export default function AcademyLayout() {
           : options?.scrollRestorationKey
             ? applicationScrollPositionsRef.current.get(destinationStorageKey)
             : applicationScrollPositionsRef.current.get(path);
-        const position = resetDestinationScroll
-          ? { left: 0, top: 0 }
-          : options?.preserveScroll
-            ? sourcePosition
-            : (storedDestination?.position ?? { left: 0, top: 0 });
+        const position =
+          options?.scrollPosition ??
+          (resetDestinationScroll
+            ? { left: 0, top: 0 }
+            : options?.preserveScroll
+              ? sourcePosition
+              : (storedDestination?.position ?? { left: 0, top: 0 }));
+        if (
+          isLearningRoutePath(path) &&
+          isLearningReturnCandidate(sourcePath)
+        ) {
+          // Only a page that is on screen has a scroll position worth
+          // keeping; a page that was requested but never rendered keeps the
+          // one it already had.
+          rememberLearningReturnLocation(
+            renderedLocationPathRef.current === sourcePath
+              ? { path: sourcePath, ...sourcePosition }
+              : { path: sourcePath },
+          );
+        }
         pendingScrollPositionRef.current = {
           destinationPath: path,
           sourcePath,
@@ -705,7 +763,7 @@ export default function AcademyLayout() {
       location.state,
       navigate,
       route.section,
-      workspaceNavigationItems,
+      settingsDocked,
     ],
   );
   const navigateToRef = useRef(navigateTo);
@@ -946,7 +1004,13 @@ export default function AcademyLayout() {
       playerPresentationRef.current = "mini";
       setPlayerPresentation("mini");
       openLearningMiniPlayerSession(session);
-      navigateTo(session.returnPath, { exact: true });
+      // Go back to the page the player was opened from, exactly where the
+      // learner left it.
+      const returnLocation = getLearningReturnLocation();
+      navigateTo(returnLocation.path, {
+        exact: true,
+        scrollPosition: { left: returnLocation.left, top: returnLocation.top },
+      });
     },
     [navigateTo],
   );
@@ -1268,6 +1332,37 @@ export default function AcademyLayout() {
       }
 
       const version = surfaceMotionVersionRef.current;
+      if (isDesktopLearningMinimizeViewport()) {
+        // Desktop motion is always a timed settle, so the page behind the
+        // player gets one CSS opacity transition instead of a value written
+        // on every frame. The compositor runs it, nothing is measured, and
+        // the stage's custom properties (which restyle the whole app when
+        // they change) are written once.
+        learningMotionOffsetYRef.current = toOffsetY;
+        learningMotionViewportHeightRef.current = viewportHeight;
+        if (forceMount) mountLearningBackground();
+        const motionStage = learningMotionStageRef.current;
+        if (motionStage) {
+          motionStage.style.setProperty(
+            "--learning-background-reveal-duration",
+            `${LEARNING_PLAYER_MOTION_DURATION_MS}ms`,
+          );
+          // Minimizing reveals the page behind the player; restoring and
+          // settling back cover it again.
+          motionStage.style.setProperty(
+            "--learning-background-reveal",
+            toOffsetY > fromOffsetY ? "1" : "0",
+          );
+          motionStage.dataset.learningPlayerMotion = phase;
+        }
+        surfaceMotionTimerRef.current = window.setTimeout(() => {
+          if (surfaceMotionVersionRef.current !== version) return;
+          surfaceMotionTimerRef.current = null;
+          onComplete?.();
+        }, LEARNING_PLAYER_MOTION_DURATION_MS + 80);
+        return;
+      }
+
       const startedAt = performance.now();
       const complete = () => {
         if (surfaceMotionVersionRef.current !== version) return;
@@ -1322,7 +1417,11 @@ export default function AcademyLayout() {
         LEARNING_PLAYER_MOTION_DURATION_MS + 80,
       );
     },
-    [applyLearningSurfaceMotion, cancelLearningSurfaceMotion],
+    [
+      applyLearningSurfaceMotion,
+      cancelLearningSurfaceMotion,
+      mountLearningBackground,
+    ],
   );
 
   const finishLearningPlayerRestoreMotion = useCallback(() => {
@@ -1375,6 +1474,9 @@ export default function AcademyLayout() {
       const motionStage = learningMotionStageRef.current;
       if (!motionStage) return;
       if (state.phase === "idle") {
+        // Idle with the full player showing also ends any restore that was
+        // still winding down.
+        restoringPlayerRef.current = false;
         cancelLearningSurfaceMotion();
         clearLearningPlayerMotionProperties(motionStage);
         unmountLearningBackground();
@@ -1487,7 +1589,14 @@ export default function AcademyLayout() {
         }
       }
     }
-    const alreadyOnLearningRoute = isLearningRoutePath(locationPathRef.current);
+    // The lesson page counts as "already here" while it is still the page
+    // on screen, even if a navigation away from it has been requested: a
+    // minimize asks to leave, and an expand right behind it cancels that
+    // before the route ever changes. Without this the route never changes,
+    // so nothing would switch the player back to the page.
+    const alreadyOnLearningRoute =
+      isLearningRoutePath(locationPathRef.current) ||
+      isLearningRoutePath(renderedLocationPathRef.current);
     navigateTo(lessonPath, { exact: true });
     if (alreadyOnLearningRoute) {
       commitPersistentPlayerRestore();
@@ -1502,18 +1611,30 @@ export default function AcademyLayout() {
   ]);
   restoreLearningMiniPlayerRef.current = restoreLearningMiniPlayer;
 
-  const activeLearningReturnPath =
-    route.kind === "learning"
-      ? (courseSlug && getCoursePlayerSession(courseSlug)?.returnPath) ||
-        getCoursePlayerReturnPath(location.search)
+  const onLearningRoute = route.kind === "learning";
+  const learningBackgroundSurface =
+    onLearningRoute && learningBackgroundMounted
+      ? resolveLearningBackgroundSurface(learningReturnLocation.path)
       : null;
-  const learningBackground =
-    route.kind === "learning" &&
-    learningBackgroundMounted &&
-    activeLearningReturnPath
-      ? {
-          ...resolveLearningBackgroundSurface(activeLearningReturnPath),
-        }
+  const learningBackground = learningBackgroundSurface
+    ? {
+        ...learningBackgroundSurface,
+        scrollLeft: learningReturnLocation.left,
+        scrollTop: learningReturnLocation.top,
+      }
+    : null;
+  // While a lesson fills the screen the shell keeps pointing at the page the
+  // player was opened from.
+  const learningOriginSection =
+    onLearningRoute &&
+    workspaceNavigationItems.some(
+      ([label]) => label === learningReturnLocation.section,
+    )
+      ? learningReturnLocation.section
+      : null;
+  const learningOriginPage =
+    onLearningRoute && isSettingsPath(learningReturnLocation.path)
+      ? "settings"
       : null;
 
   return (
@@ -1521,7 +1642,7 @@ export default function AcademyLayout() {
       <CoursesPage
         cataloguePathname={location.pathname}
         routeCatalogueEnrollmentFilter={getStudentCatalogueEnrollmentFilterFromPath(
-          location.pathname,
+          learningBackground?.pathname ?? location.pathname,
         )}
         initialPublishedCoursePage={staticCourseRouteData?.publishedCoursePage}
         initialPublishedCoursePageNeedsRefresh={
@@ -1547,6 +1668,8 @@ export default function AcademyLayout() {
           miniPlayerLessonPath: learningMiniPlayer?.lessonPath,
         })}
         learningBackground={learningBackground}
+        learningOriginPage={learningOriginPage}
+        learningOriginSection={learningOriginSection}
         learningMotionStageRef={learningMotionStageRef}
         onNavigatePage={navigateTo}
         onNavigateBack={navigateBackToOrigin}

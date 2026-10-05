@@ -2,7 +2,7 @@ import type { Invoice, OrderScope } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
-import { escapeHtml } from "../../../services/email/email.templates.ts";
+import { escapeHtml } from "@veolms/services/email";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import * as authRepo from "../../auth/authentication/authentication.repository.ts";

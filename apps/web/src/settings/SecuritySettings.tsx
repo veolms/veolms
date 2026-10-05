@@ -14,9 +14,8 @@ import { LockKeyIcon as LockKey } from "@phosphor-icons/react/LockKey";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { TimerIcon as Timer } from "@phosphor-icons/react/Timer";
-import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import { SettingRow } from "./SettingsControls";
+import { RecommendedBadge, SettingRow } from "./SettingsControls";
 import {
   CenteredLoadingSpinner,
   LoadingSpinnerIcon,
@@ -358,15 +357,6 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
 
 const SECURITY_ROW_CLASS =
   "max-[480px]:[grid-template-columns:2rem_minmax(0,1fr)] max-[480px]:[&_.settings-row__control]:col-start-2 max-[480px]:[&_.settings-row__control]:justify-stretch max-[480px]:[&_.settings-action]:w-full";
-
-function RecommendedBadge() {
-  return (
-    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-(--accent-soft) px-1.5 py-px text-[0.62rem] font-semibold text-(--accent)">
-      <Star aria-hidden size={10} weight="fill" />
-      Recommended
-    </span>
-  );
-}
 
 function StatusNote({ children }: { children: ReactNode }) {
   return (

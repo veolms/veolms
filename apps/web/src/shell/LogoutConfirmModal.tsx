@@ -22,6 +22,8 @@ export function LogoutConfirmModal({
       onClose={onClose}
       onConfirm={onConfirm}
       icon={SignOut}
+      iconWeight="regular"
+      emphasis="cancel"
       title="Sign out?"
       description="This ends your session on this device. You can sign back in anytime to return to your courses and workspace."
       cancelLabel="Stay signed in"

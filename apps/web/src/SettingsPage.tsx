@@ -330,8 +330,12 @@ export function SettingsPage({
 
   return (
     <div className="settings-page" aria-labelledby="settings-page-title">
-      <header className="settings-page__topbar">
-        <div className="settings-page__heading">
+      {/* Only the section tabs stay pinned while the page scrolls; the
+          heading above them scrolls away. The header therefore takes no
+          box of its own (`contents`), which lets the tabs stick against the
+          page instead of being held inside a header that scrolls off. */}
+      <header className="settings-page__topbar contents!">
+        <div className="settings-page__heading mb-2">
           <PageHeading
             id="settings-page-title"
             title="Settings"
@@ -346,7 +350,7 @@ export function SettingsPage({
 
         <nav
           ref={tabListRef}
-          className="settings-tabs page-tabs"
+          className="settings-tabs page-tabs sticky! top-(--settings-page-sticky-top,0px) z-25 mx-[calc(-1*var(--settings-tab-nav-bleed))]! bg-(--main-surface) px-(--settings-tab-nav-bleed)!"
           aria-label="Settings sections"
           role="tablist"
         >

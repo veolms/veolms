@@ -507,7 +507,7 @@ export function PlayerGestureSurface({
       data-player-shortcut-surface=""
       data-player-ready={ready ? "true" : "false"}
       className={classNames(
-        "absolute inset-0 z-0 cursor-inherit border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white",
+        "absolute inset-0 z-0 cursor-inherit !rounded-none border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white",
         mobileInteraction ? "touch-none" : "touch-pan-y",
       )}
       aria-label={surfaceLabel}

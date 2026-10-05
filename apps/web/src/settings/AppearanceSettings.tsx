@@ -2,7 +2,7 @@ import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMo
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { MoonIcon as Moon } from "@phosphor-icons/react/Moon";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
-import { academyThemes } from "../themes";
+import { academyThemes, DEFAULT_ACADEMY_THEME } from "../themes";
 import type { AcademyTheme } from "../themes";
 import { themeRevealOriginFromClick } from "../shell/themeViewTransition";
 import type { ThemeRevealOrigin } from "../shell/themeViewTransition";
@@ -65,7 +65,7 @@ export function AppearanceSettings({
 }: AppearanceSettingsProps) {
   const selectedColor = COLOR_THEMES.some((item) => item.id === academyTheme)
     ? academyTheme
-    : "codex";
+    : DEFAULT_ACADEMY_THEME;
 
   return (
     <div className="settings-content settings-content--appearance">

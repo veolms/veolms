@@ -104,21 +104,26 @@ export function getPublicNavigationItems(): readonly NavigationItem[] {
   return studentNavigation;
 }
 
+// Neighbouring menu items take colours from different parts of the spectrum,
+// so the multicolour sidebar does not read as shades of one hue.
 const navigationTones: Record<string, string> = {
   Home: "#5da9ff",
   Dashboard: "#5da9ff",
-  Courses: "#8f70ff",
+  Courses: "#f472b6",
   Coupons: "#fbbf24",
-  Students: "#55d98b",
+  Students: "#2dd4bf",
   Reviews: "#f1be4b",
-  "My Quiz": "#47d4d0",
-  Discussions: "#58a8ff",
+  "My Quiz": "#f87171",
+  Discussions: "#4ade80",
   Analytics: "#f09c4e",
   Orders: "#d68eea",
   "Purchase History": "#d68eea",
   Messages: "#63c8d5",
   Notifications: "#f1be4b",
   Settings: "#a16cff",
+  // Dock controls that are not pages.
+  Appearance: "#fbbf24",
+  "Reading mode": "#34d399",
   Fullscreen: "#ff8a55",
   Logout: "#8c9294",
 };

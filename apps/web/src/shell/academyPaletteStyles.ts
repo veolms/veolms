@@ -31,6 +31,7 @@ import lilacLight from "../styles/themes/light/lilac.css?url&no-inline";
 import champagneLight from "../styles/themes/light/champagne.css?url&no-inline";
 import limeLight from "../styles/themes/light/lime.css?url&no-inline";
 import paletteCatalogStylesheet from "../styles/themes/academy-theme-palettes.css?url&no-inline";
+import { DEFAULT_ACADEMY_THEME } from "../themes";
 
 export interface AcademyPaletteStyles {
   dark: string;
@@ -59,7 +60,7 @@ export const academyPaletteStylesById: Readonly<
 };
 
 export function getAcademyPaletteStylesheetBootstrapScript(): string {
-  return `(()=>{try{const p=document.documentElement.dataset.palette||"codex",all=${JSON.stringify(academyPaletteStylesById)},css=all[p]||all.codex;for(const mode of ["dark","light"]){const link=document.createElement("link");link.rel="stylesheet";link.href=css[mode];link.dataset.academyPaletteStyle=p;link.dataset.academyPaletteMode=mode;link.setAttribute("blocking","render");document.head.append(link)}}catch{}})();`;
+  return `(()=>{try{const p=document.documentElement.dataset.palette||${JSON.stringify(DEFAULT_ACADEMY_THEME)},all=${JSON.stringify(academyPaletteStylesById)},css=all[p]||all[${JSON.stringify(DEFAULT_ACADEMY_THEME)}];for(const mode of ["dark","light"]){const link=document.createElement("link");link.rel="stylesheet";link.href=css[mode];link.dataset.academyPaletteStyle=p;link.dataset.academyPaletteMode=mode;link.setAttribute("blocking","render");document.head.append(link)}}catch{}})();`;
 }
 
 let paletteCatalogLoad: Promise<void> | null = null;
@@ -94,7 +95,9 @@ export function ensureAcademyPaletteStylesheets(
 ): Promise<void> {
   if (typeof document === "undefined") return Promise.resolve();
 
-  const palette = academyPaletteStylesById[paletteId] ? paletteId : "codex";
+  const palette = academyPaletteStylesById[paletteId]
+    ? paletteId
+    : DEFAULT_ACADEMY_THEME;
   if (
     document.querySelector<HTMLLinkElement>(
       "link[data-academy-palette-catalog]",
@@ -104,7 +107,8 @@ export function ensureAcademyPaletteStylesheets(
   }
 
   const styles =
-    academyPaletteStylesById[palette] ?? academyPaletteStylesById.codex!;
+    academyPaletteStylesById[palette] ??
+    academyPaletteStylesById[DEFAULT_ACADEMY_THEME]!;
   return Promise.all([
     loadAcademyPaletteStylesheet(palette, "dark", styles.dark),
     loadAcademyPaletteStylesheet(palette, "light", styles.light),

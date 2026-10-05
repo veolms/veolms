@@ -619,25 +619,34 @@ interface MatchIdentity {
   id: string;
 }
 
+/**
+ * Resolves a pathname to its descriptor without a router match. Only routes
+ * with a fixed address can be resolved this way; a parameterised route
+ * (a quiz, a student, a coupon) yields `undefined`.
+ */
+export const getStaticRouteDescriptor = (
+  pathname: string,
+): RouteDescriptor | undefined => {
+  const catalogueRouteId = getCatalogueRouteIdFromPath(pathname);
+  if (catalogueRouteId) {
+    const catalogueDescriptor = getRouteDescriptor(catalogueRouteId);
+    if (catalogueDescriptor) return catalogueDescriptor;
+  }
+
+  const normalizedPath = normalizeNavigationPath(pathname);
+  const canonicalRoute = Object.entries(canonicalPathsByRouteId).find(
+    ([, canonicalPath]) => canonicalPath === normalizedPath,
+  );
+  return canonicalRoute ? getRouteDescriptor(canonicalRoute[0]) : undefined;
+};
+
 export const getMatchedRouteDescriptor = (
   matches: readonly MatchIdentity[],
   pathname?: string,
 ): RouteDescriptor => {
   if (pathname !== undefined) {
-    const catalogueRouteId = getCatalogueRouteIdFromPath(pathname);
-    if (catalogueRouteId) {
-      const catalogueDescriptor = getRouteDescriptor(catalogueRouteId);
-      if (catalogueDescriptor) return catalogueDescriptor;
-    }
-
-    const normalizedPath = normalizeNavigationPath(pathname);
-    const canonicalRoute = Object.entries(canonicalPathsByRouteId).find(
-      ([, canonicalPath]) => canonicalPath === normalizedPath,
-    );
-    if (canonicalRoute) {
-      const canonicalDescriptor = getRouteDescriptor(canonicalRoute[0]);
-      if (canonicalDescriptor) return canonicalDescriptor;
-    }
+    const staticDescriptor = getStaticRouteDescriptor(pathname);
+    if (staticDescriptor) return staticDescriptor;
   }
 
   for (let index = matches.length - 1; index >= 0; index -= 1) {

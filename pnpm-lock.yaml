@@ -107,9 +107,15 @@ importers:
       '@veolms/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@veolms/services':
+        specifier: workspace:*
+        version: link:../../packages/services
       '@veolms/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@veolms/video-player':
+        specifier: workspace:*
+        version: link:../../packages/video-player
       fastify:
         specifier: ^5.11.0
         version: 5.11.0
@@ -450,6 +456,49 @@ importers:
       kysely:
         specifier: 'catalog:'
         version: 0.29.6
+
+  packages/services:
+    dependencies:
+      '@aws-sdk/client-lambda':
+        specifier: ^3.1115.0
+        version: 3.1144.0
+      '@aws-sdk/client-mediaconvert':
+        specifier: ^3.1137.0
+        version: 3.1144.0
+      '@veolms/api-core':
+        specifier: workspace:*
+        version: link:../api-core
+      '@veolms/config':
+        specifier: workspace:*
+        version: link:../config
+      '@veolms/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@veolms/database':
+        specifier: workspace:*
+        version: link:../database
+      '@veolms/storage':
+        specifier: workspace:*
+        version: link:../storage
+      fastify:
+        specifier: 5.11.0
+        version: 5.11.0
+      kysely:
+        specifier: 'catalog:'
+        version: 0.29.6
+      nodemailer:
+        specifier: ^9.0.5
+        version: 9.1.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.13
+        version: 24.19.0
+      '@types/nodemailer':
+        specifier: ^8.0.2
+        version: 8.0.2
 
   packages/storage:
     dependencies:

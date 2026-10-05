@@ -3,11 +3,14 @@ import { XIcon as X } from "@phosphor-icons/react/X";
 import type { ComponentType, ReactNode } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Button } from "../components/Button";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+
+type ModalIconWeight = "bold" | "duotone" | "fill" | "regular";
 
 type ModalIcon = ComponentType<{
   size?: number;
-  weight?: "bold" | "duotone" | "fill" | "regular";
+  weight?: ModalIconWeight;
 }>;
 
 export interface ConfirmActionModalProps {
@@ -17,13 +20,27 @@ export interface ConfirmActionModalProps {
   onClose: () => void;
   onConfirm: () => void;
   icon: ModalIcon;
+  /** Defaults to the two-tone style; pass "regular" for a plain outline. */
+  iconWeight?: ModalIconWeight;
   title: string;
   description: ReactNode;
   cancelLabel: string;
   confirmLabel: string;
   pendingLabel: string;
   tone?: "accent" | "danger";
+  /**
+   * Which button is the highlighted one, shown last. Defaults to the
+   * confirming button; "cancel" highlights the safe choice instead and puts
+   * the confirming button first, unhighlighted.
+   */
+  emphasis?: "confirm" | "cancel";
 }
+
+const ACTION_BUTTON_CLASS =
+  "min-w-32 flex-1 font-bold! sm:flex-none max-[480px]:w-full";
+
+const QUIET_ACTION_BUTTON_CLASS =
+  "bg-(--surface-strong)! text-(--text-secondary)! shadow-none! hover:bg-(--hover)! hover:text-(--text)!";
 
 export function ConfirmActionModal({
   id,
@@ -32,12 +49,14 @@ export function ConfirmActionModal({
   onClose,
   onConfirm,
   icon: Icon,
+  iconWeight = "duotone",
   title,
   description,
   cancelLabel,
   confirmLabel,
   pendingLabel,
   tone = "accent",
+  emphasis = "confirm",
 }: ConfirmActionModalProps) {
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const cancelBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -45,6 +64,7 @@ export function ConfirmActionModal({
   const titleId = `${id}-title`;
   const descriptionId = `${id}-description`;
   const isDanger = tone === "danger";
+  const cancelEmphasized = emphasis === "cancel";
 
   const dismissThen = useBackDismiss({
     enabled: !isPending,
@@ -74,8 +94,9 @@ export function ConfirmActionModal({
 
       const focusableElements = [
         closeBtnRef.current,
-        cancelBtnRef.current,
-        confirmBtnRef.current,
+        ...(cancelEmphasized
+          ? [confirmBtnRef.current, cancelBtnRef.current]
+          : [cancelBtnRef.current, confirmBtnRef.current]),
       ].filter((element): element is HTMLButtonElement => element !== null);
 
       if (!focusableElements.length) return;
@@ -102,13 +123,40 @@ export function ConfirmActionModal({
       window.clearTimeout(focusTimer);
       previousActiveElement?.focus();
     };
-  }, [dismissModal, isOpen]);
+  }, [cancelEmphasized, dismissModal, isOpen]);
 
   if (!isOpen || typeof document === "undefined") return null;
 
   const iconClassName = isDanger
     ? "bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface-strong))] text-(--danger)"
     : "bg-(--accent-soft) text-(--accent-ink,var(--accent))";
+
+  const cancelButton = (
+    <Button
+      key="cancel"
+      ref={cancelBtnRef}
+      motion="static"
+      className={`${ACTION_BUTTON_CLASS}${cancelEmphasized ? "" : ` ${QUIET_ACTION_BUTTON_CLASS}`}`}
+      onClick={dismissModal}
+      disabled={isPending}
+    >
+      {cancelLabel}
+    </Button>
+  );
+  const confirmButton = (
+    <Button
+      key="confirm"
+      ref={confirmBtnRef}
+      motion="static"
+      className={`${ACTION_BUTTON_CLASS}${cancelEmphasized ? ` ${QUIET_ACTION_BUTTON_CLASS}` : ""}`}
+      onClick={onConfirm}
+      disabled={isPending}
+      aria-busy={isPending}
+    >
+      {isPending && <CircleNotch size={15} className="animate-spin" />}
+      {isPending ? pendingLabel : confirmLabel}
+    </Button>
+  );
 
   return createPortal(
     <div
@@ -130,7 +178,7 @@ export function ConfirmActionModal({
               className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconClassName}`}
               aria-hidden="true"
             >
-              <Icon size={21} weight="duotone" />
+              <Icon size={21} weight={iconWeight} />
             </div>
             <h3
               id={titleId}
@@ -160,26 +208,9 @@ export function ConfirmActionModal({
         </p>
 
         <div className="mt-6 flex items-center justify-end gap-2.5 max-[480px]:flex-col-reverse">
-          <button
-            ref={cancelBtnRef}
-            type="button"
-            className="settings-action settings-action--quiet w-auto min-w-32 flex-1 sm:flex-none max-[480px]:w-full"
-            onClick={dismissModal}
-            disabled={isPending}
-          >
-            {cancelLabel}
-          </button>
-          <button
-            ref={confirmBtnRef}
-            type="button"
-            className="settings-action w-auto min-w-32 flex-1 sm:flex-none max-[480px]:w-full"
-            onClick={onConfirm}
-            disabled={isPending}
-            aria-busy={isPending}
-          >
-            {isPending && <CircleNotch size={15} className="animate-spin" />}
-            {isPending ? pendingLabel : confirmLabel}
-          </button>
+          {cancelEmphasized
+            ? [confirmButton, cancelButton]
+            : [cancelButton, confirmButton]}
         </div>
       </div>
     </div>,

@@ -555,6 +555,8 @@ export function LearningWorkspace({
   }, [courseContentDrawerViewport, curriculumCollapsed]);
 
   const [theaterMode, setTheaterMode] = useState(false);
+  const [chaptersPanelHost, setChaptersPanelHost] =
+    useState<HTMLDivElement | null>(null);
   const mainRef = useRef<HTMLElement>(null);
   const playerWrapRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -911,17 +913,20 @@ export function LearningWorkspace({
     setPlaybackBootstrap(null);
     setPlaybackBootstrapError(null);
     let active = true;
+    let settled = false;
     void getVideoPlaybackBootstrap({
       courseSlug,
       lessonNumber: selectedLesson,
     })
       .then((bootstrap) => {
         if (active) {
+          settled = true;
           setPlaybackBootstrap(bootstrap);
         }
       })
       .catch((error: unknown) => {
         if (!active) return;
+        settled = true;
         setPlaybackBootstrap(null);
         setPlaybackBootstrapError(
           error instanceof VideoPlaybackBootstrapError
@@ -936,6 +941,13 @@ export function LearningWorkspace({
 
     return () => {
       active = false;
+      // This effect also re-runs for the same lesson, for example when the
+      // sign-in state resolves while the request is still out. The answer to
+      // this request is now ignored, so forget the key: otherwise the re-run
+      // sees the lesson as already requested and the player waits forever.
+      if (!settled && playbackRequestKeyRef.current === playbackRequestKey) {
+        playbackRequestKeyRef.current = null;
+      }
     };
   }, [
     courseSlug,
@@ -2506,7 +2518,14 @@ export function LearningWorkspace({
       courseLessonsSecondPressHold: playerCourseLessonsSecondPressHold,
       courseLessonsShortcutLabel: curriculumShortcutLabel,
       courseLessonsSidePanel: playerCourseLessonsSidePanel,
+      courseLessonsBottomSheet: phoneLessonDrawer,
       courseLessonsVideoWidthPercent: fullscreenVideoLayoutWidthPercent,
+      // Only a visible content column can host the chapters panel; otherwise
+      // the player slides it over its own right edge.
+      chaptersPanelHost:
+        curriculumCollapsed || theaterMode || courseContentDrawerViewport
+          ? null
+          : chaptersPanelHost,
       onAutoplayEnabledChange: updateAutoplayEnabled,
       onCourseLessonsToggle: toggleLessonDrawerFromPlayer,
       onGoNext: goToNextLesson,
@@ -2531,9 +2550,12 @@ export function LearningWorkspace({
     [
       autoPlayOnLessonChange,
       autoplayEnabled,
+      chaptersPanelHost,
+      courseContentDrawerViewport,
       coursePersistenceKey,
       courseSlug,
       courseTitle,
+      curriculumCollapsed,
       currentLesson,
       currentLessonMedia,
       currentLessonIndex,
@@ -2561,6 +2583,7 @@ export function LearningWorkspace({
       playerCourseLessonsOpen,
       playerCourseLessonsSecondPressHold,
       playerCourseLessonsSidePanel,
+      phoneLessonDrawer,
       previousLessonId,
       selectedLesson,
       selectedLessonDescription,
@@ -2971,6 +2994,13 @@ export function LearningWorkspace({
                 isLoading={isApiRoute && isCourseOverviewLoading}
               />
             </div>
+            {/* The lesson player portals its chapters panel here so it
+                overlays the course content. It sits below the resize rail. */}
+            <div
+              ref={setChaptersPanelHost}
+              data-learning-chapters-panel-host=""
+              className="pointer-events-none absolute inset-0 z-11 overflow-hidden"
+            />
           </div>
         </div>
       </main>

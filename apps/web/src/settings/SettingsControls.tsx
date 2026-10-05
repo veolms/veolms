@@ -7,6 +7,7 @@ import type {
   ReactNode,
 } from "react";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { ThemedSelect } from "../ThemedSelect";
 import type { ThemedSelectOption } from "../ThemedSelect";
 
@@ -14,6 +15,16 @@ type SettingsIcon = ComponentType<{
   size?: number;
   weight?: "bold" | "duotone" | "fill" | "regular";
 }>;
+
+/** Marks the option the app recommends, and uses by default. */
+export function RecommendedBadge() {
+  return (
+    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--success)_16%,transparent)] px-1.5 py-px text-[0.62rem] font-semibold text-(--success)">
+      <Star aria-hidden size={10} weight="fill" />
+      Recommended
+    </span>
+  );
+}
 
 export interface ChoiceCardProps {
   checked: boolean;

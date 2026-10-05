@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { usePlayerController } from "../react/context";
 import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import { classNames } from "../utils/classNames";
-import { PLAYER_FEEDBACK_DURATION_MS } from "./feedbackTiming";
+import { PLAYBACK_BEZEL_DURATION_MS } from "./feedbackTiming";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 export interface PlaybackFeedbackProps {
@@ -17,7 +17,7 @@ interface PlaybackFeedbackState {
 
 export function PlaybackFeedback({
   className,
-  durationMs = PLAYER_FEEDBACK_DURATION_MS,
+  durationMs = PLAYBACK_BEZEL_DURATION_MS,
 }: PlaybackFeedbackProps = {}) {
   const controller = usePlayerController();
   const mobileInteraction = usePlayerMobileInteraction();
@@ -74,7 +74,8 @@ export function PlaybackFeedback({
     >
       <span
         key={feedback.id}
-        className="grid size-20 place-items-center rounded-full border-0 bg-transparent text-(--video-player-control-text) shadow-none lg:size-22"
+        className="grid size-[78px] place-items-center rounded-full border-0 bg-black/60 text-white shadow-none backdrop-blur-[16px]"
+        data-playback-feedback-bezel=""
         data-playback-feedback-duration={durationMs}
         data-playback-feedback-surface=""
         style={
@@ -87,7 +88,7 @@ export function PlaybackFeedback({
           active
           aria-hidden="true"
           className={classNames(
-            "size-10 drop-shadow-[0_2px_6px_rgb(0_0_0/0.72)] lg:size-11",
+            "size-10",
             feedback.kind === "play" && "translate-x-0.5",
           )}
           data-playback-feedback-icon={feedback.kind}

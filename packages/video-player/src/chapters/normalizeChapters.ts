@@ -117,6 +117,7 @@ export function normalizeChapters(
       id: uniqueId(createChapterId(chapter, chapter.title), usedIds),
       title: chapter.title,
       startTime: chapter.startTime,
+      ...(chapter.thumbnailUrl ? { thumbnailUrl: chapter.thumbnailUrl } : {}),
     });
   }
 

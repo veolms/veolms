@@ -1144,9 +1144,15 @@
   .courses-app:not(.courses-app--collapsed)
   .sidebar-collapse__asset
   svg[data-sidebar-toggle-direction="left"]
+  > path:last-child,
+.courses-app--collapsed
+  .sidebar-collapse__asset
+  svg[data-sidebar-toggle-direction="left"]
   > path:last-child {
   /* The static pass still uses the expanded-side prop. Reorient only its
-     existing arrowhead; keep the shared SVG surface and icon geometry intact. */
+     existing arrowhead; keep the shared SVG surface and icon geometry intact.
+     The second selector covers the same stale icon once the head bootstrap
+     script has added the collapsed class, until React remounts the button. */
   transform-box: view-box;
   transform-origin: 0 0;
   transform: translateX(41px) scaleX(-1);

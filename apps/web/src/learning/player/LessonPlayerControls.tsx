@@ -10,6 +10,7 @@ import {
   VolumeControl,
   ZoomLevelIndicator,
   getPlayerThemeStyle,
+  useChapters,
   usePlayerMobileInteraction,
   usePlayerState,
   usePlayerTheme,
@@ -18,6 +19,7 @@ import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -33,6 +35,11 @@ import {
   LEARNING_PLAYER_MINIMIZE_TITLE,
 } from "./learningPlayerShortcuts";
 import { cn } from "../../lib/utils";
+import {
+  LessonChaptersSheetMenu,
+  LessonChaptersToggleButton,
+} from "./chapters/LessonChaptersControl";
+import { LessonChaptersPanel } from "./chapters/LessonChaptersPanel";
 
 const PLAYER_SURFACE_CLASS =
   "bg-(--video-player-control-surface) text-(--video-player-control-text) shadow-(--video-player-control-shadow)";
@@ -54,6 +61,21 @@ const getLandscapeOrientationSnapshot = () =>
   window.matchMedia(LANDSCAPE_ORIENTATION_QUERY).matches;
 
 const getLandscapeOrientationServerSnapshot = () => false;
+
+// Matches Tailwind's `sm` breakpoint. Settings and autoplay are rendered in
+// exactly one place, so their desktop position is decided in JS, not CSS.
+const WIDE_VIEWPORT_QUERY = "(min-width: 40rem)";
+
+const subscribeToWideViewport = (onStoreChange: () => void) => {
+  const media = window.matchMedia(WIDE_VIEWPORT_QUERY);
+  media.addEventListener("change", onStoreChange);
+  return () => media.removeEventListener("change", onStoreChange);
+};
+
+const getWideViewportSnapshot = () =>
+  window.matchMedia(WIDE_VIEWPORT_QUERY).matches;
+
+const getWideViewportServerSnapshot = () => false;
 const MOBILE_TEXT_PILL_HIT_CLASS = `${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} isolate !rounded-full !bg-transparent transition-colors duration-150 ease-out before:pointer-events-none before:absolute before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:transition-colors before:duration-150 before:ease-out before:content-[''] hover:!bg-transparent hover:before:bg-(--video-player-control-surface-hover) active:!bg-transparent active:before:bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)`;
 
 function CircularFullscreenButton() {
@@ -137,6 +159,15 @@ export interface LessonPlayerControlsProps {
   courseLessonsSecondPressHold?: CourseLessonsSecondPressHoldProps;
   courseLessonsShortcutLabel?: string;
   courseLessonsSidePanel?: boolean;
+  /** The lessons drawer is a bottom sheet rather than a side drawer. */
+  courseLessonsBottomSheet?: boolean;
+  /** Shown as the heading of the chapters panel. */
+  lessonTitle?: string;
+  /**
+   * Element covering the course content column. When present the chapters
+   * panel slides over it; otherwise it slides over the video's right edge.
+   */
+  chaptersPanelHost?: HTMLElement | null;
   onAmbientEnabledChange: (enabled: boolean) => void;
   onAutoplayEnabledChange: (enabled: boolean) => void;
   onCourseLessonsToggle?: (presentation: "drawer" | "side") => void;
@@ -177,6 +208,7 @@ function CourseLessonsButton({
   secondPressHold,
   shortcutLabel,
   sidePanel,
+  opensFromBottom,
   textSize = "xs",
   scrollportId,
 }: {
@@ -185,6 +217,12 @@ function CourseLessonsButton({
   secondPressHold?: CourseLessonsSecondPressHoldProps;
   shortcutLabel?: string;
   sidePanel: boolean;
+  /**
+   * The lessons open as a bottom sheet. Only then does the arrow point
+   * down and flip while the sheet is open; everywhere else the lessons come
+   * in from the right, so the arrow points right and stays put.
+   */
+  opensFromBottom: boolean;
   textSize?: "xs" | "sm";
   scrollportId?: string;
 }) {
@@ -229,13 +267,13 @@ function CourseLessonsButton({
       <span className={labelRowClass}>
         <span className="inline-flex items-center leading-none">Lessons</span>
         <span
-          className={`learning-curriculum__section-arrow inline-flex items-center justify-center leading-none [&_svg]:block${open && !sidePanel ? " is-open" : ""}`}
+          className={`learning-curriculum__section-arrow inline-flex items-center justify-center leading-none [&_svg]:block${open && opensFromBottom ? " is-open" : ""}`}
           aria-hidden="true"
         >
-          {sidePanel ? (
-            <CaretRight size={15} className="-mb-[2.5px]" />
-          ) : (
+          {opensFromBottom ? (
             <CaretDown size={15} className="-mb-[2.5px]" />
+          ) : (
+            <CaretRight size={15} className="-mb-[2.5px]" />
           )}
         </span>
       </span>
@@ -435,6 +473,9 @@ export function LessonPlayerControls({
   courseLessonsSecondPressHold,
   courseLessonsShortcutLabel,
   courseLessonsSidePanel = false,
+  courseLessonsBottomSheet = false,
+  lessonTitle,
+  chaptersPanelHost,
   onAmbientEnabledChange,
   onAutoplayEnabledChange,
   onCourseLessonsToggle,
@@ -443,6 +484,15 @@ export function LessonPlayerControls({
   onMinimize,
   onMobileLandscapeFullscreenChange,
 }: LessonPlayerControlsProps) {
+  const chaptersPanelId = useId();
+  const [chaptersRequested, setChaptersRequested] = useState(false);
+  const hasChapters = useChapters().chapters.length > 0;
+  const chaptersOpen = chaptersRequested && hasChapters;
+  const wideViewport = useSyncExternalStore(
+    subscribeToWideViewport,
+    getWideViewportSnapshot,
+    getWideViewportServerSnapshot,
+  );
   const timelineAnchorRef = useRef<HTMLSpanElement>(null);
   const [timelineHost, setTimelineHost] = useState<HTMLElement | null>(null);
   const [mobileSettingsSheetHost, setMobileSettingsSheetHost] =
@@ -487,6 +537,12 @@ export function LessonPlayerControls({
   const minimizeVisible =
     !controlsSuppressed && (visible || loading || hasError);
   const mobileFullscreen = mobileInteraction && fullscreen;
+  // Pointer devices on a wide viewport keep the top edge for chapters only;
+  // settings and autoplay join the bottom control row.
+  const desktopLayout = !mobileInteraction && wideViewport;
+  // Fullscreen shows only the video shell, so the column host is off screen.
+  const chaptersSideHost =
+    desktopLayout && !fullscreen ? (chaptersPanelHost ?? null) : null;
   const persistentProgressVisible =
     ready && !controlsSuppressed && mobileInteraction && !fullscreen;
   const timelineDisplayed = visible || persistentProgressVisible;
@@ -538,12 +594,12 @@ export function LessonPlayerControls({
     <div
       data-player-timeline-wrap=""
       data-player-timeline-layer=""
-      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-14 sm:translate-y-0 ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-12 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-12 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-12 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-12 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
     >
       <Timeline
-        className={`pointer-events-none overflow-visible [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-7 max-sm:[&_[data-video-player-preview]]:!bottom-3 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:rounded-none max-sm:[&_[data-timeline-thumb]]:z-80 ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-7 [&_[data-video-player-preview]]:!bottom-3 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!rounded-none [&_[data-timeline-thumb]]:!z-80" : ""}`}
+        className={`pointer-events-none overflow-visible [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-7 max-sm:[&_[data-video-player-preview]]:!bottom-3 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:rounded-none max-sm:[&_[data-timeline-track]]:!scale-y-100 max-sm:[&_[data-timeline-thumb]]:z-80 ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-7 [&_[data-video-player-preview]]:!bottom-3 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!rounded-none [&_[data-timeline-thumb]]:!z-80" : ""}`}
       />
     </div>
   );
@@ -629,6 +685,9 @@ export function LessonPlayerControls({
               )
             }
             sidePanel={mobileLandscapeFullscreen}
+            opensFromBottom={
+              !mobileLandscapeFullscreen && courseLessonsBottomSheet
+            }
           />
         ) : null}
         <CircularFullscreenButton />
@@ -674,6 +733,86 @@ export function LessonPlayerControls({
     </div>
   );
 
+  const mobileSheetPanelClassName = mobileLandscapeFullscreen
+    ? fullscreenCoursePanelVisible
+      ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(100dvh,var(--learning-fullscreen-video-width))] !-translate-x-1/2"
+      : "[&&]:!rounded-b-none mx-auto max-w-[100dvh]"
+    : undefined;
+  const mobileSheetPortalTarget = mobileLandscapeFullscreen
+    ? mobileSettingsSheetHost
+    : undefined;
+
+  // On desktop, fullscreen sits in the same pill as autoplay and settings.
+  // The circular settings variant is a single round button, so it keeps the
+  // separate fullscreen button.
+  const fullscreenInActionsPill = desktopLayout && !circularSettingsControl;
+  const playerActions = (
+    <PlayerControlSurface
+      cluster="player-actions"
+      className={`relative isolate flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${circularSettingsControl ? "!size-9 !rounded-full !p-0 !justify-center sm:!size-9 sm:!p-0 [&>div]:!size-9 [&>div>button]:!size-9" : ""}`}
+    >
+      <ZoomLevelIndicator className="mr-0.5" />
+      {showAutoplayControl ? (
+        <AutoplayToggle
+          enabled={autoplayEnabled}
+          mobileInteraction={mobileInteraction}
+          onEnabledChange={onAutoplayEnabledChange}
+        />
+      ) : null}
+      {hasChapters && mobileInteraction ? (
+        <LessonChaptersSheetMenu
+          mobileSheetPanelClassName={mobileSheetPanelClassName}
+          mobileSheetPortalTarget={mobileSheetPortalTarget}
+          triggerClassName={getPlayerIconPillClass(mobileInteraction)}
+        />
+      ) : null}
+      <span
+        className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
+        data-mobile-volume-control=""
+      >
+        <MuteButton
+          className={getPlayerIconPillClass(mobileInteraction)}
+          iconSize={22}
+        />
+      </span>
+      <SettingsMenu
+        includePictureInPicture
+        mobilePresentation="sheet"
+        mobileSheetPanelClassName={mobileSheetPanelClassName}
+        mobileSheetPortalTarget={mobileSheetPortalTarget}
+        triggerClassName={cn(
+          getPlayerIconPillClass(mobileInteraction, circularSettingsControl),
+          circularSettingsControl &&
+            "!inline-flex !size-9 !w-9 !items-center !justify-center !p-0 !rounded-full !leading-none [&>svg]:!block [&>svg]:!shrink-0",
+        )}
+        extraMainItems={
+          <AmbientSettingsItem
+            enabled={ambientEnabled}
+            onEnabledChange={onAmbientEnabledChange}
+          />
+        }
+        side={desktopLayout ? "top" : "bottom"}
+      />
+      {fullscreenInActionsPill ? (
+        <FullscreenButton
+          className={getPlayerIconPillClass(mobileInteraction)}
+          iconSize={22}
+        />
+      ) : null}
+    </PlayerControlSurface>
+  );
+
+  const chaptersPanel =
+    hasChapters && !mobileInteraction ? (
+      <LessonChaptersPanel
+        id={chaptersPanelId}
+        open={chaptersOpen}
+        lessonTitle={lessonTitle}
+        placement={chaptersSideHost ? "side" : "player"}
+        onClose={() => setChaptersRequested(false)}
+      />
+    ) : null;
+
   return (
     <>
       {timelineHost && mobileLandscapeFullscreen
@@ -694,6 +833,12 @@ export function LessonPlayerControls({
         : null}
       {timelineHost && !fullscreenCoursePanelVisible
         ? createPortal(bottomCornerControlsLayer, timelineHost)
+        : null}
+      {chaptersPanel && (chaptersSideHost ?? timelineHost)
+        ? createPortal(
+            chaptersPanel,
+            (chaptersSideHost ?? timelineHost) as HTMLElement,
+          )
         : null}
       {timelineHost && mobileFullscreen
         ? createPortal(
@@ -778,59 +923,15 @@ export function LessonPlayerControls({
           <div
             className={`pointer-events-auto absolute right-2 top-2 flex items-center gap-2 ${mobileFullscreen ? "!left-auto !right-3 sm:!left-auto sm:!right-3" : ""}`}
           >
-            <PlayerControlSurface
-              cluster="player-actions"
-              className={`relative isolate flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${circularSettingsControl ? "!size-9 !rounded-full !p-0 !justify-center sm:!size-9 sm:!p-0 [&>div]:!size-9 [&>div>button]:!size-9" : ""}`}
-            >
-              <ZoomLevelIndicator className="mr-0.5" />
-              {showAutoplayControl ? (
-                <AutoplayToggle
-                  enabled={autoplayEnabled}
-                  mobileInteraction={mobileInteraction}
-                  onEnabledChange={onAutoplayEnabledChange}
-                />
-              ) : null}
-              <span
-                className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
-                data-mobile-volume-control=""
-              >
-                <MuteButton
-                  className={getPlayerIconPillClass(mobileInteraction)}
-                  iconSize={22}
-                />
-              </span>
-              <SettingsMenu
-                includePictureInPicture
-                mobilePresentation="sheet"
-                mobileSheetPanelClassName={
-                  mobileLandscapeFullscreen
-                    ? fullscreenCoursePanelVisible
-                      ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(100dvh,var(--learning-fullscreen-video-width))] !-translate-x-1/2"
-                      : "[&&]:!rounded-b-none mx-auto max-w-[100dvh]"
-                    : undefined
-                }
-                mobileSheetPortalTarget={
-                  mobileLandscapeFullscreen
-                    ? mobileSettingsSheetHost
-                    : undefined
-                }
-                triggerClassName={cn(
-                  getPlayerIconPillClass(
-                    mobileInteraction,
-                    circularSettingsControl,
-                  ),
-                  circularSettingsControl &&
-                    "!inline-flex !size-9 !w-9 !items-center !justify-center !p-0 !rounded-full !leading-none [&>svg]:!block [&>svg]:!shrink-0",
-                )}
-                extraMainItems={
-                  <AmbientSettingsItem
-                    enabled={ambientEnabled}
-                    onEnabledChange={onAmbientEnabledChange}
-                  />
-                }
-                side="bottom"
+            {hasChapters && !mobileInteraction ? (
+              <LessonChaptersToggleButton
+                open={chaptersOpen}
+                panelId={chaptersPanelId}
+                className={`${MOBILE_TEXT_PILL_HIT_CLASS} h-9.5 px-3.5 py-[3px] !text-sm before:inset-0`}
+                onToggle={() => setChaptersRequested((requested) => !requested)}
               />
-            </PlayerControlSurface>
+            ) : null}
+            {desktopLayout ? null : playerActions}
           </div>
 
           {!mobileInteraction ? (
@@ -854,6 +955,9 @@ export function LessonPlayerControls({
                     secondPressHold={courseLessonsSecondPressHold}
                     shortcutLabel={courseLessonsShortcutLabel}
                     sidePanel={courseLessonsSidePanel}
+                    opensFromBottom={
+                      !courseLessonsSidePanel && courseLessonsBottomSheet
+                    }
                     textSize="sm"
                     scrollportId={
                       courseLessonsSidePanel
@@ -863,7 +967,8 @@ export function LessonPlayerControls({
                   />
                 </div>
               ) : null}
-              <CircularFullscreenButton />
+              {desktopLayout ? playerActions : null}
+              {fullscreenInActionsPill ? null : <CircularFullscreenButton />}
             </div>
           ) : null}
 

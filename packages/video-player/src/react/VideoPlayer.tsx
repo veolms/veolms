@@ -72,6 +72,8 @@ export interface VideoPlayerProps extends Omit<
   chapters?: readonly ChapterInput[];
   manualChapters?: readonly ChapterInput[];
   description?: string;
+  /** Thumbnails keyed by chapter start in whole seconds. */
+  chapterThumbnails?: Readonly<Record<number, string>>;
   storyboard?: StoryboardSource;
   storyboardLoader?: StoryboardLoader;
   markers?: readonly TimelineMarker[];
@@ -151,6 +153,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       ariaLabel = "Video player",
       autoPlay = false,
       chapters,
+      chapterThumbnails,
       centralControl,
       className,
       controls,
@@ -368,6 +371,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           />
           <PlayerMetadataBridge
             chapters={chapters}
+            chapterThumbnails={chapterThumbnails}
             manualChapters={manualChapters}
             description={description}
             storyboard={storyboard}
@@ -406,7 +410,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             ? null
             : (bufferingIndicator ?? <BufferingIndicator />)}
           <PlayerHud />
-          <ErrorOverlay onClose={onErrorOverlayClose} />
+          <ErrorOverlay onClose={onErrorOverlayClose} source={source} />
           {controls === false
             ? null
             : (controls ?? (
