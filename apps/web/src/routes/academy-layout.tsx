@@ -112,7 +112,9 @@ import {
 } from "../shell/applicationScroll";
 import { getInitialSidebarPreferences } from "../shell/sidebarPreferences";
 import { normalizeSidebarDockItems } from "../settings/settingsPreferences";
-import { autosyncManager } from "../lib/autosync";
+// Not the autosync barrel: that would pull the autosave UI and TanStack
+// persistence helpers into the shell bundle.
+import { autosyncManager } from "../lib/autosync/manager";
 import {
   getNumberShortcutIndex,
   isEditingShortcutTarget,

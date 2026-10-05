@@ -6,11 +6,13 @@ import {
   persistQueryClientSubscribe,
 } from "@tanstack/react-query-persist-client";
 import { queryClient } from "../lib/query-client";
+// Not the autosync barrel: that would pull the autosave UI into the startup
+// bundle of every page.
+import { autosyncManager } from "../lib/autosync/manager";
 import {
   AUTOSYNC_QUERY_PERSISTENCE_BUSTER,
-  autosyncManager,
   autosyncPersister,
-} from "../lib/autosync";
+} from "../lib/autosync/tanstack";
 
 interface QueryProviderProps {
   children: ReactNode;

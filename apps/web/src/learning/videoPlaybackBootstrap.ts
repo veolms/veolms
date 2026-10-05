@@ -1,9 +1,12 @@
+// Domain subpath, not the contracts barrel: this module loads with the root
+// shell, and a value import of the barrel would evaluate every schema module
+// in the package at startup.
 import {
   videoPlaybackBootstrapSchema,
   videoPlaybackTokenSchema,
   type VideoPlaybackBootstrap,
   type VideoPlaybackToken,
-} from "@veolms/contracts";
+} from "@veolms/contracts/video-playback";
 import { getApiBaseUrl } from "../lib/api-client";
 
 const API_BASE_URL = getApiBaseUrl();

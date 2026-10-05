@@ -1,4 +1,8 @@
-import { publicProfileUsernameParamsSchema } from "@veolms/contracts";
+// The subpath import matters: the contracts barrel would put zod and every
+// schema into this module's chunk, which loads in the startup path of every
+// page. username-rules is dependency-free and stays in lockstep with
+// publicProfileUsernameParamsSchema.
+import { isValidPublicProfileUsername } from "@veolms/contracts/username-rules";
 import { getCourseTitle } from "../learning/courseMetadata";
 import {
   SETTINGS_DEFAULT_TAB,
@@ -565,9 +569,7 @@ export const getEffectiveRouteId = (
     if (!match?.[1]) return "home-fallback";
     try {
       const username = decodeURIComponent(match[1]);
-      return publicProfileUsernameParamsSchema.safeParse({ username }).success
-        ? routeId
-        : "home-fallback";
+      return isValidPublicProfileUsername(username) ? routeId : "home-fallback";
     } catch {
       return "home-fallback";
     }

@@ -28,14 +28,19 @@ import type {
   TotpVerifyRequest,
   UserProfileResponse,
 } from "@veolms/contracts";
+// Domain subpaths, not the contracts barrel: this module is in the startup
+// graph of every page, and a value import of the barrel would evaluate every
+// schema module in the package at startup.
 import {
   avatarUploadContentTypeSchema,
   DICEBEAR_BASE_URL,
+} from "@veolms/contracts/auth/avatar";
+import {
   passkeyAuthenticationOptionsResponseSchema,
   passkeyRegistrationOptionsResponseSchema,
-  publicProfileResponseSchema,
   sessionResponseSchema,
-} from "@veolms/contracts";
+} from "@veolms/contracts/auth/session";
+import { publicProfileResponseSchema } from "@veolms/contracts/auth/user";
 
 export interface TotpSetupResponse {
   secret: string;

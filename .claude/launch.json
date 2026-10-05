@@ -18,6 +18,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["preview:web", "--", "--no-lessons"],
       "port": 4173
+    },
+    {
+      "name": "web-preview-lessons",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["preview:web", "--", "--first-section"],
+      "port": 4173
     }
   ]
 }

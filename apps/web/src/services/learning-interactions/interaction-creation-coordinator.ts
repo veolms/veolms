@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { registerInteractionResetHandler } from "./interaction-reset-registry";
 import type {
   CreateLearningNoteRequest,
   CreateLearningReplyRequest,
@@ -913,3 +914,7 @@ function getAuthorRole(
 
 export const interactionCreationCoordinator =
   new InteractionCreationCoordinator();
+
+// See interaction-reset-registry: keeps the API client from bundling this
+// module on pages that never load learning interactions.
+registerInteractionResetHandler(() => interactionCreationCoordinator.reset());

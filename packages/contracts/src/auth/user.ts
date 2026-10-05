@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  PUBLIC_PROFILE_USERNAME_MAX_LENGTH,
+  PUBLIC_PROFILE_USERNAME_MIN_LENGTH,
+  PUBLIC_PROFILE_USERNAME_PATTERN,
+} from "./username-rules.ts";
 
 export const otpSendRequestSchema = z
   .object({
@@ -220,9 +225,9 @@ export const profileUpdateRequestSchema = z.strictObject({
 export const publicProfileUsernameParamsSchema = z.strictObject({
   username: z
     .string()
-    .min(3)
-    .max(30)
-    .regex(/^[a-zA-Z0-9._-]+$/)
+    .min(PUBLIC_PROFILE_USERNAME_MIN_LENGTH)
+    .max(PUBLIC_PROFILE_USERNAME_MAX_LENGTH)
+    .regex(PUBLIC_PROFILE_USERNAME_PATTERN)
     .toLowerCase(),
 });
 

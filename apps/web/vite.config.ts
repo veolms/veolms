@@ -161,6 +161,46 @@ function earlyHlsPreloadPlugin(): Plugin {
   };
 }
 
+// Writes a module-to-chunk report for the client build when
+// VEO_BUNDLE_REPORT is set, so bundle composition can be audited offline.
+// No effect on normal builds.
+function bundleReportPlugin(): Plugin {
+  return {
+    name: "veo-bundle-report",
+    apply: "build",
+    generateBundle(_outputOptions, bundle) {
+      if (!process.env.VEO_BUNDLE_REPORT) return;
+      if (this.environment?.config.build.ssr) return;
+      const report: Record<string, unknown> = {};
+      for (const [fileName, item] of Object.entries(bundle)) {
+        if (item.type !== "chunk") continue;
+        report[fileName] = {
+          size: item.code.length,
+          isEntry: item.isEntry,
+          isDynamicEntry: item.isDynamicEntry,
+          name: item.name,
+          facade: item.facadeModuleId?.replaceAll("\\", "/"),
+          imports: item.imports,
+          dynamicImports: item.dynamicImports,
+          modules: Object.fromEntries(
+            Object.entries(item.modules ?? {}).map(([id, moduleInfo]) => [
+              id.replaceAll("\\", "/"),
+              (moduleInfo as { renderedLength?: number }).renderedLength ?? 0,
+            ]),
+          ),
+        };
+      }
+      fs.writeFileSync(
+        path.resolve(
+          fileURLToPath(new URL(".", import.meta.url)),
+          "build/bundle-report.json",
+        ),
+        JSON.stringify(report),
+      );
+    },
+  };
+}
+
 export default defineConfig(({ command, mode }) => {
   const environment = {
     ...process.env,
@@ -221,7 +261,12 @@ export default defineConfig(({ command, mode }) => {
       ),
       "import.meta.env.VITE_CDN_URL": JSON.stringify(config.VITE_CDN_URL),
     },
-    plugins: [earlyHlsPreloadPlugin(), tailwindcss(), reactRouter()],
+    plugins: [
+      earlyHlsPreloadPlugin(),
+      bundleReportPlugin(),
+      tailwindcss(),
+      reactRouter(),
+    ],
     // React Router's prerender pass fetches route data from Vite's temporary
     // preview server. Pin that internal server to IPv4 loopback so Windows
     // localhost address selection cannot point the request at another family.

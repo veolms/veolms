@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { registerInteractionResetHandler } from "./interaction-reset-registry";
 import type {
   LearningNote,
   LearningReply,
@@ -1358,3 +1359,8 @@ export class DesiredStateCoordinator {
 }
 
 export const desiredStateCoordinator = new DesiredStateCoordinator();
+
+// The API client clears interaction state on session loss through the reset
+// registry instead of importing this module (and its cache machinery) into
+// every page's startup bundle.
+registerInteractionResetHandler(() => desiredStateCoordinator.reset());
