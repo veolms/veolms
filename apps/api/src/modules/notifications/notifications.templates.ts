@@ -209,6 +209,34 @@ export function renderNotificationTemplate(
         body: `"${stringValue(data, "quizTitle")}" has been assigned to ${stringValue(data, "lessonTitle")} in ${stringValue(data, "courseTitle")}.`,
       };
       break;
+    case "learning.goal_completed":
+      inApp = {
+        title: "Daily goal completed",
+        body: `You hit your ${stringValue(data, "goalLabel")} learning goal today. Nice work!`,
+      };
+      break;
+    case "learning.reminder": {
+      const streakDays = numberValue(data, "streakDays");
+      inApp =
+        streakDays > 0
+          ? {
+              title: "Keep your streak alive",
+              body: `You haven't learned today — your ${streakDays}-day streak is on the line. A quick session hits your ${stringValue(data, "goalLabel")} goal.`,
+            }
+          : {
+              title: "Time to learn",
+              body: `A quick session today keeps you on track for your ${stringValue(data, "goalLabel")} learning goal.`,
+            };
+      break;
+    }
+    case "learning.streak_milestone": {
+      const streakDays = numberValue(data, "streakDays");
+      inApp = {
+        title: `${streakDays}-day learning streak!`,
+        body: `You've learned ${streakDays} days in a row. Keep it going!`,
+      };
+      break;
+    }
   }
 
   return {

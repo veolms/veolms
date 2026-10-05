@@ -172,3 +172,23 @@ export const quizAssignedEventSchema = z.strictObject({
     .max(1000)
     .regex(/^\/(?!\/)/u, "Deep links must be internal application paths."),
 });
+
+export const learningGoalCompletedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  dailyGoalMinutes: z.number().int().positive(),
+  /** Learner-local calendar date (YYYY-MM-DD) the goal was completed on. */
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
+});
+
+export const learningStreakMilestoneEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  streakDays: z.number().int().positive(),
+});
+
+export const learningReminderEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  dailyGoalMinutes: z.number().int().positive(),
+  /** Current streak that tonight's inactivity would break (0 = none). */
+  streakDays: z.number().int().nonnegative(),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
+});

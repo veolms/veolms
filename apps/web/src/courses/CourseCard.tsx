@@ -34,6 +34,7 @@ export interface CourseCardProps {
   course: Course;
   role: CourseRole;
   variant?: "catalogue" | "public";
+  publicAction?: "view" | "enroll";
   wishlisted: boolean;
   onWishlist: (course: Course) => void;
   onOpen: (course: Course) => void;
@@ -49,6 +50,7 @@ export interface CourseCardProps {
   setMenuOpen: (courseId: string | null) => void;
   setNotice: (notice: string) => void;
   imagePriority?: boolean;
+  studentHome?: boolean;
   isBin?: boolean;
   isDeleting?: boolean;
   isAdmin?: boolean;
@@ -59,6 +61,7 @@ export function CourseCard({
   course,
   role,
   variant = "catalogue",
+  publicAction = "view",
   wishlisted,
   onWishlist,
   onOpen,
@@ -74,12 +77,14 @@ export function CourseCard({
   setMenuOpen,
   setNotice,
   imagePriority = false,
+  studentHome = false,
   isBin = false,
   isDeleting = false,
   isAdmin = false,
   currentUserId,
 }: CourseCardProps) {
   const isPublic = variant === "public";
+  const isPublicEnrollmentAction = isPublic && publicAction === "enroll";
   const canEdit =
     isAdmin ||
     (Boolean(currentUserId) &&
@@ -137,14 +142,18 @@ export function CourseCard({
   };
 
   const thumbnailActionLabel = isPublic
-    ? `View ${course.title}`
+    ? isPublicEnrollmentAction
+      ? `Enroll in ${course.title}`
+      : `View ${course.title}`
     : role === "creator"
       ? `Play ${course.title}`
       : course.enrolled
         ? `${progress > 0 && progress < 100 ? "Resume" : progress >= 100 ? "Review" : "Start"} ${course.title}`
         : `Play free preview for ${course.title}`;
   const thumbnailActionTooltip = isPublic
-    ? "View Course"
+    ? isPublicEnrollmentAction
+      ? "Enroll Now"
+      : "View Course"
     : role === "creator"
       ? "Play Course"
       : course.enrolled
@@ -184,6 +193,15 @@ export function CourseCard({
         ) : (
           <CourseThumbnailPlaceholder />
         )}
+
+        {studentHome && Boolean(course.pricing?.discount) ? (
+          <span
+            className="pointer-events-none absolute left-2.5 top-2.5 z-20 inline-flex shrink-0 items-center whitespace-nowrap rounded-md bg-emerald-600 px-1.5 py-1 text-[0.72rem] font-bold leading-none text-white"
+            aria-hidden="true"
+          >
+            {course.pricing?.discount}
+          </span>
+        ) : null}
 
         <button
           type="button"
@@ -476,19 +494,23 @@ export function CourseCard({
             !course.enrolled &&
             Boolean(course.pricing) && (
               <div
-                className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"
+                className={`${studentHome ? "mb-4 flex flex-wrap items-center gap-x-2 gap-y-1" : "mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"}`}
                 data-course-card-pricing
                 aria-label={`Course price ${course.pricing?.price}`}
               >
-                <strong className="text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)">
+                <strong
+                  className={`${studentHome ? "shrink-0 " : ""}text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)`}
+                >
                   {course.pricing?.price}
                 </strong>
                 {Boolean(course.pricing?.originalPrice) && (
-                  <span className="text-[0.95rem] font-medium leading-none text-(--muted) line-through">
+                  <span
+                    className={`${studentHome ? "shrink-0 whitespace-nowrap " : ""}text-[0.95rem] font-medium leading-none text-(--muted) line-through`}
+                  >
                     {course.pricing?.originalPrice}
                   </span>
                 )}
-                {Boolean(course.pricing?.discount) && (
+                {!studentHome && Boolean(course.pricing?.discount) && (
                   <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] font-bold leading-none text-emerald-300">
                     {course.pricing?.discount}
                   </span>
@@ -636,7 +658,7 @@ export function CourseCard({
                       />
                       <span className="truncate">Continue Learning</span>
                     </>
-                  ) : isPublic ? (
+                  ) : isPublic && !isPublicEnrollmentAction ? (
                     <>
                       <ListBullets
                         className="shrink-0"
@@ -689,17 +711,22 @@ export function CourseCard({
 export function PublicCourseCard({
   course,
   onNavigatePage,
+  publicAction = "view",
   imagePriority = false,
+  studentHome = false,
 }: {
   course: Course;
   onNavigatePage: (destination: string) => void;
+  publicAction?: "view" | "enroll";
   imagePriority?: boolean;
+  studentHome?: boolean;
 }) {
   return (
     <CourseCard
       course={course}
       role="student"
       variant="public"
+      publicAction={publicAction}
       wishlisted={false}
       onWishlist={() => undefined}
       onOpen={() => undefined}
@@ -709,6 +736,7 @@ export function PublicCourseCard({
       setMenuOpen={() => undefined}
       setNotice={() => undefined}
       imagePriority={imagePriority}
+      studentHome={studentHome}
     />
   );
 }

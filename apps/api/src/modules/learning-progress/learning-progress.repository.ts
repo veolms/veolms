@@ -249,3 +249,242 @@ export async function getEstimatedWatchHours(
   const row = await query.executeTakeFirst();
   return Number(row?.seconds ?? 0) / 3600;
 }
+
+// ---------------------------------------------------------------------------
+// Learning goals & daily activity (approved PRD, 2026-10)
+// ---------------------------------------------------------------------------
+
+export interface DailyActivityAccrual {
+  /** Learner-local day credited (YYYY-MM-DD). */
+  activity_date: string;
+  /** Day totals AFTER this batch (not the batch's own contribution). */
+  seconds: number;
+  completions: number;
+  /** Day totals BEFORE this batch (0 on the day's first credit). */
+  previous_seconds: number;
+  previous_completions: number;
+}
+
+/**
+ * The heartbeat write path: one atomic statement that
+ *  1. upserts progress with the same monotonic GREATEST rule as
+ *     upsertUserCourseProgress, capturing each row's old/new percent
+ *     (PostgreSQL 18 `RETURNING old/new`);
+ *  2. converts the percent gained into seconds via the lesson's media
+ *     duration (delta% x duration, completions = newly reached 100);
+ *  3. credits learning_daily_activity for the user's CURRENT local day,
+ *     resolving the IANA zone from user_learning_settings inline (UTC
+ *     when the user has no settings row).
+ *
+ * A replayed/retried batch yields old = new (delta 0), so nothing is
+ * credited twice — idempotent by construction. Single statement means
+ * atomicity without transaction round-trips (measured: a separate
+ * read+BEGIN/COMMIT flow cost ~12% heartbeat throughput).
+ *
+ * Returns the credited day's NEW totals, or null when the batch earned
+ * nothing (replay or zero-delta) — callers use this for goal/streak
+ * threshold checks.
+ */
+export async function upsertProgressAndAccrueActivity(
+  database: LearningProgressExecutor,
+  userId: string,
+  values: Array<{
+    id: string;
+    user_id: string;
+    course_id: string;
+    lesson_id: string;
+    progress_percent: number;
+    created_at: Date;
+    updated_at: Date;
+  }>,
+): Promise<DailyActivityAccrual | null> {
+  if (values.length === 0) return null;
+
+  const rows = sql.join(
+    values.map(
+      (v) =>
+        sql`(${v.id}::uuid, ${v.user_id}::uuid, ${v.course_id}::uuid, ${v.lesson_id}::uuid, ${v.progress_percent}::int, ${v.created_at}::timestamptz, ${v.updated_at}::timestamptz)`,
+    ),
+  );
+
+  const result = await sql<DailyActivityAccrual>`
+    with upserted as (
+      insert into learning_progress
+        (id, user_id, course_id, lesson_id, progress_percent, created_at, updated_at)
+      values ${rows}
+      on conflict (user_id, course_id, lesson_id) do update set
+        progress_percent = GREATEST(learning_progress.progress_percent, EXCLUDED.progress_percent),
+        updated_at = EXCLUDED.updated_at
+      returning
+        new.lesson_id as lesson_id,
+        old.progress_percent as previous_percent,
+        new.progress_percent as current_percent
+    ),
+    credit as (
+      select
+        coalesce(sum(
+          greatest(0, u.current_percent - coalesce(u.previous_percent, 0)) / 100.0
+            * coalesce(ma.duration_seconds, 0)
+        ), 0) as earned_seconds,
+        count(*) filter (
+          where u.current_percent >= 100 and coalesce(u.previous_percent, 0) < 100
+        ) as completions
+      from upserted u
+      join course_lessons cl on cl.id = u.lesson_id
+      left join media_assets ma on ma.id = cl.content_media_id
+    )
+    insert into learning_daily_activity (user_id, activity_date, seconds, completions)
+    select
+      ${userId}::uuid,
+      (now() at time zone coalesce(
+        (select s.time_zone from user_learning_settings s where s.user_id = ${userId}::uuid),
+        'UTC'
+      ))::date,
+      floor(credit.earned_seconds)::int,
+      credit.completions::int
+    from credit
+    where credit.earned_seconds >= 1 or credit.completions > 0
+    on conflict (user_id, activity_date) do update set
+      seconds = learning_daily_activity.seconds + EXCLUDED.seconds,
+      completions = learning_daily_activity.completions + EXCLUDED.completions
+    returning
+      to_char(new.activity_date, 'YYYY-MM-DD') as activity_date,
+      new.seconds as seconds,
+      new.completions as completions,
+      coalesce(old.seconds, 0) as previous_seconds,
+      coalesce(old.completions, 0) as previous_completions
+  `.execute(database);
+
+  const accrual = result.rows[0];
+  if (!accrual) return null;
+  return {
+    activity_date: accrual.activity_date,
+    seconds: Number(accrual.seconds),
+    completions: Number(accrual.completions),
+    previous_seconds: Number(accrual.previous_seconds),
+    previous_completions: Number(accrual.previous_completions),
+  };
+}
+
+export async function findUserLearningSettings(
+  database: LearningProgressExecutor,
+  userId: string,
+) {
+  return database
+    .selectFrom("user_learning_settings")
+    .selectAll()
+    .where("user_id", "=", userId)
+    .executeTakeFirst();
+}
+
+export async function upsertUserLearningSettings(
+  database: LearningProgressExecutor,
+  values: {
+    user_id: string;
+    daily_goal_minutes: number | null;
+    reminders_enabled: boolean;
+    reminder_days: string[];
+    reminder_time: string;
+    time_zone: string;
+  },
+) {
+  return database
+    .insertInto("user_learning_settings")
+    .values(values)
+    .onConflict((conflict) =>
+      conflict.column("user_id").doUpdateSet({
+        daily_goal_minutes: values.daily_goal_minutes,
+        reminders_enabled: values.reminders_enabled,
+        reminder_days: values.reminder_days,
+        reminder_time: values.reminder_time,
+        time_zone: values.time_zone,
+        updated_at: new Date(),
+      }),
+    )
+    .returningAll()
+    .executeTakeFirstOrThrow();
+}
+
+export interface DailySummaryRow {
+  activity_date: string;
+  seconds: number;
+  completions: number;
+}
+
+/**
+ * Today + this ISO-week totals and the full streak computation in ONE
+ * round trip, all in the user's local calendar (PRD §9). Streak days are
+ * days with >= 60 seconds or >= 1 completion; the current streak counts
+ * back from today or yesterday (today is not over yet). Gaps-and-islands
+ * over the user's own rows — bounded by days of history, PK-indexed.
+ */
+export async function getLearningSummaryAggregates(
+  database: LearningProgressExecutor,
+  input: { userId: string; timeZone: string },
+): Promise<{
+  todaySeconds: number;
+  weekSeconds: number;
+  currentStreakDays: number;
+  bestStreakDays: number;
+  lastActivityDate: string | null;
+}> {
+  const result = await sql<{
+    today_seconds: number;
+    week_seconds: number;
+    current_streak: number;
+    best_streak: number;
+    last_activity_date: string | null;
+  }>`
+    with local_today as (
+      select (now() at time zone ${input.timeZone})::date as today
+    ),
+    qualifying as (
+      select activity_date
+      from learning_daily_activity
+      where user_id = ${input.userId}::uuid
+        and (seconds >= 60 or completions >= 1)
+    ),
+    islands as (
+      select
+        activity_date,
+        activity_date
+          - (row_number() over (order by activity_date))::int as grp
+      from qualifying
+    ),
+    streaks as (
+      select min(activity_date) as start_date,
+             max(activity_date) as end_date,
+             count(*)::int as len
+      from islands
+      group by grp
+    )
+    select
+      coalesce((
+        select seconds from learning_daily_activity, local_today
+        where user_id = ${input.userId}::uuid and activity_date = today
+      ), 0)::int as today_seconds,
+      coalesce((
+        select sum(seconds) from learning_daily_activity, local_today
+        where user_id = ${input.userId}::uuid
+          and activity_date >= today - 6
+          and activity_date <= today
+      ), 0)::int as week_seconds,
+      coalesce((
+        select len from streaks, local_today
+        where end_date >= today - 1
+        order by end_date desc limit 1
+      ), 0)::int as current_streak,
+      coalesce((select max(len) from streaks), 0)::int as best_streak,
+      (select to_char(max(activity_date), 'YYYY-MM-DD') from qualifying)
+        as last_activity_date
+  `.execute(database);
+
+  const row = result.rows[0];
+  return {
+    todaySeconds: Number(row?.today_seconds ?? 0),
+    weekSeconds: Number(row?.week_seconds ?? 0),
+    currentStreakDays: Number(row?.current_streak ?? 0),
+    bestStreakDays: Number(row?.best_streak ?? 0),
+    lastActivityDate: row?.last_activity_date ?? null,
+  };
+}

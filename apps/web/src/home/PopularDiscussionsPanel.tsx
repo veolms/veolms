@@ -83,7 +83,7 @@ export function PopularDiscussionsPanel({
       />
 
       {isLoading ? (
-        <DashboardDiscussionCardSkeletons />
+        <DashboardDiscussionCardSkeletons count={5} />
       ) : isError ? (
         <PublicDiscussionState
           title="Discussions are unavailable"

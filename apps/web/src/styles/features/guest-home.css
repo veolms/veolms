@@ -3,6 +3,26 @@
 .guest-home {
   width: 100%;
   min-width: 0;
+  --home-layer-two-clearance: 18px;
+  --home-layer-two-inline-clearance: var(
+    --application-page-inline-gutter,
+    25px
+  );
+  --home-layer-three-clearance: 16px;
+  --home-layer-three-inline-clearance: 14px;
+}
+
+/* Home owns its Layer 1 -> Layer 2 clearance below. The shell's generic
+   padding is intentionally removed so it cannot also become shadow clearance
+   for the course sections. Mobile keeps only the shell's bottom safe area for
+   the fixed navigation. */
+.courses-main:has(.guest-home) {
+  padding: 0;
+}
+
+.guest-home__greeting {
+  margin-block-start: var(--application-page-block-start, 22px);
+  margin-inline: var(--application-page-inline-gutter, 25px);
 }
 
 .guest-home__layout {
@@ -18,11 +38,20 @@
 .guest-home__course-column {
   display: grid;
   gap: 16px;
+  box-sizing: border-box;
+  padding: var(--home-layer-two-clearance)
+    var(--home-layer-two-inline-clearance);
+}
+
+.guest-home__discussion-column {
+  box-sizing: border-box;
+  padding: var(--home-layer-two-clearance)
+    var(--home-layer-two-inline-clearance);
 }
 
 .guest-home__course-row {
   min-width: 0;
-  margin-top: 10px;
+  margin: 10px 14px 14px;
 }
 
 .home-course-row {
@@ -33,11 +62,19 @@
   position: relative;
   isolation: isolate;
   min-width: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--main-surface) 24%, transparent);
 }
 
 .home-course-row__viewport {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
+  padding: var(--home-layer-three-clearance, 16px)
+    var(--home-layer-three-inline-clearance, 14px);
+  scroll-padding-inline: var(--home-layer-three-inline-clearance, 14px);
+  border-end-start-radius: inherit;
+  border-end-end-radius: inherit;
 }
 
 .home-course-row__control {
@@ -57,8 +94,24 @@
   transition:
     color 150ms ease,
     opacity 150ms ease,
-    transform 150ms ease,
     background 150ms ease;
+}
+
+.home-course-row__control-circle {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid
+    color-mix(in srgb, var(--border-strong) 76%, var(--text) 24%);
+  border-radius: 50%;
+  background: var(--surface-strong);
+  color: inherit;
+  pointer-events: none;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
 }
 
 .home-course-row__control--previous {
@@ -95,6 +148,13 @@
   opacity: 1;
 }
 
+.home-course-row__control:hover:not(:disabled) .home-course-row__control-circle,
+.home-course-row__control:focus-visible:not(:disabled)
+  .home-course-row__control-circle {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-strong));
+  background: color-mix(in srgb, var(--surface-strong) 88%, var(--accent) 12%);
+}
+
 .home-course-row__control:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
   outline-offset: -2px;
@@ -106,13 +166,17 @@
   pointer-events: none;
 }
 
-.home-course-row__control--previous:hover:not(:disabled),
-.home-course-row__control--previous:focus-visible:not(:disabled) {
+.home-course-row__control--previous:hover:not(:disabled)
+  .home-course-row__control-circle,
+.home-course-row__control--previous:focus-visible:not(:disabled)
+  .home-course-row__control-circle {
   transform: translateX(-3px);
 }
 
-.home-course-row__control--next:hover:not(:disabled),
-.home-course-row__control--next:focus-visible:not(:disabled) {
+.home-course-row__control--next:hover:not(:disabled)
+  .home-course-row__control-circle,
+.home-course-row__control--next:focus-visible:not(:disabled)
+  .home-course-row__control-circle {
   transform: translateX(3px);
 }
 
@@ -126,7 +190,10 @@
   width: 100%;
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview] {
   display: grid;
   align-content: start;
@@ -134,13 +201,19 @@
   padding-block: 6px;
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact {
   margin: 0;
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   .discussion-hub__card-preview {
   display: -webkit-box;
@@ -152,14 +225,20 @@
   line-clamp: 2;
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact {
   --discussion-mobile-card-height: 126px;
   --discussion-mobile-content-height: 99px;
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact
   .discussion-thread__body {
@@ -167,7 +246,10 @@
   height: var(--discussion-mobile-content-height);
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact
   .discussion-hub__card-preview-row {
@@ -184,7 +266,10 @@
 }
 
 @media (max-width: 1180px) {
-  .guest-home__discussion-panel
+  :is(
+      .guest-home__discussion-panel,
+      .student-home-zero-progress__popular-discussions-panel
+    )
     > .creator-discussion-list[data-dashboard-discussion-preview] {
     flex: 0 0 360px;
     height: 360px;
@@ -192,7 +277,7 @@
     overflow-x: hidden;
     overflow-y: auto;
     padding-block: 6px;
-    padding-inline: 2px 6px;
+    padding-inline: 0;
     scrollbar-gutter: stable;
     -webkit-overflow-scrolling: touch;
   }
@@ -218,7 +303,6 @@
     grid-template-rows: minmax(0, 1fr);
     min-height: 0;
     overflow: hidden;
-    padding-block-end: 4px;
   }
 
   :root[data-content-layout="framed"] .guest-home__course-column {
@@ -254,20 +338,255 @@
     max-height: none;
     overflow-y: auto;
     padding-block: 6px;
-    padding-inline: 2px 6px;
+    padding-inline: 0;
     scrollbar-gutter: stable;
   }
 }
 
-@media (min-width: 1181px) {
-  .guest-home--guest .home-dashboard-grid.guest-home__layout,
-  :root[data-content-layout="framed"] .guest-home--guest .guest-home__layout {
-    grid-template-columns: minmax(0, 2.05fr) minmax(18rem, 1fr);
+@media (max-width: 640px) {
+  .courses-main:has(.guest-home) {
+    padding-bottom: calc(104px + var(--app-viewport-safe-area-max-bottom));
   }
 }
 
-/* Keep the light Discovery Home layered without changing shared Home or card
-   surfaces used by authenticated variants. */
+@media (max-width: 640px) {
+  /* Keep Home's mobile gutters owned by the column/track wrappers:
+     the course cards and discussion cards still retain dedicated room for
+     their shadows without carrying the desktop density into narrow screens. */
+  .guest-home {
+    --home-layer-two-inline-clearance: 12px;
+  }
+
+  .home-course-section {
+    --home-mobile-course-inline-inset: 8px;
+  }
+
+  .student-home .home-course-section {
+    padding: 0;
+  }
+
+  .home-course-section .home-course-row__viewport {
+    padding-block-end: var(--home-layer-three-inline-clearance, 14px);
+  }
+
+  .student-home .home-course-section > .dashboard-section-heading,
+  .student-home .home-course-section > .guest-home__course-row,
+  .student-home .home-course-section > .home-course-section__row {
+    margin-inline: var(--home-mobile-course-inline-inset);
+  }
+
+  .student-home .home-course-section > .dashboard-section-heading {
+    padding-inline: var(--home-layer-three-inline-clearance, 14px);
+  }
+
+  .student-home
+    .home-course-section
+    > .dashboard-section-heading.dashboard-section-heading--with-subtitle {
+    gap: 12px;
+  }
+
+  .student-home
+    .home-course-section
+    > .dashboard-section-heading.dashboard-section-heading--with-subtitle
+    > .dashboard-section-heading__copy {
+    flex: 1 1 auto;
+  }
+
+  .student-home
+    .home-course-section
+    > .dashboard-section-heading.dashboard-section-heading--with-subtitle
+    > .dashboard-section-heading__copy
+    > .dashboard-section-heading__subtitle {
+    display: block;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  :is(
+    .guest-home .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  ) {
+    padding-inline: 0;
+  }
+
+  :is(
+      .guest-home .guest-home__discussion-panel,
+      .student-home-zero-progress__popular-discussions-panel
+    )
+    > .dashboard-section-heading {
+    margin-inline: 10px;
+  }
+
+  :is(
+      .guest-home .guest-home__discussion-panel,
+      .student-home-zero-progress__popular-discussions-panel
+    )
+    > .creator-discussion-list[data-dashboard-discussion-preview] {
+    padding-inline: 12px;
+  }
+
+  :is(
+      .guest-home .guest-home__discussion-panel,
+      .student-home-zero-progress__popular-discussions-panel
+    )
+    > .creator-discussion-list[data-dashboard-discussion-preview]
+    > .discussion-thread--workspace-card.is-compact {
+    margin-inline: 0;
+  }
+
+  .guest-home--authenticated .guest-home__greeting {
+    min-height: 0;
+  }
+
+  .guest-home .guest-home__greeting h1 {
+    display: block;
+  }
+
+  .guest-home .guest-home__layout {
+    row-gap: 0;
+  }
+
+  .guest-home .guest-home__discussion-column {
+    padding-block-start: 0;
+  }
+}
+
+@media (min-width: 1181px) {
+  .guest-home__course-column {
+    padding-right: 12px;
+  }
+
+  .guest-home__discussion-column {
+    padding-left: 12px;
+  }
+
+  :is(.guest-home--guest, .guest-home--authenticated)
+    .home-dashboard-grid.guest-home__layout,
+  :root[data-content-layout="framed"]
+    :is(.guest-home--guest, .guest-home--authenticated)
+    .guest-home__layout {
+    column-gap: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
+  }
+}
+
+:is(
+    .guest-home .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
+  > .creator-discussion-list[data-dashboard-discussion-preview] {
+  padding-inline: 0;
+}
+
+:is(
+    .guest-home .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
+  > .creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact {
+  margin-inline: 12px;
+}
+
+:is(
+    .guest-home .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
+  > .creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact:not(
+    :is(:hover, :focus-within)
+  ) {
+  border-color: color-mix(in srgb, var(--text) 12%, var(--border));
+  background: var(--card-surface-raised, var(--surface-strong));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent),
+    var(--card-compact-shadow);
+}
+
+:is(
+    .guest-home .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
+  > .creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
+  border-color: color-mix(in srgb, var(--text) 18%, var(--border));
+  background: color-mix(
+    in srgb,
+    var(--creator-discussion-card-surface, var(--surface-strong)) 92%,
+    var(--text) 8%
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+    var(--card-compact-shadow);
+}
+
+/* Let the desktop grid derive the enrolled/no-progress rail height from the
+   complete left course column while keeping the discussion list independently
+   scrollable beneath its fixed header. */
+.student-home-zero-progress__discussion-column {
+  box-sizing: border-box;
+  padding: 18px 12px;
+}
+
+@media (min-width: 1181px) {
+  .home-dashboard-grid.student-home-zero-progress__dashboard-grid {
+    align-items: stretch;
+  }
+
+  .student-home-zero-progress__discussion-column {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-self: stretch;
+    flex-direction: column;
+    min-height: 0;
+    padding-block: 0;
+    padding-inline-end: 0;
+    padding-inline-start: 0;
+    overflow: visible;
+  }
+
+  .student-home-zero-progress__discussion-column > .home-discussions-panel {
+    display: flex;
+    width: 100%;
+    flex: 1 1 0;
+    min-height: 0;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .student-home-zero-progress__discussion-column
+    .home-discussion-workspace-list[data-dashboard-discussion-preview] {
+    flex: 1 1 0;
+    min-height: 0;
+    height: 0;
+    max-height: none;
+    overflow-y: auto;
+    padding-block: 6px;
+    padding-inline: 0;
+    scrollbar-gutter: stable;
+  }
+}
+
+@media (max-width: 640px) {
+  .student-home-zero-progress__discussion-column {
+    padding-block-start: 0;
+    padding-inline: 0;
+  }
+
+  .student-home .student-home-zero-progress__more-courses-panel {
+    padding: 0;
+  }
+}
+
+/* Keep the finalized light discovery carousel surface shared with the
+   authenticated zero-progress More Courses section. */
+.student-home-zero-progress__more-courses-panel {
+  position: relative;
+  z-index: 1;
+  background: var(--card-surface-soft, var(--surface));
+}
+
 :root[data-theme="light"] .guest-home--guest {
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface) 24%, var(--main-surface));
@@ -275,27 +594,17 @@
 
 :root[data-theme="light"]
   .guest-home--guest
-  :is(.guest-home__course-section, .guest-home__discussion-panel) {
+  :is(.guest-home__course-section, .guest-home__discussion-panel),
+:root[data-theme="light"] .student-home-zero-progress__more-courses-panel {
   border-color: color-mix(in srgb, var(--text) 9%, transparent);
   background: var(--card-surface-soft, var(--surface));
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--text) 6%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 :root[data-theme="light"] .guest-home--guest .course-card:not(:hover) {
   border-color: color-mix(in srgb, var(--text) 9%, transparent);
   background: var(--card-surface, var(--surface));
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--text) 8%, transparent);
-}
-
-:root[data-theme="light"]
-  .guest-home--guest
-  .guest-home__discussion-panel
-  .discussion-thread--workspace-card.is-compact:not(
-    :is(:hover, :focus-within)
-  ) {
-  border-color: color-mix(in srgb, var(--text) 9%, transparent);
-  background: var(--card-surface, var(--surface));
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--card-shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {

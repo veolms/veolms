@@ -124,8 +124,8 @@
   grid-template-columns: 46px minmax(0, 1fr) 96px;
   column-gap: 10px;
   align-items: start;
-  height: 110px;
-  min-height: 110px;
+  height: 112px;
+  min-height: 112px;
   overflow: hidden;
   border: 1px solid transparent;
   border-radius: 15px;

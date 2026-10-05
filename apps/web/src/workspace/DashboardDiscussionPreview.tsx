@@ -1,13 +1,15 @@
 import { ArrowClockwiseIcon as ArrowClockwise } from "@phosphor-icons/react/ArrowClockwise";
 
-export function DashboardDiscussionCardSkeletons() {
+export function DashboardDiscussionCardSkeletons({
+  count = 3,
+}: { count?: number } = {}) {
   return (
     <div
       className="creator-discussion-skeleton-list"
       role="status"
       aria-label="Loading recent discussions"
     >
-      {Array.from({ length: 3 }, (_, index) => (
+      {Array.from({ length: count }, (_, index) => (
         <div
           className="creator-discussion-skeleton-card"
           key={`discussion-skeleton-${index}`}

@@ -1487,6 +1487,7 @@ export function createCourseService({
 
   return {
     getCourseAndVerifyOwner,
+    resolveCourseThumbnailUrls,
     createCourse,
     listMyCourses,
     listMyCourseScope,

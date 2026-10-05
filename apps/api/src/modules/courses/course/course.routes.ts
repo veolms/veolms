@@ -253,11 +253,10 @@ const courseRoutes: RoutePlugin = async (app, options) => {
           ),
         },
       },
-      preHandler: [
-        ctx.middleware.authenticate,
-        ctx.middleware.requireAuthenticated,
-        ctx.middleware.requireMfaVerified,
-      ],
+      // Authoring-surface route: previously any authenticated account could
+      // call it (students merely got an empty list, but the route belongs
+      // to the authoring permission surface like its siblings).
+      preHandler: ctx.authorize("course.read"),
     },
     controller.listMyCourses,
   );

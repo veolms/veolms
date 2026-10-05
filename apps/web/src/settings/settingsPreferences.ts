@@ -334,11 +334,6 @@ export interface LearningPreferences {
   startInTheaterMode: boolean;
   showLessonPageScrollbar: boolean;
   showCurriculumScrollbar: boolean;
-  weeklyGoal: string;
-  learningReminders: boolean;
-  reminderDays: string[];
-  reminderTime: string;
-  timeZone: string;
   captionsByDefault: boolean;
   captionLanguage: string;
   autoScrollTranscript: boolean;
@@ -378,11 +373,6 @@ export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   startInTheaterMode: false,
   showLessonPageScrollbar: true,
   showCurriculumScrollbar: true,
-  weeklyGoal: "5",
-  learningReminders: true,
-  reminderDays: ["mon", "tue", "wed", "thu", "fri"],
-  reminderTime: "19:00",
-  timeZone: "Asia/Kolkata (IST)",
   captionsByDefault: false,
   captionLanguage: "English",
   autoScrollTranscript: true,
@@ -728,11 +718,19 @@ export const readLearningPreferences = (): LearningPreferences => {
       videoPlayerTheme: normalizeVideoPlayerTheme(
         storedPreferences.videoPlayerTheme,
       ),
-      reminderDays: Array.isArray(storedPreferences.reminderDays)
-        ? storedPreferences.reminderDays
-        : LEARNING_PREFERENCE_DEFAULTS.reminderDays,
     };
     delete (preferences as Record<string, unknown>).autoplayNextLecture;
+    // Goal/reminder fields moved to the server (learning goal settings
+    // API); stale copies in old localStorage payloads are dropped.
+    for (const staleKey of [
+      "weeklyGoal",
+      "learningReminders",
+      "reminderDays",
+      "reminderTime",
+      "timeZone",
+    ]) {
+      delete (preferences as Record<string, unknown>)[staleKey];
+    }
     return preferences;
   } catch {
     return LEARNING_PREFERENCE_DEFAULTS;

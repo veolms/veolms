@@ -1,11 +1,17 @@
 import crypto from "node:crypto";
 import type {
+  LearningGoalSettings,
+  LearningGoalSettingsResponse,
   LearningProgressBatchRequest,
   LearningProgressResumeContextResponse,
   LearningProgressResumeLesson,
   LearningProgressResponse,
   LearningProgressSyncResponse,
+  LearningReminderDay,
+  LearningSummaryResponse,
+  UpdateLearningGoalSettingsRequest,
 } from "@veolms/contracts";
+import { LEARNING_REMINDER_DAY_IDS } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
@@ -18,7 +24,11 @@ import {
   type CurriculumService,
 } from "../courses/index.ts";
 import * as courseRepository from "../courses/course/course.repository.ts";
+import { createOutboxService } from "../../events/outbox.service.ts";
 import * as learningProgressRepository from "./learning-progress.repository.ts";
+
+/** Streak lengths that earn a one-time milestone notification. */
+const LEARNING_STREAK_MILESTONES = [7, 30, 100, 365] as const;
 
 type UserContext = { id: string; roles: readonly string[] };
 
@@ -225,6 +235,12 @@ export interface LearningProgressService {
     courseKey: string,
     input: LearningProgressBatchRequest,
   ): Promise<LearningProgressSyncResponse>;
+  getSummary(user: UserContext): Promise<LearningSummaryResponse>;
+  getGoalSettings(user: UserContext): Promise<LearningGoalSettingsResponse>;
+  updateGoalSettings(
+    user: UserContext,
+    input: UpdateLearningGoalSettingsRequest,
+  ): Promise<LearningGoalSettingsResponse>;
   getAverageProgressAndCompletionRate(filters?: {
     courseId?: string | string[];
     asOf?: Date;
@@ -264,6 +280,8 @@ export function createLearningProgressService({
   accessService?: AccessService;
   curriculumService?: CurriculumService;
 }): LearningProgressService {
+  const outbox = createOutboxService();
+
   async function findCourse(courseKey: string) {
     return isUuid(courseKey)
       ? await courseRepository.findCourseById(database, courseKey)
@@ -467,21 +485,115 @@ export function createLearningProgressService({
     }
 
     const now = new Date();
-    await learningProgressRepository.upsertUserCourseProgress(
-      database,
-      [...progressByLessonId.entries()]
-        .filter(([, progressPercent]) => progressPercent > 0)
-        .map(([lessonId, progressPercent]) => ({
-          id: crypto.randomUUID(),
-          user_id: user.id,
-          course_id: course.id,
-          lesson_id: lessonId,
-          progress_percent: progressPercent,
-          created_at: now,
-          updated_at: now,
-        })),
-    );
+    const rowsToUpsert = [...progressByLessonId.entries()]
+      .filter(([, progressPercent]) => progressPercent > 0)
+      .map(([lessonId, progressPercent]) => ({
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        course_id: course.id,
+        lesson_id: lessonId,
+        progress_percent: progressPercent,
+        created_at: now,
+        updated_at: now,
+      }));
+
+    if (rowsToUpsert.length === 0) {
+      return { synced: true };
+    }
+
+    // Daily-activity accrual (approved PRD §8): one atomic statement
+    // upserts progress and credits delta% x lesson duration to the
+    // learner's current local day. Replays produce zero deltas, so
+    // retries/sendBeacon duplicates never double-credit. Activity accrues
+    // even before a goal is configured, so a later goal setting finds an
+    // intact history/streak.
+    const accrual =
+      await learningProgressRepository.upsertProgressAndAccrueActivity(
+        database,
+        user.id,
+        rowsToUpsert,
+      );
+
+    if (accrual) {
+      // A failed notification must never fail the heartbeat.
+      try {
+        await publishLearningThresholdEvents(user.id, accrual);
+      } catch {
+        // Threshold events are best-effort; the outbox dedupe keys let a
+        // later qualifying heartbeat publish them instead.
+      }
+    }
+
     return { synced: true };
+  }
+
+  /**
+   * Fires goal-completed / streak-milestone notifications only when THIS
+   * batch crosses the threshold (the accrual row carries the day's
+   * before/after totals). Outbox dedupe keys make each one at-most-once:
+   * goal per user per local day, milestone per user per count — so a
+   * raised goal never re-fires and milestones never repeat.
+   */
+  async function publishLearningThresholdEvents(
+    userId: string,
+    accrual: learningProgressRepository.DailyActivityAccrual,
+  ) {
+    const wasQualified =
+      accrual.previous_seconds >= 60 || accrual.previous_completions >= 1;
+    const isQualified = accrual.seconds >= 60 || accrual.completions >= 1;
+    const dayJustQualified = !wasQualified && isQualified;
+
+    const settings = await learningProgressRepository.findUserLearningSettings(
+      database,
+      userId,
+    );
+    const goalSeconds = (settings?.daily_goal_minutes ?? 0) * 60;
+    const goalJustCompleted =
+      goalSeconds > 0 &&
+      accrual.previous_seconds < goalSeconds &&
+      accrual.seconds >= goalSeconds;
+
+    if (!dayJustQualified && !goalJustCompleted) return;
+
+    let milestone: number | undefined;
+    if (dayJustQualified) {
+      const aggregates =
+        await learningProgressRepository.getLearningSummaryAggregates(
+          database,
+          { userId, timeZone: settings?.time_zone ?? "UTC" },
+        );
+      milestone = LEARNING_STREAK_MILESTONES.find(
+        (days) => days === aggregates.currentStreakDays,
+      );
+    }
+
+    if (!goalJustCompleted && milestone === undefined) return;
+
+    const now = new Date();
+    await database.transaction().execute(async (transaction) => {
+      if (goalJustCompleted) {
+        await outbox.publish(transaction, {
+          type: "learning.goal_completed",
+          version: 1,
+          dedupeKey: `learning.goal_completed:${userId}:${accrual.activity_date}`,
+          occurredAt: now,
+          payload: {
+            recipientUserId: userId,
+            dailyGoalMinutes: settings!.daily_goal_minutes!,
+            localDate: accrual.activity_date,
+          },
+        });
+      }
+      if (milestone !== undefined) {
+        await outbox.publish(transaction, {
+          type: "learning.streak_milestone",
+          version: 1,
+          dedupeKey: `learning.streak_milestone:${userId}:${milestone}`,
+          occurredAt: now,
+          payload: { recipientUserId: userId, streakDays: milestone },
+        });
+      }
+    });
   }
 
   async function getAverageProgressAndCompletionRate(
@@ -536,10 +648,113 @@ export function createLearningProgressService({
     );
   }
 
+  function presentGoalSettings(
+    row: Awaited<
+      ReturnType<typeof learningProgressRepository.findUserLearningSettings>
+    >,
+  ): LearningGoalSettingsResponse {
+    if (!row) {
+      return {
+        configured: false,
+        settings: {
+          dailyGoalMinutes: null,
+          remindersEnabled: false,
+          reminderDays: ["mon", "tue", "wed", "thu", "fri"],
+          reminderTime: "19:00",
+          timeZone: "UTC",
+        },
+      };
+    }
+    return {
+      configured: row.daily_goal_minutes !== null,
+      settings: {
+        dailyGoalMinutes: row.daily_goal_minutes,
+        remindersEnabled: row.reminders_enabled,
+        reminderDays: row.reminder_days.filter(
+          (day): day is LearningReminderDay =>
+            (LEARNING_REMINDER_DAY_IDS as readonly string[]).includes(day),
+        ),
+        // Postgres time comes back as HH:MM:SS.
+        reminderTime: row.reminder_time.slice(0, 5),
+        timeZone: row.time_zone,
+      },
+    };
+  }
+
+  async function getGoalSettings(
+    user: UserContext,
+  ): Promise<LearningGoalSettingsResponse> {
+    const row = await learningProgressRepository.findUserLearningSettings(
+      database,
+      user.id,
+    );
+    return presentGoalSettings(row);
+  }
+
+  async function updateGoalSettings(
+    user: UserContext,
+    input: UpdateLearningGoalSettingsRequest,
+  ): Promise<LearningGoalSettingsResponse> {
+    const row = await learningProgressRepository.upsertUserLearningSettings(
+      database,
+      {
+        user_id: user.id,
+        daily_goal_minutes: input.dailyGoalMinutes,
+        reminders_enabled: input.remindersEnabled,
+        reminder_days: [...new Set(input.reminderDays)],
+        reminder_time: input.reminderTime,
+        time_zone: input.timeZone,
+      },
+    );
+    return presentGoalSettings(row);
+  }
+
+  async function getSummary(
+    user: UserContext,
+  ): Promise<LearningSummaryResponse> {
+    const settings = await learningProgressRepository.findUserLearningSettings(
+      database,
+      user.id,
+    );
+    const aggregates =
+      await learningProgressRepository.getLearningSummaryAggregates(database, {
+        userId: user.id,
+        timeZone: settings?.time_zone ?? "UTC",
+      });
+
+    const dailyGoalMinutes = settings?.daily_goal_minutes ?? null;
+    const goalSeconds = dailyGoalMinutes === null ? 0 : dailyGoalMinutes * 60;
+    const todayPct =
+      goalSeconds > 0
+        ? Math.min(
+            100,
+            Math.floor((aggregates.todaySeconds / goalSeconds) * 100),
+          )
+        : 0;
+
+    return {
+      configured: dailyGoalMinutes !== null,
+      dailyGoalMinutes,
+      todaySeconds: aggregates.todaySeconds,
+      todayPct,
+      remainingSeconds: Math.max(0, goalSeconds - aggregates.todaySeconds),
+      goalCompletedToday:
+        goalSeconds > 0 && aggregates.todaySeconds >= goalSeconds,
+      weekSeconds: aggregates.weekSeconds,
+      weekTargetSeconds: goalSeconds * 7,
+      currentStreakDays: aggregates.currentStreakDays,
+      bestStreakDays: aggregates.bestStreakDays,
+      lastActivityDate: aggregates.lastActivityDate,
+    };
+  }
+
   return {
     getProgress,
     getResumeContext,
     syncProgress,
+    getSummary,
+    getGoalSettings,
+    updateGoalSettings,
     getAverageProgressAndCompletionRate,
     getAverageProgressAndCompletionRateByCourse,
     getAverageProgressByCourse,

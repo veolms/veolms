@@ -4388,7 +4388,9 @@ export function CoursesPage({
           <CourseOverviewPage
             courseSlug={surfaceCourseSlug}
             initialOverview={initialCourseOverview}
-            onNavigateCourses={() => onNavigatePage("/courses")}
+            onNavigateCourses={
+              onNavigateBack ?? (() => onNavigatePage("/courses"))
+            }
             onNavigatePage={onNavigatePage}
             role={role}
           />

@@ -185,6 +185,7 @@ export function AuthenticatedHomeBoundary({
       <Suspense fallback={pendingContent ?? <HomeLoadingState />}>
         <DiscoveryHome
           mode="authenticated"
+          onNavigatePage={onNavigatePage}
           studentName={studentName}
           accessibleCourseIds={new Set()}
           onDiscussionNavigatePage={onNavigatePage}

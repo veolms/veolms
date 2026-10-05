@@ -10,9 +10,13 @@ import {
   createStudentsService,
   type StudentsService,
 } from "../../students/index.ts";
+import type { CourseService } from "../../courses/index.ts";
 
 export interface EnrollmentService {
-  listEnrolledCourses(userId: string): Promise<EnrolledCourse[]>;
+  listEnrolledCourses(
+    userId: string,
+    userRoles?: readonly string[],
+  ): Promise<EnrolledCourse[]>;
   listAcademyEnrollments(limit: number): Promise<AcademyEnrollmentListItem[]>;
   getEnrollmentStats(
     filters: enrollmentRepo.EnrollmentAnalyticsFilters,
@@ -33,9 +37,11 @@ export interface EnrollmentService {
 
 export function createEnrollmentService({
   database,
+  courseService,
   studentsService = createStudentsService({ database }),
 }: {
   database: Executor;
+  courseService: Pick<CourseService, "resolveCourseThumbnailUrls">;
   studentsService?: Pick<StudentsService, "resolveStudentAvatars">;
 }): EnrollmentService {
   async function listAcademyEnrollments(
@@ -71,6 +77,7 @@ export function createEnrollmentService({
 
   async function listEnrolledCourses(
     userId: string,
+    userRoles?: readonly string[],
   ): Promise<EnrolledCourse[]> {
     // Join enrollments with courses to get course details in a single query.
     // Excludes revoked, expired (past access_expires_at), and suspended
@@ -81,10 +88,10 @@ export function createEnrollmentService({
       .select([
         "e.id as enrollment_id",
         "c.id as course_id",
+        "c.creator_id as course_creator_id",
         "c.slug as course_slug",
         "c.title as course_title",
         "c.short_description as course_description",
-        "c.thumbnail_url as course_thumbnail_url",
         "c.thumbnail_media_id as course_thumbnail_media_id",
         "e.created_at as enrolled_at",
         "e.status as enrollment_status",
@@ -183,14 +190,24 @@ export function createEnrollmentService({
       .orderBy("e.created_at", "desc")
       .execute();
 
-    return rows.map((row) =>
+    const resolvedThumbnails = await Promise.all(
+      rows.map((row) =>
+        courseService.resolveCourseThumbnailUrls(
+          row.course_thumbnail_media_id,
+          row.course_creator_id ?? undefined,
+          userRoles,
+        ),
+      ),
+    );
+
+    return rows.map((row, index) =>
       toEnrolledCourseContract({
         enrollment_id: row.enrollment_id,
         course_id: row.course_id,
         course_slug: row.course_slug,
         course_title: row.course_title,
         course_description: row.course_description ?? null,
-        course_thumbnail_url: row.course_thumbnail_url,
+        course_thumbnail_url: resolvedThumbnails[index]?.thumbnailUrl ?? null,
         course_thumbnail_media_id: row.course_thumbnail_media_id,
         total_sections: Number(row.total_sections) || 0,
         total_lessons: Number(row.total_lessons) || 0,

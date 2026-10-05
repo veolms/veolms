@@ -3,7 +3,6 @@ import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
 import { PublicCourseCard } from "../courses/CourseCard";
 import { CourseCardSkeleton } from "../courses/CourseCardSkeleton";
 import { courseCatalogueHorizontalRowClasses } from "../courses/CourseCatalogueSkeleton";
@@ -18,11 +17,13 @@ import { useHomeTimeGreeting } from "./homeGreeting";
 import "../styles/features/student-learning.css";
 import "../styles/features/home.css";
 import "../styles/features/guest-home.css";
+import "../styles/features/dashboard-discussion-preview.css";
 
 export type DiscoveryHomeMode = "guest" | "authenticated";
 
 interface DiscoveryHomeProps {
   mode: DiscoveryHomeMode;
+  onNavigatePage: (destination: string) => void;
   studentName?: string;
   accessibleCourseIds?: ReadonlySet<string>;
   onDiscussionNavigatePage?: NavigateTo;
@@ -73,7 +74,10 @@ function DiscoveryCourseSection({
   isFetching,
   onRetry,
   onNavigatePage,
+  publicAction,
+  subtitle,
   viewAllLabel = "View all",
+  hideWhenEmpty = false,
 }: {
   title: string;
   courses: readonly CourseSummary[];
@@ -82,20 +86,28 @@ function DiscoveryCourseSection({
   isFetching: boolean;
   onRetry: () => void;
   onNavigatePage: (destination: string) => void;
+  publicAction: "view" | "enroll";
+  subtitle?: string;
   viewAllLabel?: string;
+  hideWhenEmpty?: boolean;
 }) {
   const sectionId =
     "guest-home-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
+  if (hideWhenEmpty && !isLoading && !isError && courses.length === 0) {
+    return null;
+  }
+
   return (
     <section
-      className="dashboard-panel home-continue-panel guest-home__course-section"
+      className="dashboard-panel home-continue-panel home-course-section guest-home__course-section"
       aria-labelledby={sectionId}
     >
       <HomeSectionHeader
         icon={BookOpen}
         title={title}
         id={sectionId}
+        subtitle={subtitle}
         action={viewAllLabel}
         onAction={() => onNavigatePage("/courses")}
       />
@@ -135,7 +147,9 @@ function DiscoveryCourseSection({
                 key={course.id}
                 course={adaptCourseSummaryToCatalogueCourse(course)}
                 imagePriority={index < 2}
+                publicAction={publicAction}
                 onNavigatePage={onNavigatePage}
+                studentHome
               />
             ))
           )}
@@ -145,7 +159,10 @@ function DiscoveryCourseSection({
   );
 }
 
-function DiscoveryHomeHeader({ mode, studentName }: DiscoveryHomeProps) {
+function DiscoveryHomeHeader({
+  mode,
+  studentName,
+}: Pick<DiscoveryHomeProps, "mode" | "studentName">) {
   const displayName = studentName?.trim() || "there";
   const timeGreeting = useHomeTimeGreeting();
 
@@ -218,6 +235,7 @@ function scheduleDeferredRenderStep(step: () => void): () => void {
 
 export function DiscoveryHome({
   mode,
+  onNavigatePage,
   studentName,
   accessibleCourseIds,
   onDiscussionNavigatePage,
@@ -226,7 +244,6 @@ export function DiscoveryHome({
 }: DiscoveryHomeProps) {
   const discoveryQuery = useHomeDiscovery({ initialData: initialDiscovery });
   const discussionsQuery = usePopularDiscussions();
-  const navigate = useNavigate();
   const discovery = discoveryQuery.data;
   // With build-time discovery data every card would otherwise mount in the
   // first commit, which is one long main-thread task on mobile. Stage the
@@ -255,7 +272,9 @@ export function DiscoveryHome({
       <div className="home-dashboard-grid guest-home__layout">
         <div className="guest-home__course-column">
           {mode === "authenticated" ? (
-            <DiscoveryEnrollmentBanner onExplore={() => navigate("/courses")} />
+            <DiscoveryEnrollmentBanner
+              onExplore={() => onNavigatePage("/courses")}
+            />
           ) : null}
           <DiscoveryCourseSection
             title="Popular Courses"
@@ -271,7 +290,9 @@ export function DiscoveryHome({
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
             onRetry={() => void discoveryQuery.refetch()}
-            onNavigatePage={(destination) => navigate(destination)}
+            onNavigatePage={onNavigatePage}
+            publicAction={mode === "authenticated" ? "enroll" : "view"}
+            subtitle="Explore courses learners are enjoying right now."
           />
           <DiscoveryCourseSection
             title="Free Courses"
@@ -280,8 +301,11 @@ export function DiscoveryHome({
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
             onRetry={() => void discoveryQuery.refetch()}
-            onNavigatePage={(destination) => navigate(destination)}
+            onNavigatePage={onNavigatePage}
+            publicAction={mode === "authenticated" ? "enroll" : "view"}
+            subtitle="Start learning with courses available at no cost."
             viewAllLabel="Explore all"
+            hideWhenEmpty
           />
           <DiscoveryCourseSection
             title="Recently Added"
@@ -290,7 +314,9 @@ export function DiscoveryHome({
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
             onRetry={() => void discoveryQuery.refetch()}
-            onNavigatePage={(destination) => navigate(destination)}
+            onNavigatePage={onNavigatePage}
+            publicAction={mode === "authenticated" ? "enroll" : "view"}
+            subtitle="Discover the latest courses added to the catalogue."
           />
         </div>
 

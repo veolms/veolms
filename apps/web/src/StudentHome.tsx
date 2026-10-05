@@ -4,7 +4,6 @@ import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
-import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import type {
   CourseSummary,
@@ -12,7 +11,6 @@ import type {
   LearningProgressResumeContextResponse,
 } from "@veolms/contracts";
 import { useMemo, type CSSProperties } from "react";
-import { useNavigate } from "react-router";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
 import {
@@ -35,6 +33,7 @@ import { PopularDiscussionsPanel } from "./home/PopularDiscussionsPanel";
 import { RecentUpdatesPanel } from "./home/RecentUpdatesPanel";
 import { StudentHomeThumbnail } from "./home/StudentHomeThumbnail";
 import { useCourses } from "./services/courses";
+import { useLearningSummary } from "./services/learning-goals";
 import { useLearningProgressResumeContext } from "./services/learning-progress";
 import { usePopularDiscussions } from "./services/learning-interactions";
 import { useRecentLearningUpdates } from "./services/recent-updates";
@@ -223,13 +222,11 @@ function ContinueLearningState({
 function ResumeLessonContext({
   context,
   courseKey,
-  onNavigate,
 }: {
   context: LearningProgressResumeContextResponse;
   courseKey: string;
-  onNavigate: (path: string) => void;
 }) {
-  const { resumeLesson, previousLesson } = context;
+  const { resumeLesson } = context;
   if (!resumeLesson) return null;
 
   const lessonPath = (lessonNumber: number) =>
@@ -248,18 +245,6 @@ function ResumeLessonContext({
           {resumeLesson.sectionTitle} · {resumeLesson.progressPercent}% complete
         </small>
       </a>
-      {previousLesson && (
-        <div className="home-resume-lesson-links">
-          <button
-            type="button"
-            onClick={() => onNavigate(lessonPath(previousLesson.lessonNumber))}
-            aria-label={`Previous lesson: ${previousLesson.title}`}
-          >
-            <span>Previous</span>
-            <strong>{previousLesson.title}</strong>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -422,6 +407,15 @@ function ProgressMetricSkeletons() {
   );
 }
 
+function formatGoalProgress(todaySeconds: number, goalMinutes: number) {
+  if (goalMinutes >= 60) {
+    const todayHours = Math.floor((todaySeconds / 3600) * 10) / 10;
+    const goalHours = Math.round((goalMinutes / 60) * 10) / 10;
+    return `${todayHours} / ${goalHours} hrs`;
+  }
+  return `${Math.floor(todaySeconds / 60)} / ${goalMinutes} min`;
+}
+
 export function StudentHome({
   onOpenCourse,
   onNavigatePage,
@@ -429,8 +423,11 @@ export function StudentHome({
   studentName,
   enrollment,
 }: StudentHomeProps) {
-  const navigate = useNavigate();
-  const goalCompletion = 72;
+  const {
+    data: learningSummary,
+    isLoading: learningSummaryLoading,
+    isError: learningSummaryError,
+  } = useLearningSummary();
   const firstName =
     (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
   const timeGreeting = useHomeTimeGreeting();
@@ -602,41 +599,98 @@ export function StudentHome({
           </h1>
           <p>{secondaryGreeting}</p>
         </div>
-        <div
-          className="home-goal-summary"
-          aria-label={`7 day streak and 2.1 of 3 learning hours completed today (${goalCompletion}% complete)`}
-        >
-          <div>
-            <Fire size={33} weight="fill" />
-            <span>
-              <strong>7</strong>
-              <small>Day Streak</small>
-            </span>
-          </div>
-          <div>
-            <span>
-              <small>Today&apos;s Goal</small>
-              <strong>2.1 / 3 hrs</strong>
-            </span>
-            <i
-              className="home-goal-ring"
-              style={
-                { "--goal-progress": `${goalCompletion}%` } as CSSProperties
-              }
-              aria-hidden="true"
-            >
-              <span>{goalCompletion}%</span>
-            </i>
-          </div>
-          <button
-            type="button"
-            className="home-goal-summary__info"
-            aria-label="Streaks and goals coming soon"
-            data-tooltip="Coming soon"
+        {learningSummaryLoading ? (
+          <div
+            className="home-goal-summary home-goal-summary--loading"
+            role="status"
+            aria-busy="true"
+            aria-label="Loading your learning goal and streak"
           >
-            <Info size={14} weight="bold" aria-hidden="true" />
-          </button>
-        </div>
+            <div>
+              <Fire size={33} weight="fill" />
+              <span>
+                <strong>&ndash;</strong>
+                <small>Day Streak</small>
+              </span>
+            </div>
+            <div>
+              <span>
+                <small>Today&apos;s Goal</small>
+                <strong>&ndash; / &ndash;</strong>
+              </span>
+              <i
+                className="home-goal-ring"
+                style={{ "--goal-progress": "0%" } as CSSProperties}
+                aria-hidden="true"
+              >
+                <span>&ndash;</span>
+              </i>
+            </div>
+          </div>
+        ) : learningSummary?.configured &&
+          learningSummary.dailyGoalMinutes !== null ? (
+          <div
+            className="home-goal-summary"
+            aria-label={`${learningSummary.currentStreakDays} day streak and ${formatGoalProgress(
+              learningSummary.todaySeconds,
+              learningSummary.dailyGoalMinutes,
+            )} completed today (${learningSummary.todayPct}% complete)`}
+          >
+            <div>
+              <Fire size={33} weight="fill" />
+              <span>
+                <strong>{learningSummary.currentStreakDays}</strong>
+                <small>Day Streak</small>
+              </span>
+            </div>
+            <div>
+              <span>
+                <small>Today&apos;s Goal</small>
+                <strong>
+                  {formatGoalProgress(
+                    learningSummary.todaySeconds,
+                    learningSummary.dailyGoalMinutes,
+                  )}
+                </strong>
+              </span>
+              <i
+                className="home-goal-ring"
+                style={
+                  {
+                    "--goal-progress": `${learningSummary.todayPct}%`,
+                  } as CSSProperties
+                }
+                aria-hidden="true"
+              >
+                <span>{learningSummary.todayPct}%</span>
+              </i>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="home-goal-summary home-goal-summary--empty"
+            aria-label="No learning goal configured yet"
+          >
+            <div>
+              <Fire size={33} weight="fill" />
+              <span>
+                <strong>Set your learning goal</strong>
+                <small>
+                  {learningSummaryError
+                    ? "Goal data is unavailable right now"
+                    : "Track your daily progress and streak"}
+                </small>
+              </span>
+            </div>
+            <button
+              type="button"
+              className="home-goal-summary__cta"
+              onClick={() => onNavigatePage("/settings/learning")}
+            >
+              Set goal
+            </button>
+          </div>
+        )}
       </header>
 
       {initialEnrollmentLoading ? (
@@ -686,24 +740,31 @@ export function StudentHome({
                 {heroCourse.sections} Sections <i /> {heroCourse.lectures}{" "}
                 Lectures <i /> {heroCourse.duration}
               </strong>
-              <p>
-                {heroCourse.enrolledOn
-                  ? `Enrolled on ${heroCourse.enrolledOn}`
-                  : "Ready to continue"}
-              </p>
+              <div className="home-resume-enrollment-row">
+                <p>
+                  {heroCourse.enrolledOn
+                    ? `Enrolled on ${heroCourse.enrolledOn}`
+                    : "Ready to continue"}
+                </p>
+                <span
+                  className="home-resume-enrollment-divider"
+                  aria-hidden="true"
+                >
+                  |
+                </span>
+                <div className="home-resume-progress">
+                  <ProgressBar value={heroCourse.progress} />
+                  <span aria-hidden="true">{heroCourse.progress}%</span>
+                </div>
+              </div>
               {heroCourse && primaryCourseKey && resumeContext ? (
                 <ResumeLessonContext
                   context={resumeContext}
                   courseKey={resumeContext.courseSlug}
-                  onNavigate={navigate}
                 />
               ) : heroCourse && resumeContextLoading ? (
                 <ResumeLessonContextSkeleton />
               ) : null}
-              <div className="home-resume-progress">
-                <ProgressBar value={heroCourse.progress} />
-                <span aria-hidden="true">{heroCourse.progress}%</span>
-              </div>
               <button
                 type="button"
                 className="primary-learning-action"
@@ -813,10 +874,11 @@ export function StudentHome({
           .join(" ")}
       >
         {initialEnrollmentLoading || initialEnrollmentError ? (
-          <section className="dashboard-panel home-continue-panel">
+          <section className="dashboard-panel home-continue-panel home-course-section">
             <HomeSectionHeader
               icon={BookOpen}
               title="Continue Learning"
+              subtitle="Pick up where you left off."
               action="View All"
               onAction={() => onNavigatePage("courses")}
             />
@@ -835,14 +897,15 @@ export function StudentHome({
             </div>
           </section>
         ) : remainingEnrolledCourses.length >= 2 ? (
-          <section className="dashboard-panel home-continue-panel min-w-0">
+          <section className="dashboard-panel home-continue-panel home-course-section min-w-0">
             <HomeSectionHeader
               icon={BookOpen}
               title="Continue Learning"
+              subtitle="Pick up where you left off."
               action="View All"
               onAction={() => onNavigatePage("courses")}
             />
-            <div className="mt-2 min-w-0">
+            <div className="home-course-section__row">
               <HomeCourseRow
                 id="student-home-continue-learning"
                 label="Continue Learning"
