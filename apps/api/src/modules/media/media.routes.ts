@@ -16,6 +16,10 @@ import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createAuthMiddleware } from "../../middlewares/auth.middleware.ts";
 import { createSessionService } from "../auth/index.ts";
+import {
+  createAuthorizationGuard,
+  createAuthorizationService,
+} from "../authorization/index.ts";
 
 import { createMediaController } from "./media.controller.ts";
 import { createMediaService } from "./media.service.ts";
@@ -27,6 +31,25 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     authMiddleware.authenticate,
     authMiddleware.requireAuthenticated,
     authMiddleware.requireMfaVerified,
+  ];
+
+  // Content-authoring media routes (presign, upload confirmation, transcode
+  // control, processing progress, variant manifest) were previously open to
+  // ANY authenticated account: a student could mint presigned PUT URLs into
+  // platform object storage and dispatch paid transcode jobs against their
+  // uploads. Gate them behind the course-authoring permissions; holders of
+  // any one of these at platform scope (admin, instructor, course_manager,
+  // content editors) pass, students have none.
+  const authorizationGuard = createAuthorizationGuard(
+    createAuthorizationService(options.database),
+  );
+  const requireMediaAuthor = [
+    ...requireAuthenticated,
+    authorizationGuard.authorizeAny([
+      "course.create",
+      "course.curriculum.update",
+      "lesson.video.update",
+    ]),
   ];
 
   const service = createMediaService({
@@ -148,7 +171,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           ),
         },
       },
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
     },
     controller.presignMediaUpload,
   );
@@ -171,7 +194,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           503: errorResponse("CDN delivery is not configured"),
         },
       },
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
     },
     controller.confirmMediaUpload,
   );
@@ -192,7 +215,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Media or job not found"),
         },
       },
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
     },
     controller.getVideoJobProgress,
   );
@@ -200,7 +223,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/media/:mediaId/transcode/retry",
     {
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
       schema: { params: z.object({ mediaId: z.uuid() }) },
     },
     controller.retryVideoJob,
@@ -209,7 +232,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/media/:mediaId/transcode/cancel",
     {
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
       schema: { params: z.object({ mediaId: z.uuid() }) },
     },
     controller.cancelVideoJob,
@@ -218,7 +241,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/media/:mediaId/progress/stream",
     {
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
       schema: { params: z.object({ mediaId: z.uuid() }) },
     },
     controller.streamVideoJobProgress,
@@ -266,7 +289,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Image asset not found"),
         },
       },
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
     },
     controller.getImageVariantManifest,
   );
