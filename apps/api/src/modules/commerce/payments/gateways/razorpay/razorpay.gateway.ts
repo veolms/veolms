@@ -457,6 +457,22 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       refundEntity?.id ||
       crypto.randomUUID();
 
+    // Razorpay refund webhooks carry BOTH the refund entity and the payment
+    // entity. For refund events the meaningful amount is the refund's own
+    // (partial) amount — preferring the payment entity here would report the
+    // full payment amount and make downstream logic treat a partial refund
+    // as a full one.
+    const isRefundEvent =
+      eventType === "refund.succeeded" ||
+      eventType === "refund.pending" ||
+      eventType === "refund.failed";
+    const amount = isRefundEvent
+      ? (refundEntity?.amount ?? paymentEntity?.amount)
+      : (paymentEntity?.amount ?? refundEntity?.amount);
+    const currency = isRefundEvent
+      ? (refundEntity?.currency ?? paymentEntity?.currency)
+      : (paymentEntity?.currency ?? refundEntity?.currency);
+
     return {
       eventId: resolvedEventId,
       eventType,
@@ -465,8 +481,8 @@ export class RazorpayPaymentGateway implements PaymentGateway {
         paymentEntity?.order_id ?? payloadObj?.payload?.order?.entity?.id,
       gatewayPaymentId: paymentEntity?.id ?? refundEntity?.payment_id,
       gatewayRefundId: refundEntity?.id,
-      amount: paymentEntity?.amount ?? refundEntity?.amount,
-      currency: paymentEntity?.currency ?? refundEntity?.currency,
+      amount,
+      currency,
       paymentMethod: paymentEntity?.method
         ? {
             method: paymentEntity.method,

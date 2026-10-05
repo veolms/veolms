@@ -238,7 +238,10 @@ export function createPaymentWorker({
         updated_at: now,
       });
 
-      if (isFullRefund) {
+      if (refund.preserve_access) {
+        // Admin-created refunds can opt to keep the learner's access; the
+        // upsert above adopts such a row by gateway_refund_id, so honor it.
+      } else if (isFullRefund) {
         await courseAccessService.revokeAccessForOrder(transaction, order);
       } else if (refund.order_item_id) {
         const targetItem = await orderRepository.findOrderItemById(
@@ -258,10 +261,14 @@ export function createPaymentWorker({
         }
       }
 
+      // Keyed by the refund ROW id, matching refund.service.ts and
+      // refund-reconciliation.worker.ts — the webhook adopts the admin's
+      // row via upsertRefundByGatewayRefundId, so all three paths now
+      // produce the same key and the outbox dedupes to one notification.
       await outbox.publish(transaction, {
         type: "refund.completed",
         version: 1,
-        dedupeKey: `refund.completed:${event.gatewayRefundId}`,
+        dedupeKey: `refund.completed:${refund.id}`,
         occurredAt: now,
         payload: {
           refundId: refund.id,

@@ -4,6 +4,8 @@ import type { FastifyBaseLogger } from "fastify";
 import type { GatewayRefundDetails, PaymentGateway } from "@veolms/contracts";
 import * as refundRepo from "../refunds/refund.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
+import * as paymentRepo from "../payments/payment.repository.ts";
+import { toMinorUnits } from "../shared/currency.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
 import { mapWithConcurrency } from "../../../lib/concurrency.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
@@ -141,20 +143,36 @@ export function createRefundReconciliationWorker({
             });
           const totalProcessed = totalOtherRefundsAlready + refund.amount;
 
+          // Refund amounts are gateway minor units (paise), while
+          // `orders.total_amount` is major units (rupees) — see
+          // shared/currency.ts. Compare against the captured payment's
+          // amount, which is already stored in minor units; fall back to
+          // converting the order total only if the payment row is missing.
+          const payment = await paymentRepo.findPaymentById(
+            database,
+            refund.payment_id,
+          );
+          const orderTotalMinorUnits =
+            payment?.amount ??
+            toMinorUnits(order.total_amount, refund.currency);
+
           await database.transaction().execute(async (trx) => {
             await refundRepo.updateRefundStatus(trx, refund.id, {
               status: "processed",
               updated_at: new Date(),
             });
 
-            // Determine full vs partial based on order total
-            const isFullOrderRefund = totalProcessed >= order.total_amount;
+            // Determine full vs partial based on the captured amount
+            const isFullOrderRefund = totalProcessed >= orderTotalMinorUnits;
             await orderRepo.updateOrderStatus(trx, order.id, {
               status: isFullOrderRefund ? "refunded" : "partially_refunded",
               updated_at: new Date(),
             });
 
-            if (isFullOrderRefund) {
+            if (refund.preserve_access) {
+              // The admin who created this refund chose to keep the
+              // learner's access — honor that on the async path too.
+            } else if (isFullOrderRefund) {
               // Single shared owner of the access_grants + enrollments
               // revoke write — see course-access.service.ts.
               await courseAccessService.revokeAccessForOrder(trx, order);

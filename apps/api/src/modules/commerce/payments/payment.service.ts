@@ -10,6 +10,7 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import { toMinorUnits } from "../shared/currency.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import { createPaymentReconciliationService } from "./payment-reconciliation.service.ts";
@@ -19,47 +20,11 @@ import { toPaymentContract } from "./payment.mapper.ts";
  * Course pricing is currently stored in major currency units (for example,
  * 499 means ₹499). Payment gateways expect the amount in the currency's
  * smallest unit (for INR, 49900 paise). Keep this conversion at the gateway
- * boundary so internal course/order pricing remains unchanged.
+ * boundary so internal course/order pricing remains unchanged. Shared with
+ * the refund paths so full/partial comparisons use one definition.
  */
 function toGatewayAmount(amount: number, currency: string): number {
-  if (!Number.isSafeInteger(amount) || amount < 0) {
-    throw new Error(`Invalid order amount: ${amount}`);
-  }
-
-  // Razorpay uses the smallest unit for the supported currencies. The
-  // current course-pricing UI stores whole major units, so standard
-  // two-decimal currencies use a 100x conversion. Zero-decimal currencies
-  // must not be multiplied.
-  const zeroDecimalCurrencies = new Set([
-    "BIF",
-    "CLP",
-    "DJF",
-    "GNF",
-    "JPY",
-    "KMF",
-    "KRW",
-    "MGA",
-    "PYG",
-    "RWF",
-    "UGX",
-    "VND",
-    "VUV",
-    "XAF",
-    "XOF",
-    "XPF",
-  ]);
-  const multiplier = zeroDecimalCurrencies.has(currency.toUpperCase())
-    ? 1
-    : 100;
-  const gatewayAmount = amount * multiplier;
-
-  if (!Number.isSafeInteger(gatewayAmount)) {
-    throw new Error(
-      `Order amount is too large for gateway: ${amount} ${currency}`,
-    );
-  }
-
-  return gatewayAmount;
+  return toMinorUnits(amount, currency);
 }
 
 export interface PaymentService {

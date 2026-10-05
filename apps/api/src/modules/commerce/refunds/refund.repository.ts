@@ -59,6 +59,7 @@ export async function insertRefund(
     status: RefundStatus;
     created_by?: string | null;
     idempotency_key?: string | null;
+    preserve_access?: boolean;
     created_at?: Date;
     updated_at?: Date;
   },
