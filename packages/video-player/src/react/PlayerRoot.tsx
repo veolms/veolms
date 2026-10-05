@@ -137,7 +137,17 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
     ref,
   ) {
     const controllerRef = useRef<PlayerController | null>(null);
-    if (!controllerRef.current) {
+    // Also replaces a DESTROYED controller, not only a missing one. When
+    // this subtree is hidden by Suspense (e.g. a sibling lazy chunk loads,
+    // as in the curriculum editor opening the quiz editor), React runs the
+    // lifecycle cleanup below and the deferred destroy() fires — but the
+    // component instance survives. On reveal, React re-renders and replays
+    // the effects; activate() on the destroyed controller would throw
+    // PLAYER_DESTROYED and take down the error boundary. Constructing a
+    // fresh controller during that reveal render gives every
+    // [controller]-keyed effect a new identity, so the player reloads its
+    // source and reinitializes cleanly instead of crashing.
+    if (!controllerRef.current || controllerRef.current.destroyed) {
       controllerRef.current = new PlayerController(engineFactory());
     }
     const controller = controllerRef.current;
@@ -167,7 +177,12 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
 
     useLayoutEffect(() => {
       lifecycleVersionRef.current += 1;
-      controller.activate();
+      // Render-time construction above replaces destroyed controllers, so
+      // this only trips if something destroyed the controller between that
+      // render and this commit. Skipping beats throwing: an activate()
+      // throw here escapes to the nearest error boundary and blanks the
+      // whole page.
+      if (!controller.destroyed) controller.activate();
 
       return () => {
         controller.deactivate();
