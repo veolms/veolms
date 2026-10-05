@@ -129,6 +129,11 @@ export function createAuthService({
     return userRepository.listUserDisplayNamesByIds(database, userIds);
   }
 
+  /** Bulk notification-recipient lookup (includes soft-deleted users). */
+  function listNotificationRecipientsByIds(userIds: readonly string[]) {
+    return userRepository.listNotificationRecipientsByIds(database, userIds);
+  }
+
   async function getPublicProfile(username: string) {
     const user = await userRepository.findPublicProfileByUsername(
       database,
@@ -1303,6 +1308,7 @@ export function createAuthService({
     findUserById,
     findUserByIdForNotification,
     listUserDisplayNamesByIds,
+    listNotificationRecipientsByIds,
     getPublicProfile,
     findUserByIdentifier,
     findUserByIdentifierIncludingDeleted,

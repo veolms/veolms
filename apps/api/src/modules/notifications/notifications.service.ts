@@ -241,89 +241,132 @@ export function createNotificationService({
       string,
       Awaited<ReturnType<typeof recipients.findRecipient>>
     >();
-    for (const userId of new Set(
-      intents.map((intent) => intent.recipientUserId),
-    )) {
-      recipientRecords.set(userId, await recipients.findRecipient(userId));
+    const recipientIds = [
+      ...new Set(intents.map((intent) => intent.recipientUserId)),
+    ];
+    if (recipients.findRecipients) {
+      // One bulk query per 500 recipients instead of one query each — a
+      // course-wide announcement fans out to every active enrollee.
+      for (let i = 0; i < recipientIds.length; i += 500) {
+        const batch = await recipients.findRecipients(
+          recipientIds.slice(i, i + 500),
+        );
+        for (const recipient of batch) {
+          recipientRecords.set(recipient.id, recipient);
+        }
+      }
+    } else {
+      for (const userId of recipientIds) {
+        recipientRecords.set(userId, await recipients.findRecipient(userId));
+      }
     }
 
-    return await database.transaction().execute(async (transaction) => {
-      let created = 0;
-      let skipped = 0;
+    // Chunked: a course-wide event used to create its notifications and
+    // deliveries for EVERY recipient in one transaction (~4 statements per
+    // recipient — tens of thousands of statements for a large course),
+    // which could outlive the worker's lease and get re-claimed mid-way.
+    // Each chunk commits separately; a crash or lease loss between chunks
+    // is safe because notification/delivery inserts are idempotent
+    // (ON CONFLICT DO NOTHING on their unique keys), so the retry simply
+    // skips what already exists. markProcessed runs once at the end,
+    // fenced by the claim lease.
+    const CHUNK_SIZE = 200;
+    let created = 0;
+    let skipped = 0;
 
-      for (const intent of intents) {
-        const recipient = recipientRecords.get(intent.recipientUserId);
-        if (!recipient) {
-          skipped += 1;
-          continue;
-        }
+    for (let start = 0; start < intents.length; start += CHUNK_SIZE) {
+      const chunk = intents.slice(start, start + CHUNK_SIZE);
+      const chunkResult = await database
+        .transaction()
+        .execute(async (transaction) => {
+          let chunkCreated = 0;
+          let chunkSkipped = 0;
 
-        const enabledChannels = [] as Array<"in_app" | "email">;
-        for (const channel of intent.channels) {
-          const enabled = intent.mandatory
-            ? true
-            : ((await notificationRepository.getPreference(
-                transaction,
-                intent.recipientUserId,
-                intent.type,
-                channel,
-              )) ?? true);
-          if (enabled) enabledChannels.push(channel);
-        }
+          for (const intent of chunk) {
+            const recipient = recipientRecords.get(intent.recipientUserId);
+            if (!recipient) {
+              chunkSkipped += 1;
+              continue;
+            }
 
-        if (enabledChannels.length === 0) {
-          skipped += 1;
-          continue;
-        }
+            const enabledChannels = [] as Array<"in_app" | "email">;
+            for (const channel of intent.channels) {
+              const enabled = intent.mandatory
+                ? true
+                : ((await notificationRepository.getPreference(
+                    transaction,
+                    intent.recipientUserId,
+                    intent.type,
+                    channel,
+                  )) ?? true);
+              if (enabled) enabledChannels.push(channel);
+            }
 
-        const rendered = renderNotificationTemplate(
-          intent.templateKey,
-          intent.templateData,
-          intent.deepLink,
-        );
-        const notificationId = await notificationRepository.createNotification(
-          transaction,
-          {
-            sourceEventId: event.id,
-            recipientUserId: intent.recipientUserId,
-            type: intent.type,
-            category: intent.category,
-            title: rendered.inApp.title,
-            body: rendered.inApp.body,
-            deepLink: intent.deepLink,
-          },
-        );
+            if (enabledChannels.length === 0) {
+              chunkSkipped += 1;
+              continue;
+            }
 
-        if (enabledChannels.includes("in_app")) {
-          await notificationRepository.createDelivery(transaction, {
-            notificationId,
-            channel: "in_app",
-            status: "sent",
-            destination: null,
-            payload: null,
-            sentAt: new Date(),
-          });
-        }
-        if (enabledChannels.includes("email")) {
-          await notificationRepository.createDelivery(transaction, {
-            notificationId,
-            channel: "email",
-            status: recipient.email ? "pending" : "skipped",
-            destination: recipient.email,
-            payload: {
-              subject: rendered.email.subject,
-              text: rendered.email.text,
-              html: rendered.email.html,
-            } satisfies Json,
-            sentAt: null,
-          });
-        }
-        created += 1;
-      }
+            const rendered = renderNotificationTemplate(
+              intent.templateKey,
+              intent.templateData,
+              intent.deepLink,
+            );
+            const notificationId =
+              await notificationRepository.createNotification(transaction, {
+                sourceEventId: event.id,
+                recipientUserId: intent.recipientUserId,
+                type: intent.type,
+                category: intent.category,
+                title: rendered.inApp.title,
+                body: rendered.inApp.body,
+                deepLink: intent.deepLink,
+              });
 
-      await outboxRepository.markProcessed(transaction, event.id, new Date());
-      return { created, skipped };
-    });
+            if (enabledChannels.includes("in_app")) {
+              await notificationRepository.createDelivery(transaction, {
+                notificationId,
+                channel: "in_app",
+                status: "sent",
+                destination: null,
+                payload: null,
+                sentAt: new Date(),
+              });
+            }
+            if (enabledChannels.includes("email")) {
+              await notificationRepository.createDelivery(transaction, {
+                notificationId,
+                channel: "email",
+                status: recipient.email ? "pending" : "skipped",
+                destination: recipient.email,
+                payload: {
+                  subject: rendered.email.subject,
+                  text: rendered.email.text,
+                  html: rendered.email.html,
+                } satisfies Json,
+                sentAt: null,
+              });
+            }
+            chunkCreated += 1;
+          }
+
+          return { created: chunkCreated, skipped: chunkSkipped };
+        });
+
+      created += chunkResult.created;
+      skipped += chunkResult.skipped;
+    }
+
+    // Fenced on the claim lease: if this worker lost the lease mid-way,
+    // the new owner's reprocessing decides the event's fate instead.
+    await outboxRepository.markProcessed(
+      database,
+      event.id,
+      new Date(),
+      // Claimed events always carry the lease the claim assigned.
+      event.locked_until!,
+    );
+    return { created, skipped };
   }
 
   return {

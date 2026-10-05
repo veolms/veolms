@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from "fastify";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import type { Database } from "@veolms/database";
 import type { PaymentGateway } from "@veolms/contracts";
 import { createOrderExpirationWorker } from "./order-expiration.worker.ts";
@@ -112,6 +112,39 @@ export class CommerceFulfillmentScheduler {
   }
 
   private async executeCycle(): Promise<void> {
+    // Cross-replica leader gate: every API replica starts this scheduler,
+    // and without a lock each replica duplicated every gateway call and
+    // raced the conditional DB writes each cycle. pg_try_advisory_lock is
+    // held on ONE reserved connection for the duration of the cycle (the
+    // workers themselves keep using the shared pool); a replica that
+    // doesn't get the lock simply skips its tick — the lock holder is
+    // doing the same work.
+    await this.database.connection().execute(async (connection) => {
+      const lock = await sql<{ locked: boolean }>`
+        select pg_try_advisory_lock(
+          hashtext('veolms:commerce-fulfillment-scheduler')
+        ) as locked
+      `.execute(connection);
+      if (!lock.rows[0]?.locked) {
+        this.logger?.debug(
+          "Commerce fulfillment cycle skipped: another instance holds the scheduler lock",
+        );
+        return;
+      }
+
+      try {
+        await this.runWorkers();
+      } finally {
+        await sql`
+          select pg_advisory_unlock(
+            hashtext('veolms:commerce-fulfillment-scheduler')
+          )
+        `.execute(connection);
+      }
+    });
+  }
+
+  private async runWorkers(): Promise<void> {
     // These three operate on disjoint tables (orders, payments, refunds)
     // with no dependency between them, so they run concurrently instead
     // of one after another — a tick's cost is the max of the three

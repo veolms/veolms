@@ -41,6 +41,8 @@ try {
         const user = await auth.findUserByIdForNotification(userId);
         return user ? { id: user.id, email: user.email } : undefined;
       },
+      findRecipients: (userIds) =>
+        auth.listNotificationRecipientsByIds(userIds),
     },
   });
   const isWatch = process.argv.includes("--watch");

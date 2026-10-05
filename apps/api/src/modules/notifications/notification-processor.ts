@@ -77,12 +77,14 @@ export function createNotificationProcessor({
 
   async function processOutbox() {
     const now = new Date();
+    const leaseUntil = new Date(
+      now.getTime() + config.NOTIFICATION_LEASE_SECONDS * 1000,
+    );
     const claimed = await outboxRepository.claimBatch(database, {
       limit: config.NOTIFICATION_BATCH_SIZE,
       now,
-      leaseUntil: new Date(
-        now.getTime() + config.NOTIFICATION_LEASE_SECONDS * 1000,
-      ),
+      leaseUntil,
+      maxAttempts: config.NOTIFICATION_OUTBOX_MAX_ATTEMPTS,
     });
     const result = { processed: 0, retried: 0, failed: 0 };
 
@@ -114,7 +116,8 @@ export function createNotificationProcessor({
           "Notification event processed",
         );
       } catch (error) {
-        const attemptCount = event.attempt_count + 1;
+        // attempt_count was already incremented at claim time.
+        const attemptCount = event.attempt_count;
         const message = errorMessage(error);
         const permanent =
           error instanceof z.ZodError ||
@@ -125,8 +128,8 @@ export function createNotificationProcessor({
         ) {
           await outboxRepository.markFailed(database, {
             eventId: event.id,
-            attemptCount,
             error: message,
+            lockedUntil: leaseUntil,
           });
           result.failed += 1;
           log.error(
@@ -137,13 +140,13 @@ export function createNotificationProcessor({
           const failureTime = new Date();
           await outboxRepository.markRetry(database, {
             eventId: event.id,
-            attemptCount,
             availableAt: retryAt(
               failureTime,
               attemptCount,
               config.NOTIFICATION_RETRY_SECONDS,
             ),
             error: message,
+            lockedUntil: leaseUntil,
           });
           result.retried += 1;
           log.warn(
@@ -158,14 +161,16 @@ export function createNotificationProcessor({
 
   async function processEmail() {
     const now = new Date();
+    const leaseUntil = new Date(
+      now.getTime() + config.NOTIFICATION_LEASE_SECONDS * 1000,
+    );
     const claimed = await notificationRepository.claimEmailDeliveries(
       database,
       {
         limit: config.NOTIFICATION_BATCH_SIZE,
         now,
-        leaseUntil: new Date(
-          now.getTime() + config.NOTIFICATION_LEASE_SECONDS * 1000,
-        ),
+        leaseUntil,
+        maxAttempts: config.NOTIFICATION_EMAIL_MAX_ATTEMPTS,
       },
     );
     const result = { sent: 0, retried: 0, failed: 0 };
@@ -184,10 +189,12 @@ export function createNotificationProcessor({
           providerMessageId:
             sendResult.status === "sent" ? sendResult.messageId : null,
           now: new Date(),
+          lockedUntil: leaseUntil,
         });
         result.sent += 1;
       } catch (error) {
-        const attemptCount = delivery.attempt_count + 1;
+        // attempt_count was already incremented at claim time.
+        const attemptCount = delivery.attempt_count;
         const message = errorMessage(error);
         const permanent = error instanceof z.ZodError;
         const failureTime = new Date();
@@ -197,9 +204,9 @@ export function createNotificationProcessor({
         ) {
           await notificationRepository.markDeliveryFailed(database, {
             deliveryId: delivery.id,
-            attemptCount,
             error: message,
             now: failureTime,
+            lockedUntil: leaseUntil,
           });
           result.failed += 1;
           log.error(
@@ -209,7 +216,6 @@ export function createNotificationProcessor({
         } else {
           await notificationRepository.markDeliveryRetry(database, {
             deliveryId: delivery.id,
-            attemptCount,
             nextAttemptAt: retryAt(
               failureTime,
               attemptCount,
@@ -217,6 +223,7 @@ export function createNotificationProcessor({
             ),
             error: message,
             now: failureTime,
+            lockedUntil: leaseUntil,
           });
           result.retried += 1;
           log.warn(

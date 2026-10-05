@@ -30,6 +30,25 @@ export function listUserDisplayNamesByIds(
     .execute();
 }
 
+/**
+ * Bulk id+email lookup for notification fan-out. Includes soft-deleted
+ * users, matching findUserByIdIncludingDeleted's semantics (the per-id
+ * variant the notification worker used one query at a time).
+ */
+export function listNotificationRecipientsByIds(
+  database: Executor,
+  userIds: readonly string[],
+) {
+  if (userIds.length === 0) {
+    return Promise.resolve([] as { id: string; email: string | null }[]);
+  }
+  return database
+    .selectFrom("users")
+    .select(["id", "email"])
+    .where("id", "in", [...userIds])
+    .execute();
+}
+
 export function findPublicProfileByUsername(
   database: Executor,
   username: string,
