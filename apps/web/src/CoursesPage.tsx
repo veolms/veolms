@@ -69,7 +69,7 @@ import {
   toggleWishlistCourse,
   useWishlistIds,
 } from "./courses/wishlistStorage";
-import { CourseCatalogue } from "./courses/CourseCatalogue";
+import { CourseCatalogueLoadingSkeleton } from "./courses/CourseCatalogueSkeleton";
 import type {
   Course,
   CourseEnrollmentFilter,
@@ -82,12 +82,7 @@ import { AcademyPaletteMenu } from "./shell/AcademyPaletteMenu";
 import { AcademyRouteSkeleton } from "./routing/AcademyRouteSkeleton";
 import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { useMobileProfileDrawerSize } from "./shell/useMobileProfileDrawerSize";
-import { LogoutConfirmModal } from "./shell/LogoutConfirmModal";
-import {
-  ProfileMenu,
-  ProfileMenuIdentity,
-  ShellProfileAvatar,
-} from "./shell/ProfileMenu";
+import { ShellProfileAvatar } from "./shell/ShellProfileAvatar";
 import { ProfileButtonPlaceholder } from "./shell/ProfileButtonPlaceholder";
 import { SidebarResizeReadout } from "./shell/SidebarResizeReadout";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
@@ -225,6 +220,35 @@ import type { ProfilePreferences } from "./settings/profileTypes";
 // bundle of every page; the sheet is warmed on idle for compact viewports so
 // the first tap still opens instantly. All pieces come from one module, so
 // the compound-component context stays intact.
+// The catalogue is the /courses page body; every other page only pays for
+// it on navigation. Static prerender resolves the lazy module, so the
+// /courses document still ships with catalogue markup, and an idle warm-up
+// keeps client-side navigation instant.
+const loadCourseCatalogueModule = () => import("./courses/CourseCatalogue");
+const CourseCatalogue = lazy(() =>
+  loadCourseCatalogueModule().then((module) => ({
+    default: module.CourseCatalogue,
+  })),
+);
+
+// Profile menu and logout modal open on explicit user actions, so their
+// modules load lazily (menu warmed on idle for signed-in sessions) instead
+// of riding in the startup bundle of every page.
+const loadProfileMenuModule = () => import("./shell/ProfileMenu");
+const ProfileMenu = lazy(() =>
+  loadProfileMenuModule().then((module) => ({ default: module.ProfileMenu })),
+);
+const ProfileMenuIdentity = lazy(() =>
+  loadProfileMenuModule().then((module) => ({
+    default: module.ProfileMenuIdentity,
+  })),
+);
+const LogoutConfirmModal = lazy(() =>
+  import("./shell/LogoutConfirmModal").then((module) => ({
+    default: module.LogoutConfirmModal,
+  })),
+);
+
 const loadMobileMenuDrawerModule = () => import("@/components/ui/drawer");
 const Drawer = lazy(() =>
   loadMobileMenuDrawerModule().then((module) => ({ default: module.Drawer })),
@@ -1049,6 +1073,10 @@ export function CoursesPage({
   const [mobileNavigationSheetMounted, setMobileNavigationSheetMounted] =
     useState(false);
   const [pendingMobileMenuOpen, setPendingMobileMenuOpen] = useState(false);
+  const [profileMenuSurfaceMounted, setProfileMenuSurfaceMounted] =
+    useState(false);
+  const [pendingProfileMenuOpen, setPendingProfileMenuOpen] = useState(false);
+  const [logoutModalMounted, setLogoutModalMounted] = useState(false);
   const [mobilePaletteMenu, setMobilePaletteMenu] = useState(false);
   const [mobileMenuCollapsedSnapPoint, setMobileMenuCollapsedSnapPoint] =
     useState(MOBILE_DRAWER_INITIAL_SNAP_POINT);
@@ -1862,6 +1890,62 @@ export function CoursesPage({
   }, [pendingMobileMenuOpen, mobileNavigationSheetMounted]);
 
   useEffect(() => {
+    if (!isAuthenticated || profileMenuSurfaceMounted) return undefined;
+    if (profileMenu) {
+      setProfileMenuSurfaceMounted(true);
+      return undefined;
+    }
+    const mount = () => {
+      void loadProfileMenuModule();
+      setProfileMenuSurfaceMounted(true);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(mount, { timeout: 4000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = window.setTimeout(mount, 2000);
+    return () => window.clearTimeout(handle);
+  }, [isAuthenticated, profileMenu, profileMenuSurfaceMounted]);
+
+  useEffect(() => {
+    if (!pendingProfileMenuOpen || !profileMenuSurfaceMounted) {
+      return undefined;
+    }
+    // A click arrived before the menu surface was warmed. Open only after
+    // the lazy module resolves and the closed menu has committed, so the
+    // opening click cannot race the menu's own dismiss listeners.
+    let cancelled = false;
+    void loadProfileMenuModule().then(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          setPendingProfileMenuOpen(false);
+          setProfileMenu(true);
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingProfileMenuOpen, profileMenuSurfaceMounted]);
+
+  useEffect(() => {
+    if (logoutConfirmOpen) setLogoutModalMounted(true);
+  }, [logoutConfirmOpen]);
+
+  useEffect(() => {
+    // The catalogue module is behind a route-body lazy(); warm it once the
+    // shell is idle so navigating to /courses never shows its fallback.
+    const warm = () => void loadCourseCatalogueModule();
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(warm, { timeout: 5000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = window.setTimeout(warm, 2500);
+    return () => window.clearTimeout(handle);
+  }, []);
+
+  useEffect(() => {
     if (mobileNavigationSheetMounted) return undefined;
     if (mobileMenuOpen) {
       setMobileNavigationSheetMounted(true);
@@ -1869,9 +1953,11 @@ export function CoursesPage({
     }
     if (!compactNavigation) return undefined;
     // Warm the sheet while the main thread is idle so the first tap on the
-    // "You" button opens it without waiting for the drawer chunk.
+    // "You" button opens it without waiting for the drawer chunk. The sheet
+    // body renders the profile identity/menu, so warm that module with it.
     const mount = () => {
       void loadMobileMenuDrawerModule();
+      void loadProfileMenuModule();
       setMobileNavigationSheetMounted(true);
     };
     if (typeof window.requestIdleCallback === "function") {
@@ -2397,6 +2483,7 @@ export function CoursesPage({
 
       if (event.key === "Escape") {
         setCourseMenu(null);
+        setPendingProfileMenuOpen(false);
         setProfileMenu(false);
         revertPalettePreviewRef.current?.();
         setPaletteMenu(false);
@@ -4425,52 +4512,56 @@ export function CoursesPage({
       );
     }
     return (
-      <CourseCatalogue
-        activeSection={surfaceActiveSection}
-        role={effectiveRole}
-        isAdmin={isAdmin}
-        currentUserId={activeUser?.id}
-        isLoading={isLoadingCourses}
-        hasLoadError={isCourseCatalogueLoadError}
-        onRetryLoad={() => {
-          if (effectiveRole === "student") {
-            void (needsCompleteCourseList
-              ? completeCourseQuery.refetch()
-              : pagedCourseQuery.refetch());
-          } else if (enrollmentFilter === "bin") {
-            void deletedCoursesQuery.refetch();
-          } else {
-            void myCoursesQuery.refetch();
-          }
-        }}
-        preloadFirstCourseImage={Boolean(initialPublishedCoursePage)}
-        wishlisted={wishlisted}
-        quickFilterCounts={quickFilterCounts}
-        enrollmentFilter={enrollmentFilter}
-        onEnrollmentFilterChange={handleEnrollmentFilterChange}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        search={search}
-        onSearchChange={setSearch}
-        sort={sort}
-        onSortChange={setSort}
-        visibleCourses={visibleCourses}
-        totalCoursesCount={totalCoursesCount}
-        hasNextPage={!needsCompleteCourseList && pagedCourseQuery.hasNextPage}
-        isFetchingNextPage={pagedCourseQuery.isFetchingNextPage}
-        onLoadMore={() => void pagedCourseQuery.fetchNextPage()}
-        onWishlist={toggleWishlist}
-        onOpenCourse={onOpenCourse}
-        onEditIntent={prepareCourseEditorEdit}
-        courseMenu={courseMenu}
-        setCourseMenu={setCourseMenu}
-        setNotice={setNotice}
-        onNavigatePage={onNavigatePage}
-        onResetCatalogue={resetCatalogue}
-        onDeleteCourse={handleDeleteCourse}
-        onRestoreCourse={handleRestoreCourse}
-        deletingCourseIds={deletingCourseIds}
-      />
+      <Suspense
+        fallback={<CourseCatalogueLoadingSkeleton role={effectiveRole} />}
+      >
+        <CourseCatalogue
+          activeSection={surfaceActiveSection}
+          role={effectiveRole}
+          isAdmin={isAdmin}
+          currentUserId={activeUser?.id}
+          isLoading={isLoadingCourses}
+          hasLoadError={isCourseCatalogueLoadError}
+          onRetryLoad={() => {
+            if (effectiveRole === "student") {
+              void (needsCompleteCourseList
+                ? completeCourseQuery.refetch()
+                : pagedCourseQuery.refetch());
+            } else if (enrollmentFilter === "bin") {
+              void deletedCoursesQuery.refetch();
+            } else {
+              void myCoursesQuery.refetch();
+            }
+          }}
+          preloadFirstCourseImage={Boolean(initialPublishedCoursePage)}
+          wishlisted={wishlisted}
+          quickFilterCounts={quickFilterCounts}
+          enrollmentFilter={enrollmentFilter}
+          onEnrollmentFilterChange={handleEnrollmentFilterChange}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          search={search}
+          onSearchChange={setSearch}
+          sort={sort}
+          onSortChange={setSort}
+          visibleCourses={visibleCourses}
+          totalCoursesCount={totalCoursesCount}
+          hasNextPage={!needsCompleteCourseList && pagedCourseQuery.hasNextPage}
+          isFetchingNextPage={pagedCourseQuery.isFetchingNextPage}
+          onLoadMore={() => void pagedCourseQuery.fetchNextPage()}
+          onWishlist={toggleWishlist}
+          onOpenCourse={onOpenCourse}
+          onEditIntent={prepareCourseEditorEdit}
+          courseMenu={courseMenu}
+          setCourseMenu={setCourseMenu}
+          setNotice={setNotice}
+          onNavigatePage={onNavigatePage}
+          onResetCatalogue={resetCatalogue}
+          onDeleteCourse={handleDeleteCourse}
+          onRestoreCourse={handleRestoreCourse}
+          deletingCourseIds={deletingCourseIds}
+        />
+      </Suspense>
     );
   };
 
@@ -4722,43 +4813,45 @@ export function CoursesPage({
             </nav>
 
             <div className="courses-profile" ref={profileRef}>
-              {isAuthenticated && (
-                <ProfileMenu
-                  id="desktop-profile-menu"
-                  className="profile-menu--animated"
-                  isOpen={profileMenu}
-                  role={effectiveRole}
-                  allowedRoles={allowedWorkspaceRoles}
-                  userRoles={userRoles}
-                  identity={
-                    activeUser?.username
-                      ? {
-                          displayName: shellProfileDisplayName,
-                          username: activeUser.username,
-                          avatarUrl: shellProfileAvatarUrl,
-                          avatarSrcSet: shellProfileAvatarSrcSet,
-                        }
-                      : undefined
-                  }
-                  unreadNotificationCount={
-                    isAuthenticated ? unreadNotificationCount : 0
-                  }
-                  sidebarHidden={sidebarPresentedAsOverlay}
-                  includeSidebarControl={!compactNavigation}
-                  onClose={() => setProfileMenu(false)}
-                  onRoleChange={setRole}
-                  onNavigate={(path) => {
-                    setEdgeSidebarOpen(false);
-                    dismissProfileMenuThen(() => {
-                      dismissMobileMenuThen(() => onNavigatePage(path));
-                    });
-                  }}
-                  onToggleSidebar={() => {
-                    setSidebarMode(sidebarHidden ? "expanded" : "hidden");
-                    setEdgeSidebarOpen(false);
-                  }}
-                  onLogout={openLogoutConfirm}
-                />
+              {isAuthenticated && profileMenuSurfaceMounted && (
+                <Suspense fallback={null}>
+                  <ProfileMenu
+                    id="desktop-profile-menu"
+                    className="profile-menu--animated"
+                    isOpen={profileMenu}
+                    role={effectiveRole}
+                    allowedRoles={allowedWorkspaceRoles}
+                    userRoles={userRoles}
+                    identity={
+                      activeUser?.username
+                        ? {
+                            displayName: shellProfileDisplayName,
+                            username: activeUser.username,
+                            avatarUrl: shellProfileAvatarUrl,
+                            avatarSrcSet: shellProfileAvatarSrcSet,
+                          }
+                        : undefined
+                    }
+                    unreadNotificationCount={
+                      isAuthenticated ? unreadNotificationCount : 0
+                    }
+                    sidebarHidden={sidebarPresentedAsOverlay}
+                    includeSidebarControl={!compactNavigation}
+                    onClose={() => setProfileMenu(false)}
+                    onRoleChange={setRole}
+                    onNavigate={(path) => {
+                      setEdgeSidebarOpen(false);
+                      dismissProfileMenuThen(() => {
+                        dismissMobileMenuThen(() => onNavigatePage(path));
+                      });
+                    }}
+                    onToggleSidebar={() => {
+                      setSidebarMode(sidebarHidden ? "expanded" : "hidden");
+                      setEdgeSidebarOpen(false);
+                    }}
+                    onLogout={openLogoutConfirm}
+                  />
+                </Suspense>
               )}
               {isAuthenticated ? (
                 <button
@@ -4767,7 +4860,17 @@ export function CoursesPage({
                   aria-label={`${shellProfileDisplayName}, ${shellProfileSubtitle}. Open profile menu`}
                   aria-expanded={profileMenu}
                   aria-controls="desktop-profile-menu"
-                  onClick={() => setProfileMenu((current) => !current)}
+                  onClick={() => {
+                    if (!profileMenuSurfaceMounted) {
+                      // Mount the lazy menu closed first; the pending-open
+                      // effect opens it a frame later so this click cannot
+                      // race the menu's dismiss listeners.
+                      setProfileMenuSurfaceMounted(true);
+                      setPendingProfileMenuOpen(true);
+                      return;
+                    }
+                    setProfileMenu((current) => !current);
+                  }}
                 >
                   <span className="courses-profile__avatar-wrap">
                     <ShellProfileAvatar
@@ -5406,21 +5509,23 @@ export function CoursesPage({
                   data-profile-surface
                 >
                   {isAuthenticated && activeUser?.username ? (
-                    <ProfileMenuIdentity
-                      variant="mobile"
-                      displayName={shellProfileDisplayName}
-                      username={activeUser.username}
-                      avatarUrl={shellProfileAvatarUrl}
-                      avatarSrcSet={shellProfileAvatarSrcSet}
-                      unreadNotificationCount={unreadNotificationCount}
-                      onClose={() => setProfileMenu(false)}
-                      onNavigate={(path) => {
-                        setEdgeSidebarOpen(false);
-                        dismissProfileMenuThen(() => {
-                          dismissMobileMenuThen(() => onNavigatePage(path));
-                        });
-                      }}
-                    />
+                    <Suspense fallback={null}>
+                      <ProfileMenuIdentity
+                        variant="mobile"
+                        displayName={shellProfileDisplayName}
+                        username={activeUser.username}
+                        avatarUrl={shellProfileAvatarUrl}
+                        avatarSrcSet={shellProfileAvatarSrcSet}
+                        unreadNotificationCount={unreadNotificationCount}
+                        onClose={() => setProfileMenu(false)}
+                        onNavigate={(path) => {
+                          setEdgeSidebarOpen(false);
+                          dismissProfileMenuThen(() => {
+                            dismissMobileMenuThen(() => onNavigatePage(path));
+                          });
+                        }}
+                      />
+                    </Suspense>
                   ) : accountStatusUnknown ? (
                     <ProfileButtonPlaceholder className="mobile-menu-sheet__profile courses-profile__button profile-menu__identity rounded-2xl! p-0! ps-2! pe-3! bg-[color-mix(in_srgb,var(--surface-strong)_94%,white_6%)]!" />
                   ) : (
@@ -5434,65 +5539,68 @@ export function CoursesPage({
                 </div>
                 <div className="mobile-menu-sheet__scroll overflow-x-hidden pb-11">
                   {isAuthenticated && (
-                    <ProfileMenu
-                      id="mobile-profile-menu"
-                      className="mobile-menu-sheet__profile-menu"
-                      role={effectiveRole}
-                      allowedRoles={allowedWorkspaceRoles}
-                      userRoles={userRoles}
-                      unreadNotificationCount={unreadNotificationCount}
-                      includeSidebarControl={false}
-                      beforeAccountContent={
-                        <div
-                          className="mobile-menu-sheet__list mobile-menu-sheet__profile-navigation"
-                          role="group"
-                          aria-label="Additional navigation"
-                        >
-                          {mobileMoreNavigation.map((item) => {
-                            const [label, Icon] = item;
-                            const active = isNavigationItemActive(item);
-                            return (
-                              <button
-                                type="button"
-                                key={label}
-                                className={active ? "is-active" : ""}
-                                style={
-                                  {
-                                    "--nav-icon-color": getNavigationIconColor(
-                                      label,
-                                      sidebarPreferences,
-                                    ),
-                                  } as CSSProperties
-                                }
-                                role="menuitem"
-                                aria-current={active ? "page" : undefined}
-                                data-sidebar-swipe-ignore
-                                aria-label={label}
-                                onClick={() => selectNavigation(label, item)}
-                              >
-                                <Icon
-                                  size={23}
-                                  weight={active ? "fill" : "regular"}
-                                />
-                                <span>{label}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      }
-                      onClose={() => setProfileMenu(false)}
-                      onRoleChange={setRole}
-                      onNavigate={(path) => {
-                        setEdgeSidebarOpen(false);
-                        dismissProfileMenuThen(() => {
-                          dismissMobileMenuThen(() => onNavigatePage(path));
-                        });
-                      }}
-                      onLogout={() => {
-                        closeMobileMenu();
-                        setLogoutConfirmOpen(true);
-                      }}
-                    />
+                    <Suspense fallback={null}>
+                      <ProfileMenu
+                        id="mobile-profile-menu"
+                        className="mobile-menu-sheet__profile-menu"
+                        role={effectiveRole}
+                        allowedRoles={allowedWorkspaceRoles}
+                        userRoles={userRoles}
+                        unreadNotificationCount={unreadNotificationCount}
+                        includeSidebarControl={false}
+                        beforeAccountContent={
+                          <div
+                            className="mobile-menu-sheet__list mobile-menu-sheet__profile-navigation"
+                            role="group"
+                            aria-label="Additional navigation"
+                          >
+                            {mobileMoreNavigation.map((item) => {
+                              const [label, Icon] = item;
+                              const active = isNavigationItemActive(item);
+                              return (
+                                <button
+                                  type="button"
+                                  key={label}
+                                  className={active ? "is-active" : ""}
+                                  style={
+                                    {
+                                      "--nav-icon-color":
+                                        getNavigationIconColor(
+                                          label,
+                                          sidebarPreferences,
+                                        ),
+                                    } as CSSProperties
+                                  }
+                                  role="menuitem"
+                                  aria-current={active ? "page" : undefined}
+                                  data-sidebar-swipe-ignore
+                                  aria-label={label}
+                                  onClick={() => selectNavigation(label, item)}
+                                >
+                                  <Icon
+                                    size={23}
+                                    weight={active ? "fill" : "regular"}
+                                  />
+                                  <span>{label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        }
+                        onClose={() => setProfileMenu(false)}
+                        onRoleChange={setRole}
+                        onNavigate={(path) => {
+                          setEdgeSidebarOpen(false);
+                          dismissProfileMenuThen(() => {
+                            dismissMobileMenuThen(() => onNavigatePage(path));
+                          });
+                        }}
+                        onLogout={() => {
+                          closeMobileMenu();
+                          setLogoutConfirmOpen(true);
+                        }}
+                      />
+                    </Suspense>
                   )}
                 </div>
                 <div
@@ -5733,12 +5841,16 @@ export function CoursesPage({
         </Suspense>
       ) : null}
 
-      <LogoutConfirmModal
-        isOpen={logoutConfirmOpen}
-        isPending={isSigningOut}
-        onClose={() => setLogoutConfirmOpen(false)}
-        onConfirm={() => void signOutAfterSync()}
-      />
+      {logoutModalMounted ? (
+        <Suspense fallback={null}>
+          <LogoutConfirmModal
+            isOpen={logoutConfirmOpen}
+            isPending={isSigningOut}
+            onClose={() => setLogoutConfirmOpen(false)}
+            onConfirm={() => void signOutAfterSync()}
+          />
+        </Suspense>
+      ) : null}
 
       {notice && (
         <ToastNotification
