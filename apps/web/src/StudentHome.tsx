@@ -686,11 +686,23 @@ export function StudentHome({
                 {heroCourse.sections} Sections <i /> {heroCourse.lectures}{" "}
                 Lectures <i /> {heroCourse.duration}
               </strong>
-              <p>
-                {heroCourse.enrolledOn
-                  ? `Enrolled on ${heroCourse.enrolledOn}`
-                  : "Ready to continue"}
-              </p>
+              <div className="home-resume-enrollment-row">
+                <p>
+                  {heroCourse.enrolledOn
+                    ? `Enrolled on ${heroCourse.enrolledOn}`
+                    : "Ready to continue"}
+                </p>
+                <span
+                  className="home-resume-enrollment-divider"
+                  aria-hidden="true"
+                >
+                  |
+                </span>
+                <div className="home-resume-progress">
+                  <ProgressBar value={heroCourse.progress} />
+                  <span aria-hidden="true">{heroCourse.progress}%</span>
+                </div>
+              </div>
               {heroCourse && primaryCourseKey && resumeContext ? (
                 <ResumeLessonContext
                   context={resumeContext}
@@ -700,10 +712,6 @@ export function StudentHome({
               ) : heroCourse && resumeContextLoading ? (
                 <ResumeLessonContextSkeleton />
               ) : null}
-              <div className="home-resume-progress">
-                <ProgressBar value={heroCourse.progress} />
-                <span aria-hidden="true">{heroCourse.progress}%</span>
-              </div>
               <button
                 type="button"
                 className="primary-learning-action"
@@ -817,6 +825,7 @@ export function StudentHome({
             <HomeSectionHeader
               icon={BookOpen}
               title="Continue Learning"
+              subtitle="Pick up where you left off."
               action="View All"
               onAction={() => onNavigatePage("courses")}
             />
@@ -839,6 +848,7 @@ export function StudentHome({
             <HomeSectionHeader
               icon={BookOpen}
               title="Continue Learning"
+              subtitle="Pick up where you left off."
               action="View All"
               onAction={() => onNavigatePage("courses")}
             />

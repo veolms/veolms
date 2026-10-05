@@ -1957,6 +1957,32 @@
   }
 }
 
+@media (max-width: 640px) {
+  .home-resume-card--progressed .home-resume-copy h2 {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+  }
+
+  .student-home .home-continue-panel.home-course-section {
+    padding: 0;
+  }
+
+  .student-home .home-continue-panel .home-mini-course h3 {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .student-home .home-continue-panel > .home-course-section__row {
+    margin-inline: var(--home-mobile-course-inline-inset, 8px);
+  }
+
+  .student-home .home-continue-panel .home-course-row__viewport {
+    padding-inline: var(--home-layer-three-inline-clearance, 14px);
+  }
+}
+
 @media (max-width: 560px) {
   .home-resume-card {
     padding: 10px;
@@ -2002,10 +2028,6 @@
 
   .home-mini-course-grid,
   .learning-course-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .home-metrics-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2061,13 +2083,36 @@
   margin-top: 8px;
 }
 
-.home-resume-card--progressed .home-resume-copy > p {
+.home-resume-card--progressed .home-resume-enrollment-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   margin-top: 10px;
 }
 
-.home-resume-card--progressed .home-resume-progress {
-  margin-top: 10px;
+.home-resume-card--progressed .home-resume-enrollment-row > p {
+  margin-top: 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.home-resume-card--progressed .home-resume-enrollment-divider {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.home-resume-card--progressed
+  .home-resume-enrollment-row
+  .home-resume-progress {
+  width: 8rem;
+  flex: 0 0 8rem;
+  margin-top: 0;
   padding-top: 0;
+  gap: 8px;
 }
 
 .home-resume-card--progressed .primary-learning-action {
