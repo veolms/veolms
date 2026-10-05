@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { flushSync } from "react-dom";
@@ -845,6 +846,8 @@ function LoginProfileButton({
   );
 }
 
+const subscribeToNothing = () => () => {};
+
 export function CoursesPage({
   initialPublishedCoursePage,
   initialPublishedCoursePageNeedsRefresh = false,
@@ -900,6 +903,16 @@ export function CoursesPage({
     () => getInitialSidebarShellState().width,
   );
   const sidebarShellHydratedRef = useRef(false);
+  // True only while React hydrates the prerendered page. The prerender always
+  // describes the expanded sidebar and hydration does not patch mismatched
+  // attributes, so the controls whose attributes follow the sidebar mode are
+  // keyed on this and remounted once with their real values.
+  const hydratingPrerender = useSyncExternalStore(
+    subscribeToNothing,
+    () => false,
+    () => true,
+  );
+  const sidebarControlKey = hydratingPrerender ? "prerender" : "client";
 
   const [sidebarResizing, setSidebarResizing] = useState(false);
   const [sidebarResizePreviewWidth, setSidebarResizePreviewWidth] = useState<
@@ -2760,6 +2773,19 @@ export function CoursesPage({
     const group = appearanceControlsRef.current;
     if (!group) return;
 
+    // The prerendered document always carries the expanded (horizontal) dock
+    // class, and hydration does not patch a mismatched className. The head
+    // bootstrap script corrects it before first paint; this keeps the DOM in
+    // step with React wherever that script did not run.
+    group.classList.toggle(
+      "sidebar-appearance--horizontal",
+      appearanceControlsHorizontal,
+    );
+    group.classList.toggle(
+      "sidebar-appearance--vertical",
+      !appearanceControlsHorizontal,
+    );
+
     const controls = [
       ...group.querySelectorAll<HTMLElement>(
         ":scope > button, :scope > .sidebar-palette-wrap",
@@ -3325,6 +3351,17 @@ export function CoursesPage({
   ]
     .filter(Boolean)
     .join(" ");
+
+  // The prerendered document carries the expanded shell classes, and hydration
+  // does not patch a mismatched className. The head bootstrap script adds the
+  // collapsed class before first paint (getSidebarCollapsedMarkupBootstrapScript);
+  // this keeps the DOM in step with React wherever that script did not run.
+  useLayoutEffect(() => {
+    const app = coursesAppRef.current;
+    if (app && app.className !== sidebarClassName) {
+      app.className = sidebarClassName;
+    }
+  }, [sidebarClassName]);
 
   useEffect(() => {
     if (sidebarTooltipTimerRef.current !== null) {
@@ -4358,6 +4395,7 @@ export function CoursesPage({
             {((!compactNavigation && !sidebarPresentedAsOverlay) ||
               (sidebarPresentedAsOverlay && edgeSidebarOpen)) && (
               <div
+                key={sidebarControlKey}
                 className="sidebar-resize-handle"
                 role="separator"
                 aria-orientation="vertical"
@@ -4423,6 +4461,7 @@ export function CoursesPage({
                 dangerouslySetInnerHTML={{ __html: procodrrLogoSvg }}
               />
               <button
+                key={sidebarControlKey}
                 type="button"
                 className={SIDEBAR_COLLAPSE_BUTTON_CLASS}
                 aria-label={sidebarControlAction}

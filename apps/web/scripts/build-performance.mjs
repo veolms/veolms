@@ -3,6 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const FIRST_SECTION_FLAG = "--first-section";
+export const NO_LESSONS_FLAG = "--no-lessons";
+export const LEARNING_PRERENDER_FLAGS = [FIRST_SECTION_FLAG, NO_LESSONS_FLAG];
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const reactRouterCli = path.resolve(
@@ -38,11 +40,15 @@ export const runPerformanceBuild = async (
   args = process.argv.slice(2),
   environmentOverrides = {},
 ) => {
-  const firstSectionOnly = args.includes(FIRST_SECTION_FLAG);
   const reactRouterArgs = args.filter(
-    (argument) => argument !== FIRST_SECTION_FLAG,
+    (argument) => !LEARNING_PRERENDER_FLAGS.includes(argument),
   );
-  const scope = firstSectionOnly ? "first-section" : "all-lectures";
+  // Skipping lessons entirely wins when both flags are passed.
+  const scope = args.includes(NO_LESSONS_FLAG)
+    ? "none"
+    : args.includes(FIRST_SECTION_FLAG)
+      ? "first-section"
+      : "all-lectures";
 
   console.log(`Learning prerender scope: ${scope}`);
 
