@@ -4,9 +4,7 @@ import type { FastifyBaseLogger } from "fastify";
 import type { VideoDispatchService } from "./types.ts";
 
 /**
- * Strategy 2: Direct API Server Transcoding
- * Direct in-process or local worker execution on this API server instance.
- * (Placeholder / stubbed for future in-process transcoding implementation).
+ * Strategy 2: Direct API Server Transcoding (stubbed/placeholder)
  */
 export function createDirectDispatcher(options: {
   config: ServerConfig;

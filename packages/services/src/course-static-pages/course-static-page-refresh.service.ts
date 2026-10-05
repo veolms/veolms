@@ -14,8 +14,8 @@ export interface CourseStaticPageRefreshService {
 interface CreateCourseStaticPageRefreshServiceOptions {
   githubToken?: string;
   repository?: string;
-  ref: string;
-  workflow: string;
+  ref?: string;
+  workflow?: string;
   logger: FastifyBaseLogger;
 }
 
@@ -39,14 +39,14 @@ function delay(milliseconds: number): Promise<void> {
 function errorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
-    : "Cloudflare course page deployment failed.";
+    : "Course page deployment failed.";
 }
 
 export function createCourseStaticPageRefreshService({
   githubToken,
   repository,
-  ref,
-  workflow,
+  ref = "main",
+  workflow = "deploy-pages.yml",
   logger,
 }: CreateCourseStaticPageRefreshServiceOptions): CourseStaticPageRefreshService {
   const statuses = new Map<string, CourseStaticPageRefreshStatus>();
@@ -132,8 +132,9 @@ export function createCourseStaticPageRefreshService({
       await delay(RUN_POLL_INTERVAL_MS);
     }
 
-    if (!run)
+    if (!run) {
       throw new Error("The page refresh workflow did not start in time.");
+    }
 
     const completeDeadline = Date.now() + RUN_COMPLETE_TIMEOUT_MS;
     while (Date.now() < completeDeadline) {
@@ -213,7 +214,7 @@ export function createCourseStaticPageRefreshService({
           if (result.conclusion !== "success") {
             updateStatus(courseId, { runUrl: result.runUrl });
             throw new Error(
-              `Cloudflare page deployment ended with ${result.conclusion ?? "no conclusion"}.`,
+              `Page deployment ended with ${result.conclusion ?? "no conclusion"}.`,
             );
           }
           completedRevision.set(courseId, revision);
@@ -250,6 +251,17 @@ export function createCourseStaticPageRefreshService({
     courseId: string;
     courseSlug?: string | null;
   }): CourseStaticPageRefreshStatus {
+    if (!githubToken || !repository) {
+      return {
+        courseId: input.courseId,
+        status: "idle",
+        message: "Course static page refresh not configured",
+        updatedAt: new Date().toISOString(),
+        requestId: null,
+        runUrl: null,
+      };
+    }
+
     if (input.courseSlug !== undefined) {
       courseSlugs.set(input.courseId, input.courseSlug);
     }

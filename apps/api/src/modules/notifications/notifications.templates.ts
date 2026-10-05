@@ -1,5 +1,5 @@
-import { escapeHtml } from "../../services/email/email.templates.ts";
-import type { EmailContent } from "../../services/email/email.templates.ts";
+import { escapeHtml, type EmailContent } from "@veolms/services/email";
+
 import { config } from "../../config.ts";
 import type {
   NotificationTemplateData,

@@ -14,17 +14,6 @@ export interface Msg91ProviderConfig {
 const MSG91_DEFAULT_API_URL = "https://control.msg91.com/api/v5/flow";
 const MSG91_TIMEOUT_MS = 5000;
 
-/**
- * Normalizes phone numbers for MSG91 flow API:
- * 1. Strips all non-digit characters (including '+', spaces, dashes, parentheses).
- * 2. If the recipient is a 10-digit Indian national number (e.g. '6358035535'),
- *    prepends country code 91 -> '916358035535'.
- * 3. If it starts with '0' followed by 10 digits (e.g. '06358035535'),
- *    replaces the leading '0' with '91' -> '916358035535'.
- * 4. If it is already 12 digits starting with '91', preserves '91...'.
- * 5. For international numbers (e.g. '+15551234567'), strips the '+' and
- *    retains the full international dial string ('15551234567').
- */
 export function formatPhoneForMsg91(phoneNo: string): string {
   const digits = phoneNo.replace(/\D/g, "");
 
@@ -141,7 +130,6 @@ export class Msg91Provider implements ISmsProvider {
   }
 
   async sendText(phoneNo: string, text: string): Promise<SmsProviderResult> {
-    // If text contains a 6-digit or 4-8 digit OTP code, extract and deliver it
     const otpMatch = text.match(/\b\d{4,8}\b/);
     if (otpMatch) {
       return this.sendOtp(phoneNo, otpMatch[0], {
@@ -149,7 +137,6 @@ export class Msg91Provider implements ISmsProvider {
       });
     }
 
-    // MSG91 Flow is template-based, so OTP code is expected
     return this.sendOtp(phoneNo, "", {
       variables: { text },
     });
