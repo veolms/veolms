@@ -113,6 +113,26 @@ const serverConfigSchema = z.object({
     .min(0)
     .max(60_000)
     .default(10_000),
+  /**
+   * Runs the notification outbox/email processor inside the API process.
+   * Nothing in the repository schedules the standalone worker scripts, so
+   * without this, notifications and emails are only delivered if ops runs
+   * `notifications:watch` by hand. SKIP LOCKED claiming + lease fencing
+   * make it safe alongside any number of replicas or a dedicated worker;
+   * set to false when a dedicated worker process is preferred.
+   */
+  NOTIFICATION_INLINE_WORKER: booleanEnvironmentValueSchema.default(true),
+  NOTIFICATION_INLINE_INTERVAL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(300)
+    .default(5),
+  /**
+   * Interval for the one-line ops gauge (pool saturation, webhook/outbox
+   * queue depths, email backlog) in the API log. 0 disables it.
+   */
+  OPS_HEARTBEAT_SECONDS: z.coerce.number().int().min(0).max(3600).default(60),
   MFA_ENCRYPTION_KEY: z
     .string()
     .min(32, "MFA_ENCRYPTION_KEY must be at least 32 characters")

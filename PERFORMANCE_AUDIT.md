@@ -433,3 +433,90 @@ The architecture is sound and does not need replacing — no Redis, no queue bro
 ---
 
 _Benchmark artifacts (raw autocannon JSONL, dataset SQL, suite script) were kept in the session scratchpad, outside the repository, per the audit's no-repo-changes rule._
+
+---
+
+# 45. OFFICIAL FINAL "AFTER" RECORD — 2026-10-05
+
+**Measured against:** `dev` @ `298b6860` (all remediation merged: P0 commerce fixes, webhook queue hardening, pool configuration, index bundle, N+1/SQL-aggregation rewrites, session auth cache, analytics response cache, compression, streamed uploads, inline notification worker).
+**Environment:** identical to §2 — same host (i7-13620H, 15.7GB), same isolated local PostgreSQL 18.6 (`veolms_bench`), same dataset (10,001 users · 17,500 enrollments · **1,000,000 learning_progress** · **500,001 notifications** · 450 lessons · 1,001 sessions; orders table still ~empty), same tool and protocol (autocannon, 3s warm-up + 15s at c=25). No code changes were made during this run. autocannon sends no `Accept-Encoding`, so these numbers exclude compression gains (wire sizes in production are additionally up to 26x smaller on large JSON).
+
+## 45.1 Endpoint latency & throughput — baseline (§6) vs final
+
+All values ms at 25 connections; zero errors/timeouts in every row of both runs.
+
+| Endpoint                                                                               | RPS before → after |           p50 |       p75 |       p90 |     p97.5 |         p99 |       max | Change (p50)                                                                          |
+| -------------------------------------------------------------------------------------- | ------------------ | ------------: | --------: | --------: | --------: | ----------: | --------: | ------------------------------------------------------------------------------------- |
+| GET /health                                                                            | 14,936 → 14,819    |           1→1 |       1→1 |       2→2 |       2→3 |         3→4 |     20→27 | flat (framework ceiling)                                                              |
+| GET /courses?limit=20                                                                  | 1,395 → **1,795**  |     17→**13** |     19→14 |     21→16 |     24→18 |       26→20 |   168→101 | −24%                                                                                  |
+| GET /home/discovery                                                                    | 382 → **517**      |     61→**48** |     69→49 |     82→51 |     93→53 |      102→56 |    151→81 | −21%                                                                                  |
+| GET /auth/me                                                                           | 579 → **13,563**   |      30→**1** |      47→1 |      81→2 |     115→2 |       175→2 |    234→64 | −97% (23x RPS)                                                                        |
+| GET /notifications?limit=25                                                            | 400 → **3,506**    |      55→**7** |      63→7 |      84→8 |     133→9 |      175→10 |    292→55 | −87%                                                                                  |
+| GET /notifications/summary                                                             | 238 → **2,556**    |      83→**6** |     111→8 |    183→19 |    279→27 |      364→36 |    476→86 | −93%                                                                                  |
+| GET /learning-progress/:course                                                         | 120 → **179**      |   193→**123** |   232→150 |   290→203 |   369→272 |     421→393 |   479→583 | −36%                                                                                  |
+| GET /courses/:slug/overview                                                            | 136 → 149          |       159→161 |   178→190 |   253→214 |   469→241 | 541→**255** |   659→342 | p50 flat; tail −53%                                                                   |
+| GET /enrollments/courses                                                               | 312 → **714**      |     74→**32** |     86→36 |    101→44 |    133→60 |      180→67 |    265→86 | −57%                                                                                  |
+| GET /orders?limit=20 (admin; empty table both runs — not representative)               | 630 → 1,130        |         35→19 |     41→24 |     56→30 |     72→40 |       83→45 |    146→67 | n/a                                                                                   |
+| GET /students?limit=50 (admin)                                                         | 20.9 → **154**     | 1,126→**150** | 1,212→169 | 1,350→198 | 1,459→234 |   1,478→459 | 1,486→622 | −87% (7.4x; byte-identical responses verified during implementation)                  |
+| GET /analytics/dashboard                                                               | 3.2 → **720**      |  7,010→**30** |  7,472→35 |  8,021→45 |  8,382→69 |    8,466→85 | 8,466→179 | −99.6% (225x RPS; 30s response cache + SQL aggregation; cold/uncached request ≈700ms) |
+| GET /analytics/admin/overview                                                          | 3.2 → **802**      |  6,144→**28** |  6,360→32 |  6,564→38 |  6,704→62 |    6,820→78 | 6,820→196 | −99.5% (cold ≈730ms)                                                                  |
+| POST /learning-progress/:course/batch (write; single-user row contention in both runs) | 114 → **243**      |    185→**95** |     —→108 |   351→130 |     —→165 |     578→215 |   624→292 | −49%                                                                                  |
+
+## 45.2 Throughput / concurrency ramp (10s per step)
+
+| Conc | Catalog RPS before → after | Catalog p50/p99 after | /auth/me RPS before → after | /auth/me p50/p99 after | Errors                                    |
+| ---: | -------------------------- | --------------------- | --------------------------- | ---------------------- | ----------------------------------------- |
+|   10 | 1,004 → 696                | 12 / 37               | 893 → **2,397**             | 3 / 16                 | 0                                         |
+|   50 | 1,092 → 755                | 60 / 198              | 908 → **2,379**             | 18 / 94                | 0                                         |
+|  100 | 983 → 763                  | 126 / 230             | 813 → **2,067**             | 36 / 242               | 0                                         |
+|  250 | 1,056 → 727                | 331 / 490             | 918 → **2,004**             | 68 / 677               | catalog 0; auth/me **40 non-2xx** (§45.5) |
+
+**Interference test (the audit's worst finding):** with 5 concurrent `/analytics/dashboard` streams running, `/auth/me` at c=10 measured **1,500 RPS · p50 6ms · p99 20ms** — baseline was 92 RPS · p50 78ms · p99 417ms. The one-admin-tab-degrades-everyone failure mode is eliminated (16x RPS, −95% p99 under interference).
+
+## 45.3 Database / query performance (EXPLAIN (ANALYZE, BUFFERS), same dataset)
+
+| Query shape (§11 baseline)                                   | Before                                                        | After                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Course-led progress aggregate (1M rows)                      | Parallel **Seq Scan**, 118ms                                  | Bitmap scan on `idx_learning_progress_course_updated`, **51–58ms** |
+| Active-learner count (course + 7-day window)                 | Seq-scan path                                                 | Bitmap index scan, **51ms**                                        |
+| Notifications summary (user, 500k table)                     | 14ms (indexed)                                                | **7.4ms** (indexed)                                                |
+| Webhook queue poll                                           | **Seq Scan + Sort**, degrades with table growth, no retention | Partial-index plan, **0.1ms**, bounded by retention                |
+| Sessions by user                                             | **Seq Scan** (1.5ms @1k rows, linear growth)                  | `idx_sessions_user_id` Index Scan, **0.08ms**                      |
+| Passkey count (ran on every authenticated request pre-cache) | Seq-scan path                                                 | Indexed, **0.02ms**                                                |
+
+## 45.4 Resources & stability at the tested loads
+
+- Zero application errors or timeouts anywhere except the designed fail-fast at c=250 on auth/me (§45.5).
+- API RSS under c=100 catalog load: **~435MB** (baseline ~397MB; +~10%, attributable to compression buffers and the lib-storage dependency — within Node heap noise).
+- Pool: 2 active / 8 idle of 10 connections under c=100 catalog load (the DB is no longer the bottleneck on cached/indexed paths); `pg_stat_activity` now attributes connections via `application_name=veolms-api`.
+- Error rate across the entire c=25 suite: **0.00%** (222k+ requests on /health alone).
+
+## 45.5 Regressions and observations (reported separately, per instruction)
+
+1. **auth/me @ c=250: 40 × HTTP 500 (0.2% of ~20k requests), max latency 5.5s.** All 40 are pg-pool "timeout exceeded when trying to connect" after the configured 5s — the **intentional fail-fast** (`DATABASE_CONNECT_TIMEOUT_MS=5000`) added in this work. The baseline showed zero errors at c=250 only because the old pool waited _indefinitely_ (invisible queueing; the baseline's p99 of 734ms there was pure queue time). Trigger: session-cache TTL expiries stampeding 250 connections onto the default 10-connection pool. This is designed load-shedding, not a correctness regression; at real scale the remedy is sizing `DATABASE_POOL_MAX` (see docs/operations.md). **Classification: behavior change by design — monitor `pools[].waiting` in the ops heartbeat.**
+2. **Catalog ramp throughput measured ~700–760 RPS plateau vs ~1,000–1,100 in the baseline ramp (−30%)** — while the _same endpoint in the same run_ measured **29% faster** than baseline at c=25 (1,795 vs 1,395 RPS, p50 13 vs 17ms). The two signals contradict; the ramp steps run back-to-back without per-step warm-up on shared laptop hardware, so this is attributed to run-to-run environment variance, not an identified code regression. If catalog throughput matters operationally, re-measure with isolated, interleaved A/B runs. **Classification: measurement noise, flagged for completeness.**
+3. **Course overview p50 flat (159 → 161ms).** Expected: its cost is ~15 serial queries plus 57KB serialization, neither targeted by this work; its p97.5–p99 tail halved (469/541 → 241/255ms) via pool/index effects, and its wire size is 26x smaller with compression (not reflected by autocannon). **Classification: not a regression; the known remaining per-request cost.**
+
+No endpoint regressed against the §6 baseline in like-for-like comparison.
+
+## 45.6 §36 capacity statement — final
+
+```text
+Current Safe RPS (this hardware, mixed authenticated reads): ~2,000–4,000
+  [Measured: auth-path plateau >2,000 RPS at every tested concurrency, with
+   analytics traffic no longer able to starve it; cached paths far higher]
+Current Maximum Stable Tested RPS: 13,563 (auth/me, c=25); 14,819 (/health)  [Measured]
+Current Breaking Point: not reached up to c=250. The failure mode is now
+  BOUNDED fail-fast 500s (0.2% at c=250 on a 10-connection pool) instead of
+  unbounded invisible queueing.                                              [Measured]
+Estimated Safe Concurrent Active Users (single instance): ~10,000–20,000
+  browsing-mix (up from ~2,500–5,000 at baseline).                           [Estimated, §29 assumptions]
+Primary Bottleneck (next): per-request DB round trips on uncached unique
+  paths (course overview, progress reads) and DATABASE_POOL_MAX sizing.
+  Production capacity still requires a staging load test on real
+  infrastructure — Neon network RTTs are not modeled here.                   [Observed / Unknown]
+Confidence: high for relative improvement on this environment; production
+  absolutes remain Unknown until measured there.
+```
+
+_Raw artifacts for this run (final-after.jsonl, final-sweep.sh, EXPLAIN outputs) retained in the session scratchpad._

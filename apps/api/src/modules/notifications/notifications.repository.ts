@@ -314,6 +314,19 @@ export async function createDelivery(
     .execute();
 }
 
+/** Email-backlog gauge for the ops heartbeat. */
+export async function getEmailDeliveryBacklog(
+  database: DatabaseExecutor,
+): Promise<number> {
+  const row = await database
+    .selectFrom("notification_deliveries")
+    .select((eb) => eb.fn.count<number>("id").as("total"))
+    .where("channel", "=", "email")
+    .where("status", "in", ["pending", "processing"])
+    .executeTakeFirst();
+  return Number(row?.total ?? 0);
+}
+
 export type ClaimedDelivery = Selectable<NotificationDeliveryTable>;
 
 export async function claimEmailDeliveries(

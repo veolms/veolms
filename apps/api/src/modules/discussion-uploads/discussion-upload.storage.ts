@@ -157,6 +157,17 @@ export interface DiscussionUploadStore {
     mimeType: string;
     data: Buffer;
   }): Promise<StoredDiscussionUpload>;
+  /**
+   * Like putFromStream, but with a caller-chosen file name, and streaming
+   * DIRECTLY to object storage when it is configured (no disk spool, no
+   * in-memory buffering — the buffered path cost up to 50MB of heap per
+   * concurrent upload). On failure the partial object/file is cleaned up.
+   */
+  putNamedFromStream(input: {
+    fileName: string;
+    mimeType: string;
+    stream: Readable;
+  }): Promise<StoredDiscussionUpload>;
   get(fileName: string): Promise<DiscussionUploadFile | null>;
   remove(fileName: string): Promise<void>;
 }
@@ -248,6 +259,35 @@ export function createDiscussionUploadStore(
 
       return writeDiskFile(fileName, mimeType, async (filePath) => {
         await writeFile(filePath, data, { flag: "wx" });
+      });
+    },
+
+    async putNamedFromStream({ fileName, mimeType, stream }) {
+      if (!isSafeDiscussionUploadFileName(fileName)) {
+        throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");
+      }
+
+      if (!isSupportedDiscussionUploadMimeType(mimeType)) {
+        throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");
+      }
+
+      if (s3) {
+        const key = discussionUploadStorageKey(fileName);
+        try {
+          const { bytes } = await s3.putObjectStream(key, stream, mimeType);
+          return { fileName, mimeType, size: bytes };
+        } catch (error) {
+          // A failed multipart upload is aborted by the SDK, but a stream
+          // that errored right at the end may still have completed the
+          // object — remove it so no orphan survives a failed request.
+          await s3.deleteObject(key).catch(() => undefined);
+          throw error;
+        }
+      }
+
+      return writeDiskFile(fileName, mimeType, async (filePath) => {
+        const { createWriteStream } = await import("node:fs");
+        await pipeline(stream, createWriteStream(filePath, { flags: "wx" }));
       });
     },
 

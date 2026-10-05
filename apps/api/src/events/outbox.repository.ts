@@ -162,6 +162,24 @@ export async function markFailed(
     .execute();
 }
 
+/** Queue-depth gauges for the ops heartbeat. */
+export async function getOutboxDepth(
+  database: DatabaseExecutor,
+): Promise<{ pending: number; processing: number; failed: number }> {
+  const rows = await database
+    .selectFrom("outbox_events")
+    .select(["status", (eb) => eb.fn.count<number>("id").as("total")])
+    .where("status", "in", ["pending", "processing", "failed"])
+    .groupBy("status")
+    .execute();
+  const byStatus = new Map(rows.map((row) => [row.status, Number(row.total)]));
+  return {
+    pending: byStatus.get("pending") ?? 0,
+    processing: byStatus.get("processing") ?? 0,
+    failed: byStatus.get("failed") ?? 0,
+  };
+}
+
 export async function cleanupProcessed(
   database: DatabaseExecutor,
   olderThan: Date,
