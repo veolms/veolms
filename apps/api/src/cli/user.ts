@@ -6,7 +6,7 @@ import { config } from "../config.ts";
 import {
   createEmailService,
   otpVerificationEmail,
-} from "../services/email/index.ts";
+} from "@veolms/services/email";
 import {
   ADMIN_ROLE,
   INSTRUCTOR_ROLE,

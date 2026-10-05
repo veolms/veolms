@@ -11,6 +11,7 @@ import type {
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import { isUniqueViolation } from "../shared/db-errors.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import {
@@ -204,66 +205,90 @@ export function createCheckoutService({
     const isFreeCheckout = pricing.totalAmount === 0;
 
     // 3. Database Transaction Boundary for Order + Order Items Snapshots
-    const createdOrder = await database.transaction().execute(async (trx) => {
-      const orderRow = await orderRepo.insertOrder(trx, {
-        id: orderId,
-        order_number: orderNumber,
-        user_id: user.id,
-        status: "pending",
-        currency: pricing.currency,
-        subtotal_amount: pricing.subtotalAmount,
-        discount_amount: pricing.discountAmount,
-        tax_amount: pricing.taxAmount,
-        total_amount: pricing.totalAmount,
-        coupon_id: pricing.couponId ?? null,
-        idempotency_key: idempotencyKey ?? null,
-        expires_at: expiresAt,
-        created_at: now,
-        updated_at: now,
-      });
+    let createdOrder: Awaited<ReturnType<typeof insertOrderWithItems>>;
+    try {
+      createdOrder = await insertOrderWithItems();
+    } catch (err) {
+      // Two concurrent checkouts with the same idempotency key can both
+      // miss the pre-check in step 1 (it runs before either insert
+      // commits). The loser surfaces here as a unique violation on
+      // orders.idempotency_key — previously an unhandled 500. The winner
+      // is committed by the time Postgres raises this, so re-entering
+      // createOrder replays its order via the step-1 branch.
+      if (
+        idempotencyKey &&
+        isUniqueViolation(err) &&
+        String((err as { constraint?: string }).constraint ?? "").includes(
+          "idempotency",
+        )
+      ) {
+        return await createOrder(user, request);
+      }
+      throw err;
+    }
 
-      const orderItemRows = pricing.items.map((it) => ({
-        id: crypto.randomUUID(),
-        order_id: orderId,
-        item_type: it.itemType,
-        course_id: it.itemType === "course" ? it.itemId : null,
-        bundle_id: it.itemType === "bundle" ? it.itemId : null,
-        quiz_pricing_id: it.itemType === "quiz" ? it.itemId : null,
-        title_snapshot: it.title,
-        unit_price: it.unitPrice,
-        discount_amount: it.discountAmount,
-        tax_amount: it.taxAmount,
-        final_amount: it.finalAmount,
-        created_at: now,
-      }));
-
-      await orderRepo.insertOrderItems(trx, orderItemRows);
-
-      let initialPaymentId: string | undefined;
-
-      if (isFreeCheckout) {
-        initialPaymentId = crypto.randomUUID();
-        await paymentRepo.insertPayment(trx, {
-          id: initialPaymentId,
-          order_id: orderId,
-          gateway_provider: "free",
-          gateway_order_id: `free_ord_${orderId}`,
-          gateway_payment_id: null,
-          gateway_key_id: null,
-          amount: 0,
+    async function insertOrderWithItems() {
+      return await database.transaction().execute(async (trx) => {
+        const orderRow = await orderRepo.insertOrder(trx, {
+          id: orderId,
+          order_number: orderNumber,
+          user_id: user.id,
+          status: "pending",
           currency: pricing.currency,
-          status: "initiated",
+          subtotal_amount: pricing.subtotalAmount,
+          discount_amount: pricing.discountAmount,
+          tax_amount: pricing.taxAmount,
+          total_amount: pricing.totalAmount,
+          coupon_id: pricing.couponId ?? null,
+          idempotency_key: idempotencyKey ?? null,
+          expires_at: expiresAt,
           created_at: now,
           updated_at: now,
         });
-      }
 
-      return {
-        ...orderRow,
-        items: orderItemRows,
-        initialPaymentId,
-      };
-    });
+        const orderItemRows = pricing.items.map((it) => ({
+          id: crypto.randomUUID(),
+          order_id: orderId,
+          item_type: it.itemType,
+          course_id: it.itemType === "course" ? it.itemId : null,
+          bundle_id: it.itemType === "bundle" ? it.itemId : null,
+          quiz_pricing_id: it.itemType === "quiz" ? it.itemId : null,
+          title_snapshot: it.title,
+          unit_price: it.unitPrice,
+          discount_amount: it.discountAmount,
+          tax_amount: it.taxAmount,
+          final_amount: it.finalAmount,
+          created_at: now,
+        }));
+
+        await orderRepo.insertOrderItems(trx, orderItemRows);
+
+        let initialPaymentId: string | undefined;
+
+        if (isFreeCheckout) {
+          initialPaymentId = crypto.randomUUID();
+          await paymentRepo.insertPayment(trx, {
+            id: initialPaymentId,
+            order_id: orderId,
+            gateway_provider: "free",
+            gateway_order_id: `free_ord_${orderId}`,
+            gateway_payment_id: null,
+            gateway_key_id: null,
+            amount: 0,
+            currency: pricing.currency,
+            status: "initiated",
+            created_at: now,
+            updated_at: now,
+          });
+        }
+
+        return {
+          ...orderRow,
+          items: orderItemRows,
+          initialPaymentId,
+        };
+      });
+    }
 
     // 4. Handle Free Orders vs Paid Gateway Orders
     if (isFreeCheckout && createdOrder.initialPaymentId) {

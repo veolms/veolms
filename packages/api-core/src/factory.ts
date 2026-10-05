@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import fastifyAutoload from "@fastify/autoload";
+import fastifyCompress from "@fastify/compress";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
 import fastifyRateLimit from "@fastify/rate-limit";
@@ -26,11 +27,23 @@ export const API_ROUTE_PREFIX = "/v1";
  */
 const MAX_PARAM_LENGTH = 512;
 
+/**
+ * Course-scoped routes whose mutations do NOT change the course's public
+ * static page and so must not dispatch a page rebuild. Without this, every
+ * learner discussion post, moderation action, quiz interaction or progress
+ * write under `/courses/<uuid>/...` triggered a GitHub Actions workflow run
+ * (each up to ~13 minutes, serialized per process) — CI traffic driven by
+ * ordinary learner activity.
+ */
+const STATIC_REFRESH_EXCLUDED_SEGMENTS =
+  /\/(threads|replies|discussions|notes|notes-overview|moderation|reports|quiz-assignment|quiz-assignments|quiz-pricing|quiz-analytics|attempts)(\/|\?|$)/iu;
+
 function getCourseMutation(
   request: FastifyRequest,
 ): PendingCourseStaticRefresh | null {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return null;
   if (request.routeOptions.url?.includes("static-page-refresh")) return null;
+  if (STATIC_REFRESH_EXCLUDED_SEGMENTS.test(request.url)) return null;
   const courseId = request.url.match(
     /\/(?:bin\/)?courses\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:\/|\?|$)/iu,
   )?.[1];
@@ -189,6 +202,16 @@ export async function createVeoLMSApi<
       statusCode: reply.statusCode,
       data: payload,
     };
+  });
+
+  // Response compression (brotli/gzip negotiated from Accept-Encoding).
+  // Responses were previously served uncompressed — e.g. the course
+  // overview is ~57KB of JSON per request. mime-db gates compressibility,
+  // so media/HLS byte streams are left alone, and SSE responses bypass
+  // onSend entirely via reply.hijack(). Payloads under the threshold are
+  // not worth the CPU.
+  await app.register(fastifyCompress, {
+    threshold: 1024,
   });
 
   await app.register(fastifyCookie, {

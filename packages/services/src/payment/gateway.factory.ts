@@ -1,0 +1,33 @@
+import type { ServerConfig } from "@veolms/config";
+import type { PaymentGateway } from "@veolms/contracts";
+import { RazorpayPaymentGateway } from "./razorpay.gateway.ts";
+
+/**
+ * Creates the active payment gateway based on configuration.
+ */
+export function createPaymentGateway(config: ServerConfig): PaymentGateway {
+  if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET) {
+    if (config.NODE_ENV === "production") {
+      throw new Error(
+        "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required in production.",
+      );
+    }
+    console.warn(
+      "[commerce] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set — the payment " +
+        "gateway is unconfigured. Checkout and payment endpoints will fail until they are set.",
+    );
+  }
+
+  if (!config.RAZORPAY_WEBHOOK_SECRET && config.NODE_ENV !== "production") {
+    console.warn(
+      "[commerce] RAZORPAY_WEBHOOK_SECRET is not set — all incoming Razorpay " +
+        "webhooks will be rejected as invalid until it is set.",
+    );
+  }
+
+  return new RazorpayPaymentGateway({
+    keyId: config.RAZORPAY_KEY_ID ?? "",
+    keySecret: config.RAZORPAY_KEY_SECRET ?? "",
+    webhookSecret: config.RAZORPAY_WEBHOOK_SECRET,
+  });
+}

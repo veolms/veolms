@@ -4,9 +4,11 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { AppError } from "../../../lib/errors.ts";
-import type { AppServices } from "../../../services/index.ts";
-import { otpVerificationEmail } from "../../../services/email/index.ts";
-import { otpVerificationSms } from "../../../services/sms/index.ts";
+import {
+  type AppServices,
+  otpVerificationEmail,
+  otpVerificationSms,
+} from "@veolms/services";
 import {
   OTP_DAILY_LIMIT,
   OTP_DAILY_WINDOW_MS,

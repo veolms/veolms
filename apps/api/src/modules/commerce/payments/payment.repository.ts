@@ -167,6 +167,40 @@ export async function updatePayment(
     .executeTakeFirst();
 }
 
+/**
+ * Points an existing payment row at a freshly created gateway order, but
+ * only while the payment is not in a final state. The guard matters: a
+ * webhook can capture the payment between the caller's read and this
+ * write, and an unconditional update would stomp a CAPTURED payment back
+ * to "initiated" with a different gateway_order_id — orphaning the money.
+ * Returns undefined when the payment reached a final state meanwhile.
+ */
+export async function reinitializePaymentIfNotFinal(
+  database: Executor,
+  paymentId: string,
+  updates: {
+    gateway_order_id: string;
+    gateway_key_id: string | null;
+    amount: number;
+    currency: string;
+    updated_at?: Date;
+  },
+) {
+  return await database
+    .updateTable("payments")
+    .set({
+      ...updates,
+      status: "initiated",
+      error_code: null,
+      error_description: null,
+      updated_at: updates.updated_at ?? new Date(),
+    })
+    .where("id", "=", paymentId)
+    .where("status", "not in", ["captured", "refunded"])
+    .returningAll()
+    .executeTakeFirst();
+}
+
 export async function listPaymentAttempts(
   database: Executor,
   paymentId: string,

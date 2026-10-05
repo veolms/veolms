@@ -13,12 +13,11 @@ import {
 } from "@veolms/contracts";
 import type { ServerConfig } from "@veolms/config";
 import type { FastifyBaseLogger } from "fastify";
-import type { VideoDispatchService } from "./types.ts";
+import type { VideoDispatchResult, VideoDispatchService } from "./types.ts";
 
 /**
  * Strategy 1: AWS MediaConvert (Inbuilt / Direct SDK)
  * Uses @aws-sdk/client-mediaconvert directly to submit and manage transcoding jobs.
- * Compatible with real AWS MediaConvert or local MediaConvert-compatible fleet endpoints.
  */
 export function createMediaConvertDispatcher(options: {
   config: ServerConfig;
@@ -62,20 +61,6 @@ export function createMediaConvertDispatcher(options: {
     return clientInstance;
   }
 
-  /**
-   * Chapter thumbnail capture contract with the fleet.
-   *
-   * The job is a single FRAME_CAPTURE output whose UserMetadata carries:
-   * - `jobKind`: "chapter-thumbnails"
-   * - `chapterThumbnailTimes`: comma-separated chapter starts, in seconds
-   * - `chapterThumbnailDestination`: storage prefix for the frames
-   * - `masterPlaylistKey` (optional): the transcoded HLS master, usable as a
-   *   cheaper seek source than the original upload in `sourceKey`
-   *
-   * The fleet writes `<destination><seconds>.webp` (first frame at or after
-   * each time) and then calls the webhook with status COMPLETE and the same
-   * UserMetadata. No video_jobs row exists for these jobs.
-   */
   async function dispatchChapterThumbnails(
     client: MediaConvertClient,
     payload: VideoJobEvent,
@@ -145,29 +130,40 @@ export function createMediaConvertDispatcher(options: {
     );
   }
 
-  async function dispatch(payload: VideoJobEvent): Promise<void> {
+  async function dispatch(
+    payload: VideoJobEvent,
+  ): Promise<VideoDispatchResult | void> {
     const client = getClient();
 
-    // 1. Cancellation request
     if (payload.status === "cancelled") {
-      if (payload.jobId) {
+      // MediaConvert only knows its own job id. The old code sent
+      // payload.jobId (VeoLMS's internal uuid), so every cancellation
+      // failed inside the catch below and AWS kept transcoding — and
+      // billing — to completion.
+      if (payload.providerJobId) {
         try {
           logger.info(
-            { jobId: payload.jobId },
+            { jobId: payload.jobId, providerJobId: payload.providerJobId },
             "[video-dispatch:mediaconvert] Submitting cancellation to AWS MediaConvert",
           );
-          await client.send(new CancelJobCommand({ Id: payload.jobId }));
+          await client.send(
+            new CancelJobCommand({ Id: payload.providerJobId }),
+          );
         } catch (err: unknown) {
           logger.warn(
-            { err, jobId: payload.jobId },
+            { err, jobId: payload.jobId, providerJobId: payload.providerJobId },
             "[video-dispatch:mediaconvert] Note on MediaConvert CancelJobCommand (may already be finished)",
           );
         }
+      } else {
+        logger.warn(
+          { jobId: payload.jobId },
+          "[video-dispatch:mediaconvert] No provider job id recorded for this job; cannot submit cancellation to AWS (job predates provider-id tracking)",
+        );
       }
       return;
     }
 
-    // 2. Transcode request
     const bucket = config.STORAGE_BUCKET;
     const videoKey = payload.videoKey;
     if (!videoKey) {
@@ -234,8 +230,6 @@ export function createMediaConvertDispatcher(options: {
 
     if (config.MEDIACONVERT_WEBHOOK_URL) {
       userMetadata.webhookUrl = config.MEDIACONVERT_WEBHOOK_URL;
-      // The fleet signs its callbacks with the per-job secret it receives
-      // here; the webhook handler rejects unsigned callbacks with 401.
       if (config.MEDIACONVERT_WEBHOOK_SECRET) {
         userMetadata.webhookSecret = config.MEDIACONVERT_WEBHOOK_SECRET;
       } else {
@@ -318,9 +312,6 @@ export function createMediaConvertDispatcher(options: {
           ? rawDest
           : `${rawDest}/`;
 
-      // Output groups are processed in order. Capturing the frame first makes
-      // the thumbnail available early in processing instead of after every
-      // rendition has been encoded.
       outputGroups.unshift({
         Name: "Thumbnail_Group",
         OutputGroupSettings: {
@@ -386,6 +377,10 @@ export function createMediaConvertDispatcher(options: {
       },
       "[video-dispatch:mediaconvert] Job successfully submitted to AWS MediaConvert",
     );
+
+    // Hand the provider's job id back so the caller can persist it —
+    // cancellation is impossible without it (see the cancelled branch).
+    return result.Job?.Id ? { providerJobId: result.Job.Id } : undefined;
   }
 
   return { dispatch };

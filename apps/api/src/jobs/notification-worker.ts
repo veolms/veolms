@@ -6,9 +6,11 @@ import { logger } from "../lib/logger.ts";
 import { createAuthService } from "../modules/auth/index.ts";
 import { createEnrollmentAudienceService } from "../modules/commerce/index.ts";
 import { createNotificationProcessor } from "../modules/notifications/index.ts";
-import { createEmailService } from "../services/email/index.ts";
+import { createEmailService } from "@veolms/services/email";
 
-const database = createDatabase(config.DATABASE_URL);
+const database = createDatabase(config.DATABASE_URL, {
+  applicationName: "veolms-notification-worker",
+});
 const app = Fastify({ logger });
 const email = createEmailService({
   logger: app.log,
@@ -39,6 +41,8 @@ try {
         const user = await auth.findUserByIdForNotification(userId);
         return user ? { id: user.id, email: user.email } : undefined;
       },
+      findRecipients: (userIds) =>
+        auth.listNotificationRecipientsByIds(userIds),
     },
   });
   const isWatch = process.argv.includes("--watch");

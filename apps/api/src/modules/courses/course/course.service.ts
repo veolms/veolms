@@ -412,15 +412,19 @@ export function createCourseService({
     const cursor = filters?.cursor
       ? decodePublishedCourseCursor(filters.cursor, sort)
       : undefined;
+    // The contract leaves `limit` optional; an omitted limit used to return
+    // the ENTIRE catalog (plus per-row correlated subqueries) on a public,
+    // unauthenticated endpoint. Default to the contract's maximum instead —
+    // callers that want more pages follow nextCursor.
+    const pageLimit = filters?.limit ?? 60;
     const rows = await courseRepo.listPublishedCourses(database, {
       creatorId: filters?.creatorId,
-      limit: filters?.limit,
+      limit: pageLimit,
       cursor,
       search: filters?.search,
       sort,
     });
-    const pageLimit = filters?.limit;
-    const hasNextPage = pageLimit !== undefined && rows.length > pageLimit;
+    const hasNextPage = rows.length > pageLimit;
     const pageRows = hasNextPage ? rows.slice(0, pageLimit) : rows;
     const courses = await Promise.all(pageRows.map(toPublicCourseSummary));
     const lastRow = pageRows.at(-1);
@@ -700,6 +704,36 @@ export function createCourseService({
       courses: rows.map((course) => ({
         id: course.id,
         status: course.status,
+      })),
+    };
+  }
+
+  /**
+   * Lightweight course summaries for analytics scope resolution.
+   *
+   * The analytics endpoints only need id/title/status/dates, but previously
+   * resolved their scope through listMyCourses /
+   * listAvailableCoursesByCreator, which run the full media-URL hydration —
+   * up to ~5 extra queries PER COURSE (thumbnail + trailer delivery lookups)
+   * for URLs the analytics response never uses. This stays a single query.
+   */
+  async function listMyCourseSummaries(
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdminOrInstructor =
+      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
+    const rows = isAdminOrInstructor
+      ? await courseRepo.listAllCourseScope(database)
+      : await courseRepo.listAvailableCourseScopeByCreator(database, creatorId);
+
+    return {
+      courses: rows.map((course) => ({
+        id: course.id,
+        title: course.title,
+        status: course.status as "draft" | "published" | "archived",
+        createdAt: course.created_at.toISOString(),
+        publishedAt: course.published_at?.toISOString() ?? null,
       })),
     };
   }
@@ -1456,6 +1490,7 @@ export function createCourseService({
     createCourse,
     listMyCourses,
     listMyCourseScope,
+    listMyCourseSummaries,
     listPublishedCourses,
     getHomeDiscovery,
     listPublishedCourseOptions,

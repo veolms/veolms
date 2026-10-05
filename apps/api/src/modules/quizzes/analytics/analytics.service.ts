@@ -54,64 +54,69 @@ export function createAnalyticsService(options: QuizServiceOptions) {
     return grouped;
   }
 
-  async function studentName(studentId: string, fallback: string) {
-    const student = await options.authService.findUserById(studentId);
-    return student?.display_name ?? fallback;
-  }
-
   async function listVisibleQuizzes(actor: QuizActor) {
     return isAdmin(actor)
       ? repo.listQuizzesByAcademy(database, await academyId())
       : repo.listQuizzesByCreator(database, actor.id);
   }
 
-  async function assignment(actor: QuizActor, assignmentId: string) {
-    const row = await assertOwned(actor, assignmentId);
-    const activeStudents = await accessService.listActiveUserIdsForCourse(
-      database,
-      row.course_id,
-    );
-    const attempts = await repo.listAnalyticsAttempts(database, assignmentId);
+  type AssignmentRecord = NonNullable<
+    Awaited<ReturnType<typeof repo.findAssignment>>
+  >;
+
+  /**
+   * Builds one assignment's report from an already-authorized assignment
+   * row and the course's active-student list. Names are resolved in ONE
+   * bulk query — this used to call authService.findUserById (a selectAll
+   * on users) once per student, so a course report issued roughly
+   * assignments x students concurrent queries against the shared pool.
+   */
+  async function buildAssignmentReport(
+    row: AssignmentRecord,
+    activeStudents: readonly string[],
+  ) {
+    const attempts = await repo.listAnalyticsAttempts(database, row.id);
     const grouped = group(attempts);
     const studentIds = [...new Set([...activeStudents, ...grouped.keys()])];
-    const students = await Promise.all(
-      studentIds.map(async (studentId) => {
-        const records = grouped.get(studentId) ?? [];
-        const latest = records[0];
-        const scored = records.filter(
-          (record) =>
-            record.status === "graded" && record.scorePercentage !== null,
-        );
-        const best = scored.reduce<number | null>(
-          (current, record) =>
-            Math.max(current ?? 0, Number(record.scorePercentage)),
-          null,
-        );
-        const status: "passed" | "failed" | "in_progress" | "not_attempted" =
-          latest?.status === "in_progress"
-            ? "in_progress"
-            : latest &&
-                ["graded", "submitted", "expired"].includes(latest.status)
-              ? Number(latest.scorePercentage ?? 0) >=
-                Number(row.pass_percentage)
-                ? "passed"
-                : "failed"
-              : "not_attempted";
-        return {
-          studentId,
-          studentName: await studentName(studentId, studentId),
-          attemptCount: records.length,
-          latestScore:
-            latest?.scorePercentage === null ||
-            latest?.scorePercentage === undefined
-              ? null
-              : Number(latest.scorePercentage),
-          bestScore: best,
-          status,
-          lastAttempt: latest?.submittedAt?.toISOString() ?? null,
-        };
-      }),
+    const nameRows =
+      await options.authService.listUserDisplayNamesByIds(studentIds);
+    const nameById = new Map(
+      nameRows.map((user) => [user.id, user.display_name]),
     );
+    const students = studentIds.map((studentId) => {
+      const records = grouped.get(studentId) ?? [];
+      const latest = records[0];
+      const scored = records.filter(
+        (record) =>
+          record.status === "graded" && record.scorePercentage !== null,
+      );
+      const best = scored.reduce<number | null>(
+        (current, record) =>
+          Math.max(current ?? 0, Number(record.scorePercentage)),
+        null,
+      );
+      const status: "passed" | "failed" | "in_progress" | "not_attempted" =
+        latest?.status === "in_progress"
+          ? "in_progress"
+          : latest && ["graded", "submitted", "expired"].includes(latest.status)
+            ? Number(latest.scorePercentage ?? 0) >= Number(row.pass_percentage)
+              ? "passed"
+              : "failed"
+            : "not_attempted";
+      return {
+        studentId,
+        studentName: nameById.get(studentId) ?? studentId,
+        attemptCount: records.length,
+        latestScore:
+          latest?.scorePercentage === null ||
+          latest?.scorePercentage === undefined
+            ? null
+            : Number(latest.scorePercentage),
+        bestScore: best,
+        status,
+        lastAttempt: latest?.submittedAt?.toISOString() ?? null,
+      };
+    });
     const scores = attempts
       .filter(
         (attempt) =>
@@ -138,6 +143,15 @@ export function createAnalyticsService(options: QuizServiceOptions) {
     };
   }
 
+  async function assignment(actor: QuizActor, assignmentId: string) {
+    const row = await assertOwned(actor, assignmentId);
+    const activeStudents = await accessService.listActiveUserIdsForCourse(
+      database,
+      row.course_id,
+    );
+    return await buildAssignmentReport(row, activeStudents);
+  }
+
   async function course(actor: QuizActor, courseId: string) {
     const courseRecord = await courseService.findCourseById(courseId);
     if (!courseRecord)
@@ -145,13 +159,36 @@ export function createAnalyticsService(options: QuizServiceOptions) {
     if (!isAdmin(actor))
       await courseService.getCourseAndVerifyOwner(courseId, actor.id);
     const assignments = await repo.listAssignmentsForCourse(database, courseId);
-    const reports = await Promise.all(
-      assignments.map((item) => assignment(actor, item.id)),
-    );
     const studentIds = await accessService.listActiveUserIdsForCourse(
       database,
       courseId,
     );
+
+    // One bulk quiz fetch for both the per-assignment ownership rule below
+    // and the titles at the end (was one findQuiz per assignment).
+    const quizzes = await repo.listQuizzesByIds(database, [
+      ...new Set(assignments.map((item) => item.quiz_id)),
+    ]);
+    const quizById = new Map(quizzes.map((quiz) => [quiz.id, quiz]));
+
+    // Same rule assertOwned applied per assignment: a non-admin may only
+    // see the course report when every assigned quiz is their own.
+    if (!isAdmin(actor)) {
+      for (const item of assignments) {
+        const quiz = quizById.get(item.quiz_id);
+        if (!quiz || quiz.creator_id !== actor.id)
+          throw new AppError(403, "FORBIDDEN", "You do not own this Quiz.");
+      }
+    }
+
+    // Serial on purpose: each report is 2 queries, and the course's
+    // active-student list is reused instead of re-fetched per assignment.
+    // The old shape ran every assignment concurrently, each with its own
+    // ownership checks, student-list query and per-student user lookups.
+    const reports: Awaited<ReturnType<typeof buildAssignmentReport>>[] = [];
+    for (const item of assignments) {
+      reports.push(await buildAssignmentReport(item, studentIds));
+    }
     const scores = reports.flatMap((report) =>
       report.students
         .filter((student) => student.latestScore !== null)
@@ -172,19 +209,16 @@ export function createAnalyticsService(options: QuizServiceOptions) {
         : 0,
       quizCompletionRate: pct(attempted, totalSlots),
       passRate: pct(passed, attempted),
-      quizzes: await Promise.all(
-        assignments.map(async (item, index) => {
-          const quiz = await repo.findQuiz(database, item.quiz_id);
-          const report = reports[index]!;
-          return {
-            assignmentId: item.id,
-            quizTitle: quiz?.title ?? "Quiz",
-            averageScore: report.averageScore,
-            completionRate: pct(report.attempted, report.assignedStudents),
-            passRate: pct(report.passed, report.attempted),
-          };
-        }),
-      ),
+      quizzes: assignments.map((item, index) => {
+        const report = reports[index]!;
+        return {
+          assignmentId: item.id,
+          quizTitle: quizById.get(item.quiz_id)?.title ?? "Quiz",
+          averageScore: report.averageScore,
+          completionRate: pct(report.attempted, report.assignedStudents),
+          passRate: pct(report.passed, report.attempted),
+        };
+      }),
     };
   }
 

@@ -44,19 +44,21 @@ export function createEmailService({
 }: EmailServiceOptions): EmailService {
   const log = logger.child({ service: "email" });
 
-  // Built once and reused. A transporter per send would pay a fresh TCP
-  // connection, TLS handshake and SMTP AUTH round-trip for every message.
   let transporter: Transporter | null = null;
 
   function getTransporter(): Transporter {
     transporter ??= createTransport({
       host: config.host,
       port: config.port,
-      // Port 465 is implicit TLS; everything else negotiates STARTTLS, which
-      // `requireTLS` makes mandatory so credentials never cross in the clear.
       secure: config.port === 465,
       requireTLS: config.port !== 465,
       pool: true,
+      // Nodemailer's defaults are ~2min connect / 10min socket — and the
+      // OTP path sends synchronously inside the login request, so a slow
+      // SMTP server used to be able to hold logins for minutes.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
       auth:
         config.user && config.pass
           ? { user: config.user, pass: config.pass }
@@ -91,8 +93,6 @@ export function createEmailService({
       return { status: "sent", messageId: info.messageId };
     } catch (cause) {
       const error = cause instanceof Error ? cause : new Error(String(cause));
-      // `to` is deliberately included: without the recipient a delivery failure
-      // is unactionable. The body is not, since it carries the OTP.
       log.error({ err: error, to, subject: content.subject }, "Email failed");
       return { status: "failed", error };
     }

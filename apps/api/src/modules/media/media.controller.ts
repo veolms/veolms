@@ -171,7 +171,20 @@ export function createMediaController({ service }: { service: MediaService }) {
     request.raw.on("close", () => {
       closed = true;
     });
+    // Hard upper bound: each open stream polls the database every 1.5s and
+    // previously ran until a terminal status or client disconnect — a
+    // browser tab left open on a stuck job held a connection and its DB
+    // polling forever. The client's EventSource auto-reconnects, so a
+    // deliberate cutoff is transparent to the UI.
+    const MAX_STREAM_MS = 15 * 60 * 1000;
+    const startedAt = Date.now();
     while (!closed) {
+      if (Date.now() - startedAt >= MAX_STREAM_MS) {
+        response.write(
+          `event: timeout\ndata: ${JSON.stringify({ message: "Progress stream expired; reconnect to continue." })}\n\n`,
+        );
+        break;
+      }
       try {
         const progress = await service.getVideoJobProgress(
           request.params.mediaId,

@@ -537,7 +537,7 @@ export function createMediaService({
 
     // Dispatch the transcoding job (always queue, and trigger lambda if configured)
     try {
-      await services.videoDispatch.dispatch({
+      const dispatchResult = await services.videoDispatch.dispatch({
         action: "claim",
         jobId,
         videoId: media.id,
@@ -548,6 +548,14 @@ export function createMediaService({
         videoMetadata: videoMetadata ?? undefined,
         thumbnailDestination: `public/thumbnails/${media.id}/original.webp`,
       });
+      if (dispatchResult?.providerJobId) {
+        // Cancellation must address the provider by ITS job id.
+        await mediaRepo.setVideoJobProviderJobId(
+          database,
+          jobId,
+          dispatchResult.providerJobId,
+        );
+      }
       logger?.info(
         { jobId, mediaId: media.id },
         "Video transcoding job queued and dispatched successfully",
@@ -650,7 +658,7 @@ export function createMediaService({
     }
 
     try {
-      await services.videoDispatch.dispatch({
+      const dispatchResult = await services.videoDispatch.dispatch({
         action: "claim",
         jobId: job.id,
         videoId: mediaId,
@@ -661,6 +669,13 @@ export function createMediaService({
         videoMetadata: retryVideoMetadata ?? undefined,
         thumbnailDestination: `public/thumbnails/${mediaId}/original.webp`,
       });
+      if (dispatchResult?.providerJobId) {
+        await mediaRepo.setVideoJobProviderJobId(
+          database,
+          job.id,
+          dispatchResult.providerJobId,
+        );
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Dispatch failed.";
@@ -712,6 +727,8 @@ export function createMediaService({
       await services.videoDispatch.dispatch({
         status: "cancelled",
         jobId: job.id,
+        // The provider cancels by ITS job id, not our internal uuid.
+        providerJobId: job.provider_job_id ?? undefined,
         videoId: mediaId,
         videoKey: job.video_key,
         outputPrefix: job.output_prefix,

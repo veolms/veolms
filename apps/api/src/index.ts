@@ -4,7 +4,9 @@ import { createApp } from "./app.ts";
 import { config } from "./config.ts";
 import { logger } from "./lib/logger.ts";
 
-const database = createDatabase(config.DATABASE_URL);
+const database = createDatabase(config.DATABASE_URL, {
+  applicationName: "veolms-api",
+});
 const app = await createApp({ database, logger });
 let shuttingDown = false;
 

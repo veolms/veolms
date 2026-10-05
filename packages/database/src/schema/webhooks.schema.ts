@@ -9,6 +9,16 @@ export interface WebhookEventTable {
   payload: Json;
   processed_at: Date | null;
   error: string | null;
+  /** Processing attempts so far; incremented atomically at claim time. */
+  attempts: Generated<number>;
+  /**
+   * Not eligible for claiming before this time. Doubles as a short lease
+   * while a claimer is processing (set to now + lease at claim) and as the
+   * retry backoff after a failure.
+   */
+  next_attempt_at: Date | null;
+  /** Dead-letter marker: set after the attempt cap; excluded from polling. */
+  dead_at: Date | null;
   created_at: Generated<Date>;
 }
 
