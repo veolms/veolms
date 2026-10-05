@@ -92,6 +92,9 @@ export function createCourseStaticPageRefreshService({
     }
     const response = await fetch(`${GITHUB_API}${pathname}`, {
       ...init,
+      // Background work, but each poll iteration should still be bounded —
+      // without a signal a hung GitHub API call stalls the refresh queue.
+      signal: AbortSignal.timeout(15_000),
       headers: {
         Accept: "application/vnd.github+json",
         Authorization: `Bearer ${githubToken}`,

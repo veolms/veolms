@@ -25,6 +25,9 @@ export interface RazorpayGatewayConfig {
  * Clean, lightweight Razorpay Gateway Adapter encapsulating the Razorpay REST API
  * and cryptographic signature verification without leaking Razorpay types outside.
  */
+/** Upper bound for any single Razorpay API call. */
+const REQUEST_TIMEOUT_MS = 10_000;
+
 export class RazorpayPaymentGateway implements PaymentGateway {
   readonly providerName = "razorpay" as const;
   private readonly keyId: string;
@@ -57,10 +60,28 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       ...options.headers,
     };
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+        // Without this, a hung gateway holds the request (and its pool
+        // slot / event-loop continuation) for undici's ~300s defaults.
+        // Checkout and verify call this synchronously in the request path.
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (err) {
+      if ((err as Error)?.name === "TimeoutError") {
+        // 504 so callers treat the outcome as UNKNOWN (the gateway may
+        // have processed it) — isDefinitiveGatewayRejection stays false.
+        throw new AppError(
+          504,
+          "PAYMENT_GATEWAY_ERROR",
+          "Payment gateway request timed out",
+        );
+      }
+      throw err;
+    }
 
     if (!response.ok) {
       let errorBody:

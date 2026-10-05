@@ -57,6 +57,12 @@ export function createEmailService({
       secure: config.port === 465,
       requireTLS: config.port !== 465,
       pool: true,
+      // Nodemailer's defaults are ~2min connect / 10min socket — and the
+      // OTP path sends synchronously inside the login request, so a slow
+      // SMTP server used to be able to hold logins for minutes.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
       auth:
         config.user && config.pass
           ? { user: config.user, pass: config.pass }
