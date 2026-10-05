@@ -39,6 +39,7 @@ import type {
   ShakaRuntimeLoader,
   ShakaTextTrackLike,
   ShakaVariantTrackLike,
+  ShakaVideoTrackLike,
 } from "./shaka-internal";
 
 export interface ShakaVideoEngineOptions {
@@ -55,6 +56,14 @@ function visualQualityKey(track: ShakaVariantTrackLike): string {
     track.videoCodec ?? "",
     track.hdr ?? "",
   ].join("|");
+}
+
+function qualityResolutionKey(quality: {
+  height?: number | null;
+  width?: number | null;
+  frameRate?: number | null;
+}): string {
+  return `${quality.height ?? 0}x${quality.width ?? 0}@${Math.round(quality.frameRate ?? 0)}`;
 }
 
 function hasSameRoles(
@@ -129,7 +138,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
 
   readonly #runtimeLoader: ShakaRuntimeLoader;
   readonly #shakaListeners = new Map<string, ShakaListener>();
+  readonly #knownQualities = new Map<string, VideoQuality>();
   readonly #qualityTracks = new Map<string, ShakaVariantTrackLike>();
+  readonly #videoTracks = new Map<string, ShakaVideoTrackLike>();
   readonly #audioTracks = new Map<string, ShakaAudioTrackLike>();
   readonly #textTracks = new Map<string, ShakaTextTrackLike>();
   #runtime: ShakaRuntimeLike | null = null;
@@ -142,6 +153,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   >["responseFilter"] = null;
   #adoptedPreloadSession: EarlyShakaPreloadSession | null = null;
   #autoQuality = true;
+  #selectedQualityId: string | null = null;
   #selectedTextTrackId: string | null = null;
   #browserSupported: boolean | null = null;
 
@@ -171,6 +183,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const runtime = this.requireRuntime();
     const generation = this.beginOperation();
     this.startLoading(source);
+    this.clearTrackMaps();
+    this.#selectedQualityId = null;
     this.#selectedTextTrackId = null;
     this.#autoQuality = source.streaming?.abrEnabled ?? true;
 
@@ -270,8 +284,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
 
     const player = this.requirePlayer();
-    const track = this.#qualityTracks.get(id);
-    if (!track) {
+    const quality = this.#knownQualities.get(id);
+    if (!quality) {
       throw new VideoEngineError({
         category: "PLAYER",
         code: "QUALITY_NOT_FOUND",
@@ -280,18 +294,52 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
 
     player.configure({ abr: { enabled: false } });
-    player.selectVariantTrack(track, false);
+
+    const videoTrack = this.#videoTracks.get(id);
+    const variantTrack = this.#qualityTracks.get(id);
+
+    if (typeof player.selectVideoTrack === "function" && videoTrack) {
+      player.selectVideoTrack(videoTrack, false);
+    } else if (variantTrack) {
+      player.selectVariantTrack(variantTrack, false);
+    } else {
+      const candidate = player.getVariantTracks().find((t) => {
+        return (
+          t.height === quality.height &&
+          (quality.bandwidth == null || t.bandwidth === quality.bandwidth)
+        );
+      });
+      if (candidate) {
+        player.selectVariantTrack(candidate, false);
+      }
+    }
+
     this.#autoQuality = false;
+    this.#selectedQualityId = id;
     this.refreshTracks(false);
-    const quality = this.getQualities().find((item) => item.id === id) ?? null;
+    const selected =
+      this.getQualities().find((item) => item.id === id) ?? quality;
     this.setTrackState({ autoQuality: false, selectedQualityId: id });
-    this.emit("qualitychange", { quality, auto: false });
+    this.emit("qualitychange", { quality: selected, auto: false });
   }
 
   override enableAutoQuality(): void {
     const player = this.requirePlayer();
     player.configure({ abr: { enabled: true } });
+    player.configure({
+      preferredVideo: [
+        {
+          label: "",
+          role: "",
+          language: "",
+          codec: "",
+          hdrLevel: "AUTO",
+          layout: "",
+        },
+      ],
+    });
     this.#autoQuality = true;
+    this.#selectedQualityId = null;
     this.refreshTracks(false);
     const active =
       this.getQualities().find((quality) => quality.active) ?? null;
@@ -533,6 +581,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     listen("abrstatuschanged", (event) => {
       if (typeof event.newStatus === "boolean") {
         this.#autoQuality = event.newStatus;
+        if (event.newStatus) {
+          this.#selectedQualityId = null;
+        }
         this.setTrackState({ autoQuality: event.newStatus });
       }
     });
@@ -555,18 +606,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       return;
     }
 
-    this.clearTrackMaps();
-    const qualities: VideoQuality[] = [];
     const audioTrackCandidates = player.getAudioTracks();
-    for (const track of variantsForSelectedAudio(
-      player.getVariantTracks(),
-      audioTrackCandidates,
-    )) {
-      const normalized = normalizeShakaQuality(track);
-      qualities.push(normalized);
-      this.#qualityTracks.set(normalized.id, track);
-    }
-
+    this.#audioTracks.clear();
     const audioTracks: VideoAudioTrack[] = [];
     for (const [index, track] of audioTrackCandidates.entries()) {
       const normalized = normalizeShakaAudioTrack(track, index);
@@ -574,10 +615,93 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#audioTracks.set(normalized.id, track);
     }
 
+    const variantCandidates = variantsForSelectedAudio(
+      player.getVariantTracks(),
+      audioTrackCandidates,
+    );
+    for (const track of variantCandidates) {
+      const normalized = normalizeShakaQuality(track);
+      const resKey = qualityResolutionKey(normalized);
+      const existingEntry = Array.from(this.#knownQualities.entries()).find(
+        ([, q]) => qualityResolutionKey(q) === resKey,
+      );
+      const qualityId = existingEntry ? existingEntry[0] : normalized.id;
+
+      this.#qualityTracks.set(qualityId, track);
+      this.#knownQualities.set(qualityId, {
+        ...normalized,
+        id: qualityId,
+      });
+
+      if (typeof player.getVideoTracks === "function") {
+        const videoTracks = player.getVideoTracks() ?? [];
+        const matchingVideo = videoTracks.find(
+          (vt) =>
+            vt.height === track.height &&
+            (vt.bandwidth == null ||
+              track.bandwidth == null ||
+              vt.bandwidth === track.bandwidth),
+        );
+        if (matchingVideo) {
+          this.#videoTracks.set(qualityId, matchingVideo);
+        }
+      }
+    }
+
+    let activeQualityId: string | null = null;
+    if (this.#autoQuality) {
+      const activeVariant = player.getVariantTracks().find((t) => t.active);
+      const activeVideo =
+        typeof player.getVideoTracks === "function"
+          ? player.getVideoTracks()?.find((t) => t.active)
+          : null;
+
+      if (activeVariant) {
+        const match = Array.from(this.#knownQualities.values()).find((q) => {
+          const varTrack = this.#qualityTracks.get(q.id);
+          if (varTrack && varTrack.id === activeVariant.id) return true;
+          return (
+            q.height != null &&
+            activeVariant.height != null &&
+            q.height === activeVariant.height &&
+            (q.bandwidth == null ||
+              activeVariant.bandwidth == null ||
+              q.bandwidth === activeVariant.bandwidth)
+          );
+        });
+        if (match) activeQualityId = match.id;
+      }
+      if (!activeQualityId && activeVideo) {
+        const match = Array.from(this.#knownQualities.values()).find(
+          (q) =>
+            q.height != null &&
+            activeVideo.height != null &&
+            q.height === activeVideo.height,
+        );
+        if (match) activeQualityId = match.id;
+      }
+      if (!activeQualityId) {
+        const firstActive = Array.from(this.#knownQualities.values()).find(
+          (q) => q.active,
+        );
+        if (firstActive) activeQualityId = firstActive.id;
+      }
+    } else {
+      activeQualityId = this.#selectedQualityId;
+    }
+
+    for (const quality of this.#knownQualities.values()) {
+      quality.active =
+        activeQualityId != null ? quality.id === activeQualityId : false;
+    }
+
+    const qualities = this.getSortedQualities();
+
     const isVisible = player.isTextTrackVisible
       ? player.isTextTrackVisible()
       : Boolean(this.#selectedTextTrackId);
 
+    this.#textTracks.clear();
     const textTracks: VideoTextTrack[] = [];
     for (const track of player.getTextTracks()) {
       const normalized = normalizeShakaTextTrack(track);
@@ -603,7 +727,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       audioTracks,
       textTracks,
       autoQuality: this.#autoQuality,
-      selectedQualityId: activeQuality?.id ?? null,
+      selectedQualityId: this.#autoQuality
+        ? (activeQuality?.id ?? null)
+        : this.#selectedQualityId,
       selectedAudioTrackId: activeAudio?.id ?? null,
       selectedTextTrackId: activeText?.id ?? null,
     });
@@ -621,8 +747,18 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
   }
 
+  private getSortedQualities(): VideoQuality[] {
+    return Array.from(this.#knownQualities.values()).sort((a, b) => {
+      const heightDiff = (b.height ?? 0) - (a.height ?? 0);
+      if (heightDiff !== 0) return heightDiff;
+      return (b.bandwidth ?? 0) - (a.bandwidth ?? 0);
+    });
+  }
+
   private clearTrackMaps(): void {
+    this.#knownQualities.clear();
     this.#qualityTracks.clear();
+    this.#videoTracks.clear();
     this.#audioTracks.clear();
     this.#textTracks.clear();
   }

@@ -2,7 +2,9 @@ import { toString as mdastToString } from "mdast-util-to-string";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
+import { normalizeChapters } from "./normalizeChapters.ts";
 import type {
+  Chapter,
   ChapterInput,
   DescriptionChapterDeclaration,
   ParseChaptersOptions,
@@ -330,8 +332,8 @@ export function parseChapterDeclarationsFromDescription(
  */
 export function parseChaptersFromDescription(
   description: string,
-  _options: ParseChaptersOptions = {},
-): ChapterInput[] {
+  options: ParseChaptersOptions = {},
+): Chapter[] {
   let root: MarkdownNode;
 
   try {
@@ -340,7 +342,8 @@ export function parseChaptersFromDescription(
     return [];
   }
 
-  return eligibleBlocks(root).flatMap((block) =>
+  const raw = eligibleBlocks(root).flatMap((block) =>
     extractChapterCandidates(block, description),
   );
+  return normalizeChapters(raw, options);
 }

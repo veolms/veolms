@@ -670,4 +670,61 @@ describe("ShakaVideoEngine", () => {
     );
     await vi.waitFor(() => expect(manager.destroy).toHaveBeenCalledOnce());
   });
+
+  it("persists all discovered qualities when manually switching resolutions and re-enabling auto", async () => {
+    const player = new FakeShakaPlayer();
+    const engine = new ShakaVideoEngine({
+      runtimeLoader: async () => runtimeFor(player),
+    });
+    await engine.attach(asMediaElement(new FakeMediaElement()));
+    await engine.load({ src: "lesson.m3u8" });
+
+    const initialQualities = engine.getQualities();
+    expect(initialQualities).toHaveLength(2);
+    expect(initialQualities[0]).toMatchObject({
+      height: 1080,
+      id: "shaka-quality:1",
+    });
+    expect(initialQualities[1]).toMatchObject({
+      height: 720,
+      id: "shaka-quality:2",
+    });
+
+    // Switch manually to 720p
+    engine.selectQuality("shaka-quality:2");
+    expect(engine.getSnapshot()).toMatchObject({
+      autoQuality: false,
+      selectedQualityId: "shaka-quality:2",
+    });
+
+    // Simulate Shaka firing variantchanged event with filtered variants
+    player.variants = [player.variants[1]!]; // Only 720p left in player variant list
+    player.dispatch("variantchanged");
+
+    // All qualities should still be retained in the engine
+    const qualitiesAfterFilter = engine.getQualities();
+    expect(qualitiesAfterFilter).toHaveLength(2);
+    expect(
+      qualitiesAfterFilter.find((q) => q.id === "shaka-quality:2")?.active,
+    ).toBe(true);
+    expect(
+      qualitiesAfterFilter.find((q) => q.id === "shaka-quality:1")?.active,
+    ).toBe(false);
+
+    // Switch back to 1080p
+    engine.selectQuality("shaka-quality:1");
+    const qualitiesAfter1080p = engine.getQualities();
+    expect(qualitiesAfter1080p).toHaveLength(2);
+    expect(
+      qualitiesAfter1080p.find((q) => q.id === "shaka-quality:1")?.active,
+    ).toBe(true);
+    expect(
+      qualitiesAfter1080p.find((q) => q.id === "shaka-quality:2")?.active,
+    ).toBe(false);
+
+    // Re-enable Auto
+    engine.enableAutoQuality();
+    expect(engine.getSnapshot().autoQuality).toBe(true);
+    expect(engine.getQualities()).toHaveLength(2);
+  });
 });

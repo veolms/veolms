@@ -39,6 +39,24 @@ export interface ShakaVariantTrackLike {
   hdr?: string | null;
 }
 
+export interface ShakaVideoTrackLike {
+  id?: number | string;
+  active: boolean;
+  language?: string;
+  bandwidth?: number;
+  width?: number;
+  height?: number;
+  frameRate?: number;
+  pixelAspectRatio?: string;
+  hdr?: string;
+  colorGamut?: string;
+  videoLayout?: string;
+  mimeType?: string;
+  codecs?: string;
+  roles?: readonly string[];
+  label?: string | null;
+}
+
 export interface ShakaAudioTrackLike {
   id?: number | string;
   active?: boolean;
@@ -134,6 +152,12 @@ export interface ShakaPlayerLike {
     clearBuffer?: boolean,
     safeMargin?: number,
   ): void;
+  getVideoTracks?(): ShakaVideoTrackLike[];
+  selectVideoTrack?(
+    track: ShakaVideoTrackLike,
+    clearBuffer?: boolean,
+    safeMargin?: number,
+  ): void;
   getAudioTracks(): ShakaAudioTrackLike[];
   selectAudioTrack(track: ShakaAudioTrackLike, safeMargin?: number): void;
   getTextTracks(): ShakaTextTrackLike[];
@@ -205,7 +229,7 @@ export function resolveShakaRuntime(module: unknown): ShakaRuntimeLike {
 }
 
 export function normalizeShakaQuality(
-  track: ShakaVariantTrackLike,
+  track: ShakaVariantTrackLike | ShakaVideoTrackLike,
 ): VideoQuality {
   const heightLabel = track.height ? `${track.height}p` : "Audio only";
   const frameRateLabel =
@@ -213,16 +237,29 @@ export function normalizeShakaQuality(
       ? ` ${Math.round(track.frameRate)}fps`
       : "";
 
+  const id =
+    track.id != null
+      ? `shaka-quality:${String(track.id)}`
+      : `shaka-quality:${String(track.height ?? track.bandwidth ?? "unknown")}`;
+
   return {
-    id: `shaka-quality:${String(track.id)}`,
+    id,
     label: `${heightLabel}${frameRateLabel}`,
     active: Boolean(track.active),
     bandwidth: track.bandwidth ?? undefined,
     width: track.width ?? undefined,
     height: track.height ?? undefined,
     frameRate: track.frameRate ?? undefined,
-    videoCodec: track.videoCodec ?? undefined,
-    audioCodec: track.audioCodec ?? undefined,
+    videoCodec:
+      "videoCodec" in track && typeof track.videoCodec === "string"
+        ? track.videoCodec
+        : "codecs" in track && typeof track.codecs === "string"
+          ? track.codecs
+          : undefined,
+    audioCodec:
+      "audioCodec" in track && typeof track.audioCodec === "string"
+        ? track.audioCodec
+        : undefined,
     hdr: track.hdr ?? undefined,
   };
 }
@@ -402,6 +439,7 @@ export function createShakaConfiguration(
 
   result.streaming = {
     segmentPrefetchLimit: SHAKA_SEGMENT_PREFETCH_LIMIT,
+    dontChooseCodecs: true,
     ...(streaming?.bufferingGoal !== undefined
       ? { bufferingGoal: streaming.bufferingGoal }
       : {}),
