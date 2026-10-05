@@ -1,3 +1,4 @@
+import "./learning-split-layout.css";
 import {
   LESSON_SIDE_PLACEHOLDER_SURFACE_CLASS,
   LessonContentPlaceholderBars,
@@ -14,7 +15,9 @@ import {
  * The column follows the same rules as the real page. It only sits beside
  * the video on wide viewports, and it takes its width from
  * `--learning-curriculum-width`, which the app sets on the document before
- * first paint (and sets to zero while the column is collapsed).
+ * first paint (and sets to zero while the column is collapsed). The split
+ * layout sheet is small and loads with this file, so the lesson and the
+ * column are already two cards here, as on the real page.
  */
 export function LearningWorkspaceFallback() {
   return (
@@ -22,7 +25,10 @@ export function LearningWorkspaceFallback() {
       className="min-h-dvh bg-(--canvas) text-(--text)"
       data-learning-workspace-fallback=""
     >
-      <div className="mx-auto grid w-full max-w-[1840px] grid-cols-[minmax(0,1fr)] min-[1081px]:grid-cols-[minmax(0,1fr)_minmax(0,var(--learning-curriculum-width,400px))]">
+      <div
+        className="mx-auto grid w-full max-w-[1840px] grid-cols-[minmax(0,1fr)] min-[1081px]:grid-cols-[minmax(0,1fr)_minmax(0,var(--learning-curriculum-width,400px))]"
+        data-learning-split-lesson=""
+      >
         <div className="min-w-0">
           <div
             className="aspect-video w-full bg-black"
@@ -38,8 +44,10 @@ export function LearningWorkspaceFallback() {
           </div>
         </div>
         <div
-          className={`sticky top-0 hidden h-dvh min-w-0 flex-col gap-3 self-start overflow-hidden p-4 min-[1081px]:flex ${LESSON_SIDE_PLACEHOLDER_SURFACE_CLASS}`}
+          className={`sticky top-0 hidden h-dvh min-w-0 flex-col gap-3 self-start overflow-hidden p-4 min-[1081px]:flex [[data-learning-curriculum-state=collapsed]_&]:hidden ${LESSON_SIDE_PLACEHOLDER_SURFACE_CLASS}`}
           aria-hidden="true"
+          data-learning-split-pane=""
+          data-learning-split-card=""
         >
           <LessonSidePlaceholderBars />
         </div>

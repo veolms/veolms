@@ -30,6 +30,15 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/login",
     {
+      // Unauthenticated OTP-credential verification: cap per-IP attempts so
+      // a single client cannot brute-force codes or hammer the identifier
+      // lookups (DB-side OTP attempt caps remain the hard stop).
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
+      },
       schema: {
         operationId: "loginUser",
         tags: ["Auth"],
@@ -49,6 +58,15 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/register",
     {
+      // Unauthenticated and write-heavy (user row + session + advisory
+      // lock): cap per-IP so registration cannot be used as a cheap
+      // write-amplification or enumeration vector.
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 minute",
+        },
+      },
       schema: {
         operationId: "registerUser",
         tags: ["Auth"],

@@ -17,6 +17,10 @@ import * as mfaRepository from "../mfa/mfa.repository.ts";
 import * as sessionRepository from "./session.repository.ts";
 import * as userRepository from "../authentication/authentication.repository.ts";
 import { generateRandomToken, hashToken } from "../shared/auth.utils.ts";
+import {
+  getCachedAuthContext,
+  setCachedAuthContext,
+} from "../shared/session-auth-cache.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import type { Executor } from "../shared/repository.types.ts";
 
@@ -205,9 +209,23 @@ export function createSessionService({ database }: SessionServiceOptions) {
   async function authenticate(
     token: string,
   ): Promise<AuthenticatedRequestContext | null> {
+    const tokenHash = hashToken(token);
+
+    // Process-local short-TTL cache: this path runs 5 queries in 3 serial
+    // round trips on EVERY authenticated request. Coherence (including
+    // immediate in-process eviction on revocation/rotation/MFA changes) is
+    // documented in shared/session-auth-cache.ts.
+    const cached = getCachedAuthContext(
+      tokenHash,
+      config.SESSION_AUTH_CACHE_TTL_MS,
+    );
+    if (cached) {
+      return cached;
+    }
+
     const session = await sessionRepository.findActiveSession(
       database,
-      hashToken(token),
+      tokenHash,
     );
     if (!session) {
       return null;
@@ -232,7 +250,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
       await sessionRepository.touchSession(database, session.id, new Date());
     }
 
-    return {
+    const context: AuthenticatedRequestContext = {
       user: {
         id: user.id,
         username: user.username,
@@ -272,6 +290,9 @@ export function createSessionService({ database }: SessionServiceOptions) {
         expires_at: session.expires_at,
       },
     };
+
+    setCachedAuthContext(tokenHash, context, config.SESSION_AUTH_CACHE_TTL_MS);
+    return context;
   }
 
   return {

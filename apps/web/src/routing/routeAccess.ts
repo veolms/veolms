@@ -73,6 +73,13 @@ export function isCourseAuthorPath(pathname: string): boolean {
     isCourseEditorPath(normalized) ||
     normalized === "/students" ||
     normalized.startsWith("/students/") ||
+    // Staff-only surfaces: the API already denies their data to
+    // non-authoring roles, but without this entry a student landing on the
+    // URL saw the empty staff UI shell instead of being redirected.
+    normalized === "/analytics" ||
+    normalized.startsWith("/analytics/") ||
+    normalized === "/coupons" ||
+    normalized.startsWith("/coupons/") ||
     normalized === "/quizzes/create" ||
     (normalized.startsWith("/quizzes/") &&
       !normalized.startsWith("/quizzes/attempt/"))

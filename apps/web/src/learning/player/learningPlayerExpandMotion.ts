@@ -60,6 +60,11 @@ const VIDEO_BOX_SELECTOR = ".youtube-player";
 /** Parts of the mini window that sit under the video and must not zoom. */
 const BELOW_VIDEO_SELECTOR =
   "[data-learning-mini-player-info-bar], [data-learning-mini-player-playlist-shell]";
+/**
+ * Layers drawn over the whole mini window (reading mode). They are not part
+ * of the full player, so they must not grow past the video with the window.
+ */
+const WINDOW_OVERLAY_SELECTOR = ":scope > .reading-mode-effects";
 /** Mini-only chrome on the video that should be gone at lift-off. */
 const VIDEO_CHROME_SELECTOR =
   "[data-learning-mini-player-controls-ready], [data-mini-player-resize-handle]";
@@ -96,6 +101,14 @@ const PLACEHOLDER_INLINE_PROPERTIES = [
   "border-radius",
   "transform-origin",
 ] as const;
+const PLACEHOLDER_LESSON_CARD_SELECTOR = "[data-learning-expand-sheet-lesson]";
+
+/**
+ * Corners of the player where it rests in the lesson card: the top ones
+ * follow the card, the bottom ones are square because the lesson continues
+ * straight under the video.
+ */
+const restingPlayerCorners = (radius: string) => `${radius} ${radius} 0 0`;
 
 const cancelAnimations = (animations: readonly Animation[]) => {
   for (const animation of animations) {
@@ -272,11 +285,25 @@ function preparePlaceholderSheet(
   },
 ) {
   sheet.style.display = "block";
+  sheet.dataset.learningExpandSheetActive = "";
   sheet.style.left = `${frame.left}px`;
   sheet.style.top = `${frame.top}px`;
   sheet.style.width = `${frame.width}px`;
   sheet.style.height = `${frame.height}px`;
   sheet.style.borderRadius = `${motion.restRadius}px`;
+
+  // The lesson card is exactly as wide as the full player. Whatever the
+  // sheet has left beside it is the gutter and the course content card.
+  const lessonCard = sheet.querySelector<HTMLElement>(
+    PLACEHOLDER_LESSON_CARD_SELECTOR,
+  );
+  if (lessonCard) {
+    lessonCard.style.width = `${Math.min(
+      frame.width,
+      Math.max(0, target.left - frame.left + target.width),
+    )}px`;
+    lessonCard.style.borderRadius = `${motion.restRadius}px`;
+  }
 
   // The page fades in as it arrives: transparent at the mini window,
   // opaque by the time it is in place.
@@ -301,6 +328,7 @@ function preparePlaceholderSheet(
     part.style.top = `${rect.top - frame.top}px`;
     part.style.width = `${rect.width}px`;
     part.style.height = `${Math.max(0, frame.bottom - rect.top)}px`;
+    if (key === "column") part.style.borderRadius = `${motion.restRadius}px`;
     part.style.transformOrigin = pivotInBox(target, rect);
     parts.push(part);
     tracks.push({
@@ -324,6 +352,10 @@ function preparePlaceholderSheet(
     fade?.cancel();
     for (const track of tracks) track.animation?.cancel();
     clearInlineProperties(sheet, PLACEHOLDER_INLINE_PROPERTIES);
+    delete sheet.dataset.learningExpandSheetActive;
+    if (lessonCard) {
+      clearInlineProperties(lessonCard, PLACEHOLDER_INLINE_PROPERTIES);
+    }
     for (const part of parts) {
       clearInlineProperties(part, PLACEHOLDER_INLINE_PROPERTIES);
     }
@@ -448,7 +480,12 @@ function animateFullHost(
   const squareOff = () => {
     if (finished) return;
     const tail = fullHost.animate(
-      { borderRadius: [`${restRadius.toFixed(2)}px`, "0px"] },
+      {
+        borderRadius: [
+          restingPlayerCorners(`${restRadius.toFixed(2)}px`),
+          "0px",
+        ],
+      },
       { duration: CORNER_SQUARE_OFF_MS, easing: "ease-out" },
     );
     travelling = null;
@@ -480,7 +517,7 @@ function animateFullHost(
       {
         borderRadius: [
           `${fromRadius.toFixed(2)}px`,
-          `${restRadius.toFixed(2)}px`,
+          restingPlayerCorners(`${restRadius.toFixed(2)}px`),
         ],
       },
       { ...timing, fill: "forwards" },
@@ -575,13 +612,34 @@ export function startLearningPlayerExpand(
   const startedAt = performance.now();
   const targetScale = target.width / startRect.width;
   const restRadius = resolveRestingCornerRadius(miniHost);
-  // Layout-size radius that reads as `restRadius` at the final scale.
-  const radiusAtRest = `${(restRadius / targetScale).toFixed(2)}px`;
+  // Layout-size corners that read as the resting ones at the final scale.
+  const radiusAtRest = restingPlayerCorners(
+    `${(restRadius / targetScale).toFixed(2)}px`,
+  );
   const cornerTransition = `border-radius ${durationMs}ms ${easing}`;
   const videoBox = miniHost.querySelector<HTMLElement>(VIDEO_BOX_SELECTOR);
   const belowVideo = Array.from(
     miniHost.querySelectorAll<HTMLElement>(BELOW_VIDEO_SELECTOR),
   );
+  // While the window grows, its overlays are cut back to the video. Left
+  // alone they would also cover the strip the fading info bar leaves under
+  // it, which grows with the window into a band across the lesson page.
+  const windowOverlays = Array.from(
+    miniHost.querySelectorAll<HTMLElement>(WINDOW_OVERLAY_SELECTOR),
+  );
+  const belowVideoHeight = videoBox
+    ? Math.max(0, miniHost.clientHeight - videoBox.offsetHeight)
+    : 0;
+  const fitWindowOverlaysToVideo = (fit: boolean) => {
+    for (const overlay of windowOverlays) {
+      if (fit && belowVideoHeight > 0) {
+        overlay.style.clipPath = `inset(0 0 ${belowVideoHeight}px 0)`;
+      } else {
+        overlay.style.removeProperty("clip-path");
+      }
+    }
+  };
+  fitWindowOverlaysToVideo(true);
   const frame = miniHost.parentElement?.getBoundingClientRect();
   const placeholder =
     placeholderSheet && frame
@@ -597,8 +655,9 @@ export function startLearningPlayerExpand(
   // inside it). A transition is the one thing that outranks those rules, so
   // the corners are moved through transitions on inline important values.
   if (videoBox) {
-    // The video loses the bar under it, so its own bottom corners round too.
-    // Start them from the window's radius, then let both ease together.
+    // The video loses the bar under it, so in flight its own bottom corners
+    // are the window's. They start from the window's radius and square off
+    // as it lands, where the lesson continues straight under the video.
     videoBox.style.transition = "none";
     videoBox.style.setProperty(
       "border-radius",
@@ -718,6 +777,7 @@ export function startLearningPlayerExpand(
     for (const track of tracks) track.animation?.cancel();
     cancelAnimations(chromeFades);
     clearInlineProperties(miniHost, MINI_HOST_INLINE_PROPERTIES);
+    fitWindowOverlaysToVideo(false);
     for (const element of belowVideo) {
       element.style.removeProperty("transform-origin");
     }
@@ -759,6 +819,7 @@ export function startLearningPlayerExpand(
       };
       runWindow(current, destination, turn.durationMs);
       for (const track of tracks) playTrack(track, headingToFull, turn);
+      fitWindowOverlaysToVideo(headingToFull);
       if (!headingToFull) cancelAnimations(chromeFades);
       // The corners follow: back to the mini window's, or on to the
       // resting radius again.

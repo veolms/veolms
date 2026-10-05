@@ -62,6 +62,8 @@ export interface VideoJobTable {
     Record<string, unknown> | string,
     Record<string, unknown> | string
   > | null;
+  /** Provider-assigned job id (e.g. MediaConvert's) — required to cancel. */
+  provider_job_id: string | null;
   created_at: Generated<Date>;
   started_at: Date | null;
   completed_at: Date | null;

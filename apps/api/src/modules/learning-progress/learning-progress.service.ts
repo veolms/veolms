@@ -232,6 +232,15 @@ export interface LearningProgressService {
   getAverageProgressByCourse(filters?: {
     courseId?: string | string[];
   }): Promise<Array<{ courseId: string; averageProgressPercent: number }>>;
+  getAverageProgressAndCompletionRateByCourse(
+    courseId: string | string[],
+  ): Promise<
+    Array<{
+      courseId: string;
+      averageProgressPercent: number;
+      completionRate: number;
+    }>
+  >;
   getStartedAndCompletedCounts(filters: {
     courseId?: string | string[];
     from?: Date;
@@ -495,6 +504,16 @@ export function createLearningProgressService({
     );
   }
 
+  /** One grouped query instead of the scalar variant once per course. */
+  async function getAverageProgressAndCompletionRateByCourse(
+    courseId: string | string[],
+  ) {
+    return await learningProgressRepository.getAverageProgressAndCompletionRateByCourse(
+      database,
+      courseId,
+    );
+  }
+
   async function getStartedAndCompletedCounts(filters: {
     courseId?: string | string[];
     from?: Date;
@@ -522,6 +541,7 @@ export function createLearningProgressService({
     getResumeContext,
     syncProgress,
     getAverageProgressAndCompletionRate,
+    getAverageProgressAndCompletionRateByCourse,
     getAverageProgressByCourse,
     getStartedAndCompletedCounts,
     getEstimatedWatchHours,

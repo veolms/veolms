@@ -314,11 +314,24 @@ export async function createDelivery(
     .execute();
 }
 
+/** Email-backlog gauge for the ops heartbeat. */
+export async function getEmailDeliveryBacklog(
+  database: DatabaseExecutor,
+): Promise<number> {
+  const row = await database
+    .selectFrom("notification_deliveries")
+    .select((eb) => eb.fn.count<number>("id").as("total"))
+    .where("channel", "=", "email")
+    .where("status", "in", ["pending", "processing"])
+    .executeTakeFirst();
+  return Number(row?.total ?? 0);
+}
+
 export type ClaimedDelivery = Selectable<NotificationDeliveryTable>;
 
 export async function claimEmailDeliveries(
   database: Kysely<Database>,
-  input: { limit: number; leaseUntil: Date; now: Date },
+  input: { limit: number; leaseUntil: Date; now: Date; maxAttempts: number },
 ): Promise<ClaimedDelivery[]> {
   return await database.transaction().execute(async (transaction) => {
     const rows = await transaction
@@ -337,6 +350,9 @@ export async function claimEmailDeliveries(
           ]),
         ]),
       )
+      // Attempts increment at claim time (below) so a delivery that
+      // crashes the worker still burns attempts and stops being claimed.
+      .where("attempt_count", "<", input.maxAttempts)
       .orderBy("next_attempt_at", "asc")
       .orderBy("created_at", "asc")
       .forUpdate()
@@ -348,12 +364,13 @@ export async function claimEmailDeliveries(
 
     await transaction
       .updateTable("notification_deliveries")
-      .set({
-        status: "processing",
+      .set((eb) => ({
+        status: "processing" as const,
         locked_until: input.leaseUntil,
         last_error: null,
         updated_at: input.now,
-      })
+        attempt_count: eb("attempt_count", "+", 1),
+      }))
       .where(
         "id",
         "in",
@@ -367,13 +384,26 @@ export async function claimEmailDeliveries(
       locked_until: input.leaseUntil,
       last_error: null,
       updated_at: input.now,
+      attempt_count: row.attempt_count + 1,
     }));
   });
 }
 
+/**
+ * `lockedUntil` on the mark functions below is a fence: the update only
+ * applies while this worker still owns the lease it got at claim time.
+ * A send that outlives its lease and gets re-claimed elsewhere can no
+ * longer clobber the new owner's state with a stale mark.
+ */
+
 export async function markDeliverySent(
   database: DatabaseExecutor,
-  input: { deliveryId: string; providerMessageId: string | null; now: Date },
+  input: {
+    deliveryId: string;
+    providerMessageId: string | null;
+    now: Date;
+    lockedUntil: Date;
+  },
 ): Promise<void> {
   await database
     .updateTable("notification_deliveries")
@@ -386,6 +416,8 @@ export async function markDeliverySent(
       updated_at: input.now,
     })
     .where("id", "=", input.deliveryId)
+    .where("status", "=", "processing")
+    .where("locked_until", "=", input.lockedUntil)
     .execute();
 }
 
@@ -393,23 +425,24 @@ export async function markDeliveryRetry(
   database: DatabaseExecutor,
   input: {
     deliveryId: string;
-    attemptCount: number;
     nextAttemptAt: Date;
     error: string;
     now: Date;
+    lockedUntil: Date;
   },
 ): Promise<void> {
   await database
     .updateTable("notification_deliveries")
     .set({
       status: "pending",
-      attempt_count: input.attemptCount,
       next_attempt_at: input.nextAttemptAt,
       locked_until: null,
       last_error: input.error,
       updated_at: input.now,
     })
     .where("id", "=", input.deliveryId)
+    .where("status", "=", "processing")
+    .where("locked_until", "=", input.lockedUntil)
     .execute();
 }
 
@@ -417,20 +450,21 @@ export async function markDeliveryFailed(
   database: DatabaseExecutor,
   input: {
     deliveryId: string;
-    attemptCount: number;
     error: string;
     now: Date;
+    lockedUntil: Date;
   },
 ): Promise<void> {
   await database
     .updateTable("notification_deliveries")
     .set({
       status: "failed",
-      attempt_count: input.attemptCount,
       locked_until: null,
       last_error: input.error,
       updated_at: input.now,
     })
     .where("id", "=", input.deliveryId)
+    .where("status", "=", "processing")
+    .where("locked_until", "=", input.lockedUntil)
     .execute();
 }

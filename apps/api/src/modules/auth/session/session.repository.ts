@@ -1,4 +1,17 @@
 import type { Executor } from "../shared/repository.types.ts";
+import {
+  clearSessionAuthCache,
+  evictCachedSession,
+  evictCachedUserSessions,
+} from "../shared/session-auth-cache.ts";
+
+// Every session mutation below evicts the process-local authentication
+// cache so revocation / MFA state changes take effect immediately in this
+// process no matter which feature performed the write (the MFA feature
+// calls these functions directly, bypassing the session service). If a
+// surrounding transaction later rolls back, the eviction was merely an
+// unnecessary cache miss. A mutation committed on ANOTHER instance becomes
+// visible there when the TTL expires — see session-auth-cache.ts.
 
 export async function insertSession(
   database: Executor,
@@ -35,6 +48,7 @@ export async function markSessionMfaVerified(
     .set({ mfa_verified: true })
     .where("id", "=", sessionId)
     .execute();
+  evictCachedSession(sessionId);
 }
 
 export async function revokeSession(
@@ -48,6 +62,7 @@ export async function revokeSession(
     .where("id", "=", sessionId)
     .where("revoked_at", "is", null)
     .execute();
+  evictCachedSession(sessionId);
 }
 
 export async function deleteAllUserSessions(
@@ -55,6 +70,7 @@ export async function deleteAllUserSessions(
   userId: string,
 ): Promise<void> {
   await database.deleteFrom("sessions").where("user_id", "=", userId).execute();
+  evictCachedUserSessions(userId);
 }
 
 /** Scoped by `user_id` so one user can never revoke another user's session. */
@@ -71,6 +87,7 @@ export async function revokeUserSession(
     .where("user_id", "=", userId)
     .where("revoked_at", "is", null)
     .executeTakeFirst();
+  evictCachedSession(sessionId);
   return Number(result.numUpdatedRows) > 0;
 }
 
@@ -87,6 +104,7 @@ export async function revokeOtherUserSessions(
     .where("id", "!=", keepSessionId)
     .where("revoked_at", "is", null)
     .execute();
+  evictCachedUserSessions(userId);
 }
 
 export function listUserSessions(
@@ -163,6 +181,7 @@ export async function rotateSession(
     .where("expires_at", ">", now)
     .executeTakeFirst();
 
+  evictCachedSession(sessionId);
   return Number(result.numUpdatedRows) > 0;
 }
 
@@ -180,6 +199,7 @@ export async function purgeOldSessions(
     )
     .executeTakeFirst();
 
+  clearSessionAuthCache();
   return Number(result.numDeletedRows);
 }
 

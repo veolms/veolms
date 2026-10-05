@@ -116,13 +116,19 @@ export function FloatingScrollbar({
         : null;
       const referencedRightEdgeRect =
         rightEdgeRef?.current?.getBoundingClientRect() ?? null;
-      const topTrackInset = selectedRightEdgeRect
+      // A selected edge inside the scrollport divides two columns, so its
+      // track runs the full height. One that is the scrollport's own edge
+      // sits in the rounded frame like any other page scrollbar.
+      const dividesScrollport =
+        selectedRightEdgeRect != null &&
+        selectedRightEdgeRect.right < scrollportRect.right - 1;
+      const topTrackInset = dividesScrollport
         ? 0
         : Math.max(
             MINIMUM_TRACK_INSET,
             Number.parseFloat(scrollportStyle.borderTopRightRadius) || 0,
           );
-      const bottomTrackInset = selectedRightEdgeRect
+      const bottomTrackInset = dividesScrollport
         ? 0
         : Math.max(
             MINIMUM_TRACK_INSET,

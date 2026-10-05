@@ -12,8 +12,13 @@ export type VideoDispatchStrategy =
   | "lambda"
   | "fleet";
 
+export interface VideoDispatchResult {
+  /** Provider-assigned job id (e.g. MediaConvert's), for later cancellation. */
+  providerJobId?: string;
+}
+
 export interface VideoDispatchService {
-  dispatch(payload: VideoJobEvent): Promise<void>;
+  dispatch(payload: VideoJobEvent): Promise<VideoDispatchResult | void>;
 }
 
 export interface VideoDispatchOptions {

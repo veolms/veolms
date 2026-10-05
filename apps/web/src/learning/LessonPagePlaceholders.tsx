@@ -15,8 +15,8 @@ export const LESSON_SIDE_PLACEHOLDER_SURFACE_CLASS =
   "bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))]";
 
 /**
- * Loading bars for the course content column: the course card, the search
- * row, then a run of lesson rows. Lay them out in a `flex-col gap-3` box.
+ * Loading bars for the course content column: the course card, the section
+ * row, then a run of chapter cards. Lay them out in a `flex-col gap-3` box.
  */
 export function LessonSidePlaceholderBars() {
   return (
@@ -24,9 +24,12 @@ export function LessonSidePlaceholderBars() {
       <span className={`${PLACEHOLDER_BAR_CLASS} h-28 w-full rounded-xl`} />
       <span className={`${PLACEHOLDER_BAR_CLASS} h-10 w-full rounded-lg`} />
       {SIDE_ROW_WIDTHS.map((width, index) => (
-        <span key={index} className="flex items-center gap-3 py-1.5">
-          <span className={`${PLACEHOLDER_BAR_CLASS} size-5 rounded-full`} />
-          <span className={`${PLACEHOLDER_BAR_CLASS} h-4 ${width}`} />
+        <span
+          key={index}
+          className="flex shrink-0 flex-col gap-2.5 rounded-lg bg-[color-mix(in_srgb,var(--text)_5%,transparent)] px-3.5 py-3"
+        >
+          <span className={`${PLACEHOLDER_BAR_CLASS} h-3.5 ${width}`} />
+          <span className={`${PLACEHOLDER_BAR_CLASS} h-3 w-10`} />
         </span>
       ))}
     </>

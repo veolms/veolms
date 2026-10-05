@@ -29,7 +29,6 @@ export * from "./payment/index.ts";
 export * from "./video/index.ts";
 export * from "./course-static-pages/index.ts";
 export * from "./cdn/index.ts";
-export * from "./background-jobs/index.ts";
 export * from "./utils/secure-compare.ts";
 
 /** Every outbound-integration service, injected into routes as one unit. */

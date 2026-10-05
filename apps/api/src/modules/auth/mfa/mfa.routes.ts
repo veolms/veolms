@@ -117,6 +117,14 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/totp/verify",
     {
+      // Six-digit code space: without a per-IP cap this is brute-forceable
+      // at wire speed (the TOTP step counter alone does not bound tries).
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
+      },
       schema: {
         operationId: "verifyTotpCode",
         tags: ["Auth"],
@@ -212,6 +220,14 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/passkey/login/verify",
     {
+      // Unauthenticated verification endpoint — cap per-IP like the other
+      // login verifiers.
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
+      },
       schema: {
         operationId: "verifyPasskeyLogin",
         tags: ["Auth"],

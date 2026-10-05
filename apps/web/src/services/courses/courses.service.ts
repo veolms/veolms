@@ -27,6 +27,7 @@ import type {
   MyCoursesListResponse,
   PublicCourse,
   LessonResource,
+  LessonResourceDownloadResponse,
   ReorderCourseIncludesRequest,
   ReorderLessonsRequest,
   ReorderSectionsRequest,
@@ -249,6 +250,20 @@ export const coursesService = {
   ): Promise<{ success: boolean }> => {
     return api.delete<{ success: boolean }>(
       `/courses/${courseId}/resources/${resourceId}`,
+    );
+  },
+
+  /**
+   * Resolves the short-lived link that downloads one resource of a lesson.
+   * `courseKey` is the course slug or id; the lesson is its public number.
+   */
+  getLessonResourceDownload: (
+    courseKey: string,
+    lessonNumber: number,
+    resourceId: string,
+  ): Promise<LessonResourceDownloadResponse> => {
+    return api.get<LessonResourceDownloadResponse>(
+      `/courses/${encodeURIComponent(courseKey)}/lessons/${lessonNumber}/resources/${resourceId}/download`,
     );
   },
 

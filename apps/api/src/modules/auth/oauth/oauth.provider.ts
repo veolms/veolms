@@ -3,6 +3,13 @@ import { z } from "zod";
 
 import { AppError } from "../../../lib/errors.ts";
 
+/**
+ * Upper bound for any single provider HTTP call. These run synchronously in
+ * the login request path; without a signal a hung provider holds the login
+ * request for undici's ~300s defaults.
+ */
+const OAUTH_FETCH_TIMEOUT_MS = 10_000;
+
 export type OauthProviderName = "google" | "github";
 
 export interface OauthProfile {
@@ -106,6 +113,7 @@ async function fetchGoogleProfile(
   const { credentials, code, codeVerifier, redirectUri } = input;
 
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS),
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -130,7 +138,10 @@ async function fetchGoogleProfile(
 
   const userInfoResponse = await fetch(
     "https://www.googleapis.com/oauth2/v3/userinfo",
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS),
+    },
   );
 
   if (!userInfoResponse.ok) {
@@ -166,6 +177,7 @@ async function fetchGithubProfile(
   const tokenResponse = await fetch(
     "https://github.com/login/oauth/access_token",
     {
+      signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS),
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -208,6 +220,7 @@ async function fetchGithubProfile(
 
   const userResponse = await fetch("https://api.github.com/user", {
     headers: authHeaders,
+    signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS),
   });
 
   if (!userResponse.ok) {
@@ -222,6 +235,7 @@ async function fetchGithubProfile(
 
   const emailsResponse = await fetch("https://api.github.com/user/emails", {
     headers: authHeaders,
+    signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS),
   });
 
   let email = "";

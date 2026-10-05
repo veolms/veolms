@@ -68,12 +68,10 @@ export function createPaymentWorker({
       );
       return { status: "processed" as const };
     } catch (error) {
+      // Failure bookkeeping (error column, retry backoff, dead-lettering)
+      // belongs to the queue's catch in payment-event.queue.ts — writing the
+      // error here too would race/overwrite its backoff scheduling.
       log?.error({ err: error }, "Payment worker job execution failed");
-      await webhookRepository.markWebhookEventFailed(
-        database,
-        event.eventId,
-        error instanceof Error ? error.message : "Worker error",
-      );
       throw error;
     }
   }
@@ -92,11 +90,19 @@ export function createPaymentWorker({
       event.gatewayOrderId,
     );
     if (!payment) {
+      // Do NOT swallow this as "skipped": a missing payment row usually means
+      // the webhook raced checkout's payment insert, or the user paid against
+      // a gateway order that a payment re-initialization replaced. Marking the
+      // event processed here would bury a CAPTURED payment with no
+      // fulfillment and no alert. Throwing lets the queue retry with backoff
+      // and dead-letter it (visibly) if the payment row never appears.
       log?.warn(
         { gatewayOrderId: event.gatewayOrderId },
-        "No payment record found",
+        "No payment record found for successful payment event; will retry",
       );
-      return { status: "skipped" as const };
+      throw new Error(
+        `No payment record found for gateway order ${event.gatewayOrderId}`,
+      );
     }
 
     const result = await reconciliation.finalizeSuccessfulPayment({
@@ -238,7 +244,10 @@ export function createPaymentWorker({
         updated_at: now,
       });
 
-      if (isFullRefund) {
+      if (refund.preserve_access) {
+        // Admin-created refunds can opt to keep the learner's access; the
+        // upsert above adopts such a row by gateway_refund_id, so honor it.
+      } else if (isFullRefund) {
         await courseAccessService.revokeAccessForOrder(transaction, order);
       } else if (refund.order_item_id) {
         const targetItem = await orderRepository.findOrderItemById(
@@ -258,10 +267,14 @@ export function createPaymentWorker({
         }
       }
 
+      // Keyed by the refund ROW id, matching refund.service.ts and
+      // refund-reconciliation.worker.ts — the webhook adopts the admin's
+      // row via upsertRefundByGatewayRefundId, so all three paths now
+      // produce the same key and the outbox dedupes to one notification.
       await outbox.publish(transaction, {
         type: "refund.completed",
         version: 1,
-        dedupeKey: `refund.completed:${event.gatewayRefundId}`,
+        dedupeKey: `refund.completed:${refund.id}`,
         occurredAt: now,
         payload: {
           refundId: refund.id,

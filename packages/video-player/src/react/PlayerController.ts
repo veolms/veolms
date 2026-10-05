@@ -547,6 +547,17 @@ export class PlayerController {
     this.#focusTarget?.focus();
   }
 
+  /**
+   * Whether destroy() has begun. A destroyed controller can never be
+   * reactivated (its engine and media element are gone) — PlayerRoot uses
+   * this to construct a replacement controller when React re-reveals a
+   * player whose deferred destruction already ran (see PlayerRoot's
+   * lifecycle effect).
+   */
+  get destroyed(): boolean {
+    return this.#destroyed;
+  }
+
   async destroy(): Promise<void> {
     if (this.#destroyed) return;
     this.#destroyed = true;

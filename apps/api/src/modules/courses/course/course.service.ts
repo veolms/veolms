@@ -412,15 +412,19 @@ export function createCourseService({
     const cursor = filters?.cursor
       ? decodePublishedCourseCursor(filters.cursor, sort)
       : undefined;
+    // The contract leaves `limit` optional; an omitted limit used to return
+    // the ENTIRE catalog (plus per-row correlated subqueries) on a public,
+    // unauthenticated endpoint. Default to the contract's maximum instead —
+    // callers that want more pages follow nextCursor.
+    const pageLimit = filters?.limit ?? 60;
     const rows = await courseRepo.listPublishedCourses(database, {
       creatorId: filters?.creatorId,
-      limit: filters?.limit,
+      limit: pageLimit,
       cursor,
       search: filters?.search,
       sort,
     });
-    const pageLimit = filters?.limit;
-    const hasNextPage = pageLimit !== undefined && rows.length > pageLimit;
+    const hasNextPage = rows.length > pageLimit;
     const pageRows = hasNextPage ? rows.slice(0, pageLimit) : rows;
     const courses = await Promise.all(pageRows.map(toPublicCourseSummary));
     const lastRow = pageRows.at(-1);
@@ -700,6 +704,36 @@ export function createCourseService({
       courses: rows.map((course) => ({
         id: course.id,
         status: course.status,
+      })),
+    };
+  }
+
+  /**
+   * Lightweight course summaries for analytics scope resolution.
+   *
+   * The analytics endpoints only need id/title/status/dates, but previously
+   * resolved their scope through listMyCourses /
+   * listAvailableCoursesByCreator, which run the full media-URL hydration —
+   * up to ~5 extra queries PER COURSE (thumbnail + trailer delivery lookups)
+   * for URLs the analytics response never uses. This stays a single query.
+   */
+  async function listMyCourseSummaries(
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdminOrInstructor =
+      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
+    const rows = isAdminOrInstructor
+      ? await courseRepo.listAllCourseScope(database)
+      : await courseRepo.listAvailableCourseScopeByCreator(database, creatorId);
+
+    return {
+      courses: rows.map((course) => ({
+        id: course.id,
+        title: course.title,
+        status: course.status as "draft" | "published" | "archived",
+        createdAt: course.created_at.toISOString(),
+        publishedAt: course.published_at?.toISOString() ?? null,
       })),
     };
   }
@@ -1160,6 +1194,16 @@ export function createCourseService({
       ),
     ]);
 
+    // Learners see what each resource is before downloading it, so its file
+    // details go out with the overview. They are read without an owner
+    // filter: the viewer is not the uploader.
+    const resourceMediaAssets = await mediaService.getMediaAssets(
+      Array.from(new Set(resources.map((resource) => resource.media_asset_id))),
+    );
+    const resourceMediaById = new Map(
+      resourceMediaAssets.map((media) => [media.id, media]),
+    );
+
     const mediaDurationMap = new Map<string, number>();
     for (const m of mediaAssets) {
       if (m.duration_seconds) {
@@ -1193,15 +1237,28 @@ export function createCourseService({
             position: les.position,
             isPreview: les.is_preview,
             isPublished: les.is_published,
-            resources: lesResources.map((res) => ({
-              id: res.id,
-              lessonId: res.lesson_id,
-              mediaAssetId: res.media_asset_id,
-              title: res.title,
-              description: res.description,
-              position: res.position,
-              createdAt: res.created_at.toISOString(),
-            })),
+            resources: lesResources.map((res) => {
+              const resourceMediaAsset = resourceMediaById.get(
+                res.media_asset_id,
+              );
+              return {
+                id: res.id,
+                lessonId: res.lesson_id,
+                mediaAssetId: res.media_asset_id,
+                title: res.title,
+                description: res.description,
+                position: res.position,
+                createdAt: res.created_at.toISOString(),
+                mediaAsset: resourceMediaAsset
+                  ? {
+                      originalFilename: resourceMediaAsset.original_filename,
+                      mimeType: resourceMediaAsset.mime_type,
+                      sizeBytes: Number(resourceMediaAsset.size_bytes),
+                      status: resourceMediaAsset.status,
+                    }
+                  : undefined,
+              };
+            }),
           };
         });
 
@@ -1434,6 +1491,7 @@ export function createCourseService({
     createCourse,
     listMyCourses,
     listMyCourseScope,
+    listMyCourseSummaries,
     listPublishedCourses,
     getHomeDiscovery,
     listPublishedCourseOptions,

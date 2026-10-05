@@ -409,13 +409,13 @@ describe("controller-backed player menus", () => {
   it("switches between automatic and fixed quality", () => {
     const { actions } = renderWithController(<QualityMenu />);
     fireEvent.click(
-      screen.getByRole("button", { name: "Video quality, Auto" }),
+      screen.getByRole("button", { name: "Video quality, Auto (1080p)" }),
     );
     fireEvent.click(screen.getByRole("menuitemradio", { name: /^720p/ }));
     expect(actions.selectQuality).toHaveBeenCalledWith("720");
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Video quality, Auto" }),
+      screen.getByRole("button", { name: "Video quality, Auto (1080p)" }),
     );
     fireEvent.click(screen.getByRole("menuitemradio", { name: /^Auto/ }));
     expect(actions.selectQuality).toHaveBeenCalledWith(null);

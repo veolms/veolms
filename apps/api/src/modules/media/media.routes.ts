@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   presignMediaRequestSchema,
   presignMediaResponseSchema,
+  lessonResourceDownloadResponseSchema,
   mediaDeliveryResponseSchema,
   mediaImageVariantManifestSchema,
   mediaUploadCompleteResponseSchema,
@@ -15,6 +16,10 @@ import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createAuthMiddleware } from "../../middlewares/auth.middleware.ts";
 import { createSessionService } from "../auth/index.ts";
+import {
+  createAuthorizationGuard,
+  createAuthorizationService,
+} from "../authorization/index.ts";
 
 import { createMediaController } from "./media.controller.ts";
 import { createMediaService } from "./media.service.ts";
@@ -26,6 +31,25 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     authMiddleware.authenticate,
     authMiddleware.requireAuthenticated,
     authMiddleware.requireMfaVerified,
+  ];
+
+  // Content-authoring media routes (presign, upload confirmation, transcode
+  // control, processing progress, variant manifest) were previously open to
+  // ANY authenticated account: a student could mint presigned PUT URLs into
+  // platform object storage and dispatch paid transcode jobs against their
+  // uploads. Gate them behind the course-authoring permissions; holders of
+  // any one of these at platform scope (admin, instructor, course_manager,
+  // content editors) pass, students have none.
+  const authorizationGuard = createAuthorizationGuard(
+    createAuthorizationService(options.database),
+  );
+  const requireMediaAuthor = [
+    ...requireAuthenticated,
+    authorizationGuard.authorizeAny([
+      "course.create",
+      "course.curriculum.update",
+      "lesson.video.update",
+    ]),
   ];
 
   const service = createMediaService({
@@ -100,6 +124,38 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     controller.getPlaybackToken,
   );
 
+  app.get(
+    "/courses/:idOrSlug/lessons/:lessonNumber/resources/:resourceId/download",
+    {
+      schema: {
+        operationId: "getLessonResourceDownload",
+        tags: ["Media"],
+        summary: "Resolve an authorized download link for a lesson resource",
+        description:
+          "Returns a short-lived link that downloads one resource of the lesson. The same session and course-access rules as lesson playback are applied; the lesson does not need a video.",
+        params: z.object({
+          idOrSlug: z.string().min(1).max(160),
+          lessonNumber: z.coerce.number().int().positive(),
+          resourceId: z.uuid(),
+        }),
+        response: {
+          200: jsonResponse(
+            "Authorized lesson resource download link",
+            lessonResourceDownloadResponseSchema,
+          ),
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Course access denied"),
+          404: errorResponse("Lesson or resource not found"),
+        },
+      },
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.getLessonResourceDownload,
+  );
+
   app.post(
     "/media/presign",
     {
@@ -115,7 +171,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           ),
         },
       },
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
     },
     controller.presignMediaUpload,
   );
@@ -138,7 +194,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           503: errorResponse("CDN delivery is not configured"),
         },
       },
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
     },
     controller.confirmMediaUpload,
   );
@@ -159,7 +215,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Media or job not found"),
         },
       },
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
     },
     controller.getVideoJobProgress,
   );
@@ -167,7 +223,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/media/:mediaId/transcode/retry",
     {
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
       schema: { params: z.object({ mediaId: z.uuid() }) },
     },
     controller.retryVideoJob,
@@ -176,7 +232,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/media/:mediaId/transcode/cancel",
     {
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
       schema: { params: z.object({ mediaId: z.uuid() }) },
     },
     controller.cancelVideoJob,
@@ -185,7 +241,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/media/:mediaId/progress/stream",
     {
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
       schema: { params: z.object({ mediaId: z.uuid() }) },
     },
     controller.streamVideoJobProgress,
@@ -233,7 +289,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Image asset not found"),
         },
       },
-      preHandler: requireAuthenticated,
+      preHandler: requireMediaAuthor,
     },
     controller.getImageVariantManifest,
   );

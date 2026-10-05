@@ -15,8 +15,9 @@ import { createHmac } from "node:crypto";
 import { createReadStream, createWriteStream, statSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import type { Readable } from "node:stream";
+import { PassThrough, type Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { Upload } from "@aws-sdk/lib-storage";
 
 function createHmacSignature(secret: string, value: string): string {
   return createHmac("sha256", secret).update(value, "utf8").digest("base64url");
@@ -491,11 +492,18 @@ export class S3StorageService {
 
   /**
    * Generates a pre-signed GET URL for reading/streaming an object (e.g. for probing metadata).
+   * With `responseContentDisposition`, storage answers with that header, so a
+   * browser saves the file under the given name instead of displaying it.
    */
-  async getPresignedGetUrl(key: string, expiresIn = 900): Promise<string> {
+  async getPresignedGetUrl(
+    key: string,
+    expiresIn = 900,
+    options?: { responseContentDisposition?: string },
+  ): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
+      ResponseContentDisposition: options?.responseContentDisposition,
     });
     return getSignedUrl(this.client, command, { expiresIn });
   }
@@ -520,6 +528,46 @@ export class S3StorageService {
         ContentLength: contentLength,
       }),
     );
+  }
+
+  /**
+   * Uploads a stream of UNKNOWN length (an incoming multipart file) via the
+   * SDK's managed multipart upload, so request bodies are no longer buffered
+   * fully in memory first — a 50MB attachment used to cost 50MB of heap per
+   * concurrent upload. Memory is bounded by partSize x queueSize (~16MB).
+   * If the source stream errors (e.g. a size-limit transform destroys it),
+   * the upload rejects and the SDK aborts the multipart upload server-side.
+   * Returns the byte count actually uploaded.
+   */
+  async putObjectStream(
+    key: string,
+    body: Readable,
+    contentType: string,
+  ): Promise<{ bytes: number }> {
+    const storageKey = this.keyForWrite(key);
+    let bytes = 0;
+    const counter = new PassThrough();
+    counter.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+    });
+    // Propagate source errors into the upload body so Upload aborts.
+    body.on("error", (error) => counter.destroy(error as Error));
+    body.pipe(counter);
+
+    const upload = new Upload({
+      client: this.client,
+      params: {
+        Bucket: this.bucket,
+        Key: storageKey,
+        Body: counter,
+        ContentType: contentType,
+      },
+      partSize: 8 * 1024 * 1024,
+      queueSize: 2,
+      leavePartsOnError: false,
+    });
+    await upload.done();
+    return { bytes };
   }
 
   /**

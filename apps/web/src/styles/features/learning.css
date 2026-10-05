@@ -506,52 +506,6 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   justify-content: flex-end;
 }
 
-.learning-curriculum__resize-rail::before {
-  width: 2px;
-  height: calc(100% - 28px);
-  border-radius: 999px;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    color-mix(in srgb, var(--accent) 54%, var(--border)) 16%,
-    color-mix(in srgb, var(--accent) 54%, var(--border)) 84%,
-    transparent
-  );
-  content: "";
-  opacity: 0.7;
-  transition:
-    width 160ms ease,
-    opacity 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.learning-curriculum__resize-rail:hover::before,
-.learning-curriculum__resize-rail:focus-visible::before,
-.learning-workspace.is-curriculum-resizing
-  .learning-curriculum__resize-rail::before {
-  width: 3px;
-  opacity: 1;
-  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 42%, transparent);
-}
-
-.learning-curriculum__resize-rail:active::before,
-.learning-workspace.is-curriculum-resizing
-  .learning-curriculum__resize-rail::before {
-  opacity: 0.72;
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent-shadow) 48%, transparent);
-}
-
-@media (min-width: 1081px) {
-  :root[data-lesson-page-scrollbar="visible"]:not([data-hide-scrollbars="true"])
-    .courses-main-frame:has(+ .floating-scrollbar--learning-page.is-visible)
-    > .courses-main--learning
-    .learning-curriculum__resize-rail::before {
-    width: 2px;
-    opacity: 0;
-    box-shadow: none;
-  }
-}
-
 .learning-curriculum__resize-rail:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -969,7 +923,7 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
+  background: transparent;
 }
 
 .learning-curriculum__section:last-child {
@@ -977,16 +931,17 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 }
 
 .learning-curriculum__section-toggle {
+  position: relative;
   display: flex;
   min-height: 58px;
   width: 100%;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   border: 0;
   border-radius: 0;
-  padding: 0 20px;
+  padding: 20px;
   color: var(--text);
-  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  background: transparent;
   font-size: 0.91rem;
   font-weight: 690;
   text-align: left;
@@ -995,8 +950,13 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     color 150ms ease;
 }
 
+/* The mini player's playlist keeps its dense single-line headers. */
+.learning-curriculum--compact .learning-curriculum__section-toggle {
+  padding-block: 10px;
+}
+
 .learning-curriculum__section-toggle:hover {
-  background: color-mix(in srgb, var(--accent) 12%, var(--hover));
+  background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .learning-curriculum__section-arrow {

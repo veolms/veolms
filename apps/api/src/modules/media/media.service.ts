@@ -3,6 +3,7 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Kysely } from "kysely";
 import type { Database, MediaAssetStatus } from "@veolms/database";
 import type {
+  LessonResourceDownloadResponse,
   MediaImageVariantManifest,
   PresignMediaRequest,
   VideoPlaybackBootstrap,
@@ -15,6 +16,7 @@ import { ADMIN_ROLE } from "../auth/index.ts";
 import { createAccessService } from "../access/index.ts";
 import { listLessonChaptersForPlayback } from "../courses/chapters/chapters.playback.service.ts";
 import { createChapterSyncService } from "../courses/chapters/chapters.service.ts";
+import { findLessonResourceForDownload } from "../courses/curriculum/lesson-resource.download.service.ts";
 import * as mediaRepo from "./media.repository.ts";
 import { enqueueImageJob } from "@veolms/database";
 import { probeVideoSource } from "../../lib/video-prober.ts";
@@ -30,12 +32,33 @@ export interface MediaServiceOptions {
 }
 
 const VIDEO_QUALITIES: VideoQualityLevel[] = ["360p", "720p", "1080p"];
+// Long enough to start a download after the click, short enough that a
+// copied link is of little use to anyone else.
+const LESSON_RESOURCE_DOWNLOAD_TTL_SECONDS = 300;
 const accessService = createAccessService();
 
 type PlaybackUser = {
   id: string;
   roles?: readonly string[];
 };
+
+/**
+ * `Content-Disposition` that makes a browser save the file under `fileName`.
+ * The quoted name is an ASCII fallback; `filename*` carries the real name
+ * for browsers that understand it (RFC 6266).
+ */
+function buildAttachmentDisposition(fileName: string): string {
+  const asciiName =
+    fileName
+      .replace(/[^\x20-\x7e]/g, "_")
+      .replace(/["\\]/g, "_")
+      .trim() || "download";
+  const encodedName = encodeURIComponent(fileName).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`;
+}
 
 function normalizeOutputPrefix(outputPrefix: string): string {
   return outputPrefix.replace(/^\/+|\/+$/g, "");
@@ -514,7 +537,7 @@ export function createMediaService({
 
     // Dispatch the transcoding job (always queue, and trigger lambda if configured)
     try {
-      await services.videoDispatch.dispatch({
+      const dispatchResult = await services.videoDispatch.dispatch({
         action: "claim",
         jobId,
         videoId: media.id,
@@ -525,6 +548,14 @@ export function createMediaService({
         videoMetadata: videoMetadata ?? undefined,
         thumbnailDestination: `public/thumbnails/${media.id}/original.webp`,
       });
+      if (dispatchResult?.providerJobId) {
+        // Cancellation must address the provider by ITS job id.
+        await mediaRepo.setVideoJobProviderJobId(
+          database,
+          jobId,
+          dispatchResult.providerJobId,
+        );
+      }
       logger?.info(
         { jobId, mediaId: media.id },
         "Video transcoding job queued and dispatched successfully",
@@ -627,7 +658,7 @@ export function createMediaService({
     }
 
     try {
-      await services.videoDispatch.dispatch({
+      const dispatchResult = await services.videoDispatch.dispatch({
         action: "claim",
         jobId: job.id,
         videoId: mediaId,
@@ -638,6 +669,13 @@ export function createMediaService({
         videoMetadata: retryVideoMetadata ?? undefined,
         thumbnailDestination: `public/thumbnails/${mediaId}/original.webp`,
       });
+      if (dispatchResult?.providerJobId) {
+        await mediaRepo.setVideoJobProviderJobId(
+          database,
+          job.id,
+          dispatchResult.providerJobId,
+        );
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Dispatch failed.";
@@ -689,6 +727,8 @@ export function createMediaService({
       await services.videoDispatch.dispatch({
         status: "cancelled",
         jobId: job.id,
+        // The provider cancels by ITS job id, not our internal uuid.
+        providerJobId: job.provider_job_id ?? undefined,
         videoId: mediaId,
         videoKey: job.video_key,
         outputPrefix: job.output_prefix,
@@ -973,7 +1013,12 @@ export function createMediaService({
     };
   }
 
-  async function resolveAuthorizedPlaybackLesson(
+  /**
+   * Resolves a lesson by its public number and applies the access rules of
+   * watching it. Everything a learner gets from a lesson (the video, its
+   * resources) goes through this, so the rules cannot drift apart.
+   */
+  async function resolveAuthorizedLesson(
     courseIdOrSlug: string,
     lessonNumber: number,
     user?: PlaybackUser,
@@ -1025,6 +1070,19 @@ export function createMediaService({
     }
 
     await assertPlaybackAccess(context, user);
+    return context;
+  }
+
+  async function resolveAuthorizedPlaybackLesson(
+    courseIdOrSlug: string,
+    lessonNumber: number,
+    user?: PlaybackUser,
+  ) {
+    const context = await resolveAuthorizedLesson(
+      courseIdOrSlug,
+      lessonNumber,
+      user,
+    );
     if (!context.content_media_id) {
       throw new AppError(
         404,
@@ -1034,6 +1092,52 @@ export function createMediaService({
     }
 
     return context;
+  }
+
+  /**
+   * Gives a learner who may watch the lesson a link to download one of its
+   * resources. A lesson does not need a video to have resources.
+   */
+  async function getLessonResourceDownload(
+    courseIdOrSlug: string,
+    lessonNumber: number,
+    resourceId: string,
+    user?: PlaybackUser,
+  ): Promise<LessonResourceDownloadResponse> {
+    const lesson = await resolveAuthorizedLesson(
+      courseIdOrSlug,
+      lessonNumber,
+      user,
+    );
+    const resource = await findLessonResourceForDownload(
+      database,
+      lesson.lesson_id,
+      resourceId,
+    );
+    if (!resource) {
+      throw new AppError(404, "RESOURCE_NOT_FOUND", "Resource not found.");
+    }
+
+    const media = await mediaRepo.findMediaAssetById(
+      database,
+      resource.media_asset_id,
+    );
+    if (!media) {
+      throw new AppError(404, "RESOURCE_NOT_FOUND", "Resource not found.");
+    }
+
+    const fileName = media.original_filename || resource.title;
+    const url = await services.storage.getPresignedGetUrl(
+      media.storage_key,
+      LESSON_RESOURCE_DOWNLOAD_TTL_SECONDS,
+      { responseContentDisposition: buildAttachmentDisposition(fileName) },
+    );
+    return {
+      url,
+      fileName,
+      expiresAt:
+        Math.floor(Date.now() / 1000) + LESSON_RESOURCE_DOWNLOAD_TTL_SECONDS,
+    };
   }
 
   function createPlaybackSegmentToken(
@@ -1593,6 +1697,7 @@ export function createMediaService({
     getVideoJobProgress,
     getPlaybackBootstrap,
     getPlaybackToken,
+    getLessonResourceDownload,
     getMediaDelivery,
     getHlsStream,
     getMediaStream,

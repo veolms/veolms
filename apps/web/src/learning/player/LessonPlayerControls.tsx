@@ -35,6 +35,7 @@ import {
   LEARNING_PLAYER_MINIMIZE_TITLE,
 } from "./learningPlayerShortcuts";
 import { cn } from "../../lib/utils";
+import { getPhoneLessonDrawerCollapsedSnapPoint } from "../useLessonDrawerHeroControl";
 import {
   LessonChaptersSheetMenu,
   LessonChaptersToggleButton,
@@ -76,6 +77,15 @@ const getWideViewportSnapshot = () =>
   window.matchMedia(WIDE_VIEWPORT_QUERY).matches;
 
 const getWideViewportServerSnapshot = () => false;
+
+/**
+ * Keeps a control layer hidden while the expand (maximize) motion is still
+ * carrying the player to its resting place. The motion marks the full host
+ * with this phase for exactly that stretch; once it clears, the layer's own
+ * `transition-opacity` fades the controls in over the landed video.
+ */
+const EXPAND_MOTION_HIDDEN_CLASS =
+  "[[data-learning-player-restore-phase=expanding]_&]:!invisible [[data-learning-player-restore-phase=expanding]_&]:!opacity-0 [[data-learning-player-restore-phase=expanding]_&]:!transition-none [[data-learning-player-restore-phase=expanding]_&_*]:!pointer-events-none";
 const MOBILE_TEXT_PILL_HIT_CLASS = `${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} isolate !rounded-full !bg-transparent transition-colors duration-150 ease-out before:pointer-events-none before:absolute before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:transition-colors before:duration-150 before:ease-out before:content-[''] hover:!bg-transparent hover:before:bg-(--video-player-control-surface-hover) active:!bg-transparent active:before:bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)`;
 
 function CircularFullscreenButton() {
@@ -594,12 +604,12 @@ export function LessonPlayerControls({
     <div
       data-player-timeline-wrap=""
       data-player-timeline-layer=""
-      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-12 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-12 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-0 translate-y-1/2 z-80 overflow-visible max-sm:z-170 transition-opacity duration-200 motion-reduce:transition-none sm:inset-x-3 sm:bottom-16 sm:translate-y-0 ${EXPAND_MOTION_HIDDEN_CLASS} ${timelineDisplayed ? "visible opacity-100" : "invisible opacity-0"} ${visible ? "" : "[&_*]:!pointer-events-none"} ${mobileInteraction ? (mobileFullscreen ? (fullscreenCoursePanelVisible ? "!left-(--learning-fullscreen-video-offset-x) !right-auto !bottom-0 !z-170 !w-(--learning-fullscreen-video-width) !max-w-full !translate-x-0 !translate-y-1/2 !px-3 sm:!left-(--learning-fullscreen-video-offset-x) sm:!right-auto sm:!bottom-12 sm:!w-(--learning-fullscreen-video-width) sm:!translate-x-0 sm:!translate-y-0 sm:!px-3" : "!left-1/2 !right-auto !bottom-0 !z-170 !w-[min(100%,calc(100dvh*16/9))] !max-w-full !-translate-x-1/2 !translate-y-1/2 !px-3 sm:!left-1/2 sm:!right-auto sm:!bottom-12 sm:!w-[min(100%,calc(100dvh*16/9))] sm:!-translate-x-1/2 sm:!translate-y-0 sm:!px-3") : "!z-170 sm:!inset-x-0 sm:!bottom-2 sm:!translate-y-0") : ""}`}
       aria-hidden={visible ? undefined : true}
       inert={visible ? undefined : true}
     >
       <Timeline
-        className={`pointer-events-none overflow-visible [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-7 max-sm:[&_[data-video-player-preview]]:!bottom-3 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:rounded-none max-sm:[&_[data-timeline-track]]:!scale-y-100 max-sm:[&_[data-timeline-thumb]]:z-80 ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-7 [&_[data-video-player-preview]]:!bottom-3 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!rounded-none [&_[data-timeline-thumb]]:!z-80" : ""}`}
+        className={`pointer-events-none overflow-visible [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-7 max-sm:[&_[data-video-player-preview]]:!bottom-8 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:rounded-none max-sm:[&_[data-timeline-track]]:!scale-y-100 max-sm:[&_[data-timeline-thumb]]:z-80 ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-7 [&_[data-video-player-preview]]:!bottom-8 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!rounded-none [&_[data-timeline-thumb]]:!z-80" : ""}`}
       />
     </div>
   );
@@ -698,7 +708,7 @@ export function LessonPlayerControls({
   const bottomCornerControlsLayer = (
     <div
       data-player-bottom-corner-controls-layer=""
-      className={`pointer-events-none absolute z-180 text-white transition-opacity duration-200 motion-reduce:transition-none ${
+      className={`pointer-events-none absolute z-180 text-white transition-opacity duration-200 motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
         mobileFullscreen
           ? "inset-y-0 left-1/2 right-auto w-[min(100%,calc(100dvh*16/9))] max-w-full -translate-x-1/2"
           : "inset-0"
@@ -761,6 +771,26 @@ export function LessonPlayerControls({
       ) : null}
       {hasChapters && mobileInteraction ? (
         <LessonChaptersSheetMenu
+          // On the lesson page the sheet snaps like the course content
+          // drawer: edge to edge, its top just above the video's bottom.
+          // Fullscreen letterboxes the video inside the shell, so the
+          // shell's bottom says nothing there and the sheet keeps its
+          // own size.
+          getSheetHeight={
+            mobileFullscreen
+              ? undefined
+              : () => {
+                  const videoBottom =
+                    timelineHost?.getBoundingClientRect().bottom;
+                  if (!Number.isFinite(videoBottom) || videoBottom! <= 0) {
+                    return null;
+                  }
+                  return getPhoneLessonDrawerCollapsedSnapPoint(
+                    window.innerHeight,
+                    videoBottom,
+                  );
+                }
+          }
           mobileSheetPanelClassName={mobileSheetPanelClassName}
           mobileSheetPortalTarget={mobileSheetPortalTarget}
           triggerClassName={getPlayerIconPillClass(mobileInteraction)}
@@ -861,6 +891,7 @@ export function LessonPlayerControls({
         <div
           className={cn(
             "pointer-events-none absolute inset-0 z-50 text-white transition-opacity duration-200 motion-reduce:transition-none",
+            EXPAND_MOTION_HIDDEN_CLASS,
             minimizeVisible
               ? "visible opacity-100"
               : "invisible opacity-0 [&_*]:!pointer-events-none",
@@ -889,7 +920,7 @@ export function LessonPlayerControls({
         </div>
       ) : null}
       <div
-        className={`pointer-events-none absolute inset-0 ${settingsOpen ? "z-180" : "z-30"} text-white transition-opacity duration-200 motion-reduce:transition-none ${
+        className={`pointer-events-none absolute inset-0 ${settingsOpen ? "z-180" : "z-30"} text-white transition-opacity duration-200 motion-reduce:transition-none ${EXPAND_MOTION_HIDDEN_CLASS} ${
           visible
             ? "visible opacity-100"
             : `invisible opacity-0 [&_*]:!pointer-events-none ${
@@ -1018,7 +1049,7 @@ export function LessonCentralControls({
 
   return (
     <div
-      className={`pointer-events-none absolute inset-0 z-20 hidden place-items-center transition-opacity duration-200 max-sm:grid ${mobileInteraction ? "sm:!grid" : ""} ${
+      className={`pointer-events-none absolute inset-0 z-20 hidden place-items-center transition-opacity duration-200 max-sm:grid ${EXPAND_MOTION_HIDDEN_CLASS} ${mobileInteraction ? "sm:!grid" : ""} ${
         visible
           ? "visible opacity-100"
           : `invisible opacity-0 [&_*]:!pointer-events-none ${

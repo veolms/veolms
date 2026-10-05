@@ -35,7 +35,7 @@ export async function createEvent(
 
 export async function claimBatch(
   database: Kysely<Database>,
-  input: { limit: number; leaseUntil: Date; now: Date },
+  input: { limit: number; leaseUntil: Date; now: Date; maxAttempts: number },
 ): Promise<ClaimedOutboxEvent[]> {
   return await database.transaction().execute(async (transaction) => {
     const rows = await transaction
@@ -53,6 +53,11 @@ export async function claimBatch(
           ]),
         ]),
       )
+      // attempt_count now increments AT CLAIM TIME (below), so an event
+      // that crashes the worker mid-processing — never reaching markRetry/
+      // markFailed — still burns attempts and stops being claimed here
+      // once it exhausts them, instead of crash-looping forever.
+      .where("attempt_count", "<", input.maxAttempts)
       .orderBy("available_at", "asc")
       .orderBy("created_at", "asc")
       .forUpdate()
@@ -64,11 +69,12 @@ export async function claimBatch(
 
     await transaction
       .updateTable("outbox_events")
-      .set({
-        status: "processing",
+      .set((eb) => ({
+        status: "processing" as const,
         locked_until: input.leaseUntil,
         last_error: null,
-      })
+        attempt_count: eb("attempt_count", "+", 1),
+      }))
       .where(
         "id",
         "in",
@@ -81,14 +87,26 @@ export async function claimBatch(
       status: "processing" as const,
       locked_until: input.leaseUntil,
       last_error: null,
+      attempt_count: row.attempt_count + 1,
     }));
   });
 }
+
+/**
+ * The `lockedUntil` argument on the mark functions below is a FENCE: each
+ * update only applies while this worker still owns the lease it was given
+ * at claim time. If processing outlived the lease and another worker
+ * re-claimed the event (writing a strictly later locked_until), the late
+ * worker's mark becomes a no-op instead of clobbering the new owner's
+ * state — previously a slow fan-out could markProcessed an event another
+ * worker was mid-way through, or re-send its emails.
+ */
 
 export async function markProcessed(
   database: DatabaseExecutor,
   eventId: string,
   now: Date,
+  lockedUntil: Date,
 ): Promise<void> {
   await database
     .updateTable("outbox_events")
@@ -99,6 +117,8 @@ export async function markProcessed(
       last_error: null,
     })
     .where("id", "=", eventId)
+    .where("status", "=", "processing")
+    .where("locked_until", "=", lockedUntil)
     .execute();
 }
 
@@ -106,38 +126,58 @@ export async function markRetry(
   database: DatabaseExecutor,
   input: {
     eventId: string;
-    attemptCount: number;
     availableAt: Date;
     error: string;
+    lockedUntil: Date;
   },
 ): Promise<void> {
   await database
     .updateTable("outbox_events")
     .set({
       status: "pending",
-      attempt_count: input.attemptCount,
       available_at: input.availableAt,
       locked_until: null,
       last_error: input.error,
     })
     .where("id", "=", input.eventId)
+    .where("status", "=", "processing")
+    .where("locked_until", "=", input.lockedUntil)
     .execute();
 }
 
 export async function markFailed(
   database: DatabaseExecutor,
-  input: { eventId: string; attemptCount: number; error: string },
+  input: { eventId: string; error: string; lockedUntil: Date },
 ): Promise<void> {
   await database
     .updateTable("outbox_events")
     .set({
       status: "failed",
-      attempt_count: input.attemptCount,
       locked_until: null,
       last_error: input.error,
     })
     .where("id", "=", input.eventId)
+    .where("status", "=", "processing")
+    .where("locked_until", "=", input.lockedUntil)
     .execute();
+}
+
+/** Queue-depth gauges for the ops heartbeat. */
+export async function getOutboxDepth(
+  database: DatabaseExecutor,
+): Promise<{ pending: number; processing: number; failed: number }> {
+  const rows = await database
+    .selectFrom("outbox_events")
+    .select(["status", (eb) => eb.fn.count<number>("id").as("total")])
+    .where("status", "in", ["pending", "processing", "failed"])
+    .groupBy("status")
+    .execute();
+  const byStatus = new Map(rows.map((row) => [row.status, Number(row.total)]));
+  return {
+    pending: byStatus.get("pending") ?? 0,
+    processing: byStatus.get("processing") ?? 0,
+    failed: byStatus.get("failed") ?? 0,
+  };
 }
 
 export async function cleanupProcessed(

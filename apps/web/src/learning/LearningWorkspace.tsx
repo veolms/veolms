@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import "./learning-feature.css";
+import "./learning-split-layout.css";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -16,6 +17,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import type {
+  LessonResource,
   MyQuizAssignment,
   VideoPlaybackBootstrap,
 } from "@veolms/contracts";
@@ -63,6 +65,7 @@ import {
 } from "./courseContent";
 import { mediaService } from "../services/media";
 import { Curriculum } from "./Curriculum";
+import { CurriculumResizeGrip } from "./CurriculumResizeGrip";
 import {
   FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
   FullscreenLandscapeCurriculumPanel,
@@ -729,6 +732,26 @@ export function LearningWorkspace({
       quizAssignments,
       courseQuizAssignments.data,
     ],
+  );
+
+  const curriculumLessonResources = useMemo(() => {
+    const resourcesByLesson = new Map<number, readonly LessonResource[]>();
+    for (const [lessonNumber, lesson] of adaptedCurriculum?.lessonsByNumber ??
+      []) {
+      if (lesson.resources?.length) {
+        resourcesByLesson.set(lessonNumber, lesson.resources);
+      }
+    }
+    return resourcesByLesson;
+  }, [adaptedCurriculum]);
+  const curriculumQuizLessonNumbers = useMemo(
+    () =>
+      new Set(
+        [...curriculumLessonsById.keys()].filter((lessonNumber) =>
+          hasLessonQuiz(lessonNumber),
+        ),
+      ),
+    [curriculumLessonsById, hasLessonQuiz],
   );
 
   const currentLessonUuid = getLessonUuid(selectedLesson);
@@ -2433,6 +2456,11 @@ export function LearningWorkspace({
           courseThumbnailSrcSet={courseThumbnailSrcSet}
           focusRequest={fullscreenCurriculumFocusRequest}
           persistenceKey={coursePersistenceKey}
+          lessonResources={curriculumLessonResources}
+          resourceCourseKey={courseSlug}
+          quizLessonNumbers={curriculumQuizLessonNumbers}
+          activeQuizLesson={showingQuiz ? selectedLesson : null}
+          onOpenLessonQuiz={handleOpenLessonQuiz}
         />
       </FullscreenLandscapeCurriculumPanel>
     ),
@@ -2443,14 +2471,19 @@ export function LearningWorkspace({
       courseThumbnail,
       courseThumbnailSrcSet,
       courseTitle,
+      courseSlug,
+      curriculumLessonResources,
       curriculumLessonsById,
+      curriculumQuizLessonNumbers,
       curriculumSections,
       fullscreenCurriculumFocusRequest,
       fullscreenVideoWidthPercent,
+      handleOpenLessonQuiz,
       lessonProgress,
       onOpenCourseOverview,
       selectLesson,
       selectedLesson,
+      showingQuiz,
     ],
   );
   const lessonPlayerSeekRef = useRef<((seconds: number) => void) | null>(null);
@@ -2724,6 +2757,7 @@ export function LearningWorkspace({
       <main
         ref={mainRef}
         data-learning-motion-surface=""
+        data-learning-split-lesson=""
         data-learning-quiz-active={showingQuiz ? "true" : undefined}
         className={`learning-workspace__main ${curriculumCollapsed ? "is-curriculum-collapsed" : ""}`}
         inert={lessonDrawer ? true : undefined}
@@ -2933,12 +2967,18 @@ export function LearningWorkspace({
           </div>
         </section>
 
-        <div className="learning-workspace__curriculum-clip">
+        {/* On desktop this is the second card of the page. Theater mode hides
+            the course content, so the lesson card takes the full width. */}
+        <div
+          className="learning-workspace__curriculum-clip"
+          data-learning-split-pane={theaterMode ? undefined : ""}
+        >
           <div
             className={`learning-workspace__curriculum-column ${curriculumCollapsed ? "is-collapsed" : ""}`}
+            data-learning-split-card=""
           >
             <div
-              className="learning-curriculum__resize-rail"
+              className="learning-curriculum__resize-rail group/rail"
               role="separator"
               aria-orientation="vertical"
               aria-label="Resize course curriculum"
@@ -2971,7 +3011,9 @@ export function LearningWorkspace({
               onPointerMove={moveCurriculumResize}
               onPointerUp={endCurriculumResize}
               onPointerCancel={(event) => endCurriculumResize(event, true)}
-            />
+            >
+              <CurriculumResizeGrip />
+            </div>
             <div
               id="learning-course-content"
               className="learning-curriculum__viewport"
@@ -2991,6 +3033,11 @@ export function LearningWorkspace({
                 courseThumbnailSrcSet={courseThumbnailSrcSet}
                 focusRequest={curriculumFocusRequest}
                 persistenceKey={coursePersistenceKey}
+                lessonResources={curriculumLessonResources}
+                resourceCourseKey={courseSlug}
+                quizLessonNumbers={curriculumQuizLessonNumbers}
+                activeQuizLesson={showingQuiz ? selectedLesson : null}
+                onOpenLessonQuiz={handleOpenLessonQuiz}
                 isLoading={isApiRoute && isCourseOverviewLoading}
               />
             </div>
@@ -2999,7 +3046,7 @@ export function LearningWorkspace({
             <div
               ref={setChaptersPanelHost}
               data-learning-chapters-panel-host=""
-              className="pointer-events-none absolute inset-0 z-11 overflow-hidden"
+              className="pointer-events-none absolute inset-0 z-11 overflow-hidden rounded-[inherit]"
             />
           </div>
         </div>
@@ -3152,6 +3199,11 @@ export function LearningWorkspace({
                 lessonDrawerScrollTarget === "top" ? lessonDrawerTopRequest : 0
               }
               persistenceKey={coursePersistenceKey}
+              lessonResources={curriculumLessonResources}
+              resourceCourseKey={courseSlug}
+              quizLessonNumbers={curriculumQuizLessonNumbers}
+              activeQuizLesson={showingQuiz ? selectedLesson : null}
+              onOpenLessonQuiz={handleOpenLessonQuiz}
               isLoading={isApiRoute && isCourseOverviewLoading}
               onClose={closeLessonDrawer}
               onLessonSearchOpen={

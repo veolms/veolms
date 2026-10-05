@@ -27,9 +27,14 @@ export function QualityMenu({
   const QualityIcon = usePlayerTheme().icons.quality;
   const { auto, qualities, selectedId } = useQuality();
   const activeQuality =
-    qualities.find((quality) => quality.id === selectedId) ??
-    qualities.find((quality) => quality.active);
-  const currentLabel = auto ? "Auto" : (activeQuality?.label ?? "Quality");
+    qualities.find((quality) => quality.active) ??
+    qualities.find((quality) => quality.id === selectedId);
+  const autoQualityLabel = activeQuality?.label
+    ? `Auto (${activeQuality.label})`
+    : "Auto";
+  const currentLabel = auto
+    ? autoQualityLabel
+    : (activeQuality?.label ?? "Quality");
 
   return (
     <PopoverMenu
@@ -54,7 +59,7 @@ export function QualityMenu({
       onOpenChange={onOpenChange}
     >
       <PlayerMenuItem
-        label="Auto"
+        label={auto ? autoQualityLabel : "Auto"}
         description={
           activeQuality
             ? `Currently ${activeQuality.label}`

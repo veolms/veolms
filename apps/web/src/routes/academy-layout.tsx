@@ -375,6 +375,7 @@ export default function AcademyLayout() {
   const surfaceMotionVersionRef = useRef(0);
   const restoringPlayerRef = useRef(false);
   const restoreLearningMiniPlayerRef = useRef<() => void>(() => {});
+  const commitPersistentPlayerRestoreRef = useRef<() => void>(() => {});
   const selectLessonTokenRef = useRef(0);
   const currentLocationPath = `${location.pathname}${location.search}${location.hash}`;
   const route = getMatchedRouteDescriptor(matches, location.pathname);
@@ -968,6 +969,21 @@ export default function AcademyLayout() {
         // minimized should expand into the in-page player, not leave a hollow
         // lesson page with a stuck mini player.
         restoringPlayerRef.current = true;
+        // The route effect commits this restore when the lesson page arrives
+        // together with the route change. When the page mounts on a lesson
+        // route that is already showing (it was unmounted for a moment, or
+        // its code only just loaded), that effect has nothing to react to,
+        // so the restore is committed here once this commit has settled.
+        queueMicrotask(() => {
+          if (
+            persistentRegistrationTokenRef.current !== token ||
+            !restoringPlayerRef.current ||
+            playerPresentationRef.current !== "mini"
+          ) {
+            return;
+          }
+          commitPersistentPlayerRestoreRef.current();
+        });
       } else {
         playerPresentationRef.current = "full";
         setPlayerPresentation("full");
@@ -1460,6 +1476,8 @@ export default function AcademyLayout() {
     finishLearningPlayerRestoreMotion,
     setLearningLessonContentMotionActive,
   ]);
+
+  commitPersistentPlayerRestoreRef.current = commitPersistentPlayerRestore;
 
   const handleLearningPlayerMinimizeGestureChange = useCallback(
     (state: LessonPlayerMinimizeGestureState) => {

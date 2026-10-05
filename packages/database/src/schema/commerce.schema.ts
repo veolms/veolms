@@ -173,6 +173,12 @@ export interface RefundTable {
   status: RefundStatus;
   created_by: string | null;
   idempotency_key: string | null;
+  /**
+   * Admin's choice to keep the learner's access despite the refund. Persisted
+   * so the async paths (gateway webhook, reconciliation worker) that finish a
+   * refund later can honor it — they have no request context.
+   */
+  preserve_access: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

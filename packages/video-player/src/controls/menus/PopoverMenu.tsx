@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -36,6 +37,13 @@ export interface PopoverMenuProps {
   mobileSheetPortalTarget?: HTMLElement | null;
   /** Classes applied only when the mobile sheet presentation is active. */
   mobileSheetPanelClassName?: string;
+  /** Inline styles applied only when the mobile sheet presentation is active. */
+  mobileSheetStyle?: CSSProperties;
+  /**
+   * Lets the mobile sheet be dragged up from its resting height to fill the
+   * screen, and back down again, like a drawer with two snap points.
+   */
+  mobileSheetExpandable?: boolean;
   className?: string;
   triggerClassName?: string;
   panelClassName?: string;
@@ -134,7 +142,7 @@ function measurePopoverPanelLayout(
 }
 
 const mobileSheetPanelClass =
-  "pointer-events-auto inset-x-0 bottom-0 z-180 flex max-h-[min(82dvh,36rem)] w-full flex-col overflow-hidden rounded-t-2xl border-0 text-(--video-player-menu-text) shadow-[0_-18px_48px_rgba(0,0,0,0.38)] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus:outline-none motion-reduce:transition-none";
+  "pointer-events-auto inset-x-0 bottom-0 z-180 flex max-h-[min(82dvh,36rem)] w-full flex-col overflow-hidden rounded-t-2xl border-0 text-(--video-player-menu-text) shadow-[0_-18px_48px_rgba(0,0,0,0.38)] transition-[transform,height,border-radius] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus:outline-none motion-reduce:transition-none";
 
 const mobileSheetDismissDistance = 72;
 
@@ -148,8 +156,10 @@ export function PopoverMenu({
   label,
   menuLabel,
   mobilePresentation = "popover",
+  mobileSheetExpandable = false,
   mobileSheetPanelClassName,
   mobileSheetPortalTarget,
+  mobileSheetStyle,
   onOpenChange,
   open: controlledOpen,
   panelClassName,
@@ -172,6 +182,10 @@ export function PopoverMenu({
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const [mobileSheetDragOffset, setMobileSheetDragOffset] = useState(0);
   const [mobileSheetDragging, setMobileSheetDragging] = useState(false);
+  const [mobileSheetExpanded, setMobileSheetExpanded] = useState(false);
+  const [mobileSheetDragStartHeight, setMobileSheetDragStartHeight] = useState<
+    number | null
+  >(null);
   const [panelLayout, setPanelLayout] = useState<PopoverPanelLayout | null>(
     null,
   );
@@ -284,6 +298,7 @@ export function PopoverMenu({
     mobileSheetDragRef.current = null;
     setMobileSheetDragOffset(0);
     setMobileSheetDragging(false);
+    setMobileSheetExpanded(false);
     setOpen(true);
   };
 
@@ -350,6 +365,8 @@ export function PopoverMenu({
     }
   };
 
+  const expandableSheet = isMobileSheet && mobileSheetExpandable;
+
   const handleMobileSheetDragStart = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
@@ -357,6 +374,9 @@ export function PopoverMenu({
       pointerId: event.pointerId,
       startY: event.clientY,
     };
+    setMobileSheetDragStartHeight(
+      panelRef.current?.getBoundingClientRect().height ?? null,
+    );
     setMobileSheetDragging(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
@@ -366,7 +386,14 @@ export function PopoverMenu({
   ) => {
     const drag = mobileSheetDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    setMobileSheetDragOffset(Math.max(0, event.clientY - drag.startY));
+    const dragDelta = event.clientY - drag.startY;
+    // Dragging up only means something on an expandable sheet that is not
+    // already filling the screen.
+    setMobileSheetDragOffset(
+      expandableSheet && !mobileSheetExpanded
+        ? dragDelta
+        : Math.max(0, dragDelta),
+    );
   };
 
   const finishMobileSheetDrag = (
@@ -380,8 +407,24 @@ export function PopoverMenu({
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture?.(event.pointerId);
     }
-    const dragDistance = Math.max(0, event.clientY - drag.startY);
-    if (!cancelled && dragDistance >= mobileSheetDismissDistance) {
+    const dragDelta = event.clientY - drag.startY;
+    if (!cancelled && expandableSheet) {
+      if (!mobileSheetExpanded && dragDelta <= -mobileSheetDismissDistance) {
+        setMobileSheetExpanded(true);
+        setMobileSheetDragOffset(0);
+        return;
+      }
+      if (mobileSheetExpanded) {
+        // One drag is one step, like the lessons drawer: the expanded sheet
+        // settles back to its resting height, never straight to closed.
+        if (dragDelta >= mobileSheetDismissDistance) {
+          setMobileSheetExpanded(false);
+        }
+        setMobileSheetDragOffset(0);
+        return;
+      }
+    }
+    if (!cancelled && Math.max(0, dragDelta) >= mobileSheetDismissDistance) {
       closeAndRestoreFocus();
       return;
     }
@@ -393,6 +436,32 @@ export function PopoverMenu({
     align === "start" ? "left-0" : "right-0",
   );
   const resolvedMenuLabel = menuLabel ?? label;
+  const collapsedSheetHeight =
+    typeof mobileSheetStyle?.height === "number"
+      ? mobileSheetStyle.height
+      : null;
+  /** Live height while an expandable sheet is being dragged taller or shorter. */
+  const sheetDragHeight = (() => {
+    if (
+      !expandableSheet ||
+      !mobileSheetDragging ||
+      mobileSheetDragOffset === 0
+    ) {
+      return null;
+    }
+    // Dragging a resting sheet down is the dismiss gesture, not a resize.
+    if (!mobileSheetExpanded && mobileSheetDragOffset > 0) return null;
+    if (mobileSheetDragStartHeight === null || typeof window === "undefined") {
+      return null;
+    }
+    return Math.max(
+      collapsedSheetHeight ?? 0,
+      Math.min(
+        window.innerHeight,
+        mobileSheetDragStartHeight - mobileSheetDragOffset,
+      ),
+    );
+  })();
   const panel = isOpen ? (
     <div
       ref={panelRef}
@@ -403,6 +472,9 @@ export function PopoverMenu({
       aria-labelledby={isMobileSheet ? `${menuId}-title` : undefined}
       aria-modal={isMobileSheet || undefined}
       data-video-player-mobile-sheet={isMobileSheet ? "" : undefined}
+      data-video-player-mobile-sheet-expanded={
+        isMobileSheet && mobileSheetExpanded ? "" : undefined
+      }
       data-video-player-menu-panel=""
       data-player-theme={theme.id}
       style={{
@@ -416,8 +488,18 @@ export function PopoverMenu({
               maxHeight: panelLayout.maxHeight,
             }
           : {}),
+        ...(isMobileSheet ? mobileSheetStyle : undefined),
+        ...(isMobileSheet && mobileSheetExpanded
+          ? { height: "100dvh", maxHeight: "100dvh" }
+          : undefined),
+        ...(sheetDragHeight !== null
+          ? { height: sheetDragHeight, maxHeight: "none" }
+          : undefined),
         transform:
-          isMobileSheet && mobileSheetDragOffset > 0
+          isMobileSheet &&
+          !mobileSheetExpanded &&
+          sheetDragHeight === null &&
+          mobileSheetDragOffset > 0
             ? `translate3d(0, ${mobileSheetDragOffset}px, 0)`
             : undefined,
         transitionDuration:

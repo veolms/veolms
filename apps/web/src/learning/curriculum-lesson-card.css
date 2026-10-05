@@ -1,0 +1,12 @@
+/* The "now playing" bars on the active lesson card (CurriculumLessonCard).
+   Only the keyframes live here, because Tailwind utilities cannot declare
+   @keyframes; the glyph itself is styled with Tailwind in the component. */
+@keyframes learning-lesson-now-playing {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}

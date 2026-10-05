@@ -13,7 +13,7 @@ import {
 } from "@veolms/contracts";
 import type { ServerConfig } from "@veolms/config";
 import type { FastifyBaseLogger } from "fastify";
-import type { VideoDispatchService } from "./types.ts";
+import type { VideoDispatchResult, VideoDispatchService } from "./types.ts";
 
 /**
  * Strategy 1: AWS MediaConvert (Inbuilt / Direct SDK)
@@ -130,23 +130,36 @@ export function createMediaConvertDispatcher(options: {
     );
   }
 
-  async function dispatch(payload: VideoJobEvent): Promise<void> {
+  async function dispatch(
+    payload: VideoJobEvent,
+  ): Promise<VideoDispatchResult | void> {
     const client = getClient();
 
     if (payload.status === "cancelled") {
-      if (payload.jobId) {
+      // MediaConvert only knows its own job id. The old code sent
+      // payload.jobId (VeoLMS's internal uuid), so every cancellation
+      // failed inside the catch below and AWS kept transcoding — and
+      // billing — to completion.
+      if (payload.providerJobId) {
         try {
           logger.info(
-            { jobId: payload.jobId },
+            { jobId: payload.jobId, providerJobId: payload.providerJobId },
             "[video-dispatch:mediaconvert] Submitting cancellation to AWS MediaConvert",
           );
-          await client.send(new CancelJobCommand({ Id: payload.jobId }));
+          await client.send(
+            new CancelJobCommand({ Id: payload.providerJobId }),
+          );
         } catch (err: unknown) {
           logger.warn(
-            { err, jobId: payload.jobId },
+            { err, jobId: payload.jobId, providerJobId: payload.providerJobId },
             "[video-dispatch:mediaconvert] Note on MediaConvert CancelJobCommand (may already be finished)",
           );
         }
+      } else {
+        logger.warn(
+          { jobId: payload.jobId },
+          "[video-dispatch:mediaconvert] No provider job id recorded for this job; cannot submit cancellation to AWS (job predates provider-id tracking)",
+        );
       }
       return;
     }
@@ -364,6 +377,10 @@ export function createMediaConvertDispatcher(options: {
       },
       "[video-dispatch:mediaconvert] Job successfully submitted to AWS MediaConvert",
     );
+
+    // Hand the provider's job id back so the caller can persist it —
+    // cancellation is impossible without it (see the cancelled branch).
+    return result.Job?.Id ? { providerJobId: result.Job.Id } : undefined;
   }
 
   return { dispatch };

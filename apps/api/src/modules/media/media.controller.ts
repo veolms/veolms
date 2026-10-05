@@ -62,6 +62,25 @@ export function createMediaController({ service }: { service: MediaService }) {
     );
   }
 
+  async function getLessonResourceDownload(
+    request: FastifyRequest<{
+      Params: { idOrSlug: string; lessonNumber: number; resourceId: string };
+    }>,
+    reply: FastifyReply,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    // The link is signed for this request and expires within minutes.
+    reply.header("Cache-Control", "private, no-store");
+    return await service.getLessonResourceDownload(
+      request.params.idOrSlug,
+      request.params.lessonNumber,
+      request.params.resourceId,
+      user,
+    );
+  }
+
   async function getPlaybackToken(
     request: FastifyRequest<{
       Params: { idOrSlug: string; lessonNumber: number };
@@ -152,7 +171,20 @@ export function createMediaController({ service }: { service: MediaService }) {
     request.raw.on("close", () => {
       closed = true;
     });
+    // Hard upper bound: each open stream polls the database every 1.5s and
+    // previously ran until a terminal status or client disconnect — a
+    // browser tab left open on a stuck job held a connection and its DB
+    // polling forever. The client's EventSource auto-reconnects, so a
+    // deliberate cutoff is transparent to the UI.
+    const MAX_STREAM_MS = 15 * 60 * 1000;
+    const startedAt = Date.now();
     while (!closed) {
+      if (Date.now() - startedAt >= MAX_STREAM_MS) {
+        response.write(
+          `event: timeout\ndata: ${JSON.stringify({ message: "Progress stream expired; reconnect to continue." })}\n\n`,
+        );
+        break;
+      }
       try {
         const progress = await service.getVideoJobProgress(
           request.params.mediaId,
@@ -275,6 +307,7 @@ export function createMediaController({ service }: { service: MediaService }) {
     getVideoJobProgress,
     getPlaybackBootstrap,
     getPlaybackToken,
+    getLessonResourceDownload,
     getMediaDelivery,
     retryVideoJob,
     cancelVideoJob,
