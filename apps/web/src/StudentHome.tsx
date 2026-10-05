@@ -12,7 +12,6 @@ import type {
   LearningProgressResumeContextResponse,
 } from "@veolms/contracts";
 import { useMemo, type CSSProperties } from "react";
-import { useNavigate } from "react-router";
 import { CourseThumbnailPlaceholder } from "./courses/CourseThumbnailPlaceholder";
 import { getCourseThumbnailCdnUrl } from "./courses/courseMedia";
 import {
@@ -223,13 +222,11 @@ function ContinueLearningState({
 function ResumeLessonContext({
   context,
   courseKey,
-  onNavigate,
 }: {
   context: LearningProgressResumeContextResponse;
   courseKey: string;
-  onNavigate: (path: string) => void;
 }) {
-  const { resumeLesson, previousLesson } = context;
+  const { resumeLesson } = context;
   if (!resumeLesson) return null;
 
   const lessonPath = (lessonNumber: number) =>
@@ -248,18 +245,6 @@ function ResumeLessonContext({
           {resumeLesson.sectionTitle} · {resumeLesson.progressPercent}% complete
         </small>
       </a>
-      {previousLesson && (
-        <div className="home-resume-lesson-links">
-          <button
-            type="button"
-            onClick={() => onNavigate(lessonPath(previousLesson.lessonNumber))}
-            aria-label={`Previous lesson: ${previousLesson.title}`}
-          >
-            <span>Previous</span>
-            <strong>{previousLesson.title}</strong>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -429,7 +414,6 @@ export function StudentHome({
   studentName,
   enrollment,
 }: StudentHomeProps) {
-  const navigate = useNavigate();
   const goalCompletion = 72;
   const firstName =
     (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
@@ -707,7 +691,6 @@ export function StudentHome({
                 <ResumeLessonContext
                   context={resumeContext}
                   courseKey={resumeContext.courseSlug}
-                  onNavigate={navigate}
                 />
               ) : heroCourse && resumeContextLoading ? (
                 <ResumeLessonContextSkeleton />
