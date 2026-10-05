@@ -227,9 +227,25 @@ function routeChunkPreloadPlugin(): Plugin {
                 entry.placeholder,
                 joinPublicPath(publicBase, item.fileName),
               );
+              // The feature CSS usually belongs to chunks this one imports
+              // statically, so collect it across that whole graph.
+              const cssFiles = new Set<string>();
+              const seen = new Set<string>();
+              const pending = [item.fileName];
+              while (pending.length) {
+                const fileName = pending.pop() as string;
+                if (seen.has(fileName)) continue;
+                seen.add(fileName);
+                const chunk = bundle[fileName];
+                if (!chunk || chunk.type !== "chunk") continue;
+                for (const file of chunk.viteMetadata?.importedCss ?? []) {
+                  cssFiles.add(file);
+                }
+                pending.push(...chunk.imports);
+              }
               urls.set(
                 entry.cssPlaceholder,
-                [...(item.viteMetadata?.importedCss ?? [])]
+                [...cssFiles]
                   .map((file) => joinPublicPath(publicBase, file))
                   .join(","),
               );
@@ -248,7 +264,10 @@ function routeChunkPreloadPlugin(): Plugin {
         try {
           const manifest = JSON.parse(
             fs.readFileSync(manifestPath, "utf8"),
-          ) as Record<string, { file?: string; src?: string; css?: string[] }>;
+          ) as Record<
+            string,
+            { file?: string; src?: string; css?: string[]; imports?: string[] }
+          >;
           for (const entry of ROUTE_CHUNK_PRELOADS) {
             if (urls.has(entry.placeholder)) continue;
             const manifestEntry = Object.entries(manifest).find(
@@ -263,9 +282,19 @@ function routeChunkPreloadPlugin(): Plugin {
                 entry.placeholder,
                 joinPublicPath(publicBase, manifestEntry[1].file),
               );
+              const cssFiles = new Set<string>();
+              const seen = new Set<string>();
+              const pending = [manifestEntry[0]];
+              while (pending.length) {
+                const key = pending.pop() as string;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                for (const file of manifest[key]?.css ?? []) cssFiles.add(file);
+                pending.push(...(manifest[key]?.imports ?? []));
+              }
               urls.set(
                 entry.cssPlaceholder,
-                (manifestEntry[1].css ?? [])
+                [...cssFiles]
                   .map((file) => joinPublicPath(publicBase, file))
                   .join(","),
               );

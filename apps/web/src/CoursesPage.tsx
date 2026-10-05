@@ -90,6 +90,7 @@ import { useCurrentUser, useSignOut } from "./services/auth";
 import {
   authStore,
   useAuthIdentityHint,
+  useSessionPresentAtBoot,
   useAuthStore,
   type AuthIdentityHint,
 } from "./store/auth.store";
@@ -1132,6 +1133,11 @@ export function CoursesPage({
     () => workspaceRoleHint,
     () => null,
   );
+  // Same idea for any signed-in browser: its home is not the guest home, so
+  // a loading state stands in until the session check answers.
+  const sessionPresentAtBoot = useSessionPresentAtBoot();
+  const showGuestHomeWhilePending =
+    hydratedWorkspaceRoleHint !== "creator" && !sessionPresentAtBoot;
   const storeUser = useAuthStore((s) => s.user);
   // Once `/auth/me` has completed, its null result must win over any
   // in-memory login snapshot. Before that, the snapshot is useful only for
@@ -4258,15 +4264,12 @@ export function CoursesPage({
               flashing the fallback) when a state update lands before the
               chunk would otherwise have downloaded. Its feature stylesheets
               are linked too: the prerendered guest-home markup must not
-              paint before the CSS that styles it. */}
+              paint before the CSS that styles it. They are deliberately
+              plain in-place links (no `precedence`): React would hoist
+              those above the global stylesheets and flip the cascade. */}
           <link rel="modulepreload" href={GUEST_HOME_CHUNK_URL_PLACEHOLDER} />
           {GUEST_HOME_CSS_URLS.map((href) => (
-            <link
-              key={href}
-              rel="stylesheet"
-              href={href}
-              precedence="default"
-            />
+            <link key={href} rel="stylesheet" href={href} />
           ))}
           {homeLcpCourse?.thumbnail ? (
             <link
@@ -4279,17 +4282,25 @@ export function CoursesPage({
             />
           ) : null}
           {!isAuthReady ? (
-            initialHomeDiscovery && hydratedWorkspaceRoleHint !== "creator" ? (
+            initialHomeDiscovery && showGuestHomeWhilePending ? (
               // Paint the seeded guest home while the session check runs so
               // the prerendered document carries real content (and the LCP
-              // image) instead of a blank fallback. A signed-in account swaps
-              // to its dashboard when /auth/me resolves — the same
-              // public-content-first behavior the courses catalogue has.
-              <GuestHome
-                onNavigatePage={onNavigatePage}
-                setNotice={setNotice}
-                initialDiscovery={initialHomeDiscovery}
-              />
+              // image) instead of a blank fallback. This is also the
+              // prerendered markup, so a browser that was signed in last
+              // time hides it from the first paint (data-session-hint, set
+              // by the head bootstrap) and shows the loading state instead.
+              <>
+                <div className="guest-home-preview">
+                  <GuestHome
+                    onNavigatePage={onNavigatePage}
+                    setNotice={setNotice}
+                    initialDiscovery={initialHomeDiscovery}
+                  />
+                </div>
+                <div className="session-pending-home">
+                  <AcademyPageFallback />
+                </div>
+              </>
             ) : (
               <AcademyPageFallback />
             )
@@ -4300,8 +4311,7 @@ export function CoursesPage({
               setNotice={setNotice}
               studentName={shellProfileDisplayName}
               pendingContent={
-                initialHomeDiscovery &&
-                hydratedWorkspaceRoleHint !== "creator" ? (
+                initialHomeDiscovery && showGuestHomeWhilePending ? (
                   // Keep the already-painted guest home on screen until the
                   // dashboard is ready: one content swap instead of flashing
                   // spinner states between them.
@@ -4310,7 +4320,9 @@ export function CoursesPage({
                     setNotice={setNotice}
                     initialDiscovery={initialHomeDiscovery}
                   />
-                ) : undefined
+                ) : (
+                  <AcademyPageFallback />
+                )
               }
             />
           ) : (
@@ -4589,7 +4601,7 @@ export function CoursesPage({
             stylesheets are linked so prerendered markup paints styled. */}
         <link rel="modulepreload" href={CATALOGUE_CHUNK_URL_PLACEHOLDER} />
         {CATALOGUE_CSS_URLS.map((href) => (
-          <link key={href} rel="stylesheet" href={href} precedence="default" />
+          <link key={href} rel="stylesheet" href={href} />
         ))}
         <CourseCatalogue
           activeSection={surfaceActiveSection}
