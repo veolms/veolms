@@ -62,6 +62,25 @@ export function createMediaController({ service }: { service: MediaService }) {
     );
   }
 
+  async function getLessonResourceDownload(
+    request: FastifyRequest<{
+      Params: { idOrSlug: string; lessonNumber: number; resourceId: string };
+    }>,
+    reply: FastifyReply,
+  ) {
+    const user = request.user
+      ? { id: request.user.id, roles: request.user.roles }
+      : undefined;
+    // The link is signed for this request and expires within minutes.
+    reply.header("Cache-Control", "private, no-store");
+    return await service.getLessonResourceDownload(
+      request.params.idOrSlug,
+      request.params.lessonNumber,
+      request.params.resourceId,
+      user,
+    );
+  }
+
   async function getPlaybackToken(
     request: FastifyRequest<{
       Params: { idOrSlug: string; lessonNumber: number };
@@ -275,6 +294,7 @@ export function createMediaController({ service }: { service: MediaService }) {
     getVideoJobProgress,
     getPlaybackBootstrap,
     getPlaybackToken,
+    getLessonResourceDownload,
     getMediaDelivery,
     retryVideoJob,
     cancelVideoJob,

@@ -10,10 +10,16 @@ import {
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { CircleIcon as Circle } from "@phosphor-icons/react/Circle";
+import type { LessonResource } from "@veolms/contracts";
 import type { Lesson } from "./courseContent";
+import { CurriculumLessonCard } from "./CurriculumLessonCard";
 
 const VIRTUALIZED_LESSON_THRESHOLD = 50;
 const LESSON_ROW_ESTIMATED_SIZE = 46;
+// Cards grow with their title, so a virtualized list measures each one. This
+// is only the height assumed for a card before it has been measured.
+const LESSON_CARD_ESTIMATED_SIZE = 86;
+const LESSON_CARD_GAP = 8;
 const LESSON_LIST_OVERSCAN = 8;
 const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
 
@@ -122,6 +128,14 @@ interface CurriculumLessonRowsProps {
   activeLessonRef: RefObject<HTMLButtonElement | null>;
   scrollportRef: RefObject<HTMLElement | null>;
   layoutRevision: number;
+  /** The mini player's playlist keeps the dense single-line rows. */
+  compact?: boolean;
+  lessonResources?: ReadonlyMap<number, readonly LessonResource[]>;
+  resourceCourseKey?: string;
+  quizLessonNumbers?: ReadonlySet<number>;
+  activeQuizLesson?: number | null;
+  onOpenLessonQuiz?: (lessonNumber: number) => void;
+  portalContainer?: RefObject<HTMLElement | null>;
 }
 
 export function CurriculumLessonRows(props: CurriculumLessonRowsProps) {
@@ -129,44 +143,73 @@ export function CurriculumLessonRows(props: CurriculumLessonRowsProps) {
     !props.forceVirtualized &&
     props.lessons.length < VIRTUALIZED_LESSON_THRESHOLD
   ) {
-    return (
-      <>
-        {props.lessons.map((lesson) => (
-          <CurriculumLessonButton
-            key={lesson[0]}
-            lesson={lesson}
-            progress={getLessonProgress(props.lessonProgress, lesson)}
-            isActive={props.selectedLesson === lesson[0]}
-            isAvailable={props.isLessonAvailable?.(lesson[0]) ?? true}
-            onSelectLesson={props.onSelectLesson}
-            onClose={props.onClose}
-            activeLessonRef={
-              props.selectedLesson === lesson[0]
-                ? props.activeLessonRef
-                : undefined
-            }
-          />
-        ))}
-      </>
+    const rows = props.lessons.map((lesson) => (
+      <CurriculumLesson key={lesson[0]} rows={props} lesson={lesson} />
+    ));
+    return props.compact ? (
+      <>{rows}</>
+    ) : (
+      <div className="flex flex-col gap-2 p-2">{rows}</div>
     );
   }
 
   return <VirtualizedCurriculumLessonRows {...props} />;
 }
 
-function VirtualizedCurriculumLessonRows({
-  sectionId,
-  sectionTitle,
-  lessons,
-  selectedLesson,
-  lessonProgress,
-  onSelectLesson,
-  isLessonAvailable,
-  onClose,
-  activeLessonRef,
-  scrollportRef,
-  layoutRevision,
-}: CurriculumLessonRowsProps) {
+interface CurriculumLessonProps {
+  rows: CurriculumLessonRowsProps;
+  lesson: Lesson;
+  virtualIndex?: number;
+  onVirtualizedKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
+}
+
+/** A lesson in whichever presentation the list uses. */
+function CurriculumLesson({
+  rows,
+  lesson,
+  virtualIndex,
+  onVirtualizedKeyDown,
+}: CurriculumLessonProps) {
+  const number = lesson[0];
+  const isActive = rows.selectedLesson === number;
+  const shared = {
+    lesson,
+    progress: getLessonProgress(rows.lessonProgress, lesson),
+    isActive,
+    isAvailable: rows.isLessonAvailable?.(number) ?? true,
+    onSelectLesson: rows.onSelectLesson,
+    onClose: rows.onClose,
+    activeLessonRef: isActive ? rows.activeLessonRef : undefined,
+    virtualIndex,
+    onVirtualizedKeyDown,
+  };
+
+  if (rows.compact) return <CurriculumLessonButton {...shared} />;
+
+  return (
+    <CurriculumLessonCard
+      {...shared}
+      resources={rows.lessonResources?.get(number)}
+      resourceCourseKey={rows.resourceCourseKey}
+      hasQuiz={rows.quizLessonNumbers?.has(number) ?? false}
+      quizActive={rows.activeQuizLesson === number}
+      onOpenQuiz={rows.onOpenLessonQuiz}
+      portalContainer={rows.portalContainer}
+    />
+  );
+}
+
+function VirtualizedCurriculumLessonRows(props: CurriculumLessonRowsProps) {
+  const {
+    sectionId,
+    sectionTitle,
+    lessons,
+    selectedLesson,
+    isLessonAvailable,
+    scrollportRef,
+    layoutRevision,
+    compact = false,
+  } = props;
   const listRef = useRef<HTMLDivElement>(null);
   const pendingFocusIndexRef = useRef<number | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -206,7 +249,11 @@ function VirtualizedCurriculumLessonRows({
   const virtualizer = useVirtualizer({
     count: lessons.length,
     getScrollElement: () => scrollportRef.current,
-    estimateSize: () => LESSON_ROW_ESTIMATED_SIZE,
+    estimateSize: () =>
+      compact ? LESSON_ROW_ESTIMATED_SIZE : LESSON_CARD_ESTIMATED_SIZE,
+    gap: compact ? 0 : LESSON_CARD_GAP,
+    paddingStart: compact ? 0 : LESSON_CARD_GAP,
+    paddingEnd: compact ? 0 : LESSON_CARD_GAP,
     getItemKey: (index) => lessons[index]?.[0] ?? index,
     initialRect: { width: 1024, height: 768 },
     overscan: LESSON_LIST_OVERSCAN,
@@ -273,28 +320,23 @@ function VirtualizedCurriculumLessonRows({
       {virtualItems.map((virtualItem) => {
         const lesson = lessons[virtualItem.index];
         if (!lesson) return null;
-        const isActive = selectedLesson === lesson[0];
         return (
           <div
             key={lesson[0]}
-            className="absolute inset-x-0 top-0"
+            ref={compact ? undefined : virtualizer.measureElement}
+            className={`absolute top-0 ${compact ? "inset-x-0" : "inset-x-2"}`}
             role="listitem"
             aria-posinset={virtualItem.index + 1}
             aria-setsize={lessons.length}
             data-index={virtualItem.index}
             style={{
-              height: `${LESSON_ROW_ESTIMATED_SIZE}px`,
+              height: compact ? `${LESSON_ROW_ESTIMATED_SIZE}px` : undefined,
               transform: `translateY(${virtualItem.start - scrollMargin}px)`,
             }}
           >
-            <CurriculumLessonButton
+            <CurriculumLesson
+              rows={props}
               lesson={lesson}
-              progress={getLessonProgress(lessonProgress, lesson)}
-              isActive={isActive}
-              isAvailable={isLessonAvailable?.(lesson[0]) ?? true}
-              onSelectLesson={onSelectLesson}
-              onClose={onClose}
-              activeLessonRef={isActive ? activeLessonRef : undefined}
               virtualIndex={virtualItem.index}
               onVirtualizedKeyDown={handleVirtualizedTab}
             />

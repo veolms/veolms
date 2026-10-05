@@ -1,4 +1,5 @@
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
+import { useState } from "react";
 import { PopoverMenu, usePlayerTheme } from "@veolms/video-player";
 import { cn } from "../../../lib/utils";
 import { LessonChapterRows } from "./LessonChapterRows";
@@ -47,17 +48,25 @@ export function LessonChaptersToggleButton({
   );
 }
 
-/** Touch trigger: chapters open in the same bottom sheet settings use. */
+/**
+ * Touch trigger: chapters open in a bottom sheet. Like the course content
+ * drawer, the sheet runs edge to edge and its top lands just above the
+ * bottom of the video; `getSheetHeight` measures that height when the sheet
+ * opens (fullscreen passes none and keeps the sheet's own size).
+ */
 export function LessonChaptersSheetMenu({
+  getSheetHeight,
   mobileSheetPanelClassName,
   mobileSheetPortalTarget,
   triggerClassName,
 }: {
+  getSheetHeight?: () => number | null;
   mobileSheetPanelClassName?: string;
   mobileSheetPortalTarget?: HTMLElement | null;
   triggerClassName?: string;
 }) {
   const ChaptersIcon = usePlayerTheme().icons.chapters;
+  const [sheetHeight, setSheetHeight] = useState<number | null>(null);
 
   return (
     <PopoverMenu
@@ -65,7 +74,12 @@ export function LessonChaptersSheetMenu({
       mobilePresentation="sheet"
       mobileSheetPanelClassName={mobileSheetPanelClassName}
       mobileSheetPortalTarget={mobileSheetPortalTarget}
-      panelClassName="!w-[min(22rem,calc(100vw-1.5rem))]"
+      mobileSheetExpandable={sheetHeight !== null}
+      mobileSheetStyle={
+        sheetHeight !== null
+          ? { height: sheetHeight, maxHeight: "calc(100dvh - 12px)" }
+          : undefined
+      }
       side="bottom"
       align="end"
       triggerClassName={cn(
@@ -73,6 +87,9 @@ export function LessonChaptersSheetMenu({
         triggerClassName,
       )}
       trigger={<ChaptersIcon size={20} />}
+      onOpenChange={(open) => {
+        if (open) setSheetHeight(getSheetHeight?.() ?? null);
+      }}
     >
       <div className="flex flex-col gap-1">
         <LessonChapterRows tone="player" asMenuItems />

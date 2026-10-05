@@ -251,24 +251,6 @@
   transition: background-color 150ms ease-out;
 }
 
-@media (min-width: 1081px) {
-  .courses-main-frame:has(
-      > .courses-main--learning
-        .learning-workspace:not(.is-theater)
-        .learning-workspace__curriculum-column:not(.is-collapsed)
-    )
-    + .floating-scrollbar--learning-page {
-    --learning-scrollbar-edge-offset: var(--scrollbar-thumb-size, 6px);
-    right: calc(
-      var(--floating-scrollbar-right, 0px) -
-        var(--learning-scrollbar-edge-offset)
-    );
-    width: var(--scrollbar-thumb-size, 6px);
-    background: color-mix(in srgb, var(--accent) 36%, transparent);
-    box-shadow: none;
-  }
-}
-
 .floating-scrollbar:hover .floating-scrollbar__thumb,
 .floating-scrollbar.is-dragging .floating-scrollbar__thumb,
 .floating-scrollbar.is-resizing .floating-scrollbar__thumb {

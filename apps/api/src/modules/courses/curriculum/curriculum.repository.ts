@@ -344,6 +344,20 @@ export async function softDeleteResourcesByLessonIds(
     .execute();
 }
 
+export async function findResourceByLessonId(
+  database: Kysely<Database>,
+  resourceId: string,
+  lessonId: string,
+) {
+  return await database
+    .selectFrom("lesson_resources")
+    .select(["id", "lesson_id", "media_asset_id", "title"])
+    .where("id", "=", resourceId)
+    .where("lesson_id", "=", lessonId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+}
+
 export async function listResourcesForLessons(
   database: Kysely<Database>,
   lessonIds: string[],

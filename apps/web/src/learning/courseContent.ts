@@ -38,6 +38,31 @@ export const formatMediaTime = (seconds: number) => {
 };
 
 /**
+ * Sum of the lessons' display durations ("mm:ss" or "h:mm:ss"), as a compact
+ * label like "4h 45m" or "47m". Lessons without a parseable duration (such
+ * as readings and quizzes) are skipped; "" when nothing is parseable.
+ */
+export function formatTotalLessonDuration(lessons: readonly Lesson[]): string {
+  let totalSeconds = 0;
+  for (const [, , duration] of lessons) {
+    const parts = duration.trim().split(":");
+    if (parts.length < 2 || parts.length > 3) continue;
+    if (parts.some((part) => !/^\d+$/.test(part))) continue;
+    const [hours, minutes, seconds] =
+      parts.length === 3
+        ? (parts.map(Number) as [number, number, number])
+        : [0, Number(parts[0]), Number(parts[1])];
+    totalSeconds += hours * 3600 + minutes * 60 + seconds;
+  }
+  if (totalSeconds === 0) return "";
+  const totalMinutes = Math.max(1, Math.round(totalSeconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+}
+
+/**
  * Player media for a lesson whose playable manifest comes from the playback
  * bootstrap API. It carries only display metadata and never a fallback URL.
  */

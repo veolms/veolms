@@ -178,6 +178,11 @@
   background: var(--video-player-menu-solid-surface, rgb(11 11 13)) !important;
 }
 
+/* A sheet dragged up to fill the screen sits flush with its edges. */
+[data-video-player-mobile-sheet-expanded] {
+  border-radius: 0 !important;
+}
+
 @media (min-width: 40.0625rem) {
   [data-video-player-menu-panel]:not([data-video-player-mobile-sheet]) {
     background: color-mix(

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   presignMediaRequestSchema,
   presignMediaResponseSchema,
+  lessonResourceDownloadResponseSchema,
   mediaDeliveryResponseSchema,
   mediaImageVariantManifestSchema,
   mediaUploadCompleteResponseSchema,
@@ -98,6 +99,38 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       ],
     },
     controller.getPlaybackToken,
+  );
+
+  app.get(
+    "/courses/:idOrSlug/lessons/:lessonNumber/resources/:resourceId/download",
+    {
+      schema: {
+        operationId: "getLessonResourceDownload",
+        tags: ["Media"],
+        summary: "Resolve an authorized download link for a lesson resource",
+        description:
+          "Returns a short-lived link that downloads one resource of the lesson. The same session and course-access rules as lesson playback are applied; the lesson does not need a video.",
+        params: z.object({
+          idOrSlug: z.string().min(1).max(160),
+          lessonNumber: z.coerce.number().int().positive(),
+          resourceId: z.uuid(),
+        }),
+        response: {
+          200: jsonResponse(
+            "Authorized lesson resource download link",
+            lessonResourceDownloadResponseSchema,
+          ),
+          401: errorResponse("Authentication required"),
+          403: errorResponse("Course access denied"),
+          404: errorResponse("Lesson or resource not found"),
+        },
+      },
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.getLessonResourceDownload,
   );
 
   app.post(

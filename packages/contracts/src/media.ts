@@ -280,11 +280,25 @@ export type MediaAssetType = z.infer<typeof mediaAssetTypeSchema>;
 export type MediaAssetStatus = z.infer<typeof mediaAssetStatusSchema>;
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 export type PresignMediaRequest = z.infer<typeof presignMediaRequestSchema>;
+/**
+ * Where a learner can download one lesson resource. The URL is short-lived
+ * and answers with an attachment disposition, so following it saves the file
+ * as `fileName` rather than opening it.
+ */
+export const lessonResourceDownloadResponseSchema = z.object({
+  url: z.string().min(1),
+  fileName: z.string().min(1),
+  expiresAt: z.number().int().positive(),
+});
+
 export type PresignMediaResponse = z.infer<typeof presignMediaResponseSchema>;
 export type MediaUploadCompleteResponse = z.infer<
   typeof mediaUploadCompleteResponseSchema
 >;
 export type MediaDeliveryResponse = z.infer<typeof mediaDeliveryResponseSchema>;
+export type LessonResourceDownloadResponse = z.infer<
+  typeof lessonResourceDownloadResponseSchema
+>;
 export type MediaImageVariantManifest = z.infer<
   typeof mediaImageVariantManifestSchema
 >;
@@ -305,6 +319,9 @@ z.globalRegistry.add(mediaUploadCompleteResponseSchema, {
 });
 z.globalRegistry.add(mediaDeliveryResponseSchema, {
   id: "MediaDeliveryResponse",
+});
+z.globalRegistry.add(lessonResourceDownloadResponseSchema, {
+  id: "LessonResourceDownloadResponse",
 });
 z.globalRegistry.add(videoJobProgressResponseSchema, {
   id: "VideoJobProgressResponse",

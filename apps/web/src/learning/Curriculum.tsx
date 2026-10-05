@@ -1,6 +1,7 @@
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
+import type { LessonResource } from "@veolms/contracts";
 import { DEFAULT_DEBOUNCE_DELAY_MS, useDebounce } from "../hooks/useDebounce";
 import { ExpandableSearch } from "../ExpandableSearch";
 import { CourseThumbnailPlaceholder } from "../courses/CourseThumbnailPlaceholder";
@@ -9,7 +10,9 @@ import { ElasticScroller } from "../components/elastic-scroller";
 import type { ElasticScrollerHandle } from "../components/elastic-scroller";
 import { CurriculumSectionActionsMenuContent } from "./CurriculumSectionActionsMenu";
 import { getInitialCurriculumExpandedSections } from "./curriculumExpandedSections";
+import { formatTotalLessonDuration } from "./courseContent";
 import type { CourseSection, Lesson } from "./courseContent";
+import { CurriculumProgressBar } from "./CurriculumProgressBar";
 
 import {
   isStoredBoolean,
@@ -52,6 +55,15 @@ interface CurriculumProps {
   expandAllSections?: boolean;
   expandedSectionIds?: readonly number[];
   onExpandedSectionIdsChange?: (sectionIds: readonly number[]) => void;
+  /** Downloadable files of each lesson that has any, by lesson number. */
+  lessonResources?: ReadonlyMap<number, readonly LessonResource[]>;
+  /** Course slug or id the resources are downloaded through. */
+  resourceCourseKey?: string;
+  /** Lessons with a quiz attached. */
+  quizLessonNumbers?: ReadonlySet<number>;
+  /** The lesson whose quiz is currently open, if any. */
+  activeQuizLesson?: number | null;
+  onOpenLessonQuiz?: (lessonNumber: number) => void;
 }
 
 export function Curriculum({
@@ -80,6 +92,11 @@ export function Curriculum({
   expandAllSections = false,
   expandedSectionIds: controlledExpandedSectionIds,
   onExpandedSectionIdsChange,
+  lessonResources,
+  resourceCourseKey,
+  quizLessonNumbers,
+  activeQuizLesson,
+  onOpenLessonQuiz,
 }: CurriculumProps) {
   const sectionIds = sections.map(({ id }) => id);
   const isExpandedControlled = controlledExpandedSectionIds !== undefined;
@@ -605,7 +622,13 @@ export function Curriculum({
                   getLessonProgress(number, status) >=
                   LESSON_PROGRESS_COMPLETE_THRESHOLD,
               ).length;
-              const sectionProgress = `${completedLessons}/${section.lessons.length}`;
+              const lessonCount = section.lessons.length;
+              const sectionDuration = formatTotalLessonDuration(
+                section.lessons,
+              );
+              const sectionProgress = `${completedLessons}/${lessonCount}`;
+              const sectionComplete =
+                lessonCount > 0 && completedLessons === lessonCount;
               const isOpen =
                 expanded.includes(section.id) ||
                 Boolean(activeLessonSearch && matchingLessons.length > 0);
@@ -636,18 +659,56 @@ export function Curriculum({
                     aria-expanded={isOpen}
                     className="learning-curriculum__section-toggle"
                   >
-                    <span
-                      className={`learning-curriculum__section-arrow${isOpen ? " is-open" : ""}`}
-                      aria-hidden="true"
-                    >
-                      <CaretDown size={17} />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">
-                      Section {section.id}: {section.title}
-                    </span>
-                    <span className="learning-curriculum__section-progress">
-                      {sectionProgress}
-                    </span>
+                    {hideHero ? (
+                      <>
+                        <span
+                          className={`learning-curriculum__section-arrow${isOpen ? " is-open" : ""}`}
+                          aria-hidden="true"
+                        >
+                          <CaretDown size={17} />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">
+                          Section {section.id}: {section.title}
+                        </span>
+                        <span className="learning-curriculum__section-progress">
+                          {sectionProgress}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[0.67rem] font-bold tracking-[0.1em] uppercase text-(--muted)">
+                            Section {section.id} · {lessonCount}{" "}
+                            {lessonCount === 1 ? "lesson" : "lessons"}
+                            {sectionDuration ? (
+                              <>
+                                {" · "}
+                                <span className="normal-case tabular-nums">
+                                  {sectionDuration}
+                                </span>
+                              </>
+                            ) : null}
+                          </span>
+                          <span className="mt-2 block truncate text-[0.95rem]/[1.3] font-semibold">
+                            {section.title}
+                          </span>
+                        </span>
+                        <span className="sr-only">
+                          {completedLessons} of {lessonCount} lessons completed
+                        </span>
+                        <span
+                          className={`learning-curriculum__section-arrow text-(--muted)${isOpen ? " is-open" : ""}`}
+                          aria-hidden="true"
+                        >
+                          <CaretDown size={16} weight="bold" />
+                        </span>
+                        {completedLessons > 0 && !sectionComplete ? (
+                          <CurriculumProgressBar
+                            percent={(completedLessons / lessonCount) * 100}
+                          />
+                        ) : null}
+                      </>
+                    )}
                   </button>
                   {matchingLessons.length > 0 && (
                     <div
@@ -676,6 +737,13 @@ export function Curriculum({
                             activeLessonRef={activeLessonRef}
                             scrollportRef={curriculumRef}
                             layoutRevision={layoutRevision}
+                            compact={hideHero}
+                            lessonResources={lessonResources}
+                            resourceCourseKey={resourceCourseKey}
+                            quizLessonNumbers={quizLessonNumbers}
+                            activeQuizLesson={activeQuizLesson}
+                            onOpenLessonQuiz={onOpenLessonQuiz}
+                            portalContainer={contextMenuPortalHostRef}
                           />
                         )}
                       </div>

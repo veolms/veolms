@@ -491,11 +491,18 @@ export class S3StorageService {
 
   /**
    * Generates a pre-signed GET URL for reading/streaming an object (e.g. for probing metadata).
+   * With `responseContentDisposition`, storage answers with that header, so a
+   * browser saves the file under the given name instead of displaying it.
    */
-  async getPresignedGetUrl(key: string, expiresIn = 900): Promise<string> {
+  async getPresignedGetUrl(
+    key: string,
+    expiresIn = 900,
+    options?: { responseContentDisposition?: string },
+  ): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
+      ResponseContentDisposition: options?.responseContentDisposition,
     });
     return getSignedUrl(this.client, command, { expiresIn });
   }
