@@ -115,8 +115,16 @@ import {
 } from "./courses/courseThumbnail";
 import {
   CATALOGUE_CHUNK_URL_PLACEHOLDER,
+  CATALOGUE_CSS_URLS_PLACEHOLDER,
   GUEST_HOME_CHUNK_URL_PLACEHOLDER,
+  GUEST_HOME_CSS_URLS_PLACEHOLDER,
+  splitChunkCssUrls,
 } from "./routing/routeChunkPreloads";
+
+// Resolved at module scope: the placeholders are replaced with literal URL
+// lists at build time, so these arrays are constants.
+const GUEST_HOME_CSS_URLS = splitChunkCssUrls(GUEST_HOME_CSS_URLS_PLACEHOLDER);
+const CATALOGUE_CSS_URLS = splitChunkCssUrls(CATALOGUE_CSS_URLS_PLACEHOLDER);
 import {
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
@@ -1115,6 +1123,15 @@ export function CoursesPage({
       return null;
     }
   })();
+  // Post-hydration view of the stored role hint. The server snapshot stays
+  // null so the first client render matches the prerendered guest markup;
+  // right after hydration it switches, letting creator/admin sessions hide
+  // the guest-home preview without a hydration mismatch.
+  const hydratedWorkspaceRoleHint = useSyncExternalStore(
+    subscribeToNothing,
+    () => workspaceRoleHint,
+    () => null,
+  );
   const storeUser = useAuthStore((s) => s.user);
   // Once `/auth/me` has completed, its null result must win over any
   // in-memory login snapshot. Before that, the snapshot is useful only for
@@ -4239,8 +4256,18 @@ export function CoursesPage({
           {/* Having the lazy guest-home chunk preloaded by the document
               keeps React from discarding the prerendered markup (and
               flashing the fallback) when a state update lands before the
-              chunk would otherwise have downloaded. */}
+              chunk would otherwise have downloaded. Its feature stylesheets
+              are linked too: the prerendered guest-home markup must not
+              paint before the CSS that styles it. */}
           <link rel="modulepreload" href={GUEST_HOME_CHUNK_URL_PLACEHOLDER} />
+          {GUEST_HOME_CSS_URLS.map((href) => (
+            <link
+              key={href}
+              rel="stylesheet"
+              href={href}
+              precedence="default"
+            />
+          ))}
           {homeLcpCourse?.thumbnail ? (
             <link
               rel="preload"
@@ -4252,7 +4279,7 @@ export function CoursesPage({
             />
           ) : null}
           {!isAuthReady ? (
-            initialHomeDiscovery ? (
+            initialHomeDiscovery && hydratedWorkspaceRoleHint !== "creator" ? (
               // Paint the seeded guest home while the session check runs so
               // the prerendered document carries real content (and the LCP
               // image) instead of a blank fallback. A signed-in account swaps
@@ -4273,7 +4300,8 @@ export function CoursesPage({
               setNotice={setNotice}
               studentName={shellProfileDisplayName}
               pendingContent={
-                initialHomeDiscovery ? (
+                initialHomeDiscovery &&
+                hydratedWorkspaceRoleHint !== "creator" ? (
                   // Keep the already-painted guest home on screen until the
                   // dashboard is ready: one content swap instead of flashing
                   // spinner states between them.
@@ -4555,8 +4583,12 @@ export function CoursesPage({
       >
         {/* See the guest-home modulepreload note: without this, an early
             state update makes React drop the prerendered catalogue for the
-            skeleton fallback — a full-viewport layout shift. */}
+            skeleton fallback — a full-viewport layout shift. The chunk's
+            stylesheets are linked so prerendered markup paints styled. */}
         <link rel="modulepreload" href={CATALOGUE_CHUNK_URL_PLACEHOLDER} />
+        {CATALOGUE_CSS_URLS.map((href) => (
+          <link key={href} rel="stylesheet" href={href} precedence="default" />
+        ))}
         <CourseCatalogue
           activeSection={surfaceActiveSection}
           role={effectiveRole}

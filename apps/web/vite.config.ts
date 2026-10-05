@@ -168,12 +168,14 @@ function earlyHlsPreloadPlugin(): Plugin {
 const ROUTE_CHUNK_PRELOADS = [
   {
     placeholder: "__VEO_CATALOGUE_CHUNK_URL__",
+    cssPlaceholder: "__VEO_CATALOGUE_CSS_URLS__",
     facadeSuffix: "/src/courses/CourseCatalogue.tsx",
     manifestSrcSuffix: "courses/CourseCatalogue.tsx",
     devUrl: "/src/courses/CourseCatalogue.tsx",
   },
   {
     placeholder: "__VEO_GUEST_HOME_CHUNK_URL__",
+    cssPlaceholder: "__VEO_GUEST_HOME_CSS_URLS__",
     facadeSuffix: "/src/GuestHome.tsx",
     manifestSrcSuffix: "src/GuestHome.tsx",
     devUrl: "/src/GuestHome.tsx",
@@ -199,6 +201,12 @@ function routeChunkPreloadPlugin(): Plugin {
           next = next.replaceAll(entry.placeholder, entry.devUrl);
           changed = true;
         }
+        // The dev server injects styles with the modules, so the CSS link
+        // list stays empty there.
+        if (next.includes(entry.cssPlaceholder)) {
+          next = next.replaceAll(entry.cssPlaceholder, "");
+          changed = true;
+        }
       }
       return changed ? { code: next, map: null } : undefined;
     },
@@ -219,6 +227,12 @@ function routeChunkPreloadPlugin(): Plugin {
                 entry.placeholder,
                 joinPublicPath(publicBase, item.fileName),
               );
+              urls.set(
+                entry.cssPlaceholder,
+                [...(item.viteMetadata?.importedCss ?? [])]
+                  .map((file) => joinPublicPath(publicBase, file))
+                  .join(","),
+              );
             }
           }
         }
@@ -234,7 +248,7 @@ function routeChunkPreloadPlugin(): Plugin {
         try {
           const manifest = JSON.parse(
             fs.readFileSync(manifestPath, "utf8"),
-          ) as Record<string, { file?: string; src?: string }>;
+          ) as Record<string, { file?: string; src?: string; css?: string[] }>;
           for (const entry of ROUTE_CHUNK_PRELOADS) {
             if (urls.has(entry.placeholder)) continue;
             const manifestEntry = Object.entries(manifest).find(
@@ -248,6 +262,12 @@ function routeChunkPreloadPlugin(): Plugin {
               urls.set(
                 entry.placeholder,
                 joinPublicPath(publicBase, manifestEntry[1].file),
+              );
+              urls.set(
+                entry.cssPlaceholder,
+                (manifestEntry[1].css ?? [])
+                  .map((file) => joinPublicPath(publicBase, file))
+                  .join(","),
               );
             }
           }

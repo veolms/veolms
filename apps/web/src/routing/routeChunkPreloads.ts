@@ -9,3 +9,19 @@
  */
 export const CATALOGUE_CHUNK_URL_PLACEHOLDER = "__VEO_CATALOGUE_CHUNK_URL__";
 export const GUEST_HOME_CHUNK_URL_PLACEHOLDER = "__VEO_GUEST_HOME_CHUNK_URL__";
+
+/**
+ * Comma-joined stylesheet URLs of the same chunks. The feature CSS of a
+ * lazy chunk normally loads with the chunk itself, which is too late for
+ * content that is already prerendered into the document: it paints
+ * unstyled first. Linking these from the document keeps the prerendered
+ * markup styled at first paint.
+ */
+export const CATALOGUE_CSS_URLS_PLACEHOLDER = "__VEO_CATALOGUE_CSS_URLS__";
+export const GUEST_HOME_CSS_URLS_PLACEHOLDER = "__VEO_GUEST_HOME_CSS_URLS__";
+
+/** Splits a replaced CSS placeholder; an unreplaced one yields no URLs. */
+export function splitChunkCssUrls(value: string): string[] {
+  if (!value || value.startsWith("__VEO_")) return [];
+  return value.split(",").filter((url) => url.startsWith("/"));
+}
