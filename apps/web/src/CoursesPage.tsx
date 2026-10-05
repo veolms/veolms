@@ -122,6 +122,7 @@ import {
   GUEST_HOME_CSS_URLS_PLACEHOLDER,
   splitChunkCssUrls,
 } from "./routing/routeChunkPreloads";
+import { ChunkStylesheets } from "./routing/ChunkStylesheets";
 
 // Resolved at module scope: the placeholders are replaced with literal URL
 // lists at build time, so these arrays are constants.
@@ -4267,13 +4268,9 @@ export function CoursesPage({
               flashing the fallback) when a state update lands before the
               chunk would otherwise have downloaded. Its feature stylesheets
               are linked too: the prerendered guest-home markup must not
-              paint before the CSS that styles it. They are deliberately
-              plain in-place links (no `precedence`): React would hoist
-              those above the global stylesheets and flip the cascade. */}
+              paint before the CSS that styles it. */}
           <link rel="modulepreload" href={GUEST_HOME_CHUNK_URL_PLACEHOLDER} />
-          {GUEST_HOME_CSS_URLS.map((href) => (
-            <link key={href} rel="stylesheet" href={href} />
-          ))}
+          <ChunkStylesheets hrefs={GUEST_HOME_CSS_URLS} />
           {homeLcpCourse?.thumbnail ? (
             <link
               rel="preload"
@@ -4606,9 +4603,7 @@ export function CoursesPage({
             skeleton fallback — a full-viewport layout shift. The chunk's
             stylesheets are linked so prerendered markup paints styled. */}
         <link rel="modulepreload" href={CATALOGUE_CHUNK_URL_PLACEHOLDER} />
-        {CATALOGUE_CSS_URLS.map((href) => (
-          <link key={href} rel="stylesheet" href={href} />
-        ))}
+        <ChunkStylesheets hrefs={CATALOGUE_CSS_URLS} />
         <CourseCatalogue
           activeSection={surfaceActiveSection}
           role={effectiveRole}
