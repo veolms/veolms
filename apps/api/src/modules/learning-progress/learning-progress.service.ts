@@ -467,20 +467,34 @@ export function createLearningProgressService({
     }
 
     const now = new Date();
-    await learningProgressRepository.upsertUserCourseProgress(
+    const rowsToUpsert = [...progressByLessonId.entries()]
+      .filter(([, progressPercent]) => progressPercent > 0)
+      .map(([lessonId, progressPercent]) => ({
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        course_id: course.id,
+        lesson_id: lessonId,
+        progress_percent: progressPercent,
+        created_at: now,
+        updated_at: now,
+      }));
+
+    if (rowsToUpsert.length === 0) {
+      return { synced: true };
+    }
+
+    // Daily-activity accrual (approved PRD §8): one atomic statement
+    // upserts progress and credits delta% x lesson duration to the
+    // learner's current local day. Replays produce zero deltas, so
+    // retries/sendBeacon duplicates never double-credit. Activity accrues
+    // even before a goal is configured, so a later goal setting finds an
+    // intact history/streak.
+    await learningProgressRepository.upsertProgressAndAccrueActivity(
       database,
-      [...progressByLessonId.entries()]
-        .filter(([, progressPercent]) => progressPercent > 0)
-        .map(([lessonId, progressPercent]) => ({
-          id: crypto.randomUUID(),
-          user_id: user.id,
-          course_id: course.id,
-          lesson_id: lessonId,
-          progress_percent: progressPercent,
-          created_at: now,
-          updated_at: now,
-        })),
+      user.id,
+      rowsToUpsert,
     );
+
     return { synced: true };
   }
 
