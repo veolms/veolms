@@ -4,6 +4,7 @@ import {
   type CourseListResponse,
   type CourseOverviewResponse,
 } from "@veolms/contracts";
+import { fetchStaticBuildApi } from "./staticBuildApi";
 
 export interface AcademyStaticPageData {
   publishedCoursePage?: CourseListResponse;
@@ -29,14 +30,17 @@ function getStaticApiBaseUrl() {
   return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`;
 }
 
+// Stay inside the 10 second limit React Router gives each prerender request.
+const STATIC_API_RETRY_BUDGET_MS = 7_000;
+
 async function fetchStaticApiData<T>(
   path: string,
   parse: (value: unknown) => T,
 ) {
-  const response = await fetch(`${getStaticApiBaseUrl()}${path}`, {
-    signal: AbortSignal.timeout(30_000),
-    headers: { accept: "application/json" },
-  });
+  const response = await fetchStaticBuildApi(
+    `${getStaticApiBaseUrl()}${path}`,
+    STATIC_API_RETRY_BUDGET_MS,
+  );
   if (!response.ok) {
     throw new Error(
       `Static course data request failed (${response.status}): ${path}`,

@@ -1,20 +1,20 @@
 name: Deploy Cloudflare static web
 
 on:
-  push:
-    branches:
-      - dev
-    paths:
-      - "apps/web/**"
-      - "packages/contracts/**"
-      - "packages/config/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "turbo.json"
-      - "wrangler.jsonc"
-      - ".github/workflows/deploy-cloudflare-web.yml"
-      - ".github/workflows/refresh-cloudflare-course-pages.yml"
+  # push:
+  #   branches:
+  #     - dev
+  #   paths:
+  #     - "apps/web/**"
+  #     - "packages/contracts/**"
+  #     - "packages/config/**"
+  #     - "package.json"
+  #     - "pnpm-lock.yaml"
+  #     - "pnpm-workspace.yaml"
+  #     - "turbo.json"
+  #     - "wrangler.jsonc"
+  #     - ".github/workflows/deploy-cloudflare-web.yml"
+  #     - ".github/workflows/refresh-cloudflare-course-pages.yml"
   workflow_dispatch:
 
 permissions:

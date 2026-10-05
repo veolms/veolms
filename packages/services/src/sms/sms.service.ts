@@ -57,15 +57,7 @@ export type SmsDeliveryResult =
   | { status: "failed"; error: Error };
 
 export interface SmsService {
-  /**
-   * Dispatches a message or OTP, failing over across configured providers.
-   * Never throws, guaranteeing fire-and-forget safety.
-   */
   send(phoneNo: string, content: SmsContent): Promise<SmsDeliveryResult>;
-
-  /**
-   * Directly dispatches an OTP verification code with optional template variables.
-   */
   sendOtp(
     phoneNo: string,
     otp: string,
@@ -79,7 +71,6 @@ export function createSmsService({
 }: SmsServiceOptions): SmsService {
   const log = logger.child({ service: "sms" });
 
-  // Instantiate available providers
   const consoleProvider = new ConsoleProvider(logger);
   const msg91Provider = new Msg91Provider(config.msg91 ?? {}, logger);
   const vonageProvider = new VonageProvider(
@@ -101,9 +92,6 @@ export function createSmsService({
     logger,
   );
 
-  /**
-   * Builds the failover chain of providers based on configuration and availability.
-   */
   function resolveProviderChain(): ISmsProvider[] {
     if (config.transport === "console" || config.provider === "console") {
       return [consoleProvider];
@@ -126,7 +114,6 @@ export function createSmsService({
       return primary.isConfigured() ? [primary, ...others] : others;
     }
 
-    // Auto strategy: prefer MSG91 if credentials exist, then Vonage, then Twilio
     const chain: ISmsProvider[] = [];
     if (msg91Provider.isConfigured()) chain.push(msg91Provider);
     if (vonageProvider.isConfigured()) chain.push(vonageProvider);
@@ -195,7 +182,6 @@ export function createSmsService({
     phoneNo: string,
     content: SmsContent,
   ): Promise<SmsDeliveryResult> {
-    // If an OTP code was supplied, use the dedicated sendOtp flow
     if (content.code) {
       return sendOtp(phoneNo, content.code, {
         variables: content.templateVariables,

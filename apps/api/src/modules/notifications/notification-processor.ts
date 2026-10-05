@@ -5,7 +5,7 @@ import type { Kysely } from "kysely";
 import { z } from "zod";
 
 import * as outboxRepository from "../../events/outbox.repository.ts";
-import type { EmailService } from "../../services/email/index.ts";
+import type { EmailService } from "@veolms/services/email";
 import {
   createNotificationIntents,
   UnknownNotificationEventError,

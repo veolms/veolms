@@ -8,7 +8,7 @@ import type {
 } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
 import type { CourseService } from "./course.service.ts";
-import type { CourseStaticPageRefreshService } from "../../../services/course-static-page-refresh.service.ts";
+import type { CourseStaticPageRefreshService } from "@veolms/services/course-static-pages";
 
 export function createCourseController({
   service,
