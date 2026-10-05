@@ -96,27 +96,32 @@
   border-left: 0;
 }
 
+/* Compact variant of the system primary button (.primary-learning-action):
+   solid accent fill, no border, same radius/shadow/hover. */
 .home-goal-summary__cta {
+  display: inline-flex;
   align-self: center;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
   margin-right: 14px;
-  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
-  border-radius: 8px;
-  padding: 7px 14px;
-  color: var(--accent-ink, var(--accent));
-  background: color-mix(in srgb, var(--surface-strong) 76%, transparent);
+  border: 0;
+  border-radius: 7px;
+  padding: 0 15px;
+  color: var(--on-accent);
+  background: var(--accent);
+  box-shadow: 0 9px 22px var(--accent-shadow);
   cursor: pointer;
   font-size: 0.74rem;
   font-weight: 650;
   transition:
-    border-color 150ms ease,
     background-color 150ms ease,
-    color 150ms ease;
+    box-shadow 150ms ease;
 }
 
-.home-goal-summary__cta:is(:hover, :focus-visible) {
-  border-color: var(--accent-ink, var(--accent));
-  color: var(--text);
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface-strong));
+.home-goal-summary__cta:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 12px 26px var(--accent-shadow);
 }
 
 .home-goal-summary__cta:focus-visible {
