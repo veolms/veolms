@@ -1,6 +1,5 @@
 /**
- * Rendered message bodies. Templates stay pure functions of their inputs so
- * they can be asserted on directly, without standing up a transport.
+ * Rendered message bodies. Templates stay pure functions of their inputs.
  */
 export interface EmailContent {
   subject: string;
@@ -9,9 +8,7 @@ export interface EmailContent {
 }
 
 /**
- * Escapes text before it is interpolated into an HTML body. Present values are
- * all system-generated today, but templates are the one place user-supplied
- * strings (display names, academy names) will eventually land.
+ * Escapes text before it is interpolated into an HTML body.
  */
 export function escapeHtml(value: string): string {
   return value
@@ -42,9 +39,7 @@ export interface OtpVerificationInput {
 }
 
 /**
- * The one-time passcode message used by both login and registration. The
- * validity window is passed in rather than hardcoded so the copy can never
- * drift from the expiry the API actually enforces.
+ * The one-time passcode message used by both login and registration.
  */
 export function otpVerificationEmail({
   code,

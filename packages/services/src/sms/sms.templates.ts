@@ -11,10 +11,7 @@ export interface OtpVerificationSmsInput {
 }
 
 /**
- * Mirrors `otpVerificationEmail` so the two channels quote the same validity
- * window. Kept deliberately terse to stay inside a single SMS segment.
- * Includes explicit `code` and `templateVariables` for flow-based SMS gateways
- * (like MSG91 Flow) that populate template placeholders.
+ * Generates SMS text and template variables for OTP verification.
  */
 export function otpVerificationSms({
   code,

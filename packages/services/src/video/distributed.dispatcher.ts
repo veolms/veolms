@@ -1,9 +1,29 @@
-import { InvokeCommand } from "@aws-sdk/client-lambda";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import type { VideoJobEvent } from "@veolms/contracts";
 import type { ServerConfig } from "@veolms/config";
 import type { FastifyBaseLogger } from "fastify";
-import { getLambdaClient } from "../../lib/lambda.ts";
 import type { VideoDispatchService } from "./types.ts";
+
+let lambdaClientInstance: LambdaClient | null = null;
+function getLambdaClient(config: ServerConfig): LambdaClient {
+  if (!lambdaClientInstance) {
+    const accessKeyId = config.FLEET_MANAGER_ACCESS_KEY_ID;
+    const secretAccessKey = config.FLEET_MANAGER_SECRET_ACCESS_KEY;
+
+    lambdaClientInstance = new LambdaClient({
+      region: config.FLEET_MANAGER_LAMBDA_REGION || config.STORAGE_REGION,
+      credentials:
+        accessKeyId && secretAccessKey
+          ? {
+              accessKeyId,
+              secretAccessKey,
+            }
+          : undefined,
+    });
+  }
+
+  return lambdaClientInstance;
+}
 
 /**
  * Strategy 3: Distributed Execution
@@ -15,13 +35,12 @@ export function createDistributedDispatcher(options: {
   triggerUrl?: string;
   lambdaName?: string;
 }): VideoDispatchService {
-  const { logger } = options;
-  const triggerUrl =
-    options.triggerUrl || options.config.FLEET_MANAGER_TRIGGER_URL;
+  const { config, logger } = options;
+  const triggerUrl = options.triggerUrl || config.FLEET_MANAGER_TRIGGER_URL;
   const lambdaName =
     options.lambdaName ||
-    options.config.PROBE_LAMBDA_NAME ||
-    options.config.FLEET_MANAGER_LAMBDA_NAME;
+    config.PROBE_LAMBDA_NAME ||
+    config.FLEET_MANAGER_LAMBDA_NAME;
 
   async function triggerViaHttp(
     url: string,
@@ -52,7 +71,7 @@ export function createDistributedDispatcher(options: {
     funcName: string,
     payload: VideoJobEvent,
   ): Promise<void> {
-    const client = getLambdaClient();
+    const client = getLambdaClient(config);
     const command = new InvokeCommand({
       FunctionName: funcName,
       InvocationType: "Event",

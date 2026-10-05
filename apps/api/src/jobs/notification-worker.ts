@@ -6,7 +6,7 @@ import { logger } from "../lib/logger.ts";
 import { createAuthService } from "../modules/auth/index.ts";
 import { createEnrollmentAudienceService } from "../modules/commerce/index.ts";
 import { createNotificationProcessor } from "../modules/notifications/index.ts";
-import { createEmailService } from "../services/email/index.ts";
+import { createEmailService } from "@veolms/services/email";
 
 const database = createDatabase(config.DATABASE_URL);
 const app = Fastify({ logger });

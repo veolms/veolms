@@ -96,16 +96,20 @@ export function SocialLoginActions({
 
         <button
           aria-busy={loadingProvider === "github"}
-          aria-label={loadingProvider === "github" ? "Connecting to GitHub" : undefined}
+          aria-label={
+            loadingProvider === "github" ? "Connecting to GitHub" : undefined
+          }
           className="auth-social__button"
           disabled={actionsLocked}
           onClick={() => handleOauth("github")}
           type="button"
         >
           <GitHubBrandIcon size={18} />
-          {loadingProvider === "github"
-            ? <LoadingSpinnerIcon size={18} />
-            : "Continue with GitHub"}
+          {loadingProvider === "github" ? (
+            <LoadingSpinnerIcon size={18} />
+          ) : (
+            "Continue with GitHub"
+          )}
         </button>
       </div>
     </div>

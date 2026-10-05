@@ -67,7 +67,7 @@ export class TwilioProvider implements ISmsProvider {
   async sendOtp(
     phoneNo: string,
     otp: string,
-    options?: SendOtpOptions,
+    _options?: SendOtpOptions,
   ): Promise<SmsProviderResult> {
     const text = `${otp} is your verification code.`;
     return this.sendText(phoneNo, text);
