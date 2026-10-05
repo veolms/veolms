@@ -100,6 +100,19 @@ const serverConfigSchema = z.object({
     .min(32, "SESSION_SECRET must be at least 32 characters")
     .default("default_session_secret_at_least_32_chars_long"),
   SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
+  /**
+   * TTL for the process-local per-request authentication cache (ms).
+   * Bounds how long a role/MFA-factor change made OUTSIDE the session
+   * repository — or on another instance — can be served stale. Session
+   * revocation/rotation/MFA verification evict immediately in-process.
+   * 0 disables the cache.
+   */
+  SESSION_AUTH_CACHE_TTL_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(60_000)
+    .default(10_000),
   MFA_ENCRYPTION_KEY: z
     .string()
     .min(32, "MFA_ENCRYPTION_KEY must be at least 32 characters")
