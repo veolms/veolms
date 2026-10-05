@@ -6,7 +6,10 @@ import { createDatabase } from "./client.ts";
 import { assertMigrationSuccess, createMigrator } from "./migrator.ts";
 
 const config = loadServerConfig(process.env);
-const database = createDatabase(config.DATABASE_URL);
+const database = createDatabase(config.DATABASE_URL, {
+  statementTimeoutMillis: 0,
+  applicationName: "veolms-reset",
+});
 
 try {
   const migrator = createMigrator(database);

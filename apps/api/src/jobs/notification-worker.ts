@@ -8,7 +8,9 @@ import { createEnrollmentAudienceService } from "../modules/commerce/index.ts";
 import { createNotificationProcessor } from "../modules/notifications/index.ts";
 import { createEmailService } from "../services/email/index.ts";
 
-const database = createDatabase(config.DATABASE_URL);
+const database = createDatabase(config.DATABASE_URL, {
+  applicationName: "veolms-notification-worker",
+});
 const app = Fastify({ logger });
 const email = createEmailService({
   logger: app.log,
