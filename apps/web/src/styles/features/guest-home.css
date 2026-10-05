@@ -3,6 +3,26 @@
 .guest-home {
   width: 100%;
   min-width: 0;
+  --home-layer-two-clearance: 18px;
+  --home-layer-two-inline-clearance: var(
+    --application-page-inline-gutter,
+    25px
+  );
+  --home-layer-three-clearance: 16px;
+  --home-layer-three-inline-clearance: 14px;
+}
+
+/* Home owns its Layer 1 -> Layer 2 clearance below. The shell's generic
+   padding is intentionally removed so it cannot also become shadow clearance
+   for the course sections. Mobile keeps only the shell's bottom safe area for
+   the fixed navigation. */
+.courses-main:has(.guest-home) {
+  padding: 0;
+}
+
+.guest-home__greeting {
+  margin-block-start: var(--application-page-block-start, 22px);
+  margin-inline: var(--application-page-inline-gutter, 25px);
 }
 
 .guest-home__layout {
@@ -18,11 +38,20 @@
 .guest-home__course-column {
   display: grid;
   gap: 16px;
+  box-sizing: border-box;
+  padding: var(--home-layer-two-clearance)
+    var(--home-layer-two-inline-clearance);
+}
+
+.guest-home__discussion-column {
+  box-sizing: border-box;
+  padding: var(--home-layer-two-clearance)
+    var(--home-layer-two-inline-clearance);
 }
 
 .guest-home__course-row {
   min-width: 0;
-  margin-top: 10px;
+  margin: 10px 14px 14px;
 }
 
 .home-course-row {
@@ -33,11 +62,17 @@
   position: relative;
   isolation: isolate;
   min-width: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--main-surface) 24%, transparent);
 }
 
 .home-course-row__viewport {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
+  padding: var(--home-layer-three-clearance, 16px)
+    var(--home-layer-three-inline-clearance, 14px);
+  scroll-padding-inline: var(--home-layer-three-inline-clearance, 14px);
 }
 
 .home-course-row__control {
@@ -245,7 +280,6 @@
     grid-template-rows: minmax(0, 1fr);
     min-height: 0;
     overflow: hidden;
-    padding-block-end: 4px;
   }
 
   :root[data-content-layout="framed"] .guest-home__course-column {
@@ -286,10 +320,28 @@
   }
 }
 
+@media (max-width: 640px) {
+  .courses-main:has(.guest-home) {
+    padding-bottom: calc(104px + var(--app-viewport-safe-area-max-bottom));
+  }
+}
+
 @media (min-width: 1181px) {
-  .guest-home--guest .home-dashboard-grid.guest-home__layout,
-  :root[data-content-layout="framed"] .guest-home--guest .guest-home__layout {
-    grid-template-columns: minmax(0, 2.05fr) minmax(18rem, 1fr);
+  .guest-home__course-column {
+    padding-right: 12px;
+  }
+
+  .guest-home__discussion-column {
+    padding-left: 12px;
+  }
+
+  :is(.guest-home--guest, .guest-home--authenticated)
+    .home-dashboard-grid.guest-home__layout,
+  :root[data-content-layout="framed"]
+    :is(.guest-home--guest, .guest-home--authenticated)
+    .guest-home__layout {
+    column-gap: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
   }
 }
 

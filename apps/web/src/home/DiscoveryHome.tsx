@@ -88,7 +88,7 @@ function DiscoveryCourseSection({
 
   return (
     <section
-      className="dashboard-panel home-continue-panel guest-home__course-section"
+      className="dashboard-panel home-continue-panel home-course-section guest-home__course-section"
       aria-labelledby={sectionId}
     >
       <HomeSectionHeader

@@ -813,7 +813,7 @@ export function StudentHome({
           .join(" ")}
       >
         {initialEnrollmentLoading || initialEnrollmentError ? (
-          <section className="dashboard-panel home-continue-panel">
+          <section className="dashboard-panel home-continue-panel home-course-section">
             <HomeSectionHeader
               icon={BookOpen}
               title="Continue Learning"
@@ -835,14 +835,14 @@ export function StudentHome({
             </div>
           </section>
         ) : remainingEnrolledCourses.length >= 2 ? (
-          <section className="dashboard-panel home-continue-panel min-w-0">
+          <section className="dashboard-panel home-continue-panel home-course-section min-w-0">
             <HomeSectionHeader
               icon={BookOpen}
               title="Continue Learning"
               action="View All"
               onAction={() => onNavigatePage("courses")}
             />
-            <div className="mt-2 min-w-0">
+            <div className="home-course-section__row">
               <HomeCourseRow
                 id="student-home-continue-learning"
                 label="Continue Learning"

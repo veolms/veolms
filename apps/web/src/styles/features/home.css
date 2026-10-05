@@ -26,6 +26,23 @@
   align-items: stretch;
 }
 
+/* Home course panels own their content inset through child wrappers. The
+   panel itself stays flush so its padding is never mistaken for Layer-3
+   shadow clearance. */
+.home-course-section {
+  padding: 0;
+}
+
+.home-course-section > .dashboard-section-heading {
+  margin: 14px 14px 0;
+}
+
+.home-course-section__row,
+.home-course-section > .home-mini-course-grid {
+  min-width: 0;
+  margin: 10px 14px 14px;
+}
+
 .home-metric {
   min-height: 96px;
   padding: 11px 12px;

@@ -697,16 +697,6 @@
   height: 40px;
 }
 
-.student-home-zero-progress__more-courses-panel {
-  overflow: hidden;
-}
-
-.student-home-zero-progress__more-courses-panel
-  .home-course-row__viewport-shell {
-  overflow: hidden;
-  border-radius: 10px;
-}
-
 :is(
     .student-home-zero-progress__popular-discussions-panel,
     .student-home-progressed__popular-discussions-panel
@@ -738,20 +728,25 @@
 
 @media (min-width: 1181px) {
   .home-dashboard-grid.student-home-zero-progress__dashboard-grid {
-    grid-template-columns: minmax(0, 1.12fr) minmax(16rem, 0.84fr);
+    column-gap: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
     grid-template-rows: auto;
     min-height: 0;
   }
 
   .student-home-zero-progress__course-column {
+    box-sizing: border-box;
     min-height: 0;
+    padding-right: 12px;
   }
 
   .student-home-zero-progress__discussion-column {
+    box-sizing: border-box;
     display: flex;
     align-self: stretch;
     min-height: 0;
     overflow: hidden;
+    padding-left: 12px;
   }
 
   .student-home-zero-progress__discussion-column > .home-discussions-panel {

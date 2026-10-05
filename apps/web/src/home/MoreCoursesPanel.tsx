@@ -59,7 +59,12 @@ export function MoreCoursesPanel({
 }: MoreCoursesPanelProps) {
   return (
     <section
-      className={["dashboard-panel", className, "min-w-0"]
+      className={[
+        "dashboard-panel",
+        "home-course-section",
+        className,
+        "min-w-0",
+      ]
         .filter(Boolean)
         .join(" ")}
       aria-labelledby={`${id}-title`}
@@ -71,7 +76,7 @@ export function MoreCoursesPanel({
         action="Explore all"
         onAction={() => onNavigatePage("/courses")}
       />
-      <div className="mt-2 min-w-0">
+      <div className="home-course-section__row">
         <HomeCourseRow
           id={id}
           label="More Courses for You"
