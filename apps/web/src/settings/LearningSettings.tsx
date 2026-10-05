@@ -3,10 +3,9 @@ import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ClosedCaptioningIcon as ClosedCaptioning } from "@phosphor-icons/react/ClosedCaptioning";
 import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
-import { TargetIcon as Target } from "@phosphor-icons/react/Target";
 import { AppSlider } from "../AppSlider";
-import { ThemedSelect } from "../ThemedSelect";
 import { CurriculumTestControls } from "./CurriculumTestControls";
+import { LearningGoalSettingsCard } from "./LearningGoalSettingsCard";
 import { PlayerThemePicker } from "./PlayerThemePicker";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
 import "../styles/features/settings/learning.css";
@@ -14,7 +13,6 @@ import {
   LEARNING_PREFERENCES_KEY,
   LEARNING_PREFERENCES_EVENT,
   LEARNING_PREFERENCE_DEFAULTS,
-  LEARNING_REMINDER_DAYS,
   LEARNING_SEEK_INTERVAL_MAX,
   LEARNING_SEEK_INTERVAL_MIN,
   LEARNING_SEEK_INTERVAL_PRESETS,
@@ -23,21 +21,18 @@ import {
 } from "./settingsPreferences";
 import type { LearningPreferences } from "./settingsPreferences";
 
-export function LearningSettings() {
+export function LearningSettings({
+  isAuthenticated = true,
+}: {
+  isAuthenticated?: boolean;
+}) {
   const [preferences, setPreferences] = useState({
     ...LEARNING_PREFERENCE_DEFAULTS,
-    reminderDays: [...LEARNING_PREFERENCE_DEFAULTS.reminderDays],
   });
   const [storageReady, setStorageReady] = useState(false);
   const [customSeekInterval, setCustomSeekInterval] = useState(false);
   const update = (next: Partial<LearningPreferences>) =>
     setPreferences((current) => ({ ...current, ...next }));
-  const toggleReminderDay = (day: string) =>
-    update({
-      reminderDays: preferences.reminderDays.includes(day)
-        ? preferences.reminderDays.filter((item) => item !== day)
-        : [...preferences.reminderDays, day],
-    });
   const updateSeekInterval = (value: string) => {
     const isCustom = value === "custom";
     setCustomSeekInterval(isCustom);
@@ -223,90 +218,7 @@ export function LearningSettings() {
           </div>
         </section>
 
-        <section
-          className="settings-learning-card"
-          aria-labelledby="learning-goal-heading"
-        >
-          <header className="settings-learning-card__heading">
-            <Target size={21} weight="duotone" />
-            <h3 id="learning-goal-heading">Learning goal &amp; reminders</h3>
-          </header>
-          <div className="settings-learning-card__rows">
-            <LearningSelectRow
-              id="learning-weekly-goal"
-              label="Weekly learning goal"
-              note="Set a goal for how much you want to learn each week."
-              value={preferences.weeklyGoal}
-              onChange={(weeklyGoal) => update({ weeklyGoal })}
-              options={[
-                ["3", "3 hours"],
-                ["5", "5 hours"],
-                ["7", "7 hours"],
-                ["10", "10 hours"],
-              ]}
-            />
-            <LearningToggleRow
-              label="Learning reminders"
-              note="Get reminded to keep your learning streak going."
-              checked={preferences.learningReminders}
-              onChange={(learningReminders) => update({ learningReminders })}
-            />
-            <fieldset
-              className="settings-learning-reminder-fields"
-              disabled={!preferences.learningReminders}
-            >
-              <legend>Reminder schedule</legend>
-              <span className="settings-learning-field-label">Days</span>
-              <div
-                className="settings-learning-days"
-                aria-label="Reminder days"
-              >
-                {LEARNING_REMINDER_DAYS.map(([day, label]) => (
-                  <button
-                    type="button"
-                    key={day}
-                    aria-pressed={preferences.reminderDays.includes(day)}
-                    onClick={() => toggleReminderDay(day)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="settings-learning-reminder-selects">
-                <div>
-                  <span>Time</span>
-                  <ThemedSelect
-                    id="learning-reminder-time"
-                    value={preferences.reminderTime}
-                    onValueChange={(reminderTime) => update({ reminderTime })}
-                    ariaLabel="Reminder time"
-                    options={[
-                      ["07:00", "7:00 AM"],
-                      ["12:00", "12:00 PM"],
-                      ["19:00", "7:00 PM"],
-                      ["21:00", "9:00 PM"],
-                    ]}
-                  />
-                </div>
-                <div>
-                  <span>Time zone</span>
-                  <ThemedSelect
-                    id="learning-time-zone"
-                    value={preferences.timeZone}
-                    onValueChange={(timeZone) => update({ timeZone })}
-                    ariaLabel="Reminder time zone"
-                    options={[
-                      ["Asia/Kolkata (IST)", "Asia/Kolkata (IST)"],
-                      ["Europe/London (GMT)", "Europe/London (GMT)"],
-                      ["America/New_York (EST)", "America/New_York (EST)"],
-                      ["Asia/Singapore (SGT)", "Asia/Singapore (SGT)"],
-                    ]}
-                  />
-                </div>
-              </div>
-            </fieldset>
-          </div>
-        </section>
+        <LearningGoalSettingsCard isAuthenticated={isAuthenticated} />
 
         <section
           className="settings-learning-card"
