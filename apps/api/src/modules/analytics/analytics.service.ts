@@ -256,7 +256,13 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     }
 
     if (isAdmin(actor)) {
-      const mine = await courseService.listMyCourses(actor.id, actor.roles);
+      // Summaries, not listMyCourses: scope resolution only needs ids and
+      // titles, and listMyCourses hydrates media URLs at up to ~5 queries
+      // per course before a single aggregate has run.
+      const mine = await courseService.listMyCourseSummaries(
+        actor.id,
+        actor.roles,
+      );
       return {
         courseIds: mine.courses.map((course) => course.id),
         courses: mine.courses.map((course) => ({
@@ -270,7 +276,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       };
     }
 
-    const mine = await courseService.listAvailableCoursesByCreator(actor.id);
+    const mine = await courseService.listMyCourseSummaries(actor.id);
     return {
       courseIds: mine.courses.map((course) => course.id),
       courses: mine.courses.map((course) => ({

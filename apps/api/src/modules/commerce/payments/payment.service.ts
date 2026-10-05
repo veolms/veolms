@@ -10,56 +10,22 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import { toMinorUnits } from "../shared/currency.ts";
+import { isUniqueViolation } from "../shared/db-errors.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import { createPaymentReconciliationService } from "./payment-reconciliation.service.ts";
-import { toPaymentContract } from "./payment.mapper.ts";
+import { toPaymentContract, toPaymentProvider } from "./payment.mapper.ts";
 
 /**
  * Course pricing is currently stored in major currency units (for example,
  * 499 means ₹499). Payment gateways expect the amount in the currency's
  * smallest unit (for INR, 49900 paise). Keep this conversion at the gateway
- * boundary so internal course/order pricing remains unchanged.
+ * boundary so internal course/order pricing remains unchanged. Shared with
+ * the refund paths so full/partial comparisons use one definition.
  */
 function toGatewayAmount(amount: number, currency: string): number {
-  if (!Number.isSafeInteger(amount) || amount < 0) {
-    throw new Error(`Invalid order amount: ${amount}`);
-  }
-
-  // Razorpay uses the smallest unit for the supported currencies. The
-  // current course-pricing UI stores whole major units, so standard
-  // two-decimal currencies use a 100x conversion. Zero-decimal currencies
-  // must not be multiplied.
-  const zeroDecimalCurrencies = new Set([
-    "BIF",
-    "CLP",
-    "DJF",
-    "GNF",
-    "JPY",
-    "KMF",
-    "KRW",
-    "MGA",
-    "PYG",
-    "RWF",
-    "UGX",
-    "VND",
-    "VUV",
-    "XAF",
-    "XOF",
-    "XPF",
-  ]);
-  const multiplier = zeroDecimalCurrencies.has(currency.toUpperCase())
-    ? 1
-    : 100;
-  const gatewayAmount = amount * multiplier;
-
-  if (!Number.isSafeInteger(gatewayAmount)) {
-    throw new Error(
-      `Order amount is too large for gateway: ${amount} ${currency}`,
-    );
-  }
-
-  return gatewayAmount;
+  return toMinorUnits(amount, currency);
 }
 
 export interface PaymentService {
@@ -132,10 +98,39 @@ export function createPaymentService({
       throw CommerceErrors.PAYMENT_ALREADY_PROCESSED();
     }
 
-    // 2. Create upstream order via the gateway abstraction (Razorpay, Stripe, etc.).
+    const gatewayAmount = toGatewayAmount(order.total_amount, order.currency);
+
+    // 2. Reuse an in-flight gateway order when nothing changed. Every
+    //    re-initialization used to create a FRESH gateway order and
+    //    overwrite gateway_order_id — but the old gateway order stays
+    //    payable at the provider, so a user paying it (second tab, slow
+    //    checkout page, double click) produced captured money attached to
+    //    a gateway order id no payment row references anymore.
+    const isReusable =
+      payment &&
+      (payment.status === "initiated" || payment.status === "processing") &&
+      payment.gateway_order_id !== null &&
+      payment.amount === gatewayAmount &&
+      payment.currency === order.currency &&
+      payment.gateway_provider === paymentGateway.providerName;
+
+    if (payment && isReusable) {
+      await recordPaymentAttempt(payment.id);
+      return {
+        payment: toPaymentContract(payment),
+        gatewayOrder: {
+          provider: toPaymentProvider(payment.gateway_provider),
+          gatewayOrderId: payment.gateway_order_id!,
+          amount: payment.amount,
+          currency: payment.currency,
+          keyId: payment.gateway_key_id ?? undefined,
+        },
+      };
+    }
+
+    // 3. Create upstream order via the gateway abstraction (Razorpay, Stripe, etc.).
     // The gateway receives minor units; the internal order remains in the
     // major-unit format used by the current course-pricing configuration.
-    const gatewayAmount = toGatewayAmount(order.total_amount, order.currency);
     const gatewayOrder = await paymentGateway.createOrder({
       orderId: order.id,
       orderNumber: order.order_number,
@@ -150,58 +145,71 @@ export function createPaymentService({
     });
 
     if (!payment) {
-      payment = await paymentRepo.insertPayment(database, {
-        id: crypto.randomUUID(),
-        order_id: order.id,
-        gateway_provider: paymentGateway.providerName,
-        gateway_order_id: gatewayOrder.gatewayOrderId,
-        gateway_payment_id: null,
-        gateway_key_id: gatewayOrder.keyId ?? null,
-        // Persist the gateway amount so refunds and gateway events use the
-        // same minor-unit representation as Razorpay.
-        amount: gatewayOrder.amount,
-        currency: order.currency,
-        status: "initiated",
-      });
-    } else {
-      // A payment row already existed (e.g. an earlier abandoned/retried
-      // checkout) but wasn't captured, so a fresh gateway order was just
-      // created above. Without persisting its id here, the DB would keep
-      // the stale gateway_order_id from the earlier attempt while the
-      // client is handed this new one — verifyPayment's
-      // findPaymentByGatewayOrderId(newId) would then find nothing and
-      // throw PAYMENT_NOT_FOUND even though the gateway actually processed
-      // the charge against the new order.
-      const updated = await paymentRepo.updatePayment(database, payment.id, {
-        gateway_order_id: gatewayOrder.gatewayOrderId,
-        gateway_key_id: gatewayOrder.keyId ?? null,
-        amount: gatewayOrder.amount,
-        currency: order.currency,
-        status: "initiated",
-        error_code: null,
-        error_description: null,
-        updated_at: new Date(),
-      });
-      if (!updated) {
-        throw new Error(
-          `initializePayment: payment ${payment.id} disappeared while re-initializing`,
+      try {
+        payment = await paymentRepo.insertPayment(database, {
+          id: crypto.randomUUID(),
+          order_id: order.id,
+          gateway_provider: paymentGateway.providerName,
+          gateway_order_id: gatewayOrder.gatewayOrderId,
+          gateway_payment_id: null,
+          gateway_key_id: gatewayOrder.keyId ?? null,
+          // Persist the gateway amount so refunds and gateway events use the
+          // same minor-unit representation as Razorpay.
+          amount: gatewayOrder.amount,
+          currency: order.currency,
+          status: "initiated",
+        });
+      } catch (err) {
+        // payments_active_order_unique: a concurrent initializePayment for
+        // the same order inserted its row first. Adopt the winner's row
+        // (and its gateway order) rather than racing it — two live rows
+        // for one order is exactly what the index forbids.
+        if (!isUniqueViolation(err)) throw err;
+        const winner = await paymentRepo.findPaymentByOrderId(
+          database,
+          orderId,
         );
+        if (!winner || !winner.gateway_order_id) {
+          throw CommerceErrors.PAYMENT_NOT_FOUND(orderId);
+        }
+        if (winner.status === "captured") {
+          throw CommerceErrors.PAYMENT_ALREADY_PROCESSED();
+        }
+        await recordPaymentAttempt(winner.id);
+        return {
+          payment: toPaymentContract(winner),
+          gatewayOrder: {
+            provider: toPaymentProvider(winner.gateway_provider),
+            gatewayOrderId: winner.gateway_order_id,
+            amount: winner.amount,
+            currency: winner.currency,
+            keyId: winner.gateway_key_id ?? undefined,
+          },
+        };
+      }
+    } else {
+      // A payment row already existed (earlier abandoned/failed attempt, or
+      // the amount/currency changed) and a fresh gateway order was created
+      // above. Persist its id — conditionally: if a webhook captured the
+      // old gateway order between our read and this write, stomping the row
+      // back to "initiated" would orphan that captured money.
+      const updated = await paymentRepo.reinitializePaymentIfNotFinal(
+        database,
+        payment.id,
+        {
+          gateway_order_id: gatewayOrder.gatewayOrderId,
+          gateway_key_id: gatewayOrder.keyId ?? null,
+          amount: gatewayOrder.amount,
+          currency: order.currency,
+        },
+      );
+      if (!updated) {
+        throw CommerceErrors.PAYMENT_ALREADY_PROCESSED();
       }
       payment = updated;
     }
 
-    // Record initial payment attempt
-    const existingAttempts = await paymentRepo.listPaymentAttempts(
-      database,
-      payment.id,
-    );
-    await paymentRepo.insertPaymentAttempt(database, {
-      id: crypto.randomUUID(),
-      payment_id: payment.id,
-      gateway_payment_id: null,
-      attempt_number: existingAttempts.length + 1,
-      status: "initiated",
-    });
+    await recordPaymentAttempt(payment.id);
 
     return {
       payment: toPaymentContract(payment),
@@ -213,6 +221,20 @@ export function createPaymentService({
         keyId: gatewayOrder.keyId,
       },
     };
+  }
+
+  async function recordPaymentAttempt(paymentId: string): Promise<void> {
+    const existingAttempts = await paymentRepo.listPaymentAttempts(
+      database,
+      paymentId,
+    );
+    await paymentRepo.insertPaymentAttempt(database, {
+      id: crypto.randomUUID(),
+      payment_id: paymentId,
+      gateway_payment_id: null,
+      attempt_number: existingAttempts.length + 1,
+      status: "initiated",
+    });
   }
 
   /**

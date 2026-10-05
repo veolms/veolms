@@ -53,4 +53,11 @@ export interface NotificationRecipient {
 
 export interface NotificationRecipientDirectory {
   findRecipient(userId: string): Promise<NotificationRecipient | undefined>;
+  /**
+   * Optional bulk variant — fan-out events resolve every recipient of a
+   * course; one-query-per-recipient dominates their processing time.
+   * Implementations may return fewer rows than requested ids (unknown ids
+   * are simply absent).
+   */
+  findRecipients?(userIds: readonly string[]): Promise<NotificationRecipient[]>;
 }

@@ -451,7 +451,7 @@ export async function listAllCourses(database: Kysely<Database>) {
 export async function listAllCourseScope(database: Kysely<Database>) {
   return await database
     .selectFrom("courses")
-    .select(["id", "status"])
+    .select(["id", "title", "status", "created_at", "published_at"])
     .where("deleted_at", "is", null)
     .orderBy("updated_at", "desc")
     .orderBy("created_at", "desc")
@@ -551,7 +551,7 @@ export async function listAvailableCourseScopeByCreator(
 ) {
   return await database
     .selectFrom("courses")
-    .select(["id", "status"])
+    .select(["id", "title", "status", "created_at", "published_at"])
     .where("creator_id", "=", creatorId)
     .where("status", "=", "published")
     .where("deleted_at", "is", null)

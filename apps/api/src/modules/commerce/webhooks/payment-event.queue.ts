@@ -26,14 +26,17 @@ export interface DurablePaymentEventQueueOptions {
  * 2. Processes events immediately via `setImmediate()` for near-zero latency.
  * 3. Runs a background recovery loop that polls for any unprocessed `webhook_events`
  *    (e.g., from server restarts, crash recoveries, or unhandled exceptions).
- * 4. Supports multi-instance deployments safely without duplicate fulfillment.
+ * 4. Supports multi-instance deployments safely: rows are claimed with
+ *    `FOR UPDATE SKIP LOCKED` plus a short lease (`next_attempt_at`), so two
+ *    replicas never process the same event concurrently.
  *
- * A handler failure records the error but leaves `processed_at` NULL (see
- * `markWebhookEventFailed`), so the row is picked up again on the next poll
- * tick instead of being silently buried. There is currently no attempt cap,
- * backoff, or alert on repeated failures — an event that fails every time
- * will retry forever at `pollIntervalMs` cadence with only a log line per
- * attempt.
+ * A handler failure records the error, leaves `processed_at` NULL, and
+ * schedules the retry with exponential backoff (claim-counted `attempts`,
+ * `RETRY_BASE_DELAY_SECONDS * 2^attempts`, capped at `RETRY_MAX_DELAY_SECONDS`).
+ * After `MAX_ATTEMPTS` the event is dead-lettered (`dead_at` set): it stops
+ * being claimed — so a poisoned event can no longer occupy one of the poll
+ * batch's slots and starve every newer webhook (head-of-line blocking) — but
+ * stays in the table for operators to inspect and requeue (clear `dead_at`).
  */
 export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
   private readonly database: Kysely<Database>;
@@ -119,22 +122,47 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
     }
   }
 
+  /** Attempts after which an event is dead-lettered instead of retried. */
+  private static readonly MAX_ATTEMPTS = 8;
+  /** First retry delay; doubles per attempt. */
+  private static readonly RETRY_BASE_DELAY_SECONDS = 10;
+  /** Upper bound on the retry delay. */
+  private static readonly RETRY_MAX_DELAY_SECONDS = 3600;
+  /**
+   * Claim lease: how long a claimed row is invisible to other claimers while
+   * being processed. Long enough for a slow fulfillment transaction, short
+   * enough that a crashed claimer's row comes back quickly.
+   */
+  private static readonly CLAIM_LEASE_SECONDS = 120;
+
+  private retryDelaySeconds(attempts: number): number {
+    const exponential =
+      DurablePostgresPaymentEventQueue.RETRY_BASE_DELAY_SECONDS *
+      2 ** Math.min(attempts, 30);
+    return Math.min(
+      exponential,
+      DurablePostgresPaymentEventQueue.RETRY_MAX_DELAY_SECONDS,
+    );
+  }
+
   private async runPendingEvents(): Promise<void> {
     try {
-      // Find unprocessed webhook events
-      const pendingEvents = await this.database
-        .selectFrom("webhook_events")
-        .selectAll()
-        .where("processed_at", "is", null)
-        .orderBy("created_at", "asc")
-        .limit(10)
-        .execute();
+      // Atomically claim due events (FOR UPDATE SKIP LOCKED + lease) — safe
+      // against other replicas and against a poll tick racing an enqueue kick.
+      const pendingEvents = await webhookRepo.claimDueWebhookEvents(
+        this.database,
+        {
+          limit: 10,
+          leaseSeconds: DurablePostgresPaymentEventQueue.CLAIM_LEASE_SECONDS,
+        },
+      );
 
       for (const eventRow of pendingEvents) {
         const log = this.logger?.child({
           eventId: eventRow.id,
           providerEventId: eventRow.event_id,
           eventType: eventRow.event_type,
+          attempt: eventRow.attempts,
         });
 
         try {
@@ -157,13 +185,35 @@ export class DurablePostgresPaymentEventQueue implements PaymentEventQueue {
           );
           log?.info("Durable webhook event processed successfully");
         } catch (err: unknown) {
-          log?.error({ err }, "Error processing durable webhook event");
-          // Do NOT mark processed — leave processed_at NULL so the next poll
-          // picks this event back up. See markWebhookEventFailed.
+          const message = (err as Error)?.message || "Worker error";
+          const isDead =
+            eventRow.attempts >= DurablePostgresPaymentEventQueue.MAX_ATTEMPTS;
+
+          if (isDead) {
+            log?.error(
+              { err },
+              "Durable webhook event exhausted retries — dead-lettered. " +
+                "Inspect webhook_events.error and clear dead_at to requeue.",
+            );
+          } else {
+            log?.error(
+              { err },
+              "Error processing durable webhook event; will retry with backoff",
+            );
+          }
+
           await webhookRepo.markWebhookEventFailed(
             this.database,
             eventRow.id,
-            (err as Error)?.message || "Worker error",
+            message,
+            isDead
+              ? { deadAt: new Date() }
+              : {
+                  nextAttemptAt: new Date(
+                    Date.now() +
+                      this.retryDelaySeconds(eventRow.attempts) * 1000,
+                  ),
+                },
           );
         }
       }

@@ -8,6 +8,7 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { AppError } from "../../../lib/errors.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import { toMinorUnits } from "../shared/currency.ts";
 import * as refundRepo from "./refund.repository.ts";
 import { toRefundContract } from "./refund.mapper.ts";
 import * as orderRepo from "../orders/order.repository.ts";
@@ -180,11 +181,18 @@ export function createRefundService({
         );
       }
 
-      // If orderItemId was provided without an explicit amount, default to target item final amount
+      // If orderItemId was provided without an explicit amount, default to
+      // the target item's final amount. `order_items.final_amount` is in
+      // major units while `payment.amount` / refund amounts are gateway
+      // minor units (see shared/currency.ts) — convert before comparing,
+      // otherwise this default refunds 1/100 of the item's price.
       const requestedAmount =
         amount ??
         (targetItem
-          ? Math.min(targetItem.final_amount, maxRefundable)
+          ? Math.min(
+              toMinorUnits(targetItem.final_amount, payment.currency),
+              maxRefundable,
+            )
           : maxRefundable);
       if (requestedAmount > maxRefundable) {
         throw CommerceErrors.REFUND_NOT_ALLOWED(
@@ -205,6 +213,9 @@ export function createRefundService({
         status: "pending",
         created_by: adminUserId,
         idempotency_key: idempotencyKey ?? null,
+        // Persisted so the webhook/reconciliation paths that may finish
+        // this refund asynchronously honor the admin's choice.
+        preserve_access: request.preserveAccess ?? false,
         created_at: now,
         updated_at: now,
       });
