@@ -68,12 +68,10 @@ export function createPaymentWorker({
       );
       return { status: "processed" as const };
     } catch (error) {
+      // Failure bookkeeping (error column, retry backoff, dead-lettering)
+      // belongs to the queue's catch in payment-event.queue.ts — writing the
+      // error here too would race/overwrite its backoff scheduling.
       log?.error({ err: error }, "Payment worker job execution failed");
-      await webhookRepository.markWebhookEventFailed(
-        database,
-        event.eventId,
-        error instanceof Error ? error.message : "Worker error",
-      );
       throw error;
     }
   }
@@ -92,11 +90,19 @@ export function createPaymentWorker({
       event.gatewayOrderId,
     );
     if (!payment) {
+      // Do NOT swallow this as "skipped": a missing payment row usually means
+      // the webhook raced checkout's payment insert, or the user paid against
+      // a gateway order that a payment re-initialization replaced. Marking the
+      // event processed here would bury a CAPTURED payment with no
+      // fulfillment and no alert. Throwing lets the queue retry with backoff
+      // and dead-letter it (visibly) if the payment row never appears.
       log?.warn(
         { gatewayOrderId: event.gatewayOrderId },
-        "No payment record found",
+        "No payment record found for successful payment event; will retry",
       );
-      return { status: "skipped" as const };
+      throw new Error(
+        `No payment record found for gateway order ${event.gatewayOrderId}`,
+      );
     }
 
     const result = await reconciliation.finalizeSuccessfulPayment({

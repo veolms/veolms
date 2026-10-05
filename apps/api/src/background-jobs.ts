@@ -58,7 +58,9 @@ export function registerBackgroundJobs(
 
   app.addHook("onClose", async () => {
     await paymentEventQueue.stop?.();
-    fulfillmentScheduler.stop();
+    // Awaited so an in-flight reconciliation cycle finishes before the
+    // shared Kysely instance is destroyed right after these hooks.
+    await fulfillmentScheduler.stop();
   });
 
   return paymentEventQueue;
