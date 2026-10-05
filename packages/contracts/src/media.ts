@@ -259,6 +259,13 @@ export const videoJobEventSchema = z.looseObject({
   action: lambdaActionSchema.optional(),
   status: videoJobStatusSchema.optional(),
   jobId: z.uuid().optional(),
+  /**
+   * The transcoding provider's own job id (e.g. the AWS MediaConvert job
+   * id), captured at dispatch. Cancellation must address the provider by
+   * THIS id — `jobId` is VeoLMS's internal uuid, which the provider has
+   * never heard of.
+   */
+  providerJobId: z.string().min(1).optional(),
   videoId: z.uuid().optional(),
   videoKey: z.string().min(1).optional(),
   outputPrefix: z.string().min(1).optional(),

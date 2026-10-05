@@ -209,6 +209,19 @@ export async function updateVideoJobStatus(
     .execute();
 }
 
+/** Records the transcoding provider's own job id, captured at dispatch. */
+export async function setVideoJobProviderJobId(
+  database: Kysely<Database>,
+  jobId: string,
+  providerJobId: string,
+) {
+  await database
+    .updateTable("video_jobs")
+    .set({ provider_job_id: providerJobId, updated_at: new Date() })
+    .where("id", "=", jobId)
+    .execute();
+}
+
 export async function findVideoJobById(
   database: Kysely<Database>,
   jobId: string,

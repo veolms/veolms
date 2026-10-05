@@ -9,8 +9,7 @@
     "./payment": "./src/payment/index.ts",
     "./video": "./src/video/index.ts",
     "./course-static-pages": "./src/course-static-pages/index.ts",
-    "./cdn": "./src/cdn/index.ts",
-    "./background-jobs": "./src/background-jobs/index.ts"
+    "./cdn": "./src/cdn/index.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
