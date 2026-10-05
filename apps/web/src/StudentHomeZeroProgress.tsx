@@ -276,7 +276,7 @@ export function StudentHomeZeroProgress({
             <small className="mt-2 text-xs text-(--muted)">
               Enrolled {formatRelativeTime(primaryEnrollment.enrolledAt)}
             </small>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="student-home-zero-progress__hero-actions mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
                 className="primary-learning-action !mt-0"
@@ -290,7 +290,7 @@ export function StudentHomeZeroProgress({
               </button>
               <button
                 type="button"
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-(--control-radius-action) border border-(--border) px-4 text-sm font-semibold text-(--text) hover:border-(--border-strong) hover:text-(--accent-ink,var(--accent)) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                className="student-home-zero-progress__hero-curriculum-action inline-flex min-h-10 items-center justify-center gap-2 rounded-(--control-radius-action) border border-(--border) px-4 text-(--text) hover:border-(--border-strong) hover:text-(--accent-ink,var(--accent)) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
                 onClick={() => onNavigatePage(curriculumPath)}
               >
                 <BookOpen size={18} aria-hidden="true" />

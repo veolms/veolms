@@ -188,7 +188,10 @@
   width: 100%;
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview] {
   display: grid;
   align-content: start;
@@ -196,13 +199,19 @@
   padding-block: 6px;
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact {
   margin: 0;
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   .discussion-hub__card-preview {
   display: -webkit-box;
@@ -214,14 +223,20 @@
   line-clamp: 2;
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact {
   --discussion-mobile-card-height: 126px;
   --discussion-mobile-content-height: 99px;
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact
   .discussion-thread__body {
@@ -229,7 +244,10 @@
   height: var(--discussion-mobile-content-height);
 }
 
-.guest-home__discussion-panel
+:is(
+    .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact
   .discussion-hub__card-preview-row {
@@ -246,7 +264,10 @@
 }
 
 @media (max-width: 1180px) {
-  .guest-home__discussion-panel
+  :is(
+      .guest-home__discussion-panel,
+      .student-home-zero-progress__popular-discussions-panel
+    )
     > .creator-discussion-list[data-dashboard-discussion-preview] {
     flex: 0 0 360px;
     height: 360px;
@@ -380,18 +401,33 @@
     white-space: normal;
   }
 
-  .guest-home .guest-home__discussion-panel {
-    padding-inline: 10px;
+  :is(
+    .guest-home .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  ) {
+    padding-inline: 0;
   }
 
-  .guest-home
-    .guest-home__discussion-panel
+  :is(
+      .guest-home .guest-home__discussion-panel,
+      .student-home-zero-progress__popular-discussions-panel
+    )
+    > .dashboard-section-heading {
+    margin-inline: 10px;
+  }
+
+  :is(
+      .guest-home .guest-home__discussion-panel,
+      .student-home-zero-progress__popular-discussions-panel
+    )
     > .creator-discussion-list[data-dashboard-discussion-preview] {
     padding-inline: 12px;
   }
 
-  .guest-home
-    .guest-home__discussion-panel
+  :is(
+      .guest-home .guest-home__discussion-panel,
+      .student-home-zero-progress__popular-discussions-panel
+    )
     > .creator-discussion-list[data-dashboard-discussion-preview]
     > .discussion-thread--workspace-card.is-compact {
     margin-inline: 0;
@@ -433,21 +469,27 @@
   }
 }
 
-.guest-home
-  .guest-home__discussion-panel
+:is(
+    .guest-home .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview] {
   padding-inline: 0;
 }
 
-.guest-home
-  .guest-home__discussion-panel
+:is(
+    .guest-home .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact {
   margin-inline: 12px;
 }
 
-.guest-home
-  .guest-home__discussion-panel
+:is(
+    .guest-home .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact:not(
     :is(:hover, :focus-within)
@@ -459,8 +501,10 @@
     var(--card-compact-shadow);
 }
 
-.guest-home
-  .guest-home__discussion-panel
+:is(
+    .guest-home .guest-home__discussion-panel,
+    .student-home-zero-progress__popular-discussions-panel
+  )
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
   border-color: color-mix(in srgb, var(--text) 18%, var(--border));
@@ -474,8 +518,73 @@
     var(--card-compact-shadow);
 }
 
-/* Keep the light Discovery Home layered without changing shared Home or card
-   surfaces used by authenticated variants. */
+/* Let the desktop grid derive the enrolled/no-progress rail height from the
+   complete left course column while keeping the discussion list independently
+   scrollable beneath its fixed header. */
+.student-home-zero-progress__discussion-column {
+  box-sizing: border-box;
+  padding: 18px 12px;
+}
+
+@media (min-width: 1181px) {
+  .home-dashboard-grid.student-home-zero-progress__dashboard-grid {
+    align-items: stretch;
+  }
+
+  .student-home-zero-progress__discussion-column {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-self: stretch;
+    flex-direction: column;
+    min-height: 0;
+    padding-block: 0;
+    padding-inline-end: 0;
+    padding-inline-start: 0;
+    overflow: visible;
+  }
+
+  .student-home-zero-progress__discussion-column > .home-discussions-panel {
+    display: flex;
+    width: 100%;
+    flex: 1 1 0;
+    min-height: 0;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .student-home-zero-progress__discussion-column
+    .home-discussion-workspace-list[data-dashboard-discussion-preview] {
+    flex: 1 1 0;
+    min-height: 0;
+    height: 0;
+    max-height: none;
+    overflow-y: auto;
+    padding-block: 6px;
+    padding-inline: 0;
+    scrollbar-gutter: stable;
+  }
+}
+
+@media (max-width: 640px) {
+  .student-home-zero-progress__discussion-column {
+    padding-block-start: 0;
+    padding-inline: 0;
+  }
+
+  .student-home .student-home-zero-progress__more-courses-panel {
+    padding: 0;
+  }
+}
+
+/* Keep the finalized light discovery carousel surface shared with the
+   authenticated zero-progress More Courses section. */
+.student-home-zero-progress__more-courses-panel {
+  position: relative;
+  z-index: 1;
+  background: var(--card-surface-soft, var(--surface));
+}
+
 :root[data-theme="light"] .guest-home--guest {
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface) 24%, var(--main-surface));
@@ -483,7 +592,8 @@
 
 :root[data-theme="light"]
   .guest-home--guest
-  :is(.guest-home__course-section, .guest-home__discussion-panel) {
+  :is(.guest-home__course-section, .guest-home__discussion-panel),
+:root[data-theme="light"] .student-home-zero-progress__more-courses-panel {
   border-color: color-mix(in srgb, var(--text) 9%, transparent);
   background: var(--card-surface-soft, var(--surface));
   box-shadow: var(--card-shadow);

@@ -73,6 +73,7 @@ export function MoreCoursesPanel({
         icon={BookOpen}
         title="More Courses for You"
         id={`${id}-title`}
+        subtitle="Discover more courses to keep learning."
         action="Explore all"
         onAction={() => onNavigatePage("/courses")}
       />
@@ -100,6 +101,7 @@ export function MoreCoursesPanel({
                 key={course.id}
                 course={adaptCourseSummaryToCatalogueCourse(course)}
                 imagePriority={index < 2}
+                publicAction="enroll"
                 onNavigatePage={onNavigatePage}
               />
             ))

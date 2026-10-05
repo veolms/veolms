@@ -649,6 +649,15 @@
   margin-top: 10px;
 }
 
+.student-home-zero-progress__hero-actions {
+  align-items: center;
+}
+
+.student-home-zero-progress__hero-curriculum-action {
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
 .student-home-zero-progress__up-next-panel {
   align-self: start;
   padding: 8px 10px;
@@ -697,10 +706,7 @@
   height: 40px;
 }
 
-:is(
-    .student-home-zero-progress__popular-discussions-panel,
-    .student-home-progressed__popular-discussions-panel
-  )
+.student-home-progressed__popular-discussions-panel
   .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact {
   border-color: color-mix(in srgb, var(--text) 18%, var(--border));
@@ -709,10 +715,7 @@
     var(--card-compact-shadow);
 }
 
-:is(
-    .student-home-zero-progress__popular-discussions-panel,
-    .student-home-progressed__popular-discussions-panel
-  )
+.student-home-progressed__popular-discussions-panel
   .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
   border-color: color-mix(in srgb, var(--text) 18%, var(--border));
@@ -739,36 +742,6 @@
     min-height: 0;
     padding-right: 12px;
   }
-
-  .student-home-zero-progress__discussion-column {
-    box-sizing: border-box;
-    display: flex;
-    align-self: stretch;
-    min-height: 0;
-    overflow: hidden;
-    padding-left: 12px;
-  }
-
-  .student-home-zero-progress__discussion-column > .home-discussions-panel {
-    display: flex;
-    align-self: stretch;
-    width: 100%;
-    min-height: 0;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .student-home-zero-progress__discussion-column
-    .home-discussion-workspace-list[data-dashboard-discussion-preview] {
-    flex: 1 1 0;
-    min-height: 0;
-    height: 0;
-    max-height: none;
-    overflow-y: auto;
-    padding-block: 6px;
-    padding-inline: 0;
-    scrollbar-gutter: stable;
-  }
 }
 
 .home-dashboard-grid > .home-progress-panel,
@@ -776,18 +749,12 @@
   align-self: stretch;
 }
 
-:is(
-    .student-home-zero-progress__popular-discussions-panel,
-    .student-home-progressed__popular-discussions-panel
-  )
+.student-home-progressed__popular-discussions-panel
   > .creator-discussion-list[data-dashboard-discussion-preview] {
   padding-inline: 0;
 }
 
-:is(
-    .student-home-zero-progress__popular-discussions-panel,
-    .student-home-progressed__popular-discussions-panel
-  )
+.student-home-progressed__popular-discussions-panel
   > .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact {
   margin-inline: 12px;
@@ -1994,6 +1961,10 @@
 
   .primary-learning-action {
     width: 100%;
+  }
+
+  .student-home-zero-progress__hero-actions {
+    justify-content: center;
   }
 
   .home-goal-summary {
