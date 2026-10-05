@@ -73,6 +73,8 @@
   padding: var(--home-layer-three-clearance, 16px)
     var(--home-layer-three-inline-clearance, 14px);
   scroll-padding-inline: var(--home-layer-three-inline-clearance, 14px);
+  border-end-start-radius: inherit;
+  border-end-end-radius: inherit;
 }
 
 .home-course-row__control {

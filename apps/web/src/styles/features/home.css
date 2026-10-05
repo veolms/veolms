@@ -33,6 +33,21 @@
   padding: 0;
 }
 
+@media (min-width: 641px) {
+  .dashboard-panel.home-course-section {
+    padding: 0;
+  }
+}
+
+@media (min-width: 1181px) {
+  .dashboard-panel.home-course-section > .dashboard-section-heading {
+    margin-inline: var(
+      --home-layer-two-inline-clearance,
+      var(--application-page-inline-gutter, 25px)
+    );
+  }
+}
+
 .home-course-section > .dashboard-section-heading {
   margin: 14px 14px 0;
 }
