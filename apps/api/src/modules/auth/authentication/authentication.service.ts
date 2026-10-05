@@ -124,6 +124,11 @@ export function createAuthService({
     return userRepository.findUserByIdIncludingDeleted(database, userId);
   }
 
+  /** Bulk display-name lookup — one query instead of findUserById per row. */
+  function listUserDisplayNamesByIds(userIds: readonly string[]) {
+    return userRepository.listUserDisplayNamesByIds(database, userIds);
+  }
+
   async function getPublicProfile(username: string) {
     const user = await userRepository.findPublicProfileByUsername(
       database,
@@ -1297,6 +1302,7 @@ export function createAuthService({
   return {
     findUserById,
     findUserByIdForNotification,
+    listUserDisplayNamesByIds,
     getPublicProfile,
     findUserByIdentifier,
     findUserByIdentifierIncludingDeleted,

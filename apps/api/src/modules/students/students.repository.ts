@@ -1,7 +1,34 @@
 import { sql } from "kysely";
-import type { DatabaseExecutor } from "@veolms/database";
+import type { ExpressionBuilder } from "kysely";
+import type { Database, DatabaseExecutor } from "@veolms/database";
 
 export type StudentsExecutor = DatabaseExecutor;
+
+/**
+ * Subquery of user ids that count as "students": holders of the student
+ * role in either role system, or anyone with an enrollment. Used as a
+ * semi-join (`u.id IN (...)`) so Postgres computes the union once and
+ * hash-joins it, instead of probing three EXISTS subqueries per user row.
+ */
+function isStudentUserIds(
+  eb: ExpressionBuilder<Database & { u: Database["users"] }, "u">,
+) {
+  return eb
+    .selectFrom("user_roles as ur")
+    .innerJoin("roles as r", "r.id", "ur.role_id")
+    .select("ur.user_id")
+    .where("r.name", "=", "student")
+    .union(
+      eb
+        .selectFrom("role_assignments as ra")
+        .innerJoin("roles as r2", "r2.id", "ra.role_id")
+        .select("ra.user_id")
+        .where("r2.name", "=", "student"),
+    )
+    .union(
+      eb.selectFrom("enrollments as e_students").select("e_students.user_id"),
+    );
+}
 
 export interface ListStudentsOptions {
   cursor?: string;
@@ -124,33 +151,13 @@ export async function listStudentsPaginated(
       "u.updated_at",
     ])
     .where("u.is_deleted", "=", false)
-    // Filter to users that are students (either have student role in user_roles/role_assignments, or have an enrollment)
-    .where((eb) =>
-      eb.or([
-        eb.exists(
-          eb
-            .selectFrom("user_roles as ur")
-            .innerJoin("roles as r", "r.id", "ur.role_id")
-            .select("r.id")
-            .whereRef("ur.user_id", "=", "u.id")
-            .where("r.name", "=", "student"),
-        ),
-        eb.exists(
-          eb
-            .selectFrom("role_assignments as ra")
-            .innerJoin("roles as r", "r.id", "ra.role_id")
-            .select("r.id")
-            .whereRef("ra.user_id", "=", "u.id")
-            .where("r.name", "=", "student"),
-        ),
-        eb.exists(
-          eb
-            .selectFrom("enrollments as e")
-            .select("e.id")
-            .whereRef("e.user_id", "=", "u.id"),
-        ),
-      ]),
-    );
+    // Filter to users that are students (either have student role in
+    // user_roles/role_assignments, or have an enrollment). Expressed as a
+    // semi-join against a UNION rather than OR-of-three-EXISTS: the OR form
+    // probes all three subqueries PER CANDIDATE ROW, which dominated the
+    // measured latency of this endpoint at 10k users; the union is computed
+    // once and hash-joined.
+    .where("u.id", "in", isStudentUserIds);
 
   if (options.search) {
     const cleanSearch = options.search.replace(/^@+/, "").trim();
@@ -278,33 +285,9 @@ export async function countTotalStudents(
     .selectFrom("users as u")
     .select((eb) => eb.fn.count<number>("u.id").as("total"))
     .where("u.is_deleted", "=", false)
-    // Filter to users that are students (either have student role in user_roles/role_assignments, or have an enrollment)
-    .where((eb) =>
-      eb.or([
-        eb.exists(
-          eb
-            .selectFrom("user_roles as ur")
-            .innerJoin("roles as r", "r.id", "ur.role_id")
-            .select("r.id")
-            .whereRef("ur.user_id", "=", "u.id")
-            .where("r.name", "=", "student"),
-        ),
-        eb.exists(
-          eb
-            .selectFrom("role_assignments as ra")
-            .innerJoin("roles as r", "r.id", "ra.role_id")
-            .select("r.id")
-            .whereRef("ra.user_id", "=", "u.id")
-            .where("r.name", "=", "student"),
-        ),
-        eb.exists(
-          eb
-            .selectFrom("enrollments as e")
-            .select("e.id")
-            .whereRef("e.user_id", "=", "u.id"),
-        ),
-      ]),
-    );
+    // Same student membership semi-join as listStudentsPaginated — this
+    // count runs on EVERY page request alongside the list.
+    .where("u.id", "in", isStudentUserIds);
 
   if (options.search) {
     const cleanSearch = options.search.replace(/^@+/, "").trim();
@@ -502,6 +485,39 @@ export async function listEnrollmentsForUserIds(
 /**
  * Batch loads learning progress records for a list of student user IDs.
  */
+/**
+ * Per-(user, course) progress aggregates for the student LIST page.
+ *
+ * The list previously fetched every learning_progress row for the page's
+ * users (listProgressForUserIds) and aggregated in JS — ~100+ rows per
+ * active user, so a 50-student page moved thousands of rows per request
+ * and page throughput was bound by Node parsing them, not by the queries.
+ * This returns at most users x courses rows with the same quantities the
+ * service was deriving. The >= 90 completion threshold must stay in sync
+ * with the detail endpoint's JS computation below.
+ */
+export async function listProgressSummariesForUserIds(
+  database: StudentsExecutor,
+  userIds: string[],
+) {
+  if (userIds.length === 0) return [];
+  return await database
+    .selectFrom("learning_progress as lp")
+    .select([
+      "lp.user_id",
+      "lp.course_id",
+      sql<number>`count(*)::int`.as("progress_rows"),
+      sql<number>`(count(*) filter (where lp.progress_percent >= 90))::int`.as(
+        "completed_lessons",
+      ),
+      sql<number>`avg(lp.progress_percent)::float`.as("avg_progress"),
+      sql<Date>`max(lp.updated_at)`.as("last_activity_at"),
+    ])
+    .where("lp.user_id", "in", userIds)
+    .groupBy(["lp.user_id", "lp.course_id"])
+    .execute();
+}
+
 export async function listProgressForUserIds(
   database: StudentsExecutor,
   userIds: string[],

@@ -705,6 +705,36 @@ export function createCourseService({
   }
 
   /**
+   * Lightweight course summaries for analytics scope resolution.
+   *
+   * The analytics endpoints only need id/title/status/dates, but previously
+   * resolved their scope through listMyCourses /
+   * listAvailableCoursesByCreator, which run the full media-URL hydration —
+   * up to ~5 extra queries PER COURSE (thumbnail + trailer delivery lookups)
+   * for URLs the analytics response never uses. This stays a single query.
+   */
+  async function listMyCourseSummaries(
+    creatorId: string,
+    userRoles?: readonly string[],
+  ) {
+    const isAdminOrInstructor =
+      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
+    const rows = isAdminOrInstructor
+      ? await courseRepo.listAllCourseScope(database)
+      : await courseRepo.listAvailableCourseScopeByCreator(database, creatorId);
+
+    return {
+      courses: rows.map((course) => ({
+        id: course.id,
+        title: course.title,
+        status: course.status as "draft" | "published" | "archived",
+        createdAt: course.created_at.toISOString(),
+        publishedAt: course.published_at?.toISOString() ?? null,
+      })),
+    };
+  }
+
+  /**
    * Updates basic course metadata with optimistic concurrency validation.
    */
   async function updateCourseBasics(
@@ -1433,6 +1463,7 @@ export function createCourseService({
     createCourse,
     listMyCourses,
     listMyCourseScope,
+    listMyCourseSummaries,
     listPublishedCourses,
     getHomeDiscovery,
     listPublishedCourseOptions,

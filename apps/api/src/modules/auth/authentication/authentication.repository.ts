@@ -10,6 +10,26 @@ export function findUserById(database: Executor, userId: string) {
     .executeTakeFirst();
 }
 
+/**
+ * Bulk display-name lookup for fan-out callers (quiz analytics, lists).
+ * Narrow select on purpose: callers that loop findUserById per row pull the
+ * full selectAll row — including avatar_data_url — once per user.
+ */
+export function listUserDisplayNamesByIds(
+  database: Executor,
+  userIds: readonly string[],
+) {
+  if (userIds.length === 0) {
+    return Promise.resolve([] as { id: string; display_name: string }[]);
+  }
+  return database
+    .selectFrom("users")
+    .select(["id", "display_name"])
+    .where("id", "in", [...userIds])
+    .where("is_deleted", "=", false)
+    .execute();
+}
+
 export function findPublicProfileByUsername(
   database: Executor,
   username: string,

@@ -148,7 +148,11 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
     const [allEnrollments, allProgress, allAvatars] = await Promise.all([
       studentsRepo.listEnrollmentsForUserIds(database, userIds),
-      studentsRepo.listProgressForUserIds(database, userIds),
+      // Aggregated per (user, course) in SQL: the raw-row variant shipped
+      // thousands of progress rows per page and page throughput was bound
+      // by Node parsing them (measured ~21 req/s at 25 connections while
+      // every individual query finished in tens of milliseconds).
+      studentsRepo.listProgressSummariesForUserIds(database, userIds),
       studentsRepo.listAvatarsForUserIds(database, userIds),
     ]);
 
@@ -189,35 +193,31 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       const userAvatars = avatarsByUserId.get(user.id) ?? [];
       const avatarUrl = resolveStudentAvatar(user.avatar_data_url, userAvatars);
 
-      // Group progress by courseId
-      const progressByCourse = new Map<string, typeof userProgress>();
-      for (const p of userProgress) {
-        const list = progressByCourse.get(p.course_id) ?? [];
-        list.push(p);
-        progressByCourse.set(p.course_id, list);
-      }
+      // Progress summaries are pre-aggregated per (user, course) in SQL;
+      // the math below mirrors the previous per-row JS computation exactly.
+      const progressByCourse = new Map(
+        userProgress.map((p) => [p.course_id, p]),
+      );
 
       let totalProgressSum = 0;
       let completedCoursesCount = 0;
 
       for (const enrollment of userEnrollments) {
         const courseLessonsCount = lessonCounts.get(enrollment.course_id) ?? 0;
-        const cProgressList = progressByCourse.get(enrollment.course_id) ?? [];
+        const summary = progressByCourse.get(enrollment.course_id);
 
         let courseProgressPercent = 0;
         if (courseLessonsCount > 0) {
-          const completedLessons = cProgressList.filter(
-            (p) => p.progress_percent >= 90,
-          ).length;
+          const completedLessons = summary?.completed_lessons ?? 0;
           courseProgressPercent = Math.min(
             100,
             Math.round((completedLessons / courseLessonsCount) * 100),
           );
-        } else if (cProgressList.length > 0) {
-          const avg =
-            cProgressList.reduce((acc, p) => acc + p.progress_percent, 0) /
-            cProgressList.length;
-          courseProgressPercent = Math.min(100, Math.round(avg));
+        } else if (summary && summary.progress_rows > 0) {
+          courseProgressPercent = Math.min(
+            100,
+            Math.round(summary.avg_progress),
+          );
         }
 
         if (courseProgressPercent >= 100) {
@@ -236,7 +236,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       // Determine last active timestamp
       let latestActive: Date | null = null;
       for (const p of userProgress) {
-        const date = new Date(p.updated_at);
+        const date = new Date(p.last_activity_at);
         if (!latestActive || date > latestActive) {
           latestActive = date;
         }
@@ -285,13 +285,22 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
                 : {
                     sortBy,
                     progress: (() => {
-                      const progressRows =
+                      // Reconstructs avg(progress_percent) over every one of
+                      // the user's progress rows from the per-course
+                      // summaries (weighted by row count) — identical to the
+                      // repository's progressSort expression.
+                      const summaries =
                         progressByUserId.get(lastStudent.id) ?? [];
-                      return progressRows.length > 0
-                        ? progressRows.reduce(
-                            (sum, row) => sum + row.progress_percent,
+                      const totalRows = summaries.reduce(
+                        (sum, row) => sum + row.progress_rows,
+                        0,
+                      );
+                      return totalRows > 0
+                        ? summaries.reduce(
+                            (sum, row) =>
+                              sum + row.avg_progress * row.progress_rows,
                             0,
-                          ) / progressRows.length
+                          ) / totalRows
                         : 0;
                     })(),
                     id: lastStudent.id,
