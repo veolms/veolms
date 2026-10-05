@@ -28,19 +28,16 @@ import type {
   TotpVerifyRequest,
   UserProfileResponse,
 } from "@veolms/contracts";
-// Domain subpaths, not the contracts barrel: this module is in the startup
-// graph of every page, and a value import of the barrel would evaluate every
-// schema module in the package at startup.
+// This module is in the startup graph of every page, so it must not import
+// zod or any schema module statically. Plain rules come from the
+// dependency-free avatar-rules subpath; the response schemas used by the
+// passkey/session/profile flows below are imported dynamically inside those
+// async calls, which keeps the validation identical while zod loads only
+// when one of them actually runs.
 import {
-  avatarUploadContentTypeSchema,
   DICEBEAR_BASE_URL,
-} from "@veolms/contracts/auth/avatar";
-import {
-  passkeyAuthenticationOptionsResponseSchema,
-  passkeyRegistrationOptionsResponseSchema,
-  sessionResponseSchema,
-} from "@veolms/contracts/auth/session";
-import { publicProfileResponseSchema } from "@veolms/contracts/auth/user";
+  isAvatarUploadContentType,
+} from "@veolms/contracts/auth/avatar-rules";
 
 export interface TotpSetupResponse {
   secret: string;
@@ -64,8 +61,7 @@ export function resolveAvatarUploadContentType(
 ): AvatarUploadContentType | null {
   const declaredType = file.type.trim().toLowerCase();
   if (declaredType) {
-    const parsedType = avatarUploadContentTypeSchema.safeParse(declaredType);
-    return parsedType.success ? parsedType.data : null;
+    return isAvatarUploadContentType(declaredType) ? declaredType : null;
   }
 
   const extension = file.name.split(".").pop()?.trim().toLowerCase() ?? "";
@@ -214,9 +210,11 @@ export const authService = {
 
   getPasskeyRegisterOptions:
     async (): Promise<PasskeyRegistrationOptionsResponse> => {
-      const response = await api.post<unknown>(
-        "/auth/passkey/register/options",
-      );
+      const [response, { passkeyRegistrationOptionsResponseSchema }] =
+        await Promise.all([
+          api.post<unknown>("/auth/passkey/register/options"),
+          import("@veolms/contracts/auth/session"),
+        ]);
       return passkeyRegistrationOptionsResponseSchema.parse(response);
     },
 
@@ -231,7 +229,11 @@ export const authService = {
 
   getPasskeyLoginOptions:
     async (): Promise<PasskeyAuthenticationOptionsResponse> => {
-      const response = await api.post<unknown>("/auth/passkey/login/options");
+      const [response, { passkeyAuthenticationOptionsResponseSchema }] =
+        await Promise.all([
+          api.post<unknown>("/auth/passkey/login/options"),
+          import("@veolms/contracts/auth/session"),
+        ]);
       return passkeyAuthenticationOptionsResponseSchema.parse(response);
     },
 
@@ -242,7 +244,10 @@ export const authService = {
   },
 
   getSessions: async (): Promise<SessionResponse[]> => {
-    const response = await api.get<unknown>("/auth/sessions");
+    const [response, { sessionResponseSchema }] = await Promise.all([
+      api.get<unknown>("/auth/sessions"),
+      import("@veolms/contracts/auth/session"),
+    ]);
     return sessionResponseSchema.array().parse(response);
   },
 
@@ -262,9 +267,10 @@ export const authService = {
   getPublicProfile: async (
     username: string,
   ): Promise<PublicProfileResponse> => {
-    const response = await api.get<unknown>(
-      `/auth/profiles/${encodeURIComponent(username)}`,
-    );
+    const [response, { publicProfileResponseSchema }] = await Promise.all([
+      api.get<unknown>(`/auth/profiles/${encodeURIComponent(username)}`),
+      import("@veolms/contracts/auth/user"),
+    ]);
     return publicProfileResponseSchema.parse(response);
   },
 
