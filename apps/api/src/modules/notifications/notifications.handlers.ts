@@ -8,6 +8,7 @@ import {
   discussionAnswerAcceptedEventSchema,
   discussionReplyCreatedEventSchema,
   learningGoalCompletedEventSchema,
+  learningReminderEventSchema,
   learningStreakMilestoneEventSchema,
   moderationContentModeratedEventSchema,
   moderationReportResolvedEventSchema,
@@ -417,6 +418,24 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         category: "learning",
         templateKey: "learning.goal_completed",
         templateData: { goalLabel: formatGoalLabel(event.dailyGoalMinutes) },
+        channels: commonChannels,
+        mandatory: false,
+        deepLink: "/",
+      },
+    ];
+  },
+  "learning.reminder": async (payload) => {
+    const event = learningReminderEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "learning.reminder",
+        category: "learning",
+        templateKey: "learning.reminder",
+        templateData: {
+          goalLabel: formatGoalLabel(event.dailyGoalMinutes),
+          streakDays: event.streakDays,
+        },
         channels: commonChannels,
         mandatory: false,
         deepLink: "/",

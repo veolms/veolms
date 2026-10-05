@@ -184,3 +184,11 @@ export const learningStreakMilestoneEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   streakDays: z.number().int().positive(),
 });
+
+export const learningReminderEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  dailyGoalMinutes: z.number().int().positive(),
+  /** Current streak that tonight's inactivity would break (0 = none). */
+  streakDays: z.number().int().nonnegative(),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
+});
