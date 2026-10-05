@@ -326,6 +326,94 @@
   }
 }
 
+@media (max-width: 640px) {
+  /* Keep Home's mobile gutters owned by the column/track wrappers:
+     the course cards and discussion cards still retain dedicated room for
+     their shadows without carrying the desktop density into narrow screens. */
+  .guest-home {
+    --home-layer-two-inline-clearance: 12px;
+  }
+
+  .home-course-section {
+    --home-mobile-course-inline-inset: 8px;
+  }
+
+  .guest-home--authenticated .home-course-section {
+    padding: 0;
+  }
+
+  .home-course-section .home-course-row__viewport {
+    padding-block-end: var(--home-layer-three-inline-clearance, 14px);
+  }
+
+  .student-home .home-course-section > .dashboard-section-heading,
+  .student-home .home-course-section > .guest-home__course-row,
+  .student-home .home-course-section > .home-course-section__row {
+    margin-inline: var(--home-mobile-course-inline-inset);
+  }
+
+  .student-home .home-course-section > .dashboard-section-heading {
+    padding-inline: var(--home-layer-three-inline-clearance, 14px);
+  }
+
+  .student-home
+    .home-course-section
+    > .dashboard-section-heading.dashboard-section-heading--with-subtitle {
+    gap: 12px;
+  }
+
+  .student-home
+    .home-course-section
+    > .dashboard-section-heading.dashboard-section-heading--with-subtitle
+    > .dashboard-section-heading__copy {
+    flex: 1 1 auto;
+  }
+
+  .student-home
+    .home-course-section
+    > .dashboard-section-heading.dashboard-section-heading--with-subtitle
+    > .dashboard-section-heading__copy
+    > .dashboard-section-heading__subtitle {
+    display: block;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .guest-home .guest-home__discussion-panel {
+    padding-inline: 10px;
+  }
+
+  .guest-home
+    .guest-home__discussion-panel
+    > .creator-discussion-list[data-dashboard-discussion-preview] {
+    padding-inline: 12px;
+  }
+
+  .guest-home
+    .guest-home__discussion-panel
+    > .creator-discussion-list[data-dashboard-discussion-preview]
+    > .discussion-thread--workspace-card.is-compact {
+    margin-inline: 0;
+  }
+
+  .guest-home--authenticated .guest-home__greeting {
+    min-height: 0;
+  }
+
+  .guest-home .guest-home__greeting h1 {
+    display: block;
+  }
+
+  .guest-home .guest-home__layout {
+    row-gap: 0;
+  }
+
+  .guest-home .guest-home__discussion-column {
+    padding-block-start: 0;
+  }
+}
+
 @media (min-width: 1181px) {
   .guest-home__course-column {
     padding-right: 12px;
