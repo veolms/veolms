@@ -43,6 +43,50 @@ declare global {
 
 let googleIdentityScript: Promise<void> | null = null;
 
+// The Google Identity script is ~100KB of third-party JavaScript that is not
+// needed for first paint or interaction. Waiting for an idle period keeps it
+// from competing with route code and the LCP image during page load.
+function scheduleIdleWork(callback: () => void): () => void {
+  if (typeof window.requestIdleCallback === "function") {
+    const handle = window.requestIdleCallback(callback, { timeout: 4000 });
+    return () => window.cancelIdleCallback(handle);
+  }
+  const handle = window.setTimeout(callback, 2000);
+  return () => window.clearTimeout(handle);
+}
+
+const FIRST_INTERACTION_EVENTS = [
+  "pointerdown",
+  "pointermove",
+  "keydown",
+  "wheel",
+  "touchstart",
+  "scroll",
+] as const;
+
+// On public pages the One Tap prompt waits for the first user gesture. A
+// passive page load never runs it, which keeps Google's "Not signed in with
+// the identity provider" console error (and the script's cost) out of visits
+// that never engage; anyone actually using the page triggers it within
+// moments. The login page keeps the idle schedule instead, since signing in
+// is that page's purpose.
+function scheduleAfterFirstInteraction(callback: () => void): () => void {
+  const options: AddEventListenerOptions = { capture: true, passive: true };
+  const cancel = () => {
+    for (const eventName of FIRST_INTERACTION_EVENTS) {
+      window.removeEventListener(eventName, handler, options);
+    }
+  };
+  const handler = () => {
+    cancel();
+    callback();
+  };
+  for (const eventName of FIRST_INTERACTION_EVENTS) {
+    window.addEventListener(eventName, handler, options);
+  }
+  return cancel;
+}
+
 function loadGoogleIdentityServices(): Promise<void> {
   if (window.google?.accounts?.id) return Promise.resolve();
   if (googleIdentityScript) return googleIdentityScript;
@@ -110,46 +154,49 @@ export function GoogleOneTap({
 
     let active = true;
 
-    void loadGoogleIdentityServices()
-      .then(() => {
-        const googleIdentity = window.google?.accounts?.id;
-        if (!active || !googleIdentity) return;
+    const cancelIdleLoad = scheduleIdleWork(() => {
+      void loadGoogleIdentityServices()
+        .then(() => {
+          const googleIdentity = window.google?.accounts?.id;
+          if (!active || !googleIdentity) return;
 
-        googleIdentity.initialize({
-          client_id: clientId,
-          auto_select: false,
-          cancel_on_tap_outside: true,
-          use_fedcm_for_prompt: true,
-          itp_support: true,
-          callback: (response) => {
-            if (!active || !response.credential) return;
+          googleIdentity.initialize({
+            client_id: clientId,
+            auto_select: false,
+            cancel_on_tap_outside: true,
+            use_fedcm_for_prompt: true,
+            itp_support: true,
+            callback: (response) => {
+              if (!active || !response.credential) return;
 
-            onPendingChangeRef.current?.(true);
-            loginRef.current(
-              { credential: response.credential },
-              {
-                onSuccess: (result) => {
-                  navigateRef.current(
-                    resolvePostAuthPath(result, returnToRef.current),
-                    { replace: true },
-                  );
+              onPendingChangeRef.current?.(true);
+              loginRef.current(
+                { credential: response.credential },
+                {
+                  onSuccess: (result) => {
+                    navigateRef.current(
+                      resolvePostAuthPath(result, returnToRef.current),
+                      { replace: true },
+                    );
+                  },
+                  onError: (error) => {
+                    onPendingChangeRef.current?.(false);
+                    onErrorRef.current?.(toOneTapErrorMessage(error));
+                  },
                 },
-                onError: (error) => {
-                  onPendingChangeRef.current?.(false);
-                  onErrorRef.current?.(toOneTapErrorMessage(error));
-                },
-              },
-            );
-          },
+              );
+            },
+          });
+          googleIdentity.prompt();
+        })
+        .catch(() => {
+          // The existing Google button remains the fallback.
         });
-        googleIdentity.prompt();
-      })
-      .catch(() => {
-        // The existing Google button remains the fallback.
-      });
+    });
 
     return () => {
       active = false;
+      cancelIdleLoad();
       cancelGoogleOneTap();
     };
   }, [clientId]);
@@ -241,47 +288,50 @@ export function GlobalGoogleOneTap() {
 
     let active = true;
 
-    void loadGoogleIdentityServices()
-      .then(() => {
-        const googleIdentity = window.google?.accounts?.id;
-        if (!active || !googleIdentity) return;
+    const cancelScheduledLoad = scheduleAfterFirstInteraction(() => {
+      void loadGoogleIdentityServices()
+        .then(() => {
+          const googleIdentity = window.google?.accounts?.id;
+          if (!active || !googleIdentity) return;
 
-        googleIdentity.initialize({
-          client_id: clientId,
-          auto_select: false,
-          cancel_on_tap_outside: true,
-          use_fedcm_for_prompt: true,
-          itp_support: true,
-          callback: (response) => {
-            if (!active || !response.credential) return;
+          googleIdentity.initialize({
+            client_id: clientId,
+            auto_select: false,
+            cancel_on_tap_outside: true,
+            use_fedcm_for_prompt: true,
+            itp_support: true,
+            callback: (response) => {
+              if (!active || !response.credential) return;
 
-            setIsVerifying(true);
-            loginRef.current(
-              { credential: response.credential },
-              {
-                onSuccess: (result) => {
-                  setIsVerifying(false);
-                  navigateRef.current(
-                    resolvePostAuthPath(result, returnToRef.current),
-                    { replace: true },
-                  );
+              setIsVerifying(true);
+              loginRef.current(
+                { credential: response.credential },
+                {
+                  onSuccess: (result) => {
+                    setIsVerifying(false);
+                    navigateRef.current(
+                      resolvePostAuthPath(result, returnToRef.current),
+                      { replace: true },
+                    );
+                  },
+                  onError: (error) => {
+                    setIsVerifying(false);
+                    setErrorMessage(toOneTapErrorMessage(error));
+                  },
                 },
-                onError: (error) => {
-                  setIsVerifying(false);
-                  setErrorMessage(toOneTapErrorMessage(error));
-                },
-              },
-            );
-          },
+              );
+            },
+          });
+          googleIdentity.prompt();
+        })
+        .catch(() => {
+          // Fallback gracefully
         });
-        googleIdentity.prompt();
-      })
-      .catch(() => {
-        // Fallback gracefully
-      });
+    });
 
     return () => {
       active = false;
+      cancelScheduledLoad();
       cancelGoogleOneTap();
     };
   }, [shouldPrompt, clientId, normalizedPath]);

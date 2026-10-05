@@ -1667,6 +1667,7 @@ export default function AcademyLayout() {
           staticCourseRouteData?.publishedCoursePageNeedsRefresh
         }
         initialCourseOverview={staticCourseRouteData?.courseOverview}
+        initialHomeDiscovery={staticCourseRouteData?.homeDiscovery}
         page={route.page}
         section={activeRouteSection}
         settingsTab={route.settingsTab}

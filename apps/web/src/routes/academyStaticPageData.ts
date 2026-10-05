@@ -1,8 +1,10 @@
 import {
   courseListResponseSchema,
   courseOverviewSchema,
+  homeDiscoveryResponseSchema,
   type CourseListResponse,
   type CourseOverviewResponse,
+  type HomeDiscoveryResponse,
 } from "@veolms/contracts";
 import { fetchStaticBuildApi } from "./staticBuildApi";
 
@@ -10,6 +12,7 @@ export interface AcademyStaticPageData {
   publishedCoursePage?: CourseListResponse;
   publishedCoursePageNeedsRefresh?: boolean;
   courseOverview?: CourseOverviewResponse;
+  homeDiscovery?: HomeDiscoveryResponse;
 }
 
 const PUBLISHED_COURSE_PAGE_SIZE = 24;
@@ -54,6 +57,21 @@ async function fetchStaticApiData<T>(
   return parse(payload);
 }
 
+let homeDiscoveryPromise: Promise<HomeDiscoveryResponse> | undefined;
+
+function loadHomeDiscovery() {
+  homeDiscoveryPromise ??= fetchStaticApiData("/home/discovery", (value) => {
+    const result = homeDiscoveryResponseSchema.safeParse(value);
+    if (!result.success) {
+      throw new Error(
+        "The build API returned invalid home discovery sections.",
+      );
+    }
+    return result.data as HomeDiscoveryResponse;
+  });
+  return homeDiscoveryPromise;
+}
+
 function loadPublishedCourses() {
   publishedCoursePagePromise ??= fetchStaticApiData(
     "/courses?limit=24&sort=latest",
@@ -89,10 +107,16 @@ export async function loadAcademyStaticPageData(
       .replace(/(?:_)?\.data$/u, "")
       .replace(/\/$/u, "") || "/";
   if (pathname === "/" || pathname === "/courses") {
-    const publishedCourses = await loadPublishedCourses();
+    const [publishedCourses, homeDiscovery] = await Promise.all([
+      loadPublishedCourses(),
+      // The guest home paints its course rows from this data at hydration,
+      // so its LCP image can be preloaded from the prerendered document.
+      pathname === "/" ? loadHomeDiscovery() : undefined,
+    ]);
     return {
       publishedCoursePage: publishedCourses.page,
       publishedCoursePageNeedsRefresh: publishedCourses.needsRefresh,
+      ...(homeDiscovery ? { homeDiscovery } : {}),
     } satisfies AcademyStaticPageData;
   }
   if (pathname.startsWith("/courses/") && pathname.endsWith("/overview")) {

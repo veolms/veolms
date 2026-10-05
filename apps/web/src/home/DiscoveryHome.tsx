@@ -1,8 +1,8 @@
-import type { CourseSummary } from "@veolms/contracts";
+import type { CourseSummary, HomeDiscoveryResponse } from "@veolms/contracts";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { PublicCourseCard } from "../courses/CourseCard";
 import { CourseCardSkeleton } from "../courses/CourseCardSkeleton";
@@ -27,6 +27,7 @@ interface DiscoveryHomeProps {
   accessibleCourseIds?: ReadonlySet<string>;
   onDiscussionNavigatePage?: NavigateTo;
   onDiscussionAccessDenied?: () => void;
+  initialDiscovery?: HomeDiscoveryResponse;
 }
 
 function DiscoveryHomeState({
@@ -203,17 +204,45 @@ function DiscoveryEnrollmentBanner({ onExplore }: { onExplore: () => void }) {
   );
 }
 
+const FINAL_RENDER_STAGE = 3;
+const INITIAL_POPULAR_CARD_COUNT = 4;
+
+function scheduleDeferredRenderStep(step: () => void): () => void {
+  if (typeof window.requestIdleCallback === "function") {
+    const handle = window.requestIdleCallback(step, { timeout: 500 });
+    return () => window.cancelIdleCallback(handle);
+  }
+  const handle = window.setTimeout(step, 80);
+  return () => window.clearTimeout(handle);
+}
+
 export function DiscoveryHome({
   mode,
   studentName,
   accessibleCourseIds,
   onDiscussionNavigatePage,
   onDiscussionAccessDenied,
+  initialDiscovery,
 }: DiscoveryHomeProps) {
-  const discoveryQuery = useHomeDiscovery();
+  const discoveryQuery = useHomeDiscovery({ initialData: initialDiscovery });
   const discussionsQuery = usePopularDiscussions();
   const navigate = useNavigate();
   const discovery = discoveryQuery.data;
+  // With build-time discovery data every card would otherwise mount in the
+  // first commit, which is one long main-thread task on mobile. Stage the
+  // below-fold rows across idle callbacks instead: the first commit paints
+  // the visible popular cards (the LCP), later commits fill in the rest.
+  // Without seeded data the rows already mount after the runtime fetch, so
+  // rendering starts at the final stage and behavior is unchanged.
+  const [renderStage, setRenderStage] = useState(
+    initialDiscovery ? 0 : FINAL_RENDER_STAGE,
+  );
+  useEffect(() => {
+    if (renderStage >= FINAL_RENDER_STAGE) return;
+    return scheduleDeferredRenderStep(() =>
+      setRenderStage((stage) => stage + 1),
+    );
+  }, [renderStage]);
   const discussions = useMemo(
     () => discussionsQuery.data?.discussions ?? [],
     [discussionsQuery.data?.discussions],
@@ -230,7 +259,14 @@ export function DiscoveryHome({
           ) : null}
           <DiscoveryCourseSection
             title="Popular Courses"
-            courses={discovery?.popularCourses ?? []}
+            courses={
+              renderStage >= 1
+                ? (discovery?.popularCourses ?? [])
+                : (discovery?.popularCourses ?? []).slice(
+                    0,
+                    INITIAL_POPULAR_CARD_COUNT,
+                  )
+            }
             isLoading={discoveryQuery.isLoading}
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
@@ -240,7 +276,7 @@ export function DiscoveryHome({
           <DiscoveryCourseSection
             title="Free Courses"
             courses={discovery?.freeCourses ?? []}
-            isLoading={discoveryQuery.isLoading}
+            isLoading={discoveryQuery.isLoading || renderStage < 2}
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
             onRetry={() => void discoveryQuery.refetch()}
@@ -250,7 +286,7 @@ export function DiscoveryHome({
           <DiscoveryCourseSection
             title="Recently Added"
             courses={discovery?.recentCourses ?? []}
-            isLoading={discoveryQuery.isLoading}
+            isLoading={discoveryQuery.isLoading || renderStage < 3}
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
             onRetry={() => void discoveryQuery.refetch()}

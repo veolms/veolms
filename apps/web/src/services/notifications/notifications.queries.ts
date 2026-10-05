@@ -22,10 +22,11 @@ export function useNotifications(filters: NotificationListFilters) {
   });
 }
 
-export function useNotificationSummary() {
+export function useNotificationSummary(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: notificationKeys.summary(),
     queryFn: notificationsService.summary,
+    enabled: options?.enabled ?? true,
     staleTime: 15_000,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,

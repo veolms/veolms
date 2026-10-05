@@ -24,6 +24,7 @@ import type {
 import type {
   CourseListResponse,
   CourseOverviewResponse,
+  HomeDiscoveryResponse,
 } from "@veolms/contracts";
 import {
   normalizeSettingsTab,
@@ -113,6 +114,10 @@ import {
   adaptCourseSummaryToCatalogueCourse,
   adaptDeletedCourseToCatalogueCourse,
 } from "./courses/courseAdapter";
+import {
+  courseThumbnailSizes,
+  getCourseThumbnailSrcSet,
+} from "./courses/courseThumbnail";
 import {
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
@@ -365,6 +370,7 @@ interface CoursesPageProps {
   initialPublishedCoursePage?: CourseListResponse;
   initialPublishedCoursePageNeedsRefresh?: boolean;
   initialCourseOverview?: CourseOverviewResponse;
+  initialHomeDiscovery?: HomeDiscoveryResponse;
   onOpenCourse: (
     course: Course | LearningCourse,
     options?: CourseOpenOptions,
@@ -852,6 +858,7 @@ export function CoursesPage({
   initialPublishedCoursePage,
   initialPublishedCoursePageNeedsRefresh = false,
   initialCourseOverview,
+  initialHomeDiscovery,
   onOpenCourse,
   onNavigatePage,
   onNavigateBack,
@@ -923,11 +930,13 @@ export function CoursesPage({
   >(null);
   // Browser-only input capabilities are applied after startup so the loading
   // boundary remains deterministic across the build and the first client pass.
-  const [compactNavigation, setCompactNavigation] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      Boolean(window.__VEO_BOOTSTRAP__?.navigation?.compact),
-  );
+  // Compact navigation must start as the prerendered "wide" value: it gates
+  // whole elements (mobile dock, sidebar controls), so reading the viewport
+  // here makes hydration fail on phones (React #418) and React then discards
+  // and re-renders the entire prerendered tree. The pre-hydration layout is
+  // CSS-driven via data-navigation-layout, and the mount effect below applies
+  // the real matchMedia value immediately after hydration.
+  const [compactNavigation, setCompactNavigation] = useState(false);
   const [coarseNavigationInput, setCoarseNavigationInput] = useState(false);
   const [edgeSidebarOpen, setEdgeSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>("dark");
@@ -1276,7 +1285,11 @@ export function CoursesPage({
         : Users;
   const shellProfileAvatarUrl = activeUser?.avatarDataUrl ?? null;
   const shellProfileAvatarSrcSet = activeUser?.avatarSrcSet ?? [];
-  const { data: notificationSummary } = useNotificationSummary();
+  // Guests have no notifications endpoint access; an unauthenticated request
+  // would only log a 401 console error on every public page.
+  const { data: notificationSummary } = useNotificationSummary({
+    enabled: isAuthenticated,
+  });
   const unreadNotificationCount = notificationSummary?.unreadCount ?? 0;
   const profileRef = useRef<HTMLDivElement>(null);
   const coursesAppRef = useRef<HTMLDivElement>(null);
@@ -1777,7 +1790,11 @@ export function CoursesPage({
     };
   }, [storedPreferencesReady]);
 
-  useEffect(() => {
+  // Layout effect so the real navigation mode is applied in the same frame
+  // as hydration: the first render pass must use the prerendered "wide"
+  // markup (see the compactNavigation state above), and painting that markup
+  // on a phone would flash the wrong controls for a frame.
+  useLayoutEffect(() => {
     const media = window.matchMedia(COMPACT_NAVIGATION_QUERY);
     const coarseInput = window.matchMedia("(hover: none), (pointer: coarse)");
     const syncNavigationMode = () => {
@@ -3962,6 +3979,16 @@ export function CoursesPage({
     (item) => item.id === academyTheme,
   );
 
+  // The guest home is a nested lazy chunk that normally starts downloading
+  // only after the auth check resolves. Fetching it as soon as the home page
+  // is active removes that extra network round trip from the first paint of
+  // the course rows (the page's LCP) on cold loads.
+  useEffect(() => {
+    if (page === "home") {
+      void import("./GuestHome");
+    }
+  }, [page]);
+
   const renderPageContent = ({
     surfaceCourseSlug = courseSlug,
     surfaceDiscussionTab = discussionTab,
@@ -4011,8 +4038,27 @@ export function CoursesPage({
       );
     }
     if (effectiveRole === "student" && surfacePage === "home") {
+      // The guest home's first popular-course thumbnail is the page's LCP
+      // image. Emitting its preload here (not inside the lazy GuestHome)
+      // places it in the prerendered document head, so the browser starts
+      // the download before hydration instead of after the auth check.
+      const homeLcpCourse = initialHomeDiscovery?.popularCourses?.[0]
+        ? adaptCourseSummaryToCatalogueCourse(
+            initialHomeDiscovery.popularCourses[0],
+          )
+        : undefined;
       return (
         <Suspense fallback={<AcademyPageFallback />}>
+          {homeLcpCourse?.thumbnail ? (
+            <link
+              rel="preload"
+              as="image"
+              href={homeLcpCourse.thumbnail}
+              imageSrcSet={getCourseThumbnailSrcSet(homeLcpCourse)}
+              imageSizes={courseThumbnailSizes}
+              fetchPriority="high"
+            />
+          ) : null}
           {!isAuthReady ? (
             <AcademyPageFallback />
           ) : isAuthenticated ? (
@@ -4023,7 +4069,11 @@ export function CoursesPage({
               studentName={shellProfileDisplayName}
             />
           ) : (
-            <GuestHome onNavigatePage={onNavigatePage} setNotice={setNotice} />
+            <GuestHome
+              onNavigatePage={onNavigatePage}
+              setNotice={setNotice}
+              initialDiscovery={initialHomeDiscovery}
+            />
           )}
         </Suspense>
       );

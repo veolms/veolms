@@ -927,6 +927,7 @@ function DiscussionWorkspaceCardShell({
             src={thread.avatar || null}
             srcSet={thread.avatarSrcSet}
             className="discussion-thread__avatar-image"
+            loading="lazy"
           />
         </div>
         <div className="discussion-thread__body" onClick={handleBodyClick}>
