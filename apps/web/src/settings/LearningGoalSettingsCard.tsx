@@ -13,16 +13,39 @@ import {
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
 import { LEARNING_REMINDER_DAYS } from "./settingsPreferences";
 
+// 15..720 minutes — the contract/DB cap is 720 (12 h), so the longest
+// option is exactly the API's edge case.
+const GOAL_MINUTE_STEPS = [
+  15, 30, 45, 60, 90, 120, 180, 240, 300, 360, 480, 600, 720,
+] as const;
+
+function formatGoalOption(minutes: number): string {
+  if (minutes < 60) return `${minutes} minutes / day`;
+  const hours = minutes / 60;
+  const value = Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+  return `${value} ${hours === 1 ? "hour" : "hours"} / day`;
+}
+
 const GOAL_OPTIONS: Array<[string, string]> = [
   ["none", "No goal"],
-  ["15", "15 minutes / day"],
-  ["30", "30 minutes / day"],
-  ["45", "45 minutes / day"],
-  ["60", "1 hour / day"],
-  ["90", "1.5 hours / day"],
-  ["120", "2 hours / day"],
-  ["180", "3 hours / day"],
+  ...GOAL_MINUTE_STEPS.map((minutes): [string, string] => [
+    String(minutes),
+    formatGoalOption(minutes),
+  ]),
 ];
+
+/** Every half hour across the day, labelled in 12-hour time. */
+const REMINDER_TIME_OPTIONS: Array<[string, string]> = Array.from(
+  { length: 48 },
+  (_, slot): [string, string] => {
+    const hour = Math.floor(slot / 2);
+    const minute = slot % 2 === 0 ? "00" : "30";
+    const value = `${String(hour).padStart(2, "0")}:${minute}`;
+    const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+    const period = hour < 12 ? "AM" : "PM";
+    return [value, `${hour12}:${minute} ${period}`];
+  },
+);
 
 const FALLBACK_SETTINGS: LearningGoalSettings = {
   dailyGoalMinutes: null,
@@ -90,6 +113,29 @@ export function LearningGoalSettingsCard({
       : []),
   ];
 
+  // The API accepts any 15..720 minutes and any HH:MM, so a value saved
+  // elsewhere may sit off this select's grid — surface it as an extra
+  // option instead of rendering an empty control.
+  const goalOptions: Array<[string, string]> =
+    settings.dailyGoalMinutes !== null &&
+    !GOAL_MINUTE_STEPS.some((minutes) => minutes === settings.dailyGoalMinutes)
+      ? [
+          ...GOAL_OPTIONS,
+          [
+            String(settings.dailyGoalMinutes),
+            formatGoalOption(settings.dailyGoalMinutes),
+          ],
+        ]
+      : GOAL_OPTIONS;
+
+  const reminderTimeOptions: Array<[string, string]> =
+    REMINDER_TIME_OPTIONS.some(([value]) => value === settings.reminderTime)
+      ? REMINDER_TIME_OPTIONS
+      : [
+          ...REMINDER_TIME_OPTIONS,
+          [settings.reminderTime, settings.reminderTime],
+        ];
+
   return (
     <section
       className="settings-learning-card"
@@ -133,7 +179,7 @@ export function LearningGoalSettingsCard({
               dailyGoalMinutes: value === "none" ? null : Number(value),
             })
           }
-          options={GOAL_OPTIONS}
+          options={goalOptions}
           disabled={controlsDisabled}
         />
         <LearningToggleRow
@@ -171,12 +217,7 @@ export function LearningGoalSettingsCard({
                 value={settings.reminderTime}
                 onValueChange={(reminderTime) => save({ reminderTime })}
                 ariaLabel="Reminder time"
-                options={[
-                  ["07:00", "7:00 AM"],
-                  ["12:00", "12:00 PM"],
-                  ["19:00", "7:00 PM"],
-                  ["21:00", "9:00 PM"],
-                ]}
+                options={reminderTimeOptions}
               />
             </div>
             <div>
