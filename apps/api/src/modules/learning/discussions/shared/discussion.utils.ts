@@ -189,7 +189,18 @@ export function mapAuthorRole(
   return "Student";
 }
 
+/**
+ * The academy is a singleton whose id is assigned once at setup and never
+ * changes afterwards (later setup steps update its columns, not its id) —
+ * yet this lookup ran on EVERY discussion request, often more than once
+ * per request (feed hydration re-resolves it). Cache the id for the
+ * process lifetime; the not-configured case is deliberately not cached so
+ * setup completing is picked up on the next call.
+ */
+let cachedAcademyId: string | null = null;
+
 export async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
+  if (cachedAcademyId) return cachedAcademyId;
   const academy = await db
     .selectFrom("academy")
     .select("id")
@@ -201,5 +212,6 @@ export async function resolveAcademyId(db: DatabaseExecutor): Promise<string> {
       "Academy is not configured.",
     );
   }
+  cachedAcademyId = academy.id;
   return academy.id;
 }
