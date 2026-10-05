@@ -4139,7 +4139,20 @@ export function CoursesPage({
             />
           ) : null}
           {!isAuthReady ? (
-            <AcademyPageFallback />
+            initialHomeDiscovery ? (
+              // Paint the seeded guest home while the session check runs so
+              // the prerendered document carries real content (and the LCP
+              // image) instead of a blank fallback. A signed-in account swaps
+              // to its dashboard when /auth/me resolves — the same
+              // public-content-first behavior the courses catalogue has.
+              <GuestHome
+                onNavigatePage={onNavigatePage}
+                setNotice={setNotice}
+                initialDiscovery={initialHomeDiscovery}
+              />
+            ) : (
+              <AcademyPageFallback />
+            )
           ) : isAuthenticated ? (
             <AuthenticatedHomeBoundary
               onOpenCourse={onOpenCourse}
