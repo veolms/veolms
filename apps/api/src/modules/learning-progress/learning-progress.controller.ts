@@ -1,6 +1,7 @@
 import type {
   LearningProgressBatchRequest,
   LearningProgressCourseParams,
+  UpdateLearningGoalSettingsRequest,
 } from "@veolms/contracts";
 import type { FastifyRequest } from "fastify";
 
@@ -42,7 +43,37 @@ export function createLearningProgressController({
     );
   }
 
-  return { get, getResumeContext, sync };
+  async function getSummary(request: FastifyRequest) {
+    return await service.getSummary({
+      id: request.user!.id,
+      roles: request.user!.roles,
+    });
+  }
+
+  async function getGoalSettings(request: FastifyRequest) {
+    return await service.getGoalSettings({
+      id: request.user!.id,
+      roles: request.user!.roles,
+    });
+  }
+
+  async function updateGoalSettings(
+    request: FastifyRequest<{ Body: UpdateLearningGoalSettingsRequest }>,
+  ) {
+    return await service.updateGoalSettings(
+      { id: request.user!.id, roles: request.user!.roles },
+      request.body,
+    );
+  }
+
+  return {
+    get,
+    getResumeContext,
+    sync,
+    getSummary,
+    getGoalSettings,
+    updateGoalSettings,
+  };
 }
 
 export type LearningProgressController = ReturnType<

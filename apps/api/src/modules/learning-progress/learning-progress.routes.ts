@@ -1,9 +1,12 @@
 import {
+  learningGoalSettingsResponseSchema,
   learningProgressBatchRequestSchema,
   learningProgressCourseParamsSchema,
   learningProgressResumeContextResponseSchema,
   learningProgressResponseSchema,
   learningProgressSyncResponseSchema,
+  learningSummaryResponseSchema,
+  updateLearningGoalSettingsRequestSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../lib/errors.ts";
@@ -98,6 +101,69 @@ const learningProgressRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.sync,
+  );
+
+  app.get(
+    "/learning/summary",
+    {
+      preHandler: requireAuthenticated,
+      schema: {
+        operationId: "getLearningSummary",
+        tags: ["Learning Progress"],
+        summary:
+          "Get the learner's daily goal progress, weekly totals, and streaks",
+        response: {
+          200: jsonResponse(
+            "The learner's goal and streak summary.",
+            learningSummaryResponseSchema,
+          ),
+          401: errorResponse("Authentication required"),
+        },
+      },
+    },
+    controller.getSummary,
+  );
+
+  app.get(
+    "/learning/goal-settings",
+    {
+      preHandler: requireAuthenticated,
+      schema: {
+        operationId: "getLearningGoalSettings",
+        tags: ["Learning Progress"],
+        summary: "Get the learner's goal and reminder settings",
+        response: {
+          200: jsonResponse(
+            "The learner's goal and reminder settings.",
+            learningGoalSettingsResponseSchema,
+          ),
+          401: errorResponse("Authentication required"),
+        },
+      },
+    },
+    controller.getGoalSettings,
+  );
+
+  app.put(
+    "/learning/goal-settings",
+    {
+      preHandler: requireAuthenticated,
+      schema: {
+        operationId: "updateLearningGoalSettings",
+        tags: ["Learning Progress"],
+        summary: "Update the learner's goal and reminder settings",
+        body: updateLearningGoalSettingsRequestSchema,
+        response: {
+          200: jsonResponse(
+            "The learner's updated goal and reminder settings.",
+            learningGoalSettingsResponseSchema,
+          ),
+          400: errorResponse("Invalid settings"),
+          401: errorResponse("Authentication required"),
+        },
+      },
+    },
+    controller.updateGoalSettings,
   );
 };
 

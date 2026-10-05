@@ -1,11 +1,17 @@
 import crypto from "node:crypto";
 import type {
+  LearningGoalSettings,
+  LearningGoalSettingsResponse,
   LearningProgressBatchRequest,
   LearningProgressResumeContextResponse,
   LearningProgressResumeLesson,
   LearningProgressResponse,
   LearningProgressSyncResponse,
+  LearningReminderDay,
+  LearningSummaryResponse,
+  UpdateLearningGoalSettingsRequest,
 } from "@veolms/contracts";
+import { LEARNING_REMINDER_DAY_IDS } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
@@ -225,6 +231,12 @@ export interface LearningProgressService {
     courseKey: string,
     input: LearningProgressBatchRequest,
   ): Promise<LearningProgressSyncResponse>;
+  getSummary(user: UserContext): Promise<LearningSummaryResponse>;
+  getGoalSettings(user: UserContext): Promise<LearningGoalSettingsResponse>;
+  updateGoalSettings(
+    user: UserContext,
+    input: UpdateLearningGoalSettingsRequest,
+  ): Promise<LearningGoalSettingsResponse>;
   getAverageProgressAndCompletionRate(filters?: {
     courseId?: string | string[];
     asOf?: Date;
@@ -550,10 +562,113 @@ export function createLearningProgressService({
     );
   }
 
+  function presentGoalSettings(
+    row: Awaited<
+      ReturnType<typeof learningProgressRepository.findUserLearningSettings>
+    >,
+  ): LearningGoalSettingsResponse {
+    if (!row) {
+      return {
+        configured: false,
+        settings: {
+          dailyGoalMinutes: null,
+          remindersEnabled: false,
+          reminderDays: ["mon", "tue", "wed", "thu", "fri"],
+          reminderTime: "19:00",
+          timeZone: "UTC",
+        },
+      };
+    }
+    return {
+      configured: row.daily_goal_minutes !== null,
+      settings: {
+        dailyGoalMinutes: row.daily_goal_minutes,
+        remindersEnabled: row.reminders_enabled,
+        reminderDays: row.reminder_days.filter(
+          (day): day is LearningReminderDay =>
+            (LEARNING_REMINDER_DAY_IDS as readonly string[]).includes(day),
+        ),
+        // Postgres time comes back as HH:MM:SS.
+        reminderTime: row.reminder_time.slice(0, 5),
+        timeZone: row.time_zone,
+      },
+    };
+  }
+
+  async function getGoalSettings(
+    user: UserContext,
+  ): Promise<LearningGoalSettingsResponse> {
+    const row = await learningProgressRepository.findUserLearningSettings(
+      database,
+      user.id,
+    );
+    return presentGoalSettings(row);
+  }
+
+  async function updateGoalSettings(
+    user: UserContext,
+    input: UpdateLearningGoalSettingsRequest,
+  ): Promise<LearningGoalSettingsResponse> {
+    const row = await learningProgressRepository.upsertUserLearningSettings(
+      database,
+      {
+        user_id: user.id,
+        daily_goal_minutes: input.dailyGoalMinutes,
+        reminders_enabled: input.remindersEnabled,
+        reminder_days: [...new Set(input.reminderDays)],
+        reminder_time: input.reminderTime,
+        time_zone: input.timeZone,
+      },
+    );
+    return presentGoalSettings(row);
+  }
+
+  async function getSummary(
+    user: UserContext,
+  ): Promise<LearningSummaryResponse> {
+    const settings = await learningProgressRepository.findUserLearningSettings(
+      database,
+      user.id,
+    );
+    const aggregates =
+      await learningProgressRepository.getLearningSummaryAggregates(database, {
+        userId: user.id,
+        timeZone: settings?.time_zone ?? "UTC",
+      });
+
+    const dailyGoalMinutes = settings?.daily_goal_minutes ?? null;
+    const goalSeconds = dailyGoalMinutes === null ? 0 : dailyGoalMinutes * 60;
+    const todayPct =
+      goalSeconds > 0
+        ? Math.min(
+            100,
+            Math.floor((aggregates.todaySeconds / goalSeconds) * 100),
+          )
+        : 0;
+
+    return {
+      configured: dailyGoalMinutes !== null,
+      dailyGoalMinutes,
+      todaySeconds: aggregates.todaySeconds,
+      todayPct,
+      remainingSeconds: Math.max(0, goalSeconds - aggregates.todaySeconds),
+      goalCompletedToday:
+        goalSeconds > 0 && aggregates.todaySeconds >= goalSeconds,
+      weekSeconds: aggregates.weekSeconds,
+      weekTargetSeconds: goalSeconds * 7,
+      currentStreakDays: aggregates.currentStreakDays,
+      bestStreakDays: aggregates.bestStreakDays,
+      lastActivityDate: aggregates.lastActivityDate,
+    };
+  }
+
   return {
     getProgress,
     getResumeContext,
     syncProgress,
+    getSummary,
+    getGoalSettings,
+    updateGoalSettings,
     getAverageProgressAndCompletionRate,
     getAverageProgressAndCompletionRateByCourse,
     getAverageProgressByCourse,

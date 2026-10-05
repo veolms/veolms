@@ -83,68 +83,43 @@
   font-size: 0.7rem;
 }
 
-.home-goal-summary__info {
-  position: absolute;
-  z-index: 2;
-  top: 7px;
-  right: 7px;
-  display: inline-flex;
-  width: 22px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
+.home-goal-summary--loading strong,
+.home-goal-summary--loading .home-goal-ring {
+  animation: student-home-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.home-goal-summary--empty {
+  grid-template-columns: 1fr auto;
+}
+
+.home-goal-summary--empty > div + div {
+  border-left: 0;
+}
+
+.home-goal-summary__cta {
+  align-self: center;
+  margin-right: 14px;
   border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
-  border-radius: 50%;
+  border-radius: 8px;
+  padding: 7px 14px;
   color: var(--accent-ink, var(--accent));
   background: color-mix(in srgb, var(--surface-strong) 76%, transparent);
-  cursor: help;
+  cursor: pointer;
+  font-size: 0.74rem;
+  font-weight: 650;
   transition:
     border-color 150ms ease,
     background-color 150ms ease,
     color 150ms ease;
 }
 
-.home-goal-summary__info::after {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  width: max-content;
-  max-width: 160px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
-  color: var(--text);
-  background: var(--surface-strong);
-  box-shadow: var(--card-shadow);
-  content: attr(data-tooltip);
-  font-size: 0.62rem;
-  font-weight: 600;
-  line-height: 1.2;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-2px);
-  transition:
-    opacity 150ms ease,
-    transform 150ms ease,
-    visibility 150ms ease;
-  visibility: hidden;
-  white-space: nowrap;
-}
-
-.home-goal-summary__info:is(:hover, :focus-visible) {
+.home-goal-summary__cta:is(:hover, :focus-visible) {
   border-color: var(--accent-ink, var(--accent));
   color: var(--text);
   background: color-mix(in srgb, var(--accent) 14%, var(--surface-strong));
 }
 
-.home-goal-summary__info:is(:hover, :focus-visible)::after {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-  visibility: visible;
-}
-
-.home-goal-summary__info:focus-visible {
+.home-goal-summary__cta:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
   outline-offset: 2px;
 }
