@@ -1,9 +1,3 @@
-import axios, {
-  type AxiosError,
-  type AxiosInstance,
-  type AxiosRequestConfig,
-  type AxiosResponse,
-} from "axios";
 import { getApiError, type ApiError } from "./api-error";
 import { authStore } from "../store/auth.store";
 import { resetRegisteredInteractionState } from "../services/learning-interactions/interaction-reset-registry";
@@ -15,6 +9,35 @@ import { isReactRouterBuildRequest } from "./react-router-build";
 import { setApiClient } from "@veolms/web-core";
 
 export { getApiError, type ApiError };
+
+/**
+ * Fetch-based HTTP client with the same observable behavior as the axios
+ * client it replaced (axios was ~35KB of compressed startup JavaScript on
+ * every page):
+ * - credentialed JSON requests against the configured /v1 base URL;
+ * - axios-compatible query-parameter serialization;
+ * - success bodies are JSON-parsed when possible and the standard
+ *   { success, data } envelope is unwrapped;
+ * - an HTML document in a success response is surfaced as the same 502
+ *   INVALID_API_RESPONSE error;
+ * - failures reject with the normalized ApiError, after the MFA redirect
+ *   and session-loss handling the axios interceptors performed;
+ * - error codes mirror axios ("ECONNABORTED" timeout, "ERR_NETWORK",
+ *   "ERR_CANCELED") so existing error handling keeps working.
+ */
+
+export interface ApiRequestConfig {
+  /**
+   * Query parameters, serialized like axios' default serializer. Typed as
+   * `object` (like axios' `any`) so plain interfaces without an index
+   * signature remain assignable.
+   */
+  params?: object;
+  signal?: AbortSignal;
+  /** Milliseconds before the request aborts with code ECONNABORTED. */
+  timeout?: number;
+  headers?: Record<string, string>;
+}
 
 const CONFIGURED_BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "/v1";
 
@@ -71,6 +94,94 @@ export function getApiRequestUrl(path: string): string {
   return `${BACKEND_URL.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 }
 
+/**
+ * Error shape produced by this client before normalization. It carries the
+ * axios marker and layout (response/config/code) so getApiError and any
+ * axios-era error handling keep reading it exactly as before.
+ */
+interface ApiHttpError extends Error {
+  isAxiosError: true;
+  code?: string;
+  config?: { url?: string };
+  response?: {
+    status: number;
+    statusText?: string;
+    data: unknown;
+  };
+}
+
+function createHttpError(
+  message: string,
+  properties: Omit<ApiHttpError, keyof Error | "isAxiosError">,
+): ApiHttpError {
+  return Object.assign(new Error(message), {
+    isAxiosError: true as const,
+    ...properties,
+  });
+}
+
+/** Matches axios' default serializer for the parameter shapes we send. */
+function serializeParams(params: object): string {
+  const search = new URLSearchParams();
+  const append = (key: string, value: unknown) => {
+    if (value === null || value === undefined) return;
+    if (value instanceof Date) {
+      search.append(key, value.toISOString());
+      return;
+    }
+    if (typeof value === "object") {
+      search.append(key, JSON.stringify(value));
+      return;
+    }
+    search.append(key, String(value));
+  };
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) append(`${key}[]`, item);
+      continue;
+    }
+    append(key, value);
+  }
+  return search.toString();
+}
+
+function buildRequestUrl(url: string, params?: object) {
+  let requestUrl = /^https?:\/\//i.test(url) ? url : getApiRequestUrl(url);
+  if (params) {
+    const query = serializeParams(params);
+    if (query) {
+      requestUrl += (requestUrl.includes("?") ? "&" : "?") + query;
+    }
+  }
+  return requestUrl;
+}
+
+function combineSignals(
+  requestSignal: AbortSignal | undefined,
+  timeout: number | undefined,
+): { signal: AbortSignal | undefined; didTimeout: () => boolean } {
+  let timedOut = false;
+  if (!timeout) {
+    return { signal: requestSignal, didTimeout: () => false };
+  }
+
+  const controller = new AbortController();
+  window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeout);
+  if (requestSignal) {
+    if (requestSignal.aborted) controller.abort();
+    else
+      requestSignal.addEventListener("abort", () => controller.abort(), {
+        once: true,
+      });
+  }
+  return { signal: controller.signal, didTimeout: () => timedOut };
+}
+
 function redirectToMfaSetup(apiError: ApiError): void {
   if (typeof window === "undefined") {
     return;
@@ -85,38 +196,8 @@ function redirectToMfaSetup(apiError: ApiError): void {
   window.location.replace(buildMfaChallengePath(returnTo));
 }
 
-const axiosInstance: AxiosInstance = axios.create({
-  baseURL: BACKEND_URL,
-  withCredentials: true,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-setApiClient(axiosInstance);
-
-axiosInstance.interceptors.request.use(
-  (config) => {
-    if (isReactRouterBuildRequest()) {
-      return Promise.reject(
-        Object.assign(
-          new Error("API requests are disabled during prerender."),
-          {
-            config,
-          },
-        ),
-      );
-    }
-    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
-      config.headers.delete("Content-Type");
-    }
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
-
 function shouldClearAuthOnUnauthorized(
-  error: AxiosError,
+  url: string,
   apiError: ApiError,
 ): boolean {
   if (apiError.status !== 401) {
@@ -133,11 +214,6 @@ function shouldClearAuthOnUnauthorized(
     apiError.code === "TOTP_REQUIRED" ||
     apiError.code === "PASSKEY_REQUIRED"
   ) {
-    return false;
-  }
-
-  const url = error.config?.url;
-  if (!url) {
     return false;
   }
 
@@ -167,96 +243,169 @@ function shouldClearAuthOnUnauthorized(
   return isExplicitSessionFailure || url.endsWith("/auth/me");
 }
 
-function isHtmlDocumentResponse(response: AxiosResponse): boolean {
+function isHtmlDocumentBody(body: unknown): boolean {
   return (
-    typeof response.data === "string" &&
-    /^\s*(?:<!doctype\s+html|<html(?:\s|>))/iu.test(response.data)
+    typeof body === "string" &&
+    /^\s*(?:<!doctype\s+html|<html(?:\s|>))/iu.test(body)
   );
 }
 
 function unwrapApiResponseData(data: unknown) {
   if (data && typeof data === "object" && "data" in data && "success" in data) {
-    return data.data;
+    return (data as { data: unknown }).data;
   }
   return data;
 }
 
-function normalizeApiResponse(response: AxiosResponse) {
-  if (isHtmlDocumentResponse(response)) {
-    const error = Object.assign(
-      new Error("The API endpoint returned an HTML document instead of JSON."),
-      {
-        isAxiosError: true,
-        config: response.config,
-        response: {
-          ...response,
-          status: 502,
-          statusText: "Bad Gateway",
-          data: {
-            code: "INVALID_API_RESPONSE",
-            message:
-              "The API endpoint returned an HTML document instead of JSON.",
-          },
-        },
-      },
-    ) as AxiosError;
-    throw error;
+async function readResponseBody(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return null;
+  // axios attempted JSON.parse on every textual body and silently kept the
+  // raw string when parsing failed; the API always answers JSON.
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
   }
-
-  return unwrapApiResponseData(response.data) as AxiosResponse["data"];
 }
 
-axiosInstance.interceptors.response.use(normalizeApiResponse);
-
-axiosInstance.interceptors.response.use(undefined, (error: AxiosError) => {
-  const apiError = getApiError(error);
-  redirectToMfaSetup(apiError);
-  if (shouldClearAuthOnUnauthorized(error, apiError)) {
-    authStore.clearAuth();
-    resetRegisteredInteractionState();
+async function request<T>(
+  method: string,
+  url: string,
+  data: unknown,
+  config: ApiRequestConfig = {},
+): Promise<T> {
+  if (isReactRouterBuildRequest()) {
+    // The axios pipeline routed this rejection through getApiError too, so
+    // prerender callers saw a normalized 500/UNKNOWN_ERROR ApiError.
+    return Promise.reject(
+      getApiError(new Error("API requests are disabled during prerender.")),
+    );
   }
-  return Promise.reject(apiError);
-});
+
+  const requestUrl = buildRequestUrl(url, config.params);
+  const headers = new Headers(config.headers);
+  let body: BodyInit | undefined;
+  if (data !== undefined) {
+    if (typeof FormData !== "undefined" && data instanceof FormData) {
+      body = data; // fetch sets the multipart boundary header itself.
+    } else {
+      if (!headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
+      body = JSON.stringify(data);
+    }
+  }
+
+  const { signal, didTimeout } = combineSignals(config.signal, config.timeout);
+
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, {
+      method,
+      credentials: "include",
+      headers,
+      body,
+      signal,
+    });
+  } catch (error) {
+    const aborted =
+      error instanceof DOMException && error.name === "AbortError";
+    const code = aborted
+      ? didTimeout()
+        ? "ECONNABORTED"
+        : "ERR_CANCELED"
+      : "ERR_NETWORK";
+    const message =
+      code === "ECONNABORTED"
+        ? `timeout of ${config.timeout}ms exceeded`
+        : code === "ERR_CANCELED"
+          ? "canceled"
+          : "Network Error";
+    throw getApiError(createHttpError(message, { code, config: { url } }));
+  }
+
+  const responseBody = await readResponseBody(response);
+
+  if (!response.ok) {
+    const apiError = getApiError(
+      createHttpError(`Request failed with status code ${response.status}`, {
+        config: { url },
+        response: {
+          status: response.status,
+          statusText: response.statusText,
+          data: responseBody,
+        },
+      }),
+    );
+    redirectToMfaSetup(apiError);
+    if (shouldClearAuthOnUnauthorized(url, apiError)) {
+      authStore.clearAuth();
+      resetRegisteredInteractionState();
+    }
+    throw apiError;
+  }
+
+  if (isHtmlDocumentBody(responseBody)) {
+    throw getApiError(
+      createHttpError(
+        "The API endpoint returned an HTML document instead of JSON.",
+        {
+          config: { url },
+          response: {
+            status: 502,
+            statusText: "Bad Gateway",
+            data: {
+              code: "INVALID_API_RESPONSE",
+              message:
+                "The API endpoint returned an HTML document instead of JSON.",
+            },
+          },
+        },
+      ),
+    );
+  }
+
+  return unwrapApiResponseData(responseBody) as T;
+}
 
 export const api = {
-  get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return axiosInstance.get(url, config) as unknown as Promise<T>;
+  get<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T> {
+    return request<T>("GET", url, undefined, config);
   },
 
   post<T = unknown>(
     url: string,
     data?: unknown,
-    config?: AxiosRequestConfig,
+    config?: ApiRequestConfig,
   ): Promise<T> {
     // Fastify rejects an empty request when the client advertises
     // `application/json`. Treat a no-body POST as an empty JSON object so
     // action endpoints (publish, logout, retry, etc.) work consistently.
-    return axiosInstance.post(
-      url,
-      data === undefined ? {} : data,
-      config,
-    ) as unknown as Promise<T>;
+    return request<T>("POST", url, data === undefined ? {} : data, config);
   },
 
   put<T = unknown>(
     url: string,
     data?: unknown,
-    config?: AxiosRequestConfig,
+    config?: ApiRequestConfig,
   ): Promise<T> {
-    return axiosInstance.put(url, data, config) as unknown as Promise<T>;
+    return request<T>("PUT", url, data, config);
   },
 
   patch<T = unknown>(
     url: string,
     data?: unknown,
-    config?: AxiosRequestConfig,
+    config?: ApiRequestConfig,
   ): Promise<T> {
-    return axiosInstance.patch(url, data, config) as unknown as Promise<T>;
+    return request<T>("PATCH", url, data, config);
   },
 
-  delete<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return axiosInstance.delete(url, config) as unknown as Promise<T>;
+  delete<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T> {
+    return request<T>("DELETE", url, undefined, config);
   },
 };
+
+setApiClient(api);
 
 export default api;

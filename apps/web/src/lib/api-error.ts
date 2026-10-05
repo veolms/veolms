@@ -1,5 +1,3 @@
-import axios, { type AxiosError } from "axios";
-
 export const GENERIC_API_ERROR_MESSAGE =
   "Something went wrong on our end. Please try again later.";
 
@@ -8,6 +6,33 @@ export interface ApiError {
   code: string;
   message: string;
   details?: unknown;
+}
+
+interface HttpErrorLike {
+  isAxiosError?: boolean;
+  code?: string;
+  response?: {
+    status?: number;
+    data?: {
+      message?: string;
+      code?: string;
+      error?: { message?: string; code?: string };
+    };
+  };
+}
+
+/**
+ * The fetch-based API client marks its errors with the same `isAxiosError`
+ * flag (and response/config layout) the axios client used, so this check is
+ * equivalent to the axios.isAxiosError call it replaces without pulling
+ * axios into the startup bundle.
+ */
+function isHttpClientError(error: unknown): error is HttpErrorLike {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as HttpErrorLike).isAxiosError === true
+  );
 }
 
 function isTechnicalApiError(
@@ -30,17 +55,11 @@ function getSafeApiMessage(status: number, code: string, message: string) {
 }
 
 export function getApiError(error: unknown): ApiError {
-  if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{
-      message?: string;
-      code?: string;
-      error?: { message?: string; code?: string };
-    }>;
-
-    const data = axiosError.response?.data;
-    const status = axiosError.response?.status || 500;
+  if (isHttpClientError(error)) {
+    const data = error.response?.data;
+    const status = error.response?.status || 500;
     const code =
-      data?.error?.code || data?.code || axiosError.code || "UNKNOWN_ERROR";
+      data?.error?.code || data?.code || error.code || "UNKNOWN_ERROR";
 
     const message =
       data?.error?.message || data?.message || GENERIC_API_ERROR_MESSAGE;
