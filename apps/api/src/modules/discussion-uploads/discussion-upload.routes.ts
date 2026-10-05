@@ -129,7 +129,6 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
 
       try {
         const context = readDiscussionAttachmentUploadContext(file.fields);
-        const buffer = await file.toBuffer();
         const result = await attachmentsService.processUpload(
           options.database,
           discussionActor(user),
@@ -137,7 +136,10 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
           {
             filename: file.filename,
             mimetype: file.mimetype,
-            data: buffer,
+            // Streamed to storage — the buffered path held up to 50MB of
+            // heap per concurrent upload.
+            stream: file.file,
+            isTruncated: () => file.file.truncated,
           },
         );
 
@@ -149,6 +151,9 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
           size: result.size,
         });
       } catch (error) {
+        // If the service rejected before consuming the stream, drain it so
+        // busboy can finish parsing the request.
+        file.file.resume();
         if (error instanceof AppError) throw error;
         const message =
           error instanceof Error ? error.message : "DISCUSSION_UPLOAD_FAILED";

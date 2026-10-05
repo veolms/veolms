@@ -60,20 +60,28 @@ export function createAttachmentsController({
         return;
       }
 
-      const buffer = await multipartFile.toBuffer();
-      const attachment = await service.uploadFile(
-        database,
-        attachmentId,
-        user.id,
-        {
-          filename: multipartFile.filename,
-          mimetype: multipartFile.mimetype,
-          data: buffer,
-          ...readMultipartDimensions(multipartFile.fields),
-        },
-      );
-
-      reply.status(200).send(attachment);
+      try {
+        const attachment = await service.uploadFile(
+          database,
+          attachmentId,
+          user.id,
+          {
+            filename: multipartFile.filename,
+            mimetype: multipartFile.mimetype,
+            // Streamed to storage — the buffered path held up to 50MB of
+            // heap per concurrent upload.
+            stream: multipartFile.file,
+            isTruncated: () => multipartFile.file.truncated,
+            ...readMultipartDimensions(multipartFile.fields),
+          },
+        );
+        reply.status(200).send(attachment);
+      } catch (error) {
+        // If the service rejected before consuming the stream (auth/mime/
+        // 404 paths), drain it so busboy can finish parsing the request.
+        multipartFile.file.resume();
+        throw error;
+      }
     },
 
     async completeUpload(request, reply) {
@@ -98,20 +106,24 @@ export function createAttachmentsController({
       const context = readDiscussionAttachmentUploadContext(
         multipartFile.fields,
       );
-      const buffer = await multipartFile.toBuffer();
-      const result = await service.processUpload(
-        database,
-        discussionActor(user),
-        context,
-        {
-          filename: multipartFile.filename,
-          mimetype: multipartFile.mimetype,
-          data: buffer,
-          ...readMultipartDimensions(multipartFile.fields),
-        },
-      );
-
-      reply.status(201).send(result);
+      try {
+        const result = await service.processUpload(
+          database,
+          discussionActor(user),
+          context,
+          {
+            filename: multipartFile.filename,
+            mimetype: multipartFile.mimetype,
+            stream: multipartFile.file,
+            isTruncated: () => multipartFile.file.truncated,
+            ...readMultipartDimensions(multipartFile.fields),
+          },
+        );
+        reply.status(201).send(result);
+      } catch (error) {
+        multipartFile.file.resume();
+        throw error;
+      }
     },
 
     async getLinkPreview(request, reply) {

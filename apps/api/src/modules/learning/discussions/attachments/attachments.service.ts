@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import type { Readable } from "node:stream";
 import type { DatabaseExecutor } from "@veolms/database";
 import type { S3StorageService } from "@veolms/storage";
 import { attachmentDimensionsSchema } from "@veolms/contracts";
@@ -97,13 +98,7 @@ export interface AttachmentsService {
     db: DatabaseExecutor,
     attachmentId: string,
     userId: string,
-    file: {
-      filename: string;
-      mimetype: string;
-      data: Buffer;
-      width?: number;
-      height?: number;
-    },
+    file: IncomingAttachmentFile,
   ): Promise<LearningAttachment>;
 
   completeUpload(
@@ -116,16 +111,28 @@ export interface AttachmentsService {
     db: DatabaseExecutor,
     actor: DiscussionActor,
     context: DiscussionAttachmentUploadContext,
-    file: {
-      filename: string;
-      mimetype: string;
-      data: Buffer;
-      width?: number;
-      height?: number;
-    },
+    file: IncomingAttachmentFile,
   ): Promise<LearningUploadResponse>;
 
   fetchLinkPreview(url: string): Promise<LinkPreviewResponse>;
+}
+
+/**
+ * An incoming multipart file, streamed rather than buffered: the previous
+ * `data: Buffer` shape held the entire file (up to 50MB) in heap per
+ * concurrent upload. The stream is consumed exactly once, by the storage
+ * layer. Size enforcement happens AFTER storing (the byte count is only
+ * known then); oversized or truncated uploads are deleted and rejected
+ * with the same 413 the buffered path produced.
+ */
+export interface IncomingAttachmentFile {
+  filename: string;
+  mimetype: string;
+  stream: Readable;
+  /** True when the multipart fileSize cap cut the stream short. */
+  isTruncated: () => boolean;
+  width?: number;
+  height?: number;
 }
 
 export function createAttachmentsService(
@@ -335,14 +342,6 @@ export function createAttachmentsService(
         );
       }
 
-      if (file.data.length > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
-        throw httpError(
-          413,
-          "PAYLOAD_TOO_LARGE",
-          "The selected file is too large.",
-        );
-      }
-
       const existing = await attachmentsRepo.findAttachmentById(
         db,
         attachmentId,
@@ -377,11 +376,22 @@ export function createAttachmentsService(
           : undefined);
       const ext = resolveExtension(file.filename, file.mimetype);
       const sanitizedName = `${attachmentId}${ext}`;
-      await uploadStore.putFromBuffer({
+      const stored = await uploadStore.putNamedFromStream({
         fileName: sanitizedName,
         mimeType: file.mimetype,
-        data: file.data,
+        stream: file.stream,
       });
+      if (
+        stored.size > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES ||
+        file.isTruncated()
+      ) {
+        await uploadStore.remove(sanitizedName);
+        throw httpError(
+          413,
+          "PAYLOAD_TOO_LARGE",
+          "The selected file is too large.",
+        );
+      }
       const fileUrl = discussionUploadPublicUrl(sanitizedName);
 
       try {
@@ -392,7 +402,7 @@ export function createAttachmentsService(
             file_name: file.filename,
             file_url: fileUrl,
             mime_type: file.mimetype,
-            file_size: file.data.length,
+            file_size: stored.size,
             status: "ready",
             metadata: JSON.stringify(
               mergeDimensions(
@@ -536,14 +546,6 @@ export function createAttachmentsService(
         );
       }
 
-      if (file.data.length > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES) {
-        throw httpError(
-          413,
-          "PAYLOAD_TOO_LARGE",
-          "The selected file is too large.",
-        );
-      }
-
       const dimensions = validateDimensions(file.mimetype, file);
 
       const id = crypto.randomUUID();
@@ -553,11 +555,22 @@ export function createAttachmentsService(
       const kind = getAttachmentKind(file.mimetype, file.filename);
       const mediaType = getMediaType(kind, file.mimetype);
 
-      await uploadStore.putFromBuffer({
+      const stored = await uploadStore.putNamedFromStream({
         fileName: sanitizedName,
         mimeType: file.mimetype,
-        data: file.data,
+        stream: file.stream,
       });
+      if (
+        stored.size > DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES ||
+        file.isTruncated()
+      ) {
+        await uploadStore.remove(sanitizedName);
+        throw httpError(
+          413,
+          "PAYLOAD_TOO_LARGE",
+          "The selected file is too large.",
+        );
+      }
       const fileUrl = discussionUploadPublicUrl(sanitizedName);
 
       try {
@@ -569,7 +582,7 @@ export function createAttachmentsService(
           fileName: file.filename,
           fileUrl,
           mimeType: file.mimetype,
-          fileSize: file.data.length,
+          fileSize: stored.size,
           status: "ready",
           metadata: {
             uploadedAt: new Date().toISOString(),
@@ -591,7 +604,7 @@ export function createAttachmentsService(
         kind,
         mediaType,
         mimeType: file.mimetype,
-        size: file.data.length,
+        size: stored.size,
         status: "ready",
         width: dimensions?.width ?? null,
         height: dimensions?.height ?? null,
