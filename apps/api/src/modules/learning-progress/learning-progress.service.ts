@@ -24,7 +24,11 @@ import {
   type CurriculumService,
 } from "../courses/index.ts";
 import * as courseRepository from "../courses/course/course.repository.ts";
+import { createOutboxService } from "../../events/outbox.service.ts";
 import * as learningProgressRepository from "./learning-progress.repository.ts";
+
+/** Streak lengths that earn a one-time milestone notification. */
+const LEARNING_STREAK_MILESTONES = [7, 30, 100, 365] as const;
 
 type UserContext = { id: string; roles: readonly string[] };
 
@@ -276,6 +280,8 @@ export function createLearningProgressService({
   accessService?: AccessService;
   curriculumService?: CurriculumService;
 }): LearningProgressService {
+  const outbox = createOutboxService();
+
   async function findCourse(courseKey: string) {
     return isUuid(courseKey)
       ? await courseRepository.findCourseById(database, courseKey)
@@ -501,13 +507,93 @@ export function createLearningProgressService({
     // retries/sendBeacon duplicates never double-credit. Activity accrues
     // even before a goal is configured, so a later goal setting finds an
     // intact history/streak.
-    await learningProgressRepository.upsertProgressAndAccrueActivity(
-      database,
-      user.id,
-      rowsToUpsert,
-    );
+    const accrual =
+      await learningProgressRepository.upsertProgressAndAccrueActivity(
+        database,
+        user.id,
+        rowsToUpsert,
+      );
+
+    if (accrual) {
+      // A failed notification must never fail the heartbeat.
+      try {
+        await publishLearningThresholdEvents(user.id, accrual);
+      } catch {
+        // Threshold events are best-effort; the outbox dedupe keys let a
+        // later qualifying heartbeat publish them instead.
+      }
+    }
 
     return { synced: true };
+  }
+
+  /**
+   * Fires goal-completed / streak-milestone notifications only when THIS
+   * batch crosses the threshold (the accrual row carries the day's
+   * before/after totals). Outbox dedupe keys make each one at-most-once:
+   * goal per user per local day, milestone per user per count — so a
+   * raised goal never re-fires and milestones never repeat.
+   */
+  async function publishLearningThresholdEvents(
+    userId: string,
+    accrual: learningProgressRepository.DailyActivityAccrual,
+  ) {
+    const wasQualified =
+      accrual.previous_seconds >= 60 || accrual.previous_completions >= 1;
+    const isQualified = accrual.seconds >= 60 || accrual.completions >= 1;
+    const dayJustQualified = !wasQualified && isQualified;
+
+    const settings = await learningProgressRepository.findUserLearningSettings(
+      database,
+      userId,
+    );
+    const goalSeconds = (settings?.daily_goal_minutes ?? 0) * 60;
+    const goalJustCompleted =
+      goalSeconds > 0 &&
+      accrual.previous_seconds < goalSeconds &&
+      accrual.seconds >= goalSeconds;
+
+    if (!dayJustQualified && !goalJustCompleted) return;
+
+    let milestone: number | undefined;
+    if (dayJustQualified) {
+      const aggregates =
+        await learningProgressRepository.getLearningSummaryAggregates(
+          database,
+          { userId, timeZone: settings?.time_zone ?? "UTC" },
+        );
+      milestone = LEARNING_STREAK_MILESTONES.find(
+        (days) => days === aggregates.currentStreakDays,
+      );
+    }
+
+    if (!goalJustCompleted && milestone === undefined) return;
+
+    const now = new Date();
+    await database.transaction().execute(async (transaction) => {
+      if (goalJustCompleted) {
+        await outbox.publish(transaction, {
+          type: "learning.goal_completed",
+          version: 1,
+          dedupeKey: `learning.goal_completed:${userId}:${accrual.activity_date}`,
+          occurredAt: now,
+          payload: {
+            recipientUserId: userId,
+            dailyGoalMinutes: settings!.daily_goal_minutes!,
+            localDate: accrual.activity_date,
+          },
+        });
+      }
+      if (milestone !== undefined) {
+        await outbox.publish(transaction, {
+          type: "learning.streak_milestone",
+          version: 1,
+          dedupeKey: `learning.streak_milestone:${userId}:${milestone}`,
+          occurredAt: now,
+          payload: { recipientUserId: userId, streakDays: milestone },
+        });
+      }
+    });
   }
 
   async function getAverageProgressAndCompletionRate(
