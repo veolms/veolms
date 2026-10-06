@@ -6,6 +6,10 @@ on:
       - dev
     paths:
       - "apps/api/**"
+      - "packages/api-core/**"
+      - "packages/services/**"
+      - "packages/plugin-sdk/**"
+      - "packages/video-player/**"
       - "packages/contracts/**"
       - "packages/database/**"
       - "packages/config/**"

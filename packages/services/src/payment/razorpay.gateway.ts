@@ -21,6 +21,9 @@ export interface RazorpayGatewayConfig {
   baseUrl?: string;
 }
 
+/** Upper bound for any single Razorpay API call. */
+const REQUEST_TIMEOUT_MS = 10_000;
+
 /**
  * Lightweight Razorpay Gateway Adapter encapsulating the Razorpay REST API
  * and cryptographic signature verification.
@@ -57,10 +60,28 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       ...options.headers,
     };
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+        // Without this, a hung gateway holds the request (and its pool
+        // slot / event-loop continuation) for undici's ~300s defaults.
+        // Checkout and verify call this synchronously in the request path.
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (err) {
+      if ((err as Error)?.name === "TimeoutError") {
+        // 504 so callers treat the outcome as UNKNOWN (the gateway may
+        // have processed it) — isDefinitiveGatewayRejection stays false.
+        throw new AppError(
+          504,
+          "PAYMENT_GATEWAY_ERROR",
+          "Payment gateway request timed out",
+        );
+      }
+      throw err;
+    }
 
     if (!response.ok) {
       let errorBody:
@@ -414,6 +435,22 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       refundEntity?.id ||
       crypto.randomUUID();
 
+    // Razorpay refund webhooks carry BOTH the refund entity and the payment
+    // entity. For refund events the meaningful amount is the refund's own
+    // (partial) amount — preferring the payment entity here would report the
+    // full payment amount and make downstream logic treat a partial refund
+    // as a full one.
+    const isRefundEvent =
+      eventType === "refund.succeeded" ||
+      eventType === "refund.pending" ||
+      eventType === "refund.failed";
+    const amount = isRefundEvent
+      ? (refundEntity?.amount ?? paymentEntity?.amount)
+      : (paymentEntity?.amount ?? refundEntity?.amount);
+    const currency = isRefundEvent
+      ? (refundEntity?.currency ?? paymentEntity?.currency)
+      : (paymentEntity?.currency ?? refundEntity?.currency);
+
     return {
       eventId: resolvedEventId,
       eventType,
@@ -422,8 +459,8 @@ export class RazorpayPaymentGateway implements PaymentGateway {
         paymentEntity?.order_id ?? payloadObj?.payload?.order?.entity?.id,
       gatewayPaymentId: paymentEntity?.id ?? refundEntity?.payment_id,
       gatewayRefundId: refundEntity?.id,
-      amount: paymentEntity?.amount ?? refundEntity?.amount,
-      currency: paymentEntity?.currency ?? refundEntity?.currency,
+      amount,
+      currency,
       paymentMethod: paymentEntity?.method
         ? {
             method: paymentEntity.method,

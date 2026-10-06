@@ -105,6 +105,15 @@ export class CommerceFulfillmentScheduler {
 
     try {
       await cycle;
+    } catch (error) {
+      // Both callers are timers that discard this promise (void runCycle()).
+      // A failure to even reach the workers — e.g. the pool cannot hand out
+      // a connection for the advisory lock — would otherwise surface as an
+      // unhandled rejection and take the API process down.
+      this.logger?.error(
+        { err: error, job: "commerce-fulfillment-scheduler" },
+        "Commerce fulfillment cycle failed",
+      );
     } finally {
       if (this.activeCycle === cycle) this.activeCycle = null;
       this.isRunning = false;
