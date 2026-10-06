@@ -1174,6 +1174,14 @@ export function createMediaService({
       user,
     );
 
+    // Chapter stills are an enhancement; never let them block playback.
+    // They depend only on the authorized lesson, so the read overlaps the
+    // output lookup below instead of following it.
+    const chapterRowsPromise = listLessonChaptersForPlayback(
+      database,
+      context.lesson_id,
+    ).catch(() => []);
+
     // The transcode worker only marks a job completed after publishing its
     // output. Avoid an extra storage HEAD round-trip on every first play;
     // the CDN manifest request itself remains the authoritative final check.
@@ -1192,11 +1200,7 @@ export function createMediaService({
       );
     }
     const playbackToken = createPlaybackSegmentToken(manifestKey);
-    // Chapter stills are an enhancement; never let them block playback.
-    const chapterRows = await listLessonChaptersForPlayback(
-      database,
-      context.lesson_id,
-    ).catch(() => []);
+    const chapterRows = await chapterRowsPromise;
     const chapters = chapterRows.map((chapter) => {
       let thumbnailUrl: string | undefined;
       if (chapter.thumbnail_key) {

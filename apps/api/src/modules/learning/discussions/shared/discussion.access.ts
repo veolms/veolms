@@ -333,7 +333,26 @@ export function createDiscussionAccess(): DiscussionAccess {
     async listAccessibleCourseIds(db, actor) {
       if (isAdmin(actor)) return "all";
 
-      const grants = await access.listUserGrants(db, actor.userId);
+      // Three independent reads: one parallel round trip instead of three
+      // serial ones on every notes, threads, workspace and bookmarks listing.
+      const [grants, created, openCourses] = await Promise.all([
+        access.listUserGrants(db, actor.userId),
+        db
+          .selectFrom("courses")
+          .select("id")
+          .where("creator_id", "=", actor.userId)
+          .execute(),
+        db
+          .selectFrom("courses as c")
+          .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
+          .leftJoin("course_pricing as p", "p.course_id", "c.id")
+          .select("c.id")
+          .where("c.status", "=", "published")
+          .where("c.deleted_at", "is", null)
+          .where((eb) => isOpenCourseAccess(eb))
+          .execute(),
+      ]);
+
       const now = new Date();
       const ids = new Set<string>();
       for (const grant of grants) {
@@ -341,24 +360,7 @@ export function createDiscussionAccess(): DiscussionAccess {
         if (grant.validUntil && now > new Date(grant.validUntil)) continue;
         ids.add(grant.courseId);
       }
-
-      const created = await db
-        .selectFrom("courses")
-        .select("id")
-        .where("creator_id", "=", actor.userId)
-        .execute();
       for (const course of created) ids.add(course.id);
-
-      const openCourses = await db
-        .selectFrom("courses as c")
-        .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
-        .leftJoin("course_pricing as p", "p.course_id", "c.id")
-        .select("c.id")
-        .where("c.status", "=", "published")
-        .where("c.deleted_at", "is", null)
-        .where((eb) => isOpenCourseAccess(eb))
-        .execute();
-
       for (const course of openCourses) ids.add(course.id);
 
       return [...ids];
