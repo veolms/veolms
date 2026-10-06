@@ -2648,49 +2648,51 @@ export function DiscussionsWorkspace({
       }`}
       aria-label="Filter discussions"
     >
-      <label className="discussion-hub__search">
-        <MagnifyingGlass size={19} aria-hidden="true" />
-        <span className="sr-only">Search discussions</span>
-        <input
-          id="workspace-discussions-search-input"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={
-            isQnaTab
-              ? "Search your questions..."
-              : isCommentsTab
-                ? "Search your comments..."
-                : isNotesTab
-                  ? "Search your notes..."
-                  : isMentionsTab
-                    ? "Search mentions..."
-                    : isFollowingTab
-                      ? "Search followed discussions..."
-                      : isBookmarksTab
-                        ? "Search bookmarks"
-                        : "Search discussions by title or keyword..."
-          }
-          data-search-shortcut-target
-          aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
-        />
-        <SearchShortcutHint />
-      </label>
-      <button
-        ref={mobileFiltersTriggerRef}
-        type="button"
-        className="discussion-hub__mobile-filter-trigger"
-        aria-controls="discussion-filters-sheet"
-        aria-expanded={mobileFiltersOpen}
-        aria-haspopup="dialog"
-        onPointerDownCapture={captureMobileFiltersScrollPosition}
-        onMouseDown={captureMobileFiltersScrollPosition}
-        onClick={openMobileFilters}
-      >
-        <Funnel size={17} aria-hidden="true" />
-        <span>Filter</span>
-      </button>
-      <div className="discussion-hub__filter-controls">
-        {renderDiscussionFilterControls()}
+      <div className="discussion-hub__filter-toolbar">
+        <label className="discussion-hub__search">
+          <MagnifyingGlass size={19} aria-hidden="true" />
+          <span className="sr-only">Search discussions</span>
+          <input
+            id="workspace-discussions-search-input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={
+              isQnaTab
+                ? "Search your questions..."
+                : isCommentsTab
+                  ? "Search your comments..."
+                  : isNotesTab
+                    ? "Search your notes..."
+                    : isMentionsTab
+                      ? "Search mentions..."
+                      : isFollowingTab
+                        ? "Search followed discussions..."
+                        : isBookmarksTab
+                          ? "Search bookmarks"
+                          : "Search discussions by title or keyword..."
+            }
+            data-search-shortcut-target
+            aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
+          />
+          <SearchShortcutHint />
+        </label>
+        <button
+          ref={mobileFiltersTriggerRef}
+          type="button"
+          className="discussion-hub__mobile-filter-trigger"
+          aria-controls="discussion-filters-sheet"
+          aria-expanded={mobileFiltersOpen}
+          aria-haspopup="dialog"
+          onPointerDownCapture={captureMobileFiltersScrollPosition}
+          onMouseDown={captureMobileFiltersScrollPosition}
+          onClick={openMobileFilters}
+        >
+          <Funnel size={17} aria-hidden="true" />
+          <span>Filter</span>
+        </button>
+        <div className="discussion-hub__filter-controls">
+          {renderDiscussionFilterControls()}
+        </div>
       </div>
     </section>
   );

@@ -91,7 +91,7 @@
   top: var(--page-tabs-sticky-top, 0px);
   z-index: 26;
   margin-top: 23px;
-  padding-bottom: 8px;
+  margin-bottom: 0;
   background: var(--main-surface);
 }
 
@@ -103,9 +103,8 @@
 }
 
 .discussion-hub__sticky-region .discussion-hub__filters {
-  margin-top: 12px;
-  background: var(--card-surface);
-  box-shadow: var(--surface-depth-edge-shadow);
+  margin-top: 0;
+  background: var(--main-surface);
 }
 
 .discussion-hub__sticky-region ~ .swipeable-tab-panel .discussion-hub__layout {
@@ -183,11 +182,31 @@
     minmax(210px, 1.55fr) minmax(122px, 0.66fr) minmax(112px, 0.52fr)
     minmax(150px, 0.75fr);
   gap: 10px;
-  padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--text) 12%, var(--border));
+  padding: 9px;
+  margin-inline: calc(-1 * var(--application-page-inline-gutter, 0px));
+  padding-inline: var(--application-page-inline-gutter, 0px);
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: var(--main-surface);
+}
+
+.discussion-hub__filter-toolbar {
+  display: grid;
+  margin-inline: -1px;
+  min-width: 0;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  gap: inherit;
+  min-height: 39px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 14px;
-  background: var(--card-surface);
-  box-shadow: var(--card-shadow);
+  background: var(--card-surface, var(--surface));
+  box-shadow: var(--surface-depth-edge-shadow);
+}
+
+:root[data-theme="light"] .discussion-hub__filter-toolbar {
+  box-shadow: var(--card-compact-shadow);
 }
 
 .discussion-hub__filter-controls {
@@ -479,7 +498,7 @@
 .discussion-hub__thread-list {
   display: grid;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 4px;
 }
 
 .discussion-thread {
@@ -786,6 +805,12 @@
     align-items: center;
     gap: 8px;
   }
+  .discussion-hub__filter-toolbar {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: inherit;
+  }
   .discussion-hub__filter-controls {
     display: none;
   }
@@ -926,7 +951,9 @@
   .discussion-hub__filters {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
-    padding: 8px;
+    padding: 9px;
+    margin-inline: -12px;
+    padding-inline: 12px;
   }
   .discussion-hub__search {
     grid-column: 1 / -1;
