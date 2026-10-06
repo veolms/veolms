@@ -59,8 +59,25 @@ export const academyPaletteStylesById: Readonly<
   lime: { dark: limeDark, light: limeLight },
 };
 
+/**
+ * The default palette's stylesheets. The document links these directly (see
+ * root.tsx), so they are ordinary parser-discovered, render-blocking
+ * stylesheets for everyone who has not picked another palette.
+ */
+export const defaultAcademyPaletteStyles: AcademyPaletteStyles =
+  academyPaletteStylesById[DEFAULT_ACADEMY_THEME]!;
+
+/**
+ * Loads the stored palette when it is not the default one. Those links are
+ * created by script, which is not render-blocking by itself, so they carry
+ * `blocking="render"` to keep the page from flashing the default colors.
+ *
+ * The default palette deliberately does not go through this path: under
+ * Lighthouse a script-inserted `blocking="render"` stylesheet held the first
+ * frame back by one to two seconds after everything had loaded.
+ */
 export function getAcademyPaletteStylesheetBootstrapScript(): string {
-  return `(()=>{try{const p=document.documentElement.dataset.palette||${JSON.stringify(DEFAULT_ACADEMY_THEME)},all=${JSON.stringify(academyPaletteStylesById)},css=all[p]||all[${JSON.stringify(DEFAULT_ACADEMY_THEME)}];for(const mode of ["dark","light"]){const link=document.createElement("link");link.rel="stylesheet";link.href=css[mode];link.dataset.academyPaletteStyle=p;link.dataset.academyPaletteMode=mode;link.setAttribute("blocking","render");document.head.append(link)}}catch{}})();`;
+  return `(()=>{try{const d=${JSON.stringify(DEFAULT_ACADEMY_THEME)},p=document.documentElement.dataset.palette||d,all=${JSON.stringify(academyPaletteStylesById)},css=all[p];if(p===d||!css)return;for(const mode of ["dark","light"]){const link=document.createElement("link");link.rel="stylesheet";link.href=css[mode];link.dataset.academyPaletteStyle=p;link.dataset.academyPaletteMode=mode;link.setAttribute("blocking","render");document.head.append(link)}}catch{}})();`;
 }
 
 let paletteCatalogLoad: Promise<void> | null = null;

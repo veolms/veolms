@@ -33,7 +33,10 @@ import {
   getSidebarPresentationBootstrapScript,
   getSidebarShellBootstrapScript,
 } from "./shell/sidebarPreferences";
-import { getAcademyPaletteStylesheetBootstrapScript } from "./shell/academyPaletteStyles";
+import {
+  defaultAcademyPaletteStyles,
+  getAcademyPaletteStylesheetBootstrapScript,
+} from "./shell/academyPaletteStyles";
 import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
 import {
   ACADEMY_THEME_VERSION,
@@ -265,6 +268,18 @@ export function Layout({ children }: LayoutProps) {
           </>
         ) : null}
         <link rel="stylesheet" href={appBaseStylesheet} />
+        <link
+          rel="stylesheet"
+          href={defaultAcademyPaletteStyles.dark}
+          data-academy-palette-style={DEFAULT_ACADEMY_THEME}
+          data-academy-palette-mode="dark"
+        />
+        <link
+          rel="stylesheet"
+          href={defaultAcademyPaletteStyles.light}
+          data-academy-palette-style={DEFAULT_ACADEMY_THEME}
+          data-academy-palette-mode="light"
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: getAcademyPaletteStylesheetBootstrapScript(),
