@@ -13,6 +13,7 @@ import type {
   MfaState,
   SessionUser,
 } from "../shared/auth.types.ts";
+import type { ActiveSession } from "./session.repository.ts";
 import * as mfaRepository from "../mfa/mfa.repository.ts";
 import * as sessionRepository from "./session.repository.ts";
 import * as userRepository from "../authentication/authentication.repository.ts";
@@ -28,8 +29,50 @@ export interface SessionServiceOptions {
   database: Kysely<Database>;
 }
 
+/**
+ * Everything establishSession reads before it writes. Loaded as one batch so
+ * a caller can overlap it with other independent work (login overlaps it
+ * with OTP consumption).
+ */
+export interface SessionPrerequisites {
+  roles: string[];
+  totpEnabled: boolean;
+  passkeyCount: number;
+  existingTokenHash: string | null;
+  existingSession: ActiveSession | null;
+}
+
 export function createSessionService({ database }: SessionServiceOptions) {
   const outbox = createOutboxService();
+
+  /** Same rules as resolveMfaState, for factor facts that are already loaded. */
+  function buildMfaState(
+    mfaMandatory: boolean,
+    roles: readonly string[] | null | undefined,
+    factors: { totpEnabled: boolean; passkeyCount: number },
+  ): MfaState {
+    const isAdmin = Boolean(
+      roles?.some((role) => role.toLowerCase() === ADMIN_ROLE),
+    );
+    if (config.SKIP_ADMIN_MFA && isAdmin) {
+      return {
+        totpEnabled: false,
+        passkeyEnabled: false,
+        mfaMandatory: false,
+        mfaRequired: false,
+      };
+    }
+
+    const passkeyEnabled = factors.passkeyCount > 0;
+
+    return {
+      totpEnabled: factors.totpEnabled,
+      passkeyEnabled,
+      mfaMandatory,
+      mfaRequired: mfaMandatory || factors.totpEnabled || passkeyEnabled,
+    };
+  }
+
   /** Resolves which factors an account actually has enrolled. */
   async function resolveMfaState(
     userId: string,
@@ -48,18 +91,40 @@ export function createSessionService({ database }: SessionServiceOptions) {
       };
     }
 
-    const [totpEnabled, passkeyCount] = await Promise.all([
-      mfaRepository.isTotpEnabled(database, userId),
-      mfaRepository.countUserPasskeys(database, userId),
+    return buildMfaState(
+      mfaMandatory,
+      roles,
+      await mfaRepository.findMfaFactorState(database, userId),
+    );
+  }
+
+  /**
+   * Reads roles, enrolled factors and the current session of the caller in
+   * one parallel round trip. These used to run as four serial round trips
+   * inside establishSession.
+   */
+  async function loadSessionPrerequisites(
+    userId: string,
+    existingSessionToken?: string | null,
+  ): Promise<SessionPrerequisites> {
+    const existingTokenHash = existingSessionToken
+      ? hashToken(existingSessionToken)
+      : null;
+
+    const [roles, factors, existingSession] = await Promise.all([
+      userRepository.listUserRoleNames(database, userId),
+      mfaRepository.findMfaFactorState(database, userId),
+      existingTokenHash
+        ? sessionRepository.findActiveSession(database, existingTokenHash)
+        : undefined,
     ]);
 
-    const passkeyEnabled = passkeyCount > 0;
-
     return {
-      totpEnabled,
-      passkeyEnabled,
-      mfaMandatory,
-      mfaRequired: mfaMandatory || totpEnabled || passkeyEnabled,
+      roles,
+      totpEnabled: factors.totpEnabled,
+      passkeyCount: factors.passkeyCount,
+      existingTokenHash,
+      existingSession: existingSession ?? null,
     };
   }
 
@@ -75,6 +140,8 @@ export function createSessionService({ database }: SessionServiceOptions) {
       userAgent: string | null;
       existingSessionToken?: string | null;
     },
+    /** Pass when already loaded for this user and request; read here otherwise. */
+    prerequisites?: SessionPrerequisites,
   ): Promise<EstablishedSession> {
     if (user.is_deleted) {
       throw new AppError(
@@ -84,13 +151,15 @@ export function createSessionService({ database }: SessionServiceOptions) {
       );
     }
 
-    const roles = await userRepository.listUserRoleNames(database, user.id);
-    const mfa = await resolveMfaState(
-      user.id,
+    const { roles, existingTokenHash, existingSession, ...factors } =
+      prerequisites ??
+      (await loadSessionPrerequisites(user.id, request.existingSessionToken));
+    const mfa = buildMfaState(
       isMfaMandatoryAccount(Boolean(user.mfa_mandatory), roles, {
         skipAdminMfa: config.SKIP_ADMIN_MFA,
       }),
       roles,
+      factors,
     );
 
     const token = generateRandomToken();
@@ -99,31 +168,27 @@ export function createSessionService({ database }: SessionServiceOptions) {
     const mfaVerified = !mfa.mfaRequired;
 
     // Check if the client supplied an active, unexpired session belonging to this same user
-    if (request.existingSessionToken) {
-      const existingTokenHash = hashToken(request.existingSessionToken);
-      const existingSession = await sessionRepository.findActiveSession(
+    if (
+      existingTokenHash &&
+      existingSession &&
+      existingSession.user_id === user.id
+    ) {
+      // Reuse the existing session record and rotate its token with optimistic concurrency check
+      const rotated = await sessionRepository.rotateSession(
         database,
-        existingTokenHash,
+        existingSession.id,
+        {
+          previousTokenHash: existingTokenHash,
+          tokenHash,
+          ipAddress: request.ip,
+          userAgent: request.userAgent,
+          mfaVerified,
+          expiresAt,
+        },
       );
 
-      if (existingSession && existingSession.user_id === user.id) {
-        // Reuse the existing session record and rotate its token with optimistic concurrency check
-        const rotated = await sessionRepository.rotateSession(
-          database,
-          existingSession.id,
-          {
-            previousTokenHash: existingTokenHash,
-            tokenHash,
-            ipAddress: request.ip,
-            userAgent: request.userAgent,
-            mfaVerified,
-            expiresAt,
-          },
-        );
-
-        if (rotated) {
-          return { token, sessionId: existingSession.id, mfa };
-        }
+      if (rotated) {
+        return { token, sessionId: existingSession.id, mfa, roles };
       }
     }
 
@@ -139,7 +204,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
       expiresAt,
     });
 
-    return { token, sessionId, mfa };
+    return { token, sessionId, mfa, roles };
   }
 
   async function completeMfaEnrolment(
@@ -231,16 +296,17 @@ export function createSessionService({ database }: SessionServiceOptions) {
       return null;
     }
 
-    const user = await userRepository.findUserById(database, session.user_id);
+    // The session row carries the user id, so the user, role and factor
+    // reads need nothing from each other: one parallel round trip instead of
+    // a serial user read followed by a second batch.
+    const [user, roles, { totpEnabled, passkeyCount }] = await Promise.all([
+      userRepository.findUserById(database, session.user_id),
+      userRepository.listUserRoleNames(database, session.user_id),
+      mfaRepository.findMfaFactorState(database, session.user_id),
+    ]);
     if (!user) {
       return null;
     }
-
-    const [totpEnabled, roles, passkeyCount] = await Promise.all([
-      mfaRepository.isTotpEnabled(database, user.id),
-      userRepository.listUserRoleNames(database, user.id),
-      mfaRepository.countUserPasskeys(database, user.id),
-    ]);
 
     const isAdmin = roles.some((role) => role.toLowerCase() === ADMIN_ROLE);
     const skipAdminMfa = Boolean(config.SKIP_ADMIN_MFA && isAdmin);
@@ -298,6 +364,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
   return {
     resolveMfaState,
     userHasAnyMfaFactor,
+    loadSessionPrerequisites,
     establishSession,
     completeMfaEnrolment,
     logout,

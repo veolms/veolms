@@ -183,6 +183,38 @@ export async function countUserPasskeys(
   return Number(row?.count ?? 0);
 }
 
+/**
+ * Both enrolled-factor facts in a single round trip. Session establishment
+ * and per-request authentication need the pair together; issuing
+ * isTotpEnabled and countUserPasskeys separately costs two pooled
+ * connections (or two serial round trips) for the same answer.
+ */
+export async function findMfaFactorState(
+  database: Executor,
+  userId: string,
+): Promise<{ totpEnabled: boolean; passkeyCount: number }> {
+  const row = await database
+    .selectNoFrom((eb) => [
+      eb
+        .selectFrom("user_totp_credentials")
+        .select("enabled")
+        .where("user_id", "=", userId)
+        .limit(1)
+        .as("totp_enabled"),
+      eb
+        .selectFrom("passkeys")
+        .select((passkeys) => passkeys.fn.count<string>("id").as("count"))
+        .where("user_id", "=", userId)
+        .as("passkey_count"),
+    ])
+    .executeTakeFirst();
+
+  return {
+    totpEnabled: Boolean(row?.totp_enabled),
+    passkeyCount: Number(row?.passkey_count ?? 0),
+  };
+}
+
 export async function deleteAllUserPasskeys(
   database: Executor,
   userId: string,

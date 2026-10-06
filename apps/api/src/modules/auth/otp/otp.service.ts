@@ -192,6 +192,21 @@ export function createOtpService({
 
     const now = new Date();
 
+    // Success path in one round trip. Any miss falls through to the two-step
+    // path below, unchanged, so attempt accounting and failure responses
+    // stay exactly as they were.
+    const consumedDirectly = await otpRepository.consumeMatchingActiveOtp(
+      database,
+      {
+        identifier,
+        identifierType,
+        purpose,
+        codeHash: hashToken(code),
+        now,
+      },
+    );
+    if (consumedDirectly) return;
+
     const match = await otpRepository.findMatchingActiveOtp(database, {
       identifier,
       identifierType,

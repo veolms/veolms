@@ -38,6 +38,8 @@ export interface EstablishedSession {
   token: string;
   sessionId: string;
   mfa: MfaState;
+  /** Role names read while establishing the session. */
+  roles: string[];
 }
 
 export type ChallengeType = "registration" | "authentication";

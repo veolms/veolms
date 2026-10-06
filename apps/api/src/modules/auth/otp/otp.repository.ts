@@ -80,6 +80,46 @@ export async function consumeOtp(
   return Number(result.numUpdatedRows) > 0;
 }
 
+/**
+ * Matches and consumes a valid code in one statement — the success path of
+ * findMatchingActiveOtp + consumeOtp without the second round trip. Returns
+ * false whenever the code cannot be consumed (wrong code, expired, attempts
+ * exhausted, lost a race); the caller then runs the two-step path, which
+ * owns attempt accounting and the exact failure responses.
+ */
+export async function consumeMatchingActiveOtp(
+  database: Executor,
+  input: {
+    identifier: string;
+    identifierType: IdentifierType;
+    purpose: string;
+    codeHash: string;
+    now: Date;
+  },
+): Promise<boolean> {
+  const result = await database
+    .updateTable("otp_codes")
+    .set({ consumed_at: input.now })
+    .where("id", "=", (eb) =>
+      eb
+        .selectFrom("otp_codes")
+        .select("id")
+        .where("identifier", "=", input.identifier)
+        .where("identifier_type", "=", input.identifierType)
+        .where("purpose", "=", input.purpose)
+        .where("code_hash", "=", input.codeHash)
+        .where("consumed_at", "is", null)
+        .where("expires_at", ">", input.now)
+        .limit(1),
+    )
+    .where("consumed_at", "is", null)
+    .where("expires_at", ">", input.now)
+    .where("attempts", "<", OTP_MAX_ATTEMPTS)
+    .executeTakeFirst();
+
+  return Number(result.numUpdatedRows) > 0;
+}
+
 export async function retireOutstandingOtps(
   database: Executor,
   input: {

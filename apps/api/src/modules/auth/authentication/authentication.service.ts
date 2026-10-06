@@ -682,16 +682,29 @@ export function createAuthService({
       );
     }
 
-    await otpService.verifyAndConsumeOtp(
-      input.identifier,
-      input.identifierType,
-      "login",
-      input.code,
-    );
+    // The read-only prerequisites of the session do not depend on the OTP,
+    // so they load while the code is being consumed. Nothing is written for
+    // the session until the OTP has been consumed: a rejected code fails
+    // here and the prerequisites are simply discarded.
+    const [, prerequisites] = await Promise.all([
+      otpService.verifyAndConsumeOtp(
+        input.identifier,
+        input.identifierType,
+        "login",
+        input.code,
+      ),
+      sessionService.loadSessionPrerequisites(
+        user.id,
+        input.request.existingSessionToken,
+      ),
+    ]);
 
-    const session = await sessionService.establishSession(user, input.request);
-    const roles = await getUserRoles(user.id);
-    return { user: { ...user, roles }, session };
+    const session = await sessionService.establishSession(
+      user,
+      input.request,
+      prerequisites,
+    );
+    return { user: { ...user, roles: session.roles }, session };
   }
 
   async function register(input: {

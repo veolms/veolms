@@ -129,6 +129,10 @@ export function listUserSessions(
     .execute();
 }
 
+export type ActiveSession = NonNullable<
+  Awaited<ReturnType<typeof findActiveSession>>
+>;
+
 export function findActiveSession(
   database: Executor,
   tokenHash: string,
