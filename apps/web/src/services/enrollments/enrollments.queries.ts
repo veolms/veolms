@@ -7,12 +7,18 @@ import type { ApiError } from "../../lib/api-error";
 import { enrollmentKeys } from "./enrollments.keys";
 import { enrollmentsService } from "./enrollments.service";
 
+/** Shared so the list can be prefetched under the key the hook reads. */
+export const enrolledCoursesQueryOptions = () => ({
+  queryKey: enrollmentKeys.courses(),
+  queryFn: (): Promise<EnrolledCoursesResponse> =>
+    enrollmentsService.listEnrolledCourses(),
+  staleTime: 60 * 1000,
+});
+
 export function useEnrolledCourses(options?: { enabled?: boolean }) {
   return useQuery<EnrolledCoursesResponse, ApiError>({
-    queryKey: enrollmentKeys.courses(),
-    queryFn: () => enrollmentsService.listEnrolledCourses(),
+    ...enrolledCoursesQueryOptions(),
     enabled: options?.enabled ?? true,
-    staleTime: 60 * 1000,
   });
 }
 

@@ -105,7 +105,10 @@ import {
   prefetchCourseEditor,
   useRestoreCourse,
 } from "./services/courses";
-import { useEnrolledCourses } from "./services/enrollments";
+import {
+  enrolledCoursesQueryOptions,
+  useEnrolledCourses,
+} from "./services/enrollments";
 import {
   adaptApiCourseToCatalogueCourse,
   adaptCourseSummaryToCatalogueCourse,
@@ -4200,10 +4203,35 @@ export function CoursesPage({
   // is active removes that extra network round trip from the first paint of
   // the course rows (the page's LCP) on cold loads.
   useEffect(() => {
-    if (page === "home") {
+    // A browser that was signed in last time shows its own home, not this.
+    if (page === "home" && !sessionPresentAtBoot) {
       void guestHomeBody.preload();
     }
-  }, [page]);
+  }, [page, sessionPresentAtBoot]);
+
+  // The signed-in home used to load strictly in sequence: session check,
+  // then its code, then its data, then the dashboard code. Its code can
+  // download while the session check is still in flight, and its data can be
+  // requested the moment the session is confirmed.
+  useEffect(() => {
+    if (page !== "home" || !(sessionPresentAtBoot || isAuthenticated)) return;
+    if (workspaceRoleHint === "creator") {
+      void import("./CreatorDashboard");
+      return;
+    }
+    void import("./home/AuthenticatedHomeBoundary");
+    void import("./StudentHome");
+  }, [isAuthenticated, page, sessionPresentAtBoot, workspaceRoleHint]);
+  useEffect(() => {
+    // Same rule the catalogue uses: a remembered session may ask before the
+    // session check has answered.
+    const sessionExpected =
+      isAuthenticated || (!authUserFetched && authStore.hasSessionHint());
+    if (page !== "home" || !sessionExpected || effectiveRole !== "student") {
+      return;
+    }
+    void queryClient.prefetchQuery(enrolledCoursesQueryOptions());
+  }, [authUserFetched, effectiveRole, isAuthenticated, page, queryClient]);
 
   const renderPageContent = ({
     surfaceCourseSlug = courseSlug,
