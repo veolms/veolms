@@ -1,0 +1,21 @@
+# ProCodrr
+
+> ProCodrr is an online learning platform for programming and web development. It offers video courses organised into sections and lectures, with lesson discussions, notes and progress tracking for enrolled learners.
+
+Course catalogue and course overview pages are public. Lesson playback, discussions and learner dashboards require an account.
+
+## Public pages
+
+- [Home](/): Popular, free and recently added courses, plus popular learner discussions.
+- [Courses](/courses): The full course catalogue with titles, section and lecture counts, duration and price.
+
+## Accounts
+
+- [Log in](/login): Sign in to an existing account.
+- [Register](/register): Create a learner account.
+
+## Notes for automated agents
+
+- Each course has a public overview page at `/courses/{course-slug}/overview`, linked from the catalogue.
+- Lesson pages live under `/learn/{course-slug}/{lecture}` and need an enrolled, signed-in learner for full content.
+- Pages are rendered in the browser on top of prerendered HTML; the prerendered HTML of the public pages already contains their main content.

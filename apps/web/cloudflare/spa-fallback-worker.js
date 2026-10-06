@@ -22,6 +22,14 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
+    // Well-known URIs are probed by crawlers and agents to discover optional
+    // resources (for example /.well-known/ai-catalog.json). One this site
+    // does not publish has to be a 404, not an HTML page with status 200
+    // that the prober then tries to parse as that resource.
+    if (url.pathname.startsWith("/.well-known/")) {
+      return new Response("Not found", { status: 404 });
+    }
+
     // Other file-like requests keep the previous behavior.
     const isPageNavigation = !/\.[A-Za-z0-9]{1,8}$/u.test(url.pathname);
     const documentPath = isPageNavigation ? SPA_SHELL_PATH : HOME_DOCUMENT_PATH;
