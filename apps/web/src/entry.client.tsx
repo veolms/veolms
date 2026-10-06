@@ -25,15 +25,37 @@ const hydrateApplication = () => {
   }
 };
 
+// The document is prerendered, so its content can be on screen before any of
+// this runs. Hydrating synchronously the moment parsing ends would instead
+// occupy the main thread ahead of the first paint and hold the visible page
+// (and its largest image) back behind work that changes nothing on screen.
+// Let that first frame out, then hydrate.
+const hydrateAfterFirstPaint = () => {
+  let started = false;
+  const start = () => {
+    if (started) return;
+    started = true;
+    hydrateApplication();
+  };
+  // A background tab renders no frames; nothing is being held back there.
+  if (document.visibilityState !== "visible") {
+    start();
+    return;
+  }
+  // The frame callback runs just before the paint; the task queued from it
+  // runs just after. The timer covers a frame that never comes.
+  requestAnimationFrame(() => setTimeout(start, 0));
+  setTimeout(start, 1500);
+};
+
 // The generated route context is streamed through scripts at the end of the
 // document. The async entry module can finish before the parser reaches those
 // scripts, which briefly mounts the fallback route and then rebuilds the real
-// deep link. Begin hydration as soon as parsing completes, without scheduling
-// it as low-priority transition work.
+// deep link. Wait for parsing to complete before hydrating.
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", hydrateApplication, {
+  document.addEventListener("DOMContentLoaded", hydrateAfterFirstPaint, {
     once: true,
   });
 } else {
-  hydrateApplication();
+  hydrateAfterFirstPaint();
 }
