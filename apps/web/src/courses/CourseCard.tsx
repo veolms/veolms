@@ -196,7 +196,7 @@ export function CourseCard({
 
         {studentHome && Boolean(course.pricing?.discount) ? (
           <span
-            className="pointer-events-none absolute left-2.5 top-2.5 z-20 inline-flex shrink-0 items-center whitespace-nowrap rounded-md bg-emerald-600 px-1.5 py-1 text-[0.72rem] font-bold leading-none text-white"
+            className="pointer-events-none absolute left-2.5 top-2.5 z-20 inline-flex shrink-0 items-center whitespace-nowrap rounded-md bg-emerald-700 px-1.5 py-1 text-[0.72rem] font-bold leading-none text-white"
             aria-hidden="true"
           >
             {course.pricing?.discount}
