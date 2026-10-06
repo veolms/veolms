@@ -9,10 +9,10 @@ export const getCourseCatalogueGridClasses = (role: CourseRole) =>
 export const courseCatalogueHorizontalRowClasses =
   "grid min-w-0 max-w-full auto-cols-[calc(100%-1rem)] grid-flow-col gap-4 overflow-x-auto overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-[560px]:auto-cols-[calc((100%-1rem)/2)] lg:auto-cols-[calc((100%-2rem)/3)]";
 
-// The non-scrolling counterpart: one column on phones, then the same two and
-// three column widths the horizontal row shows.
+// The non-scrolling counterpart for a fixed set of three cards; its columns
+// are defined with the guest home styles (guest-home.css).
 export const courseCatalogueStaticRowClasses =
-  "grid min-w-0 max-w-full grid-cols-1 gap-4 min-[560px]:grid-cols-2 lg:grid-cols-3";
+  "home-course-row__viewport--static";
 
 export function CourseCatalogueLoadingSkeleton({ role }: { role: CourseRole }) {
   return (

@@ -4281,31 +4281,38 @@ export function CoursesPage({
               fetchPriority="high"
             />
           ) : null}
-          {!isAuthReady ? (
-            initialHomeDiscovery && showGuestHomeWhilePending ? (
-              // Paint the seeded guest home while the session check runs so
-              // the prerendered document carries real content (and the LCP
-              // image) instead of a blank fallback. This is also the
-              // prerendered markup, so a browser that was signed in last
-              // time hides it from the first paint (data-session-hint, set
-              // by the head bootstrap) and shows the loading state instead.
-              <>
-                <div className="guest-home-preview">
-                  <GuestHome
-                    onNavigatePage={onNavigatePage}
-                    setNotice={setNotice}
-                    initialDiscovery={initialHomeDiscovery}
-                    initialPopularDiscussions={initialHomePopularDiscussions}
-                  />
-                </div>
+          {(
+            isAuthReady
+              ? !isAuthenticated
+              : Boolean(initialHomeDiscovery) && showGuestHomeWhilePending
+          ) ? (
+            // Paint the seeded guest home while the session check runs so
+            // the prerendered document carries real content (and the LCP
+            // image) instead of a blank fallback. This is also the
+            // prerendered markup, so a browser that was signed in last
+            // time hides it from the first paint (data-session-hint, set
+            // by the head bootstrap) and shows the loading state instead.
+            // A guest keeps this exact element once the check answers:
+            // rendering it from a different place in the tree would make
+            // React rebuild the whole page that is already on screen.
+            <>
+              <div className="guest-home-preview">
+                <GuestHome
+                  onNavigatePage={onNavigatePage}
+                  setNotice={setNotice}
+                  initialDiscovery={initialHomeDiscovery}
+                  initialPopularDiscussions={initialHomePopularDiscussions}
+                />
+              </div>
+              {isAuthReady ? null : (
                 <div className="session-pending-home">
                   <AcademyPageFallback />
                 </div>
-              </>
-            ) : (
-              <AcademyPageFallback />
-            )
-          ) : isAuthenticated ? (
+              )}
+            </>
+          ) : !isAuthReady ? (
+            <AcademyPageFallback />
+          ) : (
             <AuthenticatedHomeBoundary
               onOpenCourse={onOpenCourse}
               onNavigatePage={onNavigatePage}
@@ -4326,13 +4333,6 @@ export function CoursesPage({
                   <AcademyPageFallback />
                 )
               }
-            />
-          ) : (
-            <GuestHome
-              onNavigatePage={onNavigatePage}
-              setNotice={setNotice}
-              initialDiscovery={initialHomeDiscovery}
-              initialPopularDiscussions={initialHomePopularDiscussions}
             />
           )}
         </Suspense>

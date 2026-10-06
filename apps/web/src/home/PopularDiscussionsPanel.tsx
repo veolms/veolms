@@ -4,6 +4,7 @@ import { HomeSectionHeader } from "./HomePresentation";
 import { PublicDiscussionWorkspaceCard } from "../workspace/DiscussionsWorkspace";
 import { DashboardDiscussionCardSkeletons } from "../workspace/DashboardDiscussionPreview";
 import type { NavigateTo } from "../routing/navigation";
+import "../styles/features/dashboard-discussion-preview.css";
 
 function PublicDiscussionState({
   title,

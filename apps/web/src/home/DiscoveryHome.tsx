@@ -6,7 +6,7 @@ import type {
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { PublicCourseCard } from "../courses/CourseCard";
 import { CourseCardSkeleton } from "../courses/CourseCardSkeleton";
 import {
@@ -19,7 +19,7 @@ import { usePopularDiscussions } from "../services/learning-interactions";
 import type { NavigateTo } from "../routing/navigation";
 import { HomeCourseRow, HomeStaticCourseRow } from "./HomeCourseRow";
 import { HomeSectionHeader } from "./HomePresentation";
-import { PopularDiscussionsPanel } from "./PopularDiscussionsPanel";
+import { GuestHomeDiscussions } from "./GuestHomeDiscussions";
 import {
   GUEST_HOME_COURSES_PER_SECTION,
   GUEST_HOME_DISCUSSION_COUNT,
@@ -28,7 +28,15 @@ import { useHomeTimeGreeting } from "./homeGreeting";
 import "../styles/features/student-learning.css";
 import "../styles/features/home.css";
 import "../styles/features/guest-home.css";
-import "../styles/features/dashboard-discussion-preview.css";
+
+// The full discussion cards belong to the discussions workspace. Only the
+// signed-in variant shows them, so the guest home does not pay for that
+// feature's code and styles.
+const PopularDiscussionsPanel = lazy(() =>
+  import("./PopularDiscussionsPanel").then((module) => ({
+    default: module.PopularDiscussionsPanel,
+  })),
+);
 
 export type DiscoveryHomeMode = "guest" | "authenticated";
 
@@ -344,17 +352,27 @@ export function DiscoveryHome({
         </div>
 
         <aside className="guest-home__discussion-column">
-          <PopularDiscussionsPanel
-            className="guest-home__discussion-panel"
-            isLoading={discussionsQuery.isLoading}
-            isError={discussionsQuery.isError}
-            isFetching={discussionsQuery.isFetching}
-            discussions={discussions}
-            onRetry={() => void discussionsQuery.refetch()}
-            accessibleCourseIds={accessibleCourseIds}
-            onDiscussionNavigatePage={onDiscussionNavigatePage}
-            onDiscussionAccessDenied={onDiscussionAccessDenied}
-          />
+          {isGuest ? (
+            <GuestHomeDiscussions
+              className="guest-home__discussion-panel"
+              discussions={discussions}
+              onNavigatePage={onDiscussionNavigatePage}
+            />
+          ) : (
+            <Suspense fallback={null}>
+              <PopularDiscussionsPanel
+                className="guest-home__discussion-panel"
+                isLoading={discussionsQuery.isLoading}
+                isError={discussionsQuery.isError}
+                isFetching={discussionsQuery.isFetching}
+                discussions={discussions}
+                onRetry={() => void discussionsQuery.refetch()}
+                accessibleCourseIds={accessibleCourseIds}
+                onDiscussionNavigatePage={onDiscussionNavigatePage}
+                onDiscussionAccessDenied={onDiscussionAccessDenied}
+              />
+            </Suspense>
+          )}
         </aside>
       </div>
     </main>
