@@ -21,11 +21,12 @@ export const CATALOGUE_CSS_URLS_PLACEHOLDER = "__VEO_CATALOGUE_CSS_URLS__";
 export const GUEST_HOME_CSS_URLS_PLACEHOLDER = "__VEO_GUEST_HOME_CSS_URLS__";
 
 /**
- * Comma-joined URLs of the chunks those lazy chunks import statically.
+ * Comma-joined URLs of the chunks the guest home chunk imports statically.
  * Preloading only the lazy chunk itself leaves its imports to be discovered
  * one round trip later, and the body cannot hydrate until all of them are in.
+ * The catalogue has no such list: its prerendered markup was not being
+ * discarded, and preloading its whole graph measurably slowed /courses.
  */
-export const CATALOGUE_JS_URLS_PLACEHOLDER = "__VEO_CATALOGUE_JS_URLS__";
 export const GUEST_HOME_JS_URLS_PLACEHOLDER = "__VEO_GUEST_HOME_JS_URLS__";
 
 /** Splits a replaced URL-list placeholder; an unreplaced one yields none. */

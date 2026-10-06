@@ -169,6 +169,7 @@ const ROUTE_CHUNK_PRELOADS = [
   {
     placeholder: "__VEO_CATALOGUE_CHUNK_URL__",
     cssPlaceholder: "__VEO_CATALOGUE_CSS_URLS__",
+    // Not referenced by the app: the catalogue's import graph is not preloaded.
     jsPlaceholder: "__VEO_CATALOGUE_JS_URLS__",
     facadeSuffix: "/src/courses/CourseCatalogue.tsx",
     manifestSrcSuffix: "courses/CourseCatalogue.tsx",
