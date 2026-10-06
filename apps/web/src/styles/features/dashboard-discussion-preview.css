@@ -209,23 +209,20 @@
   }
 }
 
-/* Dashboard-only treatment for reused compact discussion cards. Keep the
-   shared Discussions surfaces and elevation unchanged. */
+/* Dashboard previews reuse the elevated compact card treatment from Home. */
 .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact {
   --creator-discussion-card-surface: var(
     --card-surface-raised,
     var(--surface-strong)
   );
-  --creator-discussion-card-hover-surface: color-mix(
-    in srgb,
-    var(--creator-discussion-card-surface) 92%,
-    var(--card-surface-hover, var(--card-surface-raised)) 8%
-  );
 
   border: 1px solid transparent;
   background: var(--creator-discussion-card-surface);
-  box-shadow: none;
+  border-color: color-mix(in srgb, var(--text) 18%, var(--border));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent),
+    var(--card-compact-shadow);
   transition:
     background-color 160ms ease,
     border-color 160ms ease;
@@ -233,13 +230,28 @@
 
 .creator-discussion-list[data-dashboard-discussion-preview]
   > .discussion-thread--workspace-card.is-compact:is(:hover, :focus-within) {
-  border-color: transparent;
-  background: var(--creator-discussion-card-hover-surface);
-  box-shadow: none;
+  border-color: color-mix(in srgb, var(--text) 18%, var(--border));
+  background: color-mix(
+    in srgb,
+    var(--creator-discussion-card-surface, var(--surface-strong)) 92%,
+    var(--text) 8%
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+    var(--card-compact-shadow);
+}
+
+.creator-discussion-list[data-dashboard-discussion-preview]
+  > .discussion-thread--workspace-card.is-compact {
+  margin-inline: 12px;
 }
 
 .creator-discussion-list[data-dashboard-discussion-preview] {
   gap: 12px;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-block: 6px;
+  padding-inline: 0;
 }
 
 @media (max-width: 640px) {
@@ -257,6 +269,11 @@
 @media (max-width: 520px) {
   .creator-discussion-list[data-dashboard-discussion-preview] {
     padding-inline: 6px;
+  }
+
+  .creator-discussion-list[data-dashboard-discussion-preview]
+    > .discussion-thread--workspace-card.is-compact {
+    margin-inline: 6px;
   }
 }
 

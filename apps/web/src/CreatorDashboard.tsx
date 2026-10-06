@@ -604,7 +604,7 @@ function DashboardPanel({
     <section className={`creator-dashboard-panel ${className}`}>
       <header className="creator-panel-heading">
         <h2>
-          <HeadingIcon size={18} weight="regular" aria-hidden="true" />
+          <HeadingIcon size={19} weight="duotone" aria-hidden="true" />
           <span>{title}</span>
         </h2>
         <div className="creator-panel-actions">
