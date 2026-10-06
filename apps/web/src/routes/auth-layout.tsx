@@ -67,10 +67,6 @@ export default function AuthLayout() {
 
       <p className="auth-page__footer">
         <span>&copy; 2026 {productName}. All rights reserved.</span>
-        <span aria-hidden="true" className="auth-page__footer-divider">
-          |
-        </span>
-        <span className="auth-page__footer-tagline">Learn. Build. Grow.</span>
       </p>
     </div>
   );

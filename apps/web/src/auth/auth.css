@@ -92,15 +92,6 @@
   text-align: center;
 }
 
-.auth-page__footer-divider {
-  color: color-mix(in srgb, var(--text) 22%, transparent);
-}
-
-.auth-page__footer-tagline {
-  color: var(--accent);
-  font-weight: 600;
-}
-
 .auth-page :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
