@@ -424,6 +424,17 @@
   display: none;
 }
 
+@media (max-width: 480px) {
+  [role="dialog"][aria-labelledby="logout-modal-title"] > div > .mt-6 {
+    gap: 8px;
+  }
+
+  [role="dialog"][aria-labelledby="logout-modal-title"] > div > .mt-6 > button {
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
 html[data-session-hint="signed-in"] .guest-home-preview {
   display: none;
 }
