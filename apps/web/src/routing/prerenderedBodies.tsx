@@ -1,5 +1,8 @@
 import { lazy, useState, type ComponentType } from "react";
-import { GUEST_HOME_CHUNK_URL_PLACEHOLDER } from "./routeChunkPreloads";
+import {
+  CATALOGUE_CHUNK_URL_PLACEHOLDER,
+  GUEST_HOME_CHUNK_URL_PLACEHOLDER,
+} from "./routeChunkPreloads";
 
 /**
  * A lazily loaded page body whose markup is already in the prerendered
@@ -61,10 +64,9 @@ function documentPreloads(chunkUrl: string) {
 }
 
 /**
- * Starts loading the body the prerendered document contains, recognised by
- * the module preload it emits. Returns null when there is nothing to wait
- * for. Only the guest home is waited on: the catalogue's prerendered markup
- * was not being discarded, and holding hydration for it made /courses slower.
+ * Starts loading the bodies the prerendered document contains, recognised by
+ * the module preload each one emits. Returns null when there is nothing to
+ * wait for.
  */
 export function preloadPrerenderedBodies(): Promise<unknown> | null {
   const pending: Promise<unknown>[] = [];
@@ -75,6 +77,9 @@ export function preloadPrerenderedBodies(): Promise<unknown> | null {
     !document.documentElement.dataset.sessionHint
   ) {
     pending.push(guestHomeBody.preload());
+  }
+  if (documentPreloads(CATALOGUE_CHUNK_URL_PLACEHOLDER)) {
+    pending.push(courseCatalogueBody.preload());
   }
   return pending.length ? Promise.all(pending) : null;
 }

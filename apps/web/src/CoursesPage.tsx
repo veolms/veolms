@@ -121,6 +121,7 @@ import {
 import {
   CATALOGUE_CHUNK_URL_PLACEHOLDER,
   CATALOGUE_CSS_URLS_PLACEHOLDER,
+  CATALOGUE_JS_URLS_PLACEHOLDER,
   GUEST_HOME_CHUNK_URL_PLACEHOLDER,
   GUEST_HOME_CSS_URLS_PLACEHOLDER,
   GUEST_HOME_JS_URLS_PLACEHOLDER,
@@ -137,6 +138,7 @@ import {
 const GUEST_HOME_CSS_URLS = splitChunkCssUrls(GUEST_HOME_CSS_URLS_PLACEHOLDER);
 const CATALOGUE_CSS_URLS = splitChunkCssUrls(CATALOGUE_CSS_URLS_PLACEHOLDER);
 const GUEST_HOME_JS_URLS = splitChunkCssUrls(GUEST_HOME_JS_URLS_PLACEHOLDER);
+const CATALOGUE_JS_URLS = splitChunkCssUrls(CATALOGUE_JS_URLS_PLACEHOLDER);
 import {
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
@@ -4634,6 +4636,9 @@ export function CoursesPage({
             skeleton fallback — a full-viewport layout shift. The chunk's
             stylesheets are linked so prerendered markup paints styled. */}
         <link rel="modulepreload" href={CATALOGUE_CHUNK_URL_PLACEHOLDER} />
+        {CATALOGUE_JS_URLS.map((href) => (
+          <link key={href} rel="modulepreload" href={href} />
+        ))}
         <ChunkStylesheets hrefs={CATALOGUE_CSS_URLS} />
         <CourseCatalogue
           activeSection={surfaceActiveSection}
