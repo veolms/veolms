@@ -169,6 +169,7 @@ const ROUTE_CHUNK_PRELOADS = [
   {
     placeholder: "__VEO_CATALOGUE_CHUNK_URL__",
     cssPlaceholder: "__VEO_CATALOGUE_CSS_URLS__",
+    jsPlaceholder: "__VEO_CATALOGUE_JS_URLS__",
     facadeSuffix: "/src/courses/CourseCatalogue.tsx",
     manifestSrcSuffix: "courses/CourseCatalogue.tsx",
     devUrl: "/src/courses/CourseCatalogue.tsx",
@@ -176,6 +177,7 @@ const ROUTE_CHUNK_PRELOADS = [
   {
     placeholder: "__VEO_GUEST_HOME_CHUNK_URL__",
     cssPlaceholder: "__VEO_GUEST_HOME_CSS_URLS__",
+    jsPlaceholder: "__VEO_GUEST_HOME_JS_URLS__",
     facadeSuffix: "/src/GuestHome.tsx",
     manifestSrcSuffix: "src/GuestHome.tsx",
     devUrl: "/src/GuestHome.tsx",
@@ -207,6 +209,11 @@ function routeChunkPreloadPlugin(): Plugin {
           next = next.replaceAll(entry.cssPlaceholder, "");
           changed = true;
         }
+        // Likewise the dev server resolves imports itself.
+        if (next.includes(entry.jsPlaceholder)) {
+          next = next.replaceAll(entry.jsPlaceholder, "");
+          changed = true;
+        }
       }
       return changed ? { code: next, map: null } : undefined;
     },
@@ -230,6 +237,7 @@ function routeChunkPreloadPlugin(): Plugin {
               // The feature CSS usually belongs to chunks this one imports
               // statically, so collect it across that whole graph.
               const cssFiles = new Set<string>();
+              const jsFiles = new Set<string>();
               const seen = new Set<string>();
               const pending = [item.fileName];
               while (pending.length) {
@@ -238,6 +246,15 @@ function routeChunkPreloadPlugin(): Plugin {
                 seen.add(fileName);
                 const chunk = bundle[fileName];
                 if (!chunk || chunk.type !== "chunk") continue;
+                // A chunk made only of stylesheets is deleted after this
+                // hook; it never becomes a file that could be preloaded.
+                const moduleIds = Object.keys(chunk.modules);
+                const isStyleOnlyChunk =
+                  moduleIds.length > 0 &&
+                  moduleIds.every((id) => /\.css(?:$|\?)/u.test(id));
+                if (fileName !== item.fileName && !isStyleOnlyChunk) {
+                  jsFiles.add(fileName);
+                }
                 for (const file of chunk.viteMetadata?.importedCss ?? []) {
                   cssFiles.add(file);
                 }
@@ -249,12 +266,20 @@ function routeChunkPreloadPlugin(): Plugin {
                   .map((file) => joinPublicPath(publicBase, file))
                   .join(","),
               );
+              // The chunks it imports statically: the document preloads
+              // them too, so the lazy body is ready when hydration starts.
+              urls.set(
+                entry.jsPlaceholder,
+                [...jsFiles]
+                  .map((file) => joinPublicPath(publicBase, file))
+                  .join(","),
+              );
             }
           }
         }
       }
 
-      if (urls.size < ROUTE_CHUNK_PRELOADS.length) {
+      if (urls.size < ROUTE_CHUNK_PRELOADS.length * 3) {
         // The SSR pass does not emit the client chunks; read their URLs from
         // the client manifest the way earlyHlsPreloadPlugin does.
         const manifestPath = path.resolve(
@@ -283,18 +308,27 @@ function routeChunkPreloadPlugin(): Plugin {
                 joinPublicPath(publicBase, manifestEntry[1].file),
               );
               const cssFiles = new Set<string>();
+              const jsFiles = new Set<string>();
               const seen = new Set<string>();
               const pending = [manifestEntry[0]];
               while (pending.length) {
                 const key = pending.pop() as string;
                 if (seen.has(key)) continue;
                 seen.add(key);
-                for (const file of manifest[key]?.css ?? []) cssFiles.add(file);
+                const file = manifest[key]?.file;
+                if (file && key !== manifestEntry[0]) jsFiles.add(file);
+                for (const css of manifest[key]?.css ?? []) cssFiles.add(css);
                 pending.push(...(manifest[key]?.imports ?? []));
               }
               urls.set(
                 entry.cssPlaceholder,
                 [...cssFiles]
+                  .map((file) => joinPublicPath(publicBase, file))
+                  .join(","),
+              );
+              urls.set(
+                entry.jsPlaceholder,
+                [...jsFiles]
                   .map((file) => joinPublicPath(publicBase, file))
                   .join(","),
               );

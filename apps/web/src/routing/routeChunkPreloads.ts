@@ -20,7 +20,15 @@ export const GUEST_HOME_CHUNK_URL_PLACEHOLDER = "__VEO_GUEST_HOME_CHUNK_URL__";
 export const CATALOGUE_CSS_URLS_PLACEHOLDER = "__VEO_CATALOGUE_CSS_URLS__";
 export const GUEST_HOME_CSS_URLS_PLACEHOLDER = "__VEO_GUEST_HOME_CSS_URLS__";
 
-/** Splits a replaced CSS placeholder; an unreplaced one yields no URLs. */
+/**
+ * Comma-joined URLs of the chunks those lazy chunks import statically.
+ * Preloading only the lazy chunk itself leaves its imports to be discovered
+ * one round trip later, and the body cannot hydrate until all of them are in.
+ */
+export const CATALOGUE_JS_URLS_PLACEHOLDER = "__VEO_CATALOGUE_JS_URLS__";
+export const GUEST_HOME_JS_URLS_PLACEHOLDER = "__VEO_GUEST_HOME_JS_URLS__";
+
+/** Splits a replaced URL-list placeholder; an unreplaced one yields none. */
 export function splitChunkCssUrls(value: string): string[] {
   if (!value || value.startsWith("__VEO_")) return [];
   return value.split(",").filter((url) => url.startsWith("/"));

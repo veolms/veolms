@@ -118,16 +118,24 @@ import {
 import {
   CATALOGUE_CHUNK_URL_PLACEHOLDER,
   CATALOGUE_CSS_URLS_PLACEHOLDER,
+  CATALOGUE_JS_URLS_PLACEHOLDER,
   GUEST_HOME_CHUNK_URL_PLACEHOLDER,
   GUEST_HOME_CSS_URLS_PLACEHOLDER,
+  GUEST_HOME_JS_URLS_PLACEHOLDER,
   splitChunkCssUrls,
 } from "./routing/routeChunkPreloads";
 import { ChunkStylesheets } from "./routing/ChunkStylesheets";
+import {
+  courseCatalogueBody,
+  guestHomeBody,
+} from "./routing/prerenderedBodies";
 
 // Resolved at module scope: the placeholders are replaced with literal URL
 // lists at build time, so these arrays are constants.
 const GUEST_HOME_CSS_URLS = splitChunkCssUrls(GUEST_HOME_CSS_URLS_PLACEHOLDER);
 const CATALOGUE_CSS_URLS = splitChunkCssUrls(CATALOGUE_CSS_URLS_PLACEHOLDER);
+const GUEST_HOME_JS_URLS = splitChunkCssUrls(GUEST_HOME_JS_URLS_PLACEHOLDER);
+const CATALOGUE_JS_URLS = splitChunkCssUrls(CATALOGUE_JS_URLS_PLACEHOLDER);
 import {
   getMobileOverflowNavigation,
   getMobilePrimaryNavigation,
@@ -239,12 +247,8 @@ import type { ProfilePreferences } from "./settings/profileTypes";
 // it on navigation. Static prerender resolves the lazy module, so the
 // /courses document still ships with catalogue markup, and an idle warm-up
 // keeps client-side navigation instant.
-const loadCourseCatalogueModule = () => import("./courses/CourseCatalogue");
-const CourseCatalogue = lazy(() =>
-  loadCourseCatalogueModule().then((module) => ({
-    default: module.CourseCatalogue,
-  })),
-);
+const loadCourseCatalogueModule = courseCatalogueBody.preload;
+const CourseCatalogue = courseCatalogueBody.Body;
 
 // Profile menu and logout modal open on explicit user actions, so their
 // modules load lazily (menu warmed on idle for signed-in sessions) instead
@@ -348,9 +352,7 @@ const AuthenticatedHomeBoundary = lazy(() =>
     default: module.AuthenticatedHomeBoundary,
   })),
 );
-const GuestHome = lazy(() =>
-  import("./GuestHome").then((module) => ({ default: module.GuestHome })),
-);
+const GuestHome = guestHomeBody.Body;
 const PlaceholderPage = lazy(() =>
   import("./courses/PlaceholderPage").then((module) => ({
     default: module.PlaceholderPage,
@@ -4199,7 +4201,7 @@ export function CoursesPage({
   // the course rows (the page's LCP) on cold loads.
   useEffect(() => {
     if (page === "home") {
-      void import("./GuestHome");
+      void guestHomeBody.preload();
     }
   }, [page]);
 
@@ -4270,6 +4272,9 @@ export function CoursesPage({
               are linked too: the prerendered guest-home markup must not
               paint before the CSS that styles it. */}
           <link rel="modulepreload" href={GUEST_HOME_CHUNK_URL_PLACEHOLDER} />
+          {GUEST_HOME_JS_URLS.map((href) => (
+            <link key={href} rel="modulepreload" href={href} />
+          ))}
           <ChunkStylesheets hrefs={GUEST_HOME_CSS_URLS} />
           {homeLcpCourse?.thumbnail ? (
             <link
@@ -4603,6 +4608,9 @@ export function CoursesPage({
             skeleton fallback — a full-viewport layout shift. The chunk's
             stylesheets are linked so prerendered markup paints styled. */}
         <link rel="modulepreload" href={CATALOGUE_CHUNK_URL_PLACEHOLDER} />
+        {CATALOGUE_JS_URLS.map((href) => (
+          <link key={href} rel="modulepreload" href={href} />
+        ))}
         <ChunkStylesheets hrefs={CATALOGUE_CSS_URLS} />
         <CourseCatalogue
           activeSection={surfaceActiveSection}
