@@ -137,9 +137,10 @@ pnpm dlx wrangler@4 deploy --config wrangler.cdn.jsonc
 
 Keep the R2 bucket private. Configure the Worker route as `/cdn/*` when
 `CDN_URL=/cdn`, or attach a custom domain and set `CDN_URL` to that full
-domain. `.m3u8` files are public, while non-manifest objects in
-`CDN_PUBLIC_FOLDERS` are served without a token and
-`CDN_PRIVATE_FOLDERS` require the short-lived `veo_token` issued by the API.
+domain. Streaming manifests (`.m3u8` and `.mpd`) are public, while
+non-manifest objects in `CDN_PUBLIC_FOLDERS` are served without a token and
+`CDN_PRIVATE_FOLDERS` require a short-lived token (`?t=` compact 40-character
+hex token, or legacy `?veo_token=`) issued by the API.
 `CDN_TOKEN_TTL_SECONDS` controls normal protected-media URLs and
 `CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs.
 New direct uploads use `public/...` or `protected/...` keys. Course thumbnail

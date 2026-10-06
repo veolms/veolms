@@ -144,8 +144,9 @@ export function createLearningHlsRequestFilter(options?: {
     }
 
     if (!currentToken) return;
+    const queryParam = currentToken.length === 40 ? "t" : "veo_token";
     request.uris = request.uris.map((uri) =>
-      appendLearningHlsQueryParameter(uri, "veo_token", currentToken!),
+      appendLearningHlsQueryParameter(uri, queryParam, currentToken!),
     );
   };
 }

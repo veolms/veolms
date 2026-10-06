@@ -23,6 +23,13 @@ function createHmacSignature(secret: string, value: string): string {
   return createHmac("sha256", secret).update(value, "utf8").digest("base64url");
 }
 
+function createFastHmacSignatureHex(secret: string, value: string): string {
+  return createHmac("sha256", secret)
+    .update(value, "utf8")
+    .digest("hex")
+    .slice(0, 32);
+}
+
 function normalizeCdnTokenTtlSeconds(value: number | undefined): number {
   return Math.max(60, Math.min(86_400, Math.floor(value ?? 900)));
 }
@@ -203,7 +210,8 @@ export class S3StorageService {
     const hash = hashIndex === -1 ? "" : url.slice(hashIndex);
     const withoutHash = hashIndex === -1 ? url : url.slice(0, hashIndex);
     const separator = withoutHash.includes("?") ? "&" : "?";
-    return `${withoutHash}${separator}veo_token=${encodeURIComponent(token)}${hash}`;
+    const paramName = token.length === 40 ? "t" : "veo_token";
+    return `${withoutHash}${separator}${paramName}=${encodeURIComponent(token)}${hash}`;
   }
 
   /** Returns whether the object is in a configured public prefix. */
@@ -214,8 +222,23 @@ export class S3StorageService {
     );
   }
 
-  /** Creates a Worker-compatible HMAC token scoped to a key or key prefix. */
+  /** Creates a Worker-compatible compact 40-character HMAC token scoped to a key or key prefix. */
   createCdnAccessToken(key: string, expiresAt?: number): string | null {
+    if (!this.cdnSigningSecret) return null;
+    const normalizedKey = key.replace(/^\/+|\/+$/g, "");
+    if (!normalizedKey) return null;
+    const expiry =
+      expiresAt ?? Math.floor(Date.now() / 1000) + this.cdnTokenTtlSeconds;
+    const expiryHex = Math.floor(expiry).toString(16).padStart(8, "0");
+    const signatureHex = createFastHmacSignatureHex(
+      this.cdnSigningSecret,
+      `${normalizedKey}:${expiryHex}`,
+    );
+    return `${expiryHex}${signatureHex}`;
+  }
+
+  /** Creates a legacy JSON-based veo_token for backwards compatibility. */
+  createLegacyCdnAccessToken(key: string, expiresAt?: number): string | null {
     if (!this.cdnSigningSecret) return null;
     const normalizedKey = key.replace(/^\/+|\/+$/g, "");
     if (!normalizedKey) return null;
