@@ -56,10 +56,10 @@ export const courseCatalogueBody = definePrerenderedBody(
 );
 
 function documentPreloads(chunkUrl: string) {
+  // Anywhere in the document, not only <head>: the link may still be on its
+  // way there when this runs.
   return [
-    ...document.head.querySelectorAll<HTMLLinkElement>(
-      'link[rel="modulepreload"]',
-    ),
+    ...document.querySelectorAll<HTMLLinkElement>('link[rel="modulepreload"]'),
   ].some((link) => link.getAttribute("href") === chunkUrl);
 }
 
