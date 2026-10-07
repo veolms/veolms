@@ -5,12 +5,14 @@ import {
 } from "@tanstack/react-query";
 import type {
   Category,
-  Course,
   CourseAccessRule,
+  CourseBasicsResponse,
+  CourseCreatedResponse,
   CourseDeleteResponse,
   CourseEditorDataResponse,
   CoursePricing,
   CourseSettings,
+  CourseStatusResponse,
   CourseIncludeItem,
   CreateCategoryRequest,
   CreateCourseIncludeRequest,
@@ -56,7 +58,7 @@ function invalidateCoursePublicViews(
 export function useCreateCourse() {
   const queryClient = useQueryClient();
 
-  return useMutation<Course, ApiError, CreateCourseRequest>({
+  return useMutation<CourseCreatedResponse, ApiError, CreateCourseRequest>({
     mutationFn: (payload) => coursesService.createCourse(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: courseKeys.mine() });
@@ -80,7 +82,7 @@ export function useUpdateCourseBasics() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    Course,
+    CourseBasicsResponse,
     ApiError,
     { id: string; payload: UpdateCourseBasicsRequest }
   >({
@@ -155,7 +157,7 @@ export function useCreateSection() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { id: string; courseId: string; title: string; position: number },
+    { id: string; title: string },
     ApiError,
     { courseId: string; payload: CreateCourseSectionRequest }
   >({
@@ -299,7 +301,7 @@ export function useCreateLesson() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { id: string; position: number },
+    { id: string },
     ApiError,
     {
       courseId: string;
@@ -325,7 +327,7 @@ export function useUpdateCourseLesson() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { success: boolean; videoJobId?: string; processingStatus?: string },
+    { success: boolean },
     ApiError,
     {
       courseId: string;
@@ -596,7 +598,7 @@ export const useUpsertCoursePricing = useUpsertPricing;
 export function usePublishCourse() {
   const queryClient = useQueryClient();
 
-  return useMutation<Course, ApiError, string>({
+  return useMutation<CourseStatusResponse, ApiError, string>({
     mutationFn: (courseId) => coursesService.publishCourse(courseId),
     onSuccess: (updatedCourse) => {
       queryClient.invalidateQueries({
@@ -618,7 +620,7 @@ export function usePublishCourse() {
 export function useUnpublishCourse() {
   const queryClient = useQueryClient();
 
-  return useMutation<Course, ApiError, string>({
+  return useMutation<CourseStatusResponse, ApiError, string>({
     mutationFn: (courseId) => coursesService.unpublishCourse(courseId),
     onSuccess: (updatedCourse) => {
       queryClient.invalidateQueries({

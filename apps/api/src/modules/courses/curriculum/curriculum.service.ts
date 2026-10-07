@@ -101,7 +101,7 @@ export function createCurriculumService({
       updated_at: now,
     });
 
-    return { id: sectionId, courseId, title, position };
+    return { id: sectionId, title };
   }
 
   async function updateCourseSection(
@@ -275,7 +275,7 @@ export function createCurriculumService({
       updated_at: now,
     });
 
-    return { id: lessonId, position };
+    return { id: lessonId };
   }
 
   async function updateCourseLesson(
@@ -371,15 +371,7 @@ export function createCurriculumService({
       );
     }
 
-    if (transcodeJobInfo && transcodeJobInfo.should202) {
-      return {
-        accepted: true as const,
-        videoJobId: transcodeJobInfo.jobId!,
-        processingStatus: "queued" as const,
-      };
-    }
-
-    return { accepted: false as const, success: true };
+    return { accepted: Boolean(transcodeJobInfo?.should202) };
   }
 
   async function deleteCourseLesson(
@@ -544,12 +536,8 @@ export function createCurriculumService({
 
     return {
       id: resourceId,
-      lessonId,
       mediaAssetId: payload.mediaAssetId,
       title: payload.title,
-      description: payload.description ?? null,
-      position,
-      createdAt: now.toISOString(),
       mediaAsset: {
         originalFilename: media.original_filename,
         mimeType: media.mime_type,
@@ -595,24 +583,23 @@ export function createCurriculumService({
     return await curriculumRepo.findLessonsByCourseId(database, courseId);
   }
 
-  async function listResourcesForLessons(lessonIds: string[]) {
-    return await curriculumRepo.listResourcesForLessons(database, lessonIds);
+  async function listResourcesByCourseId(courseId: string) {
+    return await curriculumRepo.listResourcesByCourseId(database, courseId);
   }
 
-  async function findSectionById(sectionId: string, courseId: string) {
-    return await curriculumRepo.findSectionById(database, sectionId, courseId);
+  /**
+   * Live lessons of live sections in learner order (section, lesson, id),
+   * with only what a lesson list shows.
+   */
+  async function listOrderedLessonsByCourseId(courseId: string) {
+    return await curriculumRepo.listOrderedLessonsByCourseId(
+      database,
+      courseId,
+    );
   }
 
   async function findLessonById(lessonId: string, courseId: string) {
     return await curriculumRepo.findLessonById(database, lessonId, courseId);
-  }
-
-  async function findResourceById(resourceId: string, courseId: string) {
-    return await curriculumRepo.findResourceById(
-      database,
-      resourceId,
-      courseId,
-    );
   }
 
   return {
@@ -629,10 +616,9 @@ export function createCurriculumService({
     removeLessonResource,
     findSectionsByCourseId,
     findLessonsByCourseId,
-    listResourcesForLessons,
-    findSectionById,
+    listResourcesByCourseId,
+    listOrderedLessonsByCourseId,
     findLessonById,
-    findResourceById,
   };
 }
 

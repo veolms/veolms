@@ -63,17 +63,11 @@ export function createCategoryService({ database }: CategoryServiceOptions) {
     return await categoryRepo.findCategoryById(database, categoryId);
   }
 
-  async function findCategoryBySlug(slug: string) {
-    return await categoryRepo.findCategoryBySlug(database, slug);
-  }
-
   return {
     listCategories,
     createCategory,
     deleteCategory,
     findCategoryById,
-    getCategoryById: findCategoryById,
-    findCategoryBySlug,
   };
 }
 

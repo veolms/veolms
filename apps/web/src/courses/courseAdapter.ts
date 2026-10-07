@@ -1,16 +1,10 @@
 import type {
-  Course as ApiCourse,
   CourseSummary,
   CoursePricingSummary,
   DeletedCourse,
+  ManagedCourseSummary,
 } from "@veolms/contracts";
-import type {
-  Course,
-  CourseCategory,
-  CourseLevel,
-  CourseLifecycleStatus,
-  CoursePricing,
-} from "./catalogue";
+import type { Course, CourseLifecycleStatus, CoursePricing } from "./catalogue";
 import {
   getCourseThumbnailCdnSrcSet,
   getCourseThumbnailCdnUrl,
@@ -89,19 +83,6 @@ export function adaptCourseSummaryToCatalogueCourse(
   enrolled?: ReadonlySet<string> | boolean | number,
   progressMap?: ReadonlyMap<string, number | null> | unknown,
 ): Course {
-  const validLevel: CourseLevel =
-    summary.difficulty === "advanced" || summary.difficulty === "intermediate"
-      ? "Intermediate"
-      : "Beginner";
-
-  const validCategory: CourseCategory =
-    summary.categoryName === "Design" ||
-    summary.categoryName === "Development" ||
-    summary.categoryName === "Database" ||
-    summary.categoryName === "Cloud"
-      ? summary.categoryName
-      : "Development";
-
   const isEnrolled =
     typeof enrolled === "boolean"
       ? enrolled
@@ -128,8 +109,9 @@ export function adaptCourseSummaryToCatalogueCourse(
     slug: summary.slug,
     title: summary.title,
     description: summary.shortDescription || "",
-    level: validLevel,
-    category: validCategory,
+    // Catalogue cards show neither; the course overview loads its own.
+    level: "Beginner",
+    category: "Development",
     sections: summary.totalSections,
     lectures: summary.totalLessons,
     progress: courseProgress,
@@ -150,7 +132,7 @@ export function adaptCourseSummaryToCatalogueCourse(
  * consumed by CourseCatalogue and CourseCard.
  */
 export function adaptApiCourseToCatalogueCourse(
-  apiCourse: ApiCourse,
+  apiCourse: ManagedCourseSummary,
   enrolled?: ReadonlySet<string> | boolean | number,
   progressMap?: ReadonlyMap<string, number | null> | unknown,
 ): Course {
@@ -191,18 +173,20 @@ export function adaptApiCourseToCatalogueCourse(
     id: apiCourse.id,
     slug: apiCourse.slug,
     title: apiCourse.title,
-    description: apiCourse.shortDescription || apiCourse.description || "",
+    // The list sends the short description, or the opening of the full one
+    // when a course has none.
+    description: apiCourse.shortDescription || "",
     level:
       apiCourse.difficulty === "advanced" ||
       apiCourse.difficulty === "intermediate"
         ? "Intermediate"
         : "Beginner",
     category: "Development",
-    sections: apiCourse.totalSections ?? 0,
-    lectures: apiCourse.totalLessons ?? 0,
+    sections: apiCourse.totalSections,
+    lectures: apiCourse.totalLessons,
     progress: courseProgress,
     enrolled: isEnrolled,
-    duration: formatDuration(apiCourse.totalDurationSeconds ?? 0),
+    duration: formatDuration(apiCourse.totalDurationSeconds),
     students: 0,
     thumbnail,
     thumbnailSrcSet:
@@ -246,7 +230,6 @@ export function adaptDeletedCourseToCatalogueCourse(
     thumbnail: "",
     lifecycleStatus: validStatus,
     deletedAt: deletedCourse.deletedAt,
-    purgeAt: deletedCourse.purgeAt,
     creatorId: deletedCourse.creatorId,
     isApi: true,
   };

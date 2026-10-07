@@ -20,21 +20,6 @@ export async function findAccessRuleByCourseId(
     .executeTakeFirst();
 }
 
-export async function insertAccessRule(
-  database: Kysely<Database>,
-  values: {
-    id: string;
-    course_id: string;
-    access_type: AccessType;
-    duration_type: AccessDurationType;
-    duration_days: number | null;
-    created_at: Date;
-    updated_at: Date;
-  },
-) {
-  await database.insertInto("course_access_rules").values(values).execute();
-}
-
 export async function upsertAccessRule(
   database: Kysely<Database>,
   values: {
@@ -61,23 +46,6 @@ export async function upsertAccessRule(
     .returning("id")
     .executeTakeFirstOrThrow();
   return result.id;
-}
-
-export async function updateAccessRule(
-  database: Kysely<Database>,
-  accessRuleId: string,
-  values: {
-    access_type: AccessType;
-    duration_type: AccessDurationType;
-    duration_days: number | null;
-    updated_at: Date;
-  },
-) {
-  await database
-    .updateTable("course_access_rules")
-    .set(values)
-    .where("id", "=", accessRuleId)
-    .execute();
 }
 
 // --- Pricing ---
@@ -113,22 +81,6 @@ export async function findPricingByCourseIds(
     .execute();
 }
 
-export async function insertPricing(
-  database: Kysely<Database>,
-  values: {
-    id: string;
-    course_id: string;
-    pricing_type: PricingType;
-    price: number;
-    currency: string;
-    sale_price: number | null;
-    created_at: Date;
-    updated_at: Date;
-  },
-) {
-  await database.insertInto("course_pricing").values(values).execute();
-}
-
 export async function upsertPricing(
   database: Kysely<Database>,
   values: {
@@ -159,24 +111,6 @@ export async function upsertPricing(
   return result.id;
 }
 
-export async function updatePricing(
-  database: Kysely<Database>,
-  pricingId: string,
-  values: {
-    pricing_type: PricingType;
-    price: number;
-    currency: string;
-    sale_price: number | null;
-    updated_at: Date;
-  },
-) {
-  await database
-    .updateTable("course_pricing")
-    .set(values)
-    .where("id", "=", pricingId)
-    .execute();
-}
-
 // --- Settings ---
 
 export async function findSettingsByCourseId(
@@ -188,26 +122,6 @@ export async function findSettingsByCourseId(
     .selectAll()
     .where("course_id", "=", courseId)
     .executeTakeFirst();
-}
-
-export async function insertSettings(
-  database: Kysely<Database>,
-  values: {
-    id: string;
-    course_id: string;
-    allow_qa: boolean;
-    allow_comments: boolean;
-    allow_downloads: boolean;
-    allow_notes: boolean;
-    certificate_enabled: boolean;
-    show_instructor_name: boolean;
-    language: string;
-    estimated_duration: number | null;
-    created_at: Date;
-    updated_at: Date;
-  },
-) {
-  await database.insertInto("course_settings").values(values).execute();
 }
 
 export async function upsertSettings(
@@ -246,26 +160,4 @@ export async function upsertSettings(
     .returning("id")
     .executeTakeFirstOrThrow();
   return result.id;
-}
-
-export async function updateSettings(
-  database: Kysely<Database>,
-  settingsId: string,
-  values: {
-    allow_qa?: boolean;
-    allow_comments?: boolean;
-    allow_downloads?: boolean;
-    allow_notes?: boolean;
-    certificate_enabled?: boolean;
-    show_instructor_name?: boolean;
-    language?: string;
-    estimated_duration?: number | null;
-    updated_at: Date;
-  },
-) {
-  await database
-    .updateTable("course_settings")
-    .set(values)
-    .where("id", "=", settingsId)
-    .execute();
 }

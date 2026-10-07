@@ -38,12 +38,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         response: {
           201: jsonResponse(
             "Section created",
-            z.object({
-              id: z.uuid(),
-              courseId: z.uuid(),
-              title: z.string(),
-              position: z.number(),
-            }),
+            z.object({ id: z.uuid(), title: z.string() }),
           ),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
@@ -133,10 +128,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
         body: createCourseLessonRequestSchema,
         response: {
-          201: jsonResponse(
-            "Lesson created",
-            z.object({ id: z.uuid(), position: z.number() }),
-          ),
+          201: jsonResponse("Lesson created", z.object({ id: z.uuid() })),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Section not found"),
         },
@@ -162,15 +154,7 @@ const curriculumRoutes: RoutePlugin = async (app, options) => {
           ),
           202: jsonResponse(
             "Video processing accepted",
-            z.object({
-              videoJobId: z.uuid(),
-              processingStatus: z.enum([
-                "queued",
-                "processing",
-                "completed",
-                "failed",
-              ]),
-            }),
+            z.object({ success: z.boolean() }),
           ),
           400: errorResponse("Invalid media asset or type mismatch"),
           403: errorResponse("Forbidden - not permitted"),

@@ -34,7 +34,7 @@ export async function findIncludeById(
 ) {
   return await database
     .selectFrom("course_includes")
-    .selectAll()
+    .select(["id", "text", "position"])
     .where("id", "=", includeId)
     .where("course_id", "=", courseId)
     .executeTakeFirst();
@@ -46,7 +46,7 @@ export async function findIncludesByCourseId(
 ) {
   return await database
     .selectFrom("course_includes")
-    .selectAll()
+    .select(["id", "text", "position"])
     .where("course_id", "=", courseId)
     .orderBy("position", "asc")
     .orderBy("created_at", "asc")
