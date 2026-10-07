@@ -326,10 +326,6 @@ export const authService = {
     });
   },
 
-  deleteUploadedAvatars: (): Promise<UserProfileResponse> => {
-    return api.delete<UserProfileResponse>("/auth/me/avatars");
-  },
-
   logout: (): Promise<AuthMessageResponse> => {
     return api.post<AuthMessageResponse>("/auth/logout");
   },

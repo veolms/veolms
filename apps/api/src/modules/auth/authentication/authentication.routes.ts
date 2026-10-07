@@ -107,6 +107,14 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/auth/profiles/:username",
     {
+      // Unauthenticated and keyed by a guessable username: cap per-IP so the
+      // contact details people chose to publish cannot be harvested in bulk.
+      config: {
+        rateLimit: {
+          max: 60,
+          timeWindow: "1 minute",
+        },
+      },
       schema: {
         operationId: "getPublicProfileByUsername",
         tags: ["Auth"],

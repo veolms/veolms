@@ -1,9 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type {
-  CapabilitiesResponse,
-  Permission,
-  FeatureKey,
-} from "@veolms/contracts";
+import type { CapabilitiesResponse, Permission } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { useAuthStore } from "../../store/auth.store";
 import { authorizationKeys } from "./authorization.keys";
@@ -28,21 +24,14 @@ export function useCapabilities(options?: {
   });
 
   const permissions = new Set(query.data?.permissions ?? []);
-  const features = query.data?.features ?? {};
 
   const can = (permission: Permission): boolean => {
     return permissions.has(permission);
   };
 
-  const hasFeature = (feature: FeatureKey | string): boolean => {
-    return Boolean(features[feature]);
-  };
-
   return {
     ...query,
     can,
-    hasFeature,
     permissions: query.data?.permissions ?? [],
-    features,
   };
 }

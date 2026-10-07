@@ -2,7 +2,11 @@ import crypto from "node:crypto";
 import { config } from "../../../config.ts";
 
 import { AppError } from "../../../lib/errors.ts";
-import type { IdentifierType } from "./auth.types.ts";
+import type {
+  IdentifierType,
+  SessionUser,
+  UserProfileFields,
+} from "./auth.types.ts";
 
 // 2. Token Hashing (SHA-256 for secure session storage and verification tokens)
 export function hashToken(token: string): string {
@@ -61,8 +65,35 @@ export function resolveIdentifier(body: {
   );
 }
 
-export function normalizePhoneNumber(phoneNo: string): string {
-  return phoneNo.trim().replace(/[^\d+]/g, "");
+/**
+ * Maps a `users` row to the profile fields every response and the request
+ * context share. A contact channel or link is only "public" while the value
+ * it publishes still exists (and, for email and phone, is verified).
+ */
+export function toUserProfileFields(user: SessionUser): UserProfileFields {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.display_name,
+    avatarDataUrl: user.avatar_data_url,
+    bio: user.bio,
+    emailPublic: Boolean(
+      user.email_public && user.email && user.email_verified_at,
+    ),
+    mobilePublic: Boolean(
+      user.mobile_public && user.phone_no && user.phone_verified_at,
+    ),
+    linkedinUrl: user.linkedin_url,
+    linkedinPublic: Boolean(user.linkedin_public && user.linkedin_url),
+    githubUrl: user.github_url,
+    githubPublic: Boolean(user.github_public && user.github_url),
+    websiteUrl: user.website_url,
+    websitePublic: Boolean(user.website_public && user.website_url),
+    email: user.email,
+    emailVerified: Boolean(user.email_verified_at),
+    phoneNo: user.phone_no,
+    mobileVerified: Boolean(user.phone_verified_at),
+  };
 }
 
 export function generatePkce(): { verifier: string; challenge: string } {

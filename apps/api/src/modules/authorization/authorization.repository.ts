@@ -177,22 +177,6 @@ export async function isFeatureEnabled(
   return Boolean(row?.enabled ?? true);
 }
 
-export async function getFeatureMap(
-  database: Executor,
-): Promise<Record<string, boolean>> {
-  const allFeatures = await database
-    .selectFrom("features")
-    .select(["feature_key", "enabled"])
-    .execute();
-
-  const featureMap: Record<string, boolean> = {};
-  for (const f of allFeatures) {
-    featureMap[f.feature_key] = Boolean(f.enabled);
-  }
-
-  return featureMap;
-}
-
 export async function resolveCourseScope(
   database: Executor,
   courseIdOrSlug: string,

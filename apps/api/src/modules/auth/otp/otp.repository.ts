@@ -16,7 +16,7 @@ export function findMatchingActiveOtp(
 ) {
   return database
     .selectFrom("otp_codes")
-    .selectAll()
+    .select(["id", "attempts"])
     .where("identifier", "=", input.identifier)
     .where("identifier_type", "=", input.identifierType)
     .where("purpose", "=", input.purpose)

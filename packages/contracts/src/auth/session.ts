@@ -38,9 +38,6 @@ export const oauthUrlResponseSchema = z.object({
   url: z.string().meta({
     description: "Provider consent screen the client should redirect to.",
   }),
-  state: z.string().meta({
-    description: "Opaque CSRF value the provider echoes back on callback.",
-  }),
 });
 
 export const oauthCallbackRequestSchema = z.object({
@@ -84,7 +81,6 @@ export const oauthRegisterRequestSchema = oauthCallbackRequestSchema.extend({
 
 export const authConfigResponseSchema = z.object({
   googleClientId: z.string().optional(),
-  githubClientId: z.string().optional(),
 });
 
 export const authMessageResponseSchema = z.object({
@@ -109,9 +105,7 @@ export const sessionResponseSchema = z.object({
   ipAddress: z.string().max(45).nullable(),
   userAgent: z.string().max(255).nullable(),
   isCurrent: z.boolean(),
-  createdAt: z.string().max(40),
   lastUsedAt: z.string().max(40),
-  expiresAt: z.string().max(40),
 });
 
 export const sessionParamsSchema = z.object({

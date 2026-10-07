@@ -10,14 +10,7 @@ import type { Executor } from "../shared/repository.types.ts";
 export function findTotpCredential(database: Executor, userId: string) {
   return database
     .selectFrom("user_totp_credentials")
-    .select([
-      "id",
-      "secret_encrypted",
-      "enabled",
-      "last_used_step",
-      "failed_attempts",
-      "locked_until",
-    ])
+    .select(["id", "secret_encrypted", "enabled", "locked_until"])
     .where("user_id", "=", userId)
     .executeTakeFirst();
 }
@@ -229,7 +222,7 @@ export function findUserPasskey(
 ) {
   return database
     .selectFrom("passkeys")
-    .selectAll()
+    .select(["id", "credential_id", "public_key", "counter"])
     .where("user_id", "=", userId)
     .where("credential_id", "=", credentialId)
     .executeTakeFirst();
@@ -307,7 +300,7 @@ export function findActiveChallenge(
 ) {
   return database
     .selectFrom("webauthn_challenges")
-    .selectAll()
+    .select(["id", "challenge"])
     .where("user_id", "=", userId)
     .where("type", "=", type)
     .where("expires_at", ">", new Date())

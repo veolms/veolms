@@ -25,9 +25,6 @@ export interface AuthorizationGuard {
     resourceType?: ResourceType,
     featureKey?: string,
   ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  requireFeature: (
-    featureKey: string,
-  ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 }
 
 export function createAuthorizationGuard(
@@ -113,6 +110,19 @@ export function createAuthorizationGuard(
             });
 
       if (!decision.allowed) {
+        // Why the policy said no (which role assignment, deny rule or
+        // feature flag) stays in the log; the client gets a fixed message.
+        request.log?.info(
+          {
+            userId: request.user.id,
+            permissions,
+            courseId: scope.courseId,
+            code: decision.code,
+            reason: decision.reason,
+          },
+          "Authorization denied",
+        );
+
         if (decision.code === "FEATURE_DISABLED") {
           return reply
             .code(403)
@@ -120,8 +130,7 @@ export function createAuthorizationGuard(
               httpError(
                 403,
                 "FEATURE_DISABLED",
-                decision.reason ??
-                  "This feature is not enabled on the platform",
+                "This feature is not enabled on the platform",
               ),
             );
         }
@@ -132,8 +141,7 @@ export function createAuthorizationGuard(
             httpError(
               403,
               "PERMISSION_DENIED",
-              decision.reason ??
-                "You do not have permission to perform this action",
+              "You do not have permission to perform this action",
             ),
           );
       }
@@ -150,34 +158,8 @@ export function createAuthorizationGuard(
     return authorizeAny([permission], resourceType, featureKey);
   }
 
-  function requireFeature(featureKey: string) {
-    return async function requireFeatureHandler(
-      request: FastifyRequest,
-      reply: FastifyReply,
-    ): Promise<void> {
-      const decision = await service.check({
-        userId: request.user?.id ?? "00000000-0000-0000-0000-000000000000",
-        permission: "course.read",
-        featureKey,
-      });
-
-      if (decision.code === "FEATURE_DISABLED") {
-        return reply
-          .code(403)
-          .send(
-            httpError(
-              403,
-              "FEATURE_DISABLED",
-              `Feature '${featureKey}' is disabled on the platform`,
-            ),
-          );
-      }
-    };
-  }
-
   return {
     authorize,
     authorizeAny,
-    requireFeature,
   };
 }

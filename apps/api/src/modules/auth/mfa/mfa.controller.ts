@@ -83,6 +83,7 @@ export function createMfaController(context: AuthContext) {
       userId: request.user!.id,
       sessionId: request.session!.id,
       response: request.body.response,
+      logger: request.log,
     });
   }
 
@@ -102,6 +103,7 @@ export function createMfaController(context: AuthContext) {
       userId: request.user!.id,
       sessionId: request.session!.id,
       response: request.body.response,
+      logger: request.log,
     });
   }
 

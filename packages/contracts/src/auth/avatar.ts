@@ -50,9 +50,7 @@ export const userAvatarSchema = z.strictObject({
   avatarDataUrl: z.string().max(3_000_000),
   avatarSrcSet: z.array(avatarImageVariantSchema),
   source: userAvatarSourceSchema,
-  createdAt: z.iso.datetime(),
   isCurrent: z.boolean(),
-  canDelete: z.boolean(),
 });
 
 export const userAvatarListResponseSchema = z.array(userAvatarSchema);

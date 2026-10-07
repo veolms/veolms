@@ -26,7 +26,7 @@ export function createOauthController(context: AuthContext) {
       request.body.redirectUri,
     );
     setOauthStateCookie(reply, result.cookie);
-    return { url: result.url, state: result.state };
+    return { url: result.url };
   }
 
   async function login(
@@ -37,6 +37,7 @@ export function createOauthController(context: AuthContext) {
       request.body,
       request.cookies[oauthService.oauthStateCookieName],
       () => clearOauthStateCookie(reply),
+      request.log,
     );
 
     const existingSessionToken = request.cookies["veolms-session"] ?? null;
@@ -76,6 +77,7 @@ export function createOauthController(context: AuthContext) {
       request.body,
       request.cookies[oauthService.oauthStateCookieName],
       () => clearOauthStateCookie(reply),
+      request.log,
     );
 
     const existingSessionToken = request.cookies["veolms-session"] ?? null;
