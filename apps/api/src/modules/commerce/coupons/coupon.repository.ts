@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 import type { CouponDiscountType } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
+import { exactCursorTimestamp } from "../../../lib/keyset.ts";
 
 export async function findCouponByCode(database: Executor, code: string) {
   return await database
@@ -289,10 +290,16 @@ export async function listCoupons(
 
   if (options?.cursor) {
     const cursor = options.cursor;
+    const createdAt = exactCursorTimestamp(
+      ["coupons"],
+      "created_at",
+      cursor.id,
+      cursor.createdAt,
+    );
     query = query.where(
       sql<boolean>`(
-        created_at < ${cursor.createdAt}
-        or (created_at = ${cursor.createdAt} and id < ${cursor.id}::uuid)
+        created_at < ${createdAt}
+        or (created_at = ${createdAt} and id < ${cursor.id}::uuid)
       )`,
     );
   }

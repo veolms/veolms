@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 import type { ExpressionBuilder } from "kysely";
 import type { Database, DatabaseExecutor } from "@veolms/database";
+import { exactCursorTimestamp, isCursorUuid } from "../../lib/keyset.ts";
 
 export type StudentsExecutor = DatabaseExecutor;
 
@@ -148,8 +149,9 @@ export function decodeStudentListCursor(
     if (
       typeof cursor.sortBy !== "string" ||
       !studentListSorts.includes(cursor.sortBy as StudentListSort) ||
-      typeof cursor.id !== "string" ||
-      cursor.id.length === 0
+      // The id is compared as a uuid; anything else used to reach the
+      // database and come back as a 500.
+      !isCursorUuid(cursor.id)
     )
       return null;
 
@@ -272,12 +274,17 @@ export async function listStudentsPaginated(
   const cursor = decodeStudentListCursor(options.cursor);
   if (cursor?.sortBy === sortBy) {
     if (cursor.sortBy === "recent") {
-      const cursorDate = new Date(cursor.createdAt);
+      const createdAt = exactCursorTimestamp(
+        ["users"],
+        "created_at",
+        cursor.id,
+        new Date(cursor.createdAt),
+      );
       query = query.where((eb) =>
         eb.or([
-          eb("u.created_at", "<", cursorDate),
+          eb("u.created_at", "<", createdAt),
           eb.and([
-            eb("u.created_at", "=", cursorDate),
+            eb("u.created_at", "=", createdAt),
             eb("u.id", "<", cursor.id),
           ]),
         ]),

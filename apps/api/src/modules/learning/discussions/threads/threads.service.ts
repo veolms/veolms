@@ -1158,8 +1158,8 @@ export function createThreadsService(
         if (pageCursor) {
           notesQuery = notesQuery.where(
             noteSort === "activity"
-              ? updatedAtIdDescSql("n", pageCursor)
-              : createdAtIdDescSql("n", pageCursor),
+              ? updatedAtIdDescSql("n", pageCursor, "learning_notes")
+              : createdAtIdDescSql("n", pageCursor, "learning_notes"),
           );
         }
 
@@ -1358,7 +1358,7 @@ export function createThreadsService(
 
         if (pageCursor) {
           reportsQuery = reportsQuery.where(
-            createdAtIdDescSql("rep", pageCursor),
+            createdAtIdDescSql("rep", pageCursor, "learning_reports"),
           );
         }
 

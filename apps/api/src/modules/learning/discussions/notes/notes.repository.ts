@@ -262,7 +262,9 @@ export function createNotesRepository(): NotesRepository {
       let filtered = db.selectFrom("learning_notes as n");
       filtered = applyNoteFilters(filtered, userId, options);
       if (options.pageCursor) {
-        filtered = filtered.where(createdAtIdDescSql("n", options.pageCursor));
+        filtered = filtered.where(
+          createdAtIdDescSql("n", options.pageCursor, "learning_notes"),
+        );
       }
 
       const rows = await filtered

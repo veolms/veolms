@@ -18,6 +18,7 @@ import { sql } from "kysely";
 import {
   type DiscussionListCursor,
   authorRoleSql,
+  createdAtIdDescSql,
 } from "../shared/discussion.utils.ts";
 
 export const BOOKMARKS_WORKSPACE_SORT = "bookmarked";
@@ -225,13 +226,7 @@ function applyBookmarkFilters<O>(
 
   if (options.pageCursor) {
     q = q.where(
-      sql<boolean>`(
-        b.created_at < ${options.pageCursor.createdAt}
-        or (
-          b.created_at = ${options.pageCursor.createdAt}
-          and b.id < ${options.pageCursor.id}::uuid
-        )
-      )`,
+      createdAtIdDescSql("b", options.pageCursor, "learning_bookmarks"),
     );
   }
 
