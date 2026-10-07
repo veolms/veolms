@@ -108,11 +108,13 @@ export function presentAttemptResult(input: {
     feedbackMode: assignment.feedback_mode,
     ...(scope.includeFeedback
       ? {
-          answers: answers.flatMap((answer) => {
-            const question = questions.find(
-              (item) => item.id === answer.question_id,
+          // In question order, so the response to a submit and a later read
+          // of the same result list the answers identically.
+          answers: questions.flatMap((question) => {
+            const answer = answers.find(
+              (item) => item.question_id === question.id,
             );
-            if (!question) return [];
+            if (!answer) return [];
             const response = answer.response_value as QuizResponseValue;
             const selected = response.selectedOptionIds ?? [];
             const textResponse = response.textResponse ?? null;
