@@ -2,6 +2,11 @@ import { formatMoney } from "@veolms/contracts";
 import { escapeHtml, type EmailContent } from "@veolms/services/email";
 
 import { config } from "../../config.ts";
+import { clampText } from "../../lib/text.ts";
+
+/** Limits of `notificationSchema` in @veolms/contracts. */
+export const NOTIFICATION_TITLE_MAX = 255;
+export const NOTIFICATION_BODY_MAX = 2000;
 import type {
   NotificationTemplateData,
   NotificationTemplateKey,
@@ -234,6 +239,15 @@ export function renderNotificationTemplate(
       break;
     }
   }
+
+  // Templates embed user-written text (a 255-character thread title, a list
+  // of item titles), so the rendered strings can exceed what the
+  // notification response schema allows — and one such row made every page
+  // of that user's feed return 500.
+  inApp = {
+    title: clampText(inApp.title, NOTIFICATION_TITLE_MAX),
+    body: clampText(inApp.body, NOTIFICATION_BODY_MAX),
+  };
 
   return {
     inApp,

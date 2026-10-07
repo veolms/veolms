@@ -13,7 +13,12 @@ import type { ClaimedOutboxEvent } from "../../events/outbox.repository.ts";
 import * as outboxRepository from "../../events/outbox.repository.ts";
 import { AppError } from "../../lib/errors.ts";
 import * as notificationRepository from "./notifications.repository.ts";
-import { renderNotificationTemplate } from "./notifications.templates.ts";
+import { clampText } from "../../lib/text.ts";
+import {
+  NOTIFICATION_BODY_MAX,
+  NOTIFICATION_TITLE_MAX,
+  renderNotificationTemplate,
+} from "./notifications.templates.ts";
 import type {
   NotificationIntent,
   NotificationRecipientDirectory,
@@ -97,8 +102,9 @@ function presentNotification(row: {
     id: row.id,
     type: row.type,
     category: row.category,
-    title: row.title,
-    body: row.body,
+    // Rows stored before titles were clamped at write time can be too long.
+    title: clampText(row.title, NOTIFICATION_TITLE_MAX),
+    body: clampText(row.body, NOTIFICATION_BODY_MAX),
     deepLink: row.deep_link,
     readAt: row.read_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),

@@ -92,10 +92,13 @@ const publicCourseObjectSchema = z.strictObject({
     .max(500)
     .default("")
     .meta({ description: "One-line summary shown in catalogue listings." }),
+  // No minimum and a generous maximum on purpose: this is a RESPONSE
+  // schema, and a course whose stored description was empty or longer than
+  // the old 2000-character limit (the editors allow both) made this
+  // endpoint fail serialization and return 500.
   description: z
     .string()
-    .min(1)
-    .max(2000)
+    .max(20_000)
     .meta({ description: "Full course description." }),
 });
 

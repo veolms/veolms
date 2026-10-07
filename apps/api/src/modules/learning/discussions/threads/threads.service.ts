@@ -17,6 +17,7 @@ import type {
   WorkspaceDiscussionItem,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import { clampText } from "../../../../lib/text.ts";
 import { avatarSrcSetFromUrl } from "../../../avatars/index.ts";
 import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
@@ -849,10 +850,16 @@ export function createThreadsService(
         discussions: rows.map((row) => ({
           id: row.id,
           kind: row.kind,
-          title: row.title,
-          snippet: row.snippet,
+          // SQL left(…, 500) counts code points; the schema counts UTF-16
+          // units, so one emoji in a long post made this public endpoint
+          // return 500 for everyone.
+          title: row.title === null ? null : clampText(row.title, 255),
+          snippet: clampText(row.snippet ?? "", 500),
           author: {
-            displayName: row.authorName?.trim() || "Anonymous Learner",
+            displayName: clampText(
+              row.authorName?.trim() || "Anonymous Learner",
+              100,
+            ),
             avatarUrl: row.authorAvatarUrl,
             avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
           },
