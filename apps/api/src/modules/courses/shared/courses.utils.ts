@@ -59,6 +59,27 @@ export async function getCourseAndVerifyOwner(
 }
 
 /**
+ * Loads a course for a read that is public once the course is published.
+ * Unpublished courses are visible only to whoever may manage them; for
+ * everyone else they answer exactly like a missing course.
+ */
+export async function getCourseForViewer(
+  database: Kysely<Database>,
+  courseId: string,
+  viewer?: { id: string; roles?: readonly string[] } | null,
+) {
+  const course = await courseRepo.findCourseById(database, courseId);
+  if (
+    !course ||
+    (course.status !== "published" &&
+      !canManageCourse(course, viewer?.id, viewer?.roles))
+  ) {
+    throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+  }
+  return course;
+}
+
+/**
  * Throws OPTIMISTIC_LOCK_CONFLICT if a version-guarded UPDATE matched zero
  * rows (e.g. the row's version moved between the read and the write). Every
  * caller of courseRepo.updateCourse must pass its result through this so a

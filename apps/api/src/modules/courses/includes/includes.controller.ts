@@ -35,7 +35,7 @@ export function createIncludesController({
     request: FastifyRequest<{ Params: { id: string } }>,
   ) {
     const { id } = request.params;
-    const items = await service.listCourseIncludes(id);
+    const items = await service.listCourseIncludes(id, request.user);
     return { items };
   }
 
