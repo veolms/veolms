@@ -13,7 +13,7 @@ import type {
 } from "@veolms/contracts";
 import { LEARNING_REMINDER_DAY_IDS } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
-import type { Kysely, Transaction } from "kysely";
+import type { Kysely } from "kysely";
 
 import { ADMIN_ROLE } from "../auth/index.ts";
 import { createAccessService, type AccessService } from "../access/index.ts";
@@ -25,10 +25,16 @@ import {
 } from "../courses/index.ts";
 import * as courseRepository from "../courses/course/course.repository.ts";
 import { createOutboxService } from "../../events/outbox.service.ts";
+import {
+  createQuizCompletionService,
+  type QuizCompletionService,
+} from "../quizzes/index.ts";
 import * as learningProgressRepository from "./learning-progress.repository.ts";
 
 /** Streak lengths that earn a one-time milestone notification. */
 const LEARNING_STREAK_MILESTONES = [7, 30, 100, 365] as const;
+/** Days after a milestone on which a missed announcement is still made. */
+const STREAK_MILESTONE_CATCH_UP_DAYS = 2;
 
 type UserContext = { id: string; roles: readonly string[] };
 
@@ -274,11 +280,13 @@ export function createLearningProgressService({
   services,
   accessService = createAccessService(),
   curriculumService = createCurriculumService({ database, services }),
+  quizCompletionService = createQuizCompletionService({ database }),
 }: {
   database: Kysely<Database>;
   services: AppServices;
   accessService?: AccessService;
   curriculumService?: CurriculumService;
+  quizCompletionService?: QuizCompletionService;
 }): LearningProgressService {
   const outbox = createOutboxService();
   // Learners known to have a settings row, so the heartbeat does not look
@@ -476,10 +484,41 @@ export function createLearningProgressService({
         .filter((lesson) => canManageCourse || lesson.is_published)
         .map((lesson) => lesson.id),
     );
+    // A quiz lesson is complete when its quiz has been passed — a fact the
+    // server holds. The page used to simply report 100% for it, so any
+    // request could mark a quiz lesson done. Looked up only when the batch
+    // actually reports progress on a quiz lesson.
+    const quizLessonIds = new Set(
+      lessons
+        .filter((lesson) => lesson.content_type === "quiz")
+        .map((lesson) => lesson.id),
+    );
+    const reportedQuizLessonIds = [
+      ...new Set(
+        input.items
+          .filter(
+            (item) =>
+              item.progressPercent > 0 && quizLessonIds.has(item.lessonId),
+          )
+          .map((item) => item.lessonId),
+      ),
+    ];
+    const passedQuizLessonIds =
+      reportedQuizLessonIds.length > 0
+        ? await quizCompletionService.listPassedLessonIds(
+            user.id,
+            reportedQuizLessonIds,
+          )
+        : new Set<string>();
     const progressByLessonId = new Map<string, number>();
 
     for (const item of input.items) {
       if (!availableLessonIds.has(item.lessonId)) continue;
+      if (
+        quizLessonIds.has(item.lessonId) &&
+        !passedQuizLessonIds.has(item.lessonId)
+      )
+        continue;
       const current = progressByLessonId.get(item.lessonId) ?? 0;
       progressByLessonId.set(
         item.lessonId,
@@ -512,23 +551,24 @@ export function createLearningProgressService({
     // intact history/streak.
     await seedTimeZoneFromDevice(user.id, input.timeZone);
 
-    // The accrual and the events it triggers commit together. Published
-    // afterwards, an event lost to a crash or a dropped connection was gone
-    // for good: the threshold is only crossed once, so no later heartbeat
-    // would publish it. If anything here fails the heartbeat fails as a
-    // whole and the client sends it again — progress is a max-merge and
-    // the events carry dedupe keys, so the retry is safe.
-    await database.transaction().execute(async (transaction) => {
-      const accrual =
-        await learningProgressRepository.upsertProgressAndAccrueActivity(
-          transaction,
-          user.id,
-          rowsToUpsert,
-        );
-      if (accrual) {
-        await publishLearningThresholdEvents(transaction, user.id, accrual);
+    // One statement: progress, the day's activity, and — when this batch
+    // takes the day across the learner's goal — the goal-completed event.
+    const accrual =
+      await learningProgressRepository.upsertProgressAndAccrueActivity(
+        database,
+        user.id,
+        rowsToUpsert,
+      );
+
+    if (accrual) {
+      // A failed notification must never fail the heartbeat. A milestone
+      // missed here is picked up on the learner's next learning day.
+      try {
+        await publishStreakMilestone(user.id, accrual);
+      } catch {
+        // See above.
       }
-    });
+    }
 
     return { synced: true };
   }
@@ -593,75 +633,50 @@ export function createLearningProgressService({
   }
 
   /**
-   * Fires goal-completed / streak-milestone notifications only when THIS
-   * batch crosses the threshold (the accrual row carries the day's
-   * before/after totals). Outbox dedupe keys make each one at-most-once:
-   * goal per user per local day, milestone per user per count — so a
-   * raised goal never re-fires and milestones never repeat.
+   * Announces a streak milestone on the heartbeat that makes today a
+   * learning day (the goal-completed event is queued by the accrual
+   * statement itself).
+   *
+   * A milestone is announced when the streak reaches it, or up to
+   * STREAK_MILESTONE_CATCH_UP_DAYS later: if the announcement failed on the
+   * day itself, the next learning day makes it instead of it being lost.
+   * The dedupe key — one per learner per milestone — keeps it to once.
    */
-  async function publishLearningThresholdEvents(
-    transaction: Transaction<Database>,
+  async function publishStreakMilestone(
     userId: string,
     accrual: learningProgressRepository.DailyActivityAccrual,
   ) {
     const wasQualified =
       accrual.previous_seconds >= 60 || accrual.previous_completions >= 1;
     const isQualified = accrual.seconds >= 60 || accrual.completions >= 1;
-    const dayJustQualified = !wasQualified && isQualified;
+    if (wasQualified || !isQualified) return;
 
     const settings = await learningProgressRepository.findUserLearningSettings(
-      transaction,
+      database,
       userId,
     );
-    const goalSeconds = (settings?.daily_goal_minutes ?? 0) * 60;
-    const goalJustCompleted =
-      goalSeconds > 0 &&
-      accrual.previous_seconds < goalSeconds &&
-      accrual.seconds >= goalSeconds;
-
-    if (!dayJustQualified && !goalJustCompleted) return;
-
-    let milestone: number | undefined;
-    if (dayJustQualified) {
-      const aggregates =
-        await learningProgressRepository.getLearningSummaryAggregates(
-          transaction,
-          {
-            userId,
-            timeZone: settings?.time_zone ?? "UTC",
-            floorDate: settings?.accrual_floor_date,
-          },
-        );
-      milestone = LEARNING_STREAK_MILESTONES.find(
-        (days) => days === aggregates.currentStreakDays,
-      );
-    }
-
-    if (!goalJustCompleted && milestone === undefined) return;
-
-    const now = new Date();
-    if (goalJustCompleted) {
-      await outbox.publish(transaction, {
-        type: "learning.goal_completed",
-        version: 1,
-        dedupeKey: `learning.goal_completed:${userId}:${accrual.activity_date}`,
-        occurredAt: now,
-        payload: {
-          recipientUserId: userId,
-          dailyGoalMinutes: settings!.daily_goal_minutes!,
-          localDate: accrual.activity_date,
-        },
+    const aggregates =
+      await learningProgressRepository.getLearningSummaryAggregates(database, {
+        userId,
+        timeZone: settings?.time_zone ?? "UTC",
+        floorDate: settings?.accrual_floor_date,
       });
-    }
-    if (milestone !== undefined) {
+    const streak = aggregates.currentStreakDays;
+    const milestone = LEARNING_STREAK_MILESTONES.find(
+      (days) =>
+        streak >= days && streak <= days + STREAK_MILESTONE_CATCH_UP_DAYS,
+    );
+    if (milestone === undefined) return;
+
+    await database.transaction().execute(async (transaction) => {
       await outbox.publish(transaction, {
         type: "learning.streak_milestone",
         version: 1,
         dedupeKey: `learning.streak_milestone:${userId}:${milestone}`,
-        occurredAt: now,
+        occurredAt: new Date(),
         payload: { recipientUserId: userId, streakDays: milestone },
       });
-    }
+    });
   }
 
   async function getAverageProgressAndCompletionRate(

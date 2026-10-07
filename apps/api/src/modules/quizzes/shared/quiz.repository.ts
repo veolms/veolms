@@ -564,6 +564,30 @@ export async function listAnalyticsAttempts(
     .execute();
 }
 
+/** Of these lessons, the ones whose quiz the learner has a passed attempt on. */
+export async function listPassedLessonIds(
+  database: DatabaseExecutor,
+  userId: string,
+  lessonIds: readonly string[],
+): Promise<string[]> {
+  if (lessonIds.length === 0) return [];
+  const rows = await database
+    .selectFrom("quiz_attempts")
+    .innerJoin(
+      "quiz_assignments",
+      "quiz_assignments.id",
+      "quiz_attempts.assignment_id",
+    )
+    .select("quiz_assignments.lesson_id as lessonId")
+    .distinct()
+    .where("quiz_attempts.user_id", "=", userId)
+    .where("quiz_attempts.status", "=", "graded")
+    .where("quiz_attempts.is_passed", "=", true)
+    .where("quiz_assignments.lesson_id", "in", [...lessonIds])
+    .execute();
+  return rows.map((row) => row.lessonId);
+}
+
 /**
  * In-progress attempts whose time limit, or whose assignment's due date,
  * passed before `cutoff`. Oldest first so a backlog drains in order.

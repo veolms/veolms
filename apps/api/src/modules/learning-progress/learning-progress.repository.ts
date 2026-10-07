@@ -276,6 +276,16 @@ export interface DailyActivityAccrual {
  *     resolving the IANA zone from user_learning_settings inline (UTC
  *     when the user has no settings row).
  *
+ *  4. queues the goal-completed event when this batch takes the day's
+ *     total across the learner's goal. Queued after the accrual had
+ *     committed, a failure in between lost the event for good — the goal
+ *     is only crossed once.
+ *
+ * Seconds credited by one batch are capped by the time since the learner's
+ * previous heartbeat (see ACCRUAL_* below). Progress is a position the
+ * client reports, so without the cap a single request claiming 100% was
+ * credited the whole lesson at once.
+ *
  * A replayed/retried batch yields old = new (delta 0), so nothing is
  * credited twice — idempotent by construction. Single statement means
  * atomicity without transaction round-trips (measured: a separate
@@ -285,6 +295,15 @@ export interface DailyActivityAccrual {
  * nothing (replay or zero-delta) — callers use this for goal/streak
  * threshold checks.
  */
+/** Fastest preset the player offers: content watched per second of time. */
+const ACCRUAL_MAX_PLAYBACK_RATE = 3;
+/** Allowance for clock skew and the heartbeat's own latency. */
+const ACCRUAL_SLACK_SECONDS = 30;
+/** A gap longer than this earns no more than the gap itself would. */
+const ACCRUAL_MAX_GAP_SECONDS = 2 * 60 * 60;
+/** What a learner's very first heartbeat may claim. */
+const ACCRUAL_FIRST_HEARTBEAT_SECONDS = 5 * 60;
+
 export async function upsertProgressAndAccrueActivity(
   database: LearningProgressExecutor,
   userId: string,
@@ -308,7 +327,24 @@ export async function upsertProgressAndAccrueActivity(
   );
 
   const result = await sql<DailyActivityAccrual>`
-    with upserted as (
+    with previous as (
+      -- Read before the upsert below takes effect: every part of one
+      -- statement sees the same snapshot.
+      select max(updated_at) as last_at
+      from learning_progress
+      where user_id = ${userId}::uuid
+    ),
+    allowance as (
+      select case
+        when last_at is null then ${ACCRUAL_FIRST_HEARTBEAT_SECONDS}::numeric
+        else least(
+          greatest(extract(epoch from (now() - last_at)), 0),
+          ${ACCRUAL_MAX_GAP_SECONDS}
+        ) * ${ACCRUAL_MAX_PLAYBACK_RATE} + ${ACCRUAL_SLACK_SECONDS}
+      end as seconds
+      from previous
+    ),
+    upserted as (
       insert into learning_progress
         (id, user_id, course_id, lesson_id, progress_percent, created_at, updated_at)
       values ${rows}
@@ -322,17 +358,21 @@ export async function upsertProgressAndAccrueActivity(
     ),
     credit as (
       select
-        coalesce(sum(
-          greatest(0, u.current_percent - coalesce(u.previous_percent, 0)) / 100.0
-            * coalesce(ma.duration_seconds, 0)
-        ), 0) as earned_seconds,
+        least(
+          coalesce(sum(
+            greatest(0, u.current_percent - coalesce(u.previous_percent, 0)) / 100.0
+              * coalesce(ma.duration_seconds, 0)
+          ), 0),
+          (select seconds from allowance)
+        ) as earned_seconds,
         count(*) filter (
           where u.current_percent >= 100 and coalesce(u.previous_percent, 0) < 100
         ) as completions
       from upserted u
       join course_lessons cl on cl.id = u.lesson_id
       left join media_assets ma on ma.id = cl.content_media_id
-    )
+    ),
+    accrued as (
     insert into learning_daily_activity (user_id, activity_date, seconds, completions)
     select
       ${userId}::uuid,
@@ -361,6 +401,31 @@ export async function upsertProgressAndAccrueActivity(
       new.completions as completions,
       coalesce(old.seconds, 0) as previous_seconds,
       coalesce(old.completions, 0) as previous_completions
+    ),
+    goal_event as (
+      -- Same row shape as the outbox's own createEvent; the dedupe key
+      -- makes it once per learner per local day.
+      insert into outbox_events
+        (id, event_type, event_version, dedupe_key, payload, occurred_at)
+      select
+        gen_random_uuid(),
+        'learning.goal_completed',
+        1,
+        'learning.goal_completed:' || ${userId}::text || ':' || a.activity_date,
+        jsonb_build_object(
+          'recipientUserId', ${userId}::text,
+          'dailyGoalMinutes', s.daily_goal_minutes,
+          'localDate', a.activity_date
+        ),
+        now()
+      from accrued a
+      join user_learning_settings s on s.user_id = ${userId}::uuid
+      where s.daily_goal_minutes is not null
+        and a.previous_seconds < s.daily_goal_minutes * 60
+        and a.seconds >= s.daily_goal_minutes * 60
+      on conflict (dedupe_key) do nothing
+    )
+    select * from accrued
   `.execute(database);
 
   const accrual = result.rows[0];

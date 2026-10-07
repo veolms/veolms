@@ -109,6 +109,17 @@ export function QuizAttemptPanel({
   const closedResultQuery = useQuizResult(attemptClosed ? attemptId : null);
   const shownResult =
     result ?? (attemptClosed ? (closedResultQuery.data ?? null) : null);
+
+  // An attempt the server graded by itself (time ran out with a passing
+  // score) never went through the submit below, so report the pass here.
+  const closedResult = attemptClosed ? closedResultQuery.data : undefined;
+  const reportedPassRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!closedResult?.passed) return;
+    if (reportedPassRef.current === closedResult.attemptId) return;
+    reportedPassRef.current = closedResult.attemptId;
+    onPassed?.(closedResult);
+  }, [closedResult, onPassed]);
   const myQuizAssignmentsQuery = useMyQuizAssignments({
     enabled: !courseId,
   });
