@@ -120,7 +120,7 @@ describe("Students Service", () => {
     const mockDatabase: any = {
       selectFrom: () => {
         const builder: any = {
-          selectAll: () => builder,
+          select: () => builder,
           where: () => builder,
           executeTakeFirst: async () => undefined,
         };

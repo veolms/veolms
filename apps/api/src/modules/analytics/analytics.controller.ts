@@ -27,7 +27,7 @@ export function createAnalyticsController({
     ) => service.instructorOverview(actor(request), request.query),
     dashboard: async (
       request: FastifyRequest<{ Querystring: DashboardQuery }>,
-    ) => service.dashboard(actor(request), "platform", request.query.range),
+    ) => service.dashboard(actor(request), request.query.range),
   };
 }
 
