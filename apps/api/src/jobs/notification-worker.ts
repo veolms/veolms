@@ -39,7 +39,9 @@ try {
     recipients: {
       findRecipient: async (userId) => {
         const user = await auth.findUserByIdForNotification(userId);
-        return user ? { id: user.id, email: user.email } : undefined;
+        return user
+          ? { id: user.id, email: user.email, isDeleted: user.is_deleted }
+          : undefined;
       },
       findRecipients: (userIds) =>
         auth.listNotificationRecipientsByIds(userIds),

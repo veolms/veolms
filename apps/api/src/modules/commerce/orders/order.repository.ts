@@ -6,6 +6,7 @@ import type {
   OrderSortOrder,
 } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
+import { toMinorUnits } from "../shared/currency.ts";
 
 export interface ListOrdersOptions {
   cursor?: OrderCursorPayload;
@@ -333,7 +334,11 @@ export async function getOrderStatsByCurrency(
     currency: row.currency,
     totalOrders: Number(row.total_orders),
     uniqueBuyers: Number(row.unique_buyers),
-    grossPaid: Number(row.gross_paid),
+    // Every amount in this row is MINOR units. orders.total_amount is stored
+    // in major units while refunds and after_commission_amount are minor, so
+    // the gross is converted here; subtracting the raw values gave nonsense
+    // (a ₹499 order with a ₹100 refund netted to -9501).
+    grossPaid: toMinorUnits(Number(row.gross_paid), row.currency),
     totalEarnings: Number(row.total_earnings),
     refundedAmount: Number(row.refunded_amount),
     refundedAgainstPaid: Number(row.refunded_against_paid),
@@ -399,7 +404,11 @@ export async function getRevenueTrend(
   const rows = await query.execute();
   return rows.map((row) => ({
     date: row.date,
-    value: Number(row.gross_paid) - Number(row.refunded_amount),
+    // Minor units: the major-unit gross is converted before the minor-unit
+    // refunds are subtracted.
+    value:
+      toMinorUnits(Number(row.gross_paid), filters.currency) -
+      Number(row.refunded_amount),
   }));
 }
 
@@ -438,6 +447,81 @@ export async function findOrderByIdempotencyKey(
     .selectFrom("orders")
     .selectAll()
     .where("idempotency_key", "=", idempotencyKey)
+    .executeTakeFirst();
+}
+
+/**
+ * Unpaid, unexpired orders that carry a coupon. A coupon use is only
+ * recorded as a redemption when the order is paid, so until then these
+ * orders are what is holding it: they count against the coupon's limits.
+ * An order stops counting when it is paid (it becomes a redemption),
+ * expires, or is cancelled.
+ */
+export async function listPendingOrdersUsingCoupon(
+  database: Executor,
+  input: { couponId: string; userId?: string; now: Date },
+) {
+  let query = database
+    .selectFrom("orders")
+    .selectAll()
+    .where("coupon_id", "=", input.couponId)
+    .where("status", "=", "pending")
+    .where("expires_at", ">", input.now);
+
+  if (input.userId) {
+    query = query.where("user_id", "=", input.userId);
+  }
+  return await query.orderBy("created_at", "desc").execute();
+}
+
+/**
+ * Another paid order of the same buyer that still entitles them to a
+ * course — bought directly, or inside a bundle — other than the order being
+ * refunded. Items that have themselves been refunded do not count.
+ *
+ * access_grants and enrollments hold ONE row per (user, course), owned by
+ * the most recent purchase. So when that owning order is refunded and this
+ * returns an order, the row is handed to it instead of being revoked;
+ * otherwise a bundle refund took away a course the buyer had also bought on
+ * its own.
+ */
+export async function findOtherPaidOrderCoveringCourse(
+  database: Executor,
+  input: { userId: string; courseId: string; excludeOrderId: string },
+) {
+  return await database
+    .selectFrom("orders as o")
+    .innerJoin("order_items as oi", "oi.order_id", "o.id")
+    .select(["o.id as order_id", "oi.item_type"])
+    .where("o.user_id", "=", input.userId)
+    .where("o.id", "!=", input.excludeOrderId)
+    .where("o.status", "in", ["paid", "partially_refunded"])
+    .where((eb) =>
+      eb.or([
+        eb("oi.course_id", "=", input.courseId),
+        eb(
+          "oi.bundle_id",
+          "in",
+          eb
+            .selectFrom("course_bundle_items as cbi")
+            .select("cbi.bundle_id")
+            .where("cbi.course_id", "=", input.courseId),
+        ),
+      ]),
+    )
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom("refunds as r")
+            .select("r.id")
+            .whereRef("r.order_item_id", "=", "oi.id")
+            .where("r.status", "in", ["pending", "processed"]),
+        ),
+      ),
+    )
+    .orderBy("o.paid_at", "desc")
+    .limit(1)
     .executeTakeFirst();
 }
 

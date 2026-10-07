@@ -35,7 +35,7 @@ const repliesRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/threads/:threadId/replies",
     {
-      preHandler: permissions.authenticate,
+      preHandler: permissions.optionalAuthenticated,
       schema: {
         operationId: "listLearningReplies",
         tags: ["Learning Discussions"],

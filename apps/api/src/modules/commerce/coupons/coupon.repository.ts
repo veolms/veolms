@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 import type { CouponDiscountType } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
+import { exactCursorTimestamp } from "../../../lib/keyset.ts";
 
 export async function findCouponByCode(database: Executor, code: string) {
   return await database
@@ -15,6 +16,19 @@ export async function findCouponById(database: Executor, id: string) {
     .selectFrom("coupons")
     .selectAll()
     .where("id", "=", id)
+    .executeTakeFirst();
+}
+
+/**
+ * Loads a coupon under a row lock, serialising every limit check for it.
+ * Must be called inside a transaction.
+ */
+export async function findCouponByIdForUpdate(database: Executor, id: string) {
+  return await database
+    .selectFrom("coupons")
+    .selectAll()
+    .where("id", "=", id)
+    .forUpdate()
     .executeTakeFirst();
 }
 
@@ -189,6 +203,7 @@ export async function insertCoupon(
     is_active?: boolean;
     restricted_course_ids?: string[] | null;
     restricted_bundle_ids?: string[] | null;
+    created_by?: string | null;
     created_at?: Date;
     updated_at?: Date;
   },
@@ -243,6 +258,8 @@ export async function getCouponRedemptionStats(
 
 export interface ListCouponsRepositoryOptions {
   courseId?: string;
+  /** Only coupons this user created (non-admin callers). */
+  createdBy?: string;
   cursor?: {
     createdAt: Date;
     id: string;
@@ -255,6 +272,10 @@ export async function listCoupons(
   options?: ListCouponsRepositoryOptions,
 ) {
   let query = database.selectFrom("coupons").selectAll();
+
+  if (options?.createdBy) {
+    query = query.where("created_by", "=", options.createdBy);
+  }
 
   if (options?.courseId) {
     const courseId = options.courseId;
@@ -269,10 +290,16 @@ export async function listCoupons(
 
   if (options?.cursor) {
     const cursor = options.cursor;
+    const createdAt = exactCursorTimestamp(
+      ["coupons"],
+      "created_at",
+      cursor.id,
+      cursor.createdAt,
+    );
     query = query.where(
       sql<boolean>`(
-        created_at < ${cursor.createdAt}
-        or (created_at = ${cursor.createdAt} and id < ${cursor.id}::uuid)
+        created_at < ${createdAt}
+        or (created_at = ${createdAt} and id < ${cursor.id}::uuid)
       )`,
     );
   }
@@ -325,9 +352,12 @@ export async function deleteCoupon(database: Executor, couponId: string) {
 
 export async function getCouponOverallSummary(
   database: Executor,
-  options?: { courseId?: string },
+  options?: { courseId?: string; createdBy?: string },
 ) {
   let query = database.selectFrom("coupons");
+  if (options?.createdBy) {
+    query = query.where("created_by", "=", options.createdBy);
+  }
   if (options?.courseId) {
     const courseId = options.courseId;
     query = query.where(

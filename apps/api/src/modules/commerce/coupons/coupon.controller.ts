@@ -6,6 +6,13 @@ import type {
 } from "@veolms/contracts";
 import type { CouponService } from "./coupon.service.ts";
 
+// Every coupon route runs behind requireStaff/requireAdmin, so the user is
+// always present here.
+const actorOf = (request: FastifyRequest) => ({
+  id: request.user!.id,
+  roles: request.user!.roles,
+});
+
 export function createCouponController({
   service,
 }: {
@@ -14,19 +21,22 @@ export function createCouponController({
   async function listCoupons(
     request: FastifyRequest<{ Querystring: ListCouponsQuery }>,
   ) {
-    return await service.listCoupons(request.query);
+    return await service.listCoupons(actorOf(request), request.query);
   }
 
   async function getCoupon(
     request: FastifyRequest<{ Params: { couponId: string } }>,
   ) {
-    return await service.getCouponById(request.params.couponId);
+    return await service.getCouponById(
+      actorOf(request),
+      request.params.couponId,
+    );
   }
 
   async function createCoupon(
     request: FastifyRequest<{ Body: CreateCouponRequest }>,
   ) {
-    return await service.createCoupon(request.body);
+    return await service.createCoupon(actorOf(request), request.body);
   }
 
   async function updateCoupon(
@@ -35,7 +45,11 @@ export function createCouponController({
       Body: UpdateCouponRequest;
     }>,
   ) {
-    return await service.updateCoupon(request.params.couponId, request.body);
+    return await service.updateCoupon(
+      actorOf(request),
+      request.params.couponId,
+      request.body,
+    );
   }
 
   async function deleteCoupon(

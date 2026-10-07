@@ -20,11 +20,11 @@ import type { AppServices } from "../../../services/index.ts";
 import {
   slugify,
   assertOptimisticUpdate,
+  canManageCourse,
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
 import {
   ADMIN_ROLE,
-  INSTRUCTOR_ROLE,
   createAuthService,
   type AuthService,
 } from "../../auth/index.ts";
@@ -554,7 +554,11 @@ export function createCourseService({
     const data: CreateCourseRequest =
       typeof payload === "string" ? { title: payload } : payload;
     const title = data.title;
-    const baseSlug = slugify(title);
+    // slugify keeps only Latin letters and digits, so a title written entirely
+    // in another script (Hindi, Chinese, emoji) slugified to "" — and an
+    // empty slug fails the catalogue's response schema for every visitor.
+    const baseSlug =
+      slugify(title) || `course-${crypto.randomBytes(4).toString("hex")}`;
     let slug = baseSlug;
     let attempts = 0;
 
@@ -656,9 +660,9 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdminOrInstructor =
-      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
-    const rows = isAdminOrInstructor
+    // Admins manage every course; everyone else (instructors included) sees
+    // only the courses they created.
+    const rows = userRoles?.includes(ADMIN_ROLE)
       ? await courseRepo.listAllCourses(database)
       : await courseRepo.listCoursesByCreator(database, creatorId);
     const courses = await Promise.all(
@@ -709,6 +713,11 @@ export function createCourseService({
     return { courses };
   }
 
+  /** Ids of every non-deleted course the user created. */
+  async function listOwnedCourseIds(creatorId: string): Promise<string[]> {
+    return await courseRepo.listCourseIdsByCreator(database, creatorId);
+  }
+
   /**
    * Lists only the course identity and status needed by analytics scope
    * resolution, using the same visibility split as the course-management
@@ -718,9 +727,7 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdminOrInstructor =
-      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
-    const rows = isAdminOrInstructor
+    const rows = userRoles?.includes(ADMIN_ROLE)
       ? await courseRepo.listAllCourseScope(database)
       : await courseRepo.listAvailableCourseScopeByCreator(database, creatorId);
 
@@ -745,9 +752,7 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdminOrInstructor =
-      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
-    const rows = isAdminOrInstructor
+    const rows = userRoles?.includes(ADMIN_ROLE)
       ? await courseRepo.listAllCourseScope(database)
       : await courseRepo.listAvailableCourseScopeByCreator(database, creatorId);
 
@@ -946,16 +951,11 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const isInstructor =
-      userRoles?.includes(INSTRUCTOR_ROLE) ||
-      userRoles?.includes("instructor") ||
-      userRoles?.includes("creator");
     const course = await courseRepo.findCourseById(database, courseId);
     if (!course) {
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
     }
-    if (!isAdmin && !isInstructor && course.creator_id !== creatorId) {
+    if (!canManageCourse(course, creatorId, userRoles)) {
       throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
     }
 
@@ -1153,14 +1153,10 @@ export function createCourseService({
     const isAdmin = Boolean(
       user && user.roles && user.roles.includes(ADMIN_ROLE),
     );
-    const isInstructor = Boolean(
-      user &&
-      user.roles &&
-      (user.roles.includes(INSTRUCTOR_ROLE) || user.roles.includes("creator")),
-    );
-
     if (course.status !== "published") {
-      if (!isOwner && !isAdmin && !isInstructor) {
+      // Drafts are visible to their creator and to admins only — another
+      // instructor's role does not open someone else's unpublished course.
+      if (!isOwner && !isAdmin) {
         throw new AppError(404, "COURSE_NOT_FOUND", "Course not published.");
       }
     }
@@ -1448,13 +1444,41 @@ export function createCourseService({
     };
   }
 
+  /**
+   * The three direct-update endpoints below (thumbnail, details, archive)
+   * were guarded by a route permission only, so anyone holding that
+   * permission could change ANY course. They go through the same ownership
+   * gate as every other course mutation.
+   */
   async function updateCourseThumbnail(
     courseId: string,
+    creatorId: string,
+    userRoles: readonly string[] | undefined,
     payload: { thumbnailUrl: string; thumbnailMediaId?: string | null },
   ) {
-    const course = await courseRepo.findCourseById(database, courseId);
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+
+    // Same rule as updateCourseBasics: the asset must be an image the caller
+    // owns. Unchecked, any media id could be attached here — and a media
+    // asset attached to a published course is served publicly, which turned
+    // this endpoint into a way to expose paid lesson files.
+    if (payload.thumbnailMediaId) {
+      const thumb = await mediaService.getMediaAsset(
+        payload.thumbnailMediaId,
+        creatorId,
+        userRoles,
+      );
+      if (
+        !thumb ||
+        thumb.type !== "image" ||
+        !ALLOWED_THUMBNAIL_MIME_TYPES.has(thumb.mime_type)
+      ) {
+        throw new AppError(
+          400,
+          "INVALID_THUMBNAIL",
+          "Thumbnail must be a valid image asset.",
+        );
+      }
     }
 
     await courseRepo.updateCourseDirect(database, courseId, {
@@ -1468,6 +1492,8 @@ export function createCourseService({
 
   async function updateCourseDetails(
     courseId: string,
+    creatorId: string,
+    userRoles: readonly string[] | undefined,
     payload: {
       title?: string;
       subtitle?: string | null;
@@ -1477,10 +1503,7 @@ export function createCourseService({
       categoryId?: string | null;
     },
   ) {
-    const course = await courseRepo.findCourseById(database, courseId);
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    }
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const updates: Record<string, unknown> = {};
     if (payload.title !== undefined) updates.title = payload.title;
@@ -1499,11 +1522,12 @@ export function createCourseService({
     return await formatCourseDto(updated!);
   }
 
-  async function archiveCourse(courseId: string) {
-    const course = await courseRepo.findCourseById(database, courseId);
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    }
+  async function archiveCourse(
+    courseId: string,
+    creatorId: string,
+    userRoles: readonly string[] | undefined,
+  ) {
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     await courseRepo.updateCourseDirect(database, courseId, {
       status: "archived",
@@ -1519,6 +1543,7 @@ export function createCourseService({
     createCourse,
     listMyCourses,
     listMyCourseScope,
+    listOwnedCourseIds,
     listMyCourseSummaries,
     listPublishedCourses,
     getHomeDiscovery,

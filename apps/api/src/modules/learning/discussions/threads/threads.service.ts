@@ -17,6 +17,7 @@ import type {
   WorkspaceDiscussionItem,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import { clampText } from "../../../../lib/text.ts";
 import { avatarSrcSetFromUrl } from "../../../avatars/index.ts";
 import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
@@ -413,15 +414,21 @@ export function createThreadsService(
           visibility,
         });
 
-        await syncMentionsAndNotify(trx, outbox, {
-          sourceType: "thread",
-          sourceId: id,
-          actorUserId: input.userId,
-          content: input.content,
-          courseId: input.courseId,
-          threadId: id,
-          plainText,
-        });
+        // A private post is visible to its author only, so mentioning
+        // someone in it must not notify them (notes already work this way).
+        // Without the guard a private thread was an invisible, unmoderated
+        // way to send email to other users.
+        if (visibility !== "private") {
+          await syncMentionsAndNotify(trx, outbox, {
+            sourceType: "thread",
+            sourceId: id,
+            actorUserId: input.userId,
+            content: input.content,
+            courseId: input.courseId,
+            threadId: id,
+            plainText,
+          });
+        }
 
         // Attach any verified attachments owned by the caller
         if (input.attachmentIds && input.attachmentIds.length > 0) {
@@ -791,7 +798,16 @@ export function createThreadsService(
           plainText,
         });
 
-        if (updates.content) {
+        // Same rule as create (and as notes): a private thread carries no
+        // mentions. Turning a thread private drops the ones it had.
+        const finalVisibility = updates.visibility ?? row.visibility;
+        if (finalVisibility === "private") {
+          await trx
+            .deleteFrom("learning_mentions")
+            .where("source_type", "=", "thread")
+            .where("source_id", "=", threadId)
+            .execute();
+        } else if (updates.content) {
           await syncMentionsAndNotify(trx, outbox, {
             sourceType: "thread",
             sourceId: threadId,
@@ -856,10 +872,16 @@ export function createThreadsService(
         discussions: rows.map((row) => ({
           id: row.id,
           kind: row.kind,
-          title: row.title,
-          snippet: row.snippet,
+          // SQL left(…, 500) counts code points; the schema counts UTF-16
+          // units, so one emoji in a long post made this public endpoint
+          // return 500 for everyone.
+          title: row.title === null ? null : clampText(row.title, 255),
+          snippet: clampText(row.snippet ?? "", 500),
           author: {
-            displayName: row.authorName?.trim() || "Anonymous Learner",
+            displayName: clampText(
+              row.authorName?.trim() || "Anonymous Learner",
+              100,
+            ),
             username: row.authorUsername,
             avatarUrl: row.authorAvatarUrl,
             avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
@@ -888,8 +910,6 @@ export function createThreadsService(
       );
       const isAuthorRestrictedTab =
         tab === "q-and-a" || tab === "comments" || tab === "notes";
-      const effectiveMine =
-        isAuthorRestrictedTab && !isStaff ? true : query.mine;
 
       // Validate courseId if supplied
       if (query.courseId) {
@@ -910,17 +930,32 @@ export function createThreadsService(
         }
       }
 
-      // Notes use the canonical course-access policy for every role. The
-      // broader staff shortcut remains unchanged for the existing thread and
-      // report tabs below.
+      // The staff view (everyone's threads, moderation reports) covers only
+      // the courses the actor may moderate: all of them for an admin, the
+      // courses they created for anyone else. It used to be every course for
+      // any staff role, which exposed other instructors' threads and
+      // moderation reports — reporter identity included. Asking for a course
+      // outside that set drops the actor back to the ordinary learner view.
+      const moderatableCourseIds = isStaff
+        ? await courseAccess.listModeratableCourseIds(db, actor)
+        : [];
+      const hasStaffView =
+        isStaff &&
+        (moderatableCourseIds === "all" ||
+          !query.courseId ||
+          moderatableCourseIds.includes(query.courseId));
+      const effectiveMine =
+        isAuthorRestrictedTab && !hasStaffView ? true : query.mine;
+
+      // Notes use the canonical course-access policy for every role.
       const accessibleCourseIds =
         tab === "saved" ||
         tab === "following" ||
         tab === "notes" ||
         tab === "mentions" ||
-        !isStaff
+        !hasStaffView
           ? await courseAccess.listAccessibleCourseIds(db, actor)
-          : "all";
+          : moderatableCourseIds;
 
       if (
         accessibleCourseIds !== "all" &&
@@ -1131,8 +1166,8 @@ export function createThreadsService(
         if (pageCursor) {
           notesQuery = notesQuery.where(
             noteSort === "activity"
-              ? updatedAtIdDescSql("n", pageCursor)
-              : createdAtIdDescSql("n", pageCursor),
+              ? updatedAtIdDescSql("n", pageCursor, "learning_notes")
+              : createdAtIdDescSql("n", pageCursor, "learning_notes"),
           );
         }
 
@@ -1251,7 +1286,7 @@ export function createThreadsService(
 
       // Tab: Reports (Staff / Admin only)
       if (tab === "reports") {
-        if (!isStaff) {
+        if (!hasStaffView) {
           throw httpError(
             403,
             "FORBIDDEN",
@@ -1286,6 +1321,20 @@ export function createThreadsService(
           .selectFrom("learning_reports as rep")
           .select(sql<number>`count(*)::int`.as("count"));
 
+        if (accessibleCourseIds !== "all") {
+          const moderatableCourseIds = [...accessibleCourseIds];
+          reportsQuery = reportsQuery.where(
+            "rep.course_id",
+            "in",
+            moderatableCourseIds,
+          );
+          reportsCountQuery = reportsCountQuery.where(
+            "rep.course_id",
+            "in",
+            moderatableCourseIds,
+          );
+        }
+
         if (query.courseId) {
           reportsQuery = reportsQuery.where(
             "rep.course_id",
@@ -1317,7 +1366,7 @@ export function createThreadsService(
 
         if (pageCursor) {
           reportsQuery = reportsQuery.where(
-            createdAtIdDescSql("rep", pageCursor),
+            createdAtIdDescSql("rep", pageCursor, "learning_reports"),
           );
         }
 

@@ -12,4 +12,10 @@ export interface CreateUserInput {
   /** Identifies the provider-owned avatar namespace when an OAuth photo is
    * successfully downloaded. */
   avatarSource?: "google" | "github" | undefined;
+  /**
+   * Lets this call create the platform's first account, which is granted the
+   * administrator role. Only the setup-token flow sets it; ordinary
+   * registration and OAuth sign-up are refused while no account exists.
+   */
+  allowBootstrapAdmin?: boolean | undefined;
 }

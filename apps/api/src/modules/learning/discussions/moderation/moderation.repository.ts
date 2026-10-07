@@ -208,7 +208,7 @@ export function createModerationRepository(): ModerationRepository {
       filtered = applyReportFilters(filtered, options);
       if (options.pageCursor) {
         filtered = filtered.where(
-          createdAtIdDescSql("rep", options.pageCursor),
+          createdAtIdDescSql("rep", options.pageCursor, "learning_reports"),
         );
       }
 
@@ -387,7 +387,9 @@ export function createModerationRepository(): ModerationRepository {
       }
 
       if (options.pageCursor) {
-        query = query.where(createdAtIdDescSql("a", options.pageCursor));
+        query = query.where(
+          createdAtIdDescSql("a", options.pageCursor, "learning_audit_logs"),
+        );
       }
 
       const rows = await query

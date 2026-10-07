@@ -52,6 +52,11 @@ export interface NotificationHandlerDependencies {
 export interface NotificationRecipient {
   id: string;
   email: string | null;
+  /**
+   * Deactivated accounts are still resolved (the deactivation notice itself
+   * must reach them) but receive nothing optional.
+   */
+  isDeleted?: boolean;
 }
 
 export interface NotificationRecipientDirectory {

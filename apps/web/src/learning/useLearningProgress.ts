@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { getDeviceTimeZone } from "../lib/device-time-zone";
+import { learningGoalKeys } from "../services/learning-goals";
 
 import {
   useLearningProgressSnapshot,
@@ -37,6 +40,7 @@ export function useLearningProgress({
   lessonIdsByNumber,
   enabled = true,
 }: UseLearningProgressOptions) {
+  const queryClient = useQueryClient();
   const syncEnabled = Boolean(enabled && courseKey && userId);
   const storageIdentity =
     userId && courseKey ? `${userId}\u0000${courseKey}` : null;
@@ -144,6 +148,9 @@ export function useLearningProgress({
           lessonId,
           progressPercent,
         })),
+        // Sets the learner's zone if they have never chosen one, so their
+        // learning days are local days rather than UTC ones.
+        timeZone: getDeviceTimeZone(),
       };
       if (
         keepalive &&
@@ -171,6 +178,10 @@ export function useLearningProgress({
           setLocalState((current) =>
             markLearningProgressSynced(current, pendingItems),
           );
+          // Today's goal ring and streak are built from this progress.
+          void queryClient.invalidateQueries({
+            queryKey: learningGoalKeys.summary(),
+          });
         }
         retryDelayRef.current = 0;
         retryAtRef.current = 0;
@@ -186,7 +197,7 @@ export function useLearningProgress({
         isFlushingRef.current = false;
       }
     },
-    [courseKey, syncEnabled],
+    [courseKey, queryClient, syncEnabled],
   );
 
   useEffect(() => {

@@ -7,14 +7,42 @@ import type {
 } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
 import { AppError } from "../../../lib/errors.ts";
+import { ADMIN_ROLE } from "../../auth/index.ts";
+import type { CourseService } from "../../courses/index.ts";
+import { toMinorUnits } from "../shared/currency.ts";
 import * as couponRepo from "./coupon.repository.ts";
 
+/**
+ * Discounts actually given are transacted money, so they leave the API in
+ * minor units like order totals. Redemption rows store the order's
+ * major-unit discount and carry no currency of their own; INR is the
+ * academy's operating currency.
+ */
+const discountGivenToMinor = (amountMajor: number) =>
+  toMinorUnits(Math.round(amountMajor), "INR");
+
+/** The staff member managing coupons. */
+export interface CouponActor {
+  id: string;
+  roles: readonly string[];
+}
+
 export interface CouponService {
-  listCoupons(query?: ListCouponsQuery): Promise<CouponListResponse>;
-  getCouponById(id: string): Promise<Coupon>;
+  listCoupons(
+    actor: CouponActor,
+    query?: ListCouponsQuery,
+  ): Promise<CouponListResponse>;
+  getCouponById(actor: CouponActor, id: string): Promise<Coupon>;
   getCouponByCode(code: string): Promise<Coupon>;
-  createCoupon(request: CreateCouponRequest): Promise<Coupon>;
-  updateCoupon(id: string, request: UpdateCouponRequest): Promise<Coupon>;
+  createCoupon(
+    actor: CouponActor,
+    request: CreateCouponRequest,
+  ): Promise<Coupon>;
+  updateCoupon(
+    actor: CouponActor,
+    id: string,
+    request: UpdateCouponRequest,
+  ): Promise<Coupon>;
   deleteCoupon(id: string): Promise<void>;
 }
 
@@ -77,9 +105,72 @@ function assertValidWindow(startsAt: Date, expiresAt: Date) {
 
 export function createCouponService({
   database,
+  courseService,
 }: {
   database: Executor;
+  courseService: Pick<CourseService, "listOwnedCourseIds">;
 }): CouponService {
+  const isAdmin = (actor: CouponActor) => actor.roles.includes(ADMIN_ROLE);
+
+  function couponNotFound(id: string): AppError {
+    return new AppError(
+      404,
+      "COUPON_NOT_FOUND",
+      `Coupon with id "${id}" was not found.`,
+    );
+  }
+
+  /**
+   * Admins manage every coupon. Anyone else manages only coupons they
+   * created; other coupons (including pre-ownership rows with no creator)
+   * answer exactly like a missing id.
+   */
+  function assertCanManageCoupon(
+    actor: CouponActor,
+    coupon: { id: string; created_by: string | null },
+  ): void {
+    if (isAdmin(actor)) return;
+    if (coupon.created_by !== actor.id) throw couponNotFound(coupon.id);
+  }
+
+  /**
+   * A non-admin's coupon must name the courses it applies to, and they must
+   * all be the actor's own: an empty restriction means "every course and
+   * bundle in the academy", which is an admin decision. Bundles are
+   * admin-managed, so a non-admin coupon cannot target them either.
+   */
+  async function assertOwnCourseScope(
+    actor: CouponActor,
+    restrictedCourseIds: readonly string[] | null | undefined,
+    restrictedBundleIds: readonly string[] | null | undefined,
+  ): Promise<void> {
+    if (isAdmin(actor)) return;
+
+    if (!restrictedCourseIds || restrictedCourseIds.length === 0) {
+      throw new AppError(
+        403,
+        "COUPON_SCOPE_REQUIRED",
+        "Choose at least one of your own courses for this coupon. Only administrators can create coupons that apply to every course.",
+      );
+    }
+    if (restrictedBundleIds && restrictedBundleIds.length > 0) {
+      throw new AppError(
+        403,
+        "COUPON_SCOPE_FORBIDDEN",
+        "Only administrators can create coupons for bundles.",
+      );
+    }
+
+    const owned = new Set(await courseService.listOwnedCourseIds(actor.id));
+    if (!restrictedCourseIds.every((courseId) => owned.has(courseId))) {
+      throw new AppError(
+        403,
+        "COUPON_SCOPE_FORBIDDEN",
+        "A coupon can only apply to courses you created.",
+      );
+    }
+  }
+
   function mapToCoupon(
     row: NonNullable<Awaited<ReturnType<typeof couponRepo.findCouponById>>>,
     usage?: { redemptionCount: number; totalDiscountGiven: number },
@@ -100,7 +191,7 @@ export function createCouponService({
       restrictedCourseIds: row.restricted_course_ids,
       restrictedBundleIds: row.restricted_bundle_ids,
       redemptionCount: usage?.redemptionCount ?? 0,
-      totalDiscountGiven: usage?.totalDiscountGiven ?? 0,
+      totalDiscountGiven: discountGivenToMinor(usage?.totalDiscountGiven ?? 0),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -114,19 +205,23 @@ export function createCouponService({
   }
 
   async function listCoupons(
+    actor: CouponActor,
     query?: ListCouponsQuery,
   ): Promise<CouponListResponse> {
     const limit = query?.limit ?? 30;
     const cursor = query?.cursor ? decodeCouponCursor(query.cursor) : undefined;
+    const createdBy = isAdmin(actor) ? undefined : actor.id;
 
     const [rows, summary] = await Promise.all([
       couponRepo.listCoupons(database, {
         courseId: query?.courseId,
+        createdBy,
         cursor,
         limit,
       }),
       couponRepo.getCouponOverallSummary(database, {
         courseId: query?.courseId,
+        createdBy,
       }),
     ]);
 
@@ -163,19 +258,20 @@ export function createCouponService({
             })
           : null,
       totalCount: summary.totalCount,
-      summary,
+      summary: {
+        ...summary,
+        totalDiscountGiven: discountGivenToMinor(summary.totalDiscountGiven),
+      },
     };
   }
 
-  async function getCouponById(id: string): Promise<Coupon> {
+  async function getCouponById(
+    actor: CouponActor,
+    id: string,
+  ): Promise<Coupon> {
     const coupon = await couponRepo.findCouponById(database, id);
-    if (!coupon) {
-      throw new AppError(
-        404,
-        "COUPON_NOT_FOUND",
-        `Coupon with id "${id}" was not found.`,
-      );
-    }
+    if (!coupon) throw couponNotFound(id);
+    assertCanManageCoupon(actor, coupon);
     return attachUsage(coupon);
   }
 
@@ -191,7 +287,16 @@ export function createCouponService({
     return attachUsage(coupon);
   }
 
-  async function createCoupon(request: CreateCouponRequest): Promise<Coupon> {
+  async function createCoupon(
+    actor: CouponActor,
+    request: CreateCouponRequest,
+  ): Promise<Coupon> {
+    await assertOwnCourseScope(
+      actor,
+      request.restrictedCourseIds,
+      request.restrictedBundleIds,
+    );
+
     if (request.discountType === "percentage" && request.discountValue > 100) {
       throw new AppError(
         400,
@@ -227,6 +332,7 @@ export function createCouponService({
       is_active: request.isActive ?? true,
       restricted_course_ids: request.restrictedCourseIds ?? null,
       restricted_bundle_ids: request.restrictedBundleIds ?? null,
+      created_by: actor.id,
       created_at: now,
       updated_at: now,
     });
@@ -235,17 +341,24 @@ export function createCouponService({
   }
 
   async function updateCoupon(
+    actor: CouponActor,
     id: string,
     request: UpdateCouponRequest,
   ): Promise<Coupon> {
     const existing = await couponRepo.findCouponById(database, id);
-    if (!existing) {
-      throw new AppError(
-        404,
-        "COUPON_NOT_FOUND",
-        `Coupon with id "${id}" was not found.`,
-      );
-    }
+    if (!existing) throw couponNotFound(id);
+    assertCanManageCoupon(actor, existing);
+    // Check the restriction the coupon will have AFTER this update, so a
+    // partial update cannot widen it (e.g. `restrictedCourseIds: null`).
+    await assertOwnCourseScope(
+      actor,
+      request.restrictedCourseIds === undefined
+        ? existing.restricted_course_ids
+        : request.restrictedCourseIds,
+      request.restrictedBundleIds === undefined
+        ? existing.restricted_bundle_ids
+        : request.restrictedBundleIds,
+    );
 
     const effectiveDiscountType =
       request.discountType ?? existing.discount_type;

@@ -8,7 +8,11 @@ import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import * as repo from "../shared/quiz.repository.ts";
 import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
-import type { QuizActor, QuizServiceOptions } from "../shared/quiz.types.ts";
+import {
+  assertNoLearnerAttempts,
+  type QuizActor,
+  type QuizServiceOptions,
+} from "../shared/quiz.types.ts";
 import { isAdmin } from "../shared/quiz.types.ts";
 
 type PricingRow = Awaited<ReturnType<typeof pricingRepo.findPricing>>;
@@ -270,10 +274,9 @@ export function createAssignmentService(options: QuizServiceOptions) {
     const course = await courseService.findCourseById(courseId);
     if (!course)
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    const canManageCourse =
-      isAdmin(actor) ||
-      course.creator_id === actor.id ||
-      actor.roles.some((role) => role.toLowerCase() === "instructor");
+    // Managing a course's assignments is admin or course-creator only; the
+    // instructor role alone used to list other instructors' draft courses.
+    const canManageCourse = isAdmin(actor) || course.creator_id === actor.id;
     if (
       !canManageCourse &&
       !(await repo.isPublishedFreeCourse(database, courseId)) &&
@@ -387,6 +390,12 @@ export function createAssignmentService(options: QuizServiceOptions) {
   async function deleteAssignment(actor: QuizActor, assignmentId: string) {
     const assignment = await assertAuthorAssignment(actor, assignmentId);
     await database.transaction().execute(async (trx) => {
+      assertNoLearnerAttempts(
+        await repo.countLearnerAttempts(trx, {
+          assignmentIds: [assignmentId],
+          actorId: actor.id,
+        }),
+      );
       if (assignment.lesson_id) {
         await trx
           .updateTable("course_lessons")

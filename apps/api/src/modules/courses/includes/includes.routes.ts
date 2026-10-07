@@ -25,6 +25,12 @@ const includesRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/courses/:id/includes",
     {
+      // Optional auth: anonymous for published courses; a draft's includes
+      // are returned only to its creator or an admin (checked in the service).
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
       schema: {
         operationId: "listCourseIncludes",
         tags: ["Course Includes"],

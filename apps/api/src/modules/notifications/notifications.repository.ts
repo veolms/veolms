@@ -10,6 +10,7 @@ import type {
   NotificationDeliveryTable,
 } from "@veolms/database";
 import { sql, type Kysely, type Selectable } from "kysely";
+import { exactCursorTimestamp } from "../../lib/keyset.ts";
 
 export interface NotificationCursor {
   createdAt: Date;
@@ -72,11 +73,17 @@ export async function findNotifications(
     );
   }
   if (input.cursor) {
+    const createdAt = exactCursorTimestamp(
+      ["notifications"],
+      "created_at",
+      input.cursor.id,
+      input.cursor.createdAt,
+    );
     query = query.where(
       sql<boolean>`(
-        notifications.created_at < ${input.cursor.createdAt}
+        notifications.created_at < ${createdAt}
         or (
-          notifications.created_at = ${input.cursor.createdAt}
+          notifications.created_at = ${createdAt}
           and notifications.id < ${input.cursor.id}::uuid
         )
       )`,

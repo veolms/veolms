@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { AnalyticsKpi, CoursePerformanceRow } from "@veolms/contracts";
+import { formatMoney, toMajorUnits } from "@veolms/contracts/commerce/money";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { FunnelSimpleIcon as FunnelSimple } from "@phosphor-icons/react/FunnelSimple";
 import { LightbulbIcon as Lightbulb } from "@phosphor-icons/react/Lightbulb";
@@ -43,12 +44,30 @@ export function toneForIndex(index: number): KpiTone {
   return TONE_CYCLE[index % TONE_CYCLE.length] ?? "accent";
 }
 
+/** Formats a revenue figure. Analytics revenue is in minor units (paise). */
 export function formatCurrencyAmount(amount: number, currency = "INR"): string {
-  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(amount);
+  return formatMoney(amount, { currency, decimals: "never" });
+}
+
+/**
+ * Charts scale and label plain numbers, so a revenue series is converted to
+ * major units once, where it enters the chart, and its tooltip is formatted
+ * with {@link formatChartCurrency}.
+ */
+export function toRevenueChartData(
+  points: Array<{ date: string; value: number }>,
+  currency = "INR",
+) {
+  return toChartData(
+    points.map((point) => ({
+      ...point,
+      value: toMajorUnits(point.value, currency),
+    })),
+  );
+}
+
+export function formatChartCurrency(value: number, currency = "INR"): string {
+  return formatMoney(value, { currency, unit: "major", decimals: "never" });
 }
 
 export function formatWholeNumber(value: number): string {

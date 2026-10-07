@@ -137,6 +137,11 @@ export function createCourseController({
   async function getStaticPageRefreshStatus(
     request: FastifyRequest<{ Params: { id: string } }>,
   ): Promise<CourseStaticPageRefreshStatus> {
+    await service.getCourseAndVerifyOwner(
+      request.params.id,
+      request.user!.id,
+      request.user?.roles,
+    );
     return (
       staticPages?.getStatus(request.params.id) ?? {
         courseId: request.params.id,
@@ -152,6 +157,11 @@ export function createCourseController({
   async function retryStaticPageRefresh(
     request: FastifyRequest<{ Params: { id: string } }>,
   ): Promise<CourseStaticPageRefreshStatus> {
+    await service.getCourseAndVerifyOwner(
+      request.params.id,
+      request.user!.id,
+      request.user?.roles,
+    );
     return (
       staticPages?.retry(request.params.id) ??
       getStaticPageRefreshStatus(request)
@@ -165,7 +175,12 @@ export function createCourseController({
     }>,
   ) {
     const { id } = request.params;
-    return await service.updateCourseThumbnail(id, request.body);
+    return await service.updateCourseThumbnail(
+      id,
+      request.user!.id,
+      request.user?.roles,
+      request.body,
+    );
   }
 
   async function updateCourseDetails(
@@ -182,14 +197,23 @@ export function createCourseController({
     }>,
   ) {
     const { id } = request.params;
-    return await service.updateCourseDetails(id, request.body);
+    return await service.updateCourseDetails(
+      id,
+      request.user!.id,
+      request.user?.roles,
+      request.body,
+    );
   }
 
   async function archiveCourse(
     request: FastifyRequest<{ Params: { id: string } }>,
   ) {
     const { id } = request.params;
-    return await service.archiveCourse(id);
+    return await service.archiveCourse(
+      id,
+      request.user!.id,
+      request.user?.roles,
+    );
   }
 
   return {

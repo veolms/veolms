@@ -10,7 +10,7 @@ import {
   createMediaRetentionService,
   type MediaRetentionService,
 } from "../../media/index.ts";
-import { ADMIN_ROLE, INSTRUCTOR_ROLE } from "../../auth/index.ts";
+import { canManageCourse } from "../shared/courses.utils.ts";
 import * as deletionRepo from "./course-deletion.repository.ts";
 
 export const COURSE_DELETION_RETENTION_DAYS = 30;
@@ -106,9 +106,7 @@ export function createCourseDeletionService({
       if (!course) {
         throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
       }
-      const isAdmin = userRoles?.includes(ADMIN_ROLE);
-      const isInstructor = userRoles?.includes(INSTRUCTOR_ROLE);
-      if (!isAdmin && !isInstructor && course.creator_id !== creatorId) {
+      if (!canManageCourse(course, creatorId, userRoles)) {
         throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
       }
       if (course.deleted_at) {

@@ -89,8 +89,10 @@ export function useDeleteQuizQuestion() {
       quizId: string;
       questionId: string;
     }) => quizzesService.deleteQuestion(quizId, questionId),
-    onSuccess: (data, vars) => {
-      qc.setQueryData(quizKeys.detail(vars.quizId), data);
+    // The response is only an acknowledgement. Writing it into the quiz
+    // cache replaced the quiz with `{ success: true }` and the builder
+    // crashed on its next render.
+    onSuccess: (_data, vars) => {
       void qc.invalidateQueries({ queryKey: quizKeys.detail(vars.quizId) });
     },
   });

@@ -36,6 +36,7 @@ import {
 } from "../notes/notes.service.ts";
 import { createNotesRepository } from "../notes/notes.repository.ts";
 import { discussionVisibilityPredicate } from "../shared/discussion.visibility.ts";
+import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
 
 const SOURCE_RANK = {
   note: 1,
@@ -250,34 +251,43 @@ async function listCandidates(
 
   if (sources.length === 0) return [];
 
+  // The cursor row is a thread or a note; read its exact timestamp back.
+  const cursorCreatedAt = cursor
+    ? exactCursorTimestamp(
+        ["learning_threads", "learning_notes"],
+        "created_at",
+        cursor.entityId,
+        cursor.createdAt,
+      )
+    : undefined;
   const cursorWhere = cursor
     ? context.sort === "top"
       ? sql`where (
           score < ${cursor.score}
           or (
             score = ${cursor.score}
-            and "createdAt" < ${cursor.createdAt}
+            and "createdAt" < ${cursorCreatedAt}
           )
           or (
             score = ${cursor.score}
-            and "createdAt" = ${cursor.createdAt}
+            and "createdAt" = ${cursorCreatedAt}
             and "sourceRank" < ${cursor.sourceRank}
           )
           or (
             score = ${cursor.score}
-            and "createdAt" = ${cursor.createdAt}
+            and "createdAt" = ${cursorCreatedAt}
             and "sourceRank" = ${cursor.sourceRank}
             and "entityId" < ${cursor.entityId}::uuid
           )
         )`
       : sql`where (
-          "createdAt" < ${cursor.createdAt}
+          "createdAt" < ${cursorCreatedAt}
           or (
-            "createdAt" = ${cursor.createdAt}
+            "createdAt" = ${cursorCreatedAt}
             and "sourceRank" < ${cursor.sourceRank}
           )
           or (
-            "createdAt" = ${cursor.createdAt}
+            "createdAt" = ${cursorCreatedAt}
             and "sourceRank" = ${cursor.sourceRank}
             and "entityId" < ${cursor.entityId}::uuid
           )

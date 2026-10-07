@@ -15,7 +15,22 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-import { ADMIN_ROLE, INSTRUCTOR_ROLE } from "../../auth/index.ts";
+import { ADMIN_ROLE } from "../../auth/index.ts";
+
+/**
+ * The single course-management rule: an admin manages every course, anyone
+ * else manages only the courses they created. Holding the instructor role is
+ * NOT enough — it used to be, which let any instructor edit (and re-price)
+ * every other instructor's course.
+ */
+export function canManageCourse(
+  course: { creator_id: string | null },
+  userId: string | null | undefined,
+  userRoles?: readonly string[],
+): boolean {
+  if (userRoles?.includes(ADMIN_ROLE)) return true;
+  return Boolean(userId) && course.creator_id === userId;
+}
 
 /**
  * Verifies course existence and owner permissions. This is the single
@@ -37,10 +52,29 @@ export async function getCourseAndVerifyOwner(
   if (!course) {
     throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
   }
-  const isAdmin = userRoles?.includes(ADMIN_ROLE);
-  const isInstructor = userRoles?.includes(INSTRUCTOR_ROLE);
-  if (!isAdmin && !isInstructor && course.creator_id !== userId) {
+  if (!canManageCourse(course, userId, userRoles)) {
     throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
+  }
+  return course;
+}
+
+/**
+ * Loads a course for a read that is public once the course is published.
+ * Unpublished courses are visible only to whoever may manage them; for
+ * everyone else they answer exactly like a missing course.
+ */
+export async function getCourseForViewer(
+  database: Kysely<Database>,
+  courseId: string,
+  viewer?: { id: string; roles?: readonly string[] } | null,
+) {
+  const course = await courseRepo.findCourseById(database, courseId);
+  if (
+    !course ||
+    (course.status !== "published" &&
+      !canManageCourse(course, viewer?.id, viewer?.roles))
+  ) {
+    throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
   }
   return course;
 }

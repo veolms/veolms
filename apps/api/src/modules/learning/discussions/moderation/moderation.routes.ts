@@ -4,6 +4,7 @@ import {
   createReportRequestSchema,
   listAuditLogsQuerySchema,
   listReportsQuerySchema,
+  moderateNoteRequestSchema,
   moderateReplyRequestSchema,
   moderateThreadRequestSchema,
   reportsListResponseSchema,
@@ -176,6 +177,34 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.moderateCourseReply,
+  );
+
+  // POST /courses/:courseId/moderation/notes/:noteId
+  app.post(
+    "/courses/:courseId/moderation/notes/:noteId",
+    {
+      preHandler: permissions.requireAuthenticated,
+      schema: {
+        operationId: "moderateCourseNote",
+        tags: ["Course Moderation"],
+        summary: "Take a shared note in a course out of view (make private)",
+        params: z.object({
+          courseId: z.uuid(),
+          noteId: z.uuid(),
+        }),
+        body: moderateNoteRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Action applied",
+            z.object({ message: z.string() }),
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          404: errorResponse("Note not found"),
+        },
+      },
+    },
+    controller.moderateCourseNote,
   );
 
   // POST /courses/:courseId/moderation/users/:userId/suspend
@@ -353,6 +382,31 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.moderatePlatformReply,
+  );
+
+  // POST /moderation/notes/:noteId
+  app.post(
+    "/moderation/notes/:noteId",
+    {
+      preHandler: permissions.requireAdmin,
+      schema: {
+        operationId: "moderatePlatformNote",
+        tags: ["Platform Moderation"],
+        summary: "Take a shared note out of view globally (make private)",
+        params: z.object({ noteId: z.uuid() }),
+        body: moderateNoteRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Moderation action applied",
+            z.object({ message: z.string() }),
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden - Admin required"),
+          404: errorResponse("Note not found"),
+        },
+      },
+    },
+    controller.moderatePlatformNote,
   );
 
   // POST /moderation/users/:userId/suspend

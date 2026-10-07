@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 import type { ExpressionBuilder } from "kysely";
 import type { Database, DatabaseExecutor } from "@veolms/database";
+import { exactCursorTimestamp, isCursorUuid } from "../../lib/keyset.ts";
 
 export type StudentsExecutor = DatabaseExecutor;
 
@@ -30,6 +31,67 @@ function isStudentUserIds(
     );
 }
 
+type UserExpressionBuilder = ExpressionBuilder<
+  Database & { u: Database["users"] },
+  "u"
+>;
+
+/**
+ * Ids of the non-deleted courses a creator owns. Every query below takes an
+ * optional `creatorId`: when set (a non-admin caller) the student
+ * population, the filters, the sort keys and the per-student aggregates all
+ * look only at that creator's courses, so an instructor never sees learners
+ * — or enrollments and progress — that belong to someone else's course.
+ */
+function ownedCourseIds(creatorId: string) {
+  return sql<string>`(
+    select c_owned.id
+    from courses as c_owned
+    where c_owned.creator_id = ${creatorId}
+      and c_owned.deleted_at is null
+  )`;
+}
+
+/** Enrollments of the outer user row, optionally narrowed. */
+function userEnrollments(
+  eb: UserExpressionBuilder,
+  filter: {
+    courseIds?: readonly string[];
+    activeOnly?: boolean;
+    creatorId?: string;
+  },
+) {
+  let query = eb
+    .selectFrom("enrollments as e")
+    .select("e.id")
+    .whereRef("e.user_id", "=", "u.id");
+
+  if (filter.courseIds && filter.courseIds.length > 0) {
+    query = query.where("e.course_id", "in", filter.courseIds);
+  }
+  if (filter.activeOnly) {
+    query = query.where("e.status", "=", "active");
+  }
+  if (filter.creatorId) {
+    query = query.where("e.course_id", "in", ownedCourseIds(filter.creatorId));
+  }
+  return query;
+}
+
+/** Fully completed lessons of the outer user row (the "completed" filter). */
+function completedProgress(eb: UserExpressionBuilder, creatorId?: string) {
+  let query = eb
+    .selectFrom("learning_progress as lp")
+    .select("lp.id")
+    .whereRef("lp.user_id", "=", "u.id")
+    .where("lp.progress_percent", ">=", 100);
+
+  if (creatorId) {
+    query = query.where("lp.course_id", "in", ownedCourseIds(creatorId));
+  }
+  return query;
+}
+
 export interface ListStudentsOptions {
   cursor?: string;
   limit: number;
@@ -37,12 +99,16 @@ export interface ListStudentsOptions {
   courseId?: string;
   status?: "all" | "active" | "completed" | "inactive";
   sortBy?: "recent" | "name" | "courses" | "progress";
+  /** Restrict to learners of this creator's courses (non-admin callers). */
+  creatorId?: string;
 }
 
 export interface StudentCountOptions {
   courseId?: string | string[];
   search?: string;
   status?: "all" | "active" | "completed" | "inactive";
+  /** Restrict to learners of this creator's courses (non-admin callers). */
+  creatorId?: string;
 }
 
 export type StudentListSort = NonNullable<ListStudentsOptions["sortBy"]>;
@@ -83,8 +149,9 @@ export function decodeStudentListCursor(
     if (
       typeof cursor.sortBy !== "string" ||
       !studentListSorts.includes(cursor.sortBy as StudentListSort) ||
-      typeof cursor.id !== "string" ||
-      cursor.id.length === 0
+      // The id is compared as a uuid; anything else used to reach the
+      // database and come back as a 500.
+      !isCursorUuid(cursor.id)
     )
       return null;
 
@@ -126,17 +193,23 @@ export async function listStudentsPaginated(
   options: ListStudentsOptions,
 ) {
   const sortBy = options.sortBy ?? "recent";
+  const creatorId = options.creatorId;
+  // The sort keys must count exactly what the service aggregates for the
+  // row (it rebuilds the cursor from those aggregates), so they take the
+  // same creator scope as the per-student queries further down.
   const enrolledCoursesSort = sql<number>`(
     select count(*)::int
     from enrollments as e_sort
     inner join courses as c_sort on c_sort.id = e_sort.course_id
     where e_sort.user_id = u.id
       and c_sort.deleted_at is null
+      ${creatorId ? sql`and c_sort.creator_id = ${creatorId}` : sql``}
   )`;
   const progressSort = sql<number>`(
     select coalesce(avg(lp_sort.progress_percent), 0)::float
     from learning_progress as lp_sort
     where lp_sort.user_id = u.id
+      ${creatorId ? sql`and lp_sort.course_id in ${ownedCourseIds(creatorId)}` : sql``}
   )`;
 
   let query = database
@@ -159,6 +232,10 @@ export async function listStudentsPaginated(
     // once and hash-joined.
     .where("u.id", "in", isStudentUserIds);
 
+  if (creatorId) {
+    query = query.where((eb) => eb.exists(userEnrollments(eb, { creatorId })));
+  }
+
   if (options.search) {
     const cleanSearch = options.search.replace(/^@+/, "").trim();
     if (cleanSearch) {
@@ -174,62 +251,40 @@ export async function listStudentsPaginated(
   }
 
   if (options.courseId) {
+    const courseIds = [options.courseId];
     query = query.where((eb) =>
-      eb.exists(
-        eb
-          .selectFrom("enrollments as e")
-          .select("e.id")
-          .whereRef("e.user_id", "=", "u.id")
-          .where("e.course_id", "=", options.courseId!),
-      ),
+      eb.exists(userEnrollments(eb, { courseIds, creatorId })),
     );
   }
 
   if (options.status === "active") {
     query = query.where((eb) =>
-      eb.exists(
-        eb
-          .selectFrom("enrollments as e")
-          .select("e.id")
-          .whereRef("e.user_id", "=", "u.id")
-          .where("e.status", "=", "active"),
-      ),
+      eb.exists(userEnrollments(eb, { activeOnly: true, creatorId })),
     );
   } else if (options.status === "completed") {
     // Has at least one completed lesson or 100% progress
-    query = query.where((eb) =>
-      eb.exists(
-        eb
-          .selectFrom("learning_progress as lp")
-          .select("lp.id")
-          .whereRef("lp.user_id", "=", "u.id")
-          .where("lp.progress_percent", ">=", 100),
-      ),
-    );
+    query = query.where((eb) => eb.exists(completedProgress(eb, creatorId)));
   } else if (options.status === "inactive") {
     // No active enrollments
     query = query.where((eb) =>
-      eb.not(
-        eb.exists(
-          eb
-            .selectFrom("enrollments as e")
-            .select("e.id")
-            .whereRef("e.user_id", "=", "u.id")
-            .where("e.status", "=", "active"),
-        ),
-      ),
+      eb.not(eb.exists(userEnrollments(eb, { activeOnly: true, creatorId }))),
     );
   }
 
   const cursor = decodeStudentListCursor(options.cursor);
   if (cursor?.sortBy === sortBy) {
     if (cursor.sortBy === "recent") {
-      const cursorDate = new Date(cursor.createdAt);
+      const createdAt = exactCursorTimestamp(
+        ["users"],
+        "created_at",
+        cursor.id,
+        new Date(cursor.createdAt),
+      );
       query = query.where((eb) =>
         eb.or([
-          eb("u.created_at", "<", cursorDate),
+          eb("u.created_at", "<", createdAt),
           eb.and([
-            eb("u.created_at", "=", cursorDate),
+            eb("u.created_at", "=", createdAt),
             eb("u.id", "<", cursor.id),
           ]),
         ]),
@@ -289,6 +344,11 @@ export async function countTotalStudents(
     // count runs on EVERY page request alongside the list.
     .where("u.id", "in", isStudentUserIds);
 
+  const creatorId = options.creatorId;
+  if (creatorId) {
+    query = query.where((eb) => eb.exists(userEnrollments(eb, { creatorId })));
+  }
+
   if (options.search) {
     const cleanSearch = options.search.replace(/^@+/, "").trim();
     if (cleanSearch) {
@@ -304,59 +364,21 @@ export async function countTotalStudents(
   }
 
   const courseIds = toIdList(options.courseId);
-  if (courseIds.length === 1) {
+  if (courseIds.length > 0) {
     query = query.where((eb) =>
-      eb.exists(
-        eb
-          .selectFrom("enrollments as e")
-          .select("e.id")
-          .whereRef("e.user_id", "=", "u.id")
-          .where("e.course_id", "=", courseIds[0]!),
-      ),
-    );
-  } else if (courseIds.length > 1) {
-    query = query.where((eb) =>
-      eb.exists(
-        eb
-          .selectFrom("enrollments as e")
-          .select("e.id")
-          .whereRef("e.user_id", "=", "u.id")
-          .where("e.course_id", "in", courseIds),
-      ),
+      eb.exists(userEnrollments(eb, { courseIds, creatorId })),
     );
   }
 
   if (options.status === "active") {
     query = query.where((eb) =>
-      eb.exists(
-        eb
-          .selectFrom("enrollments as e")
-          .select("e.id")
-          .whereRef("e.user_id", "=", "u.id")
-          .where("e.status", "=", "active"),
-      ),
+      eb.exists(userEnrollments(eb, { activeOnly: true, creatorId })),
     );
   } else if (options.status === "completed") {
-    query = query.where((eb) =>
-      eb.exists(
-        eb
-          .selectFrom("learning_progress as lp")
-          .select("lp.id")
-          .whereRef("lp.user_id", "=", "u.id")
-          .where("lp.progress_percent", ">=", 100),
-      ),
-    );
+    query = query.where((eb) => eb.exists(completedProgress(eb, creatorId)));
   } else if (options.status === "inactive") {
     query = query.where((eb) =>
-      eb.not(
-        eb.exists(
-          eb
-            .selectFrom("enrollments as e")
-            .select("e.id")
-            .whereRef("e.user_id", "=", "u.id")
-            .where("e.status", "=", "active"),
-        ),
-      ),
+      eb.not(eb.exists(userEnrollments(eb, { activeOnly: true, creatorId }))),
     );
   }
 
@@ -470,16 +492,20 @@ export async function getActiveLearnerCount(
 export async function listEnrollmentsForUserIds(
   database: StudentsExecutor,
   userIds: string[],
+  creatorId?: string,
 ) {
   if (userIds.length === 0) return [];
-  return await database
+  let query = database
     .selectFrom("enrollments as e")
     .innerJoin("courses as c", "c.id", "e.course_id")
     .select(["e.user_id", "e.course_id", "e.created_at as enrolled_at"])
     .where("e.user_id", "in", userIds)
-    .where("c.deleted_at", "is", null)
-    .orderBy("e.created_at", "desc")
-    .execute();
+    .where("c.deleted_at", "is", null);
+
+  if (creatorId) {
+    query = query.where("c.creator_id", "=", creatorId);
+  }
+  return await query.orderBy("e.created_at", "desc").execute();
 }
 
 /**
@@ -499,9 +525,10 @@ export async function listEnrollmentsForUserIds(
 export async function listProgressSummariesForUserIds(
   database: StudentsExecutor,
   userIds: string[],
+  creatorId?: string,
 ) {
   if (userIds.length === 0) return [];
-  return await database
+  let query = database
     .selectFrom("learning_progress as lp")
     .select([
       "lp.user_id",
@@ -513,17 +540,21 @@ export async function listProgressSummariesForUserIds(
       sql<number>`avg(lp.progress_percent)::float`.as("avg_progress"),
       sql<Date>`max(lp.updated_at)`.as("last_activity_at"),
     ])
-    .where("lp.user_id", "in", userIds)
-    .groupBy(["lp.user_id", "lp.course_id"])
-    .execute();
+    .where("lp.user_id", "in", userIds);
+
+  if (creatorId) {
+    query = query.where("lp.course_id", "in", ownedCourseIds(creatorId));
+  }
+  return await query.groupBy(["lp.user_id", "lp.course_id"]).execute();
 }
 
 export async function listProgressForUserIds(
   database: StudentsExecutor,
   userIds: string[],
+  creatorId?: string,
 ) {
   if (userIds.length === 0) return [];
-  return await database
+  let query = database
     .selectFrom("learning_progress as lp")
     .select([
       "lp.user_id",
@@ -532,8 +563,12 @@ export async function listProgressForUserIds(
       "lp.progress_percent",
       "lp.updated_at",
     ])
-    .where("lp.user_id", "in", userIds)
-    .execute();
+    .where("lp.user_id", "in", userIds);
+
+  if (creatorId) {
+    query = query.where("lp.course_id", "in", ownedCourseIds(creatorId));
+  }
+  return await query.execute();
 }
 
 /**
@@ -585,13 +620,20 @@ export async function listAvatarsForUserIds(
 
 /**
  * Finds a student user by username (case-insensitive, strips any leading @).
+ *
+ * Only resolves accounts that are students (same population as the list) —
+ * this lookup used to return ANY non-deleted user, so the student detail
+ * endpoint doubled as a profile reader for admins and other instructors.
+ * With `creatorId` it additionally requires an enrollment in one of that
+ * creator's courses.
  */
 export async function findStudentByUsername(
   database: StudentsExecutor,
   username: string,
+  creatorId?: string,
 ) {
   const cleanUsername = username.replace(/^@+/, "").trim();
-  return await database
+  let query = database
     .selectFrom("users as u")
     .selectAll("u")
     .where((eb) =>
@@ -601,7 +643,12 @@ export async function findStudentByUsername(
       ]),
     )
     .where("u.is_deleted", "=", false)
-    .executeTakeFirst();
+    .where("u.id", "in", isStudentUserIds);
+
+  if (creatorId) {
+    query = query.where((eb) => eb.exists(userEnrollments(eb, { creatorId })));
+  }
+  return await query.executeTakeFirst();
 }
 
 /**
@@ -610,8 +657,9 @@ export async function findStudentByUsername(
 export async function getStudentEnrolledCourses(
   database: StudentsExecutor,
   userId: string,
+  creatorId?: string,
 ) {
-  return await database
+  let query = database
     .selectFrom("enrollments as e")
     .innerJoin("courses as c", "c.id", "e.course_id")
     .select([
@@ -628,7 +676,10 @@ export async function getStudentEnrolledCourses(
       "c.difficulty",
     ])
     .where("e.user_id", "=", userId)
-    .where("c.deleted_at", "is", null)
-    .orderBy("e.created_at", "desc")
-    .execute();
+    .where("c.deleted_at", "is", null);
+
+  if (creatorId) {
+    query = query.where("c.creator_id", "=", creatorId);
+  }
+  return await query.orderBy("e.created_at", "desc").execute();
 }

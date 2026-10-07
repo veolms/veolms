@@ -12,12 +12,14 @@ import {
   FunnelList,
   InsightsPanel,
   KpiCard,
+  formatChartCurrency,
   formatCurrencyAmount,
   formatHours,
   formatPercent,
   formatWholeNumber,
   kpiGridClass,
   toChartData,
+  toRevenueChartData,
 } from "../analyticsShared";
 
 export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
@@ -102,8 +104,8 @@ export function OverviewTab({ data }: { data: AnalyticsOverviewResponse }) {
 
       <ChartSection title="Revenue Trend" description="Net revenue per day">
         <TrendChart
-          data={toChartData(overview.revenueTrend)}
-          valueFormatter={(value) => formatCurrencyAmount(value, currency)}
+          data={toRevenueChartData(overview.revenueTrend, currency)}
+          valueFormatter={(value) => formatChartCurrency(value, currency)}
         />
       </ChartSection>
 

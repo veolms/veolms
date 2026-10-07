@@ -3,6 +3,7 @@ import type { Executor } from "../shared/repository.types.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import { escapeHtml } from "@veolms/services/email";
+import { formatMoney, toMinorUnits } from "../shared/currency.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import * as authRepo from "../../auth/authentication/authentication.repository.ts";
@@ -62,16 +63,17 @@ export function createInvoiceService({
         customDomain: academy?.custom_domain ?? null,
       },
       currency: order.currency,
-      subtotalAmount: order.subtotal_amount,
-      discountAmount: order.discount_amount,
-      taxAmount: order.tax_amount,
-      totalAmount: order.total_amount,
+      // Invoice amounts are minor units, like every order response.
+      subtotalAmount: toMinorUnits(order.subtotal_amount, order.currency),
+      discountAmount: toMinorUnits(order.discount_amount, order.currency),
+      taxAmount: toMinorUnits(order.tax_amount, order.currency),
+      totalAmount: toMinorUnits(order.total_amount, order.currency),
       paymentReference: paymentRef,
       items: items.map((it) => ({
         title: it.title_snapshot,
-        unitPrice: it.unit_price,
-        discountAmount: it.discount_amount,
-        finalAmount: it.final_amount,
+        unitPrice: toMinorUnits(it.unit_price, order.currency),
+        discountAmount: toMinorUnits(it.discount_amount, order.currency),
+        finalAmount: toMinorUnits(it.final_amount, order.currency),
       })),
       paidAt: order.paid_at,
       createdAt: order.created_at,
@@ -83,6 +85,14 @@ export function createInvoiceService({
     orderId: string,
   ): Promise<string> {
     const inv = await generateInvoiceData(scope, orderId);
+    // An invoice always shows the currency's decimals (₹499.00).
+    const money = (amountMinor: number) =>
+      escapeHtml(
+        formatMoney(amountMinor, {
+          currency: inv.currency,
+          decimals: "always",
+        }),
+      );
     const dateStr = inv.paidAt
       ? new Date(inv.paidAt).toLocaleDateString("en-IN", {
           year: "numeric",
@@ -100,9 +110,9 @@ export function createInvoiceService({
         (it) => `
         <tr>
           <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0;">${escapeHtml(it.title)}</td>
-          <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: right;">₹${(it.unitPrice / 100).toFixed(2)}</td>
-          <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">-₹${(it.discountAmount / 100).toFixed(2)}</td>
-          <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 600;">₹${(it.finalAmount / 100).toFixed(2)}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: right;">${money(it.unitPrice)}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">-${money(it.discountAmount)}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 600;">${money(it.finalAmount)}</td>
         </tr>`,
       )
       .join("");
@@ -174,19 +184,19 @@ export function createInvoiceService({
     <div class="totals">
       <div class="totals-row">
         <span style="color: #64748b;">Subtotal:</span>
-        <span>₹${(inv.subtotalAmount / 100).toFixed(2)}</span>
+        <span>${money(inv.subtotalAmount)}</span>
       </div>
       ${
         inv.discountAmount > 0
           ? `<div class="totals-row" style="color: #16a34a;">
               <span>Discount:</span>
-              <span>-₹${(inv.discountAmount / 100).toFixed(2)}</span>
+              <span>-${money(inv.discountAmount)}</span>
             </div>`
           : ""
       }
       <div class="totals-row totals-grand">
         <span>Total Paid:</span>
-        <span>₹${(inv.totalAmount / 100).toFixed(2)}</span>
+        <span>${money(inv.totalAmount)}</span>
       </div>
     </div>
 

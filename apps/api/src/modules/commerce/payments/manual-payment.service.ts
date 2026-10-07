@@ -10,6 +10,7 @@ import type {
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import { toMinorUnits } from "../shared/currency.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as manualPaymentRepo from "./manual-payment.repository.ts";
@@ -225,7 +226,9 @@ export function createManualPaymentService({
           gateway_order_id: `manual_ord_${order.id}`,
           gateway_payment_id: `manual_pay_${req.transaction_reference}`,
           gateway_key_id: null,
-          amount: order.total_amount,
+          // payments.amount is minor units for every provider; this row
+          // used to store the major-unit order total.
+          amount: toMinorUnits(order.total_amount, order.currency),
           currency: order.currency,
           status: "captured",
           payment_method: {

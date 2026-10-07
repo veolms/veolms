@@ -31,21 +31,41 @@ export async function findMediaAssetById(
  * `courses` table directly rather than importing the courses module, to
  * avoid a circular dependency (courses already depends on media).
  */
+/**
+ * Whether a media asset is the thumbnail or trailer of a published course,
+ * which makes it publicly deliverable.
+ *
+ * The asset's own type has to match the slot: only an image counts as a
+ * thumbnail and only a video as a trailer. Matching on the id alone meant
+ * any asset that ended up in `thumbnail_media_id` — a paid lesson's source
+ * file, a private document — was served to anonymous callers.
+ */
 export async function isMediaAttachedToPublishedCourse(
   database: Kysely<Database>,
   mediaId: string,
 ) {
   const row = await database
-    .selectFrom("courses")
-    .select("id")
-    .where("status", "=", "published")
-    .where("deleted_at", "is", null)
-    .where((eb) =>
-      eb.or([
-        eb("thumbnail_media_id", "=", mediaId),
-        eb("trailer_media_id", "=", mediaId),
-      ]),
-    )
+    .selectFrom("courses as c")
+    .select("c.id")
+    .where("c.status", "=", "published")
+    .where("c.deleted_at", "is", null)
+    .where((eb) => {
+      const assetOfType = (type: string) =>
+        eb.exists(
+          eb
+            .selectFrom("media_assets as m")
+            .select("m.id")
+            .where("m.id", "=", mediaId)
+            .where("m.type", "=", type),
+        );
+      return eb.or([
+        eb.and([
+          eb("c.thumbnail_media_id", "=", mediaId),
+          assetOfType("image"),
+        ]),
+        eb.and([eb("c.trailer_media_id", "=", mediaId), assetOfType("video")]),
+      ]);
+    })
     .executeTakeFirst();
 
   return row !== undefined;

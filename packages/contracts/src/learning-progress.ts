@@ -11,6 +11,12 @@ export const learningProgressItemSchema = z.strictObject({
 
 export const learningProgressBatchRequestSchema = z.strictObject({
   items: z.array(learningProgressItemSchema).min(1).max(100),
+  /**
+   * The device's IANA time zone. Used only to set the learner's zone when
+   * they have never saved one, so their learning days follow their own
+   * calendar instead of UTC. Ignored once a zone is saved, or if unknown.
+   */
+  timeZone: z.string().min(1).max(64).optional(),
 });
 
 export const learningProgressLessonSchema = z.strictObject({

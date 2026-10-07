@@ -25,6 +25,7 @@ export const dashboardRevenueOverviewSchema = z.strictObject({
       value: z.number(),
     }),
   ),
+  /** grossSales, netRevenue and the trend values are in minor units (paise). */
   grossSales: dashboardKpiSchema,
   netRevenue: dashboardKpiSchema,
   orders: dashboardKpiSchema,
@@ -76,6 +77,7 @@ export const dashboardYourCourseSchema = z.strictObject({
 export type DashboardYourCourse = z.infer<typeof dashboardYourCourseSchema>;
 
 export const dashboardSummaryResponseSchema = z.strictObject({
+  /** value and previousValue are in minor units (paise). */
   revenue: z.strictObject({
     value: z.number(),
     previousValue: z.number(),

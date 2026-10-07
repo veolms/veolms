@@ -61,6 +61,23 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
+// A rejected promise nobody awaited — typically a background timer's work —
+// used to be fatal: Node's default is to crash the process, which dropped
+// every in-flight request because one poller tick failed. Log it and keep
+// serving; the individual jobs own their own retries.
+process.on("unhandledRejection", (reason) => {
+  app.log.error({ err: reason }, "Unhandled promise rejection");
+});
+
+// A thrown error nobody caught leaves the process in an unknown state, so
+// this one still ends the process — but through the graceful path, with a
+// structured log line instead of a bare stack trace on stderr.
+process.on("uncaughtException", (error) => {
+  app.log.fatal({ err: error }, "Uncaught exception; shutting down");
+  process.exitCode = 1;
+  void shutdown("uncaughtException");
+});
+
 try {
   await app.listen({ host: config.API_HOST, port: config.API_PORT });
 } catch (error) {

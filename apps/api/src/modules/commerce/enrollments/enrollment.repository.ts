@@ -8,11 +8,16 @@ export interface EnrollmentAnalyticsFilters {
   to?: Date;
 }
 
+/**
+ * Recent enrollments. `creatorId` limits the list to that creator's courses
+ * — non-admin staff only ever see enrollments in courses they own.
+ */
 export async function listAcademyEnrollments(
   database: Executor,
   limit: number,
+  creatorId?: string,
 ) {
-  return await database
+  let query = database
     .selectFrom("enrollments as e")
     .innerJoin("users as u", "u.id", "e.user_id")
     .innerJoin("courses as c", "c.id", "e.course_id")
@@ -35,7 +40,13 @@ export async function listAcademyEnrollments(
       ),
     ])
     .where("u.is_deleted", "=", false)
-    .where("c.deleted_at", "is", null)
+    .where("c.deleted_at", "is", null);
+
+  if (creatorId) {
+    query = query.where("c.creator_id", "=", creatorId);
+  }
+
+  return await query
     .groupBy([
       "e.id",
       "e.created_at",
@@ -279,12 +290,24 @@ export async function insertEnrollment(
       // so this reactivated row correctly points at the *new* purchase
       // (the order that will actually revoke it on refund), not whichever
       // order originally created the row.
+      //
+      // As in insertAccessGrant: a live enrollment never has its access
+      // period shortened by a later purchase.
       oc.columns(["user_id", "course_id"]).doUpdateSet({
         order_id: values.order_id ?? null,
         status: values.status,
         source: values.source,
         access_starts_at: values.access_starts_at ?? new Date(),
-        access_expires_at: values.access_expires_at ?? null,
+        access_expires_at: sql<Date | null>`case
+          when enrollments.status <> 'active'
+            or (enrollments.access_expires_at is not null
+                and enrollments.access_expires_at <= now())
+            then excluded.access_expires_at
+          when enrollments.access_expires_at is null
+            or excluded.access_expires_at is null
+            then null
+          else greatest(enrollments.access_expires_at, excluded.access_expires_at)
+        end`,
         updated_at: new Date(),
       }),
     )
@@ -333,6 +356,43 @@ export async function revokeEnrollmentsByOrderId(
       updated_at: new Date(),
     })
     .where("order_id", "=", orderId)
+    .returningAll()
+    .execute();
+}
+
+/** Courses whose live enrollment currently belongs to an order. */
+export async function listActiveEnrollmentCourseIdsByOrderId(
+  database: Executor,
+  orderId: string,
+): Promise<string[]> {
+  const rows = await database
+    .selectFrom("enrollments")
+    .select("course_id")
+    .where("order_id", "=", orderId)
+    .where("status", "=", "active")
+    .execute();
+  return rows.map((row) => row.course_id);
+}
+
+/** Mirrors access.repository.ts's reassignAccessGrantOrder. */
+export async function reassignEnrollmentOrder(
+  database: Executor,
+  input: {
+    fromOrderId: string;
+    courseId: string;
+    toOrderId: string;
+    source: EnrollmentSource;
+  },
+) {
+  return await database
+    .updateTable("enrollments")
+    .set({
+      order_id: input.toOrderId,
+      source: input.source,
+      updated_at: new Date(),
+    })
+    .where("order_id", "=", input.fromOrderId)
+    .where("course_id", "=", input.courseId)
     .returningAll()
     .execute();
 }

@@ -1,5 +1,13 @@
-import { useLayoutEffect, type ReactNode } from "react";
-import { Links, Meta, Outlet, Scripts, useLocation } from "react-router";
+import { useEffect, useLayoutEffect, type ReactNode } from "react";
+import {
+  isRouteErrorResponse,
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  useLocation,
+  useRouteError,
+} from "react-router";
 import type { Route } from "./+types/root";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
 import { appBaseStylesheet } from "./appStylesheet";
@@ -16,6 +24,11 @@ import {
   getEarlyHlsPreloadInlineScript,
 } from "./learning/learningHlsBootstrap";
 import { getVideoPlaybackCdnOrigin } from "./learning/videoPlaybackBootstrap";
+import {
+  installChunkReloadHandler,
+  isChunkLoadError,
+  reloadOnceForNewBuild,
+} from "./lib/chunk-reload";
 import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getSessionPresenceBootstrapScript } from "./store/sessionPresence";
@@ -340,14 +353,66 @@ function HydrationMarker() {
     }
     root.dataset.appHydrated = "true";
     const removeTabFocusListeners = installTabFocusVisibility(root);
+    const removeChunkReloadHandler = installChunkReloadHandler();
 
     return () => {
+      removeChunkReloadHandler();
       removeTabFocusListeners();
       root.dataset.appHydrated = "false";
       root.dataset.tabNavigation = "false";
     };
   }, []);
   return null;
+}
+
+/**
+ * Shown in place of the app when a screen throws while rendering, instead
+ * of the router's bare default error page. A failure to load a screen's
+ * files — a tab left open across a deploy — reloads once for the new build.
+ */
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const isStaleBuild = isChunkLoadError(error);
+
+  useEffect(() => {
+    if (isStaleBuild) reloadOnceForNewBuild();
+  }, [isStaleBuild]);
+
+  const isNotFound = isRouteErrorResponse(error) && error.status === 404;
+  const title = isNotFound
+    ? "Page not found"
+    : isStaleBuild
+      ? "A new version is available"
+      : "Something went wrong";
+  const message = isNotFound
+    ? "The page you were looking for does not exist or has moved."
+    : isStaleBuild
+      ? "This tab was open during an update. Reload to continue."
+      : "This screen could not be shown. Reloading usually fixes it; your saved work is not affected.";
+
+  return (
+    <main className="grid min-h-dvh place-items-center bg-(--canvas) px-6 text-(--text)">
+      <div className="max-w-md text-center">
+        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <p className="mt-2 text-sm text-(--muted)">{message}</p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-(--accent) px-4 text-sm font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+          >
+            Reload
+          </button>
+          <a
+            href="/"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--text)_14%,transparent)] px-4 text-sm font-semibold text-(--text) hover:bg-(--hover)"
+          >
+            Go to home
+          </a>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 export default function Root() {

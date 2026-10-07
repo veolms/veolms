@@ -8,13 +8,54 @@ import {
 } from "../../../../events/outbox.service.ts";
 import { extractPlainText } from "./discussion.utils.ts";
 import { DISCUSSION_CONSTANTS } from "./discussion.constants.ts";
-import { createDiscussionAccess } from "./discussion.access.ts";
 
 const MENTION_PATTERN = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,30})/g;
 const MAX_ACTOR_NAME = 255;
 const MAX_CONTEXT = 1000;
 
-export type MentionParticipantScope = readonly string[] | "all";
+/**
+ * SQL predicate: "the `users` row is a participant of this course".
+ *
+ * A participant is the course creator, anyone holding live access to it
+ * (grant or enrollment), anyone with a role assigned on that course, and
+ * anyone who has already posted in it.
+ *
+ * Who can be mentioned — and who the mention picker lists — used to be an
+ * id list built in memory, and for any free published course it was simply
+ * "everyone on the platform". That let a user who joined one free course
+ * page through every account and send each of them an email. Expressing the
+ * rule in SQL also removes the per-keystroke load of every participant id.
+ */
+export function isCourseParticipant(courseId: string) {
+  return sql<boolean>`(
+    users.id = (
+      select c.creator_id from courses as c
+      where c.id = ${courseId} and c.deleted_at is null
+    )
+    or exists (
+      select 1 from access_grants as g
+      where g.user_id = users.id
+        and g.course_id = ${courseId}
+        and g.status = 'active'
+        and (g.valid_until is null or g.valid_until > now())
+    )
+    or exists (
+      select 1 from enrollments as e
+      where e.user_id = users.id
+        and e.course_id = ${courseId}
+        and e.status = 'active'
+        and (e.access_expires_at is null or e.access_expires_at > now())
+    )
+    or exists (
+      select 1 from role_assignments as ra
+      where ra.user_id = users.id and ra.course_id = ${courseId}
+    )
+    or exists (
+      select 1 from learning_threads as lt
+      where lt.user_id = users.id and lt.course_id = ${courseId}
+    )
+  )`;
+}
 
 export function createDiscussionOutbox(): OutboxService {
   return createOutboxService();
@@ -33,23 +74,17 @@ export function extractMentionUsernames(content: string): string[] {
 export async function resolveMentionedUserIds(
   db: DatabaseExecutor,
   usernames: readonly string[],
-  participantScope: MentionParticipantScope,
+  courseId: string,
 ): Promise<string[]> {
-  if (participantScope !== "all" && participantScope.length === 0) {
-    return [];
-  }
+  if (usernames.length === 0) return [];
 
-  let query = db
+  const users = await db
     .selectFrom("users")
     .select("id")
     .where("is_deleted", "=", false)
-    .where(sql<string>`lower(username)`, "in", [...usernames]);
-
-  if (participantScope !== "all") {
-    query = query.where("id", "in", [...participantScope]);
-  }
-
-  const users = await query.execute();
+    .where(sql<string>`lower(username)`, "in", [...usernames])
+    .where(isCourseParticipant(courseId))
+    .execute();
   return users.map((user) => user.id);
 }
 
@@ -144,15 +179,10 @@ export async function syncMentionsAndNotify(
   const mentionedIds = new Set<string>();
 
   if (usernames.length > 0) {
-    const courseAccess = createDiscussionAccess();
-    const participantScope = await courseAccess.listCourseParticipantIds(
-      db,
-      input.courseId,
-    );
     const resolvedIds = await resolveMentionedUserIds(
       db,
       usernames,
-      participantScope,
+      input.courseId,
     );
     for (const userId of resolvedIds) mentionedIds.add(userId);
   }
