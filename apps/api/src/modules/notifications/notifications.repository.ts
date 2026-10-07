@@ -141,7 +141,7 @@ export async function markRead(
     .where("id", "=", notificationId)
     .where("recipient_user_id", "=", userId)
     .where("archived_at", "is", null)
-    .returningAll()
+    .returning(["id", "read_at"])
     .executeTakeFirst();
 }
 
@@ -156,7 +156,7 @@ export async function markUnread(
     .where("id", "=", notificationId)
     .where("recipient_user_id", "=", userId)
     .where("archived_at", "is", null)
-    .returningAll()
+    .returning(["id", "read_at"])
     .executeTakeFirst();
 }
 
@@ -218,27 +218,35 @@ export async function getPreference(
   return row?.enabled;
 }
 
-export async function updatePreference(
+/**
+ * Saves a set of preferences in one statement. Each (type, channel) pair may
+ * appear only once: Postgres rejects an upsert that touches a row twice.
+ */
+export async function upsertPreferences(
   database: DatabaseExecutor,
-  input: {
-    userId: string;
+  userId: string,
+  preferences: ReadonlyArray<{
     notificationType: string;
     channel: NotificationChannel;
     enabled: boolean;
-  },
+  }>,
 ): Promise<void> {
+  if (preferences.length === 0) return;
+
   await database
     .insertInto("notification_preferences")
-    .values({
-      user_id: input.userId,
-      notification_type: input.notificationType,
-      channel: input.channel,
-      enabled: input.enabled,
-    })
+    .values(
+      preferences.map((preference) => ({
+        user_id: userId,
+        notification_type: preference.notificationType,
+        channel: preference.channel,
+        enabled: preference.enabled,
+      })),
+    )
     .onConflict((conflict) =>
       conflict
         .columns(["user_id", "notification_type", "channel"])
-        .doUpdateSet({ enabled: input.enabled }),
+        .doUpdateSet((eb) => ({ enabled: eb.ref("excluded.enabled") })),
     )
     .execute();
 }

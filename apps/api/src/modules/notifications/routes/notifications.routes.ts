@@ -5,7 +5,7 @@ import {
   notificationListQuerySchema,
   notificationListResponseSchema,
   notificationPreferencesResponseSchema,
-  notificationSchema,
+  notificationReadStateSchema,
   notificationSummarySchema,
   updateNotificationPreferencesSchema,
 } from "@veolms/contracts";
@@ -77,7 +77,10 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
         summary: "Mark one notification as read",
         params: notificationIdParamsSchema,
         response: {
-          200: jsonResponse("Notification marked read", notificationSchema),
+          200: jsonResponse(
+            "Notification marked read",
+            notificationReadStateSchema,
+          ),
           401: errorResponse("Authentication required"),
           404: errorResponse("Notification not found"),
         },
@@ -96,7 +99,10 @@ const notificationRoutes: RoutePlugin = async (app, options) => {
         summary: "Mark one notification as unread",
         params: notificationIdParamsSchema,
         response: {
-          200: jsonResponse("Notification marked unread", notificationSchema),
+          200: jsonResponse(
+            "Notification marked unread",
+            notificationReadStateSchema,
+          ),
           401: errorResponse("Authentication required"),
           404: errorResponse("Notification not found"),
         },

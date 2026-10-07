@@ -1,12 +1,5 @@
 import { z } from "zod";
 
-export const videoPlaybackTrackSchema = z.strictObject({
-  src: z.string().min(1),
-  language: z.string().min(1),
-  label: z.string().min(1).optional(),
-  kind: z.string().min(1).optional(),
-});
-
 /**
  * A chapter derived from the lesson description. The description stays the
  * authoring source; this carries the extracted first-frame thumbnail.
@@ -33,10 +26,7 @@ export const videoPlaybackBootstrapSchema = z.strictObject({
   duration: z.number().nonnegative().optional(),
   chapters: z.array(videoPlaybackChapterSchema).optional(),
   title: z.string().min(1).optional(),
-  posterUrl: z.string().min(1).optional(),
-  resumeAt: z.number().nonnegative().optional(),
-  tracks: z.array(videoPlaybackTrackSchema).optional(),
-  source: z.enum(["ssg", "public-cdn", "paid-bootstrap-api"]),
+  source: z.literal("paid-bootstrap-api"),
 });
 
 /** The minimal response used to renew a protected HLS segment token. */
@@ -51,5 +41,4 @@ export type VideoPlaybackBootstrap = z.infer<
 
 export type VideoPlaybackToken = z.infer<typeof videoPlaybackTokenSchema>;
 
-export type VideoPlaybackTrack = z.infer<typeof videoPlaybackTrackSchema>;
 export type VideoPlaybackChapter = z.infer<typeof videoPlaybackChapterSchema>;
