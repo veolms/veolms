@@ -5,11 +5,10 @@ import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import * as repo from "../shared/quiz.repository.ts";
 import { gradeQuizQuestion, hasQuizAnswer } from "../shared/quiz.grading.ts";
+import type { AssignmentRow } from "../shared/quiz.presenters.ts";
+import { resultScope } from "./attempt.result.ts";
 
 type AttemptRow = NonNullable<Awaited<ReturnType<typeof repo.findAttempt>>>;
-type AssignmentRow = NonNullable<
-  Awaited<ReturnType<typeof repo.findAssignment>>
->;
 
 /** Enough of a course to address the result notification. */
 export interface AttemptCourse {
@@ -70,10 +69,24 @@ export async function gradeLockedAttempt(
     requireComplete: boolean;
     findCourse?: FindAttemptCourse;
   },
-): Promise<"graded" | "expired"> {
+) {
   const { attempt, assignment, now, requireComplete } = input;
-  const questions = await repo.listQuestions(trx, attempt.quiz_version_id);
-  const options = await repo.listOptions(
+  // What the learner will be shown once this attempt is closed. Prompts and
+  // explanations are read only if that result will carry them.
+  const scope = resultScope(
+    { status: "graded", attempt_number: attempt.attempt_number },
+    assignment,
+    now,
+  );
+  const questions = await repo.listGradingQuestions(
+    trx,
+    attempt.quiz_version_id,
+    {
+      prompt: scope.includeFeedback,
+      explanation: scope.includeFeedback && scope.revealAnswers,
+    },
+  );
+  const options = await repo.listKeyOptions(
     trx,
     questions.map((question) => question.id),
   );
@@ -104,8 +117,17 @@ export async function gradeLockedAttempt(
       "Answer every Quiz question before submitting.",
     );
   if (!graded.some((item) => item.answered)) {
-    await repo.updateAttempt(trx, attempt.id, { status: "expired" });
-    return "expired";
+    const closed = await repo.updateAttempt(trx, attempt.id, {
+      status: "expired",
+    });
+    return {
+      outcome: "expired" as const,
+      attempt: closed,
+      scope,
+      questions,
+      options,
+      answers,
+    };
   }
 
   const maxScore = graded.reduce(
@@ -131,7 +153,7 @@ export async function gradeLockedAttempt(
         updated_at: now,
       })),
   );
-  await repo.updateAttempt(trx, attempt.id, {
+  const closed = await repo.updateAttempt(trx, attempt.id, {
     status: "graded",
     submitted_at: input.submittedAt,
     score_obtained: score,
@@ -141,7 +163,8 @@ export async function gradeLockedAttempt(
   });
 
   const course = await input.findCourse?.(assignment.course_id);
-  const quiz = await repo.findQuiz(trx, assignment.quiz_id);
+  // The quiz is only named in the notice, and no course means no notice.
+  const quiz = course ? await repo.findQuiz(trx, assignment.quiz_id) : null;
   if (course && quiz) {
     const outbox = createOutboxService();
     const deepLink = `/learn/${course.slug}?lessonId=${assignment.lesson_id}&view=quiz`;
@@ -184,8 +207,28 @@ export async function gradeLockedAttempt(
       });
     }
   }
-  return "graded";
+  return {
+    outcome: "graded" as const,
+    attempt: closed,
+    scope,
+    questions,
+    options,
+    // The answers as just graded, so the result needs no second read.
+    answers: graded.flatMap((item) =>
+      item.answer
+        ? [
+            {
+              ...item.answer,
+              is_correct: item.isCorrect,
+              points_awarded: item.pointsAwarded,
+            },
+          ]
+        : [],
+    ),
+  };
 }
+/** A closed attempt and everything its result is built from. */
+export type GradedAttempt = Awaited<ReturnType<typeof gradeLockedAttempt>>;
 
 /**
  * Closes attempts whose time is up. Every place that used to stamp an

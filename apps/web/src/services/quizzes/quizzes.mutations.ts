@@ -1,10 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ApiError } from "../../lib/api-error";
 import type {
   AssignQuizRequest,
-  BulkQuizAnswersRequest,
   CreateQuizQuestionRequest,
-  CreateQuizRequest,
   CreateQuizWithQuestionsRequest,
   SetQuizCoursePricingRequest,
   UpdateQuizAssignmentRequest,
@@ -13,16 +10,6 @@ import type {
 } from "@veolms/contracts";
 import { quizKeys } from "./quizzes.keys";
 import { quizzesService } from "./quizzes.service";
-export function useCreateQuiz() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: CreateQuizRequest) => quizzesService.create(payload),
-    onSuccess: (data) => {
-      qc.setQueryData(quizKeys.detail(data.id), data);
-      void qc.invalidateQueries({ queryKey: quizKeys.mine() });
-    },
-  });
-}
 export function useCreateQuizWithQuestions() {
   const qc = useQueryClient();
   return useMutation({
@@ -39,9 +26,10 @@ export function useUpdateQuiz() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdateQuizRequest }) =>
       quizzesService.update(id, payload),
+    // The response is the saved quiz. It goes straight into the cache;
+    // refetching the same quiz after every autosave only repeated the read.
     onSuccess: (data, vars) => {
       qc.setQueryData(quizKeys.detail(vars.id), data);
-      void qc.invalidateQueries({ queryKey: quizKeys.detail(vars.id) });
     },
   });
 }
@@ -57,7 +45,6 @@ export function useAddQuizQuestion() {
     }) => quizzesService.addQuestion(id, payload),
     onSuccess: (data, vars) => {
       qc.setQueryData(quizKeys.detail(vars.id), data);
-      void qc.invalidateQueries({ queryKey: quizKeys.detail(vars.id) });
     },
   });
 }
@@ -75,7 +62,6 @@ export function useUpdateQuizQuestion() {
     }) => quizzesService.updateQuestion(quizId, questionId, payload),
     onSuccess: (data, vars) => {
       qc.setQueryData(quizKeys.detail(vars.quizId), data);
-      void qc.invalidateQueries({ queryKey: quizKeys.detail(vars.quizId) });
     },
   });
 }
@@ -105,19 +91,6 @@ export function usePublishQuiz() {
       void qc.invalidateQueries({ queryKey: quizKeys.detail(id) });
       void qc.invalidateQueries({ queryKey: quizKeys.mine() });
     },
-  });
-}
-export function useSaveQuizAnswers() {
-  const qc = useQueryClient();
-  return useMutation<
-    { saved: true; answerCount: number },
-    ApiError,
-    { attemptId: string; payload: BulkQuizAnswersRequest }
-  >({
-    mutationFn: ({ attemptId, payload }) =>
-      quizzesService.saveAnswers(attemptId, payload),
-    onSuccess: (_, vars) =>
-      void qc.invalidateQueries({ queryKey: quizKeys.attempt(vars.attemptId) }),
   });
 }
 export function useStartQuizAttempt() {

@@ -767,30 +767,14 @@ export function LearningWorkspace({
         (a) => a.lessonId === currentLessonUuid,
       );
       if (foundCourse) {
+        // Only what the attempt panel is given; this list carries no
+        // attempt state, so the panel starts without an active attempt.
         return {
           id: foundCourse.id,
-          quizId: foundCourse.quizId,
-          quizVersionId: foundCourse.quizVersionId,
           courseId: foundCourse.courseId,
-          lessonId: foundCourse.lessonId,
           quizTitle: foundCourse.quizTitle,
-          lessonTitle: currentLesson[1],
-          courseTitle: courseOverview?.course.title ?? "Course",
-          required: foundCourse.required,
-          passPercentage: foundCourse.passPercentage,
           maxAttempts: foundCourse.maxAttempts,
-          timeLimitSeconds: foundCourse.timeLimitSeconds,
-          shuffleQuestions: foundCourse.shuffleQuestions,
-          shuffleOptions: foundCourse.shuffleOptions,
-          feedbackMode: foundCourse.feedbackMode,
-          availableFrom: foundCourse.availableFrom,
-          availableUntil: foundCourse.availableUntil,
           activeAttemptId: null,
-          attemptCount: 0,
-          latestAttemptStatus: null,
-          latestScore: null,
-          bestScore: null,
-          latestPassed: null,
         };
       }
     }
@@ -806,8 +790,6 @@ export function LearningWorkspace({
     quizAssignments,
     courseQuizAssignments.data,
     quizAssignment,
-    currentLesson,
-    courseOverview?.course.title,
   ]);
 
   const isDedicatedQuizLesson = currentLesson[5] === "quiz";

@@ -6,7 +6,7 @@ import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import type { LearnerQuizAttempt, QuizResult } from "@veolms/contracts";
+import type { QuizResult } from "@veolms/contracts";
 import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { getApiError } from "../lib/api-error";
@@ -150,10 +150,7 @@ export function QuizAttemptPanel({
     }),
     [attempt?.answers, attempt?.questions],
   );
-  const autosync = useAutosync<
-    QuizAttemptDraft,
-    { saved: true; answerCount: number }
-  >({
+  const autosync = useAutosync<QuizAttemptDraft, { saved: true }>({
     key: {
       entity: "quiz-attempt",
       entityId: attemptId ?? "pending",
