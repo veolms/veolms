@@ -8,11 +8,16 @@ export interface EnrollmentAnalyticsFilters {
   to?: Date;
 }
 
+/**
+ * Recent enrollments. `creatorId` limits the list to that creator's courses
+ * — non-admin staff only ever see enrollments in courses they own.
+ */
 export async function listAcademyEnrollments(
   database: Executor,
   limit: number,
+  creatorId?: string,
 ) {
-  return await database
+  let query = database
     .selectFrom("enrollments as e")
     .innerJoin("users as u", "u.id", "e.user_id")
     .innerJoin("courses as c", "c.id", "e.course_id")
@@ -35,7 +40,13 @@ export async function listAcademyEnrollments(
       ),
     ])
     .where("u.is_deleted", "=", false)
-    .where("c.deleted_at", "is", null)
+    .where("c.deleted_at", "is", null);
+
+  if (creatorId) {
+    query = query.where("c.creator_id", "=", creatorId);
+  }
+
+  return await query
     .groupBy([
       "e.id",
       "e.created_at",

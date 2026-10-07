@@ -11,13 +11,17 @@ import {
   type StudentsService,
 } from "../../students/index.ts";
 import type { CourseService } from "../../courses/index.ts";
+import { ADMIN_ROLE } from "../../auth/index.ts";
 
 export interface EnrollmentService {
   listEnrolledCourses(
     userId: string,
     userRoles?: readonly string[],
   ): Promise<EnrolledCourse[]>;
-  listAcademyEnrollments(limit: number): Promise<AcademyEnrollmentListItem[]>;
+  listAcademyEnrollments(
+    limit: number,
+    actor: { id: string; roles: readonly string[] },
+  ): Promise<AcademyEnrollmentListItem[]>;
   getEnrollmentStats(
     filters: enrollmentRepo.EnrollmentAnalyticsFilters,
   ): Promise<{ totalEnrollments: number; activeEnrollments: number }>;
@@ -46,8 +50,15 @@ export function createEnrollmentService({
 }): EnrollmentService {
   async function listAcademyEnrollments(
     limit: number,
+    actor: { id: string; roles: readonly string[] },
   ): Promise<AcademyEnrollmentListItem[]> {
-    const rows = await enrollmentRepo.listAcademyEnrollments(database, limit);
+    // Admins see the whole academy; other staff see only their own courses.
+    const creatorId = actor.roles.includes(ADMIN_ROLE) ? undefined : actor.id;
+    const rows = await enrollmentRepo.listAcademyEnrollments(
+      database,
+      limit,
+      creatorId,
+    );
     const avatarUrls = await studentsService.resolveStudentAvatars(
       rows.map((row) => ({
         id: row.student_id,
