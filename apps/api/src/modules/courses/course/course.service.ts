@@ -530,7 +530,11 @@ export function createCourseService({
     const data: CreateCourseRequest =
       typeof payload === "string" ? { title: payload } : payload;
     const title = data.title;
-    const baseSlug = slugify(title);
+    // slugify keeps only Latin letters and digits, so a title written entirely
+    // in another script (Hindi, Chinese, emoji) slugified to "" — and an
+    // empty slug fails the catalogue's response schema for every visitor.
+    const baseSlug =
+      slugify(title) || `course-${crypto.randomBytes(4).toString("hex")}`;
     let slug = baseSlug;
     let attempts = 0;
 
