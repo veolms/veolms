@@ -9,13 +9,20 @@ import {
 import { jsonResponse } from "../../../lib/responses.ts";
 import { errorResponse } from "../../../lib/errors.ts";
 import type { RoutePlugin } from "../../../lib/route-plugin.ts";
+import { createCourseService } from "../../courses/index.ts";
 import { createCommerceContext } from "../shared/commerce.context.ts";
 import { createCouponService } from "./coupon.service.ts";
 import { createCouponController } from "./coupon.controller.ts";
 
 const couponRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCommerceContext(options);
-  const service = createCouponService({ database: options.database });
+  const service = createCouponService({
+    database: options.database,
+    courseService: createCourseService({
+      database: options.database,
+      services: options.services,
+    }),
+  });
   const controller = createCouponController({ service });
 
   app.get(

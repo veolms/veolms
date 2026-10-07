@@ -545,6 +545,20 @@ export async function listAvailableCoursesByCreator(
     .execute();
 }
 
+/** Ids of every non-deleted course a user created, whatever its status. */
+export async function listCourseIdsByCreator(
+  database: Kysely<Database>,
+  creatorId: string,
+) {
+  const rows = await database
+    .selectFrom("courses")
+    .select("id")
+    .where("creator_id", "=", creatorId)
+    .where("deleted_at", "is", null)
+    .execute();
+  return rows.map((row) => row.id);
+}
+
 export async function listAvailableCourseScopeByCreator(
   database: Kysely<Database>,
   creatorId: string,

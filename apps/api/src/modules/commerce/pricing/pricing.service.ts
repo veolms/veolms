@@ -441,12 +441,23 @@ export function createPricingService({
             isEligible = false;
           }
         }
+        const hasBundleRestriction = Boolean(
+          coupon.restricted_bundle_ids &&
+          coupon.restricted_bundle_ids.length > 0,
+        );
         if (
           coupon.restricted_course_ids &&
           coupon.restricted_course_ids.length > 0
         ) {
           const restricted = new Set(coupon.restricted_course_ids);
           if (item.itemType === "course" && !restricted.has(item.itemId)) {
+            isEligible = false;
+          }
+          // A coupon limited to specific courses is for those courses only.
+          // Without this, it still discounted every bundle — so a coupon an
+          // instructor scoped to their own course could be spent on any
+          // bundle in the academy.
+          if (item.itemType === "bundle" && !hasBundleRestriction) {
             isEligible = false;
           }
         }

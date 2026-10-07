@@ -685,6 +685,11 @@ export function createCourseService({
     return { courses };
   }
 
+  /** Ids of every non-deleted course the user created. */
+  async function listOwnedCourseIds(creatorId: string): Promise<string[]> {
+    return await courseRepo.listCourseIdsByCreator(database, creatorId);
+  }
+
   /**
    * Lists only the course identity and status needed by analytics scope
    * resolution, using the same visibility split as the course-management
@@ -1478,6 +1483,7 @@ export function createCourseService({
     createCourse,
     listMyCourses,
     listMyCourseScope,
+    listOwnedCourseIds,
     listMyCourseSummaries,
     listPublishedCourses,
     getHomeDiscovery,
