@@ -31,7 +31,7 @@ export async function listLessonsByIds(
   if (lessonIds.length === 0) return [];
   return await database
     .selectFrom("course_lessons")
-    .select(["id", "course_id", "title"])
+    .select(["id", "course_id", "title", "is_published"])
     .where("id", "in", lessonIds)
     .where("deleted_at", "is", null)
     .execute();
@@ -382,6 +382,32 @@ export async function updateAssignment(
     .executeTakeFirstOrThrow();
 }
 
+/**
+ * Attempts on these assignments made by learners — everyone except the
+ * acting author and the owner of the course the quiz sits in, whose own
+ * trial runs should not stand in the way of removing a quiz.
+ */
+export async function countLearnerAttempts(
+  database: DatabaseExecutor,
+  input: { assignmentIds: readonly string[]; actorId: string },
+): Promise<number> {
+  if (input.assignmentIds.length === 0) return 0;
+  const row = await database
+    .selectFrom("quiz_attempts")
+    .innerJoin(
+      "quiz_assignments",
+      "quiz_assignments.id",
+      "quiz_attempts.assignment_id",
+    )
+    .innerJoin("courses", "courses.id", "quiz_assignments.course_id")
+    .select(({ fn }) => fn.countAll<string>().as("count"))
+    .where("quiz_attempts.assignment_id", "in", [...input.assignmentIds])
+    .where("quiz_attempts.user_id", "<>", input.actorId)
+    .whereRef("quiz_attempts.user_id", "<>", "courses.creator_id")
+    .executeTakeFirst();
+  return Number(row?.count ?? 0);
+}
+
 export async function deleteAssignment(
   database: DatabaseExecutor,
   assignmentId: string,
@@ -538,20 +564,49 @@ export async function listAnalyticsAttempts(
     .execute();
 }
 
-export async function expireAbandonedAttempts(
+/** Of these lessons, the ones whose quiz the learner has a passed attempt on. */
+export async function listPassedLessonIds(
   database: DatabaseExecutor,
-  now: Date = new Date(),
+  userId: string,
+  lessonIds: readonly string[],
+): Promise<string[]> {
+  if (lessonIds.length === 0) return [];
+  const rows = await database
+    .selectFrom("quiz_attempts")
+    .innerJoin(
+      "quiz_assignments",
+      "quiz_assignments.id",
+      "quiz_attempts.assignment_id",
+    )
+    .select("quiz_assignments.lesson_id as lessonId")
+    .distinct()
+    .where("quiz_attempts.user_id", "=", userId)
+    .where("quiz_attempts.status", "=", "graded")
+    .where("quiz_attempts.is_passed", "=", true)
+    .where("quiz_assignments.lesson_id", "in", [...lessonIds])
+    .execute();
+  return rows.map((row) => row.lessonId);
+}
+
+/**
+ * In-progress attempts whose time limit, or whose assignment's due date,
+ * passed before `cutoff`. Oldest first so a backlog drains in order.
+ */
+export async function listOverdueAttempts(
+  database: DatabaseExecutor,
+  cutoff: Date,
+  limit: number,
 ) {
   return await database
-    .updateTable("quiz_attempts")
-    .set({
-      status: "expired",
-      updated_at: now,
-    })
+    .selectFrom("quiz_attempts")
+    .select(["id", "user_id", "assignment_id", "attempt_number"])
     .where("status", "=", "in_progress")
     .where((eb) =>
       eb.or([
-        eb.and([eb("expires_at", "is not", null), eb("expires_at", "<=", now)]),
+        eb.and([
+          eb("expires_at", "is not", null),
+          eb("expires_at", "<=", cutoff),
+        ]),
         eb(
           "assignment_id",
           "in",
@@ -559,10 +614,11 @@ export async function expireAbandonedAttempts(
             .selectFrom("quiz_assignments")
             .select("id")
             .where("available_until", "is not", null)
-            .where("available_until", "<=", now),
+            .where("available_until", "<=", cutoff),
         ),
       ]),
     )
-    .returning(["id", "user_id", "assignment_id", "attempt_number"])
+    .orderBy("started_at", "asc")
+    .limit(limit)
     .execute();
 }

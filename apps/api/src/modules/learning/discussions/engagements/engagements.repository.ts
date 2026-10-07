@@ -1,6 +1,7 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import type { EngagementTargetType, UserMention } from "@veolms/contracts";
 import { sql } from "kysely";
+import { isCourseParticipant } from "../shared/discussion.mentions.ts";
 
 export interface EngagementExistenceRow {
   id: string;
@@ -86,7 +87,8 @@ export interface EngagementsRepository {
     db: DatabaseExecutor,
     options: {
       query: string;
-      userIds?: readonly string[] | "all";
+      /** Only participants of this course are listed. */
+      courseId: string;
       limit: number;
     },
   ): Promise<UserMention[]>;
@@ -218,15 +220,13 @@ export function createEngagementsRepository(): EngagementsRepository {
         .execute();
     },
 
-    async searchUsersForMention(db, { query, userIds, limit }) {
-      if (Array.isArray(userIds) && userIds.length === 0) return [];
-
+    async searchUsersForMention(db, { query, courseId, limit }) {
       const cleanQuery = query.toLowerCase();
       const pattern = `%${cleanQuery}%`;
       const prefixPattern = `${cleanQuery}%`;
       const wordPattern = `% ${cleanQuery}%`;
 
-      let queryBuilder = db
+      const queryBuilder = db
         .selectFrom("users")
         .select(["id", "display_name", "username", "avatar_data_url"])
         .where("username", "is not", null)
@@ -236,11 +236,8 @@ export function createEngagementsRepository(): EngagementsRepository {
             eb(sql<string>`lower(display_name)`, "like", pattern),
             eb(sql<string>`lower(username)`, "like", pattern),
           ]),
-        );
-
-      if (Array.isArray(userIds) && userIds.length > 0) {
-        queryBuilder = queryBuilder.where("id", "in", [...userIds]);
-      }
+        )
+        .where(isCourseParticipant(courseId));
 
       const users = await queryBuilder
         .orderBy(

@@ -46,6 +46,21 @@ export function toBulkQuizAnswers(
   };
 }
 
+/**
+ * How far the server's clock is ahead of this device's, from the server
+ * time sent with the attempt and the moment that response arrived. Zero
+ * when either is missing.
+ */
+export function serverClockOffsetMs(
+  serverNow: string | undefined,
+  receivedAtMs: number,
+) {
+  const serverNowMs = serverNow ? Date.parse(serverNow) : Number.NaN;
+  return Number.isFinite(serverNowMs) && receivedAtMs > 0
+    ? serverNowMs - receivedAtMs
+    : 0;
+}
+
 export function formatQuizRemainingTime(seconds: number) {
   const safeSeconds = Math.max(0, Math.floor(seconds));
   return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, "0")}`;

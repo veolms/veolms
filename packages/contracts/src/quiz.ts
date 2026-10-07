@@ -247,7 +247,10 @@ export const learnerQuizAttemptSchema = z.strictObject({
   attemptNumber: z.number().int().positive(),
   status: quizAttemptStatusSchema,
   startedAt: z.string(),
+  /** Time limit or due date, whichever ends the attempt first. */
   expiresAt: z.string().nullable(),
+  /** Server clock when this was sent; count down against it, not the device. */
+  serverNow: z.string(),
   questions: z.array(learnerQuizQuestionSchema),
   answers: z.record(
     z.string(),

@@ -7,6 +7,7 @@ import type {
   LearningReport,
   ListAuditLogsQuery,
   ListReportsQuery,
+  ModerateNoteRequest,
   ModerateReplyRequest,
   ModerateThreadRequest,
   ReportsListResponse,
@@ -98,6 +99,15 @@ export interface ModerationService {
     ipAddress?: string,
   ): Promise<void>;
 
+  moderateNote(
+    db: DatabaseExecutor,
+    noteId: string,
+    actor: DiscussionActor,
+    input: ModerateNoteRequest,
+    courseId?: string,
+    ipAddress?: string,
+  ): Promise<void>;
+
   suspendUser(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -146,6 +156,25 @@ export function createModerationService({
     }
   }
 
+  /**
+   * A report is accepted only for content the reporter can open. Without
+   * this, any signed-in user could probe which thread and reply ids exist
+   * and fill the report queue of a course they are not part of. Reported as
+   * "not found" either way, so the check reveals nothing.
+   */
+  async function assertReporterCanSee(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    thread: Parameters<typeof courseAccess.assertCanAccessThread>[2],
+    label: string,
+  ): Promise<void> {
+    try {
+      await courseAccess.assertCanAccessThread(db, actor, thread);
+    } catch {
+      throw httpError(404, "TARGET_NOT_FOUND", `Reported ${label} not found`);
+    }
+  }
+
   return {
     async createReport(db, reporter, input) {
       const actor: DiscussionActor =
@@ -165,6 +194,7 @@ export function createModerationService({
             "Reported discussion thread not found",
           );
         }
+        await assertReporterCanSee(db, actor, thread, "discussion thread");
         courseId = thread.courseId;
       } else if (input.targetType === "reply") {
         const reply = await repliesRepo.findReplyById(db, input.targetId);
@@ -172,7 +202,11 @@ export function createModerationService({
           throw httpError(404, "TARGET_NOT_FOUND", "Reported reply not found");
         }
         const thread = await threadsRepo.findThreadById(db, reply.threadId);
-        courseId = thread?.courseId ?? null;
+        if (!thread) {
+          throw httpError(404, "TARGET_NOT_FOUND", "Reported reply not found");
+        }
+        await assertReporterCanSee(db, actor, thread, "reply");
+        courseId = thread.courseId;
       } else if (input.targetType === "note") {
         const note = await notesRepo.findNoteById(db, input.targetId);
         if (!note) {
@@ -369,9 +403,9 @@ export function createModerationService({
         } else if (input.action === "unhide") {
           await threadsRepo.setStatus(trx, threadId, "active");
         } else if (input.action === "lock") {
-          await threadsRepo.setLocked(trx, threadId, true);
+          await threadsRepo.setLocked(trx, threadId, true, actor.userId);
         } else if (input.action === "unlock") {
-          await threadsRepo.setLocked(trx, threadId, false);
+          await threadsRepo.setLocked(trx, threadId, false, actor.userId);
         } else if (input.action === "delete") {
           await threadsRepo.deleteThread(trx, threadId);
         }
@@ -451,6 +485,98 @@ export function createModerationService({
                 recipientUserId: rep.reporter_id,
                 targetType: "thread",
                 status: targetReportStatus,
+                actionTaken: input.action,
+              },
+            });
+          }
+        }
+      });
+    },
+
+    async moderateNote(db, noteId, actor, input, courseId, ipAddress) {
+      await assertModerationScope(db, actor, courseId);
+      return withWriteTransaction(db, async (trx) => {
+        const note = await notesRepo.findNoteById(trx, noteId);
+        // A private note is nobody's business but its author's: moderators
+        // act on shared notes only, and cannot tell a private one exists.
+        if (!note || note.visibility === "private") {
+          throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
+        }
+        if (courseId && note.courseId !== courseId) {
+          throw httpError(
+            403,
+            "FORBIDDEN",
+            "Learning note does not belong to this course",
+          );
+        }
+
+        await notesRepo.holdPrivate(trx, noteId);
+        // Nobody else can open it now, so nobody stays mentioned in it.
+        await trx
+          .deleteFrom("learning_mentions")
+          .where("source_type", "=", "note")
+          .where("source_id", "=", noteId)
+          .execute();
+
+        const pendingReports = await trx
+          .selectFrom("learning_reports")
+          .select(["id", "reporter_id"])
+          .where("target_type", "=", "note")
+          .where("target_id", "=", noteId)
+          .where("status", "=", "pending")
+          .execute();
+        await trx
+          .updateTable("learning_reports")
+          .set({
+            status: "actioned",
+            reviewed_by_user_id: actor.userId,
+            action_taken: input.action,
+            updated_at: new Date(),
+          })
+          .where("target_type", "=", "note")
+          .where("target_id", "=", noteId)
+          .where("status", "=", "pending")
+          .execute();
+
+        const academyId = await resolveAcademyId(trx);
+        await moderationRepo.createAuditLog(trx, {
+          id: crypto.randomUUID(),
+          academyId,
+          courseId: note.courseId,
+          actorUserId: actor.userId,
+          action: `${input.action}_note`,
+          targetType: "note",
+          targetId: noteId,
+          details: { reason: input.reason || null },
+          ipAddress,
+        });
+
+        if (note.userId !== actor.userId) {
+          await outbox.publish(trx, {
+            type: "moderation.content_moderated",
+            version: 1,
+            dedupeKey: `moderation.content_moderated:note:${noteId}:${input.action}`,
+            occurredAt: new Date(),
+            payload: {
+              recipientUserId: note.userId,
+              contentType: "note",
+              action: input.action,
+              reason: input.reason || null,
+            },
+          });
+        }
+
+        for (const report of pendingReports) {
+          if (report.reporter_id !== actor.userId) {
+            await outbox.publish(trx, {
+              type: "moderation.report_resolved",
+              version: 1,
+              dedupeKey: `moderation.report_resolved:${report.id}:actioned`,
+              occurredAt: new Date(),
+              payload: {
+                recipientUserId: report.reporter_id,
+                targetType: "note",
+                status: "actioned",
                 actionTaken: input.action,
               },
             });

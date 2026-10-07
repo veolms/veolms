@@ -15,6 +15,7 @@ import {
   useMyQuizAssignments,
   useQuizAttempt,
   useQuizPricingPreview,
+  useQuizResult,
 } from "../services/quizzes/quizzes.queries";
 import { quizzesService } from "../services/quizzes/quizzes.service";
 import {
@@ -25,6 +26,7 @@ import {
   answeredQuestionCount,
   formatQuizRemainingTime,
   hasAnsweredEveryQuestion,
+  serverClockOffsetMs,
   toBulkQuizAnswers,
   type QuizAttemptDraft,
 } from "./quizDraft";
@@ -57,16 +59,25 @@ export function QuizAttemptPanel({
   const [result, setResult] = useState<QuizResult | null>(null);
   const prevAssignmentIdRef = useRef(assignmentId);
   const startRequestedForAssignmentRef = useRef<string | null>(null);
+  // An attempt whose result the student has moved on from. The parent's
+  // `activeAttemptId` can still name it for a moment afterwards.
+  const dismissedAttemptIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (prevAssignmentIdRef.current !== assignmentId) {
       prevAssignmentIdRef.current = assignmentId;
       startRequestedForAssignmentRef.current = null;
+      dismissedAttemptIdRef.current = null;
       setAttemptId(activeAttemptId);
       setResult(null);
       return;
     }
-    if (!attemptId && activeAttemptId && !result) {
+    if (
+      !attemptId &&
+      activeAttemptId &&
+      !result &&
+      activeAttemptId !== dismissedAttemptIdRef.current
+    ) {
       setAttemptId(activeAttemptId);
     }
   }, [assignmentId, activeAttemptId, attemptId, result]);
@@ -84,6 +95,31 @@ export function QuizAttemptPanel({
   const submit = useSubmitQuizAttempt();
   const attemptQuery = useQuizAttempt(attemptId);
   const attempt = attemptQuery.data;
+  // The server has closed this attempt — time ran out, or it was handed in
+  // from another tab. Its result is shown instead of a dead-end error.
+  const attemptErrorCode = attemptQuery.error
+    ? getApiError(attemptQuery.error).code
+    : null;
+  const attemptClosed =
+    Boolean(attemptId) &&
+    !result &&
+    (attemptErrorCode === "ATTEMPT_EXPIRED" ||
+      attemptErrorCode === "ATTEMPT_NOT_ACTIVE" ||
+      (attempt !== undefined && attempt.status !== "in_progress"));
+  const closedResultQuery = useQuizResult(attemptClosed ? attemptId : null);
+  const shownResult =
+    result ?? (attemptClosed ? (closedResultQuery.data ?? null) : null);
+
+  // An attempt the server graded by itself (time ran out with a passing
+  // score) never went through the submit below, so report the pass here.
+  const closedResult = attemptClosed ? closedResultQuery.data : undefined;
+  const reportedPassRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!closedResult?.passed) return;
+    if (reportedPassRef.current === closedResult.attemptId) return;
+    reportedPassRef.current = closedResult.attemptId;
+    onPassed?.(closedResult);
+  }, [closedResult, onPassed]);
   const myQuizAssignmentsQuery = useMyQuizAssignments({
     enabled: !courseId,
   });
@@ -125,18 +161,17 @@ export function QuizAttemptPanel({
     },
     initialValue,
     enabled: Boolean(attempt),
-    validate: (draft) => {
-      if (!attempt) return { valid: false, message: "Quiz is still loading." };
-      return hasAnsweredEveryQuestion(attempt, draft)
-        ? true
-        : { valid: false, message: "Answer every question before syncing." };
-    },
+    // Partial drafts are saved too. Saving only a complete draft meant a
+    // student who ran out of time one question short had nothing recorded.
+    validate: () =>
+      attempt ? true : { valid: false, message: "Quiz is still loading." },
     sync: (draft) =>
       quizzesService.saveAnswers(attempt!.id, toBulkQuizAnswers(draft)),
   });
   const autosyncValue = autosync.value;
   const autosyncIsRestoring = autosync.isRestoring;
   const flushAutosync = autosync.flush;
+  const discardAutosync = autosync.discard;
 
   useEffect(() => {
     if (
@@ -174,13 +209,20 @@ export function QuizAttemptPanel({
     return () => window.clearInterval(timer);
   }, [attempt?.expiresAt]);
 
+  // Counted against the server's clock: a device clock that is a few
+  // minutes off used to end the quiz early or show time that was not there.
+  const clockOffsetMs = serverClockOffsetMs(
+    attempt?.serverNow,
+    attemptQuery.dataUpdatedAt,
+  );
   const expiresAtMs = attempt?.expiresAt ? Date.parse(attempt.expiresAt) : null;
   const remainingSeconds =
     expiresAtMs === null
       ? null
-      : Math.max(0, Math.ceil((expiresAtMs - now) / 1_000));
+      : Math.max(0, Math.ceil((expiresAtMs - (now + clockOffsetMs)) / 1_000));
   const timeExpired = remainingSeconds === 0;
 
+  const submitAttempt = submit.mutateAsync;
   useEffect(() => {
     if (
       !attempt ||
@@ -190,12 +232,39 @@ export function QuizAttemptPanel({
     )
       return;
     expiryRefreshRef.current = attempt.id;
-    void refetchAttempt();
-  }, [attempt, refetchAttempt, timeExpired]);
+    // Time is up: save what is there and hand the attempt in. The server
+    // grades whatever was saved, so the answers given so far still count.
+    setShowSubmitConfirmation(false);
+    setIsSubmitting(true);
+    void (async () => {
+      try {
+        await flushAutosync().catch(() => undefined);
+        const next = await submitAttempt(attempt.id);
+        setResult(next);
+        discardAutosync();
+        if (next.passed) onPassed?.(next);
+      } catch {
+        // Not reachable right now. Reloading the attempt shows its result
+        // once the server has closed it.
+        void refetchAttempt();
+      } finally {
+        setIsSubmitting(false);
+      }
+    })();
+  }, [
+    attempt,
+    discardAutosync,
+    flushAutosync,
+    onPassed,
+    refetchAttempt,
+    submitAttempt,
+    timeExpired,
+  ]);
 
   const retry = () => {
-    if (!result || result.attemptNumber >= maxAttempts) return;
+    if (!shownResult || shownResult.attemptNumber >= maxAttempts) return;
     autosync.discard();
+    dismissedAttemptIdRef.current = shownResult.attemptId;
     expiryRefreshRef.current = null;
     startRequestedForAssignmentRef.current = null;
     resetStart();
@@ -203,14 +272,14 @@ export function QuizAttemptPanel({
     setAttemptId(null);
   };
 
-  if (result) {
+  if (shownResult) {
     return (
       <QuizResultCard
-        result={result}
+        result={shownResult}
         maxAttempts={maxAttempts}
         onBackToVideo={onBackToVideo}
         onContinueCourse={onContinueCourse}
-        onRetry={result.attemptNumber < maxAttempts ? retry : undefined}
+        onRetry={shownResult.attemptNumber < maxAttempts ? retry : undefined}
       />
     );
   }
@@ -245,12 +314,18 @@ export function QuizAttemptPanel({
     );
   }
 
-  if (startError || attemptQuery.error) {
-    const error = startError ?? attemptQuery.error;
+  // For a closed attempt the only thing left to load is its result.
+  const openingError =
+    startError ??
+    (attemptClosed ? closedResultQuery.error : attemptQuery.error);
+  if (openingError) {
+    const error = openingError;
     const retryOpening = () => {
       if (startError) {
         resetStart();
         startRequestedForAssignmentRef.current = null;
+      } else if (attemptClosed) {
+        void closedResultQuery.refetch();
       } else {
         void attemptQuery.refetch();
       }
@@ -297,7 +372,7 @@ export function QuizAttemptPanel({
       </section>
     );
   }
-  if (attemptQuery.isLoading || isStarting || !attempt) {
+  if (attemptQuery.isLoading || isStarting || !attempt || attemptClosed) {
     return (
       <section
         className="mx-auto max-w-3xl rounded-[14px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-6 text-(--muted)"
@@ -830,7 +905,7 @@ function QuizResultCard({
         </div>
       ) : null}
       <p className="text-[0.68rem] sm:text-xs font-bold uppercase tracking-[0.18em] text-(--accent)">
-        Quiz completed
+        {result.status === "expired" ? "Time ran out" : "Quiz completed"}
       </p>
       <h1 className="mt-1 sm:mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-(--text)">
         {result.percentage.toFixed(0)}%
@@ -840,6 +915,11 @@ function QuizResultCard({
       >
         {result.passed ? "PASSED" : "TRY AGAIN"}
       </p>
+      {result.status === "expired" ? (
+        <p className="mt-2 text-xs sm:text-sm text-(--muted)">
+          No answers had been saved when the time limit was reached.
+        </p>
+      ) : null}
       <div className="mt-4 sm:mt-6 grid grid-cols-2 gap-2.5 sm:gap-3 text-sm">
         <div
           className="rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-2.5 sm:p-4"

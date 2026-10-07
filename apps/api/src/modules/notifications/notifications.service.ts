@@ -6,6 +6,10 @@ import type {
   NotificationSummary,
   UpdateNotificationPreferences,
 } from "@veolms/contracts";
+import {
+  isKnownNotificationPreferenceType,
+  LEGACY_NOTIFICATION_TYPE_ALIASES,
+} from "@veolms/contracts";
 import type { Database, Json } from "@veolms/database";
 import type { Kysely } from "kysely";
 
@@ -13,7 +17,12 @@ import type { ClaimedOutboxEvent } from "../../events/outbox.repository.ts";
 import * as outboxRepository from "../../events/outbox.repository.ts";
 import { AppError } from "../../lib/errors.ts";
 import * as notificationRepository from "./notifications.repository.ts";
-import { renderNotificationTemplate } from "./notifications.templates.ts";
+import { clampText } from "../../lib/text.ts";
+import {
+  NOTIFICATION_BODY_MAX,
+  NOTIFICATION_TITLE_MAX,
+  renderNotificationTemplate,
+} from "./notifications.templates.ts";
 import type {
   NotificationIntent,
   NotificationRecipientDirectory,
@@ -97,8 +106,9 @@ function presentNotification(row: {
     id: row.id,
     type: row.type,
     category: row.category,
-    title: row.title,
-    body: row.body,
+    // Rows stored before titles were clamped at write time can be too long.
+    title: clampText(row.title, NOTIFICATION_TITLE_MAX),
+    body: clampText(row.body, NOTIFICATION_BODY_MAX),
     deepLink: row.deep_link,
     readAt: row.read_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
@@ -219,6 +229,21 @@ export function createNotificationService({
     userId: string,
     input: UpdateNotificationPreferences,
   ) {
+    // Only real, optional types can be stored. Arbitrary strings used to be
+    // accepted, which let the table grow without bound and hid typos like
+    // the settings page toggling names the server never sends.
+    const unknown = input.preferences.find(
+      (preference) =>
+        !isKnownNotificationPreferenceType(preference.notificationType),
+    );
+    if (unknown) {
+      throw new AppError(
+        400,
+        "UNKNOWN_NOTIFICATION_TYPE",
+        `"${unknown.notificationType}" is not a notification type that can be turned on or off.`,
+      );
+    }
+
     await database.transaction().execute(async (transaction) => {
       for (const preference of input.preferences) {
         await notificationRepository.updatePreference(transaction, {
@@ -288,17 +313,36 @@ export function createNotificationService({
               chunkSkipped += 1;
               continue;
             }
+            // A deactivated account cannot sign in to change its settings,
+            // so it gets only what is mandatory (its deactivation notice) —
+            // not reminders, replies or course announcements.
+            if (recipient.isDeleted && !intent.mandatory) {
+              chunkSkipped += 1;
+              continue;
+            }
 
             const enabledChannels = [] as Array<"in_app" | "email">;
             for (const channel of intent.channels) {
-              const enabled = intent.mandatory
+              let enabled: boolean | undefined = intent.mandatory
                 ? true
-                : ((await notificationRepository.getPreference(
+                : await notificationRepository.getPreference(
                     transaction,
                     intent.recipientUserId,
                     intent.type,
                     channel,
-                  )) ?? true);
+                  );
+              // An opt-out saved under the name the settings page used
+              // before it shared the server's type list still applies.
+              const legacyType = LEGACY_NOTIFICATION_TYPE_ALIASES[intent.type];
+              if (enabled === undefined && legacyType) {
+                enabled = await notificationRepository.getPreference(
+                  transaction,
+                  intent.recipientUserId,
+                  legacyType,
+                  channel,
+                );
+              }
+              enabled ??= true;
               if (enabled) enabledChannels.push(channel);
             }
 

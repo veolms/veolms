@@ -6,6 +6,7 @@ import type {
   LearningReminderDay,
 } from "@veolms/contracts";
 import { ThemedSelect } from "../ThemedSelect";
+import { getDeviceTimeZone } from "../lib/device-time-zone";
 import {
   useLearningGoalSettings,
   useUpdateLearningGoalSettings,
@@ -55,14 +56,6 @@ const FALLBACK_SETTINGS: LearningGoalSettings = {
   timeZone: "UTC",
 };
 
-function getDeviceTimeZone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
-
 const COMMON_TIME_ZONES: Array<[string, string]> = [
   ["Asia/Kolkata", "Asia/Kolkata (IST)"],
   ["Europe/London", "Europe/London (GMT)"],
@@ -80,20 +73,32 @@ export function LearningGoalSettingsCard({
   const update = useUpdateLearningGoalSettings();
   const deviceTimeZone = getDeviceTimeZone();
 
+  // Nothing saved yet: the server's zone is a placeholder ("UTC"), so the
+  // device zone is shown and is what the first save stores. Without this a
+  // learner's days, streak and reminder time silently ran on UTC.
+  const loadedSettings: LearningGoalSettings | undefined = query.data
+    ? query.data.hasSavedSettings === false
+      ? { ...query.data.settings, timeZone: deviceTimeZone }
+      : query.data.settings
+    : undefined;
+
   // Immediate-mutate: while a save is in flight the UI reflects the value
   // just chosen; afterwards the server response (written to the query
   // cache) is the source of truth.
   const settings: LearningGoalSettings =
     update.isPending && update.variables
       ? update.variables
-      : (query.data?.settings ?? FALLBACK_SETTINGS);
+      : (loadedSettings ?? FALLBACK_SETTINGS);
 
   const isSaving = update.isPending;
   const hasSaveError = query.isError || update.isError;
-  const controlsDisabled = !isAuthenticated || query.isPending || isSaving;
+  // Also disabled when the settings could not be loaded: a save merges one
+  // change into what is on screen, and saving over placeholder defaults
+  // would wipe the learner's real goal and reminder schedule.
+  const controlsDisabled = !isAuthenticated || !loadedSettings || isSaving;
 
   const save = (next: Partial<LearningGoalSettings>) => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !loadedSettings) return;
     update.mutate({ ...settings, ...next });
   };
 
@@ -182,6 +187,15 @@ export function LearningGoalSettingsCard({
           options={goalOptions}
           disabled={controlsDisabled}
         />
+        <LearningSelectRow
+          id="learning-time-zone"
+          label="Time zone"
+          note="Your learning day, streak and reminder time follow this zone."
+          value={settings.timeZone}
+          onChange={(timeZone) => save({ timeZone })}
+          options={timeZoneOptions}
+          disabled={controlsDisabled}
+        />
         <LearningToggleRow
           label="Learning reminders"
           note="Get reminded to keep your learning streak going."
@@ -218,16 +232,6 @@ export function LearningGoalSettingsCard({
                 onValueChange={(reminderTime) => save({ reminderTime })}
                 ariaLabel="Reminder time"
                 options={reminderTimeOptions}
-              />
-            </div>
-            <div>
-              <span>Time zone</span>
-              <ThemedSelect
-                id="learning-time-zone"
-                value={settings.timeZone}
-                onValueChange={(timeZone) => save({ timeZone })}
-                ariaLabel="Reminder time zone"
-                options={timeZoneOptions}
               />
             </div>
           </div>

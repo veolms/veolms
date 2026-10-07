@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Database, DatabaseExecutor } from "@veolms/database";
+import type { Database, DatabaseExecutor, Json } from "@veolms/database";
 import type {
   CreateQuizQuestionRequest,
   CreateQuizRequest,
@@ -10,8 +10,12 @@ import type {
 import { AppError } from "../../../lib/errors.ts";
 import * as repo from "../shared/quiz.repository.ts";
 import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
-import type { QuizActor, QuizServiceOptions } from "../shared/quiz.types.ts";
-import { isAdmin } from "../shared/quiz.types.ts";
+import {
+  assertNoLearnerAttempts,
+  isAdmin,
+  type QuizActor,
+  type QuizServiceOptions,
+} from "../shared/quiz.types.ts";
 
 type OptionInput = CreateQuizQuestionRequest["options"];
 
@@ -63,6 +67,10 @@ function validateQuestionPayload(payload: CreateQuizQuestionRequest) {
       "DUPLICATE_OPTION_ID",
       "Question options must be unique.",
     );
+}
+
+function isJsonObject(value: unknown): value is Record<string, Json> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function createAuthoringService(options: QuizServiceOptions) {
@@ -308,7 +316,14 @@ export function createAuthoringService(options: QuizServiceOptions) {
         prompt: question.prompt,
         points: question.points,
         position: question.position,
-        configuration: question.configuration,
+        // Remember which published question this copy came from, so an
+        // edit addressed to the published id reaches the right draft row.
+        configuration: {
+          ...(isJsonObject(question.configuration)
+            ? question.configuration
+            : {}),
+          sourceQuestionId: question.id,
+        },
         explanation: question.explanation,
         created_at: new Date(),
         updated_at: new Date(),
@@ -336,8 +351,11 @@ export function createAuthoringService(options: QuizServiceOptions) {
   /**
    * Resolve a question against the editable snapshot. If the caller loaded a
    * published version before the first edit, its question IDs belong to that
-   * immutable snapshot. Match that source question to the cloned draft by its
-   * stable authoring position so edits never mutate an attempt's pinned data.
+   * immutable snapshot. Match that source question to its copy in the draft
+   * so edits never mutate an attempt's pinned data. The copy records the id
+   * it was made from; position and prompt are only a fallback for drafts
+   * cloned before that was recorded — two questions can share a position
+   * after a delete and an add, and matching on it edited the wrong one.
    */
   async function getEditableQuestion(
     trx: DatabaseExecutor,
@@ -366,6 +384,11 @@ export function createAuthoringService(options: QuizServiceOptions) {
     version = await getEditableVersion(trx, quizId);
     const draftQuestions = await repo.listQuestions(trx, version.id);
     const question =
+      draftQuestions.find(
+        (candidate) =>
+          isJsonObject(candidate.configuration) &&
+          candidate.configuration.sourceQuestionId === sourceQuestion.id,
+      ) ??
       draftQuestions.find(
         (candidate) => candidate.position === sourceQuestion.position,
       ) ??
@@ -572,6 +595,12 @@ export function createAuthoringService(options: QuizServiceOptions) {
     await requireQuiz(quizId, actor);
     await database.transaction().execute(async (trx) => {
       const assignments = await repo.listAssignmentsForQuizzes(trx, [quizId]);
+      assertNoLearnerAttempts(
+        await repo.countLearnerAttempts(trx, {
+          assignmentIds: assignments.map((assignment) => assignment.id),
+          actorId: actor.id,
+        }),
+      );
       const lessonIds = assignments
         .map((a) => a.lesson_id)
         .filter((id): id is string => Boolean(id));

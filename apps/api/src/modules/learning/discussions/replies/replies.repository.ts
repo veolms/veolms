@@ -10,6 +10,7 @@ import {
   authorRoleSql,
   type DiscussionListCursor,
 } from "../shared/discussion.utils.ts";
+import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
 
 export type LearningReplyRow = Selectable<LearningReplyTable>;
 
@@ -191,14 +192,20 @@ export function createRepliesRepository(): RepliesRepository {
       if (options.pageCursor) {
         const cursor = options.pageCursor;
         const accepted = cursor.isAccepted === true;
+        const createdAt = exactCursorTimestamp(
+          ["learning_replies"],
+          "created_at",
+          cursor.id,
+          cursor.createdAt,
+        );
         query = query.where(
           sql<boolean>`(
             (
               r.is_accepted = ${accepted}
               and (
-                r.created_at < ${cursor.createdAt}
+                r.created_at < ${createdAt}
                 or (
-                  r.created_at = ${cursor.createdAt}
+                  r.created_at = ${createdAt}
                   and r.id < ${cursor.id}::uuid
                 )
               )

@@ -63,6 +63,12 @@ export type UpdateLearningGoalSettingsRequest = z.infer<
 export const learningGoalSettingsResponseSchema = z.strictObject({
   /** False until the learner saves a goal for the first time. */
   configured: z.boolean(),
+  /**
+   * False when nothing is stored for the learner yet and `settings` are
+   * defaults — the time zone in particular is then a placeholder, not a
+   * choice, and the client should offer the device zone instead.
+   */
+  hasSavedSettings: z.boolean(),
   settings: learningGoalSettingsSchema,
 });
 export type LearningGoalSettingsResponse = z.infer<

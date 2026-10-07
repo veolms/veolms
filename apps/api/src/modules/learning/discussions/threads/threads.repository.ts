@@ -26,11 +26,13 @@ import { sql } from "kysely";
 import {
   authorRoleSql,
   createdAtIdDescSql,
+  updatedAtIdDescSql,
   type DiscussionListCursor,
   normalizeThreadSort,
 } from "../shared/discussion.utils.ts";
 import { discussionVisibilityPredicate } from "../shared/discussion.visibility.ts";
 import { publicLessonDiscussionPredicate } from "../shared/lesson-discussion-access.ts";
+import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
 
 export type LearningThreadRow = Selectable<LearningThreadTable>;
 
@@ -305,13 +307,7 @@ function applyMentionFilters<O>(
 
   if (options.pageCursor) {
     q = q.where(
-      sql<boolean>`(
-        m.created_at < ${options.pageCursor.createdAt}
-        or (
-          m.created_at = ${options.pageCursor.createdAt}
-          and m.id < ${options.pageCursor.id}::uuid
-        )
-      )`,
+      createdAtIdDescSql("m", options.pageCursor, "learning_mentions"),
     );
   }
 
@@ -493,11 +489,16 @@ export interface ThreadsRepository {
     replyId: string | null,
   ): Promise<void>;
 
+  /** `lockedByUserId` is recorded on lock and cleared on unlock. */
   setLocked(
     db: DatabaseExecutor,
     threadId: string,
     isLocked: boolean,
+    lockedByUserId: string,
   ): Promise<void>;
+
+  /** Who holds the lock on a locked thread, if that was recorded. */
+  findLockOwner(db: DatabaseExecutor, threadId: string): Promise<string | null>;
 
   setStatus(
     db: DatabaseExecutor,
@@ -731,21 +732,22 @@ function applyThreadCursor<O>(
   if (!cursor) return query;
   const sort = normalizeThreadSort(options.sort);
   if (sort === "activity" && cursor.updatedAt) {
-    return query.where(
-      sql<boolean>`(
-        t.updated_at < ${cursor.updatedAt}
-        or (t.updated_at = ${cursor.updatedAt} and t.id < ${cursor.id}::uuid)
-      )`,
-    );
+    return query.where(updatedAtIdDescSql("t", cursor, "learning_threads"));
   }
+  const createdAt = exactCursorTimestamp(
+    ["learning_threads"],
+    "created_at",
+    cursor.id,
+    cursor.createdAt,
+  );
   if (sort === "replies" && cursor.repliesCount !== undefined) {
     return query.where(
       sql<boolean>`(
         t.replies_count < ${cursor.repliesCount}
-        or (t.replies_count = ${cursor.repliesCount} and t.created_at < ${cursor.createdAt})
+        or (t.replies_count = ${cursor.repliesCount} and t.created_at < ${createdAt})
         or (
           t.replies_count = ${cursor.repliesCount}
-          and t.created_at = ${cursor.createdAt}
+          and t.created_at = ${createdAt}
           and t.id < ${cursor.id}::uuid
         )
       )`,
@@ -757,17 +759,17 @@ function applyThreadCursor<O>(
         (t.likes_count + t.replies_count) < ${cursor.engagement}
         or (
           (t.likes_count + t.replies_count) = ${cursor.engagement}
-          and t.created_at < ${cursor.createdAt}
+          and t.created_at < ${createdAt}
         )
         or (
           (t.likes_count + t.replies_count) = ${cursor.engagement}
-          and t.created_at = ${cursor.createdAt}
+          and t.created_at = ${createdAt}
           and t.id < ${cursor.id}::uuid
         )
       )`,
     );
   }
-  return query.where(createdAtIdDescSql("t", cursor));
+  return query.where(createdAtIdDescSql("t", cursor, "learning_threads"));
 }
 
 export function createThreadsRepository(): ThreadsRepository {
@@ -1138,11 +1140,22 @@ export function createThreadsRepository(): ThreadsRepository {
         .execute();
     },
 
-    async setLocked(db, threadId, isLocked) {
+    async findLockOwner(db, threadId) {
+      const row = await db
+        .selectFrom("learning_threads")
+        .select("locked_by_user_id")
+        .where("id", "=", threadId)
+        .where("is_locked", "=", true)
+        .executeTakeFirst();
+      return row?.locked_by_user_id ?? null;
+    },
+
+    async setLocked(db, threadId, isLocked, lockedByUserId) {
       await db
         .updateTable("learning_threads")
         .set({
           is_locked: isLocked,
+          locked_by_user_id: isLocked ? lockedByUserId : null,
           updated_at: new Date(),
         })
         .where("id", "=", threadId)

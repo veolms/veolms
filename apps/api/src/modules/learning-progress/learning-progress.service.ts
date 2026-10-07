@@ -25,10 +25,16 @@ import {
 } from "../courses/index.ts";
 import * as courseRepository from "../courses/course/course.repository.ts";
 import { createOutboxService } from "../../events/outbox.service.ts";
+import {
+  createQuizCompletionService,
+  type QuizCompletionService,
+} from "../quizzes/index.ts";
 import * as learningProgressRepository from "./learning-progress.repository.ts";
 
 /** Streak lengths that earn a one-time milestone notification. */
 const LEARNING_STREAK_MILESTONES = [7, 30, 100, 365] as const;
+/** Days after a milestone on which a missed announcement is still made. */
+const STREAK_MILESTONE_CATCH_UP_DAYS = 2;
 
 type UserContext = { id: string; roles: readonly string[] };
 
@@ -274,13 +280,18 @@ export function createLearningProgressService({
   services,
   accessService = createAccessService(),
   curriculumService = createCurriculumService({ database, services }),
+  quizCompletionService = createQuizCompletionService({ database }),
 }: {
   database: Kysely<Database>;
   services: AppServices;
   accessService?: AccessService;
   curriculumService?: CurriculumService;
+  quizCompletionService?: QuizCompletionService;
 }): LearningProgressService {
   const outbox = createOutboxService();
+  // Learners known to have a settings row, so the heartbeat does not look
+  // it up every time. Per process; a miss only costs one indexed read.
+  const usersWithSettings = new Set<string>();
 
   async function findCourse(courseKey: string) {
     return isUuid(courseKey)
@@ -473,10 +484,41 @@ export function createLearningProgressService({
         .filter((lesson) => canManageCourse || lesson.is_published)
         .map((lesson) => lesson.id),
     );
+    // A quiz lesson is complete when its quiz has been passed — a fact the
+    // server holds. The page used to simply report 100% for it, so any
+    // request could mark a quiz lesson done. Looked up only when the batch
+    // actually reports progress on a quiz lesson.
+    const quizLessonIds = new Set(
+      lessons
+        .filter((lesson) => lesson.content_type === "quiz")
+        .map((lesson) => lesson.id),
+    );
+    const reportedQuizLessonIds = [
+      ...new Set(
+        input.items
+          .filter(
+            (item) =>
+              item.progressPercent > 0 && quizLessonIds.has(item.lessonId),
+          )
+          .map((item) => item.lessonId),
+      ),
+    ];
+    const passedQuizLessonIds =
+      reportedQuizLessonIds.length > 0
+        ? await quizCompletionService.listPassedLessonIds(
+            user.id,
+            reportedQuizLessonIds,
+          )
+        : new Set<string>();
     const progressByLessonId = new Map<string, number>();
 
     for (const item of input.items) {
       if (!availableLessonIds.has(item.lessonId)) continue;
+      if (
+        quizLessonIds.has(item.lessonId) &&
+        !passedQuizLessonIds.has(item.lessonId)
+      )
+        continue;
       const current = progressByLessonId.get(item.lessonId) ?? 0;
       progressByLessonId.set(
         item.lessonId,
@@ -507,6 +549,10 @@ export function createLearningProgressService({
     // retries/sendBeacon duplicates never double-credit. Activity accrues
     // even before a goal is configured, so a later goal setting finds an
     // intact history/streak.
+    await seedTimeZoneFromDevice(user.id, input.timeZone);
+
+    // One statement: progress, the day's activity, and — when this batch
+    // takes the day across the learner's goal — the goal-completed event.
     const accrual =
       await learningProgressRepository.upsertProgressAndAccrueActivity(
         database,
@@ -515,12 +561,12 @@ export function createLearningProgressService({
       );
 
     if (accrual) {
-      // A failed notification must never fail the heartbeat.
+      // A failed notification must never fail the heartbeat. A milestone
+      // missed here is picked up on the learner's next learning day.
       try {
-        await publishLearningThresholdEvents(user.id, accrual);
+        await publishStreakMilestone(user.id, accrual);
       } catch {
-        // Threshold events are best-effort; the outbox dedupe keys let a
-        // later qualifying heartbeat publish them instead.
+        // See above.
       }
     }
 
@@ -528,71 +574,108 @@ export function createLearningProgressService({
   }
 
   /**
-   * Fires goal-completed / streak-milestone notifications only when THIS
-   * batch crosses the threshold (the accrual row carries the day's
-   * before/after totals). Outbox dedupe keys make each one at-most-once:
-   * goal per user per local day, milestone per user per count — so a
-   * raised goal never re-fires and milestones never repeat.
+   * A learner who has never saved settings gets the zone their device
+   * reports, so their learning days are their own calendar days rather
+   * than UTC ones. Never overrides a saved zone, and never fails a
+   * heartbeat: an id that cannot be used is simply skipped.
    */
-  async function publishLearningThresholdEvents(
+  async function seedTimeZoneFromDevice(
+    userId: string,
+    deviceTimeZone: string | undefined,
+  ) {
+    if (!deviceTimeZone || usersWithSettings.has(userId)) return;
+    try {
+      const existing =
+        await learningProgressRepository.findUserLearningSettings(
+          database,
+          userId,
+        );
+      if (!existing) {
+        const timeZone = await resolveSupportedTimeZone(deviceTimeZone);
+        if (!timeZone) return;
+        await learningProgressRepository.seedUserTimeZone(
+          database,
+          userId,
+          timeZone,
+        );
+      }
+      if (usersWithSettings.size >= 20_000) usersWithSettings.clear();
+      usersWithSettings.add(userId);
+    } catch {
+      // Best-effort; the next heartbeat tries again.
+    }
+  }
+
+  /**
+   * The zone id to store for what the client sent: the id itself when
+   * Postgres knows it, else its canonical form ("US/Pacific" →
+   * "America/Los_Angeles"), else nothing.
+   */
+  async function resolveSupportedTimeZone(
+    timeZone: string,
+  ): Promise<string | null> {
+    const candidates = [timeZone];
+    try {
+      const canonical = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+      }).resolvedOptions().timeZone;
+      if (canonical !== timeZone) candidates.push(canonical);
+    } catch {
+      return null;
+    }
+    const supported = await learningProgressRepository.listSupportedTimeZones(
+      database,
+      candidates,
+    );
+    return (
+      candidates.find((candidate) => supported.includes(candidate)) ?? null
+    );
+  }
+
+  /**
+   * Announces a streak milestone on the heartbeat that makes today a
+   * learning day (the goal-completed event is queued by the accrual
+   * statement itself).
+   *
+   * A milestone is announced when the streak reaches it, or up to
+   * STREAK_MILESTONE_CATCH_UP_DAYS later: if the announcement failed on the
+   * day itself, the next learning day makes it instead of it being lost.
+   * The dedupe key — one per learner per milestone — keeps it to once.
+   */
+  async function publishStreakMilestone(
     userId: string,
     accrual: learningProgressRepository.DailyActivityAccrual,
   ) {
     const wasQualified =
       accrual.previous_seconds >= 60 || accrual.previous_completions >= 1;
     const isQualified = accrual.seconds >= 60 || accrual.completions >= 1;
-    const dayJustQualified = !wasQualified && isQualified;
+    if (wasQualified || !isQualified) return;
 
     const settings = await learningProgressRepository.findUserLearningSettings(
       database,
       userId,
     );
-    const goalSeconds = (settings?.daily_goal_minutes ?? 0) * 60;
-    const goalJustCompleted =
-      goalSeconds > 0 &&
-      accrual.previous_seconds < goalSeconds &&
-      accrual.seconds >= goalSeconds;
+    const aggregates =
+      await learningProgressRepository.getLearningSummaryAggregates(database, {
+        userId,
+        timeZone: settings?.time_zone ?? "UTC",
+        floorDate: settings?.accrual_floor_date,
+      });
+    const streak = aggregates.currentStreakDays;
+    const milestone = LEARNING_STREAK_MILESTONES.find(
+      (days) =>
+        streak >= days && streak <= days + STREAK_MILESTONE_CATCH_UP_DAYS,
+    );
+    if (milestone === undefined) return;
 
-    if (!dayJustQualified && !goalJustCompleted) return;
-
-    let milestone: number | undefined;
-    if (dayJustQualified) {
-      const aggregates =
-        await learningProgressRepository.getLearningSummaryAggregates(
-          database,
-          { userId, timeZone: settings?.time_zone ?? "UTC" },
-        );
-      milestone = LEARNING_STREAK_MILESTONES.find(
-        (days) => days === aggregates.currentStreakDays,
-      );
-    }
-
-    if (!goalJustCompleted && milestone === undefined) return;
-
-    const now = new Date();
     await database.transaction().execute(async (transaction) => {
-      if (goalJustCompleted) {
-        await outbox.publish(transaction, {
-          type: "learning.goal_completed",
-          version: 1,
-          dedupeKey: `learning.goal_completed:${userId}:${accrual.activity_date}`,
-          occurredAt: now,
-          payload: {
-            recipientUserId: userId,
-            dailyGoalMinutes: settings!.daily_goal_minutes!,
-            localDate: accrual.activity_date,
-          },
-        });
-      }
-      if (milestone !== undefined) {
-        await outbox.publish(transaction, {
-          type: "learning.streak_milestone",
-          version: 1,
-          dedupeKey: `learning.streak_milestone:${userId}:${milestone}`,
-          occurredAt: now,
-          payload: { recipientUserId: userId, streakDays: milestone },
-        });
-      }
+      await outbox.publish(transaction, {
+        type: "learning.streak_milestone",
+        version: 1,
+        dedupeKey: `learning.streak_milestone:${userId}:${milestone}`,
+        occurredAt: new Date(),
+        payload: { recipientUserId: userId, streakDays: milestone },
+      });
     });
   }
 
@@ -656,6 +739,7 @@ export function createLearningProgressService({
     if (!row) {
       return {
         configured: false,
+        hasSavedSettings: false,
         settings: {
           dailyGoalMinutes: null,
           remindersEnabled: false,
@@ -667,6 +751,7 @@ export function createLearningProgressService({
     }
     return {
       configured: row.daily_goal_minutes !== null,
+      hasSavedSettings: true,
       settings: {
         dailyGoalMinutes: row.daily_goal_minutes,
         remindersEnabled: row.reminders_enabled,
@@ -695,6 +780,16 @@ export function createLearningProgressService({
     user: UserContext,
     input: UpdateLearningGoalSettingsRequest,
   ): Promise<LearningGoalSettingsResponse> {
+    // The contract checks the id with `Intl`; the database buckets days
+    // with it, and does not know every id `Intl` accepts.
+    const timeZone = await resolveSupportedTimeZone(input.timeZone);
+    if (!timeZone) {
+      throw new AppError(
+        400,
+        "UNSUPPORTED_TIME_ZONE",
+        "That time zone is not supported. Choose a region-based zone such as Asia/Kolkata.",
+      );
+    }
     const row = await learningProgressRepository.upsertUserLearningSettings(
       database,
       {
@@ -703,9 +798,10 @@ export function createLearningProgressService({
         reminders_enabled: input.remindersEnabled,
         reminder_days: [...new Set(input.reminderDays)],
         reminder_time: input.reminderTime,
-        time_zone: input.timeZone,
+        time_zone: timeZone,
       },
     );
+    usersWithSettings.add(user.id);
     return presentGoalSettings(row);
   }
 
@@ -720,6 +816,7 @@ export function createLearningProgressService({
       await learningProgressRepository.getLearningSummaryAggregates(database, {
         userId: user.id,
         timeZone: settings?.time_zone ?? "UTC",
+        floorDate: settings?.accrual_floor_date,
       });
 
     const dailyGoalMinutes = settings?.daily_goal_minutes ?? null;

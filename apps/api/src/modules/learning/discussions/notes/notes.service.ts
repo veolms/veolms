@@ -252,6 +252,17 @@ export function createNotesService(
       const id = crypto.randomUUID();
       const plainText = extractPlainText(input.content);
       const visibility = input.visibility ?? "private";
+      // A shared note is posted to the course like a comment, so a learner
+      // suspended from commenting cannot share one. Private notes are their
+      // own study material and stay available.
+      if (visibility !== "private") {
+        await courseAccess.assertNotSuspended(
+          db,
+          input.userId,
+          input.courseId,
+          "comment",
+        );
+      }
 
       return withWriteTransaction(db, async (trx) => {
         await notesRepo.createNote(trx, {
@@ -634,6 +645,21 @@ export function createNotesService(
           ? extractPlainText(updates.content)
           : undefined;
       const finalVisibility = updates.visibility ?? note.visibility;
+      if (finalVisibility !== "private") {
+        await courseAccess.assertNotSuspended(
+          db,
+          actor.userId,
+          note.courseId,
+          "comment",
+        );
+        if (await notesRepo.isHeldPrivate(db, noteId)) {
+          throw httpError(
+            403,
+            "NOTE_SHARING_DISABLED",
+            "A moderator made this note private. It can no longer be shared.",
+          );
+        }
+      }
 
       return withWriteTransaction(db, async (trx) => {
         await notesRepo.updateNote(trx, noteId, {

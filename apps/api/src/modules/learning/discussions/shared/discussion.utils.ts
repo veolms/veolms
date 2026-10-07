@@ -1,6 +1,7 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import { sql } from "kysely";
 import { httpError } from "../../../../lib/errors.ts";
+import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -125,14 +126,22 @@ export function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
+/** `table` is the table behind `alias`: the cursor row is read back from it. */
 export function createdAtIdDescSql(
   alias: string,
   cursor: DiscussionListCursor,
+  table: string,
 ) {
+  const boundary = exactCursorTimestamp(
+    [table],
+    "created_at",
+    cursor.id,
+    cursor.createdAt,
+  );
   return sql<boolean>`(
-    ${sql.raw(`${alias}.created_at`)} < ${cursor.createdAt}
+    ${sql.raw(`${alias}.created_at`)} < ${boundary}
     or (
-      ${sql.raw(`${alias}.created_at`)} = ${cursor.createdAt}
+      ${sql.raw(`${alias}.created_at`)} = ${boundary}
       and ${sql.raw(`${alias}.id`)} < ${cursor.id}::uuid
     )
   )`;
@@ -141,25 +150,42 @@ export function createdAtIdDescSql(
 export function updatedAtIdDescSql(
   alias: string,
   cursor: DiscussionListCursor,
+  table: string,
 ) {
   if (!cursor.updatedAt) {
     throw httpError(400, "INVALID_CURSOR", "The pagination cursor is invalid.");
   }
 
+  const boundary = exactCursorTimestamp(
+    [table],
+    "updated_at",
+    cursor.id,
+    cursor.updatedAt,
+  );
   return sql<boolean>`(
-    ${sql.raw(`${alias}.updated_at`)} < ${cursor.updatedAt}
+    ${sql.raw(`${alias}.updated_at`)} < ${boundary}
     or (
-      ${sql.raw(`${alias}.updated_at`)} = ${cursor.updatedAt}
+      ${sql.raw(`${alias}.updated_at`)} = ${boundary}
       and ${sql.raw(`${alias}.id`)} < ${cursor.id}::uuid
     )
   )`;
 }
 
-export function createdAtIdAscSql(alias: string, cursor: DiscussionListCursor) {
+export function createdAtIdAscSql(
+  alias: string,
+  cursor: DiscussionListCursor,
+  table: string,
+) {
+  const boundary = exactCursorTimestamp(
+    [table],
+    "created_at",
+    cursor.id,
+    cursor.createdAt,
+  );
   return sql<boolean>`(
-    ${sql.raw(`${alias}.created_at`)} > ${cursor.createdAt}
+    ${sql.raw(`${alias}.created_at`)} > ${boundary}
     or (
-      ${sql.raw(`${alias}.created_at`)} = ${cursor.createdAt}
+      ${sql.raw(`${alias}.created_at`)} = ${boundary}
       and ${sql.raw(`${alias}.id`)} > ${cursor.id}::uuid
     )
   )`;

@@ -7,49 +7,29 @@ import { BellRingingIcon as BellRinging } from "@phosphor-icons/react/BellRingin
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { TrophyIcon as Trophy } from "@phosphor-icons/react/Trophy";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import "../styles/features/workspace.css";
 
+import {
+  OPTIONAL_NOTIFICATION_GROUPS,
+  OPTIONAL_NOTIFICATION_TYPES,
+} from "@veolms/contracts/notification-types";
 import {
   useNotificationPreferences,
   useUpdateNotificationPreferences,
 } from "../services/notifications";
 import { SettingRow, SettingsToggle } from "./SettingsControls";
 
-const optionalNotificationTypes = [
-  "course.published",
-  "purchase.completed",
-  "payment.failed",
-  "refund.completed",
-  "video.processing_completed",
-  "video.processing_failed",
-  "user.mentioned",
-  "comment.replied",
-  "qa.answered",
-  "assignment.reminder",
-  "learning.reminder",
-  "certificate.generated",
-  "learning.goal_completed",
-  "learning.streak_milestone",
-] as const;
-
-const courseUpdateTypes = [
-  "course.published",
-  "video.processing_completed",
-  "video.processing_failed",
-] as const;
-const discussionTypes = [
-  "user.mentioned",
-  "comment.replied",
-  "qa.answered",
-] as const;
-const reminderTypes = ["assignment.reminder", "learning.reminder"] as const;
-const achievementTypes = [
-  "certificate.generated",
-  "learning.goal_completed",
-  "learning.streak_milestone",
-] as const;
+// The type names come from the list the API sends from, so a toggle here
+// always controls notifications that actually exist.
+const optionalNotificationTypes = OPTIONAL_NOTIFICATION_TYPES;
+const courseUpdateTypes = OPTIONAL_NOTIFICATION_GROUPS.courseUpdates;
+const discussionTypes = OPTIONAL_NOTIFICATION_GROUPS.discussions;
+const reminderTypes = OPTIONAL_NOTIFICATION_GROUPS.reminders;
+const achievementTypes = OPTIONAL_NOTIFICATION_GROUPS.achievements;
+const purchaseTypes = OPTIONAL_NOTIFICATION_GROUPS.purchases;
 const channels = ["in_app", "email"] as const;
 
 function preferenceKey(type: string, channel: NotificationChannel): string {
@@ -203,7 +183,7 @@ export function NotificationSettings({
           <SettingRow
             icon={ChatCircleDots}
             label="Discussion replies"
-            note="Replies, mentions, and answers in conversations you follow."
+            note="Replies, mentions, accepted answers, and outcomes of your reports."
           >
             <SettingsToggle
               checked={isGroupEnabled(discussionTypes)}
@@ -215,7 +195,7 @@ export function NotificationSettings({
           <SettingRow
             icon={BellRinging}
             label="Learning reminders"
-            note="Gentle prompts to make time for your next lesson."
+            note="Prompts to make time for your next lesson, and newly assigned quizzes."
           >
             <SettingsToggle
               checked={isGroupEnabled(reminderTypes)}
@@ -227,12 +207,24 @@ export function NotificationSettings({
           <SettingRow
             icon={Trophy}
             label="Milestones & achievements"
-            note="Celebrate course completions and certificates."
+            note="Quiz results, daily goals, streaks, and certificates."
           >
             <SettingsToggle
               checked={isGroupEnabled(achievementTypes)}
               onChange={(enabled) => save(achievementTypes, channels, enabled)}
               label="Milestones and achievements"
+              disabled={!isAuthenticated || query.isPending || isSaving}
+            />
+          </SettingRow>
+          <SettingRow
+            icon={Receipt}
+            label="Purchases & refunds"
+            note="Payment confirmations, failed payments, and refunds. Invoices stay in your order history."
+          >
+            <SettingsToggle
+              checked={isGroupEnabled(purchaseTypes)}
+              onChange={(enabled) => save(purchaseTypes, channels, enabled)}
+              label="Purchases and refunds"
               disabled={!isAuthenticated || query.isPending || isSaving}
             />
           </SettingRow>
