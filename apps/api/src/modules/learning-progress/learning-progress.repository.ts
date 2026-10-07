@@ -336,10 +336,18 @@ export async function upsertProgressAndAccrueActivity(
     insert into learning_daily_activity (user_id, activity_date, seconds, completions)
     select
       ${userId}::uuid,
-      (now() at time zone coalesce(
-        (select s.time_zone from user_learning_settings s where s.user_id = ${userId}::uuid),
-        'UTC'
-      ))::date,
+      -- The learner's local day, but never one before the day it was when
+      -- they last changed time zone (see accrual_floor_date).
+      coalesce(
+        (
+          select greatest(
+            (now() at time zone s.time_zone)::date,
+            coalesce(s.accrual_floor_date, '-infinity'::date)
+          )
+          from user_learning_settings s where s.user_id = ${userId}::uuid
+        ),
+        (now() at time zone 'UTC')::date
+      ),
       floor(credit.earned_seconds)::int,
       credit.completions::int
     from credit
@@ -398,11 +406,56 @@ export async function upsertUserLearningSettings(
         reminder_days: values.reminder_days,
         reminder_time: values.reminder_time,
         time_zone: values.time_zone,
+        // A zone change pins the floor to the day it is in the zone being
+        // left, so the new zone cannot reopen a day that has already ended.
+        accrual_floor_date: sql<Date | null>`
+          case
+            when user_learning_settings.time_zone is distinct from excluded.time_zone
+            then greatest(
+              coalesce(user_learning_settings.accrual_floor_date, '-infinity'::date),
+              (now() at time zone user_learning_settings.time_zone)::date
+            )
+            else user_learning_settings.accrual_floor_date
+          end`,
         updated_at: new Date(),
       }),
     )
     .returningAll()
     .executeTakeFirstOrThrow();
+}
+
+/**
+ * Sets the learner's zone only if they have no settings row yet. Returns
+ * whether a row was created.
+ */
+export async function seedUserTimeZone(
+  database: LearningProgressExecutor,
+  userId: string,
+  timeZone: string,
+): Promise<boolean> {
+  const inserted = await database
+    .insertInto("user_learning_settings")
+    .values({ user_id: userId, daily_goal_minutes: null, time_zone: timeZone })
+    .onConflict((conflict) => conflict.column("user_id").doNothing())
+    .returning("user_id")
+    .executeTakeFirst();
+  return inserted !== undefined;
+}
+
+/**
+ * Which of these zone ids Postgres can bucket days in. JavaScript's `Intl`
+ * accepts ids Postgres rejects ("CTT"), and `at time zone` throws on those.
+ */
+export async function listSupportedTimeZones(
+  database: LearningProgressExecutor,
+  candidates: readonly string[],
+): Promise<string[]> {
+  if (candidates.length === 0) return [];
+  const result = await sql<{ name: string }>`
+    select name from pg_timezone_names
+    where name = any(${[...candidates]}::text[])
+  `.execute(database);
+  return result.rows.map((row) => row.name);
 }
 
 export interface DailySummaryRow {
@@ -420,7 +473,12 @@ export interface DailySummaryRow {
  */
 export async function getLearningSummaryAggregates(
   database: LearningProgressExecutor,
-  input: { userId: string; timeZone: string },
+  input: {
+    userId: string;
+    timeZone: string;
+    /** `accrual_floor_date` — "today" is never before it. */
+    floorDate?: Date | null;
+  },
 ): Promise<{
   todaySeconds: number;
   weekSeconds: number;
@@ -436,7 +494,11 @@ export async function getLearningSummaryAggregates(
     last_activity_date: string | null;
   }>`
     with local_today as (
-      select (now() at time zone ${input.timeZone})::date as today
+      -- Same day the accrual credits to, so today's ring shows it.
+      select greatest(
+        (now() at time zone ${input.timeZone})::date,
+        coalesce(${input.floorDate ?? null}::date, '-infinity'::date)
+      ) as today
     ),
     qualifying as (
       select activity_date

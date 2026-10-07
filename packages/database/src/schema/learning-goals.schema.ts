@@ -14,6 +14,11 @@ export interface UserLearningSettingsTable {
   reminder_days: Generated<string[]>;
   reminder_time: Generated<string>;
   time_zone: Generated<string>;
+  /**
+   * Local date when the zone was last changed; activity is never credited
+   * to an earlier day. Null until the first zone change.
+   */
+  accrual_floor_date: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

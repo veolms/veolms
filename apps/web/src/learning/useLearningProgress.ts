@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getDeviceTimeZone } from "../lib/device-time-zone";
 
 import {
   useLearningProgressSnapshot,
@@ -144,6 +145,9 @@ export function useLearningProgress({
           lessonId,
           progressPercent,
         })),
+        // Sets the learner's zone if they have never chosen one, so their
+        // learning days are local days rather than UTC ones.
+        timeZone: getDeviceTimeZone(),
       };
       if (
         keepalive &&
