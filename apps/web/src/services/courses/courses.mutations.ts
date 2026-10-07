@@ -1,4 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import type {
   Category,
   Course,
@@ -30,6 +34,24 @@ import type {
 import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
+
+/**
+ * What learners see of a course, and the state of its public page rebuild.
+ *
+ * Overviews are cached under the slug on learner screens and under the id
+ * in the editor, so an edit that refreshed only the id entry left the
+ * public page showing the old curriculum — and edits to pricing, settings,
+ * access rules, includes and resources refreshed neither.
+ */
+function invalidateCoursePublicViews(
+  queryClient: QueryClient,
+  courseId: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: courseKeys.overviews() });
+  void queryClient.invalidateQueries({
+    queryKey: courseKeys.staticPageRefresh(courseId),
+  });
+}
 
 export function useCreateCourse() {
   const queryClient = useQueryClient();
@@ -146,9 +168,7 @@ export function useCreateSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -174,9 +194,7 @@ export function useUpdateCourseSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -199,9 +217,7 @@ export function useDeleteCourseSection() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -273,9 +289,7 @@ export function useReorderCourseSections() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -302,9 +316,7 @@ export function useCreateLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -330,9 +342,7 @@ export function useUpdateCourseLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -355,9 +365,7 @@ export function useDeleteCourseLesson() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -384,6 +392,7 @@ export function useCreateLessonResource() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -405,6 +414,7 @@ export function useDeleteLessonResource() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -484,9 +494,7 @@ export function useReorderSectionLessons() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
-      queryClient.invalidateQueries({
-        queryKey: courseKeys.overview(variables.courseId),
-      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -516,6 +524,7 @@ export function useUpsertAccessRules() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -548,6 +557,7 @@ export function useUpsertSettings() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -577,6 +587,7 @@ export function useUpsertPricing() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -643,6 +654,7 @@ export function useCreateCourseInclude() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -664,6 +676,7 @@ export function useUpdateCourseInclude() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -685,6 +698,7 @@ export function useDeleteCourseInclude() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }
@@ -706,6 +720,7 @@ export function useReorderCourseIncludes() {
       queryClient.invalidateQueries({
         queryKey: courseKeys.preview(variables.courseId),
       });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
     },
   });
 }

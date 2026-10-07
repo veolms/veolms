@@ -1,5 +1,7 @@
 import {
+  useCallback,
   useEffect,
+  useRef,
   useState,
   useSyncExternalStore,
   type FormEvent,
@@ -162,7 +164,10 @@ interface TotpSetupModalProps {
 }
 
 function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
-  const [step, setStep] = useState<"loading" | "qr" | "verify">("loading");
+  const [step, setStep] = useState<"loading" | "error" | "qr" | "verify">(
+    "loading",
+  );
+  const [setupError, setSetupError] = useState<string | null>(null);
   const [secret, setSecret] = useState("");
   const [uri, setUri] = useState("");
   const [code, setCode] = useState("");
@@ -171,21 +176,33 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
   const setupMutation = useSetupTotp();
   const enableMutation = useEnableTotp();
 
-  const startSetup = async () => {
+  const requestSetup = setupMutation.mutateAsync;
+  const startSetup = useCallback(async () => {
+    setSetupError(null);
+    setStep("loading");
     try {
-      const data = await setupMutation.mutateAsync();
+      const data = await requestSetup();
       setSecret(data.secret);
       setUri(data.uri);
       setStep("qr");
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
-      setCodeError(errorObj?.message || "Could not start authenticator setup.");
+      setSetupError(
+        errorObj?.message || "Could not start authenticator setup.",
+      );
+      setStep("error");
     }
-  };
+  }, [requestSetup]);
 
-  if (step === "loading" && !setupMutation.isPending) {
+  // Started once when the dialog opens. It used to be started from render
+  // whenever no request was in flight, so a failing request was sent again
+  // on every render, without pause, for as long as the dialog stayed open.
+  const setupStartedRef = useRef(false);
+  useEffect(() => {
+    if (setupStartedRef.current) return;
+    setupStartedRef.current = true;
     void startSetup();
-  }
+  }, [startSetup]);
 
   const queryClient = useQueryClient();
 
@@ -244,6 +261,33 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
             label="Preparing authenticator setup"
             className="min-h-24 w-full"
           />
+        )}
+
+        {step === "error" && (
+          <>
+            <p className="auth-mfa-setup__modal-body" role="alert">
+              {setupError}
+            </p>
+            <div
+              className="auth-mfa-setup__modal-actions"
+              style={{ justifyContent: "flex-end", marginTop: "8px" }}
+            >
+              <button
+                className="settings-action settings-action--quiet"
+                onClick={onClose}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="settings-action"
+                onClick={() => void startSetup()}
+                type="button"
+              >
+                Try again
+              </button>
+            </div>
+          </>
         )}
 
         {step === "qr" && (

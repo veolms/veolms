@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { LoadingCards } from "../components/analytics/StatTiles";
+import { Button } from "../components/Button";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { useMyCourses } from "../services/courses";
 import {
@@ -34,7 +35,12 @@ function useDateRangeParams(rangeKey: RangeKey) {
     const option = RANGE_OPTIONS.find(
       (candidate) => candidate.key === rangeKey,
     )!;
+    // Through the end of today (UTC), so the range is the same for every
+    // request made today. With "now" to the millisecond no two requests
+    // matched: the server's response cache never hit, and this page
+    // refetched everything each time it was opened.
     const to = new Date();
+    to.setUTCHours(24, 0, 0, 0);
     const from = new Date(to.getTime() - option.days * 24 * 60 * 60 * 1000);
     return { from: from.toISOString(), to: to.toISOString() };
   }, [rangeKey]);
@@ -118,7 +124,9 @@ function AnalyticsContent({ isAdmin }: { isAdmin: boolean }) {
   const instructorQuery = useInstructorAnalyticsOverview(params, {
     enabled: !isAdmin,
   });
-  const { data, isLoading } = isAdmin ? adminQuery : instructorQuery;
+  const { data, isLoading, isError, refetch } = isAdmin
+    ? adminQuery
+    : instructorQuery;
 
   const courseOptions: ThemedSelectOption<string>[] = [
     [
@@ -154,7 +162,27 @@ function AnalyticsContent({ isAdmin }: { isAdmin: boolean }) {
         }
       />
 
-      {isLoading || !data ? (
+      {isError && !data ? (
+        // Without this a failed load left the loading cards up for good.
+        <div
+          role="alert"
+          className="rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-6 text-sm text-(--muted)"
+        >
+          <p className="font-semibold text-(--text)">
+            Analytics could not be loaded.
+          </p>
+          <p className="mt-1">
+            Check your connection and try again. Nothing has been changed.
+          </p>
+          <Button
+            motion="static"
+            className="mt-4 h-9 text-xs"
+            onClick={() => void refetch()}
+          >
+            Try again
+          </Button>
+        </div>
+      ) : isLoading || !data ? (
         <div className="grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-3 xl:grid-cols-6">
           <LoadingCards />
         </div>

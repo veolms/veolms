@@ -56,31 +56,44 @@ function getStaticApiBaseUrl() {
   return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`;
 }
 
+/** Far more pages than any catalogue has; only guards against a cursor that never ends. */
+const MAX_CATALOGUE_PAGES = 500;
+
 async function getStaticCataloguePaths() {
-  // Discovery runs before prerendering starts, so it can outwait a full API
-  // restart; nothing times this call out.
-  const response = await fetchStaticBuildApi(
-    `${getStaticApiBaseUrl()}/courses`,
-    90_000,
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Unable to discover course overview pages from the build API (${response.status}).`,
-    );
+  // The catalogue is paged (60 at most per request). Only the first page
+  // used to be read, and it is ordered oldest first — so once an academy
+  // had more than 60 courses, the newest ones got no page at all.
+  const slugs: string[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < MAX_CATALOGUE_PAGES; page += 1) {
+    const url = new URL(`${getStaticApiBaseUrl()}/courses`);
+    url.searchParams.set("limit", "60");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    // Discovery runs before prerendering starts, so it can outwait a full
+    // API restart; nothing times this call out.
+    const response = await fetchStaticBuildApi(url.toString(), 90_000);
+    if (!response.ok) {
+      throw new Error(
+        `Unable to discover course overview pages from the build API (${response.status}).`,
+      );
+    }
+    const body: unknown = await response.json();
+    const payload =
+      body && typeof body === "object" && "success" in body && "data" in body
+        ? body.data
+        : body;
+    const result = courseListResponseSchema.safeParse(payload);
+    if (!result.success) {
+      throw new Error(
+        "The build API returned an invalid published course catalogue.",
+      );
+    }
+    slugs.push(...result.data.courses.map(({ slug }) => slug));
+    cursor = result.data.nextCursor;
+    if (!cursor) break;
   }
-  const body: unknown = await response.json();
-  const payload =
-    body && typeof body === "object" && "success" in body && "data" in body
-      ? body.data
-      : body;
-  const result = courseListResponseSchema.safeParse(payload);
-  if (!result.success) {
-    throw new Error(
-      "The build API returned an invalid published course catalogue.",
-    );
-  }
-  return result.data.courses.map(
-    ({ slug }) => `/courses/${encodeURIComponent(slug)}/overview`,
+  return [...new Set(slugs)].map(
+    (slug) => `/courses/${encodeURIComponent(slug)}/overview`,
   );
 }
 
