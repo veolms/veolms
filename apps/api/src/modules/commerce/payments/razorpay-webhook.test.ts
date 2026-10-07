@@ -40,8 +40,8 @@ function refundWebhook(event: string) {
   };
 }
 
-describe("Razorpay webhook normalization", () => {
-  it("reports the refund's own amount for a partial refund, not the payment amount", () => {
+void describe("Razorpay webhook normalization", () => {
+  void it("reports the refund's own amount for a partial refund, not the payment amount", () => {
     const event = gateway.normalizeWebhookEvent(
       refundWebhook("refund.processed"),
       "evt_TEST",
@@ -57,7 +57,7 @@ describe("Razorpay webhook normalization", () => {
     assert.equal(event.currency, "INR");
   });
 
-  it("still reports the payment amount for payment events", () => {
+  void it("still reports the payment amount for payment events", () => {
     const event = gateway.normalizeWebhookEvent(
       {
         event: "payment.captured",
