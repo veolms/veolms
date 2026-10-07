@@ -408,15 +408,21 @@ export function createThreadsService(
           visibility,
         });
 
-        await syncMentionsAndNotify(trx, outbox, {
-          sourceType: "thread",
-          sourceId: id,
-          actorUserId: input.userId,
-          content: input.content,
-          courseId: input.courseId,
-          threadId: id,
-          plainText,
-        });
+        // A private post is visible to its author only, so mentioning
+        // someone in it must not notify them (notes already work this way).
+        // Without the guard a private thread was an invisible, unmoderated
+        // way to send email to other users.
+        if (visibility !== "private") {
+          await syncMentionsAndNotify(trx, outbox, {
+            sourceType: "thread",
+            sourceId: id,
+            actorUserId: input.userId,
+            content: input.content,
+            courseId: input.courseId,
+            threadId: id,
+            plainText,
+          });
+        }
 
         // Attach any verified attachments owned by the caller
         if (input.attachmentIds && input.attachmentIds.length > 0) {
@@ -786,7 +792,16 @@ export function createThreadsService(
           plainText,
         });
 
-        if (updates.content) {
+        // Same rule as create (and as notes): a private thread carries no
+        // mentions. Turning a thread private drops the ones it had.
+        const finalVisibility = updates.visibility ?? row.visibility;
+        if (finalVisibility === "private") {
+          await trx
+            .deleteFrom("learning_mentions")
+            .where("source_type", "=", "thread")
+            .where("source_id", "=", threadId)
+            .execute();
+        } else if (updates.content) {
           await syncMentionsAndNotify(trx, outbox, {
             sourceType: "thread",
             sourceId: threadId,

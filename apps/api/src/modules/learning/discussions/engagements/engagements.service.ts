@@ -382,11 +382,13 @@ export function createEngagementsService({
     async searchMentions(db, actor, input) {
       const rawQuery = (input.query ?? input.q ?? "").trim();
       const needle = rawQuery.replace(/[%_\\]/g, "").toLowerCase();
-      if (!needle) {
+      // Two characters minimum: a one-letter query pages through the whole
+      // participant list a screenful at a time.
+      if (needle.length < 2) {
         throw httpError(
           400,
           "QUERY_REQUIRED",
-          "A non-empty mention query is required.",
+          "Type at least two characters to search for people to mention.",
         );
       }
 
@@ -401,14 +403,9 @@ export function createEngagementsService({
 
       await courseAccess.assertCanAccessCourse(db, actor, input.courseId);
 
-      const participantIds = await courseAccess.listCourseParticipantIds(
-        db,
-        input.courseId,
-      );
-
       return engagementsRepo.searchUsersForMention(db, {
         query: needle,
-        userIds: participantIds,
+        courseId: input.courseId,
         limit: input.limit ?? 10,
       });
     },
