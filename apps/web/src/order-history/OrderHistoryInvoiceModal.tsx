@@ -4,6 +4,7 @@ import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { ShoppingBagIcon as ShoppingBag } from "@phosphor-icons/react/ShoppingBag";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { formatMoney } from "@veolms/contracts/commerce/money";
 import type { OrderHistoryItem } from "./orderHistoryData";
 
 export interface OrderHistoryInvoiceModalProps {
@@ -121,11 +122,21 @@ export function OrderHistoryInvoiceModal({
         <div className="mt-4 rounded-xl border border-(--border) p-4 text-xs">
           <div className="flex justify-between py-1 text-(--text-secondary)">
             <span>Course Subtotal</span>
-            <span>${order.subtotal.toFixed(2)}</span>
+            <span>
+              {formatMoney(order.subtotal, {
+                currency: order.currency,
+                unit: "major",
+              })}
+            </span>
           </div>
           <div className="flex justify-between py-1 text-(--muted)">
-            <span>Taxes & Processing Fee (18%)</span>
-            <span>${order.tax.toFixed(2)}</span>
+            <span>Taxes</span>
+            <span>
+              {formatMoney(order.tax, {
+                currency: order.currency,
+                unit: "major",
+              })}
+            </span>
           </div>
           <div className="mt-2 pt-2 border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] flex justify-between text-sm font-bold text-(--text)">
             <span>Total Paid</span>

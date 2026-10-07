@@ -3,8 +3,12 @@ import * as quizPricingRepo from "../../quizzes/shared/quiz-pricing.repository.t
 import type { AccessService } from "../../access/access.service.ts";
 import { createAccessService } from "../../access/access.service.ts";
 import type { Executor } from "./repository.types.ts";
+import * as courseConfigRepo from "../../courses/configuration/configuration.repository.ts";
 import * as bundleRepo from "../bundles/bundle.repository.ts";
 import * as enrollmentRepo from "../enrollments/enrollment.repository.ts";
+import * as orderRepo from "../orders/order.repository.ts";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface OrderRefLike {
   id: string;
@@ -65,6 +69,76 @@ export function createCourseAccessService({
 }: {
   accessService?: AccessService;
 } = {}): CourseAccessService {
+  /**
+   * When a purchase of this course stops granting access: the course's
+   * access rule decides. "Fixed duration" means N days from the purchase;
+   * anything else is lifetime (null). The rule used to be stored, shown and
+   * validated at publish time but never applied, so a "90 days" course
+   * granted lifetime access.
+   */
+  async function resolveAccessExpiry(
+    database: Executor,
+    courseId: string,
+    from: Date,
+  ): Promise<Date | null> {
+    const rule = await courseConfigRepo.findAccessRuleByCourseId(
+      database,
+      courseId,
+    );
+    if (
+      rule?.duration_type === "fixed_duration" &&
+      rule.duration_days &&
+      rule.duration_days > 0
+    ) {
+      return new Date(from.getTime() + rule.duration_days * DAY_MS);
+    }
+    return null;
+  }
+
+  /**
+   * Stops an order from providing a course. If the buyer still holds the
+   * course through another paid order, the grant and enrollment are handed
+   * to that order and access continues; otherwise they are revoked.
+   */
+  async function releaseCourseFromOrder(
+    database: Executor,
+    order: OrderRefLike,
+    courseId: string,
+  ): Promise<void> {
+    const successor = await orderRepo.findOtherPaidOrderCoveringCourse(
+      database,
+      { userId: order.user_id, courseId, excludeOrderId: order.id },
+    );
+
+    if (successor) {
+      const viaBundle = successor.item_type === "bundle";
+      await accessService.reassignGrantToOrder(database, {
+        fromOrderId: order.id,
+        courseId,
+        toOrderId: successor.order_id,
+        source: viaBundle ? "bundle_purchase" : "purchase",
+      });
+      await enrollmentRepo.reassignEnrollmentOrder(database, {
+        fromOrderId: order.id,
+        courseId,
+        toOrderId: successor.order_id,
+        source: viaBundle ? "bundle_purchase" : "direct_purchase",
+      });
+      return;
+    }
+
+    await accessService.revokeAccessForOrderCourse(
+      database,
+      order.id,
+      courseId,
+    );
+    await enrollmentRepo.revokeEnrollmentsForOrderCourse(
+      database,
+      order.id,
+      courseId,
+    );
+  }
+
   async function grantAccessForOrder(
     database: Executor,
     order: OrderRefLike,
@@ -76,12 +150,18 @@ export function createCourseAccessService({
 
     for (const item of orderItems) {
       if (item.item_type === "course" && item.course_id) {
+        const expiresAt = await resolveAccessExpiry(
+          database,
+          item.course_id,
+          now,
+        );
         await accessService.grantAccess(database, {
           userId: order.user_id,
           courseId: item.course_id,
           orderId: order.id,
           source: "purchase",
           validFrom: now,
+          validUntil: expiresAt,
         });
         await enrollmentRepo.insertEnrollment(database, {
           id: crypto.randomUUID(),
@@ -91,7 +171,7 @@ export function createCourseAccessService({
           status: "active",
           source: "direct_purchase",
           access_starts_at: now,
-          access_expires_at: null,
+          access_expires_at: expiresAt,
           created_at: now,
           updated_at: now,
         });
@@ -102,12 +182,18 @@ export function createCourseAccessService({
           item.bundle_id,
         );
         for (const bc of bundleCourses) {
+          const expiresAt = await resolveAccessExpiry(
+            database,
+            bc.course_id,
+            now,
+          );
           await accessService.grantAccess(database, {
             userId: order.user_id,
             courseId: bc.course_id,
             orderId: order.id,
             source: "bundle_purchase",
             validFrom: now,
+            validUntil: expiresAt,
           });
           await enrollmentRepo.insertEnrollment(database, {
             id: crypto.randomUUID(),
@@ -117,7 +203,7 @@ export function createCourseAccessService({
             status: "active",
             source: "bundle_purchase",
             access_starts_at: now,
-            access_expires_at: null,
+            access_expires_at: expiresAt,
             created_at: now,
             updated_at: now,
           });
@@ -154,6 +240,20 @@ export function createCourseAccessService({
     database: Executor,
     order: OrderRefLike,
   ): Promise<void> {
+    // Course by course, so a course the buyer also holds through another
+    // paid order is handed to that order instead of being taken away.
+    const courseIds = new Set([
+      ...(await accessService.listActiveCourseIdsForOrder(database, order.id)),
+      ...(await enrollmentRepo.listActiveEnrollmentCourseIdsByOrderId(
+        database,
+        order.id,
+      )),
+    ]);
+    for (const courseId of courseIds) {
+      await releaseCourseFromOrder(database, order, courseId);
+    }
+
+    // Anything still tied to the order (rows that were not active).
     await accessService.revokeAccessForOrder(database, order.id);
     await enrollmentRepo.revokeEnrollmentsByOrderId(database, order.id);
     await quizPricingRepo.revokeGrantsByOrderId(database, order.id);
@@ -165,32 +265,14 @@ export function createCourseAccessService({
     item: OrderItemRefLike,
   ): Promise<void> {
     if (item.item_type === "course" && item.course_id) {
-      await accessService.revokeAccessForOrderCourse(
-        database,
-        order.id,
-        item.course_id,
-      );
-      await enrollmentRepo.revokeEnrollmentsForOrderCourse(
-        database,
-        order.id,
-        item.course_id,
-      );
+      await releaseCourseFromOrder(database, order, item.course_id);
     } else if (item.item_type === "bundle" && item.bundle_id) {
       const bundleCourses = await bundleRepo.listBundleCourses(
         database,
         item.bundle_id,
       );
       for (const bc of bundleCourses) {
-        await accessService.revokeAccessForOrderCourse(
-          database,
-          order.id,
-          bc.course_id,
-        );
-        await enrollmentRepo.revokeEnrollmentsForOrderCourse(
-          database,
-          order.id,
-          bc.course_id,
-        );
+        await releaseCourseFromOrder(database, order, bc.course_id);
       }
     } else if (item.item_type === "quiz" && item.quiz_pricing_id) {
       const offering = await quizPricingRepo.findPricingById(

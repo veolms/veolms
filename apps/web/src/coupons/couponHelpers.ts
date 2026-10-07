@@ -1,4 +1,5 @@
 import type { Coupon } from "@veolms/contracts";
+import { formatMoney } from "@veolms/contracts/commerce/money";
 
 export type CouponStatus = "active" | "scheduled" | "expired" | "draft";
 export type CouponTabFilter = "all" | CouponStatus;
@@ -51,22 +52,17 @@ export function couponStatusClass(status: CouponStatus) {
   return "bg-(--canvas) text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]";
 }
 
-export function rupeesToPaise(rupees: number) {
-  return Math.round(rupees * 100);
-}
-
-export function paiseToRupees(paise: number) {
-  return paise / 100;
-}
-
+/**
+ * A coupon's configured amounts (fixed discount, minimum order, maximum
+ * discount) are list values in major units, like course prices.
+ */
 export function formatRupees(amount: number) {
-  return `₹${amount.toLocaleString("en-IN", {
-    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-  })}`;
+  return formatMoney(amount, { unit: "major" });
 }
 
+/** Discounts actually given are transacted money: minor units. */
 export function formatPaiseAsRupees(paise: number) {
-  return formatRupees(paiseToRupees(paise));
+  return formatMoney(paise);
 }
 
 export function formatCouponDiscount(coupon: {

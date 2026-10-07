@@ -5,6 +5,7 @@ import type { PaymentGateway } from "@veolms/contracts";
 import type { AccessService } from "../../access/access.service.ts";
 import { createAccessService } from "../../access/access.service.ts";
 import { createPaymentReconciliationService } from "../payments/payment-reconciliation.service.ts";
+import * as paymentRepo from "../payments/payment.repository.ts";
 import { mapWithConcurrency } from "../../../lib/concurrency.ts";
 
 export interface PaymentRecoveryWorkerOptions {
@@ -14,7 +15,10 @@ export interface PaymentRecoveryWorkerOptions {
   logger?: FastifyBaseLogger;
   /** Minimum age in minutes before a stale payment is queried against the gateway. Default: 5 */
   staleAfterMinutes?: number;
-  /** Maximum age in hours — payments older than this are skipped (likely abandoned). Default: 24 */
+  /**
+   * Age in hours after which an unresolved payment gets one final gateway
+   * check and is then closed as abandoned. Default: 24
+   */
   maxAgeHours?: number;
   /**
    * Max stale payments processed in one tick. Without this, a backlog of N
@@ -66,30 +70,106 @@ export function createPaymentRecoveryWorker({
     );
     const maxAgeCutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
 
-    // Find payments stuck in initiated/processing within our time window.
-    // Bounded by batchSize so a backlog doesn't turn one tick's cost into N
-    // sequential gateway calls — see fulfillment.scheduler.ts's isRunning
-    // guard, which would otherwise skip the next cycle and fall further
-    // behind under exactly the conditions this worker exists to handle.
-    const stalePayments = await database
-      .selectFrom("payments")
-      .selectAll()
-      .where("status", "in", ["initiated", "processing"])
-      .where("updated_at", "<", staleMinuteCutoff)
-      .where("created_at", ">", maxAgeCutoff)
-      .orderBy("created_at", "asc")
-      .limit(batchSize)
-      .execute();
+    let recovered = 0;
+    let failed = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    type StalePayment = Awaited<ReturnType<typeof listRecent>>[number];
+
+    /**
+     * Asks the gateway about one payment and fulfils it if the money was
+     * captured. "open" means nothing was captured (yet).
+     */
+    async function reconcile(
+      payment: StalePayment,
+    ): Promise<"recovered" | "already-final" | "open"> {
+      const gatewayOrder = await paymentGateway.fetchOrder(
+        payment.gateway_order_id,
+      );
+      if (gatewayOrder.status !== "paid") return "open";
+
+      let targetPaymentId = payment.gateway_payment_id;
+      let paymentMethod = payment.payment_method;
+
+      // If no gateway_payment_id locally, query Razorpay for payments on this order
+      if (!targetPaymentId) {
+        const orderPayments = await paymentGateway.fetchOrderPayments(
+          payment.gateway_order_id,
+        );
+        const capturedPayment = orderPayments.find(
+          (p) => p.status === "captured",
+        );
+        if (capturedPayment) {
+          targetPaymentId = capturedPayment.gatewayPaymentId;
+          paymentMethod = capturedPayment.method
+            ? {
+                method: capturedPayment.method,
+                bank: capturedPayment.bank,
+                wallet: capturedPayment.wallet,
+                vpa: capturedPayment.vpa,
+                cardLast4: capturedPayment.cardLast4,
+              }
+            : paymentMethod;
+        }
+      }
+
+      if (!targetPaymentId) {
+        log?.warn(
+          {
+            paymentId: payment.id,
+            gatewayOrderId: payment.gateway_order_id,
+          },
+          "Gateway order is paid but no captured payment found via API; deferring to webhook",
+        );
+        return "open";
+      }
+
+      const result = await reconciliation.finalizeSuccessfulPayment({
+        paymentId: payment.id,
+        gatewayPaymentId: targetPaymentId,
+        paymentMethod,
+      });
+
+      if (result.outcome === "finalized") {
+        log?.info(
+          { paymentId: payment.id, orderId: result.orderId },
+          "Payment recovered and fulfilled via gateway order verification",
+        );
+        return "recovered";
+      }
+      log?.info(
+        { paymentId: payment.id },
+        "Payment already finalized by another path",
+      );
+      return "already-final";
+    }
+
+    // --- 1. Payments still inside the recovery window ----------------------
+    //
+    // Least-recently-checked first, and every payment that is still open is
+    // stamped as checked. The batch used to be "the 50 oldest by created_at"
+    // with nothing written for an open payment, so once more than 50
+    // abandoned checkouts sat in the window (every dismissed payment modal
+    // leaves one for 24 hours) each tick re-read the same 50 and a genuinely
+    // captured payment further back was never looked at.
+    function listRecent() {
+      return database
+        .selectFrom("payments")
+        .selectAll()
+        .where("status", "in", ["initiated", "processing"])
+        .where("updated_at", "<", staleMinuteCutoff)
+        .where("created_at", ">", maxAgeCutoff)
+        .orderBy("updated_at", "asc")
+        .limit(batchSize)
+        .execute();
+    }
+    const stalePayments = await listRecent();
 
     log?.info(
       { count: stalePayments.length },
       "Found stale payments for recovery",
     );
-
-    let recovered = 0;
-    let failed = 0;
-    let skipped = 0;
-    let errors = 0;
 
     // Bounded concurrency instead of a fully serial loop: caps how many
     // gateway calls are in flight at once instead of either processing one
@@ -97,82 +177,76 @@ export function createPaymentRecoveryWorker({
     // every call at once (Promise.all — unbounded against the gateway).
     await mapWithConcurrency(stalePayments, concurrency, async (payment) => {
       try {
-        // Query the gateway for current order status
-        const gatewayOrder = await paymentGateway.fetchOrder(
-          payment.gateway_order_id,
-        );
-
-        if (gatewayOrder.status === "paid") {
-          let targetPaymentId = payment.gateway_payment_id;
-          let paymentMethod = payment.payment_method;
-
-          // If no gateway_payment_id locally, query Razorpay for payments on this order
-          if (!targetPaymentId) {
-            const orderPayments = await paymentGateway.fetchOrderPayments(
-              payment.gateway_order_id,
-            );
-            const capturedPayment = orderPayments.find(
-              (p) => p.status === "captured",
-            );
-            if (capturedPayment) {
-              targetPaymentId = capturedPayment.gatewayPaymentId;
-              paymentMethod = capturedPayment.method
-                ? {
-                    method: capturedPayment.method,
-                    bank: capturedPayment.bank,
-                    wallet: capturedPayment.wallet,
-                    vpa: capturedPayment.vpa,
-                    cardLast4: capturedPayment.cardLast4,
-                  }
-                : paymentMethod;
-            }
-          }
-
-          if (targetPaymentId) {
-            const result = await reconciliation.finalizeSuccessfulPayment({
-              paymentId: payment.id,
-              gatewayPaymentId: targetPaymentId,
-              paymentMethod,
-            });
-
-            if (result.outcome === "finalized") {
-              log?.info(
-                { paymentId: payment.id, orderId: result.orderId },
-                "Payment recovered and fulfilled via gateway order verification",
-              );
-              recovered++;
-            } else {
-              log?.info(
-                { paymentId: payment.id },
-                "Payment already finalized by another path",
-              );
-              skipped++;
-            }
-          } else {
-            log?.warn(
-              {
-                paymentId: payment.id,
-                gatewayOrderId: payment.gateway_order_id,
-              },
-              "Gateway order is paid but no captured payment found via API; deferring to webhook",
-            );
-            skipped++;
-          }
-        } else if (gatewayOrder.status === "created") {
-          // Gateway order exists but no payment attempt yet — truly stale/abandoned
-          log?.debug(
-            { paymentId: payment.id },
-            "Gateway order not yet attempted, skipping",
-          );
-          skipped++;
-        } else {
-          // 'attempted' — payment was tried but not yet captured; still in-flight
-          skipped++;
+        const outcome = await reconcile(payment);
+        if (outcome === "recovered") {
+          recovered++;
+          return;
+        }
+        skipped++;
+        if (outcome === "open") {
+          // Mark as checked so the next tick moves on to other payments.
+          await database
+            .updateTable("payments")
+            .set({ updated_at: new Date() })
+            .where("id", "=", payment.id)
+            .where("status", "in", ["initiated", "processing"])
+            .execute();
         }
       } catch (err: unknown) {
         log?.error(
           { err, paymentId: payment.id },
           "Error recovering stale payment",
+        );
+        errors++;
+      }
+    });
+
+    // --- 2. Payments that have aged out of the window ----------------------
+    //
+    // These used to fall out of the query above and were never looked at
+    // again — a captured-but-unfulfilled payment was dropped silently at 24
+    // hours. Each one now gets a final gateway check: fulfilled if the money
+    // was captured, otherwise closed as abandoned so it stops being
+    // re-examined. A capture that still arrives later is fulfilled by the
+    // webhook path, which may claim a failed payment.
+    const agedOut = await database
+      .selectFrom("payments")
+      .selectAll()
+      .where("status", "in", ["initiated", "processing"])
+      .where("created_at", "<=", maxAgeCutoff)
+      .orderBy("created_at", "asc")
+      .limit(batchSize)
+      .execute();
+
+    await mapWithConcurrency(agedOut, concurrency, async (payment) => {
+      try {
+        const outcome = await reconcile(payment);
+        if (outcome === "recovered") {
+          recovered++;
+          return;
+        }
+        if (outcome === "already-final") {
+          skipped++;
+          return;
+        }
+        const closed = await paymentRepo.transitionPaymentStatus(
+          database,
+          payment.id,
+          "failed",
+          ["initiated", "processing"],
+          {
+            error_code: "ABANDONED",
+            error_description: `No captured payment after ${maxAgeHours} hours.`,
+          },
+        );
+        if (closed) failed++;
+        else skipped++;
+      } catch (err: unknown) {
+        // Left in-flight on purpose: the final check is retried next tick
+        // rather than closing a payment whose gateway state is unknown.
+        log?.error(
+          { err, paymentId: payment.id },
+          "Error on the final check of an aged-out payment",
         );
         errors++;
       }

@@ -187,6 +187,78 @@ export async function sumOtherCountedRefunds(
     .reduce((sum, r) => sum + r.amount, 0);
 }
 
+/**
+ * Gives a gateway refund id to the admin's unconfirmed reservation for the
+ * same refund, if there is one.
+ *
+ * The admin path reserves a `pending` row, calls the gateway, then writes
+ * the gateway id onto that row. A webhook that arrives in between — or after
+ * that last write failed — knows the refund only by its gateway id and
+ * could not see the reservation: it inserted a second row for the same
+ * refund, the reservation was counted as a separate refund (turning a
+ * partial refund into a "full" one), and the admin's preserve-access choice
+ * on the reservation was lost. Matching on payment and amount lets the
+ * webhook continue the reservation instead.
+ */
+export async function adoptUnconfirmedReservation(
+  database: Executor,
+  input: {
+    paymentId: string;
+    amount: number;
+    gatewayRefundId: string;
+    now: Date;
+  },
+) {
+  return await database
+    .updateTable("refunds")
+    .set({ gateway_refund_id: input.gatewayRefundId, updated_at: input.now })
+    .where("id", "=", (eb) =>
+      eb
+        .selectFrom("refunds")
+        .select("id")
+        .where("payment_id", "=", input.paymentId)
+        .where("status", "=", "pending")
+        .where("gateway_refund_id", "is", null)
+        .where("amount", "=", input.amount)
+        .orderBy("created_at", "asc")
+        .limit(1),
+    )
+    .where("gateway_refund_id", "is", null)
+    .returningAll()
+    .executeTakeFirst();
+}
+
+/**
+ * Releases reservations that never got a gateway refund id and never will:
+ * the gateway call's outcome was lost and no webhook claimed the row. Left
+ * alone they stay `pending` forever and permanently reduce what can still be
+ * refunded on the order. Clearing the key lets the same request start over.
+ */
+export async function failStrandedReservations(
+  database: Executor,
+  olderThanHours: number,
+  limit = 100,
+) {
+  const cutoff = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);
+  return await database
+    .updateTable("refunds")
+    .set({ status: "failed", idempotency_key: null, updated_at: new Date() })
+    .where("id", "in", (eb) =>
+      eb
+        .selectFrom("refunds")
+        .select("id")
+        .where("status", "=", "pending")
+        .where("gateway_refund_id", "is", null)
+        .where("created_at", "<", cutoff)
+        .orderBy("created_at", "asc")
+        .limit(limit),
+    )
+    .where("status", "=", "pending")
+    .where("gateway_refund_id", "is", null)
+    .returning(["id", "order_id", "amount", "currency", "created_at"])
+    .execute();
+}
+
 export async function listStaleRefunds(
   database: Executor,
   olderThanMinutes: number,

@@ -151,6 +151,7 @@ export const couponSchema = z.strictObject({
   restrictedCourseIds: z.array(z.uuid()).nullable().optional(),
   restrictedBundleIds: z.array(z.uuid()).nullable().optional(),
   redemptionCount: z.number().int().nonnegative().default(0),
+  /** Discounts actually given, in minor units (unlike discountValue, a list amount). */
   totalDiscountGiven: z.number().int().nonnegative().default(0),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
@@ -171,6 +172,7 @@ export const couponSummarySchema = z.object({
   expiredCount: z.number().int().nonnegative(),
   inactiveCount: z.number().int().nonnegative(),
   totalRedemptions: z.number().int().nonnegative(),
+  /** Minor units. */
   totalDiscountGiven: z.number().int().nonnegative(),
 });
 export type CouponSummary = z.infer<typeof couponSummarySchema>;
@@ -435,6 +437,12 @@ export const orderAdminDetailsSchema = z.strictObject({
 });
 export type OrderAdminDetails = z.infer<typeof orderAdminDetailsSchema>;
 
+/**
+ * Money on an order response is in MINOR units (paise): order and item
+ * amounts, payments, refunds and afterCommissionAmount alike. List prices,
+ * coupon configuration and the checkout preview stay in major units. See
+ * ./money.ts — format with `formatMoney`, never divide by 100 by hand.
+ */
 export const purchaseItemSnapshotSchema = z.strictObject({
   id: z.uuid(),
   purchaseId: z.uuid().optional(),
@@ -458,6 +466,7 @@ export type OrderItemSnapshot = PurchaseItemSnapshot;
 export const purchaseStatusSchema = orderStatusSchema;
 export type PurchaseStatus = OrderStatus;
 
+/** All amounts in minor units — see the note on purchaseItemSnapshotSchema. */
 export const purchaseSchema = z.strictObject({
   id: z.uuid(),
   purchaseNumber: z.string().optional(),
@@ -512,6 +521,7 @@ export type CreateCheckoutOrderRequest = z.infer<
 export const createPurchaseRequestSchema = createCheckoutOrderRequestSchema;
 export type CreatePurchaseRequest = CreateCheckoutOrderRequest;
 
+/** Invoice amounts are in minor units, like the order they describe. */
 export const invoiceItemSchema = z.strictObject({
   title: z.string(),
   unitPrice: z.number().int().nonnegative(),
@@ -583,6 +593,7 @@ export const orderStatsQuerySchema = z.object({
 });
 export type OrderStatsQuery = z.infer<typeof orderStatsQuerySchema>;
 
+/** Every amount here (netRevenue, totalEarnings, refundedAmount) is in minor units. */
 export const orderStatsResponseSchema = z.strictObject({
   /** Gross of successful orders minus partial refunds on those orders. */
   netRevenue: z.number().int(),

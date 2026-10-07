@@ -1,4 +1,4 @@
-import { memo, useState, useEffect } from "react";
+import { memo, useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Order } from "@veolms/contracts";
 import { XIcon as X } from "@phosphor-icons/react/X";
@@ -8,6 +8,10 @@ import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/Warnin
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { useRefundOrder } from "../services/orders";
 import { getApiError } from "../lib/api-error";
+import {
+  minorUnitsPerMajor,
+  toMajorUnits,
+} from "@veolms/contracts/commerce/money";
 import { formatCurrency } from "./orderHelpers";
 
 // 3D design system surface tokens: 0 borders, pure tactile depth via theme-adaptive shadows & highlights
@@ -39,6 +43,16 @@ export const OrderRefundModal = memo(function OrderRefundModal({
   const [preserveAccess, setPreserveAccess] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // One key per opened dialog. If a submit fails with an unknown outcome
+  // (timeout, dropped connection) and the admin clicks again, the retry
+  // carries the same key, so the server resumes the first refund instead of
+  // issuing a second one. Reopening the dialog starts a new refund.
+  const openOrderId = order?.id;
+  const idempotencyKey = useMemo(
+    () => (openOrderId ? crypto.randomUUID() : undefined),
+    [openOrderId],
+  );
+
   // Lock body scroll and listen for ESC key
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -57,7 +71,8 @@ export const OrderRefundModal = memo(function OrderRefundModal({
 
   if (!order) return null;
 
-  const totalPaidInr = Math.round(order.totalAmount / 100);
+  // order.totalAmount is minor units; the input is typed in major units.
+  const totalPaid = toMajorUnits(order.totalAmount, order.currency);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,13 +85,13 @@ export const OrderRefundModal = memo(function OrderRefundModal({
         setErrorMessage("Please enter a valid partial refund amount.");
         return;
       }
-      if (parsedInr > totalPaidInr) {
+      if (parsedInr > totalPaid) {
         setErrorMessage(
-          `Partial refund cannot exceed total paid amount (₹${totalPaidInr}).`,
+          `Partial refund cannot exceed total paid amount (${formatCurrency(order.totalAmount, order.currency)}).`,
         );
         return;
       }
-      amountPaise = Math.round(parsedInr * 100);
+      amountPaise = Math.round(parsedInr * minorUnitsPerMajor(order.currency));
     }
 
     try {
@@ -86,6 +101,7 @@ export const OrderRefundModal = memo(function OrderRefundModal({
           amount: amountPaise,
           reason: reason.trim() || undefined,
           preserveAccess,
+          idempotencyKey,
         },
       });
 
@@ -228,9 +244,9 @@ export const OrderRefundModal = memo(function OrderRefundModal({
                     id="refund-amount"
                     type="number"
                     min="1"
-                    max={totalPaidInr}
+                    max={totalPaid}
                     step="1"
-                    placeholder={`Max ₹${totalPaidInr}`}
+                    placeholder={`Max ${formatCurrency(order.totalAmount, order.currency)}`}
                     value={partialAmountInr}
                     onChange={(e) => setPartialAmountInr(e.target.value)}
                     className="w-full rounded-[12px] border-none bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pl-8 pr-3.5 py-2.5 text-[0.82rem] sm:text-[0.85rem] text-(--text) outline-none placeholder:text-(--muted) shadow-[inset_0_2px_4px_color-mix(in_srgb,black_20%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] focus:shadow-[inset_0_0_0_1.5px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all"

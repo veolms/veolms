@@ -9,6 +9,7 @@ import type {
 import type { Database, OrderItemType, OrderStatus } from "@veolms/database";
 import type { Selectable } from "kysely";
 import { toRefundContract } from "../refunds/refund.mapper.ts";
+import { toMinorUnits } from "../shared/currency.ts";
 
 /**
  * Minimal shape needed to map a persisted order row to the `Order` API
@@ -50,7 +51,16 @@ export interface OrderItemRowLike {
   created_at: Date;
 }
 
-export function toOrderItemContract(row: OrderItemRowLike): OrderItemSnapshot {
+/**
+ * Order rows store major units (499 = ₹499) while the payments and refunds
+ * shown alongside them are minor units (49900 paise). The order response
+ * exposes ONE unit — minor — so a client never has to know which field came
+ * from which table; the conversion happens here and nowhere else.
+ */
+export function toOrderItemContract(
+  row: OrderItemRowLike,
+  currency: string,
+): OrderItemSnapshot {
   return {
     id: row.id,
     orderId: row.order_id,
@@ -63,10 +73,10 @@ export function toOrderItemContract(row: OrderItemRowLike): OrderItemSnapshot {
     courseId: row.course_id,
     bundleId: row.bundle_id,
     titleSnapshot: row.title_snapshot,
-    unitPrice: row.unit_price,
-    discountAmount: row.discount_amount,
-    taxAmount: row.tax_amount,
-    finalAmount: row.final_amount,
+    unitPrice: toMinorUnits(row.unit_price, currency),
+    discountAmount: toMinorUnits(row.discount_amount, currency),
+    taxAmount: toMinorUnits(row.tax_amount, currency),
+    finalAmount: toMinorUnits(row.final_amount, currency),
     createdAt: row.created_at,
   };
 }
@@ -175,14 +185,15 @@ export function toOrderContract(
     // passing through `as any`.
     status: overrides?.status ?? row.status,
     currency: row.currency,
-    subtotalAmount: row.subtotal_amount,
-    discountAmount: row.discount_amount,
-    taxAmount: row.tax_amount,
-    totalAmount: row.total_amount,
+    subtotalAmount: toMinorUnits(row.subtotal_amount, row.currency),
+    discountAmount: toMinorUnits(row.discount_amount, row.currency),
+    taxAmount: toMinorUnits(row.tax_amount, row.currency),
+    totalAmount: toMinorUnits(row.total_amount, row.currency),
+    // Already stored in minor units.
     afterCommissionAmount: row.after_commission_amount ?? null,
     couponId: row.coupon_id,
     idempotencyKey: row.idempotency_key,
-    items: items.map(toOrderItemContract),
+    items: items.map((item) => toOrderItemContract(item, row.currency)),
     expiresAt: row.expires_at,
     paidAt: overrides && "paidAt" in overrides ? overrides.paidAt : row.paid_at,
     createdAt: row.created_at,

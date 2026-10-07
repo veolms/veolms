@@ -1,5 +1,6 @@
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
+import { formatMoney } from "@veolms/contracts";
 import type {
   CourseValidationIssue,
   CourseValidationResponse,
@@ -299,7 +300,11 @@ export function createLifecycleService({
       if (pricing.pricing_type === "free") {
         pricingStatus = "Free";
       } else {
-        pricingStatus = `${pricing.currency || "INR"} ${(pricing.price / 100).toFixed(2)}`;
+        // course_pricing.price is a list price in major units.
+        pricingStatus = formatMoney(pricing.price, {
+          currency: pricing.currency || "INR",
+          unit: "major",
+        });
       }
     }
 

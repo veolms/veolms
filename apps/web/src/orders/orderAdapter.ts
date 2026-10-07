@@ -1,4 +1,5 @@
 import type { Order } from "@veolms/contracts";
+import { formatMoney, toMajorUnits } from "@veolms/contracts/commerce/money";
 import type {
   OrderItem,
   OrderStatus,
@@ -99,18 +100,13 @@ export function adaptOrderToOrderItem(order: Order): OrderItem {
     year: "numeric",
   });
 
-  const price = Math.round(order.totalAmount / 100);
-  const subtotal = Math.round(order.subtotalAmount / 100);
-  const tax = Math.round(order.taxAmount / 100);
+  // Order amounts arrive in minor units; `price`/`subtotal`/`tax` are the
+  // major-unit numbers this view model exposes for sorting and totals.
   const currency = order.currency || "INR";
-  const formattedPrice = new Intl.NumberFormat(
-    currency === "INR" ? "en-IN" : "en-US",
-    {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    },
-  ).format(price);
+  const price = toMajorUnits(order.totalAmount, currency);
+  const subtotal = toMajorUnits(order.subtotalAmount, currency);
+  const tax = toMajorUnits(order.taxAmount, currency);
+  const formattedPrice = formatMoney(order.totalAmount, { currency });
 
   const cleanOrderNumber = order.orderNumber.startsWith("#")
     ? order.orderNumber
@@ -139,6 +135,7 @@ export function adaptOrderToOrderItem(order: Order): OrderItem {
     transactionId,
     tax,
     subtotal,
+    currency,
   };
 }
 
@@ -191,18 +188,11 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
     minute: "2-digit",
   });
 
-  const amount = order.totalAmount / 100;
-  const subtotal = order.subtotalAmount / 100;
-  const tax = order.taxAmount / 100;
   const currency = order.currency || "INR";
-  const formattedAmount = new Intl.NumberFormat(
-    currency === "INR" ? "en-IN" : "en-US",
-    {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    },
-  ).format(amount);
+  const amount = toMajorUnits(order.totalAmount, currency);
+  const subtotal = toMajorUnits(order.subtotalAmount, currency);
+  const tax = toMajorUnits(order.taxAmount, currency);
+  const formattedAmount = formatMoney(order.totalAmount, { currency });
 
   const cleanOrderNumber = order.orderNumber.startsWith("#")
     ? order.orderNumber
@@ -295,11 +285,8 @@ export function computeOrderSummary(
     }
   }
 
-  const formattedTotal = new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(totalSpentAmount);
+  // `price` on the view model is already in major units.
+  const formattedTotal = formatMoney(totalSpentAmount, { unit: "major" });
 
   return {
     totalOrders: orders.length,

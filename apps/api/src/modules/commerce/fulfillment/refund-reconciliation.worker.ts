@@ -33,6 +33,9 @@ export interface RefundReconciliationWorkerOptions {
   concurrency?: number;
 }
 
+/** How long an unconfirmed refund reservation may wait for the gateway. */
+const STRANDED_RESERVATION_HOURS = 24;
+
 export function createRefundReconciliationWorker({
   database,
   paymentGateway,
@@ -55,6 +58,29 @@ export function createRefundReconciliationWorker({
     errors: number;
   }> {
     const log = logger?.child({ job: "refund-reconciliation-worker" });
+
+    // Reservations with no gateway refund id cannot be reconciled below
+    // (there is nothing to look up). After a day without a webhook claiming
+    // them they are released so they stop blocking further refunds. Logged
+    // at error level: someone should confirm in the gateway dashboard that
+    // no refund was actually issued for them.
+    const stranded = await refundRepo.failStrandedReservations(
+      database,
+      STRANDED_RESERVATION_HOURS,
+    );
+    for (const reservation of stranded) {
+      log?.error(
+        {
+          refundId: reservation.id,
+          orderId: reservation.order_id,
+          amount: reservation.amount,
+          currency: reservation.currency,
+          reservedAt: reservation.created_at,
+        },
+        "Released a refund reservation that never received a gateway refund id; verify in the gateway dashboard that no refund was issued",
+      );
+    }
+
     const staleRefunds = await refundRepo.listStaleRefunds(
       database,
       staleAfterMinutes,
