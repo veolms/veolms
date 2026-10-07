@@ -20,11 +20,11 @@ import type { AppServices } from "../../../services/index.ts";
 import {
   slugify,
   assertOptimisticUpdate,
+  canManageCourse,
   getCourseAndVerifyOwner as verifyCourseOwner,
 } from "../shared/courses.utils.ts";
 import {
   ADMIN_ROLE,
-  INSTRUCTOR_ROLE,
   createAuthService,
   type AuthService,
 } from "../../auth/index.ts";
@@ -632,9 +632,9 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdminOrInstructor =
-      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
-    const rows = isAdminOrInstructor
+    // Admins manage every course; everyone else (instructors included) sees
+    // only the courses they created.
+    const rows = userRoles?.includes(ADMIN_ROLE)
       ? await courseRepo.listAllCourses(database)
       : await courseRepo.listCoursesByCreator(database, creatorId);
     const courses = await Promise.all(
@@ -694,9 +694,7 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdminOrInstructor =
-      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
-    const rows = isAdminOrInstructor
+    const rows = userRoles?.includes(ADMIN_ROLE)
       ? await courseRepo.listAllCourseScope(database)
       : await courseRepo.listAvailableCourseScopeByCreator(database, creatorId);
 
@@ -721,9 +719,7 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdminOrInstructor =
-      userRoles?.includes(ADMIN_ROLE) || userRoles?.includes("instructor");
-    const rows = isAdminOrInstructor
+    const rows = userRoles?.includes(ADMIN_ROLE)
       ? await courseRepo.listAllCourseScope(database)
       : await courseRepo.listAvailableCourseScopeByCreator(database, creatorId);
 
@@ -922,16 +918,11 @@ export function createCourseService({
     creatorId: string,
     userRoles?: readonly string[],
   ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const isInstructor =
-      userRoles?.includes(INSTRUCTOR_ROLE) ||
-      userRoles?.includes("instructor") ||
-      userRoles?.includes("creator");
     const course = await courseRepo.findCourseById(database, courseId);
     if (!course) {
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
     }
-    if (!isAdmin && !isInstructor && course.creator_id !== creatorId) {
+    if (!canManageCourse(course, creatorId, userRoles)) {
       throw new AppError(403, "FORBIDDEN", "Unauthorized course access.");
     }
 
@@ -1127,14 +1118,10 @@ export function createCourseService({
     const isAdmin = Boolean(
       user && user.roles && user.roles.includes(ADMIN_ROLE),
     );
-    const isInstructor = Boolean(
-      user &&
-      user.roles &&
-      (user.roles.includes(INSTRUCTOR_ROLE) || user.roles.includes("creator")),
-    );
-
     if (course.status !== "published") {
-      if (!isOwner && !isAdmin && !isInstructor) {
+      // Drafts are visible to their creator and to admins only — another
+      // instructor's role does not open someone else's unpublished course.
+      if (!isOwner && !isAdmin) {
         throw new AppError(404, "COURSE_NOT_FOUND", "Course not published.");
       }
     }
