@@ -834,7 +834,10 @@ export function createAuthService({
   }
 
   /**
-   * Creates an account, granting the administrator role to the very first user.
+   * Creates an account. The very first account is the administrator, and
+   * only the setup-token flow (`allowBootstrapAdmin`) may create it: without
+   * that gate, whoever registered first on a fresh or restored-empty
+   * database — by OTP or OAuth, no setup token needed — owned the platform.
    *
    * The whole thing runs in one transaction behind a transaction-scoped
    * advisory lock. Counting users outside the transaction (or even inside it
@@ -886,6 +889,13 @@ export function createAuthService({
         );
 
         const isFirstUser = (await userRepository.countUsers(trx)) === 0;
+        if (isFirstUser && !input.allowBootstrapAdmin) {
+          throw new AppError(
+            403,
+            "SETUP_REQUIRED",
+            "This platform has not been set up yet. An administrator must complete setup before accounts can be created.",
+          );
+        }
 
         await userRepository.insertUser(trx, {
           id: userId,
