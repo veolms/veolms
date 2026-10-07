@@ -538,20 +538,25 @@ export async function listAnalyticsAttempts(
     .execute();
 }
 
-export async function expireAbandonedAttempts(
+/**
+ * In-progress attempts whose time limit, or whose assignment's due date,
+ * passed before `cutoff`. Oldest first so a backlog drains in order.
+ */
+export async function listOverdueAttempts(
   database: DatabaseExecutor,
-  now: Date = new Date(),
+  cutoff: Date,
+  limit: number,
 ) {
   return await database
-    .updateTable("quiz_attempts")
-    .set({
-      status: "expired",
-      updated_at: now,
-    })
+    .selectFrom("quiz_attempts")
+    .select(["id", "user_id", "assignment_id", "attempt_number"])
     .where("status", "=", "in_progress")
     .where((eb) =>
       eb.or([
-        eb.and([eb("expires_at", "is not", null), eb("expires_at", "<=", now)]),
+        eb.and([
+          eb("expires_at", "is not", null),
+          eb("expires_at", "<=", cutoff),
+        ]),
         eb(
           "assignment_id",
           "in",
@@ -559,10 +564,11 @@ export async function expireAbandonedAttempts(
             .selectFrom("quiz_assignments")
             .select("id")
             .where("available_until", "is not", null)
-            .where("available_until", "<=", now),
+            .where("available_until", "<=", cutoff),
         ),
       ]),
     )
-    .returning(["id", "user_id", "assignment_id", "attempt_number"])
+    .orderBy("started_at", "asc")
+    .limit(limit)
     .execute();
 }
