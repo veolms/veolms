@@ -219,6 +219,26 @@ export function createPaymentWorker({
     let isFullRefund = false;
 
     await database.transaction().execute(async (transaction) => {
+      // Same order lock the admin refund path takes for its reservation, so
+      // the two cannot interleave their reads of "refunded so far".
+      await orderRepository.findOrderByIdForUpdate(transaction, order.id);
+
+      // If this gateway refund is not recorded yet, it may be the one an
+      // admin request has reserved but not finished recording. Continue that
+      // row rather than inserting a second row for the same refund.
+      const recorded = await refundRepository.findRefundByGatewayRefundId(
+        transaction,
+        event.gatewayRefundId!,
+      );
+      if (!recorded) {
+        await refundRepository.adoptUnconfirmedReservation(transaction, {
+          paymentId: payment.id,
+          amount: refundAmount,
+          gatewayRefundId: event.gatewayRefundId!,
+          now,
+        });
+      }
+
       const totalOtherRefunds = await refundRepository.sumOtherCountedRefunds(
         transaction,
         order.id,
