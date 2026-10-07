@@ -161,6 +161,40 @@ export function createAttemptService(options: QuizServiceOptions) {
       );
   }
 
+  /**
+   * A quiz can be started only once its lesson and course are published.
+   * Enrolled students could otherwise open a quiz the instructor was still
+   * preparing — and, with feedback on, read its answers before release.
+   * The course owner and admins may try it out beforehand. Reported as
+   * "not found" so an unreleased quiz is not revealed.
+   */
+  async function assertAssignmentReleased(
+    assignment: NonNullable<Awaited<ReturnType<typeof repo.findAssignment>>>,
+    userId: string,
+    roles: readonly string[],
+  ) {
+    if (isAdmin({ id: userId, roles })) return;
+    const course = await courseService.findCourseById(assignment.course_id);
+    if (course?.creator_id === userId) return;
+    const lesson = assignment.lesson_id
+      ? await courseService.findLessonById(
+          assignment.course_id,
+          assignment.lesson_id,
+        )
+      : undefined;
+    if (
+      !course ||
+      course.deleted_at ||
+      course.status !== "published" ||
+      !lesson?.is_published
+    )
+      throw new AppError(
+        404,
+        "ASSIGNMENT_NOT_FOUND",
+        "Quiz assignment not found.",
+      );
+  }
+
   /** Course access and, for paid quizzes, the quiz pass. */
   async function assertAssignmentAccess(
     assignment: NonNullable<Awaited<ReturnType<typeof repo.findAssignment>>>,
@@ -192,6 +226,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     roles: readonly string[] = [],
   ) {
     const assignment = await getAssignment(assignmentId);
+    await assertAssignmentReleased(assignment, userId, roles);
     await assertAssignmentAccess(
       assignment,
       userId,
@@ -755,12 +790,15 @@ export function createAttemptService(options: QuizServiceOptions) {
       current.push(attempt);
       attemptsByAssignment.set(attempt.assignment_id, current);
     }
+    // Only published courses: a quiz in a course that was unpublished or
+    // deleted after the student got access is not offered.
     const courseTitles = new Map<string, string>();
     await Promise.all(
       [...new Set(assignments.map((assignment) => assignment.course_id))].map(
         async (courseId) => {
           const course = await courseService.findCourseById(courseId);
-          if (course) courseTitles.set(courseId, course.title);
+          if (course && !course.deleted_at && course.status === "published")
+            courseTitles.set(courseId, course.title);
         },
       ),
     );
@@ -781,8 +819,12 @@ export function createAttemptService(options: QuizServiceOptions) {
     for (const assignment of assignments) {
       const quiz = quizzesById.get(assignment.quiz_id);
       const lessonRow = lessonsById.get(assignment.lesson_id);
+      // Unpublished lessons are left out, like the lesson itself is.
       const lesson =
-        lessonRow && lessonRow.course_id === assignment.course_id
+        lessonRow &&
+        lessonRow.course_id === assignment.course_id &&
+        lessonRow.is_published &&
+        courseTitles.has(assignment.course_id)
           ? lessonRow
           : undefined;
       const attempts = attemptsByAssignment.get(assignment.id) ?? [];

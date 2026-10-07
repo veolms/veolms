@@ -31,7 +31,7 @@ export async function listLessonsByIds(
   if (lessonIds.length === 0) return [];
   return await database
     .selectFrom("course_lessons")
-    .select(["id", "course_id", "title"])
+    .select(["id", "course_id", "title", "is_published"])
     .where("id", "in", lessonIds)
     .where("deleted_at", "is", null)
     .execute();
@@ -380,6 +380,32 @@ export async function updateAssignment(
     .where("id", "=", assignmentId)
     .returningAll()
     .executeTakeFirstOrThrow();
+}
+
+/**
+ * Attempts on these assignments made by learners — everyone except the
+ * acting author and the owner of the course the quiz sits in, whose own
+ * trial runs should not stand in the way of removing a quiz.
+ */
+export async function countLearnerAttempts(
+  database: DatabaseExecutor,
+  input: { assignmentIds: readonly string[]; actorId: string },
+): Promise<number> {
+  if (input.assignmentIds.length === 0) return 0;
+  const row = await database
+    .selectFrom("quiz_attempts")
+    .innerJoin(
+      "quiz_assignments",
+      "quiz_assignments.id",
+      "quiz_attempts.assignment_id",
+    )
+    .innerJoin("courses", "courses.id", "quiz_assignments.course_id")
+    .select(({ fn }) => fn.countAll<string>().as("count"))
+    .where("quiz_attempts.assignment_id", "in", [...input.assignmentIds])
+    .where("quiz_attempts.user_id", "<>", input.actorId)
+    .whereRef("quiz_attempts.user_id", "<>", "courses.creator_id")
+    .executeTakeFirst();
+  return Number(row?.count ?? 0);
 }
 
 export async function deleteAssignment(
