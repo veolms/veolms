@@ -2693,22 +2693,9 @@ export function CoursesPage({
               }
             }
 
-            if (localEstimate == null) {
-              const lastLessonStr = localStorage.getItem(
-                `veolms-last-lesson-${courseKey}`,
-              );
-              if (lastLessonStr) {
-                const lessonNum = parseInt(lastLessonStr, 10);
-                // last-lesson is a resume pointer, not completion — never let it
-                // drop below the enrolled-courses API progress.
-                if (!isNaN(lessonNum) && lessonNum > 0) {
-                  localEstimate = Math.min(
-                    100,
-                    Math.round((lessonNum / total) * 100),
-                  );
-                }
-              }
-            }
+            // The last-opened lesson is a resume pointer, not progress. It
+            // used to stand in for it: opening lesson 45 of 50 showed 90%
+            // on a course the learner had barely started.
 
             const nextProgress =
               serverProgress == null

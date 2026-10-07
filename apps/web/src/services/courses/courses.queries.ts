@@ -99,11 +99,14 @@ export function useCourseStaticPageRefreshStatus(courseId: string | null) {
       : [...courseKeys.all, "static-page-refresh", null],
     queryFn: () => coursesService.getStaticPageRefreshStatus(courseId!),
     enabled: Boolean(courseId),
+    // Followed closely only while a rebuild is under way. Course edits
+    // refresh this query themselves, so the idle check is just a backstop;
+    // at 5 seconds it was 12 requests a minute from every open editor.
     refetchInterval: (query) =>
       query.state.data?.status === "queued" ||
       query.state.data?.status === "running"
         ? 2_000
-        : 5_000,
+        : 60_000,
   });
 }
 

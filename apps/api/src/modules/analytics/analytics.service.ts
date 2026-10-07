@@ -99,10 +99,18 @@ function kpi(value: number, previousValue: number): AnalyticsKpi {
   return { value, previousValue, changePercent };
 }
 
+/** Longest span one request may cover; the dashboard's widest is a year. */
+const MAX_RANGE_DAYS = 366;
+
 function resolveDateRange(query: AnalyticsFilterQuery) {
   const to = query.to ?? new Date();
-  const from =
+  const requestedFrom =
     query.from ?? new Date(to.getTime() - DEFAULT_RANGE_DAYS * DAY_MS);
+  // The span was whatever the client asked for, and every extra day is
+  // scanned twice — once for the range and once for the period before it.
+  const from = new Date(
+    Math.max(requestedFrom.getTime(), to.getTime() - MAX_RANGE_DAYS * DAY_MS),
+  );
   const spanMs = Math.max(to.getTime() - from.getTime(), DAY_MS);
   const prevTo = from;
   const prevFrom = new Date(from.getTime() - spanMs);

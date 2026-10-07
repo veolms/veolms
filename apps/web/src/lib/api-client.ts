@@ -1,5 +1,7 @@
 import { getApiError, type ApiError } from "./api-error";
 import { authStore } from "../store/auth.store";
+import { authKeys } from "../services/auth/auth.keys";
+import { queryClient } from "./query-client";
 import { resetRegisteredInteractionState } from "../services/learning-interactions/interaction-reset-registry";
 import {
   buildMfaChallengePath,
@@ -341,6 +343,10 @@ async function request<T>(
     redirectToMfaSetup(apiError);
     if (shouldClearAuthOnUnauthorized(url, apiError)) {
       authStore.clearAuth();
+      // The route guards also read the cached current user. Left in place,
+      // it kept the signed-in shell on screen — every request failing —
+      // until that cache next refreshed, minutes later.
+      queryClient.setQueryData(authKeys.me(), null);
       resetRegisteredInteractionState();
     }
     throw apiError;
