@@ -3,11 +3,13 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import type { PointerEvent, ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatMoney, toMajorUnits } from "@veolms/contracts/commerce/money";
 import type {
   DashboardRange,
   DashboardRevenueOverview,
@@ -279,12 +281,14 @@ function EnrollmentActivityComparison({
   );
 }
 
+/** Dashboard revenue figures arrive in minor units (paise). */
 function formatDashboardCurrency(value: number, currency: string) {
-  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value);
+  return formatMoney(value, { currency, decimals: "never" });
+}
+
+/** A point of the revenue chart series, which is held in major units. */
+function formatDashboardChartCurrency(value: number, currency: string) {
+  return formatMoney(value, { currency, unit: "major", decimals: "never" });
 }
 
 function formatDashboardNumber(value: number) {
@@ -1882,7 +1886,7 @@ function DataCanvas({
         >
           <span>{formatRevenueTooltipDate(tooltipData.date)}</span>
           <strong>
-            {formatDashboardCurrency(tooltipData.value, revenueCurrency)}
+            {formatDashboardChartCurrency(tooltipData.value, revenueCurrency)}
           </strong>
         </div>
       )}
@@ -1927,7 +1931,17 @@ function RevenuePanel({
   isManualRefresh: boolean;
 }) {
   const currency = revenueOverview?.currency ?? "INR";
-  const trend = revenueOverview?.trend ?? [];
+  // The canvas chart scales and labels plain numbers, so the revenue series
+  // (minor units from the API) is converted to major units once, here.
+  const apiTrend = revenueOverview?.trend;
+  const trend = useMemo(
+    () =>
+      (apiTrend ?? []).map((point) => ({
+        ...point,
+        value: toMajorUnits(point.value, currency),
+      })),
+    [apiTrend, currency],
+  );
   const panelIsLoading = isLoading || isManualRefresh;
   const revenueStatus = panelIsLoading
     ? "loading"

@@ -1,3 +1,4 @@
+import { formatMoney } from "@veolms/contracts";
 import { escapeHtml, type EmailContent } from "@veolms/services/email";
 
 import { config } from "../../config.ts";
@@ -40,13 +41,6 @@ function stringListValue(
   return value;
 }
 
-function formatMoney(amount: number, currency: string): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(amount / 100);
-}
-
 function emailContent(
   subject: string,
   body: string,
@@ -84,10 +78,12 @@ export function renderNotificationTemplate(
     }
     case "purchase.completed": {
       const orderNumber = stringValue(data, "orderNumber");
-      const total = formatMoney(
-        numberValue(data, "totalAmount"),
-        stringValue(data, "currency"),
-      );
+      // payment.completed carries the stored order total, which is in major
+      // units (499 = ₹499) — unlike refund events, which carry minor units.
+      const total = formatMoney(numberValue(data, "totalAmount"), {
+        currency: stringValue(data, "currency"),
+        unit: "major",
+      });
       const itemTitles = stringListValue(data, "itemTitles");
       inApp = {
         title: "Purchase completed",
@@ -104,7 +100,7 @@ export function renderNotificationTemplate(
     case "refund.completed":
       inApp = {
         title: "Refund completed",
-        body: `${formatMoney(numberValue(data, "amount"), stringValue(data, "currency"))} was refunded for order ${stringValue(data, "orderNumber")}.`,
+        body: `${formatMoney(numberValue(data, "amount"), { currency: stringValue(data, "currency") })} was refunded for order ${stringValue(data, "orderNumber")}.`,
       };
       break;
     case "video.processing_completed":

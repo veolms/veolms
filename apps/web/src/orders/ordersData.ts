@@ -18,6 +18,8 @@ export interface OrderItem {
   transactionId: string;
   tax: number;
   subtotal: number;
+  /** ISO 4217 code of the order; defaults to INR when absent. */
+  currency?: string;
 }
 
 export interface OrderSummaryMetrics {

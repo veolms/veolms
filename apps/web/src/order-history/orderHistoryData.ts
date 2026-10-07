@@ -18,12 +18,14 @@ export interface OrderHistoryItem {
   date: string; // e.g. "May 24, 2025"
   time: string; // e.g. "10:30 AM"
   payment: OrderHistoryPayment;
-  amount: number; // in USD
+  amount: number; // major units of the order's currency
   formattedAmount: string; // e.g. "$49.00"
   status: OrderHistoryStatus;
   statusLabel: string;
   subtotal: number;
   tax: number;
+  /** ISO 4217 code of the order; defaults to INR when absent. */
+  currency?: string;
   transactionId: string;
 }
 

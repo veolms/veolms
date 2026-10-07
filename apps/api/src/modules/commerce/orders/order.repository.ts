@@ -6,6 +6,7 @@ import type {
   OrderSortOrder,
 } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
+import { toMinorUnits } from "../shared/currency.ts";
 
 export interface ListOrdersOptions {
   cursor?: OrderCursorPayload;
@@ -333,7 +334,11 @@ export async function getOrderStatsByCurrency(
     currency: row.currency,
     totalOrders: Number(row.total_orders),
     uniqueBuyers: Number(row.unique_buyers),
-    grossPaid: Number(row.gross_paid),
+    // Every amount in this row is MINOR units. orders.total_amount is stored
+    // in major units while refunds and after_commission_amount are minor, so
+    // the gross is converted here; subtracting the raw values gave nonsense
+    // (a ₹499 order with a ₹100 refund netted to -9501).
+    grossPaid: toMinorUnits(Number(row.gross_paid), row.currency),
     totalEarnings: Number(row.total_earnings),
     refundedAmount: Number(row.refunded_amount),
     refundedAgainstPaid: Number(row.refunded_against_paid),
@@ -399,7 +404,11 @@ export async function getRevenueTrend(
   const rows = await query.execute();
   return rows.map((row) => ({
     date: row.date,
-    value: Number(row.gross_paid) - Number(row.refunded_amount),
+    // Minor units: the major-unit gross is converted before the minor-unit
+    // refunds are subtracted.
+    value:
+      toMinorUnits(Number(row.gross_paid), filters.currency) -
+      Number(row.refunded_amount),
   }));
 }
 

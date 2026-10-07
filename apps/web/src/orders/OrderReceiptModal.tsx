@@ -3,6 +3,7 @@ import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/Down
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/Receipt";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { formatMoney } from "@veolms/contracts/commerce/money";
 import type { OrderItem } from "./ordersData";
 
 export interface OrderReceiptModalProps {
@@ -123,11 +124,21 @@ export function OrderReceiptModal({
         <div className="mt-4 rounded-xl border border-(--border) p-4 text-xs">
           <div className="flex justify-between py-1 text-(--text-secondary)">
             <span>Course Subtotal</span>
-            <span>₹{order.subtotal.toLocaleString()}</span>
+            <span>
+              {formatMoney(order.subtotal, {
+                currency: order.currency,
+                unit: "major",
+              })}
+            </span>
           </div>
           <div className="flex justify-between py-1 text-(--muted)">
-            <span>Estimated GST / Taxes (18%)</span>
-            <span>₹{order.tax.toLocaleString()}</span>
+            <span>Taxes</span>
+            <span>
+              {formatMoney(order.tax, {
+                currency: order.currency,
+                unit: "major",
+              })}
+            </span>
           </div>
           <div className="mt-2 pt-2 border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] flex justify-between text-sm font-bold text-(--text)">
             <span>Total Amount Paid</span>

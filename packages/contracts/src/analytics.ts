@@ -27,6 +27,7 @@ export const coursePerformanceRowSchema = z.strictObject({
   courseId: z.string().uuid(),
   title: z.string(),
   enrollments: z.number().int().nonnegative(),
+  /** Minor units (paise). */
   netRevenue: z.number().int(),
   completionRate: z.number(),
   averageProgressPercent: z.number(),
@@ -56,6 +57,7 @@ export const analyticsOverviewResponseSchema = z.strictObject({
   currency: z.string().length(3),
 
   overview: z.strictObject({
+    /** Revenue figures (this KPI and revenueTrend) are in minor units. */
     netRevenue: analyticsKpiSchema,
     orders: analyticsKpiSchema,
     newEnrollments: analyticsKpiSchema,

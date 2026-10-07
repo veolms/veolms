@@ -9,7 +9,17 @@ import type { Executor } from "../shared/repository.types.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { ADMIN_ROLE } from "../../auth/index.ts";
 import type { CourseService } from "../../courses/index.ts";
+import { toMinorUnits } from "../shared/currency.ts";
 import * as couponRepo from "./coupon.repository.ts";
+
+/**
+ * Discounts actually given are transacted money, so they leave the API in
+ * minor units like order totals. Redemption rows store the order's
+ * major-unit discount and carry no currency of their own; INR is the
+ * academy's operating currency.
+ */
+const discountGivenToMinor = (amountMajor: number) =>
+  toMinorUnits(Math.round(amountMajor), "INR");
 
 /** The staff member managing coupons. */
 export interface CouponActor {
@@ -181,7 +191,7 @@ export function createCouponService({
       restrictedCourseIds: row.restricted_course_ids,
       restrictedBundleIds: row.restricted_bundle_ids,
       redemptionCount: usage?.redemptionCount ?? 0,
-      totalDiscountGiven: usage?.totalDiscountGiven ?? 0,
+      totalDiscountGiven: discountGivenToMinor(usage?.totalDiscountGiven ?? 0),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -248,7 +258,10 @@ export function createCouponService({
             })
           : null,
       totalCount: summary.totalCount,
-      summary,
+      summary: {
+        ...summary,
+        totalDiscountGiven: discountGivenToMinor(summary.totalDiscountGiven),
+      },
     };
   }
 
