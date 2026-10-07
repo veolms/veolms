@@ -1,5 +1,8 @@
 import type { DatabaseExecutor } from "@veolms/database";
-import type { EngagementTargetType, UserMention } from "@veolms/contracts";
+import type {
+  EngagementTargetType,
+  UserAutocompleteItem,
+} from "@veolms/contracts";
 import { sql } from "kysely";
 import { isCourseParticipant } from "../shared/discussion.mentions.ts";
 
@@ -91,7 +94,7 @@ export interface EngagementsRepository {
       courseId: string;
       limit: number;
     },
-  ): Promise<UserMention[]>;
+  ): Promise<UserAutocompleteItem[]>;
 }
 
 export function createEngagementsRepository(): EngagementsRepository {
@@ -228,7 +231,7 @@ export function createEngagementsRepository(): EngagementsRepository {
 
       const queryBuilder = db
         .selectFrom("users")
-        .select(["id", "display_name", "username", "avatar_data_url"])
+        .select(["display_name", "username", "avatar_data_url"])
         .where("username", "is not", null)
         .where("is_deleted", "=", false)
         .where((eb) =>
@@ -260,7 +263,6 @@ export function createEngagementsRepository(): EngagementsRepository {
         if (!u.username) return [];
         return [
           {
-            id: u.id,
             displayName: u.display_name || u.username,
             username: u.username,
             avatarUrl: u.avatar_data_url ?? null,

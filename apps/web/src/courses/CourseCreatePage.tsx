@@ -1831,13 +1831,10 @@ export function buildLocalPreviewData({
   const sectionsData: CourseEditorDataResponse["sections"] = sections.map(
     (sec, secIdx) => ({
       id: sec.id,
-      courseId: currentCourseId,
       title: sec.title,
       position: secIdx,
       lessons: (sec.lessons || []).map((les, lesIdx) => ({
         id: les.id,
-        courseId: currentCourseId,
-        sectionId: sec.id,
         title: les.title,
         description: les.description || null,
         contentType: (les.contentType === "audio"
@@ -1850,13 +1847,10 @@ export function buildLocalPreviewData({
         position: lesIdx,
         isPreview: Boolean(les.isPreview),
         isPublished: les.isPublished !== undefined ? les.isPublished : true,
-        resources: (les.resources || []).map((res, resIdx) => ({
+        resources: (les.resources || []).map((res) => ({
           id: res.id,
-          lessonId: les.id,
           mediaAssetId: res.mediaAssetId || res.id,
           title: res.name,
-          position: resIdx,
-          createdAt: now,
         })),
       })),
     }),
@@ -1864,7 +1858,6 @@ export function buildLocalPreviewData({
 
   const accessRulesData: CourseEditorDataResponse["accessRules"] = {
     id: editorDefaults?.accessRules?.id || "preview-access-rules",
-    courseId: currentCourseId,
     accessType: (accessRulesDraft.accessType as AccessType) || "everyone",
     durationType: isFixedDuration ? "fixed_duration" : "lifetime",
     durationDays,
@@ -1872,7 +1865,6 @@ export function buildLocalPreviewData({
 
   const pricingData: CourseEditorDataResponse["pricing"] = {
     id: editorDefaults?.pricing?.id || "preview-pricing",
-    courseId: currentCourseId,
     pricingType: pricingPayload.pricingType,
     price: pricingPayload.price,
     salePrice: pricingPayload.salePrice,
@@ -1882,7 +1874,6 @@ export function buildLocalPreviewData({
 
   const settingsData: CourseEditorDataResponse["settings"] = {
     id: editorDefaults?.settings?.id || "preview-settings",
-    courseId: currentCourseId,
     allowQa: accessRulesDraft.enableQA,
     allowComments: accessRulesDraft.enableComments,
     allowDownloads: accessRulesDraft.enableDownloads,
@@ -1897,12 +1888,8 @@ export function buildLocalPreviewData({
     .filter((inc) => Boolean(inc.text.trim()))
     .map((inc, index) => ({
       id: inc.id,
-      courseId: currentCourseId,
       text: inc.text.trim(),
-      icon: null,
       position: index,
-      createdAt: now,
-      updatedAt: now,
     }));
 
   return {
@@ -3272,7 +3259,7 @@ export function CourseCreatePage({
       courseVersionRef.current = updated.version;
       thumbnailMediaIdRef.current = presigned.mediaAssetId;
       setThumbnailMediaId(presigned.mediaAssetId);
-      setThumbnail(updated.thumbnailUrl ?? processedThumbnailUrl);
+      setThumbnail(processedThumbnailUrl);
       thumbnailDirtyRef.current = false;
       setThumbnailUploadStatus("idle");
       setThumbnailUploadError(null);

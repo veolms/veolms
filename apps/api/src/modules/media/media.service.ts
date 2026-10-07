@@ -110,19 +110,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function getPersistedImageVariantKey(
   metadata: unknown,
-  variant: "full" | number,
+  width: number,
 ): string | null {
   if (!isRecord(metadata)) return null;
 
-  if (variant === "full") {
-    const full = metadata.full;
-    if (!isRecord(full) || typeof full.key !== "string") return null;
-    return full.key.trim() || null;
-  }
-
   if (!Array.isArray(metadata.variants)) return null;
   const matchingVariant = metadata.variants.find(
-    (item) => isRecord(item) && item.width === variant,
+    (item) => isRecord(item) && item.width === width,
   );
   if (!isRecord(matchingVariant) || typeof matchingVariant.key !== "string") {
     return null;
@@ -159,6 +153,29 @@ function hlsContentType(path: string): string {
   if (/\.aac$/i.test(path)) return "audio/aac";
   if (/\.vtt$/i.test(path)) return "text/vtt";
   return "application/octet-stream";
+}
+
+/**
+ * What an author is told when transcoding failed. The stored error is the
+ * provider's or dispatcher's own text and is not for clients.
+ */
+const VIDEO_JOB_FAILED_MESSAGE = "Video processing failed. Please try again.";
+
+/** One answer for every webhook authentication failure. */
+const WEBHOOK_UNAUTHORIZED_MESSAGE = "Webhook authentication failed.";
+
+/**
+ * Whether a course's lessons play without a grant: it is free and not
+ * access-restricted. A restricted course needs a grant even when it costs
+ * nothing, the same rule learning progress and discussions apply.
+ */
+function isOpenFreeCourse(context: {
+  pricing_type: string | null;
+  access_type: string | null;
+}): boolean {
+  return (
+    context.pricing_type === "free" && context.access_type !== "restricted"
+  );
 }
 
 export function createMediaService({
@@ -224,15 +241,9 @@ export function createMediaService({
     ownerId: string,
     logger?: FastifyBaseLogger,
     userRoles?: readonly string[],
-  ): Promise<{
-    status: MediaAssetStatus;
-    jobId?: string | null;
-    deliveryUrl?: string;
-    deliveryUrlExpiresAt?: number;
-    thumbnailUrl?: string;
-  }> {
+  ): Promise<{ status: MediaAssetStatus }> {
     const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(
+    const media = await mediaRepo.findMediaAssetSummaryById(
       database,
       mediaId,
       isAdmin ? undefined : ownerId,
@@ -243,29 +254,7 @@ export function createMediaService({
     }
 
     if (media.status !== "uploading") {
-      let existingJobId: string | null = null;
-      if (media.type === "video") {
-        const job = await mediaRepo.findVideoJobByVideoId(database, mediaId);
-        existingJobId = job ? job.id : null;
-      }
-      const delivery = getDirectDelivery(media.storage_key);
-      let thumbnailUrl: string | undefined;
-      if (media.type === "video") {
-        try {
-          thumbnailUrl = getDirectDelivery(
-            `public/thumbnails/${media.id}/original.webp`,
-          ).url;
-        } catch {
-          // Ignore
-        }
-      }
-      return {
-        status: media.status,
-        jobId: existingJobId,
-        deliveryUrl: delivery.url,
-        deliveryUrlExpiresAt: delivery.expiresAt,
-        ...(thumbnailUrl ? { thumbnailUrl } : {}),
-      };
+      return { status: media.status };
     }
 
     const metadata = await services.storage.headObject(media.storage_key);
@@ -308,39 +297,15 @@ export function createMediaService({
       const jobId = crypto.randomUUID();
       await enqueueImageJob(database, { id: jobId, media_id: mediaId });
       await mediaRepo.updateMediaAssetStatus(database, mediaId, "processing");
-      return { status: "processing", jobId };
+      return { status: "processing" };
     }
 
-    let jobId: string | null = null;
     // Once video is uploaded, automatically queue and dispatch it for processing
     if (media.type === "video" && logger) {
-      const transcodeResult = await queueTranscodeJob(
-        mediaId,
-        ownerId,
-        logger,
-        userRoles,
-      );
-      jobId = transcodeResult.jobId;
+      await queueTranscodeJob(mediaId, ownerId, logger, userRoles);
     }
 
-    const delivery = getDirectDelivery(media.storage_key);
-    let thumbnailUrl: string | undefined;
-    if (media.type === "video") {
-      try {
-        thumbnailUrl = getDirectDelivery(
-          `public/thumbnails/${media.id}/original.webp`,
-        ).url;
-      } catch {
-        // Ignore
-      }
-    }
-    return {
-      status: "uploaded",
-      jobId,
-      deliveryUrl: delivery.url,
-      deliveryUrlExpiresAt: delivery.expiresAt,
-      ...(thumbnailUrl ? { thumbnailUrl } : {}),
-    };
+    return { status: "uploaded" };
   }
 
   /**
@@ -389,7 +354,7 @@ export function createMediaService({
       await mediaRepo.updateMediaAssetStatus(database, media.id, "uploaded");
     }
 
-    const existingJob = await mediaRepo.findVideoJobByVideoId(
+    const existingJob = await mediaRepo.findVideoJobStateByVideoId(
       database,
       media.id,
     );
@@ -520,7 +485,7 @@ export function createMediaService({
       });
     } catch (insertErr) {
       if (isUniqueViolation(insertErr)) {
-        const raceWinner = await mediaRepo.findVideoJobByVideoId(
+        const raceWinner = await mediaRepo.findVideoJobStateByVideoId(
           database,
           media.id,
         );
@@ -585,7 +550,7 @@ export function createMediaService({
     userRoles?: readonly string[],
   ) {
     const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(
+    const media = await mediaRepo.findMediaAssetSummaryById(
       database,
       mediaId,
       isAdmin ? undefined : ownerId,
@@ -698,7 +663,7 @@ export function createMediaService({
     userRoles?: readonly string[],
   ) {
     const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(
+    const media = await mediaRepo.findMediaAssetSummaryById(
       database,
       mediaId,
       isAdmin ? undefined : ownerId,
@@ -830,17 +795,18 @@ export function createMediaService({
     userRoles?: readonly string[],
   ) {
     const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(
+    // This runs every 1.5s for each open progress stream, so it reads only
+    // the two statuses and the percentage, in one query.
+    const progress = await mediaRepo.findVideoJobProgress(
       database,
       videoId,
       isAdmin ? undefined : ownerId,
     );
-    if (!media) {
+    if (!progress) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
 
-    const job = await mediaRepo.findVideoJobByVideoId(database, videoId);
-    if (!job) {
+    if (!progress.job_id || !progress.job_status) {
       throw new AppError(
         404,
         "JOB_NOT_FOUND",
@@ -848,35 +814,34 @@ export function createMediaService({
       );
     }
 
-    if (job.status === "completed" && media.status !== "ready") {
+    let status = progress.job_status;
+    let progressPercent = Number(progress.progress_percent ?? 0);
+
+    if (status === "completed" && progress.media_status !== "ready") {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "ready");
-    } else if (job.status === "failed" && media.status !== "failed") {
+    } else if (status === "failed" && progress.media_status !== "failed") {
       await mediaRepo.updateMediaAssetStatus(database, videoId, "failed");
-    } else if (media.status === "ready" && job.status !== "completed") {
-      job.status = "completed";
-      job.progress_percent = 100;
-      await database
-        .updateTable("video_jobs")
-        .set({
+    } else if (progress.media_status === "ready" && status !== "completed") {
+      status = "completed";
+      progressPercent = 100;
+      await mediaRepo
+        .updateVideoJobStatus(database, progress.job_id, {
           status: "completed",
           progress_percent: 100,
-          updated_at: new Date(),
         })
-        .where("id", "=", job.id)
-        .execute()
         .catch(() => {});
     }
 
     return {
-      status: job.status,
+      status,
       // The worker reports live FFmpeg progress to worker_monitoring. The
       // video_jobs value is the durable fallback used before a worker is
       // assigned and after the worker is released.
-      progressPercent: Math.max(
-        0,
-        Math.min(100, Math.floor(Number(job.progress_percent))),
-      ),
-      error: job.error_message,
+      progressPercent: Math.max(0, Math.min(100, Math.floor(progressPercent))),
+      // video_jobs.error_message holds the provider's or dispatcher's own
+      // text (AWS account ids, role and queue ARNs, bucket paths). It stays
+      // in the database and the logs; the author sees a fixed message.
+      error: status === "failed" ? VIDEO_JOB_FAILED_MESSAGE : null,
     };
   }
 
@@ -886,6 +851,7 @@ export function createMediaService({
       course_status: string;
       course_creator_id: string | null;
       pricing_type: string | null;
+      access_type: string | null;
       is_preview: boolean;
       is_published?: boolean;
       /** The course's first published lesson. */
@@ -908,11 +874,12 @@ export function createMediaService({
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
-    // Preview lessons are public. A free course is open to anyone who is
-    // signed in; a visitor who is not gets its first lesson only.
+    // Preview lessons are public. A free course that is not
+    // access-restricted is open to anyone who is signed in; a visitor who
+    // is not gets its first lesson only.
     if (context.is_preview) return;
     if (
-      context.pricing_type === "free" &&
+      isOpenFreeCourse(context) &&
       (user || context.is_first_lesson === true)
     ) {
       return;
@@ -940,19 +907,24 @@ export function createMediaService({
     }
   }
 
+  /**
+   * `media` is the asset as the playback context read it alongside the
+   * lesson; its fields are null when the lesson's media row is gone.
+   */
   async function getReadyPlaybackOutput(
     mediaId: string,
+    media: {
+      media_type: string | null;
+      media_status: string | null;
+      media_storage_key: string | null;
+    },
     options: { verifyManifest?: boolean } = {},
   ) {
-    const [media, outputs] = await Promise.all([
-      mediaRepo.findMediaAssetById(database, mediaId),
-      mediaRepo.findVideoOutputsByVideoIds(database, [mediaId]),
-    ]);
-    if (!media || media.type !== "video") {
+    if (media.media_type !== "video" || media.media_storage_key === null) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Video asset not found.");
     }
 
-    if (media.status !== "ready") {
+    if (media.media_status !== "ready") {
       throw new AppError(
         409,
         "MEDIA_NOT_READY",
@@ -960,10 +932,11 @@ export function createMediaService({
       );
     }
 
-    const outputPrefix = normalizeOutputPrefix(media.storage_key);
-    const latestOutput = outputs
-      .filter((output) => output.video_id === mediaId)
-      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())[0];
+    const outputPrefix = normalizeOutputPrefix(media.media_storage_key);
+    const latestOutput = await mediaRepo.findLatestVideoOutput(
+      database,
+      mediaId,
+    );
     const manifestKey = normalizeOutputPrefix(
       latestOutput?.master_playlist_path || `${outputPrefix}/master.m3u8`,
     );
@@ -978,7 +951,7 @@ export function createMediaService({
       }
     }
 
-    return { media, outputPrefix, manifestKey };
+    return { outputPrefix, manifestKey };
   }
 
   function getDirectDelivery(storageKey: string) {
@@ -991,7 +964,7 @@ export function createMediaService({
     userRoles?: readonly string[],
   ) {
     const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(database, mediaId);
+    const media = await mediaRepo.findMediaAssetSummaryById(database, mediaId);
     if (!media) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
@@ -1132,7 +1105,7 @@ export function createMediaService({
       throw new AppError(404, "RESOURCE_NOT_FOUND", "Resource not found.");
     }
 
-    const media = await mediaRepo.findMediaAssetById(
+    const media = await mediaRepo.findMediaAssetSummaryById(
       database,
       resource.media_asset_id,
     );
@@ -1146,12 +1119,7 @@ export function createMediaService({
       LESSON_RESOURCE_DOWNLOAD_TTL_SECONDS,
       { responseContentDisposition: buildAttachmentDisposition(fileName) },
     );
-    return {
-      url,
-      fileName,
-      expiresAt:
-        Math.floor(Date.now() / 1000) + LESSON_RESOURCE_DOWNLOAD_TTL_SECONDS,
-    };
+    return { url };
   }
 
   function createPlaybackSegmentToken(
@@ -1199,11 +1167,10 @@ export function createMediaService({
     // The transcode worker only marks a job completed after publishing its
     // output. Avoid an extra storage HEAD round-trip on every first play;
     // the CDN manifest request itself remains the authoritative final check.
-    const { media, manifestKey } = await getReadyPlaybackOutput(
+    const { manifestKey } = await getReadyPlaybackOutput(
       context.content_media_id!,
-      {
-        verifyManifest: false,
-      },
+      context,
+      { verifyManifest: false },
     );
     const manifestUrl = services.storage.getCdnObjectUrl(manifestKey);
     if (!manifestUrl) {
@@ -1242,9 +1209,9 @@ export function createMediaService({
             segmentTokenExpiresAt: playbackToken.expiresAt,
           }
         : {}),
-      ...(media.duration_seconds !== null &&
-      media.duration_seconds !== undefined
-        ? { duration: Number(media.duration_seconds) }
+      ...(context.duration_seconds !== null &&
+      context.duration_seconds !== undefined
+        ? { duration: Number(context.duration_seconds) }
         : {}),
       ...(chapters.length > 0 ? { chapters } : {}),
       title: context.lesson_title,
@@ -1264,6 +1231,7 @@ export function createMediaService({
     );
     const { manifestKey } = await getReadyPlaybackOutput(
       context.content_media_id!,
+      context,
       { verifyManifest: false },
     );
     const playbackToken = createPlaybackSegmentToken(manifestKey);
@@ -1288,7 +1256,7 @@ export function createMediaService({
     }
 
     await assertPlaybackAccess(context, user);
-    const { outputPrefix } = await getReadyPlaybackOutput(mediaId, {
+    const { outputPrefix } = await getReadyPlaybackOutput(mediaId, context, {
       verifyManifest: false,
     });
     const hlsPath = requestedPath.replace(/^\/+/, "");
@@ -1310,69 +1278,24 @@ export function createMediaService({
       isPublic:
         context.course_status === "published" &&
         (context.is_preview ||
-          (context.pricing_type === "free" && context.is_first_lesson)),
+          (isOpenFreeCourse(context) && context.is_first_lesson === true)),
     };
   }
 
   /**
-   * Fetches the media file stream and metadata from storage.
+   * Streams one responsive variant of an image.
    *
-   * Access rule: an asset is servable without restriction if it's the
-   * thumbnail/trailer of a published course (those render as plain
-   * <img>/<video> src on public, logged-out marketing pages). Anything
-   * else — draft-course assets, unattached uploads, other media types —
-   * is only servable to its owner. `requestingUserId` is undefined for
-   * anonymous requests.
+   * Access rule: an image is servable to anyone when it is the thumbnail of
+   * a published course (it renders as a plain <img> on public, logged-out
+   * pages). Anything else — draft-course images, unattached uploads — is
+   * only servable to its owner or an admin. `requestingUserId` is undefined
+   * for anonymous requests. `isPublic` tells the caller which case applied,
+   * so a privately served image is never marked cacheable by shared caches.
    *
    * Returns MEDIA_NOT_FOUND (not 403) for an authorization failure too, so
    * a caller can't distinguish "doesn't exist" from "exists but isn't
    * yours" by probing IDs.
    */
-  async function getMediaStream(
-    mediaId: string,
-    requestingUserId?: string,
-    userRoles?: readonly string[],
-  ) {
-    const isAdmin = userRoles?.includes(ADMIN_ROLE);
-    const media = await mediaRepo.findMediaAssetById(database, mediaId);
-    if (!media) {
-      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
-    }
-
-    const isPublic = await mediaRepo.isMediaAttachedToPublishedCourse(
-      database,
-      mediaId,
-    );
-    if (!isPublic && media.owner_id !== requestingUserId && !isAdmin) {
-      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
-    }
-
-    const isReadyImage = media.type === "image" && media.status === "ready";
-    const fullKey = isReadyImage
-      ? (getPersistedImageVariantKey(media.metadata, "full") ??
-        `${resolveImageThumbnailPrefix(media.storage_key, media.id)}/full.webp`)
-      : media.storage_key;
-    const file = await services.storage.getObject(fullKey);
-    if (!file) {
-      throw new AppError(
-        404,
-        "FILE_NOT_FOUND",
-        "Media file not found in storage.",
-      );
-    }
-    return {
-      stream: file.body,
-      contentType: isReadyImage
-        ? "image/webp"
-        : media.mime_type || file.contentType || "application/octet-stream",
-      contentLength:
-        file.contentLength ??
-        (media.size_bytes ? Number(media.size_bytes) : undefined),
-      filename: media.original_filename,
-      isPublic,
-    };
-  }
-
   async function getImageVariantStream(
     mediaId: string,
     width: number,
@@ -1416,6 +1339,7 @@ export function createMediaService({
       stream: file.body,
       contentType: "image/webp",
       contentLength: file.contentLength,
+      isPublic,
     };
   }
 
@@ -1430,13 +1354,15 @@ export function createMediaService({
     body: MediaConvertWebhookPayload;
     logger?: FastifyBaseLogger;
   }): Promise<MediaConvertWebhookResponse> {
+    // Every authentication failure answers the same way: an unauthenticated
+    // caller learns neither whether a secret is configured nor which check
+    // rejected it. The reason goes to the log instead.
     const webhookSecret = services.config?.MEDIACONVERT_WEBHOOK_SECRET;
     if (!webhookSecret) {
-      throw new AppError(
-        401,
-        "UNAUTHORIZED",
-        "MediaConvert webhook secret is not configured.",
+      logger?.warn(
+        "[mediaconvert-webhook] Rejected: MEDIACONVERT_WEBHOOK_SECRET is not configured",
       );
+      throw new AppError(401, "UNAUTHORIZED", WEBHOOK_UNAUTHORIZED_MESSAGE);
     }
 
     const signatureHeader =
@@ -1444,11 +1370,8 @@ export function createMediaService({
       headers["x-hub-signature-256"] ||
       headers["x-mediaconvert-signature"];
     if (!signatureHeader) {
-      throw new AppError(
-        401,
-        "UNAUTHORIZED",
-        "Missing MediaConvert webhook signature header.",
-      );
+      logger?.warn("[mediaconvert-webhook] Rejected: no signature header");
+      throw new AppError(401, "UNAUTHORIZED", WEBHOOK_UNAUTHORIZED_MESSAGE);
     }
     const rawPayload = rawBody
       ? typeof rawBody === "string"
@@ -1469,11 +1392,8 @@ export function createMediaService({
       sigBuf.length !== expBuf.length ||
       !crypto.timingSafeEqual(sigBuf, expBuf)
     ) {
-      throw new AppError(
-        401,
-        "UNAUTHORIZED",
-        "Invalid MediaConvert webhook signature.",
-      );
+      logger?.warn("[mediaconvert-webhook] Rejected: signature mismatch");
+      throw new AppError(401, "UNAUTHORIZED", WEBHOOK_UNAUTHORIZED_MESSAGE);
     }
 
     const eventDetail = body?.detail || body;
@@ -1525,12 +1445,13 @@ export function createMediaService({
         val,
       );
 
-    let job: Awaited<ReturnType<typeof mediaRepo.findVideoJobById>> | undefined;
+    let job:
+      Awaited<ReturnType<typeof mediaRepo.findVideoJobStateById>> | undefined;
     if (jobId && isUuid(jobId)) {
-      job = await mediaRepo.findVideoJobById(database, jobId);
+      job = await mediaRepo.findVideoJobStateById(database, jobId);
     }
     if (!job && videoId && isUuid(videoId)) {
-      job = await mediaRepo.findVideoJobByVideoId(database, videoId);
+      job = await mediaRepo.findVideoJobStateByVideoId(database, videoId);
     }
 
     if (!job) {
@@ -1613,7 +1534,7 @@ export function createMediaService({
       // The duration is only reliable now, so chapters authored before the
       // upload finished are derived (and their frames requested) here.
       try {
-        const readyMedia = await mediaRepo.findMediaAssetById(
+        const readyMedia = await mediaRepo.findMediaAssetSummaryById(
           database,
           job.video_id,
         );
@@ -1720,7 +1641,6 @@ export function createMediaService({
     getLessonResourceDownload,
     getMediaDelivery,
     getHlsStream,
-    getMediaStream,
     getImageVariantStream,
     handleMediaConvertWebhook,
   };

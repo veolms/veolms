@@ -13,7 +13,7 @@ export const inputClass =
   "h-9 sm:h-10 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 sm:px-3.5 text-xs sm:text-sm text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20";
 
 export function getCouponStatus(
-  coupon: Coupon,
+  coupon: Pick<Coupon, "isActive" | "startsAt" | "expiresAt">,
   referenceTime: number = Date.now(),
 ): CouponStatus {
   if (!coupon.isActive) {
@@ -150,7 +150,9 @@ export function unpackCouponCopy(raw?: string | null): {
   };
 }
 
-export function couponCampaignTitle(coupon: Coupon) {
+export function couponCampaignTitle(
+  coupon: Pick<Coupon, "code" | "description">,
+) {
   const { title } = unpackCouponCopy(coupon.description);
   if (title) return title;
   const description = coupon.description?.trim();

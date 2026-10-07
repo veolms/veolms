@@ -221,7 +221,6 @@ export async function listStudentsPaginated(
       "u.email",
       "u.avatar_data_url",
       "u.created_at",
-      "u.updated_at",
     ])
     .where("u.is_deleted", "=", false)
     // Filter to users that are students (either have student role in
@@ -498,29 +497,26 @@ export async function listEnrollmentsForUserIds(
   let query = database
     .selectFrom("enrollments as e")
     .innerJoin("courses as c", "c.id", "e.course_id")
-    .select(["e.user_id", "e.course_id", "e.created_at as enrolled_at"])
+    .select(["e.user_id", "e.course_id"])
     .where("e.user_id", "in", userIds)
     .where("c.deleted_at", "is", null);
 
   if (creatorId) {
     query = query.where("c.creator_id", "=", creatorId);
   }
-  return await query.orderBy("e.created_at", "desc").execute();
+  return await query.execute();
 }
 
 /**
- * Batch loads learning progress records for a list of student user IDs.
- */
-/**
- * Per-(user, course) progress aggregates for the student LIST page.
+ * Per-(user, course) progress aggregates, used by both the student list and
+ * the student detail page.
  *
- * The list previously fetched every learning_progress row for the page's
- * users (listProgressForUserIds) and aggregated in JS — ~100+ rows per
- * active user, so a 50-student page moved thousands of rows per request
- * and page throughput was bound by Node parsing them, not by the queries.
- * This returns at most users x courses rows with the same quantities the
- * service was deriving. The >= 90 completion threshold must stay in sync
- * with the detail endpoint's JS computation below.
+ * Both used to fetch every learning_progress row for their users and
+ * aggregate in JS — ~100+ rows per active user, so a 50-student page moved
+ * thousands of rows per request and page throughput was bound by Node
+ * parsing them, not by the queries. This returns at most users x courses
+ * rows with the same quantities the service was deriving. A lesson counts
+ * as completed from 90% progress.
  */
 export async function listProgressSummariesForUserIds(
   database: StudentsExecutor,
@@ -546,29 +542,6 @@ export async function listProgressSummariesForUserIds(
     query = query.where("lp.course_id", "in", ownedCourseIds(creatorId));
   }
   return await query.groupBy(["lp.user_id", "lp.course_id"]).execute();
-}
-
-export async function listProgressForUserIds(
-  database: StudentsExecutor,
-  userIds: string[],
-  creatorId?: string,
-) {
-  if (userIds.length === 0) return [];
-  let query = database
-    .selectFrom("learning_progress as lp")
-    .select([
-      "lp.user_id",
-      "lp.course_id",
-      "lp.lesson_id",
-      "lp.progress_percent",
-      "lp.updated_at",
-    ])
-    .where("lp.user_id", "in", userIds);
-
-  if (creatorId) {
-    query = query.where("lp.course_id", "in", ownedCourseIds(creatorId));
-  }
-  return await query.execute();
 }
 
 /**
@@ -635,7 +608,22 @@ export async function findStudentByUsername(
   const cleanUsername = username.replace(/^@+/, "").trim();
   let query = database
     .selectFrom("users as u")
-    .selectAll("u")
+    .select([
+      "u.id",
+      "u.username",
+      "u.display_name",
+      "u.email",
+      "u.phone_no",
+      "u.avatar_data_url",
+      "u.bio",
+      "u.created_at",
+      "u.github_url",
+      "u.github_public",
+      "u.linkedin_url",
+      "u.linkedin_public",
+      "u.website_url",
+      "u.website_public",
+    ])
     .where((eb) =>
       eb.or([
         eb("u.username", "=", cleanUsername),
@@ -663,12 +651,9 @@ export async function getStudentEnrolledCourses(
     .selectFrom("enrollments as e")
     .innerJoin("courses as c", "c.id", "e.course_id")
     .select([
-      "e.id as enrollment_id",
       "e.course_id",
-      "e.status as enrollment_status",
       "e.source as enrollment_source",
       "e.created_at as enrolled_at",
-      "e.access_expires_at",
       "c.slug as course_slug",
       "c.title as course_title",
       "c.short_description as course_description",

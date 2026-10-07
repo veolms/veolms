@@ -3,6 +3,8 @@ import type {
   MediaUploadCompleteResponse,
   PresignMediaRequest,
   PresignMediaResponse,
+  VideoTranscodeCancelResponse,
+  VideoTranscodeRetryResponse,
 } from "@veolms/contracts";
 import { api, getApiBaseUrl } from "../../lib/api-client";
 
@@ -31,10 +33,6 @@ export const mediaService = {
 
   getImageVariantUrl(mediaAssetId: string, width: number): string {
     return `${getApiBaseUrl().replace(/\/$/, "")}/media/${mediaAssetId}/variants/${width}`;
-  },
-
-  getMediaAssetUrl(mediaAssetId: string): string {
-    return `${getApiBaseUrl().replace(/\/$/, "")}/media/${mediaAssetId}`;
   },
 
   /**
@@ -179,16 +177,16 @@ export const mediaService = {
     );
   },
 
-  retryTranscode(
-    mediaAssetId: string,
-  ): Promise<{ should202: boolean; jobId: string }> {
-    return api.post(`/media/${mediaAssetId}/transcode/retry`);
+  retryTranscode(mediaAssetId: string): Promise<VideoTranscodeRetryResponse> {
+    return api.post<VideoTranscodeRetryResponse>(
+      `/media/${mediaAssetId}/transcode/retry`,
+    );
   },
 
-  cancelTranscode(
-    mediaAssetId: string,
-  ): Promise<{ cancelled: true; jobId: string }> {
-    return api.post(`/media/${mediaAssetId}/transcode/cancel`);
+  cancelTranscode(mediaAssetId: string): Promise<VideoTranscodeCancelResponse> {
+    return api.post<VideoTranscodeCancelResponse>(
+      `/media/${mediaAssetId}/transcode/cancel`,
+    );
   },
 };
 

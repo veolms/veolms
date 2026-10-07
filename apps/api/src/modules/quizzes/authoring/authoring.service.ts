@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Database, DatabaseExecutor, Json } from "@veolms/database";
+import type { DatabaseExecutor, Json } from "@veolms/database";
 import type {
   CreateQuizQuestionRequest,
   CreateQuizRequest,
@@ -9,15 +9,16 @@ import type {
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import * as repo from "../shared/quiz.repository.ts";
-import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
+import { presentAssignment } from "../shared/quiz.presenters.ts";
 import {
   assertNoLearnerAttempts,
   isAdmin,
+  requireAcademyId,
   type QuizActor,
   type QuizServiceOptions,
 } from "../shared/quiz.types.ts";
 
-type OptionInput = CreateQuizQuestionRequest["options"];
+type QuizRow = NonNullable<Awaited<ReturnType<typeof repo.findQuiz>>>;
 
 function iso(value: Date | null | undefined) {
   return value ? value.toISOString() : null;
@@ -76,21 +77,10 @@ function isJsonObject(value: unknown): value is Record<string, Json> {
 export function createAuthoringService(options: QuizServiceOptions) {
   const { database } = options;
 
-  async function academyId() {
-    const id = await options.getAcademyId();
-    if (!id)
-      throw new AppError(
-        503,
-        "ACADEMY_NOT_CONFIGURED",
-        "The academy is not configured.",
-      );
-    return id;
-  }
-
   async function requireQuiz(quizId: string, actor: QuizActor) {
     const quiz = await repo.findQuiz(database, quizId);
     if (!quiz) throw new AppError(404, "QUIZ_NOT_FOUND", "Quiz not found.");
-    const currentAcademyId = await academyId();
+    const currentAcademyId = await requireAcademyId(options);
     if (quiz.academy_id !== currentAcademyId)
       throw new AppError(404, "QUIZ_NOT_FOUND", "Quiz not found.");
     if (quiz.creator_id !== actor.id && !isAdmin(actor))
@@ -105,7 +95,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     await database.transaction().execute(async (trx) => {
       await repo.insertQuiz(trx, {
         id: quizId,
-        academy_id: await academyId(),
+        academy_id: await requireAcademyId(options),
         creator_id: actor.id,
         title: payload.title,
         description: payload.description ?? null,
@@ -123,7 +113,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
         published_at: null,
       });
     });
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
   async function createQuizWithQuestions(
@@ -166,7 +156,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     await database.transaction().execute(async (trx) => {
       await repo.insertQuiz(trx, {
         id: quizId,
-        academy_id: await academyId(),
+        academy_id: await requireAcademyId(options),
         creator_id: actor.id,
         title: payload.title,
         description: payload.description ?? null,
@@ -187,103 +177,93 @@ export function createAuthoringService(options: QuizServiceOptions) {
       await repo.insertOptions(trx, optionRows);
     });
 
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
+  /**
+   * The quiz library. A summary per quiz, counted in one query: the list
+   * shows a title, a status and two counts, never a question.
+   */
   async function listMine(actor: QuizActor) {
-    const rows = isAdmin(actor)
-      ? await repo.listQuizzesByAcademy(database, await academyId())
-      : await repo.listQuizzesByCreator(database, actor.id);
-    return Promise.all(rows.map((quiz) => getQuiz(actor, quiz.id)));
+    const rows = await repo.listQuizSummaries(
+      database,
+      isAdmin(actor)
+        ? { academyId: await requireAcademyId(options) }
+        : { creatorId: actor.id },
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      updatedAt: row.updated_at.toISOString(),
+      questionCount: Number(row.question_count ?? 0),
+      publishedVersionCount: Number(row.published_version_count ?? 0),
+    }));
   }
 
-  async function presentQuiz(quizId: string) {
-    const quiz = await repo.findQuiz(database, quizId);
-    if (!quiz) throw new AppError(404, "QUIZ_NOT_FOUND", "Quiz not found.");
-    const versions = await repo.listVersions(database, quizId);
-    const result = [];
-    for (const version of versions) {
-      const questions = await repo.listQuestions(database, version.id);
-      const options = await repo.listOptions(
-        database,
-        questions.map((question) => question.id),
-      );
-      result.push({
-        id: version.id,
-        versionNumber: version.version_number,
-        instructions: version.instructions,
-        publishedAt: iso(version.published_at),
-        questions: questions.map((question) => ({
-          id: question.id,
-          questionType: question.question_type,
-          prompt: question.prompt,
-          points: Number(question.points),
-          position: question.position,
-          explanation: question.explanation,
-          options: options
-            .filter((option) => option.question_id === question.id)
-            .map((option) => ({
-              id: option.id,
-              text: option.option_text,
-              isCorrect: option.is_correct,
-              weight: Number(option.weight),
-              position: option.position,
-            })),
-        })),
-      });
-    }
-    const assignmentRows = await repo.listAssignmentsForQuizzes(database, [
-      quizId,
+  /**
+   * The quiz as its author edits it. Questions are loaded for one version
+   * only — the draft, or the newest version when nothing is in draft — which
+   * is the one the editor works on. Earlier versions are listed by number so
+   * one can be picked for an assignment.
+   */
+  async function presentQuiz(quiz: QuizRow) {
+    const [versions, assignmentRows] = await Promise.all([
+      repo.listVersions(database, quiz.id),
+      repo.listAssignmentsForQuizzes(database, [quiz.id]),
     ]);
-    const pricingByCourseId = new Map(
-      (
-        await pricingRepo.listPricingForCourses(database, [
-          ...new Set(assignmentRows.map((row) => row.course_id)),
-        ])
-      ).map((pricing) => [pricing.course_id, pricing] as const),
+    const editable =
+      versions.find((version) => !version.published_at) ?? versions.at(-1);
+    const questions = editable
+      ? await repo.listQuestions(database, editable.id)
+      : [];
+    const options = await repo.listOptions(
+      database,
+      questions.map((question) => question.id),
     );
-    const assignments = assignmentRows.map((row) => {
-      const pricing = pricingByCourseId.get(row.course_id);
-      return {
-        id: row.id,
-        quizId: row.quiz_id,
-        quizVersionId: row.quiz_version_id,
-        courseId: row.course_id,
-        lessonId: row.lesson_id,
-        required: row.required,
-        passPercentage: Number(row.pass_percentage),
-        maxAttempts: row.max_attempts,
-        timeLimitSeconds: row.time_limit_seconds,
-        shuffleQuestions: row.shuffle_questions,
-        shuffleOptions: row.shuffle_options,
-        feedbackMode: row.feedback_mode,
-        availableFrom: row.available_from?.toISOString() ?? null,
-        availableUntil: row.available_until?.toISOString() ?? null,
-        quizPricingId: pricing?.id ?? null,
-        pricingType: pricing?.pricing_type ?? ("free" as const),
-        price: Number(pricing?.price ?? 0),
-        currency: pricing?.currency ?? "INR",
-        salePrice:
-          pricing?.sale_price !== null && pricing?.sale_price !== undefined
-            ? Number(pricing.sale_price)
-            : null,
-      };
-    });
     return {
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
-      status: quiz.status,
-      createdAt: quiz.created_at.toISOString(),
-      updatedAt: quiz.updated_at.toISOString(),
-      versions: result,
-      assignments,
+      versions: versions.map((version) => ({
+        id: version.id,
+        versionNumber: version.version_number,
+        publishedAt: iso(version.published_at),
+      })),
+      editableVersion: editable
+        ? {
+            id: editable.id,
+            instructions: editable.instructions,
+            publishedAt: iso(editable.published_at),
+            questions: questions.map((question) => ({
+              id: question.id,
+              questionType: question.question_type,
+              prompt: question.prompt,
+              points: Number(question.points),
+              explanation: question.explanation,
+              options: options
+                .filter((option) => option.question_id === question.id)
+                .map((option) => ({
+                  id: option.id,
+                  text: option.option_text,
+                  isCorrect: option.is_correct,
+                })),
+            })),
+          }
+        : null,
+      assignments: assignmentRows.map(presentAssignment),
     };
   }
 
+  /** For a caller that has already been authorized for this quiz. */
+  async function presentQuizById(quizId: string) {
+    const quiz = await repo.findQuiz(database, quizId);
+    if (!quiz) throw new AppError(404, "QUIZ_NOT_FOUND", "Quiz not found.");
+    return presentQuiz(quiz);
+  }
+
   async function getQuiz(actor: QuizActor, quizId: string) {
-    await requireQuiz(quizId, actor);
-    return presentQuiz(quizId);
+    return presentQuiz(await requireQuiz(quizId, actor));
   }
 
   async function getEditableVersion(trx: DatabaseExecutor, quizId: string) {
@@ -293,13 +273,14 @@ export function createAuthoringService(options: QuizServiceOptions) {
     const source = latest.at(-1);
     if (!source)
       throw new AppError(409, "QUIZ_VERSION_MISSING", "Quiz has no version.");
+    const now = new Date();
     const version = await repo.insertVersion(trx, {
       id: crypto.randomUUID(),
       quiz_id: quizId,
       version_number:
         Math.max(...latest.map((item) => item.version_number)) + 1,
       instructions: source.instructions,
-      created_at: new Date(),
+      created_at: now,
       published_at: null,
     });
     const questions = await repo.listQuestions(trx, source.id);
@@ -307,10 +288,15 @@ export function createAuthoringService(options: QuizServiceOptions) {
       trx,
       questions.map((question) => question.id),
     );
-    for (const question of questions) {
-      const questionId = crypto.randomUUID();
-      await repo.insertQuestion(trx, {
-        id: questionId,
+    // The copy is written in two statements, not two per question.
+    const copies = questions.map((question) => ({
+      source: question,
+      id: crypto.randomUUID(),
+    }));
+    await repo.insertQuestions(
+      trx,
+      copies.map(({ source: question, id }) => ({
+        id,
         quiz_version_id: version.id,
         question_type: question.question_type,
         prompt: question.prompt,
@@ -325,26 +311,28 @@ export function createAuthoringService(options: QuizServiceOptions) {
           sourceQuestionId: question.id,
         },
         explanation: question.explanation,
-        created_at: new Date(),
-        updated_at: new Date(),
+        created_at: now,
+        updated_at: now,
         deleted_at: null,
-      });
-      await repo.insertOptions(
-        trx,
+      })),
+    );
+    await repo.insertOptions(
+      trx,
+      copies.flatMap(({ source: question, id }) =>
         options
           .filter((option) => option.question_id === question.id)
           .map((option) => ({
             id: crypto.randomUUID(),
-            question_id: questionId,
+            question_id: id,
             option_text: option.option_text,
             is_correct: option.is_correct,
             weight: option.weight,
             position: option.position,
-            created_at: new Date(),
-            updated_at: new Date(),
+            created_at: now,
+            updated_at: now,
           })),
-      );
-    }
+      ),
+    );
     return version;
   }
 
@@ -424,7 +412,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
         });
       }
     });
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
   async function addQuestion(
@@ -437,14 +425,14 @@ export function createAuthoringService(options: QuizServiceOptions) {
     const questionId = crypto.randomUUID();
     await database.transaction().execute(async (trx) => {
       const version = await getEditableVersion(trx, quizId);
-      const existing = await repo.listQuestions(trx, version.id);
       await repo.insertQuestion(trx, {
         id: questionId,
         quiz_version_id: version.id,
         question_type: payload.questionType,
         prompt: payload.prompt,
         points: payload.points,
-        position: payload.position ?? existing.length,
+        position:
+          payload.position ?? (await repo.countQuestions(trx, version.id)),
         configuration: {},
         explanation: payload.explanation ?? null,
         created_at: new Date(),
@@ -465,7 +453,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
         })),
       );
     });
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
   async function updateQuestion(
@@ -529,7 +517,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
         );
       }
     });
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
   async function deleteQuestion(
@@ -588,13 +576,15 @@ export function createAuthoringService(options: QuizServiceOptions) {
       await repo.updateVersion(trx, version.id, { published_at: new Date() });
       await repo.updateQuiz(trx, quizId, { status: "published" });
     });
-    return getQuiz(actor, quizId);
+    return presentQuizById(quizId);
   }
 
   async function deleteQuiz(actor: QuizActor, quizId: string) {
     await requireQuiz(quizId, actor);
     await database.transaction().execute(async (trx) => {
-      const assignments = await repo.listAssignmentsForQuizzes(trx, [quizId]);
+      const assignments = await repo.listAssignmentRefsForQuizzes(trx, [
+        quizId,
+      ]);
       assertNoLearnerAttempts(
         await repo.countLearnerAttempts(trx, {
           assignmentIds: assignments.map((assignment) => assignment.id),
@@ -629,7 +619,6 @@ export function createAuthoringService(options: QuizServiceOptions) {
     updateQuestion,
     deleteQuestion,
     publish,
-    presentQuiz,
   };
 }
 export type AuthoringService = ReturnType<typeof createAuthoringService>;

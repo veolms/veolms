@@ -186,7 +186,7 @@ export function createQuizController({
         courseId: string;
         assignmentId: string;
       };
-      return pricingService.calculateQuizPricing({
+      const pricing = await pricingService.calculateQuizPricing({
         userId: request.user?.id ?? null,
         quizAssignmentId: params.assignmentId,
         courseId: params.courseId,
@@ -194,6 +194,16 @@ export function createQuizController({
           ? isAdmin({ id: request.user.id, roles: request.user.roles })
           : false,
       });
+      // Only what the purchase card reads. The caller already knows which
+      // quiz it asked about, and a visitor has no use for its ids or title.
+      return {
+        quizPricingId: pricing.quizPricingId,
+        pricingType: pricing.pricingType,
+        catalogPrice: pricing.catalogPrice,
+        salePrice: pricing.salePrice,
+        currency: pricing.currency,
+        isEnrolled: pricing.isEnrolled,
+      };
     },
   };
 }

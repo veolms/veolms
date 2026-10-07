@@ -8,51 +8,25 @@ import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import * as repo from "../shared/quiz.repository.ts";
 import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
+import { presentAssignment } from "../shared/quiz.presenters.ts";
 import {
+  assertCanManageCourse,
   assertNoLearnerAttempts,
+  isAdmin,
   type QuizActor,
   type QuizServiceOptions,
 } from "../shared/quiz.types.ts";
-import { isAdmin } from "../shared/quiz.types.ts";
 
 type PricingRow = Awaited<ReturnType<typeof pricingRepo.findPricing>>;
 
-/**
- * Pricing belongs to the course (one quiz pass covers every quiz in it), so it
- * is joined in read-only here rather than stored on the assignment.
- */
-function present(
-  row: Awaited<ReturnType<typeof repo.findAssignment>>,
-  pricing: PricingRow,
-) {
-  if (!row)
-    throw new AppError(
-      404,
-      "ASSIGNMENT_NOT_FOUND",
-      "Quiz assignment not found.",
-    );
+/** The course's quiz pass price; no row means its quizzes are free. */
+function presentCoursePricing(row: PricingRow) {
   return {
-    id: row.id,
-    quizId: row.quiz_id,
-    quizVersionId: row.quiz_version_id,
-    courseId: row.course_id,
-    lessonId: row.lesson_id,
-    required: row.required,
-    passPercentage: Number(row.pass_percentage),
-    maxAttempts: row.max_attempts,
-    timeLimitSeconds: row.time_limit_seconds,
-    shuffleQuestions: row.shuffle_questions,
-    shuffleOptions: row.shuffle_options,
-    feedbackMode: row.feedback_mode,
-    availableFrom: row.available_from?.toISOString() ?? null,
-    availableUntil: row.available_until?.toISOString() ?? null,
-    quizPricingId: pricing?.id ?? null,
-    pricingType: pricing?.pricing_type ?? ("free" as const),
-    price: Number(pricing?.price ?? 0),
-    currency: pricing?.currency ?? "INR",
+    pricingType: row?.pricing_type ?? ("free" as const),
+    price: Number(row?.price ?? 0),
     salePrice:
-      pricing?.sale_price !== null && pricing?.sale_price !== undefined
-        ? Number(pricing.sale_price)
+      row?.sale_price !== null && row?.sale_price !== undefined
+        ? Number(row.sale_price)
         : null,
   };
 }
@@ -60,6 +34,13 @@ function present(
 export function createAssignmentService(options: QuizServiceOptions) {
   const { database, courseService, getAcademyId } = options;
   const outbox = createOutboxService();
+
+  async function requireCourse(courseId: string) {
+    const course = await courseService.findCourseById(courseId);
+    if (!course)
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    return course;
+  }
 
   async function assertAuthorAssignment(
     actor: QuizActor,
@@ -72,14 +53,7 @@ export function createAssignmentService(options: QuizServiceOptions) {
         "ASSIGNMENT_NOT_FOUND",
         "Quiz assignment not found.",
       );
-    const course = await courseService.findCourseById(assignment.course_id);
-    if (!course)
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    if (!isAdmin(actor))
-      await courseService.getCourseAndVerifyOwner(
-        assignment.course_id,
-        actor.id,
-      );
+    assertCanManageCourse(actor, await requireCourse(assignment.course_id));
     if (!isAdmin(actor)) {
       const quiz = await repo.findQuiz(database, assignment.quiz_id);
       if (!quiz || quiz.creator_id !== actor.id)
@@ -98,11 +72,8 @@ export function createAssignmentService(options: QuizServiceOptions) {
     lessonId: string,
     payload: AssignQuizRequest,
   ) {
-    const course = await courseService.findCourseById(courseId);
-    if (!course)
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    if (!isAdmin(actor))
-      await courseService.getCourseAndVerifyOwner(courseId, actor.id);
+    const course = await requireCourse(courseId);
+    assertCanManageCourse(actor, course);
     const lesson = await courseService.findLessonById(courseId, lessonId);
     if (!lesson)
       throw new AppError(404, "LESSON_NOT_FOUND", "Course lesson not found.");
@@ -145,8 +116,7 @@ export function createAssignmentService(options: QuizServiceOptions) {
         "INVALID_AVAILABILITY_WINDOW",
         "Quiz availability must end after it starts.",
       );
-    const existing = await repo.findAssignmentForLesson(database, lessonId);
-    if (existing)
+    if (await repo.lessonHasAssignment(database, lessonId))
       throw new AppError(
         409,
         "LESSON_ALREADY_ASSIGNED",
@@ -172,28 +142,26 @@ export function createAssignmentService(options: QuizServiceOptions) {
         updated_at: new Date(),
       });
 
-      if (course && lesson) {
-        await outbox.publish(trx, {
-          type: "quiz.assigned",
-          version: 1,
-          dedupeKey: `quiz:assigned:${inserted.id}`,
-          occurredAt: new Date(),
-          payload: {
-            courseId: course.id,
-            courseTitle: course.title,
-            courseSlug: course.slug,
-            quizId: quiz.id,
-            quizTitle: quiz.title,
-            lessonId: lesson.id,
-            lessonTitle: lesson.title,
-            deepLink: `/learn/${course.slug}?lessonId=${lesson.id}&view=quiz`,
-          },
-        });
-      }
+      await outbox.publish(trx, {
+        type: "quiz.assigned",
+        version: 1,
+        dedupeKey: `quiz:assigned:${inserted.id}`,
+        occurredAt: new Date(),
+        payload: {
+          courseId: course.id,
+          courseTitle: course.title,
+          courseSlug: course.slug,
+          quizId: quiz.id,
+          quizTitle: quiz.title,
+          lessonId: lesson.id,
+          lessonTitle: lesson.title,
+          deepLink: `/learn/${course.slug}?lessonId=${lesson.id}&view=quiz`,
+        },
+      });
 
       return inserted;
     });
-    return present(row, await pricingRepo.findPricing(database, courseId));
+    return presentAssignment(row);
   }
 
   async function update(
@@ -263,17 +231,17 @@ export function createAssignmentService(options: QuizServiceOptions) {
         ? { available_until: payload.availableUntil }
         : {}),
     });
-    const finalRow = row ?? current;
-    return present(
-      finalRow,
-      await pricingRepo.findPricing(database, finalRow.course_id),
-    );
+    return presentAssignment(row);
   }
 
+  /**
+   * The quizzes attached to a course. Whoever manages the course sees all of
+   * them. A learner sees only what has been released: nothing while the
+   * course is unpublished, and never a quiz on an unpublished lesson — the
+   * same rule that decides whether an attempt can be started.
+   */
   async function listForCourse(actor: QuizActor, courseId: string) {
-    const course = await courseService.findCourseById(courseId);
-    if (!course)
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    const course = await requireCourse(courseId);
     // Managing a course's assignments is admin or course-creator only; the
     // instructor role alone used to list other instructors' draft courses.
     const canManageCourse = isAdmin(actor) || course.creator_id === actor.id;
@@ -291,8 +259,22 @@ export function createAssignmentService(options: QuizServiceOptions) {
         "COURSE_ACCESS_REQUIRED",
         "You need active course access to view this Quiz assignment.",
       );
-    const rows = await repo.listAssignmentsForCourse(database, courseId);
-    const pricing = await pricingRepo.findPricing(database, courseId);
+    if (!canManageCourse && course.status !== "published") return [];
+    let rows = await repo.listAssignmentsForCourse(database, courseId);
+    if (!canManageCourse) {
+      const releasedLessonIds = new Set(
+        (
+          await repo.listLessonsByIds(database, [
+            ...new Set(rows.map((row) => row.lesson_id)),
+          ])
+        )
+          .filter(
+            (lesson) => lesson.course_id === courseId && lesson.is_published,
+          )
+          .map((lesson) => lesson.id),
+      );
+      rows = rows.filter((row) => releasedLessonIds.has(row.lesson_id));
+    }
     const quizTitles = new Map(
       (
         await repo.listQuizzesByIds(database, [
@@ -301,48 +283,21 @@ export function createAssignmentService(options: QuizServiceOptions) {
       ).map((quiz) => [quiz.id, quiz.title] as const),
     );
     return rows.map((row) => ({
-      ...present(row, pricing),
+      ...presentAssignment(row),
       quizTitle: quizTitles.get(row.quiz_id) ?? "Quiz",
     }));
-  }
-
-  async function get(assignmentId: string) {
-    const row = await repo.findAssignment(database, assignmentId);
-    return present(
-      row,
-      row ? await pricingRepo.findPricing(database, row.course_id) : undefined,
-    );
-  }
-
-  function presentCoursePricing(courseId: string, row: PricingRow) {
-    return {
-      id: row?.id ?? null,
-      courseId,
-      pricingType: row?.pricing_type ?? ("free" as const),
-      price: Number(row?.price ?? 0),
-      currency: row?.currency ?? "INR",
-      salePrice:
-        row?.sale_price !== null && row?.sale_price !== undefined
-          ? Number(row.sale_price)
-          : null,
-    };
   }
 
   async function assertCanManageCoursePricing(
     actor: QuizActor,
     courseId: string,
   ) {
-    const course = await courseService.findCourseById(courseId);
-    if (!course)
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    if (!isAdmin(actor))
-      await courseService.getCourseAndVerifyOwner(courseId, actor.id);
+    assertCanManageCourse(actor, await requireCourse(courseId));
   }
 
   async function getPricing(actor: QuizActor, courseId: string) {
     await assertCanManageCoursePricing(actor, courseId);
     return presentCoursePricing(
-      courseId,
       await pricingRepo.findPricing(database, courseId),
     );
   }
@@ -384,7 +339,7 @@ export function createAssignmentService(options: QuizServiceOptions) {
       currency: courseCurrency,
       sale_price: isPaid ? (payload.salePrice ?? null) : null,
     });
-    return presentCoursePricing(courseId, row);
+    return presentCoursePricing(row);
   }
 
   async function deleteAssignment(actor: QuizActor, assignmentId: string) {
@@ -416,8 +371,6 @@ export function createAssignmentService(options: QuizServiceOptions) {
     setPricing,
     deleteAssignment,
     listForCourse,
-    get,
-    assertAuthorAssignment,
   };
 }
 export type AssignmentService = ReturnType<typeof createAssignmentService>;

@@ -1,11 +1,9 @@
 import crypto from "node:crypto";
 import type {
-  CartItemInput,
   CheckoutPreviewRequest,
   CheckoutPreviewResponse,
   CreateCheckoutOrderRequest,
   CreateCheckoutOrderResponse,
-  Order,
   PaymentGateway,
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
@@ -27,8 +25,6 @@ import {
   createPaymentReconciliationService,
   type PaymentReconciliationService,
 } from "../payments/payment-reconciliation.service.ts";
-import { toOrderContract } from "../orders/order.mapper.ts";
-import { toPaymentProvider } from "../payments/payment.mapper.ts";
 
 export interface CheckoutService {
   previewCheckout(
@@ -76,9 +72,20 @@ export function createCheckoutService({
       },
     );
 
+    // The wire shape is what the checkout UI shows; the per-item breakdown
+    // and the coupon's id are for order creation and stay here.
     return {
-      pricing,
-      couponValidation,
+      pricing: {
+        discountAmount: pricing.discountAmount,
+        totalAmount: pricing.totalAmount,
+        currency: pricing.currency,
+      },
+      couponValidation: couponValidation && {
+        valid: couponValidation.valid,
+        discountType: couponValidation.discountType,
+        discountValue: couponValidation.discountValue,
+        message: couponValidation.message,
+      },
     };
   }
 
@@ -115,10 +122,7 @@ export function createCheckoutService({
       database,
       existingOrder.id,
     );
-    const orderItems = await orderRepo.listOrderItems(
-      database,
-      existingOrder.id,
-    );
+    const order = { id: existingOrder.id, status: existingOrder.status };
 
     if (payment) {
       const isFreeOrder =
@@ -131,21 +135,18 @@ export function createCheckoutService({
             payment.gateway_payment_id ?? `free_pay_${existingOrder.id}`,
           paymentMethod: { method: "free" },
         });
+        // Finalizing marked the order paid; the row read above predates it.
         return {
-          order: toOrderContract(existingOrder, orderItems, {
-            status: "paid",
-            paidAt: new Date(),
-          }),
+          order: { id: existingOrder.id, status: "paid" },
           gateway: null,
         };
       }
 
       return {
-        order: toOrderContract(existingOrder, orderItems),
+        order,
         gateway: isFreeOrder
           ? null
           : {
-              provider: toPaymentProvider(payment.gateway_provider),
               gatewayOrderId: payment.gateway_order_id,
               keyId: payment.gateway_key_id ?? undefined,
               amount: payment.amount,
@@ -172,9 +173,8 @@ export function createCheckoutService({
     });
 
     return {
-      order: toOrderContract(existingOrder, orderItems),
+      order,
       gateway: {
-        provider: gatewayOrder.provider,
         gatewayOrderId: gatewayOrder.gatewayOrderId,
         keyId: gatewayOrder.keyId,
         amount: gatewayOrder.amount,
@@ -239,12 +239,13 @@ export function createCheckoutService({
         .map((it) => itemKey(it.itemType, it.itemId))
         .sort()
         .join("|");
+      const pendingItems = await orderRepo.listOrderItemsByOrderIds(
+        database,
+        pendingOrders.map((pendingOrder) => pendingOrder.id),
+      );
       for (const pendingOrder of pendingOrders) {
-        const pendingItems = await orderRepo.listOrderItems(
-          database,
-          pendingOrder.id,
-        );
         const held = pendingItems
+          .filter((it) => it.order_id === pendingOrder.id)
           .map((it) =>
             itemKey(
               it.item_type,
@@ -308,12 +309,12 @@ export function createCheckoutService({
           if (coupon.global_usage_limit !== null) {
             const [redeemed, held] = await Promise.all([
               couponRepo.countCouponRedemptionsGlobal(trx, coupon.id),
-              orderRepo.listPendingOrdersUsingCoupon(trx, {
+              orderRepo.countPendingOrdersUsingCoupon(trx, {
                 couponId: coupon.id,
                 now,
               }),
             ]);
-            if (redeemed + held.length >= coupon.global_usage_limit) {
+            if (redeemed + held >= coupon.global_usage_limit) {
               throw CommerceErrors.COUPON_USAGE_LIMIT_REACHED(coupon.code);
             }
           }
@@ -321,13 +322,13 @@ export function createCheckoutService({
           if (coupon.per_user_limit) {
             const [redeemedByUser, heldByUser] = await Promise.all([
               couponRepo.countCouponRedemptionsByUser(trx, coupon.id, user.id),
-              orderRepo.listPendingOrdersUsingCoupon(trx, {
+              orderRepo.countPendingOrdersUsingCoupon(trx, {
                 couponId: coupon.id,
                 userId: user.id,
                 now,
               }),
             ]);
-            if (redeemedByUser + heldByUser.length >= coupon.per_user_limit) {
+            if (redeemedByUser + heldByUser >= coupon.per_user_limit) {
               throw CommerceErrors.COUPON_USER_LIMIT_REACHED(coupon.code);
             }
           }
@@ -388,7 +389,6 @@ export function createCheckoutService({
 
         return {
           ...orderRow,
-          items: orderItemRows,
           initialPaymentId,
         };
       });
@@ -403,11 +403,9 @@ export function createCheckoutService({
         paymentMethod: { method: "free" },
       });
 
+      // Finalizing marked the order paid; `createdOrder` predates it.
       return {
-        order: toOrderContract(createdOrder, createdOrder.items, {
-          status: "paid",
-          paidAt: now,
-        }),
+        order: { id: createdOrder.id, status: "paid" },
         gateway: null,
       };
     }
@@ -415,13 +413,14 @@ export function createCheckoutService({
     // 5. External Gateway Call for Paid Orders (executed OUTSIDE the database transaction)
     const { gatewayOrder } = await paymentService.initializePayment({
       orderId: createdOrder.id,
+      // Inserted by this request a moment ago, so there is nothing to re-read.
+      order: createdOrder,
       customer: user,
     });
 
     return {
-      order: toOrderContract(createdOrder, createdOrder.items),
+      order: { id: createdOrder.id, status: createdOrder.status },
       gateway: {
-        provider: gatewayOrder.provider,
         gatewayOrderId: gatewayOrder.gatewayOrderId,
         keyId: gatewayOrder.keyId,
         amount: gatewayOrder.amount,

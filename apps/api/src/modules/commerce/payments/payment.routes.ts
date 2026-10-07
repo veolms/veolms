@@ -3,6 +3,7 @@ import {
   verifyPaymentRequestSchema,
   verifyPaymentResponseSchema,
   manualPaymentRequestSchema,
+  learnerManualPaymentRequestSchema,
   submitManualPaymentRequestSchema,
   verifyManualPaymentRequestSchema,
 } from "@veolms/contracts";
@@ -75,7 +76,7 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
         response: {
           201: jsonResponse(
             "Manual payment submitted",
-            manualPaymentRequestSchema,
+            learnerManualPaymentRequestSchema,
           ),
           400: errorResponse("Invalid order or status"),
           401: errorResponse("Unauthorized"),
@@ -99,7 +100,7 @@ const paymentRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "List of manual payment submissions",
-            z.array(manualPaymentRequestSchema),
+            z.array(learnerManualPaymentRequestSchema),
           ),
           401: errorResponse("Unauthorized"),
         },

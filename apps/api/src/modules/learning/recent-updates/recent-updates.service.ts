@@ -58,14 +58,12 @@ export function createRecentUpdatesService({
         courseTitle: course.course_title,
         courseThumbnailUrl: course.course_thumbnail_url,
         courseThumbnailMediaId: course.course_thumbnail_media_id,
-        recentLessonCount: Number(course.recent_lesson_count),
         latestUpdatedAt: course.latest_updated_at.toISOString(),
         lessons: (lessonsByCourse.get(course.course_id) ?? []).map(
           (lesson) => ({
             lessonId: lesson.lesson_id,
             lessonTitle: lesson.lesson_title,
             lessonNumber: Number(lesson.lesson_number),
-            updatedAt: lesson.lesson_updated_at.toISOString(),
           }),
         ),
       })),

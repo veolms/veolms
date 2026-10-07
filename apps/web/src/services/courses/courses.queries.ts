@@ -4,7 +4,7 @@ import type {
   Category,
   CourseEditorDataResponse,
   CourseOverviewResponse,
-  CourseStaticPageRefreshStatus,
+  CourseStaticPageRefreshStatusResponse,
   CourseListResponse,
   CourseOptionsResponse,
   CourseSummary,
@@ -93,7 +93,7 @@ export function useCourseEditor(courseId: string | null) {
 }
 
 export function useCourseStaticPageRefreshStatus(courseId: string | null) {
-  return useQuery<CourseStaticPageRefreshStatus, ApiError>({
+  return useQuery<CourseStaticPageRefreshStatusResponse, ApiError>({
     queryKey: courseId
       ? courseKeys.staticPageRefresh(courseId)
       : [...courseKeys.all, "static-page-refresh", null],
@@ -208,7 +208,10 @@ export function useCategories(options?: { enabled?: boolean }) {
   return useQuery<Category[], ApiError>({
     queryKey: courseKeys.categories(),
     queryFn: () => coursesService.listCategories(),
-    enabled: options?.enabled ?? false,
+    // On by default like every other query here: the default used to be
+    // off, and the course editor (the only caller) never turned it on, so
+    // its category list stayed empty.
+    enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
   });
 }

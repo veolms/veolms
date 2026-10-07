@@ -3,6 +3,7 @@ import type {
   NotificationListQuery,
   NotificationListResponse,
   NotificationPreference,
+  NotificationReadState,
   NotificationSummary,
   UpdateNotificationPreferences,
 } from "@veolms/contracts";
@@ -34,8 +35,14 @@ export interface NotificationService {
     query: NotificationListQuery,
   ): Promise<NotificationListResponse>;
   getSummary(userId: string): Promise<NotificationSummary>;
-  markRead(userId: string, notificationId: string): Promise<Notification>;
-  markUnread(userId: string, notificationId: string): Promise<Notification>;
+  markRead(
+    userId: string,
+    notificationId: string,
+  ): Promise<NotificationReadState>;
+  markUnread(
+    userId: string,
+    notificationId: string,
+  ): Promise<NotificationReadState>;
   markAllRead(userId: string): Promise<{ updatedCount: number }>;
   archive(userId: string, notificationId: string): Promise<{ archived: true }>;
   getPreferences(
@@ -115,6 +122,13 @@ function presentNotification(row: {
   };
 }
 
+function presentReadState(row: {
+  id: string;
+  read_at: Date | null;
+}): NotificationReadState {
+  return { id: row.id, readAt: row.read_at?.toISOString() ?? null };
+}
+
 export function createNotificationService({
   database,
 }: {
@@ -160,7 +174,7 @@ export function createNotificationService({
   async function markRead(
     userId: string,
     notificationId: string,
-  ): Promise<Notification> {
+  ): Promise<NotificationReadState> {
     const row = await notificationRepository.markRead(
       database,
       userId,
@@ -173,13 +187,13 @@ export function createNotificationService({
         "Notification not found.",
       );
     }
-    return presentNotification(row);
+    return presentReadState(row);
   }
 
   async function markUnread(
     userId: string,
     notificationId: string,
-  ): Promise<Notification> {
+  ): Promise<NotificationReadState> {
     const row = await notificationRepository.markUnread(
       database,
       userId,
@@ -192,7 +206,7 @@ export function createNotificationService({
         "Notification not found.",
       );
     }
-    return presentNotification(row);
+    return presentReadState(row);
   }
 
   async function markAllRead(userId: string) {
@@ -244,16 +258,13 @@ export function createNotificationService({
       );
     }
 
-    await database.transaction().execute(async (transaction) => {
-      for (const preference of input.preferences) {
-        await notificationRepository.updatePreference(transaction, {
-          userId,
-          notificationType: preference.notificationType,
-          channel: preference.channel,
-          enabled: preference.enabled,
-        });
-      }
-    });
+    // One statement for the whole set (the request schema guarantees each
+    // type and channel appears once), so it is atomic without a transaction.
+    await notificationRepository.upsertPreferences(
+      database,
+      userId,
+      input.preferences,
+    );
     return await getPreferences(userId);
   }
 

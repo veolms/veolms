@@ -2,14 +2,12 @@ import type {
   AcceptReplyRequest,
   AcceptReplyResponse,
   CompleteAttachmentUploadRequest,
-  CourseNotesOverviewResponse,
   CreateLearningNoteRequest,
   CreateLearningReplyRequest,
   CreateLearningThreadRequest,
   CreateReportRequest,
   InitiateAttachmentUploadRequest,
   InitiateAttachmentUploadResponse,
-  LearningAttachment,
   LearningNote,
   LearningNotesListResponse,
   LearningRepliesListResponse,
@@ -20,31 +18,23 @@ import type {
   LessonDiscussionsListResponse,
   LessonDiscussionCountsResponse,
   ListLessonDiscussionsQuery,
-  LearningUploadResponse,
   LinkPreviewResponse,
-  ListAuditLogsQuery,
   ListLearningNotesQuery,
   ListLearningRepliesQuery,
   ListLearningThreadsQuery,
-  ListReportsQuery,
   LockThreadRequest,
   LockThreadResponse,
-  ModerateReplyRequest,
-  ModerateThreadRequest,
-  ReportsListResponse,
   DiscussionsWorkspaceResponse,
-  SuspendUserRequest,
   ToggleBookmarkResponse,
   ToggleFollowResponse,
   ToggleLikeRequest,
   ToggleLikeResponse,
-  UnsuspendUserRequest,
   UpdateLearningNoteRequest,
   UpdateLearningReplyRequest,
   UpdateLearningThreadRequest,
+  UploadedAttachment,
   UserAutocompleteQuery,
   UserAutocompleteResponse,
-  UserSuspension,
 } from "@veolms/contracts";
 import { api } from "../../lib/api-client";
 import { mediaService } from "../media/media.service";
@@ -94,17 +84,6 @@ export const learningInteractionsService = {
     return api.get<LearningThreadsListResponse>(
       `/courses/${courseId}/lessons/${lessonId}/threads`,
       { params: query },
-    );
-  },
-
-  createLessonThread(
-    courseId: string,
-    lessonId: string,
-    payload: CreateLearningThreadRequest,
-  ): Promise<LearningThread> {
-    return api.post<LearningThread>(
-      `/courses/${courseId}/lessons/${lessonId}/threads`,
-      payload,
     );
   },
 
@@ -249,14 +228,6 @@ export const learningInteractionsService = {
     });
   },
 
-  getCourseNotesOverview(
-    courseId: string,
-  ): Promise<CourseNotesOverviewResponse> {
-    return api.get<CourseNotesOverviewResponse>(
-      `/courses/${courseId}/notes-overview`,
-    );
-  },
-
   createNote(payload: CreateLearningNoteRequest): Promise<LearningNote> {
     return api.post<LearningNote>("/notes", payload);
   },
@@ -289,24 +260,10 @@ export const learningInteractionsService = {
     );
   },
 
-  uploadAttachmentFile(
-    attachmentId: string,
-    file: File,
-    dimensions?: { width?: number; height?: number },
-  ): Promise<LearningAttachment> {
-    const formData = new FormData();
-    appendDimensions(formData, dimensions);
-    formData.append("file", file, file.name);
-    return api.post<LearningAttachment>(
-      `/attachments/${attachmentId}/upload`,
-      formData,
-    );
-  },
-
   completeUpload(
     payload: CompleteAttachmentUploadRequest,
-  ): Promise<LearningAttachment> {
-    return api.post<LearningAttachment>("/attachments/complete", payload);
+  ): Promise<UploadedAttachment> {
+    return api.post<UploadedAttachment>("/attachments/complete", payload);
   },
 
   uploadAttachmentDirect(
@@ -314,7 +271,7 @@ export const learningInteractionsService = {
     onProgress?: (progress: AttachmentUploadProgress) => void,
     dimensions?: { width?: number; height?: number },
     context?: DiscussionAttachmentUploadContext,
-  ): Promise<LearningUploadResponse> {
+  ): Promise<UploadedAttachment> {
     if (!context) {
       return Promise.reject(
         new Error("Course and lesson context are required for attachments."),
@@ -341,30 +298,7 @@ export const learningInteractionsService = {
           }),
       );
 
-      const completed = await this.completeUpload({
-        attachmentId: initiated.attachmentId,
-      });
-      const mediaType = completed.mimeType.startsWith("image/")
-        ? "image"
-        : completed.mimeType.startsWith("video/")
-          ? "video"
-          : completed.kind === "code"
-            ? "code"
-            : "document";
-
-      return {
-        id: completed.id,
-        url: completed.fileUrl,
-        storageKey: completed.storageKey,
-        fileName: completed.fileName,
-        kind: completed.kind,
-        mediaType,
-        mimeType: completed.mimeType,
-        size: completed.fileSize,
-        status: completed.status,
-        width: completed.width,
-        height: completed.height,
-      } satisfies LearningUploadResponse;
+      return this.completeUpload({ attachmentId: initiated.attachmentId });
     });
   },
 
@@ -380,128 +314,4 @@ export const learningInteractionsService = {
       targetId: serverId,
     });
   },
-
-  // Course Moderation
-  listCourseReports(
-    courseId: string,
-    query?: ListReportsQuery,
-  ): Promise<ReportsListResponse> {
-    return api.get<ReportsListResponse>(
-      `/courses/${courseId}/moderation/reports`,
-      {
-        params: query,
-      },
-    );
-  },
-
-  moderateCourseThread(
-    courseId: string,
-    threadId: string,
-    payload: ModerateThreadRequest,
-  ): Promise<{ message: string }> {
-    const serverId = requireServerEntityId(threadId);
-    return api.post<{ message: string }>(
-      `/courses/${courseId}/moderation/threads/${serverId}`,
-      payload,
-    );
-  },
-
-  moderateCourseReply(
-    courseId: string,
-    replyId: string,
-    payload: ModerateReplyRequest,
-  ): Promise<{ message: string }> {
-    const serverId = requireServerEntityId(replyId);
-    return api.post<{ message: string }>(
-      `/courses/${courseId}/moderation/replies/${serverId}`,
-      payload,
-    );
-  },
-
-  suspendCourseParticipant(
-    courseId: string,
-    userId: string,
-    payload: Omit<SuspendUserRequest, "userId" | "courseId">,
-  ): Promise<UserSuspension> {
-    return api.post<UserSuspension>(
-      `/courses/${courseId}/moderation/users/${userId}/suspend`,
-      payload,
-    );
-  },
-
-  unsuspendCourseParticipant(
-    courseId: string,
-    userId: string,
-    payload?: Omit<UnsuspendUserRequest, "userId" | "courseId">,
-  ): Promise<{ message: string }> {
-    return api.post<{ message: string }>(
-      `/courses/${courseId}/moderation/users/${userId}/unsuspend`,
-      payload,
-    );
-  },
-
-  // Platform Moderation
-  listPlatformReports(query?: ListReportsQuery): Promise<ReportsListResponse> {
-    return api.get<ReportsListResponse>("/moderation/reports", {
-      params: query,
-    });
-  },
-
-  listReports(query?: ListReportsQuery): Promise<ReportsListResponse> {
-    return api.get<ReportsListResponse>("/moderation/reports", {
-      params: query,
-    });
-  },
-
-  moderatePlatformThread(
-    threadId: string,
-    payload: ModerateThreadRequest,
-  ): Promise<{ message: string }> {
-    const serverId = requireServerEntityId(threadId);
-    return api.post<{ message: string }>(
-      `/moderation/threads/${serverId}`,
-      payload,
-    );
-  },
-
-  moderatePlatformReply(
-    replyId: string,
-    payload: ModerateReplyRequest,
-  ): Promise<{ message: string }> {
-    const serverId = requireServerEntityId(replyId);
-    return api.post<{ message: string }>(
-      `/moderation/replies/${serverId}`,
-      payload,
-    );
-  },
-
-  suspendPlatformUser(
-    userId: string,
-    payload: Omit<SuspendUserRequest, "userId">,
-  ): Promise<UserSuspension> {
-    return api.post<UserSuspension>(
-      `/moderation/users/${userId}/suspend`,
-      payload,
-    );
-  },
-
-  unsuspendPlatformUser(
-    userId: string,
-    payload?: Omit<UnsuspendUserRequest, "userId">,
-  ): Promise<{ message: string }> {
-    return api.post<{ message: string }>(
-      `/moderation/users/${userId}/unsuspend`,
-      payload,
-    );
-  },
 };
-
-function appendDimensions(
-  formData: FormData,
-  dimensions?: { width?: number; height?: number },
-): void {
-  if (dimensions?.width !== undefined && dimensions.height !== undefined) {
-    formData.append("width", String(dimensions.width));
-    formData.append("height", String(dimensions.height));
-  }
-}

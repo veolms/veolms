@@ -28,21 +28,13 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
 
   function formatInclude(row: {
     id: string;
-    course_id: string;
     text: string;
-    icon: string | null;
     position: number;
-    created_at: Date;
-    updated_at: Date;
   }): CourseIncludeItem {
     return {
       id: row.id,
-      courseId: row.course_id,
       text: row.text,
-      icon: row.icon ?? null,
       position: row.position,
-      createdAt: row.created_at.toISOString(),
-      updatedAt: row.updated_at.toISOString(),
     };
   }
 
@@ -76,15 +68,7 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
       updated_at: now,
     });
 
-    return {
-      id: includeId,
-      courseId,
-      text: payload.text,
-      icon: payload.icon ?? null,
-      position,
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    };
+    return formatInclude({ id: includeId, text: payload.text, position });
   }
 
   async function listCourseIncludes(
@@ -94,27 +78,20 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     // This list is public for published courses, but the route had no check
     // at all, so the includes of any draft could be read by course id.
     await getCourseForViewer(database, courseId, viewer);
-    const rows = await includesRepo.findIncludesByCourseId(database, courseId);
-    return rows.map(formatInclude);
+    return await listIncludesForAuthorizedCourse(courseId);
   }
 
-  async function getCourseInclude(
+  /**
+   * The same list without the viewer check, for callers that have already
+   * decided the viewer may see this course (the editor and the overview).
+   * Going through listCourseIncludes there re-read the course and, with no
+   * viewer to pass, answered 404 for every draft.
+   */
+  async function listIncludesForAuthorizedCourse(
     courseId: string,
-    includeId: string,
-  ): Promise<CourseIncludeItem> {
-    const row = await includesRepo.findIncludeById(
-      database,
-      includeId,
-      courseId,
-    );
-    if (!row) {
-      throw new AppError(
-        404,
-        "INCLUDE_NOT_FOUND",
-        "Course include item not found.",
-      );
-    }
-    return formatInclude(row);
+  ): Promise<CourseIncludeItem[]> {
+    const rows = await includesRepo.findIncludesByCourseId(database, courseId);
+    return rows.map(formatInclude);
   }
 
   async function updateCourseInclude(
@@ -224,7 +201,7 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
   return {
     createCourseInclude,
     listCourseIncludes,
-    getCourseInclude,
+    listIncludesForAuthorizedCourse,
     updateCourseInclude,
     deleteCourseInclude,
     reorderCourseIncludes,

@@ -16,34 +16,6 @@ export function listUserCourseProgress(
     .execute();
 }
 
-export async function upsertUserCourseProgress(
-  database: LearningProgressExecutor,
-  values: Array<{
-    id: string;
-    user_id: string;
-    course_id: string;
-    lesson_id: string;
-    progress_percent: number;
-    created_at: Date;
-    updated_at: Date;
-  }>,
-) {
-  if (values.length === 0) return;
-
-  await database
-    .insertInto("learning_progress")
-    .values(values)
-    .onConflict((conflict) =>
-      conflict.columns(["user_id", "course_id", "lesson_id"]).doUpdateSet({
-        // Progress is intentionally monotonic. Replaying a batch, a retry,
-        // or an older browser tab can never move a learner backwards.
-        progress_percent: sql<number>`GREATEST(learning_progress.progress_percent, EXCLUDED.progress_percent)`,
-        updated_at: new Date(),
-      }),
-    )
-    .execute();
-}
-
 export type LearningProgressRow = Awaited<
   ReturnType<typeof listUserCourseProgress>
 >[number];
@@ -267,9 +239,10 @@ export interface DailyActivityAccrual {
 
 /**
  * The heartbeat write path: one atomic statement that
- *  1. upserts progress with the same monotonic GREATEST rule as
- *     upsertUserCourseProgress, capturing each row's old/new percent
- *     (PostgreSQL 18 `RETURNING old/new`);
+ *  1. upserts progress with a monotonic GREATEST rule (a replayed batch, a
+ *     retry or an older browser tab can never move a learner backwards),
+ *     capturing each row's old/new percent (PostgreSQL 18
+ *     `RETURNING old/new`);
  *  2. converts the percent gained into seconds via the lesson's media
  *     duration (delta% x duration, completions = newly reached 100);
  *  3. credits learning_daily_activity for the user's CURRENT local day,
@@ -439,13 +412,23 @@ export async function upsertProgressAndAccrueActivity(
   };
 }
 
+/** What the service reads of a learner's settings, on reads and after a save. */
+const USER_LEARNING_SETTINGS_COLUMNS = [
+  "daily_goal_minutes",
+  "reminders_enabled",
+  "reminder_days",
+  "reminder_time",
+  "time_zone",
+  "accrual_floor_date",
+] as const;
+
 export async function findUserLearningSettings(
   database: LearningProgressExecutor,
   userId: string,
 ) {
   return database
     .selectFrom("user_learning_settings")
-    .selectAll()
+    .select(USER_LEARNING_SETTINGS_COLUMNS)
     .where("user_id", "=", userId)
     .executeTakeFirst();
 }
@@ -485,7 +468,7 @@ export async function upsertUserLearningSettings(
         updated_at: new Date(),
       }),
     )
-    .returningAll()
+    .returning(USER_LEARNING_SETTINGS_COLUMNS)
     .executeTakeFirstOrThrow();
 }
 
@@ -523,18 +506,12 @@ export async function listSupportedTimeZones(
   return result.rows.map((row) => row.name);
 }
 
-export interface DailySummaryRow {
-  activity_date: string;
-  seconds: number;
-  completions: number;
-}
-
 /**
- * Today + this ISO-week totals and the full streak computation in ONE
- * round trip, all in the user's local calendar (PRD §9). Streak days are
- * days with >= 60 seconds or >= 1 completion; the current streak counts
- * back from today or yesterday (today is not over yet). Gaps-and-islands
- * over the user's own rows — bounded by days of history, PK-indexed.
+ * Today's total and the current streak in ONE round trip, in the user's
+ * local calendar (PRD §9). Streak days are days with >= 60 seconds or >= 1
+ * completion; the current streak counts back from today or yesterday (today
+ * is not over yet). Gaps-and-islands over the user's own rows — bounded by
+ * days of history, PK-indexed.
  */
 export async function getLearningSummaryAggregates(
   database: LearningProgressExecutor,
@@ -546,17 +523,11 @@ export async function getLearningSummaryAggregates(
   },
 ): Promise<{
   todaySeconds: number;
-  weekSeconds: number;
   currentStreakDays: number;
-  bestStreakDays: number;
-  lastActivityDate: string | null;
 }> {
   const result = await sql<{
     today_seconds: number;
-    week_seconds: number;
     current_streak: number;
-    best_streak: number;
-    last_activity_date: string | null;
   }>`
     with local_today as (
       -- Same day the accrual credits to, so today's ring shows it.
@@ -579,8 +550,7 @@ export async function getLearningSummaryAggregates(
       from qualifying
     ),
     streaks as (
-      select min(activity_date) as start_date,
-             max(activity_date) as end_date,
+      select max(activity_date) as end_date,
              count(*)::int as len
       from islands
       group by grp
@@ -591,27 +561,15 @@ export async function getLearningSummaryAggregates(
         where user_id = ${input.userId}::uuid and activity_date = today
       ), 0)::int as today_seconds,
       coalesce((
-        select sum(seconds) from learning_daily_activity, local_today
-        where user_id = ${input.userId}::uuid
-          and activity_date >= today - 6
-          and activity_date <= today
-      ), 0)::int as week_seconds,
-      coalesce((
         select len from streaks, local_today
         where end_date >= today - 1
         order by end_date desc limit 1
-      ), 0)::int as current_streak,
-      coalesce((select max(len) from streaks), 0)::int as best_streak,
-      (select to_char(max(activity_date), 'YYYY-MM-DD') from qualifying)
-        as last_activity_date
+      ), 0)::int as current_streak
   `.execute(database);
 
   const row = result.rows[0];
   return {
     todaySeconds: Number(row?.today_seconds ?? 0),
-    weekSeconds: Number(row?.week_seconds ?? 0),
     currentStreakDays: Number(row?.current_streak ?? 0),
-    bestStreakDays: Number(row?.best_streak ?? 0),
-    lastActivityDate: row?.last_activity_date ?? null,
   };
 }

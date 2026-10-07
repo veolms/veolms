@@ -42,7 +42,6 @@ export const studentListItemSchema = z.strictObject({
   enrolledCoursesCount: z.number().int().nonnegative(),
   completedCoursesCount: z.number().int().nonnegative(),
   averageProgressPercent: z.number().min(0).max(100),
-  lastActiveAt: z.string().or(z.date()).nullable().optional(),
 });
 export type StudentListItem = z.infer<typeof studentListItemSchema>;
 
@@ -71,7 +70,8 @@ export type StudentListQuery = z.infer<typeof studentListQuerySchema>;
 export const studentListResponseSchema = z.strictObject({
   students: z.array(studentListItemSchema),
   nextCursor: z.string().nullable(),
-  totalCount: z.number().int().nonnegative(),
+  /** Sent with the first page only (no cursor). */
+  totalCount: z.number().int().nonnegative().optional(),
 });
 export type StudentListResponse = z.infer<typeof studentListResponseSchema>;
 
@@ -94,9 +94,7 @@ export const studentCourseDetailSchema = z.strictObject({
   courseThumbnailUrl: z.string().nullable().optional(),
   difficulty: z.string().nullable().optional(),
   enrolledAt: z.string().or(z.date()),
-  enrollmentStatus: z.string(),
   enrollmentSource: z.string(),
-  accessExpiresAt: z.string().or(z.date()).nullable().optional(),
   progressPercent: z.number().min(0).max(100),
   completedLessonsCount: z.number().int().nonnegative(),
   totalLessonsCount: z.number().int().nonnegative(),
@@ -109,7 +107,6 @@ export type StudentCourseDetail = z.infer<typeof studentCourseDetailSchema>;
  */
 export const studentDetailResponseSchema = z.strictObject({
   student: z.strictObject({
-    id: z.string().uuid(),
     username: z.string(),
     displayName: z.string(),
     email: z.string().email().nullable().optional(),
@@ -129,7 +126,6 @@ export const studentDetailResponseSchema = z.strictObject({
     inProgressCoursesCount: z.number().int().nonnegative(),
     averageProgressPercent: z.number().min(0).max(100),
     totalLessonsCompleted: z.number().int().nonnegative(),
-    lastActiveAt: z.string().or(z.date()).nullable().optional(),
   }),
   courses: z.array(studentCourseDetailSchema),
 });

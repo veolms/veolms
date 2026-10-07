@@ -7,7 +7,10 @@ import type {
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { AppError } from "../../../lib/errors.ts";
-import { CommerceErrors } from "../shared/commerce.errors.ts";
+import {
+  CommerceErrors,
+  toClientGatewayError,
+} from "../shared/commerce.errors.ts";
 import { toMinorUnits } from "../shared/currency.ts";
 import * as refundRepo from "./refund.repository.ts";
 import { toRefundContract } from "./refund.mapper.ts";
@@ -278,8 +281,10 @@ export function createRefundService({
       // gateway did create the refund, and a retry with the same key resumes
       // it (see the replay branch above) under the same gateway key, so it
       // resolves to the original refund rather than a second one.
+      // Both branches decide on the gateway's own status first; only what is
+      // thrown to the caller is stripped of the provider's status and text.
       if (idempotencyKey && !isDefinitiveGatewayRejection(err)) {
-        throw err;
+        throw toClientGatewayError(err);
       }
 
       // Otherwise release the reservation so it doesn't permanently eat into
@@ -291,7 +296,7 @@ export function createRefundService({
         idempotency_key: null,
         updated_at: new Date(),
       });
-      throw err;
+      throw toClientGatewayError(err);
     }
 
     const now = new Date();

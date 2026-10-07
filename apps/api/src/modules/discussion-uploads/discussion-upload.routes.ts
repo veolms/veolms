@@ -3,8 +3,7 @@ import type { FastifyReply } from "fastify";
 import { z } from "zod";
 import type { DatabaseExecutor } from "@veolms/database";
 import { discussionUploadResponseSchema } from "@veolms/contracts";
-import type { LearningAttachment } from "@veolms/contracts";
-import { AppError, errorResponse } from "../../lib/errors.ts";
+import { AppError, errorResponse, httpError } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createDiscussionPermissions } from "../learning/discussions/shared/discussion.permissions.ts";
@@ -13,7 +12,10 @@ import {
   discussionActor,
   type DiscussionActor,
 } from "../learning/discussions/shared/discussion.access.ts";
-import { createAttachmentsRepository } from "../learning/discussions/attachments/attachments.repository.ts";
+import {
+  createAttachmentsRepository,
+  type AttachmentRecord,
+} from "../learning/discussions/attachments/attachments.repository.ts";
 import { createAttachmentsService } from "../learning/discussions/attachments/attachments.service.ts";
 import { readDiscussionAttachmentUploadContext } from "../learning/discussions/attachments/attachment-upload-context.ts";
 import { createNotesRepository } from "../learning/discussions/notes/notes.repository.ts";
@@ -47,8 +49,11 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
   async function isAuthorizedToReadAttachment(
     db: DatabaseExecutor,
     actor: DiscussionActor,
-    attachment: LearningAttachment,
+    attachment: AttachmentRecord,
   ): Promise<boolean> {
+    // Only finished uploads are served. An attachment removed together with
+    // its post is marked deleted and stops being readable, for its owner too.
+    if (attachment.status !== "ready") return false;
     if (attachment.ownerId === actor.userId) return true;
     if (!attachment.targetId) return false;
 
@@ -69,11 +74,19 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
         const thread = await threadsRepo.findThreadById(db, reply.threadId);
         if (!thread) return false;
         await discussionAccess.assertCanAccessThread(db, actor, thread);
+        // A hidden or removed reply keeps its attachment row, so the reply's
+        // own state decides: only course staff still see it.
+        if (reply.status !== "active") {
+          return discussionAccess.canModerateCourse(db, actor, thread.courseId);
+        }
         return true;
       }
 
       if (attachment.targetType === "note") {
-        const note = await notesRepo.findNoteById(db, attachment.targetId);
+        const note = await notesRepo.findNoteAccessTarget(
+          db,
+          attachment.targetId,
+        );
         if (!note) return false;
         if (note.userId === actor.userId) return true;
         if (note.visibility === "private") return false;
@@ -119,12 +132,7 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
       const user = request.user!;
       const file = await request.file();
       if (!file) {
-        return reply.code(400).send({
-          success: false,
-          statusCode: 400,
-          error: "Bad Request",
-          message: "Choose an image or video file.",
-        });
+        throw httpError(400, "FILE_REQUIRED", "Choose an image or video file.");
       }
 
       try {
@@ -157,18 +165,18 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
         if (error instanceof AppError) throw error;
         const message =
           error instanceof Error ? error.message : "DISCUSSION_UPLOAD_FAILED";
-        const statusCode =
-          message === "DISCUSSION_UPLOAD_TOO_LARGE" ? 413 : 415;
-        return reply.code(statusCode).send({
-          success: false,
-          statusCode,
-          error:
-            statusCode === 413 ? "Payload Too Large" : "Unsupported Media Type",
-          message:
-            statusCode === 413
-              ? "The selected file is too large."
-              : "Choose a supported image or video file.",
-        });
+        if (message === "DISCUSSION_UPLOAD_TOO_LARGE") {
+          throw httpError(
+            413,
+            "PAYLOAD_TOO_LARGE",
+            "The selected file is too large.",
+          );
+        }
+        throw httpError(
+          415,
+          "UNSUPPORTED_MEDIA_TYPE",
+          "Choose a supported image or video file.",
+        );
       }
     },
   );
@@ -186,13 +194,13 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
       },
     },
     async (request, reply) => {
+      // One answer for "no such file" and "not yours to read".
       const notFound = () =>
-        reply.code(404).send({
-          success: false,
-          statusCode: 404,
-          error: "Not Found",
-          message: "Discussion attachment not found.",
-        });
+        httpError(
+          404,
+          "ATTACHMENT_NOT_FOUND",
+          "Discussion attachment not found.",
+        );
 
       const user = request.user!;
       const { fileName } = request.params;
@@ -202,7 +210,7 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
         attachmentId,
       );
       if (!attachment) {
-        return notFound();
+        throw notFound();
       }
 
       const authorized = await isAuthorizedToReadAttachment(
@@ -211,12 +219,12 @@ const discussionUploadRoutes: RoutePlugin = async (app, options) => {
         attachment,
       );
       if (!authorized) {
-        return notFound();
+        throw notFound();
       }
 
       const file = await store.get(fileName);
       if (!file) {
-        return notFound();
+        throw notFound();
       }
 
       return (reply as FastifyReply)

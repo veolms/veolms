@@ -1,18 +1,22 @@
 import { z } from "zod";
 import {
   courseSchema,
+  courseBasicsAcceptedResponseSchema,
+  courseBasicsResponseSchema,
+  courseCreatedResponseSchema,
   courseListResponseSchema,
   courseListQuerySchema,
   courseOptionsResponseSchema,
   courseSlugParamsSchema,
   publicCourseSchema,
   createCourseRequestSchema,
+  creatorCoursesListResponseSchema,
   updateCourseBasicsRequestSchema,
   courseEditorDataResponseSchema,
   myCoursesListResponseSchema,
   courseOverviewSchema,
   courseDeleteResponseSchema,
-  courseStaticPageRefreshStatusSchema,
+  courseStaticPageRefreshStatusResponseSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../../lib/errors.ts";
@@ -45,7 +49,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Current public page refresh status.",
-            courseStaticPageRefreshStatusSchema,
+            courseStaticPageRefreshStatusResponseSchema,
           ),
         },
       },
@@ -65,7 +69,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Queued public page refresh retry.",
-            courseStaticPageRefreshStatusSchema,
+            courseStaticPageRefreshStatusResponseSchema,
           ),
         },
       },
@@ -143,7 +147,7 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Available courses by this creator.",
-            myCoursesListResponseSchema,
+            creatorCoursesListResponseSchema,
           ),
           403: errorResponse("MFA step-up required."),
         },
@@ -231,7 +235,10 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         summary: "Create a lightweight course draft",
         body: createCourseRequestSchema,
         response: {
-          201: jsonResponse("Course draft created", courseSchema),
+          201: jsonResponse(
+            "Course draft created",
+            courseCreatedResponseSchema,
+          ),
         },
       },
       preHandler: ctx.authorize("course.create", "platform"),
@@ -293,19 +300,13 @@ const courseRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ id: z.uuid() }),
         body: updateCourseBasicsRequestSchema,
         response: {
-          200: jsonResponse("Course basics updated", courseSchema),
+          200: jsonResponse(
+            "Course basics updated",
+            courseBasicsResponseSchema,
+          ),
           202: jsonResponse(
             "Video processing accepted",
-            z.object({
-              videoJobId: z.uuid(),
-              processingStatus: z.enum([
-                "queued",
-                "processing",
-                "completed",
-                "failed",
-              ]),
-              version: z.number().int(),
-            }),
+            courseBasicsAcceptedResponseSchema,
           ),
           409: errorResponse("Optimistic lock conflict"),
         },

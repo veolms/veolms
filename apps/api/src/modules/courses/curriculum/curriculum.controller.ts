@@ -132,14 +132,8 @@ export function createCurriculumController({
       request.user?.roles,
     );
 
-    if (result.accepted) {
-      reply.code(202);
-      return {
-        videoJobId: result.videoJobId,
-        processingStatus: result.processingStatus,
-      };
-    }
-
+    // 202 tells the editor the new video still has to be processed.
+    if (result.accepted) reply.code(202);
     return { success: true };
   }
 

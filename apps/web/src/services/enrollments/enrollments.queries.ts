@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type {
   AcademyEnrollmentListResponse,
   EnrolledCoursesResponse,
@@ -33,16 +33,5 @@ export function useRecentEnrollments(options?: {
     queryFn: () => enrollmentsService.listRecentEnrollments({ limit }),
     enabled: options?.enabled ?? true,
     staleTime: 60 * 1000,
-  });
-}
-
-export function useEnrollFreeCourse() {
-  const queryClient = useQueryClient();
-  return useMutation<unknown, ApiError, string>({
-    mutationFn: (courseId: string) =>
-      enrollmentsService.enrollFreeCourse(courseId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: enrollmentKeys.courses() });
-    },
   });
 }

@@ -1,12 +1,14 @@
 import { api } from "../../lib/api-client";
 import type {
   Category,
-  Course,
   CourseAccessRule,
+  CourseBasicsResponse,
+  CourseCreatedResponse,
   CourseDeleteResponse,
   CourseEditorDataResponse,
   CourseOverviewResponse,
-  CourseStaticPageRefreshStatus,
+  CourseStaticPageRefreshStatusResponse,
+  CourseStatusResponse,
   CourseListResponse,
   CourseListQuery,
   CourseOptionsResponse,
@@ -66,15 +68,15 @@ export const coursesService = {
 
   getStaticPageRefreshStatus: (
     courseId: string,
-  ): Promise<CourseStaticPageRefreshStatus> =>
-    api.get<CourseStaticPageRefreshStatus>(
+  ): Promise<CourseStaticPageRefreshStatusResponse> =>
+    api.get<CourseStaticPageRefreshStatusResponse>(
       `/courses/${courseId}/static-page-refresh`,
     ),
 
   retryStaticPageRefresh: (
     courseId: string,
-  ): Promise<CourseStaticPageRefreshStatus> =>
-    api.post<CourseStaticPageRefreshStatus>(
+  ): Promise<CourseStaticPageRefreshStatusResponse> =>
+    api.post<CourseStaticPageRefreshStatusResponse>(
       `/courses/${courseId}/static-page-refresh/retry`,
     ),
 
@@ -104,23 +106,25 @@ export const coursesService = {
     return api.get<CourseValidationResponse>(`/courses/${courseId}/validation`);
   },
 
-  publishCourse: (courseId: string): Promise<Course> => {
-    return api.post<Course>(`/courses/${courseId}/publish`);
+  publishCourse: (courseId: string): Promise<CourseStatusResponse> => {
+    return api.post<CourseStatusResponse>(`/courses/${courseId}/publish`);
   },
 
-  unpublishCourse: (courseId: string): Promise<Course> => {
-    return api.post<Course>(`/courses/${courseId}/unpublish`);
+  unpublishCourse: (courseId: string): Promise<CourseStatusResponse> => {
+    return api.post<CourseStatusResponse>(`/courses/${courseId}/unpublish`);
   },
 
-  createCourse: (payload: CreateCourseRequest): Promise<Course> => {
-    return api.post<Course>("/courses", payload);
+  createCourse: (
+    payload: CreateCourseRequest,
+  ): Promise<CourseCreatedResponse> => {
+    return api.post<CourseCreatedResponse>("/courses", payload);
   },
 
   updateCourseBasics: (
     id: string,
     payload: UpdateCourseBasicsRequest,
-  ): Promise<Course> => {
-    return api.patch<Course>(`/courses/${id}/basics`, payload);
+  ): Promise<CourseBasicsResponse> => {
+    return api.patch<CourseBasicsResponse>(`/courses/${id}/basics`, payload);
   },
 
   deleteCourse: (id: string): Promise<CourseDeleteResponse> => {
@@ -142,18 +146,11 @@ export const coursesService = {
   createSection: (
     courseId: string,
     payload: CreateCourseSectionRequest,
-  ): Promise<{
-    id: string;
-    courseId: string;
-    title: string;
-    position: number;
-  }> => {
-    return api.post<{
-      id: string;
-      courseId: string;
-      title: string;
-      position: number;
-    }>(`/courses/${courseId}/sections`, payload);
+  ): Promise<{ id: string; title: string }> => {
+    return api.post<{ id: string; title: string }>(
+      `/courses/${courseId}/sections`,
+      payload,
+    );
   },
 
   updateSection: (
@@ -190,8 +187,8 @@ export const coursesService = {
     courseId: string,
     sectionId: string,
     payload: CreateCourseLessonRequest,
-  ): Promise<{ id: string; position: number }> => {
-    return api.post<{ id: string; position: number }>(
+  ): Promise<{ id: string }> => {
+    return api.post<{ id: string }>(
       `/courses/${courseId}/sections/${sectionId}/lessons`,
       payload,
     );
@@ -201,16 +198,11 @@ export const coursesService = {
     courseId: string,
     lessonId: string,
     payload: UpdateCourseLessonRequest,
-  ): Promise<{
-    success: boolean;
-    videoJobId?: string;
-    processingStatus?: string;
-  }> => {
-    return api.patch<{
-      success: boolean;
-      videoJobId?: string;
-      processingStatus?: string;
-    }>(`/courses/${courseId}/lessons/${lessonId}`, payload);
+  ): Promise<{ success: boolean }> => {
+    return api.patch<{ success: boolean }>(
+      `/courses/${courseId}/lessons/${lessonId}`,
+      payload,
+    );
   },
 
   deleteLesson: (

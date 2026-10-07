@@ -10,6 +10,7 @@ import { httpError } from "../../../lib/errors.ts";
 import type { OrderService } from "./order.service.ts";
 import type { InvoiceService } from "../invoices/invoice.service.ts";
 import type { RefundService } from "../refunds/refund.service.ts";
+import { toRefundResult } from "../refunds/refund.mapper.ts";
 import type { AuthorizationService } from "../../authorization/authorization.service.ts";
 
 type BillingPermission = "billing.read" | "billing.manage";
@@ -134,7 +135,7 @@ export function createOrderController({
       scope,
       request.params.orderId,
     );
-    reply
+    await reply
       .header("Content-Type", "text/html; charset=utf-8")
       .header(
         "Content-Disposition",
@@ -168,13 +169,14 @@ export function createOrderController({
       );
     }
 
-    return await refundService.processRefund(user.id, {
+    const refund = await refundService.processRefund(user.id, {
       orderId: request.params.orderId,
       amount: request.body.amount,
       reason: request.body.reason,
       preserveAccess: request.body.preserveAccess ?? false,
       idempotencyKey: headerKey ?? bodyKey,
     });
+    return toRefundResult(refund);
   }
 
   return {

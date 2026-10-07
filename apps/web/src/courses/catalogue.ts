@@ -51,7 +51,7 @@ export interface Course {
   duration: string;
   students: number;
   thumbnail: string;
-  thumbnailSrcSet?: readonly { url: string; width: number; height: number }[];
+  thumbnailSrcSet?: readonly { url: string; width: number }[];
   lifecycleStatus: CourseLifecycleStatus;
   pricing?: CoursePricing;
   certificateAvailable?: boolean;
@@ -59,7 +59,6 @@ export interface Course {
   createdAt?: string;
   updatedAt?: string;
   deletedAt?: string;
-  purgeAt?: string;
   isApi?: boolean;
   creatorId?: string | null;
 }

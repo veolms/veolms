@@ -1,12 +1,9 @@
-import type {
-  DatabaseExecutor,
-  LearningAttachmentTable,
-} from "@veolms/database";
-import type { Selectable } from "kysely";
+import type { DatabaseExecutor } from "@veolms/database";
 import type {
   AcceptReplyResponse,
   LearningRepliesListResponse,
   LearningReply,
+  LearningReplyEditResponse,
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
@@ -24,10 +21,18 @@ import {
   decodeDiscussionCursor,
   encodeDiscussionCursor,
   extractPlainText,
-  mapAuthorRole,
   takePage,
   toDate,
 } from "../shared/discussion.utils.ts";
+import {
+  presentDiscussionAuthor,
+  toIsoString,
+} from "../shared/discussion.presenters.ts";
+import {
+  listReadyAttachments,
+  presentDiscussionAttachment,
+  type DiscussionAttachmentRow,
+} from "../shared/discussion-attachments.ts";
 import {
   createDiscussionAccess,
   type DiscussionActor,
@@ -36,15 +41,11 @@ import {
   createLessonDiscussionAccess,
   type LessonDiscussionAccess,
 } from "../shared/lesson-discussion-access.ts";
-import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import type { ThreadsRepository } from "../threads/threads.repository.ts";
-import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
 import type {
   RepliesRepository,
   ReplyRowWithAuthor,
 } from "./replies.repository.ts";
-
-type LearningAttachmentRow = Selectable<LearningAttachmentTable>;
 
 export interface RepliesService {
   createReply(
@@ -73,7 +74,7 @@ export interface RepliesService {
     replyId: string,
     actor: DiscussionActor,
     updates: UpdateLearningReplyRequest,
-  ): Promise<LearningReply>;
+  ): Promise<LearningReplyEditResponse>;
 
   deleteReply(
     db: DatabaseExecutor,
@@ -106,74 +107,23 @@ export function createRepliesService({
   function mapReplyRow(
     row: ReplyRowWithAuthor,
     currentUserId?: string,
-    attachments: LearningAttachmentRow[] = [],
+    attachments: DiscussionAttachmentRow[] = [],
     likedReplyIds?: Set<string>,
   ): LearningReply {
-    const isOwn = currentUserId ? row.userId === currentUserId : false;
-    const isLiked = likedReplyIds ? likedReplyIds.has(row.id) : false;
-
-    const repliedTo =
-      row.replyToReplyId || row.replyToUserId
-        ? {
-            id: row.replyToReplyId || row.parentReplyId || row.id,
-            userId: row.replyToUserId || row.userId,
-            username: (row.replyToUsername || "user").split("@")[0] || "user",
-            displayName: row.replyToDisplayName || "Learner",
-            textSnippet: row.replyToContent
-              ? row.replyToContent.slice(0, 120)
-              : undefined,
-          }
-        : null;
-
     return {
       id: row.id,
       threadId: row.threadId,
-      parentReplyId: row.parentReplyId ?? null,
-      replyToReplyId: row.replyToReplyId ?? null,
-      replyToUserId: row.replyToUserId ?? null,
-      repliedTo,
-      userId: row.userId,
-      author: {
-        id: row.userId,
-        displayName: row.authorName || "Anonymous Learner",
-        username:
-          (row.authorUsername || row.authorEmail || "user").split("@")[0] ||
-          "user",
-        avatarUrl: row.authorAvatarUrl,
-        role: mapAuthorRole(row.authorRole),
-      },
+      author: presentDiscussionAuthor(row),
       content: row.content,
       plainText: row.plainText,
-      timestampSeconds: row.timestampSeconds ?? null,
       isAccepted: Boolean(row.isAccepted),
-      status: row.status,
       likesCount: Number(row.likesCount || 0),
-      attachments: attachments.map((a) => ({
-        id: a.id,
-        kind: a.kind,
-        fileName: a.file_name,
-        fileUrl: storage
-          ? getCdnDeliveryUrl(storage, a.storage_key).url
-          : a.file_url,
-        mimeType: a.mime_type,
-        fileSize: Number(a.file_size || 0),
-        ...getAttachmentDimensionFields(a.metadata),
-        metadata: a.metadata
-          ? typeof a.metadata === "string"
-            ? JSON.parse(a.metadata)
-            : a.metadata
-          : null,
-      })),
-      isLiked,
-      isOwn,
-      createdAt:
-        row.createdAt instanceof Date
-          ? row.createdAt.toISOString()
-          : String(row.createdAt),
-      updatedAt:
-        row.updatedAt instanceof Date
-          ? row.updatedAt.toISOString()
-          : String(row.updatedAt),
+      attachments: attachments.map((attachment) =>
+        presentDiscussionAttachment(attachment, storage),
+      ),
+      isLiked: likedReplyIds ? likedReplyIds.has(row.id) : false,
+      isOwn: currentUserId ? row.userId === currentUserId : false,
+      createdAt: toIsoString(row.createdAt),
     };
   }
 
@@ -309,14 +259,9 @@ export function createRepliesService({
         if (!created) {
           throw httpError(500, "CREATE_FAILED", "Failed to load created reply");
         }
-        const attachments = await trx
-          .selectFrom("learning_attachments")
-          .selectAll()
-          .where("target_type", "=", "reply")
-          .where("target_id", "=", id)
-          .execute();
+        const attachments = await listReadyAttachments(trx, "reply", [id]);
 
-        return mapReplyRow(created, input.userId, attachments);
+        return mapReplyRow(created, input.userId, attachments.get(id));
       });
     },
 
@@ -334,7 +279,12 @@ export function createRepliesService({
           })
         : null;
       if (lessonReadAccess?.canReadPrivateState) {
-        await courseAccess.assertCanAccessThread(db, actor!, thread);
+        // The lesson check has already established course access.
+        courseAccess.assertThreadVisibleToMember(
+          actor!,
+          thread,
+          lessonReadAccess.canModerate,
+        );
       } else if (lessonReadAccess) {
         courseAccess.assertThreadIsActive(thread);
         if (thread.visibility !== "public") {
@@ -365,53 +315,31 @@ export function createRepliesService({
       const { page, hasMore } = takePage(rows, query.limit);
 
       let likedReplyIds = new Set<string>();
-      let attachmentsByReplyId = new Map<string, LearningAttachmentRow[]>();
+      let attachmentsByReplyId = new Map<string, DiscussionAttachmentRow[]>();
       if (page.length > 0) {
         const replyIds = page.map((r) => r.id);
-        const [likes, attachmentRows] =
+        const [likes, attachments] = await Promise.all([
           actor && canReadPrivateState
-            ? await Promise.all([
-                db
-                  .selectFrom("learning_likes")
-                  .select("target_id")
-                  .where("user_id", "=", actor.userId)
-                  .where("target_type", "=", "reply")
-                  .where("target_id", "in", replyIds)
-                  .execute(),
-                db
-                  .selectFrom("learning_attachments")
-                  .selectAll()
-                  .where("target_type", "=", "reply")
-                  .where("target_id", "in", replyIds)
-                  .where("status", "=", "ready")
-                  .execute(),
-              ])
-            : [
-                [],
-                await db
-                  .selectFrom("learning_attachments")
-                  .selectAll()
-                  .where("target_type", "=", "reply")
-                  .where("target_id", "in", replyIds)
-                  .where("status", "=", "ready")
-                  .execute(),
-              ];
+            ? db
+                .selectFrom("learning_likes")
+                .select("target_id")
+                .where("user_id", "=", actor.userId)
+                .where("target_type", "=", "reply")
+                .where("target_id", "in", replyIds)
+                .execute()
+            : Promise.resolve([]),
+          listReadyAttachments(db, "reply", replyIds),
+        ]);
 
         likedReplyIds = new Set(likes.map((l) => l.target_id));
-        for (const attachment of attachmentRows) {
-          const targetId = attachment.target_id;
-          if (!targetId) continue;
-          const group = attachmentsByReplyId.get(targetId) ?? [];
-          group.push(attachment);
-          attachmentsByReplyId.set(targetId, group);
-        }
+        attachmentsByReplyId = attachments;
       }
 
       const replies = page.map((r) =>
         mapReplyRow(
           r,
           actor?.userId,
-          attachmentsByReplyId.get(r.id) ?? [],
+          attachmentsByReplyId.get(r.id),
           likedReplyIds,
         ),
       );
@@ -496,7 +424,12 @@ export function createRepliesService({
         if (!updated) {
           throw httpError(500, "UPDATE_FAILED", "Failed to load updated reply");
         }
-        return mapReplyRow(updated, actor.userId);
+        return {
+          id: updated.id,
+          content: updated.content,
+          plainText: updated.plainText,
+          updatedAt: toIsoString(updated.updatedAt),
+        };
       });
     },
 
@@ -665,12 +598,7 @@ export function createRepliesService({
             });
           }
 
-          return {
-            replyId,
-            threadId: thread.id,
-            isAccepted: true,
-            acceptedAnswerId: replyId,
-          };
+          return { acceptedAnswerId: replyId };
         }
 
         await repliesRepo.setAcceptedStatus(trx, replyId, false);
@@ -679,9 +607,6 @@ export function createRepliesService({
         }
 
         return {
-          replyId,
-          threadId: thread.id,
-          isAccepted: false,
           acceptedAnswerId:
             thread.acceptedAnswerId === replyId
               ? null

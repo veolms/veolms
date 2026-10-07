@@ -160,11 +160,6 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
         courseId?: string | null;
       }) {
         const { userId, courseId } = params;
-        const featuresObj: Record<string, boolean> = {};
-
-        for (const [k, v] of platformFeatures.entries()) {
-          featuresObj[k] = v;
-        }
 
         let perms: string[] = [];
         if (userId === USER_ADMIN) {
@@ -200,9 +195,7 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
         }
 
         return {
-          courseId: courseId ?? null,
           permissions: perms,
-          features: featuresObj,
         };
       },
 
@@ -422,13 +415,10 @@ describe("VeoLMS 2-Tier Scoped Authorization Service & Guards (Platform + Course
         courseId: COURSE_1,
       });
 
-      assert.equal(capabilities.courseId, COURSE_1);
       assert.ok(capabilities.permissions.includes("course.thumbnail.update"));
       assert.ok(capabilities.permissions.includes("lesson.thumbnail.update"));
       assert.ok(!capabilities.permissions.includes("course.pricing.update"));
       assert.ok(!capabilities.permissions.includes("course.publish"));
-      assert.equal(capabilities.features["quizzes"], true);
-      assert.equal(capabilities.features["certificates"], false);
     });
   });
 

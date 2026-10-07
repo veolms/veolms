@@ -5,6 +5,7 @@ import type {
   CreateLinkPreviewRequest,
   InitiateAttachmentUploadRequest,
 } from "@veolms/contracts";
+import { httpError } from "../../../../lib/errors.ts";
 import { discussionActor } from "../shared/discussion.access.ts";
 import { readDiscussionAttachmentUploadContext } from "./attachment-upload-context.ts";
 import type { AttachmentsService } from "./attachments.service.ts";
@@ -48,7 +49,7 @@ export function createAttachmentsController({
         discussionActor(user),
         request.body,
       );
-      reply.status(201).send(result);
+      await reply.status(201).send(result);
     },
 
     async uploadFile(request, reply) {
@@ -56,8 +57,7 @@ export function createAttachmentsController({
       const { attachmentId } = request.params;
       const multipartFile = await request.file();
       if (!multipartFile) {
-        reply.status(400).send({ message: "No file provided" });
-        return;
+        throw httpError(400, "FILE_REQUIRED", "No file provided");
       }
 
       try {
@@ -75,7 +75,7 @@ export function createAttachmentsController({
             ...readMultipartDimensions(multipartFile.fields),
           },
         );
-        reply.status(200).send(attachment);
+        await reply.status(200).send(attachment);
       } catch (error) {
         // If the service rejected before consuming the stream (auth/mime/
         // 404 paths), drain it so busboy can finish parsing the request.
@@ -92,15 +92,14 @@ export function createAttachmentsController({
         attachmentId,
         user.id,
       );
-      reply.status(200).send(attachment);
+      await reply.status(200).send(attachment);
     },
 
     async uploadAttachment(request, reply) {
       const user = request.user!;
       const multipartFile = await request.file();
       if (!multipartFile) {
-        reply.status(400).send({ message: "No file provided" });
-        return;
+        throw httpError(400, "FILE_REQUIRED", "No file provided");
       }
 
       const context = readDiscussionAttachmentUploadContext(
@@ -119,7 +118,7 @@ export function createAttachmentsController({
             ...readMultipartDimensions(multipartFile.fields),
           },
         );
-        reply.status(201).send(result);
+        await reply.status(201).send(result);
       } catch (error) {
         multipartFile.file.resume();
         throw error;
@@ -129,7 +128,7 @@ export function createAttachmentsController({
     async getLinkPreview(request, reply) {
       const { url } = request.body;
       const preview = await service.fetchLinkPreview(url);
-      reply.status(200).send(preview);
+      await reply.status(200).send(preview);
     },
   };
 }

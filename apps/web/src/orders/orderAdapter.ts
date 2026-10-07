@@ -1,8 +1,7 @@
-import type { Order } from "@veolms/contracts";
+import type { LearnerOrder } from "@veolms/contracts";
 import { formatMoney, toMajorUnits } from "@veolms/contracts/commerce/money";
 import type {
   OrderItem,
-  OrderStatus,
   OrderSummaryMetrics,
   RecentPaymentItem,
 } from "./ordersData";
@@ -12,141 +11,15 @@ import type {
 } from "../order-history/orderHistoryData";
 
 /**
- * Adapts an API Order to the frontend OrderItem model consumed by OrdersPage.
+ * Adapts an API order to the frontend OrderHistoryItem model consumed by OrderHistoryPage.
  */
-export function adaptOrderToOrderItem(order: Order): OrderItem {
-  const firstItem = order.items?.[0];
+export function adaptOrderToOrderHistoryItem(
+  order: LearnerOrder,
+): OrderHistoryItem {
+  const firstItem = order.items[0];
   const courseTitle =
     firstItem?.titleSnapshot ||
-    (order.items && order.items.length > 1
-      ? `${order.items[0]?.titleSnapshot} + ${order.items.length - 1} more`
-      : "Course Order");
-  const courseId = firstItem?.courseId || firstItem?.bundleId || order.id;
-
-  let badgeText = "TS";
-  let badgeColor = "#2563eb";
-  let badgeTextColor = "#ffffff";
-  const titleLower = courseTitle.toLowerCase();
-  if (titleLower.includes("typescript")) {
-    badgeText = "TS";
-    badgeColor = "#2563eb";
-  } else if (titleLower.includes("javascript")) {
-    badgeText = "JS";
-    badgeColor = "#eab308";
-    badgeTextColor = "#000000";
-  } else if (titleLower.includes("node") || titleLower.includes("backend")) {
-    badgeText = "node";
-    badgeColor = "#1e293b";
-    badgeTextColor = "#4ade80";
-  } else if (
-    titleLower.includes("ui") ||
-    titleLower.includes("ux") ||
-    titleLower.includes("design")
-  ) {
-    badgeText = "UI";
-    badgeColor = "#8b5cf6";
-  } else if (
-    titleLower.includes("postgres") ||
-    titleLower.includes("sql") ||
-    titleLower.includes("database")
-  ) {
-    badgeText = "PG";
-    badgeColor = "#0284c7";
-  } else if (titleLower.includes("react")) {
-    badgeText = "react";
-    badgeColor = "#06b6d4";
-  } else if (titleLower.includes("graphql")) {
-    badgeText = "GQL";
-    badgeColor = "#ec4899";
-  } else if (titleLower.includes("aws") || titleLower.includes("cloud")) {
-    badgeText = "AWS";
-    badgeColor = "#f59e0b";
-  } else {
-    badgeText = courseTitle.slice(0, 2).toUpperCase();
-    badgeColor = "#3b82f6";
-  }
-
-  let status: OrderStatus = "pending";
-  let statusLabel = "Pending";
-  if (order.status === "paid") {
-    status = "completed";
-    statusLabel = "Completed";
-  } else if (
-    order.status === "pending" ||
-    order.status === "payment_processing"
-  ) {
-    status = "pending";
-    statusLabel =
-      order.status === "payment_processing" ? "Processing" : "Pending";
-  } else if (
-    order.status === "payment_failed" ||
-    order.status === "expired" ||
-    order.status === "cancelled"
-  ) {
-    status = "failed";
-    statusLabel = "Failed";
-  } else if (
-    order.status === "refunded" ||
-    order.status === "partially_refunded"
-  ) {
-    status = "refunded";
-    statusLabel = "Refunded";
-  }
-
-  const dateObj = order.createdAt ? new Date(order.createdAt) : new Date();
-  const date = dateObj.toLocaleDateString("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-  });
-
-  // Order amounts arrive in minor units; `price`/`subtotal`/`tax` are the
-  // major-unit numbers this view model exposes for sorting and totals.
-  const currency = order.currency || "INR";
-  const price = toMajorUnits(order.totalAmount, currency);
-  const subtotal = toMajorUnits(order.subtotalAmount, currency);
-  const tax = toMajorUnits(order.taxAmount, currency);
-  const formattedPrice = formatMoney(order.totalAmount, { currency });
-
-  const cleanOrderNumber = order.orderNumber.startsWith("#")
-    ? order.orderNumber
-    : `#${order.orderNumber}`;
-  const invoiceNumber = `INV-${
-    order.orderNumber.replace(/^[#A-Za-z_-]+/, "") || order.id.slice(0, 8)
-  }`;
-  const transactionId =
-    order.idempotencyKey || `TXN_${order.id.replace(/-/g, "").slice(0, 10)}`;
-
-  return {
-    id: order.id,
-    orderNumber: cleanOrderNumber,
-    courseId,
-    courseTitle,
-    badgeText,
-    badgeColor,
-    badgeTextColor,
-    date,
-    paymentMethod: "Credit Card / UPI",
-    price,
-    formattedPrice,
-    status,
-    statusLabel,
-    invoiceNumber,
-    transactionId,
-    tax,
-    subtotal,
-    currency,
-  };
-}
-
-/**
- * Adapts an API Order to the frontend OrderHistoryItem model consumed by OrderHistoryPage.
- */
-export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
-  const firstItem = order.items?.[0];
-  const courseTitle =
-    firstItem?.titleSnapshot ||
-    (order.items && order.items.length > 1
+    (order.items.length > 1
       ? `${order.items[0]?.titleSnapshot} + ${order.items.length - 1} more`
       : "Course Order");
   const courseId = firstItem?.courseId || "";
@@ -200,8 +73,7 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
   const invoiceNumber = `INV-${
     order.orderNumber.replace(/^[#A-Za-z_-]+/, "") || order.id.slice(0, 8)
   }`;
-  const transactionId =
-    order.idempotencyKey || `TXN_${order.id.replace(/-/g, "").slice(0, 10)}`;
+  const transactionId = `TXN_${order.id.replace(/-/g, "").slice(0, 10)}`;
 
   let iconColor = "#3b82f6";
   const titleLower = courseTitle.toLowerCase();
@@ -217,9 +89,7 @@ export function adaptOrderToOrderHistoryItem(order: Order): OrderHistoryItem {
   else if (titleLower.includes("javascript")) iconColor = "#f97316";
 
   const itemCount =
-    order.items && order.items.length > 1
-      ? `${order.items.length} Courses`
-      : "1 Course";
+    order.items.length > 1 ? `${order.items.length} Courses` : "1 Course";
 
   const paymentMethod = order.paymentSummary?.method.toLowerCase() ?? "";
   const paymentType = paymentMethod.includes("upi")

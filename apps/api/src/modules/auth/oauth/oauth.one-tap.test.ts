@@ -64,7 +64,6 @@ function createService(
       },
       syncProviderAvatar: async () => {},
       requireUser: async () => user,
-      getUserRoles: async () => ["student"],
     } as unknown as AuthService,
     sessionService: {
       establishSession: async () => ({
@@ -76,6 +75,7 @@ function createService(
           mfaMandatory: true,
           mfaRequired: true,
         },
+        roles: ["student"],
       }),
     } as unknown as SessionService,
   });

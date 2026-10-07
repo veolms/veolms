@@ -87,18 +87,11 @@ export function createAuthorizationService(
     }): Promise<CapabilitiesResponse> {
       const { userId, courseId } = params;
 
-      const [permissionsList, featuresMap] = await Promise.all([
-        repo.getUserEffectivePermissions(database, {
+      return {
+        permissions: await repo.getUserEffectivePermissions(database, {
           userId,
           courseId,
         }),
-        repo.getFeatureMap(database),
-      ]);
-
-      return {
-        courseId: courseId ?? null,
-        permissions: permissionsList,
-        features: featuresMap,
       };
     },
 

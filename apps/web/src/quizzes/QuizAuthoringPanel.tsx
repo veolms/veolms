@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AssignQuizRequest, QuizQuestionType } from "@veolms/contracts";
+import type {
+  AssignQuizRequest,
+  Quiz,
+  QuizQuestionType,
+} from "@veolms/contracts";
 import { Button } from "../components/Button";
 import {
   CenteredLoadingSpinner,
@@ -79,9 +83,25 @@ interface EditableQuestion {
   questionType: QuizQuestionType;
   prompt: string;
   points: number;
-  position: number;
   explanation: string | null;
   options: readonly OptionDraft[];
+}
+
+type SavedQuestion = NonNullable<Quiz["editableVersion"]>["questions"][number];
+
+/** The cached quiz with its editable questions replaced (optimistic edits). */
+function withEditableQuestions(
+  quiz: Quiz | undefined,
+  update: (questions: SavedQuestion[]) => SavedQuestion[],
+): Quiz | undefined {
+  if (!quiz?.editableVersion) return quiz;
+  return {
+    ...quiz,
+    editableVersion: {
+      ...quiz.editableVersion,
+      questions: update(quiz.editableVersion.questions),
+    },
+  };
 }
 
 const initialOptions = (): OptionDraft[] => [
@@ -337,12 +357,9 @@ export function QuizAuthoringPanel({
     courseId,
     lessonId,
   ]);
-  const version = useMemo(
-    () =>
-      quiz.data?.versions.find((item) => !item.publishedAt) ??
-      quiz.data?.versions.at(-1),
-    [quiz.data],
-  );
+  // The draft, or the newest version when nothing is in draft: the server
+  // sends questions for this version only.
+  const version = quiz.data?.editableVersion ?? undefined;
 
   useEffect(() => {
     if (initialQuizId) return;
@@ -456,10 +473,7 @@ export function QuizAuthoringPanel({
       lastLoadedQuizIdRef.current = quizId;
       setQuizTitle(quiz.data.title);
       setDescription(quiz.data.description ?? "");
-      const currentVersion =
-        quiz.data.versions.find((item) => !item.publishedAt) ??
-        quiz.data.versions.at(-1);
-      const instr = currentVersion?.instructions ?? "";
+      const instr = quiz.data.editableVersion?.instructions ?? "";
       setInstructions(instr);
       lastSavedDetailsRef.current = {
         title: quiz.data.title,
@@ -1000,37 +1014,26 @@ export function QuizAuthoringPanel({
       id: `temp-opt-${position}-${Date.now()}`,
       text: opt.text,
       isCorrect: opt.isCorrect,
-      weight: 1,
-      position,
     }));
-    const newPosition = version?.questions.length ?? 0;
-    const optimisticQuestion = {
+    const optimisticQuestion: SavedQuestion = {
       id: tempQuestionId,
-      questionType: "single_choice" as const,
+      questionType: "single_choice",
       prompt: `Question ${nextIdx}`,
       points: 1,
-      position: newPosition,
       explanation: null,
       options: initialOpts,
     };
 
     // Optimistically update query cache immediately (0ms latency, zero fluctuation)
-    qc.setQueryData(quizKeys.detail(quizId), (prev: any) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        versions: prev.versions.map((v: any) => {
-          if (v.id !== version?.id) return v;
-          return {
-            ...v,
-            questions: [...(v.questions ?? []), optimisticQuestion],
-          };
-        }),
-      };
-    });
+    qc.setQueryData<Quiz>(quizKeys.detail(quizId), (prev) =>
+      withEditableQuestions(prev, (questions) => [
+        ...questions,
+        optimisticQuestion,
+      ]),
+    );
 
     // Immediately expand and enter edit mode for the optimistic question
-    editQuestion(optimisticQuestion as any);
+    editQuestion(optimisticQuestion);
 
     addQuestion.mutate(
       {
@@ -1050,10 +1053,7 @@ export function QuizAuthoringPanel({
       {
         onSuccess: (updatedQuiz) => {
           qc.setQueryData(quizKeys.detail(quizId), updatedQuiz);
-          const latestVersion =
-            updatedQuiz.versions.find((item) => !item.publishedAt) ??
-            updatedQuiz.versions.at(-1);
-          const realQ = latestVersion?.questions.at(-1);
+          const realQ = updatedQuiz.editableVersion?.questions.at(-1);
           if (realQ) {
             setEditingQuestionId((currentId) =>
               currentId === tempQuestionId ? realQ.id : currentId,
@@ -1072,21 +1072,11 @@ export function QuizAuthoringPanel({
           }
         },
         onError: () => {
-          qc.setQueryData(quizKeys.detail(quizId), (prev: any) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              versions: prev.versions.map((v: any) => {
-                if (v.id !== version?.id) return v;
-                return {
-                  ...v,
-                  questions: v.questions.filter(
-                    (q: any) => q.id !== tempQuestionId,
-                  ),
-                };
-              }),
-            };
-          });
+          qc.setQueryData<Quiz>(quizKeys.detail(quizId), (prev) =>
+            withEditableQuestions(prev, (questions) =>
+              questions.filter((q) => q.id !== tempQuestionId),
+            ),
+          );
           setEditingQuestionId((currentId) =>
             currentId === tempQuestionId ? null : currentId,
           );
@@ -1642,20 +1632,14 @@ export function QuizAuthoringPanel({
                                   current.filter((q) => q.id !== question.id),
                                 );
                               } else {
-                                qc.setQueryData(
+                                qc.setQueryData<Quiz>(
                                   quizKeys.detail(quizId),
-                                  (prev: any) => {
-                                    if (!prev) return prev;
-                                    return {
-                                      ...prev,
-                                      versions: prev.versions.map((v: any) => ({
-                                        ...v,
-                                        questions: v.questions.filter(
-                                          (q: any) => q.id !== question.id,
-                                        ),
-                                      })),
-                                    };
-                                  },
+                                  (prev) =>
+                                    withEditableQuestions(prev, (questions) =>
+                                      questions.filter(
+                                        (q) => q.id !== question.id,
+                                      ),
+                                    ),
                                 );
                               }
                               return;

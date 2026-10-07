@@ -4,7 +4,6 @@ import type {
   AttachmentStatus,
   AttachmentTargetType,
   DiscussionAttachmentSummary,
-  LearningAttachment,
 } from "@veolms/contracts";
 import { sql } from "kysely";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
@@ -14,7 +13,25 @@ export interface AttachmentSummaryRow {
   attachmentSummary: DiscussionAttachmentSummary;
 }
 
-export type ThreadAttachmentSummary = AttachmentSummaryRow;
+/**
+ * A stored attachment as the server works with it. It carries the storage
+ * key and ownership, so it is never sent to a client as-is.
+ */
+export interface AttachmentRecord {
+  id: string;
+  ownerId: string;
+  targetType: AttachmentTargetType | null;
+  targetId: string | null;
+  kind: AttachmentKind;
+  storageKey: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  status: AttachmentStatus;
+  width: number | null;
+  height: number | null;
+  metadata: Record<string, unknown> | null;
+}
 
 export interface AttachmentsRepository {
   createAttachment(
@@ -38,13 +55,7 @@ export interface AttachmentsRepository {
   findAttachmentById(
     db: DatabaseExecutor,
     attachmentId: string,
-  ): Promise<LearningAttachment | null>;
-
-  listAttachmentsByTarget(
-    db: DatabaseExecutor,
-    targetType: AttachmentTargetType,
-    targetId: string,
-  ): Promise<LearningAttachment[]>;
+  ): Promise<AttachmentRecord | null>;
 
   listThreadAttachmentSummaries(
     db: DatabaseExecutor,
@@ -60,13 +71,6 @@ export interface AttachmentsRepository {
     db: DatabaseExecutor,
     noteIds: readonly string[],
   ): Promise<AttachmentSummaryRow[]>;
-
-  linkAttachmentsToTarget(
-    db: DatabaseExecutor,
-    attachmentIds: string[],
-    targetType: AttachmentTargetType,
-    targetId: string,
-  ): Promise<void>;
 }
 
 export function createAttachmentsRepository(): AttachmentsRepository {
@@ -141,7 +145,19 @@ export function createAttachmentsRepository(): AttachmentsRepository {
     async findAttachmentById(db, attachmentId) {
       const row = await db
         .selectFrom("learning_attachments")
-        .selectAll()
+        .select([
+          "id",
+          "owner_id",
+          "target_type",
+          "target_id",
+          "kind",
+          "storage_key",
+          "file_name",
+          "mime_type",
+          "file_size",
+          "status",
+          "metadata",
+        ])
         .where("id", "=", attachmentId)
         .executeTakeFirst();
 
@@ -155,7 +171,6 @@ export function createAttachmentsRepository(): AttachmentsRepository {
         kind: row.kind as AttachmentKind,
         storageKey: row.storage_key,
         fileName: row.file_name,
-        fileUrl: row.file_url,
         mimeType: row.mime_type,
         fileSize: row.file_size,
         status: row.status as AttachmentStatus,
@@ -164,45 +179,7 @@ export function createAttachmentsRepository(): AttachmentsRepository {
           typeof row.metadata === "string"
             ? JSON.parse(row.metadata)
             : (row.metadata as Record<string, unknown> | null),
-        createdAt:
-          row.created_at instanceof Date
-            ? row.created_at.toISOString()
-            : String(row.created_at),
       };
-    },
-
-    async listAttachmentsByTarget(db, targetType, targetId) {
-      const rows = await db
-        .selectFrom("learning_attachments")
-        .selectAll()
-        .where("target_type", "=", targetType)
-        .where("target_id", "=", targetId)
-        .where("status", "=", "ready")
-        .orderBy("created_at", "asc")
-        .execute();
-
-      return rows.map((row) => ({
-        id: row.id,
-        ownerId: row.owner_id,
-        targetType: (row.target_type as AttachmentTargetType) ?? null,
-        targetId: row.target_id ?? null,
-        kind: row.kind as AttachmentKind,
-        storageKey: row.storage_key,
-        fileName: row.file_name,
-        fileUrl: row.file_url,
-        mimeType: row.mime_type,
-        fileSize: row.file_size,
-        status: row.status as AttachmentStatus,
-        ...getAttachmentDimensionFields(row.metadata),
-        metadata:
-          typeof row.metadata === "string"
-            ? JSON.parse(row.metadata)
-            : (row.metadata as Record<string, unknown> | null),
-        createdAt:
-          row.created_at instanceof Date
-            ? row.created_at.toISOString()
-            : String(row.created_at),
-      }));
     },
 
     async listThreadAttachmentSummaries(db, threadIds) {
@@ -215,18 +192,6 @@ export function createAttachmentsRepository(): AttachmentsRepository {
 
     async listNoteAttachmentSummaries(db, noteIds) {
       return listAttachmentSummaries(db, "note", noteIds);
-    },
-
-    async linkAttachmentsToTarget(db, attachmentIds, targetType, targetId) {
-      if (attachmentIds.length === 0) return;
-      await db
-        .updateTable("learning_attachments")
-        .set({
-          target_type: targetType,
-          target_id: targetId,
-        })
-        .where("id", "in", attachmentIds)
-        .execute();
     },
   };
 }

@@ -102,13 +102,10 @@ export function createCourseController({
       request.user?.roles,
     );
 
+    // 202 tells the editor the new trailer still has to be processed.
     if (result.accepted) {
       reply.code(202);
-      return {
-        videoJobId: result.videoJobId,
-        processingStatus: result.processingStatus,
-        version: result.version,
-      };
+      return { version: result.version };
     }
 
     return result.course;

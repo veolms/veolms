@@ -7,44 +7,29 @@ import { AppError } from "../../../lib/errors.ts";
 import * as repo from "../shared/quiz.repository.ts";
 import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
 import { resolveQuizCharge } from "../../commerce/pricing/quiz-pricing.amount.ts";
+import type { AssignmentRow } from "../shared/quiz.presenters.ts";
 import { isAdmin, type QuizServiceOptions } from "../shared/quiz.types.ts";
-import { gradeQuizQuestion } from "../shared/quiz.grading.ts";
 import {
   ANSWER_SAVE_GRACE_MS,
   attemptDeadline,
   createAttemptCloser,
   gradeLockedAttempt,
   isPastDeadline,
+  type GradedAttempt,
 } from "./attempt.closing.ts";
+import { presentAttemptResult, resultScope } from "./attempt.result.ts";
 
-function assignmentDto(row: Awaited<ReturnType<typeof repo.findAssignment>>) {
-  if (!row)
-    throw new AppError(
-      404,
-      "ASSIGNMENT_NOT_FOUND",
-      "Quiz assignment not found.",
-    );
-  return row;
-}
+type AttemptRow = NonNullable<Awaited<ReturnType<typeof repo.findAttempt>>>;
+
+/**
+ * How many of a learner's most recent attempts their history returns. The
+ * page lists the latest few and totals the rest; this only keeps one very
+ * long history from being read in full on every visit.
+ */
+const ATTEMPT_HISTORY_LIMIT = 500;
 
 function toIso(value: Date | null | undefined) {
   return value?.toISOString() ?? null;
-}
-
-/** Read-only pricing joined from the course's shared quiz pricing row. */
-function presentPricing(
-  pricing: Awaited<ReturnType<typeof pricingRepo.findPricing>>,
-) {
-  return {
-    quizPricingId: pricing?.id ?? null,
-    pricingType: pricing?.pricing_type ?? ("free" as const),
-    price: Number(pricing?.price ?? 0),
-    currency: pricing?.currency ?? "INR",
-    salePrice:
-      pricing?.sale_price !== null && pricing?.sale_price !== undefined
-        ? Number(pricing.sale_price)
-        : null,
-  };
 }
 
 function stableHash(value: string) {
@@ -73,23 +58,6 @@ function isUniqueViolation(error: unknown) {
   );
 }
 
-function shouldRevealAnswers(
-  feedbackMode: string,
-  attemptNumber: number,
-  maxAttempts: number,
-  availableUntil: Date | null,
-  now: Date = new Date(),
-) {
-  if (feedbackMode === "after_submit") return true;
-  if (feedbackMode === "after_attempt") {
-    return (
-      attemptNumber >= maxAttempts ||
-      Boolean(availableUntil && availableUntil <= now)
-    );
-  }
-  return false;
-}
-
 const startAttemptTimestamps = new Map<string, number[]>();
 const answerSaveTimestamps = new Map<string, number[]>();
 
@@ -115,35 +83,92 @@ export function createAttemptService(options: QuizServiceOptions) {
     courseService.findCourseById(courseId);
   const closer = createAttemptCloser({ database, findCourse });
 
-  async function hasCourseAccess(
-    userId: string,
-    courseId: string,
-    roles: readonly string[] = [],
-  ) {
-    if (isAdmin({ id: userId, roles })) return true;
-    const course = await courseService.findCourseById(courseId);
-    if (course?.creator_id === userId) return true;
-    if (await repo.isPublishedFreeCourse(database, courseId)) return true;
-    return accessService.hasActiveAccess(database, userId, courseId);
-  }
-
   async function getAssignment(assignmentId: string) {
-    return assignmentDto(await repo.findAssignment(database, assignmentId));
+    const assignment = await repo.findAssignment(database, assignmentId);
+    if (!assignment)
+      throw new AppError(
+        404,
+        "ASSIGNMENT_NOT_FOUND",
+        "Quiz assignment not found.",
+      );
+    return assignment;
   }
 
   /**
-   * Paid course quizzes need the student's quiz pass for the course; one
-   * purchase unlocks every quiz in it. Free quizzes need no grant. Course
-   * owners and admins skip the check.
+   * The course and lesson an assignment sits in. Every rule below is decided
+   * from these two rows, so they are read once per request and passed along.
    */
-  async function assertQuizPurchased(
-    assignment: NonNullable<Awaited<ReturnType<typeof repo.findAssignment>>>,
+  async function loadPlacement(assignment: AssignmentRow) {
+    const [course, lesson] = await Promise.all([
+      courseService.findCourseById(assignment.course_id),
+      courseService.findLessonById(assignment.course_id, assignment.lesson_id),
+    ]);
+    return { course, lesson };
+  }
+  type Placement = Awaited<ReturnType<typeof loadPlacement>>;
+
+  /** Admins and the course's own creator may try a quiz without the checks. */
+  function isCourseManager(
+    placement: Placement,
     userId: string,
     roles: readonly string[],
   ) {
-    if (isAdmin({ id: userId, roles })) return;
-    const course = await courseService.findCourseById(assignment.course_id);
-    if (course?.creator_id === userId) return;
+    return (
+      isAdmin({ id: userId, roles }) || placement.course?.creator_id === userId
+    );
+  }
+
+  /**
+   * A quiz can be started only once its lesson and course are published.
+   * Enrolled students could otherwise open a quiz the instructor was still
+   * preparing — and, with feedback on, read its answers before release.
+   * The course owner and admins may try it out beforehand. Reported as
+   * "not found" so an unreleased quiz is not revealed.
+   */
+  function assertAssignmentReleased(
+    placement: Placement,
+    userId: string,
+    roles: readonly string[],
+  ) {
+    if (isCourseManager(placement, userId, roles)) return;
+    const { course, lesson } = placement;
+    if (
+      !course ||
+      course.deleted_at ||
+      course.status !== "published" ||
+      !lesson?.is_published
+    )
+      throw new AppError(
+        404,
+        "ASSIGNMENT_NOT_FOUND",
+        "Quiz assignment not found.",
+      );
+  }
+
+  /**
+   * Course access and, for paid quizzes, the quiz pass. A quiz on a
+   * free-preview lesson needs neither. A paid course quiz needs the
+   * student's quiz pass for the course; one purchase unlocks every quiz in
+   * it. Course owners and admins skip both checks.
+   */
+  async function assertAssignmentAccess(
+    assignment: AssignmentRow,
+    placement: Placement,
+    userId: string,
+    roles: readonly string[],
+    accessMessage: string,
+  ) {
+    if (placement.lesson?.is_preview) return;
+    if (isCourseManager(placement, userId, roles)) return;
+    if (
+      !(await repo.isPublishedFreeCourse(database, assignment.course_id)) &&
+      !(await accessService.hasActiveAccess(
+        database,
+        userId,
+        assignment.course_id,
+      ))
+    )
+      throw new AppError(403, "COURSE_ACCESS_REQUIRED", accessMessage);
     const charge = resolveQuizCharge(
       await pricingRepo.findPricing(database, assignment.course_id),
     );
@@ -162,140 +187,54 @@ export function createAttemptService(options: QuizServiceOptions) {
   }
 
   /**
-   * A quiz can be started only once its lesson and course are published.
-   * Enrolled students could otherwise open a quiz the instructor was still
-   * preparing — and, with feedback on, read its answers before release.
-   * The course owner and admins may try it out beforehand. Reported as
-   * "not found" so an unreleased quiz is not revealed.
+   * The attempt as its learner works on it. Only what the page shows is
+   * read: no answer key, no explanations, and not the authored position
+   * that shuffling is meant to hide.
    */
-  async function assertAssignmentReleased(
-    assignment: NonNullable<Awaited<ReturnType<typeof repo.findAssignment>>>,
-    userId: string,
-    roles: readonly string[],
-  ) {
-    if (isAdmin({ id: userId, roles })) return;
-    const course = await courseService.findCourseById(assignment.course_id);
-    if (course?.creator_id === userId) return;
-    const lesson = assignment.lesson_id
-      ? await courseService.findLessonById(
-          assignment.course_id,
-          assignment.lesson_id,
-        )
-      : undefined;
-    if (
-      !course ||
-      course.deleted_at ||
-      course.status !== "published" ||
-      !lesson?.is_published
-    )
-      throw new AppError(
-        404,
-        "ASSIGNMENT_NOT_FOUND",
-        "Quiz assignment not found.",
-      );
-  }
-
-  /** Course access and, for paid quizzes, the quiz pass. */
-  async function assertAssignmentAccess(
-    assignment: NonNullable<Awaited<ReturnType<typeof repo.findAssignment>>>,
-    userId: string,
-    roles: readonly string[],
-    accessMessage: string,
-  ) {
-    let isPreviewLesson = false;
-    if (assignment.lesson_id) {
-      const lesson = await courseService.findLessonById(
-        assignment.course_id,
-        assignment.lesson_id,
-      );
-      if (lesson?.is_preview) {
-        isPreviewLesson = true;
-      }
-    }
-
-    if (!isPreviewLesson) {
-      if (!(await hasCourseAccess(userId, assignment.course_id, roles)))
-        throw new AppError(403, "COURSE_ACCESS_REQUIRED", accessMessage);
-      await assertQuizPurchased(assignment, userId, roles);
-    }
-  }
-
-  async function assertCanAttempt(
-    assignmentId: string,
-    userId: string,
-    roles: readonly string[] = [],
-  ) {
-    const assignment = await getAssignment(assignmentId);
-    await assertAssignmentReleased(assignment, userId, roles);
-    await assertAssignmentAccess(
-      assignment,
-      userId,
-      roles,
-      "You need active course access to take this Quiz.",
-    );
-    const version = await repo.findVersion(
-      database,
-      assignment.quiz_version_id,
-    );
-    if (!version?.published_at)
-      throw new AppError(
-        409,
-        "QUIZ_VERSION_NOT_PUBLISHED",
-        "The assigned Quiz version is not published.",
-      );
-    return { assignment, version };
-  }
-
-  async function buildAttempt(
-    attempt: NonNullable<Awaited<ReturnType<typeof repo.findAttempt>>>,
-  ) {
-    const assignment = await getAssignment(attempt.assignment_id);
-    const questions = await repo.listQuestions(
+  async function buildAttempt(attempt: AttemptRow, assignment: AssignmentRow) {
+    const questions = await repo.listAttemptQuestions(
       database,
       attempt.quiz_version_id,
     );
-    const options = await repo.listOptions(
-      database,
-      questions.map((question) => question.id),
-    );
-    const answers = await repo.listAnswers(database, attempt.id);
+    const [options, answers] = await Promise.all([
+      repo.listAttemptOptions(
+        database,
+        questions
+          .filter((question) => question.question_type !== "short_answer")
+          .map((question) => question.id),
+      ),
+      repo.listAnswerResponses(database, attempt.id),
+    ]);
     const presentedQuestions = assignment.shuffle_questions
       ? stableShuffle(questions, attempt.id)
       : questions;
     return {
       id: attempt.id,
-      assignmentId: attempt.assignment_id,
-      quizVersionId: attempt.quiz_version_id,
       attemptNumber: attempt.attempt_number,
       status: attempt.status,
-      startedAt: attempt.started_at.toISOString(),
       // The due date can end an attempt before its own time limit does.
       expiresAt: toIso(attemptDeadline(attempt, assignment)),
       // The countdown is measured against this, not the device clock.
       serverNow: new Date().toISOString(),
-      questions: presentedQuestions.map((question) => ({
-        id: question.id,
-        questionType: question.question_type,
-        prompt: question.prompt,
-        points: Number(question.points),
-        position: question.position,
-        options:
-          question.question_type === "short_answer"
-            ? []
-            : (assignment.shuffle_options
-                ? stableShuffle(
-                    options.filter(
-                      (option) => option.question_id === question.id,
-                    ),
-                    attempt.id,
-                  )
-                : options.filter((option) => option.question_id === question.id)
-              ).map((option) => ({
-                id: option.id,
-                text: option.option_text,
-                position: option.position,
-              })),
-      })),
+      questions: presentedQuestions.map((question) => {
+        const questionOptions = options.filter(
+          (option) => option.question_id === question.id,
+        );
+        return {
+          id: question.id,
+          questionType: question.question_type,
+          prompt: question.prompt,
+          points: Number(question.points),
+          // A short answer's accepted texts are its key: never listed.
+          options: (assignment.shuffle_options
+            ? stableShuffle(questionOptions, attempt.id)
+            : questionOptions
+          ).map((option) => ({
+            id: option.id,
+            text: option.option_text,
+          })),
+        };
+      }),
       answers: Object.fromEntries(
         answers.map((answer) => [
           answer.question_id,
@@ -310,11 +249,26 @@ export function createAttemptService(options: QuizServiceOptions) {
     assignmentId: string,
     roles: readonly string[] = [],
   ) {
-    const { assignment, version } = await assertCanAttempt(
-      assignmentId,
+    const assignment = await getAssignment(assignmentId);
+    const placement = await loadPlacement(assignment);
+    assertAssignmentReleased(placement, userId, roles);
+    await assertAssignmentAccess(
+      assignment,
+      placement,
       userId,
       roles,
+      "You need active course access to take this Quiz.",
     );
+    const version = await repo.findVersion(
+      database,
+      assignment.quiz_version_id,
+    );
+    if (!version?.published_at)
+      throw new AppError(
+        409,
+        "QUIZ_VERSION_NOT_PUBLISHED",
+        "The assigned Quiz version is not published.",
+      );
     const existing = await repo.findActiveAttempt(
       database,
       assignmentId,
@@ -329,7 +283,7 @@ export function createAttemptService(options: QuizServiceOptions) {
           ANSWER_SAVE_GRACE_MS,
         )
       )
-        return buildAttempt(existing);
+        return buildAttempt(existing, assignment);
       // Time ran out on the previous attempt: grade what was saved before
       // a new attempt is opened.
       await closer.closeIfOverdue(existing.id, now, ANSWER_SAVE_GRACE_MS);
@@ -382,7 +336,7 @@ export function createAttemptService(options: QuizServiceOptions) {
         created_at: now,
         updated_at: now,
       });
-      return buildAttempt(attempt);
+      return buildAttempt(attempt, assignment);
     } catch (error) {
       // The partial unique index is the final concurrency guard. If another
       // request won the race to create the active attempt, resume that one.
@@ -392,7 +346,7 @@ export function createAttemptService(options: QuizServiceOptions) {
         assignmentId,
         userId,
       );
-      if (concurrent) return buildAttempt(concurrent);
+      if (concurrent) return buildAttempt(concurrent, assignment);
       throw error;
     }
   }
@@ -412,6 +366,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     const assignment = await getAssignment(attempt.assignment_id);
     await assertAssignmentAccess(
       assignment,
+      await loadPlacement(assignment),
       userId,
       roles,
       "You need active course access to continue this Quiz.",
@@ -509,7 +464,9 @@ export function createAttemptService(options: QuizServiceOptions) {
         "DUPLICATE_QUESTION_ID",
         "Each question may appear only once in a bulk answer snapshot.",
       );
-    const questions = await repo.listQuestionsByIds(
+    // Saving runs on every change the student makes. It only has to know
+    // each question's type and which options are its own — not the key.
+    const questions = await repo.listQuestionTypesByIds(
       database,
       attempt.quiz_version_id,
       ids,
@@ -520,7 +477,7 @@ export function createAttemptService(options: QuizServiceOptions) {
         "INVALID_QUESTION",
         "An answer references a question outside this Quiz version.",
       );
-    const options = await repo.listOptions(database, ids);
+    const options = await repo.listOptionRefs(database, ids);
     for (const answer of payload.answers)
       validateResponse(
         questions.find((question) => question.id === answer.questionId)!,
@@ -573,23 +530,40 @@ export function createAttemptService(options: QuizServiceOptions) {
         })),
       );
     });
-    return { saved: true as const, answerCount: payload.answers.length };
+    return { saved: true as const };
   }
 
-  function grade(
-    question: { id: string; points: number; question_type: string },
-    selected: string[],
-    correct: string[],
-    textResponse?: string | null,
-    acceptedOptionTexts?: string[],
-  ) {
-    return gradeQuizQuestion({
-      questionType: question.question_type,
-      points: question.points,
-      selectedOptionIds: selected,
-      correctOptionIds: correct,
-      textResponse,
-      acceptedOptionTexts,
+  /**
+   * The result of an attempt read back from what was stored. Questions,
+   * options and answers are loaded only as far as the result will show
+   * them: nothing at all when it carries no answer list and the score is
+   * already recorded.
+   */
+  async function readResult(attempt: AttemptRow, assignment: AssignmentRow) {
+    const scope = resultScope(attempt, assignment);
+    const questions =
+      scope.includeFeedback || attempt.max_score === null
+        ? await repo.listGradingQuestions(database, attempt.quiz_version_id, {
+            prompt: scope.includeFeedback,
+            explanation: scope.includeFeedback && scope.revealAnswers,
+          })
+        : [];
+    const [options, answers] = scope.includeFeedback
+      ? await Promise.all([
+          repo.listKeyOptions(
+            database,
+            questions.map((question) => question.id),
+          ),
+          repo.listAnswers(database, attempt.id),
+        ])
+      : [[], []];
+    return presentAttemptResult({
+      attempt,
+      assignment,
+      scope,
+      questions,
+      options,
+      answers,
     });
   }
 
@@ -597,97 +571,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     const attempt = await repo.findAttempt(database, attemptId);
     if (!attempt || attempt.user_id !== userId)
       throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
-    const assignment = await getAssignment(attempt.assignment_id);
-    const questions = await repo.listQuestions(
-      database,
-      attempt.quiz_version_id,
-    );
-    const options = await repo.listOptions(
-      database,
-      questions.map((question) => question.id),
-    );
-    const answers = await repo.listAnswers(database, attempt.id);
-    const includeFeedback =
-      assignment.feedback_mode !== "never" && attempt.status !== "in_progress";
-    const revealAnswers = shouldRevealAnswers(
-      assignment.feedback_mode,
-      attempt.attempt_number,
-      assignment.max_attempts,
-      assignment.available_until,
-    );
-    return {
-      attemptId: attempt.id,
-      assignmentId: attempt.assignment_id,
-      quizVersionId: attempt.quiz_version_id,
-      attemptNumber: attempt.attempt_number,
-      score: Number(attempt.score_obtained ?? 0),
-      maxScore: Number(
-        attempt.max_score ??
-          questions.reduce((sum, question) => sum + Number(question.points), 0),
-      ),
-      percentage: Number(attempt.score_percentage ?? 0),
-      passed: Boolean(attempt.is_passed),
-      status: attempt.status,
-      submittedAt:
-        toIso(attempt.submitted_at) ?? attempt.updated_at.toISOString(),
-      feedbackMode: assignment.feedback_mode,
-      ...(includeFeedback
-        ? {
-            answers: answers.map((answer) => {
-              const question = questions.find(
-                (item) => item.id === answer.question_id,
-              )!;
-              const responseVal = answer.response_value as QuizResponseValue;
-              const selected = responseVal.selectedOptionIds ?? [];
-              const textResp = responseVal.textResponse ?? null;
-              const correct = options
-                .filter(
-                  (option) =>
-                    option.question_id === question.id && option.is_correct,
-                )
-                .map((option) => option.id);
-              const acceptedTexts = options
-                .filter(
-                  (option) =>
-                    option.question_id === question.id && option.is_correct,
-                )
-                .map((option) => option.option_text);
-              const selectedOptionTexts = options
-                .filter(
-                  (option) =>
-                    option.question_id === question.id &&
-                    selected.includes(option.id),
-                )
-                .map((option) => option.option_text);
-              const correctOptionTexts = revealAnswers ? acceptedTexts : [];
-              const graded = grade(
-                {
-                  id: question.id,
-                  points: Number(question.points),
-                  question_type: question.question_type,
-                },
-                selected,
-                correct,
-                textResp,
-                acceptedTexts,
-              );
-              return {
-                questionId: question.id,
-                prompt: question.prompt,
-                selectedOptionIds: selected,
-                selectedOptionTexts,
-                correctOptionTexts,
-                textResponse: textResp,
-                isCorrect: Boolean(answer.is_correct ?? graded.isCorrect),
-                pointsAwarded: Number(
-                  answer.points_awarded ?? graded.pointsAwarded,
-                ),
-                explanation: revealAnswers ? question.explanation : null,
-              };
-            }),
-          }
-        : {}),
-    };
+    return readResult(attempt, await getAssignment(attempt.assignment_id));
   }
 
   /**
@@ -704,33 +588,45 @@ export function createAttemptService(options: QuizServiceOptions) {
     const existing = await repo.findAttempt(database, attemptId);
     if (!existing || existing.user_id !== userId)
       throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
-    if (existing.status !== "in_progress") return result(userId, attemptId);
     const assignment = await getAssignment(existing.assignment_id);
+    if (existing.status !== "in_progress")
+      return readResult(existing, assignment);
+    const placement = await loadPlacement(assignment);
     await assertAssignmentAccess(
       assignment,
+      placement,
       userId,
       roles,
       "You need active course access to continue this Quiz.",
     );
     const now = new Date();
-    await database.transaction().execute(async (trx) => {
-      const locked = await repo.findAttemptForUpdate(trx, attemptId);
-      if (!locked || locked.user_id !== userId)
-        throw new AppError(404, "ATTEMPT_NOT_FOUND", "Quiz attempt not found.");
-      // Graded or closed by a concurrent request: report that outcome.
-      if (locked.status !== "in_progress") return;
-      const deadline = attemptDeadline(locked, assignment);
-      const timedOut = deadline !== null && isPastDeadline(deadline, now);
-      await gradeLockedAttempt(trx, {
-        attempt: locked,
-        assignment,
-        now,
-        submittedAt: timedOut ? deadline : now,
-        requireComplete: !timedOut,
-        findCourse,
+    const graded = await database
+      .transaction()
+      .execute(async (trx): Promise<GradedAttempt | null> => {
+        const locked = await repo.findAttemptForUpdate(trx, attemptId);
+        if (!locked || locked.user_id !== userId)
+          throw new AppError(
+            404,
+            "ATTEMPT_NOT_FOUND",
+            "Quiz attempt not found.",
+          );
+        // Graded or closed by a concurrent request: report that outcome.
+        if (locked.status !== "in_progress") return null;
+        const deadline = attemptDeadline(locked, assignment);
+        const timedOut = deadline !== null && isPastDeadline(deadline, now);
+        return await gradeLockedAttempt(trx, {
+          attempt: locked,
+          assignment,
+          now,
+          submittedAt: timedOut ? deadline : now,
+          requireComplete: !timedOut,
+          // Already loaded for the access check above.
+          findCourse: () => Promise.resolve(placement.course),
+        });
       });
-    });
-    return result(userId, attemptId);
+    if (!graded) return result(userId, attemptId);
+    // Built from what was just graded; nothing is read a second time.
+    return presentAttemptResult({ ...graded, assignment });
   }
 
   async function getAttempt(
@@ -738,19 +634,22 @@ export function createAttemptService(options: QuizServiceOptions) {
     attemptId: string,
     roles: readonly string[] = [],
   ) {
-    const { attempt } = await requireOwnedActiveAttempt(
+    const { attempt, assignment } = await requireOwnedActiveAttempt(
       userId,
       attemptId,
       roles,
     );
-    return buildAttempt(attempt);
+    return buildAttempt(attempt, assignment);
   }
 
   async function listMine(userId: string) {
-    const attempts = await repo.listAttemptsForUser(database, userId);
+    const attempts = await repo.listAttemptHistory(
+      database,
+      userId,
+      ATTEMPT_HISTORY_LIMIT,
+    );
     return attempts.map((attempt) => ({
       id: attempt.id,
-      assignmentId: attempt.assignment_id,
       attemptNumber: attempt.attempt_number,
       status: attempt.status,
       score: Number(attempt.score_percentage ?? 0),
@@ -778,55 +677,52 @@ export function createAttemptService(options: QuizServiceOptions) {
       database,
       courseIds,
     );
-    const pricingByCourseId = new Map(
-      (await pricingRepo.listPricingForCourses(database, courseIds)).map(
-        (pricing) => [pricing.course_id, pricing] as const,
-      ),
-    );
-    const userAttempts = await repo.listAttemptsForUser(database, userId);
-    const attemptsByAssignment = new Map<string, typeof userAttempts>();
-    for (const attempt of userAttempts) {
-      const current = attemptsByAssignment.get(attempt.assignment_id) ?? [];
-      current.push(attempt);
-      attemptsByAssignment.set(attempt.assignment_id, current);
-    }
-    // Only published courses: a quiz in a course that was unpublished or
-    // deleted after the student got access is not offered.
-    const courseTitles = new Map<string, string>();
-    await Promise.all(
-      [...new Set(assignments.map((assignment) => assignment.course_id))].map(
-        async (courseId) => {
-          const course = await courseService.findCourseById(courseId);
-          if (course && !course.deleted_at && course.status === "published")
-            courseTitles.set(courseId, course.title);
-        },
-      ),
-    );
-    // Two batched lookups instead of a query per assignment.
-    const [quizRows, lessonRows] = await Promise.all([
+    // Batched lookups instead of a query per assignment or per course.
+    const [courseRows, quizRows, lessonRows, userAttempts] = await Promise.all([
+      // Only published courses: a quiz in a course that was unpublished or
+      // deleted after the student got access is not offered.
+      repo.listPublishedCourseTitles(database, [
+        ...new Set(assignments.map((assignment) => assignment.course_id)),
+      ]),
       repo.listQuizzesByIds(database, [
         ...new Set(assignments.map((assignment) => assignment.quiz_id)),
       ]),
       repo.listLessonsByIds(database, [
         ...new Set(assignments.map((assignment) => assignment.lesson_id)),
       ]),
+      repo.listAttemptsForAssignments(
+        database,
+        userId,
+        assignments.map((assignment) => assignment.id),
+      ),
     ]);
+    const courseTitles = new Map(
+      courseRows.map((course) => [course.id, course.title]),
+    );
     const quizzesById = new Map(quizRows.map((quiz) => [quiz.id, quiz]));
     const lessonsById = new Map(
       lessonRows.map((lesson) => [lesson.id, lesson]),
     );
+    const attemptsByAssignment = new Map<string, typeof userAttempts>();
+    for (const attempt of userAttempts) {
+      const current = attemptsByAssignment.get(attempt.assignment_id) ?? [];
+      current.push(attempt);
+      attemptsByAssignment.set(attempt.assignment_id, current);
+    }
     const items = [];
     for (const assignment of assignments) {
       const quiz = quizzesById.get(assignment.quiz_id);
-      const lessonRow = lessonsById.get(assignment.lesson_id);
+      const lesson = lessonsById.get(assignment.lesson_id);
+      const courseTitle = courseTitles.get(assignment.course_id);
       // Unpublished lessons are left out, like the lesson itself is.
-      const lesson =
-        lessonRow &&
-        lessonRow.course_id === assignment.course_id &&
-        lessonRow.is_published &&
-        courseTitles.has(assignment.course_id)
-          ? lessonRow
-          : undefined;
+      if (
+        !quiz ||
+        !lesson ||
+        lesson.course_id !== assignment.course_id ||
+        !lesson.is_published ||
+        courseTitle === undefined
+      )
+        continue;
       const attempts = attemptsByAssignment.get(assignment.id) ?? [];
       // At most one attempt per assignment is in progress (partial unique index).
       const activeAttempt = attempts.find(
@@ -836,71 +732,34 @@ export function createAttemptService(options: QuizServiceOptions) {
         (attempt) => attempt.status === "graded",
       );
       const latestAttempt = attempts[0];
-      const bestScore = gradedAttempts.length
-        ? Math.max(
-            ...gradedAttempts.map((attempt) =>
-              Number(attempt.score_percentage ?? 0),
-            ),
-          )
-        : null;
-      if (quiz && lesson)
-        items.push({
-          ...assignment,
-          quizTitle: quiz.title,
-          lessonTitle: lesson.title,
-          courseTitle: courseTitles.get(assignment.course_id) ?? "Course",
-          activeAttemptId: activeAttempt?.id ?? null,
-          attemptCount: attempts.length,
-          latestAttemptStatus: latestAttempt?.status ?? null,
-          latestScore:
-            latestAttempt?.score_percentage === null ||
-            latestAttempt?.score_percentage === undefined
-              ? null
-              : Number(latestAttempt.score_percentage),
-          bestScore,
-          latestPassed:
-            latestAttempt?.is_passed === null ||
-            latestAttempt?.is_passed === undefined
-              ? null
-              : Boolean(latestAttempt.is_passed),
-        });
+      items.push({
+        id: assignment.id,
+        courseId: assignment.course_id,
+        lessonId: assignment.lesson_id,
+        quizTitle: quiz.title,
+        lessonTitle: lesson.title,
+        courseTitle,
+        maxAttempts: assignment.max_attempts,
+        availableFrom: toIso(assignment.available_from),
+        availableUntil: toIso(assignment.available_until),
+        activeAttemptId: activeAttempt?.id ?? null,
+        attemptCount: attempts.length,
+        latestAttemptStatus: latestAttempt?.status ?? null,
+        bestScore: gradedAttempts.length
+          ? Math.max(
+              ...gradedAttempts.map((attempt) =>
+                Number(attempt.score_percentage ?? 0),
+              ),
+            )
+          : null,
+        latestPassed:
+          latestAttempt?.is_passed === null ||
+          latestAttempt?.is_passed === undefined
+            ? null
+            : Boolean(latestAttempt.is_passed),
+      });
     }
-    return {
-      assignments: items.map((item) => ({
-        id: item.id,
-        quizId: item.quiz_id,
-        quizVersionId: item.quiz_version_id,
-        courseId: item.course_id,
-        lessonId: item.lesson_id,
-        required: item.required,
-        passPercentage: Number(item.pass_percentage),
-        maxAttempts: item.max_attempts,
-        timeLimitSeconds: item.time_limit_seconds,
-        shuffleQuestions: item.shuffle_questions,
-        shuffleOptions: item.shuffle_options,
-        feedbackMode: item.feedback_mode,
-        availableFrom: toIso(item.available_from),
-        availableUntil: toIso(item.available_until),
-        ...presentPricing(pricingByCourseId.get(item.course_id)),
-        quizTitle: item.quizTitle,
-        lessonTitle: item.lessonTitle,
-        courseTitle: item.courseTitle,
-        activeAttemptId: item.activeAttemptId,
-        attemptCount: item.attemptCount,
-        latestAttemptStatus: item.latestAttemptStatus,
-        latestScore: item.latestScore,
-        bestScore: item.bestScore,
-        latestPassed: item.latestPassed,
-      })),
-    };
-  }
-
-  async function expireAbandonedAttempts(now: Date = new Date()) {
-    const { closed } = await closer.closeOverdueAttempts(now);
-    return {
-      expiredCount: closed.length,
-      expiredAttempts: closed,
-    };
+    return { assignments: items };
   }
 
   return {
@@ -911,8 +770,6 @@ export function createAttemptService(options: QuizServiceOptions) {
     result,
     listMine,
     listAssignments,
-    assertCanAttempt,
-    expireAbandonedAttempts,
   };
 }
 export type AttemptService = ReturnType<typeof createAttemptService>;

@@ -1518,10 +1518,7 @@ function QuizLibraryRow({
   onEdit: () => void;
   expanded?: boolean;
 }) {
-  const latest = quiz.versions.at(-1);
-  const published = quiz.versions.filter(
-    (version) => version.publishedAt,
-  ).length;
+  const published = quiz.publishedVersionCount;
   return (
     <div
       className={`flex flex-col gap-3 sm:gap-4 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-4 ${expanded ? "hover:bg-(--hover)" : ""}`}
@@ -1536,9 +1533,8 @@ function QuizLibraryRow({
             {quiz.title}
           </p>
           <p className="mt-0.5 sm:mt-1 text-[0.72rem] sm:text-xs text-(--muted)">
-            {latest?.questions.length ?? 0} questions · {published} published
-            version{published === 1 ? "" : "s"} · Updated{" "}
-            {formatDate(quiz.updatedAt)}
+            {quiz.questionCount} questions · {published} published version
+            {published === 1 ? "" : "s"} · Updated {formatDate(quiz.updatedAt)}
           </p>
         </div>
       </div>

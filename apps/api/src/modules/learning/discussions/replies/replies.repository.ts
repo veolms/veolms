@@ -1,18 +1,15 @@
-import type { DatabaseExecutor, LearningReplyTable } from "@veolms/database";
+import type { DatabaseExecutor } from "@veolms/database";
 import type {
   InteractionStatus,
   ListLearningRepliesQuery,
   UpdateLearningReplyRequest,
 } from "@veolms/contracts";
-import type { Selectable } from "kysely";
 import { sql } from "kysely";
 import {
   authorRoleSql,
   type DiscussionListCursor,
 } from "../shared/discussion.utils.ts";
 import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
-
-export type LearningReplyRow = Selectable<LearningReplyTable>;
 
 export interface ReplyRowWithAuthor {
   id: string;
@@ -32,11 +29,7 @@ export interface ReplyRowWithAuthor {
   authorName: string | null;
   authorUsername: string | null;
   authorAvatarUrl: string | null;
-  authorEmail: string | null;
   authorRole: string | null;
-  replyToUsername: string | null;
-  replyToDisplayName: string | null;
-  replyToContent: string | null;
 }
 
 export interface RepliesRepository {
@@ -123,9 +116,11 @@ export function createRepliesRepository(): RepliesRepository {
     async findReplyById(db, replyId) {
       const row = await db
         .selectFrom("learning_replies as r")
-        .innerJoin("users as u", "u.id", "r.user_id")
-        .leftJoin("learning_replies as rr", "rr.id", "r.reply_to_reply_id")
-        .leftJoin("users as ru", "ru.id", "r.reply_to_user_id")
+        // Active accounts only: a reply by a deactivated account stays in
+        // the thread and is presented without an author.
+        .leftJoin("users as u", (join) =>
+          join.onRef("u.id", "=", "r.user_id").on("u.is_deleted", "=", false),
+        )
         .select([
           "r.id as id",
           "r.thread_id as threadId",
@@ -144,11 +139,7 @@ export function createRepliesRepository(): RepliesRepository {
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
-          "u.email as authorEmail",
           authorRoleSql("r.user_id"),
-          "ru.username as replyToUsername",
-          "ru.display_name as replyToDisplayName",
-          "rr.plain_text as replyToContent",
         ])
         .where("r.id", "=", replyId)
         .executeTakeFirst();
@@ -159,9 +150,11 @@ export function createRepliesRepository(): RepliesRepository {
     async listRepliesByThreadId(db, threadId, options) {
       let query = db
         .selectFrom("learning_replies as r")
-        .innerJoin("users as u", "u.id", "r.user_id")
-        .leftJoin("learning_replies as rr", "rr.id", "r.reply_to_reply_id")
-        .leftJoin("users as ru", "ru.id", "r.reply_to_user_id")
+        // Active accounts only: a reply by a deactivated account stays in
+        // the thread and is presented without an author.
+        .leftJoin("users as u", (join) =>
+          join.onRef("u.id", "=", "r.user_id").on("u.is_deleted", "=", false),
+        )
         .select([
           "r.id as id",
           "r.thread_id as threadId",
@@ -180,11 +173,7 @@ export function createRepliesRepository(): RepliesRepository {
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
-          "u.email as authorEmail",
           authorRoleSql("r.user_id"),
-          "ru.username as replyToUsername",
-          "ru.display_name as replyToDisplayName",
-          "rr.plain_text as replyToContent",
         ])
         .where("r.thread_id", "=", threadId)
         .where("r.status", "=", "active");

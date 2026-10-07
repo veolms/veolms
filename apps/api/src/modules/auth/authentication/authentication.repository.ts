@@ -92,17 +92,52 @@ export function findUserByIdIncludingDeleted(
     .executeTakeFirst();
 }
 
-/** Looks a user up by whichever contact channel the flow was started with. */
-export function findUserByIdentifier(
+/** The contact fields the verification flows read, without the whole row. */
+export function findUserContactById(database: Executor, userId: string) {
+  return database
+    .selectFrom("users")
+    .select(["id", "email", "email_verified_at"])
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+export function findUserAvatarUrlById(database: Executor, userId: string) {
+  return database
+    .selectFrom("users")
+    .select("avatar_data_url")
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+/** Which active account, if any, owns a contact channel. */
+export function findUserIdByIdentifier(
   database: Executor,
   identifier: string,
   identifierType: "email" | "phone",
 ) {
   return database
     .selectFrom("users")
-    .selectAll()
+    .select("id")
     .where(identifierType === "email" ? "email" : "phone_no", "=", identifier)
     .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+/**
+ * Whether a contact channel is taken, counting deactivated accounts, for
+ * callers that only branch on existence and the deactivated flag.
+ */
+export function findUserStatusByIdentifier(
+  database: Executor,
+  identifier: string,
+  identifierType: "email" | "phone",
+) {
+  return database
+    .selectFrom("users")
+    .select(["id", "is_deleted"])
+    .where(identifierType === "email" ? "email" : "phone_no", "=", identifier)
     .executeTakeFirst();
 }
 
@@ -116,15 +151,6 @@ export function findUserByIdentifierIncludingDeleted(
     .selectFrom("users")
     .selectAll()
     .where(identifierType === "email" ? "email" : "phone_no", "=", identifier)
-    .executeTakeFirst();
-}
-
-export function findUserByEmail(database: Executor, email: string) {
-  return database
-    .selectFrom("users")
-    .selectAll()
-    .where("email", "=", email)
-    .where("is_deleted", "=", false)
     .executeTakeFirst();
 }
 
@@ -279,7 +305,7 @@ export function findUserAvatarBySource(
 export function listUserAvatars(database: Executor, userId: string) {
   return database
     .selectFrom("user_avatars")
-    .selectAll()
+    .select(["id", "source", "storage_prefix", "avatar_data_url"])
     .where("user_id", "=", userId)
     .orderBy("last_used_at", "desc")
     .orderBy("created_at", "desc")
@@ -406,7 +432,7 @@ export async function updateUserPhoneNumber(
     })
     .where("id", "=", userId)
     .where("is_deleted", "=", false)
-    .returningAll()
+    .returning("id")
     .executeTakeFirst();
 }
 
@@ -423,7 +449,7 @@ export async function markUserEmailVerified(
     })
     .where("id", "=", userId)
     .where("is_deleted", "=", false)
-    .returningAll()
+    .returning("id")
     .executeTakeFirst();
 }
 

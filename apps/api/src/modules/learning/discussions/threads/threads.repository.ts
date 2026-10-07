@@ -16,12 +16,7 @@ import type {
   ListLearningThreadsQuery,
   UpdateLearningThreadRequest,
 } from "@veolms/contracts";
-import type {
-  ExpressionBuilder,
-  Nullable,
-  Selectable,
-  SelectQueryBuilder,
-} from "kysely";
+import type { ExpressionBuilder, Nullable, SelectQueryBuilder } from "kysely";
 import { sql } from "kysely";
 import {
   authorRoleSql,
@@ -33,8 +28,6 @@ import {
 import { discussionVisibilityPredicate } from "../shared/discussion.visibility.ts";
 import { publicLessonDiscussionPredicate } from "../shared/lesson-discussion-access.ts";
 import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
-
-export type LearningThreadRow = Selectable<LearningThreadTable>;
 
 // Kysely represents a `"learning_threads as t"` aliased query with the alias
 // added as its own entry on the DB generic, not the bare table name.
@@ -112,8 +105,6 @@ export interface PublicPopularThreadRow {
   lessonTitle: string;
   replyCount: number;
   likeCount: number;
-  engagementScore: number;
-  createdAt: Date;
   updatedAt: Date;
 }
 
@@ -137,7 +128,6 @@ export interface MentionWorkspaceRow {
   lessonTitle: string | null;
   userId: string;
   visibility: DiscussionVisibility | null;
-  status: InteractionStatus | null;
   isLocked: boolean | null;
   acceptedAnswerId: string | null;
   likesCount: number;
@@ -145,7 +135,6 @@ export interface MentionWorkspaceRow {
   authorName: string | null;
   authorUsername: string | null;
   authorAvatarUrl: string | null;
-  authorRole: string | null;
 }
 
 export type MentionFilterOptions = Partial<
@@ -162,27 +151,41 @@ export type MentionFilterOptions = Partial<
 };
 
 function createMentionSourceQuery(db: DatabaseExecutor) {
-  return db
-    .selectFrom("learning_mentions as m")
-    .leftJoin("learning_threads as t", (join) =>
-      join.onRef("t.id", "=", "m.source_id").on("m.source_type", "=", "thread"),
-    )
-    .leftJoin("learning_replies as r", (join) =>
-      join.onRef("r.id", "=", "m.source_id").on("m.source_type", "=", "reply"),
-    )
-    .leftJoin("learning_notes as n", (join) =>
-      join.onRef("n.id", "=", "m.source_id").on("m.source_type", "=", "note"),
-    )
-    .leftJoin("learning_threads as pt", "pt.id", "r.thread_id")
-    .leftJoin("users as tu", "tu.id", "t.user_id")
-    .leftJoin("users as ru", "ru.id", "r.user_id")
-    .leftJoin("users as nu", "nu.id", "n.user_id")
-    .leftJoin("courses as tc", "tc.id", "t.course_id")
-    .leftJoin("courses as pc", "pc.id", "pt.course_id")
-    .leftJoin("courses as nc", "nc.id", "n.course_id")
-    .leftJoin("course_lessons as tl", "tl.id", "t.lesson_id")
-    .leftJoin("course_lessons as pl", "pl.id", "pt.lesson_id")
-    .leftJoin("course_lessons as nl", "nl.id", "n.lesson_id");
+  return (
+    db
+      .selectFrom("learning_mentions as m")
+      .leftJoin("learning_threads as t", (join) =>
+        join
+          .onRef("t.id", "=", "m.source_id")
+          .on("m.source_type", "=", "thread"),
+      )
+      .leftJoin("learning_replies as r", (join) =>
+        join
+          .onRef("r.id", "=", "m.source_id")
+          .on("m.source_type", "=", "reply"),
+      )
+      .leftJoin("learning_notes as n", (join) =>
+        join.onRef("n.id", "=", "m.source_id").on("m.source_type", "=", "note"),
+      )
+      .leftJoin("learning_threads as pt", "pt.id", "r.thread_id")
+      // Active accounts only: a post by a deactivated account keeps its place
+      // in the feed and is presented without an author.
+      .leftJoin("users as tu", (join) =>
+        join.onRef("tu.id", "=", "t.user_id").on("tu.is_deleted", "=", false),
+      )
+      .leftJoin("users as ru", (join) =>
+        join.onRef("ru.id", "=", "r.user_id").on("ru.is_deleted", "=", false),
+      )
+      .leftJoin("users as nu", (join) =>
+        join.onRef("nu.id", "=", "n.user_id").on("nu.is_deleted", "=", false),
+      )
+      .leftJoin("courses as tc", "tc.id", "t.course_id")
+      .leftJoin("courses as pc", "pc.id", "pt.course_id")
+      .leftJoin("courses as nc", "nc.id", "n.course_id")
+      .leftJoin("course_lessons as tl", "tl.id", "t.lesson_id")
+      .leftJoin("course_lessons as pl", "pl.id", "pt.lesson_id")
+      .leftJoin("course_lessons as nl", "nl.id", "n.lesson_id")
+  );
 }
 
 function applyMentionFilters<O>(
@@ -370,10 +373,6 @@ const mentionWorkspaceSelect = [
   sql<string | null>`coalesce(t.visibility, pt.visibility, n.visibility)`.as(
     "visibility",
   ),
-  sql<InteractionStatus | null>`case
-    when m.source_type = 'thread' then t.status
-    else null
-  end`.as("status"),
   sql<boolean | null>`case
     when m.source_type = 'thread' then t.is_locked
     else null
@@ -402,7 +401,6 @@ const mentionWorkspaceSelect = [
   >`coalesce(tu.avatar_data_url, ru.avatar_data_url, nu.avatar_data_url)`.as(
     "authorAvatarUrl",
   ),
-  authorRoleSql("coalesce(t.user_id, r.user_id, n.user_id)"),
 ] as const;
 
 export type ThreadFilterOptions = ListLearningThreadsQuery & {
@@ -428,7 +426,6 @@ export interface ThreadsRepository {
       plainText: string;
       timestampSeconds: number | null;
       visibility: DiscussionVisibility;
-      tags?: string[];
     },
   ): Promise<void>;
 
@@ -454,20 +451,10 @@ export interface ThreadsRepository {
     },
   ): Promise<PublicPopularThreadRow[]>;
 
-  countThreads(
-    db: DatabaseExecutor,
-    options: ThreadFilterOptions,
-  ): Promise<number>;
-
   listMentionItems(
     db: DatabaseExecutor,
     options: MentionFilterOptions,
   ): Promise<MentionWorkspaceRow[]>;
-
-  countMentionItems(
-    db: DatabaseExecutor,
-    options: MentionFilterOptions,
-  ): Promise<number>;
 
   updateThread(
     db: DatabaseExecutor,
@@ -519,7 +506,33 @@ function applyThreadFilters<O>(
 ): SelectQueryBuilder<ThreadsAliasedDB, "t", O> {
   let q = query
     .where("t.status", "=", "active")
-    .where("t.academy_id", "=", options.academyId);
+    .where("t.academy_id", "=", options.academyId)
+    // A thread is listed only while it can still be opened: reading one
+    // thread already requires a live course and a published, undeleted
+    // lesson (see `assertCanReadLesson`).
+    .where(
+      sql<boolean>`exists (
+        select 1
+        from courses as live_course
+        where live_course.id = t.course_id
+          and live_course.deleted_at is null
+      )`,
+    )
+    .where(
+      sql<boolean>`(
+        t.lesson_id is null
+        or exists (
+          select 1
+          from course_lessons as live_lesson
+          inner join course_sections as live_section
+            on live_section.id = live_lesson.section_id
+          where live_lesson.id = t.lesson_id
+            and live_lesson.is_published = true
+            and live_lesson.deleted_at is null
+            and live_section.deleted_at is null
+        )
+      )`,
+    );
 
   if (options.courseId) {
     q = q.where("t.course_id", "=", options.courseId);
@@ -806,7 +819,9 @@ export function createThreadsRepository(): ThreadsRepository {
     async findThreadById(db, threadId) {
       const row = await db
         .selectFrom("learning_threads as t")
-        .innerJoin("users as u", "u.id", "t.user_id")
+        .leftJoin("users as u", (join) =>
+          join.onRef("u.id", "=", "t.user_id").on("u.is_deleted", "=", false),
+        )
         .leftJoin("courses as c", "c.id", "t.course_id")
         .leftJoin("course_lessons as cl", "cl.id", "t.lesson_id")
         .select([
@@ -858,7 +873,9 @@ export function createThreadsRepository(): ThreadsRepository {
       filtered = applyThreadCursor(filtered, options);
 
       let query = filtered
-        .innerJoin("users as u", "u.id", "t.user_id")
+        .leftJoin("users as u", (join) =>
+          join.onRef("u.id", "=", "t.user_id").on("u.is_deleted", "=", false),
+        )
         .leftJoin("courses as c", "c.id", "t.course_id")
         .leftJoin("course_lessons as cl", "cl.id", "t.lesson_id")
         .select([
@@ -935,11 +952,11 @@ export function createThreadsRepository(): ThreadsRepository {
           "l.title as lessonTitle",
           "t.replies_count as replyCount",
           "t.likes_count as likeCount",
+          "t.updated_at as updatedAt",
+          // Only orders the outer query; it is not part of the returned row.
           sql<number>`(
             coalesce(t.replies_count, 0) + coalesce(t.likes_count, 0)
           )::int`.as("engagementScore"),
-          "t.created_at as createdAt",
-          "t.updated_at as updatedAt",
           sql<number>`row_number() over (
             partition by t.user_id
             order by
@@ -970,30 +987,22 @@ export function createThreadsRepository(): ThreadsRepository {
         .limit(Math.min(40, limit))
         .execute();
 
-      return rows.map(({ authorRank: _authorRank, ...row }) => ({
-        ...row,
-        kind: row.kind as "comment" | "question",
-        replyCount: Number(row.replyCount ?? 0),
-        likeCount: Number(row.likeCount ?? 0),
-        engagementScore: Number(row.engagementScore ?? 0),
-        createdAt:
-          row.createdAt instanceof Date
-            ? row.createdAt
-            : new Date(row.createdAt),
-        updatedAt:
-          row.updatedAt instanceof Date
-            ? row.updatedAt
-            : new Date(row.updatedAt),
-      }));
-    },
-
-    async countThreads(db, options) {
-      let query = db.selectFrom("learning_threads as t");
-      query = applyThreadFilters(query, options);
-      const row = await query
-        .select(sql<number>`count(*)::int`.as("count"))
-        .executeTakeFirst();
-      return Number(row?.count ?? 0);
+      return rows.map(
+        ({
+          authorRank: _authorRank,
+          engagementScore: _engagementScore,
+          ...row
+        }) => ({
+          ...row,
+          kind: row.kind as "comment" | "question",
+          replyCount: Number(row.replyCount ?? 0),
+          likeCount: Number(row.likeCount ?? 0),
+          updatedAt:
+            row.updatedAt instanceof Date
+              ? row.updatedAt
+              : new Date(row.updatedAt),
+        }),
+      );
     },
 
     async listMentionItems(db, options) {
@@ -1006,18 +1015,6 @@ export function createThreadsRepository(): ThreadsRepository {
         .limit(options.limit + 1)
         .execute();
       return rows as MentionWorkspaceRow[];
-    },
-
-    async countMentionItems(db, options) {
-      let query = createMentionSourceQuery(db);
-      query = applyMentionFilters(query, {
-        ...options,
-        pageCursor: undefined,
-      });
-      const row = await query
-        .select(sql<number>`count(*)::int`.as("count"))
-        .executeTakeFirst();
-      return Number(row?.count ?? 0);
     },
 
     async updateThread(db, threadId, updates) {

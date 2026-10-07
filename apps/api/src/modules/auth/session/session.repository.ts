@@ -114,14 +114,7 @@ export function listUserSessions(
 ) {
   return database
     .selectFrom("sessions")
-    .select([
-      "id",
-      "ip_address",
-      "user_agent",
-      "created_at",
-      "last_used_at",
-      "expires_at",
-    ])
+    .select(["id", "ip_address", "user_agent", "last_used_at"])
     .where("user_id", "=", userId)
     .where("revoked_at", "is", null)
     .where("expires_at", ">", now)

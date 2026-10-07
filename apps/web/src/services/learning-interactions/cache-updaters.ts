@@ -182,12 +182,8 @@ function insertIntoSavedWorkspace(
       {
         ...firstPage,
         items: [bookmarkedItem, ...firstPage.items],
-        totalCount: firstPage.totalCount + 1,
       },
-      ...data.pages.slice(1).map((page) => ({
-        ...page,
-        totalCount: page.totalCount + 1,
-      })),
+      ...data.pages.slice(1),
     ],
   };
 }
@@ -224,7 +220,6 @@ function insertIntoFollowingWorkspace(
               ...page.items.slice(insertionItemIndex),
             ]
           : page.items,
-      totalCount: page.totalCount + 1,
     })),
   };
 }
@@ -246,14 +241,7 @@ function removeFromWorkspaceMembership(
     });
     return items.length === page.items.length ? page : { ...page, items };
   });
-  if (!removed) return data;
-  return {
-    ...data,
-    pages: pages.map((page) => ({
-      ...page,
-      totalCount: Math.max(0, page.totalCount - 1),
-    })),
-  };
+  return removed ? { ...data, pages } : data;
 }
 
 /**

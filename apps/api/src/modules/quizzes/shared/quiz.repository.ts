@@ -1,10 +1,36 @@
 import type { Database, DatabaseExecutor } from "@veolms/database";
 import { sql, type Insertable, type Updateable } from "kysely";
 
+const QUIZ_COLUMNS = [
+  "id",
+  "academy_id",
+  "creator_id",
+  "title",
+  "description",
+] as const;
+
+/** Every column of an assignment that a presenter or a rule reads. */
+const ASSIGNMENT_COLUMNS = [
+  "id",
+  "quiz_id",
+  "quiz_version_id",
+  "course_id",
+  "lesson_id",
+  "required",
+  "pass_percentage",
+  "max_attempts",
+  "time_limit_seconds",
+  "shuffle_questions",
+  "shuffle_options",
+  "feedback_mode",
+  "available_from",
+  "available_until",
+] as const;
+
 export async function findQuiz(database: DatabaseExecutor, quizId: string) {
   return await database
     .selectFrom("quizzes")
-    .selectAll()
+    .select(QUIZ_COLUMNS)
     .where("id", "=", quizId)
     .where("deleted_at", "is", null)
     .executeTakeFirst();
@@ -18,7 +44,7 @@ export async function listQuizzesByIds(
   if (quizIds.length === 0) return [];
   return await database
     .selectFrom("quizzes")
-    .selectAll()
+    .select(["id", "title", "creator_id"])
     .where("id", "in", quizIds)
     .where("deleted_at", "is", null)
     .execute();
@@ -37,30 +63,86 @@ export async function listLessonsByIds(
     .execute();
 }
 
-export async function listQuizzesByCreator(
+/** Titles of the published courses among these, in one query. */
+export async function listPublishedCourseTitles(
   database: DatabaseExecutor,
-  creatorId: string,
+  courseIds: readonly string[],
 ) {
+  if (courseIds.length === 0) return [];
   return await database
-    .selectFrom("quizzes")
-    .selectAll()
-    .where("creator_id", "=", creatorId)
+    .selectFrom("courses")
+    .select(["id", "title"])
+    .where("id", "in", courseIds)
+    .where("status", "=", "published")
     .where("deleted_at", "is", null)
-    .orderBy("updated_at", "desc")
     .execute();
 }
 
-export async function listQuizzesByAcademy(
+/** Which quizzes an author sees: their own, or the whole academy's. */
+export type QuizOwnerScope = { creatorId: string } | { academyId: string };
+
+/** Ids and titles only, for reports that just need to name each quiz. */
+export async function listQuizTitles(
   database: DatabaseExecutor,
-  academyId: string,
+  scope: QuizOwnerScope,
 ) {
-  return await database
+  let query = database
     .selectFrom("quizzes")
-    .selectAll()
-    .where("academy_id", "=", academyId)
-    .where("deleted_at", "is", null)
-    .orderBy("updated_at", "desc")
-    .execute();
+    .select(["id", "title"])
+    .where("deleted_at", "is", null);
+  query =
+    "creatorId" in scope
+      ? query.where("creator_id", "=", scope.creatorId)
+      : query.where("academy_id", "=", scope.academyId);
+  return await query.orderBy("updated_at", "desc").execute();
+}
+
+/**
+ * The quiz library: one row per quiz with the question count of its newest
+ * version and how many versions are published. Counted in the database so
+ * the list never loads question or option rows.
+ */
+export async function listQuizSummaries(
+  database: DatabaseExecutor,
+  scope: QuizOwnerScope,
+) {
+  let query = database
+    .selectFrom("quizzes as q")
+    .select((eb) => [
+      "q.id",
+      "q.title",
+      "q.status",
+      "q.updated_at",
+      eb
+        .selectFrom("quiz_versions as v")
+        .select(({ fn }) => fn.countAll<string>().as("count"))
+        .whereRef("v.quiz_id", "=", "q.id")
+        .where("v.published_at", "is not", null)
+        .as("published_version_count"),
+      eb
+        .selectFrom("quiz_questions as qq")
+        .select(({ fn }) => fn.countAll<string>().as("count"))
+        .where("qq.deleted_at", "is", null)
+        .where((inner) =>
+          inner(
+            "qq.quiz_version_id",
+            "=",
+            inner
+              .selectFrom("quiz_versions as latest")
+              .select("latest.id")
+              .whereRef("latest.quiz_id", "=", "q.id")
+              .orderBy("latest.version_number", "desc")
+              .limit(1),
+          ),
+        )
+        .as("question_count"),
+    ])
+    .where("q.deleted_at", "is", null);
+  query =
+    "creatorId" in scope
+      ? query.where("q.creator_id", "=", scope.creatorId)
+      : query.where("q.academy_id", "=", scope.academyId);
+  return await query.orderBy("q.updated_at", "desc").execute();
 }
 
 export async function findVersion(
@@ -69,7 +151,7 @@ export async function findVersion(
 ) {
   return await database
     .selectFrom("quiz_versions")
-    .selectAll()
+    .select(["id", "quiz_id", "published_at"])
     .where("id", "=", versionId)
     .executeTakeFirst();
 }
@@ -77,7 +159,7 @@ export async function findVersion(
 export async function listVersions(database: DatabaseExecutor, quizId: string) {
   return await database
     .selectFrom("quiz_versions")
-    .selectAll()
+    .select(["id", "version_number", "instructions", "published_at"])
     .where("quiz_id", "=", quizId)
     .orderBy("version_number", "asc")
     .execute();
@@ -90,7 +172,7 @@ export async function findLatestVersion(
 ) {
   let query = database
     .selectFrom("quiz_versions")
-    .selectAll()
+    .select("id")
     .where("quiz_id", "=", quizId);
   query = published
     ? query.where("published_at", "is not", null)
@@ -105,7 +187,7 @@ export async function insertVersion(
   return await database
     .insertInto("quiz_versions")
     .values(values)
-    .returningAll()
+    .returning("id")
     .executeTakeFirstOrThrow();
 }
 
@@ -113,11 +195,7 @@ export async function insertQuiz(
   database: DatabaseExecutor,
   values: Insertable<Database["quizzes"]>,
 ) {
-  return await database
-    .insertInto("quizzes")
-    .values(values)
-    .returningAll()
-    .executeTakeFirstOrThrow();
+  await database.insertInto("quizzes").values(values).execute();
 }
 
 export async function updateQuiz(
@@ -129,7 +207,7 @@ export async function updateQuiz(
     .updateTable("quizzes")
     .set({ ...values, updated_at: new Date() })
     .where("id", "=", quizId)
-    .returningAll()
+    .returning("id")
     .executeTakeFirstOrThrow();
 }
 
@@ -157,21 +235,43 @@ export async function updateVersion(
     .updateTable("quiz_versions")
     .set(values)
     .where("id", "=", versionId)
-    .returningAll()
+    .returning("id")
     .executeTakeFirstOrThrow();
 }
 
+/** A version's questions as the author works on them, answer key included. */
 export async function listQuestions(
   database: DatabaseExecutor,
   versionId: string,
 ) {
   return await database
     .selectFrom("quiz_questions")
-    .selectAll()
+    .select([
+      "id",
+      "question_type",
+      "prompt",
+      "points",
+      "position",
+      "configuration",
+      "explanation",
+    ])
     .where("quiz_version_id", "=", versionId)
     .where("deleted_at", "is", null)
     .orderBy("position", "asc")
     .execute();
+}
+
+export async function countQuestions(
+  database: DatabaseExecutor,
+  versionId: string,
+): Promise<number> {
+  const row = await database
+    .selectFrom("quiz_questions")
+    .select(({ fn }) => fn.countAll<string>().as("count"))
+    .where("quiz_version_id", "=", versionId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+  return Number(row?.count ?? 0);
 }
 
 export async function listQuestionsByIds(
@@ -182,13 +282,75 @@ export async function listQuestionsByIds(
   if (ids.length === 0) return [];
   return await database
     .selectFrom("quiz_questions")
-    .selectAll()
+    .select([
+      "id",
+      "question_type",
+      "prompt",
+      "points",
+      "position",
+      "explanation",
+    ])
     .where("quiz_version_id", "=", versionId)
     .where("id", "in", ids)
     .where("deleted_at", "is", null)
     .execute();
 }
 
+/**
+ * Questions as a learner sees them during an attempt, in authored order.
+ * No explanation and no configuration: neither belongs on an open attempt.
+ */
+export async function listAttemptQuestions(
+  database: DatabaseExecutor,
+  versionId: string,
+) {
+  return await database
+    .selectFrom("quiz_questions")
+    .select(["id", "question_type", "prompt", "points"])
+    .where("quiz_version_id", "=", versionId)
+    .where("deleted_at", "is", null)
+    .orderBy("position", "asc")
+    .execute();
+}
+
+/** Just enough of the answered questions to check an answer's shape. */
+export async function listQuestionTypesByIds(
+  database: DatabaseExecutor,
+  versionId: string,
+  ids: readonly string[],
+) {
+  if (ids.length === 0) return [];
+  return await database
+    .selectFrom("quiz_questions")
+    .select(["id", "question_type"])
+    .where("quiz_version_id", "=", versionId)
+    .where("id", "in", ids)
+    .where("deleted_at", "is", null)
+    .execute();
+}
+
+/**
+ * Questions for grading an attempt and showing its result. The prompt is
+ * read only when the result lists answers, the explanation only when the
+ * answers are revealed.
+ */
+export async function listGradingQuestions(
+  database: DatabaseExecutor,
+  versionId: string,
+  include: { prompt: boolean; explanation: boolean },
+) {
+  return await database
+    .selectFrom("quiz_questions")
+    .select(["id", "question_type", "points"])
+    .$if(include.prompt, (qb) => qb.select("prompt"))
+    .$if(include.explanation, (qb) => qb.select("explanation"))
+    .where("quiz_version_id", "=", versionId)
+    .where("deleted_at", "is", null)
+    .orderBy("position", "asc")
+    .execute();
+}
+
+/** Options as the author works on them, answer key included. */
 export async function listOptions(
   database: DatabaseExecutor,
   questionIds: readonly string[],
@@ -196,7 +358,55 @@ export async function listOptions(
   if (questionIds.length === 0) return [];
   return await database
     .selectFrom("quiz_question_options")
-    .selectAll()
+    .select([
+      "id",
+      "question_id",
+      "option_text",
+      "is_correct",
+      "weight",
+      "position",
+    ])
+    .where("question_id", "in", questionIds)
+    .orderBy("position", "asc")
+    .execute();
+}
+
+/** Options as a learner sees them during an attempt: never the answer key. */
+export async function listAttemptOptions(
+  database: DatabaseExecutor,
+  questionIds: readonly string[],
+) {
+  if (questionIds.length === 0) return [];
+  return await database
+    .selectFrom("quiz_question_options")
+    .select(["id", "question_id", "option_text"])
+    .where("question_id", "in", questionIds)
+    .orderBy("position", "asc")
+    .execute();
+}
+
+/** Which option belongs to which question, to validate a saved answer. */
+export async function listOptionRefs(
+  database: DatabaseExecutor,
+  questionIds: readonly string[],
+) {
+  if (questionIds.length === 0) return [];
+  return await database
+    .selectFrom("quiz_question_options")
+    .select(["id", "question_id"])
+    .where("question_id", "in", questionIds)
+    .execute();
+}
+
+/** Options with the answer key, for grading and for a closed attempt's result. */
+export async function listKeyOptions(
+  database: DatabaseExecutor,
+  questionIds: readonly string[],
+) {
+  if (questionIds.length === 0) return [];
+  return await database
+    .selectFrom("quiz_question_options")
+    .select(["id", "question_id", "option_text", "is_correct"])
     .where("question_id", "in", questionIds)
     .orderBy("position", "asc")
     .execute();
@@ -206,23 +416,15 @@ export async function insertQuestion(
   database: DatabaseExecutor,
   values: Insertable<Database["quiz_questions"]>,
 ) {
-  return await database
-    .insertInto("quiz_questions")
-    .values(values)
-    .returningAll()
-    .executeTakeFirstOrThrow();
+  await database.insertInto("quiz_questions").values(values).execute();
 }
 
 export async function insertQuestions(
   database: DatabaseExecutor,
   values: Insertable<Database["quiz_questions"]>[],
 ) {
-  if (values.length === 0) return [];
-  return await database
-    .insertInto("quiz_questions")
-    .values(values)
-    .returningAll()
-    .execute();
+  if (values.length === 0) return;
+  await database.insertInto("quiz_questions").values(values).execute();
 }
 
 export async function updateQuestion(
@@ -235,7 +437,7 @@ export async function updateQuestion(
     .set({ ...values, updated_at: new Date() })
     .where("id", "=", questionId)
     .where("deleted_at", "is", null)
-    .returningAll()
+    .returning("id")
     .executeTakeFirstOrThrow();
 }
 
@@ -254,12 +456,8 @@ export async function insertOptions(
   database: DatabaseExecutor,
   values: Insertable<Database["quiz_question_options"]>[],
 ) {
-  if (values.length === 0) return [];
-  return await database
-    .insertInto("quiz_question_options")
-    .values(values)
-    .returningAll()
-    .execute();
+  if (values.length === 0) return;
+  await database.insertInto("quiz_question_options").values(values).execute();
 }
 
 export async function deleteOptions(
@@ -278,20 +476,21 @@ export async function findAssignment(
 ) {
   return await database
     .selectFrom("quiz_assignments")
-    .selectAll()
+    .select(ASSIGNMENT_COLUMNS)
     .where("id", "=", assignmentId)
     .executeTakeFirst();
 }
 
-export async function findAssignmentForLesson(
+export async function lessonHasAssignment(
   database: DatabaseExecutor,
   lessonId: string,
-) {
-  return await database
+): Promise<boolean> {
+  const row = await database
     .selectFrom("quiz_assignments")
-    .selectAll()
+    .select("id")
     .where("lesson_id", "=", lessonId)
     .executeTakeFirst();
+  return Boolean(row);
 }
 
 export async function listAssignmentsForCourse(
@@ -300,12 +499,13 @@ export async function listAssignmentsForCourse(
 ) {
   return await database
     .selectFrom("quiz_assignments")
-    .selectAll()
+    .select(ASSIGNMENT_COLUMNS)
     .where("course_id", "=", courseId)
     .orderBy("created_at", "asc")
     .execute();
 }
 
+/** What the learner's quiz list shows of each assignment. */
 export async function listAssignmentsForCourses(
   database: DatabaseExecutor,
   courseIds: readonly string[],
@@ -313,7 +513,15 @@ export async function listAssignmentsForCourses(
   if (courseIds.length === 0) return [];
   return await database
     .selectFrom("quiz_assignments")
-    .selectAll()
+    .select([
+      "id",
+      "quiz_id",
+      "course_id",
+      "lesson_id",
+      "max_attempts",
+      "available_from",
+      "available_until",
+    ])
     .where("course_id", "in", courseIds)
     .orderBy("created_at", "asc")
     .execute();
@@ -352,7 +560,21 @@ export async function listAssignmentsForQuizzes(
   if (quizIds.length === 0) return [];
   return await database
     .selectFrom("quiz_assignments")
-    .selectAll()
+    .select(ASSIGNMENT_COLUMNS)
+    .where("quiz_id", "in", quizIds)
+    .orderBy("created_at", "asc")
+    .execute();
+}
+
+/** Where each of these quizzes is attached, without the delivery rules. */
+export async function listAssignmentRefsForQuizzes(
+  database: DatabaseExecutor,
+  quizIds: readonly string[],
+) {
+  if (quizIds.length === 0) return [];
+  return await database
+    .selectFrom("quiz_assignments")
+    .select(["id", "quiz_id", "lesson_id"])
     .where("quiz_id", "in", quizIds)
     .orderBy("created_at", "asc")
     .execute();
@@ -365,7 +587,7 @@ export async function insertAssignment(
   return await database
     .insertInto("quiz_assignments")
     .values(values)
-    .returningAll()
+    .returning(ASSIGNMENT_COLUMNS)
     .executeTakeFirstOrThrow();
 }
 
@@ -378,7 +600,7 @@ export async function updateAssignment(
     .updateTable("quiz_assignments")
     .set({ ...values, updated_at: new Date() })
     .where("id", "=", assignmentId)
-    .returningAll()
+    .returning(ASSIGNMENT_COLUMNS)
     .executeTakeFirstOrThrow();
 }
 
@@ -428,14 +650,40 @@ export async function deleteAssignmentsByQuizId(
     .execute();
 }
 
-export async function listAttemptsForUser(
+/** The learner's most recent attempts, newest first, for their history. */
+export async function listAttemptHistory(
   database: DatabaseExecutor,
   userId: string,
+  limit: number,
 ) {
   return await database
     .selectFrom("quiz_attempts")
-    .selectAll()
+    .select([
+      "id",
+      "attempt_number",
+      "status",
+      "score_percentage",
+      "is_passed",
+      "submitted_at",
+    ])
     .where("user_id", "=", userId)
+    .orderBy("created_at", "desc")
+    .limit(limit)
+    .execute();
+}
+
+/** One user's attempts on these assignments, newest first. */
+export async function listAttemptsForAssignments(
+  database: DatabaseExecutor,
+  userId: string,
+  assignmentIds: readonly string[],
+) {
+  if (assignmentIds.length === 0) return [];
+  return await database
+    .selectFrom("quiz_attempts")
+    .select(["id", "assignment_id", "status", "score_percentage", "is_passed"])
+    .where("user_id", "=", userId)
+    .where("assignment_id", "in", [...assignmentIds])
     .orderBy("created_at", "desc")
     .execute();
 }
@@ -514,13 +762,34 @@ export async function updateAttempt(
     .executeTakeFirstOrThrow();
 }
 
+/** Saved answers with their grading, for grading and for a result. */
 export async function listAnswers(
   database: DatabaseExecutor,
   attemptId: string,
 ) {
   return await database
     .selectFrom("quiz_attempt_answers")
-    .selectAll()
+    .select([
+      "id",
+      "question_id",
+      "response_value",
+      "is_correct",
+      "points_awarded",
+      "time_spent_seconds",
+      "created_at",
+    ])
+    .where("attempt_id", "=", attemptId)
+    .execute();
+}
+
+/** What the learner has answered so far, to resume an open attempt. */
+export async function listAnswerResponses(
+  database: DatabaseExecutor,
+  attemptId: string,
+) {
+  return await database
+    .selectFrom("quiz_attempt_answers")
+    .select(["question_id", "response_value"])
     .where("attempt_id", "=", attemptId)
     .execute();
 }
@@ -529,8 +798,8 @@ export async function upsertAnswers(
   database: DatabaseExecutor,
   values: Insertable<Database["quiz_attempt_answers"]>[],
 ) {
-  if (values.length === 0) return [];
-  return await database
+  if (values.length === 0) return;
+  await database
     .insertInto("quiz_attempt_answers")
     .values(values)
     .onConflict((oc) =>
@@ -542,7 +811,6 @@ export async function upsertAnswers(
         updated_at: new Date(),
       }),
     )
-    .returningAll()
     .execute();
 }
 

@@ -126,9 +126,7 @@ export const capabilitiesQuerySchema = z.object({
 export type CapabilitiesQuery = z.infer<typeof capabilitiesQuerySchema>;
 
 export const capabilitiesResponseSchema = z.object({
-  courseId: z.string().uuid().optional().nullable(),
   permissions: z.array(z.string()),
-  features: z.record(z.string(), z.boolean()),
 });
 
 export type CapabilitiesResponse = z.infer<typeof capabilitiesResponseSchema>;

@@ -74,7 +74,7 @@ export function createOtpService({
     identifier: string,
     identifierType: IdentifierType,
   ): Promise<OtpPurpose> {
-    const user = await userRepository.findUserByIdentifierIncludingDeleted(
+    const user = await userRepository.findUserStatusByIdentifier(
       database,
       identifier,
       identifierType,

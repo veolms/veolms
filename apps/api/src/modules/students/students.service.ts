@@ -31,6 +31,31 @@ function resolveCreatorScope(actor: StudentsActor): string | undefined {
   return actor.roles.includes(ADMIN_ROLE) ? undefined : actor.id;
 }
 
+/**
+ * A learner's progress through one course: completed lessons over published
+ * lessons, or — for a course with no published lessons left — the average of
+ * whatever progress rows remain.
+ */
+function resolveCourseProgressPercent(
+  publishedLessonsCount: number,
+  summary:
+    | { completed_lessons: number; progress_rows: number; avg_progress: number }
+    | undefined,
+): number {
+  if (publishedLessonsCount > 0) {
+    return Math.min(
+      100,
+      Math.round(
+        ((summary?.completed_lessons ?? 0) / publishedLessonsCount) * 100,
+      ),
+    );
+  }
+  if (summary && summary.progress_rows > 0) {
+    return Math.min(100, Math.round(summary.avg_progress));
+  }
+  return 0;
+}
+
 export function resolveStudentAvatar(
   userAvatarDataUrl: string | null | undefined,
   avatars: {
@@ -135,6 +160,8 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     const limit = query.limit || 50;
     const creatorId = resolveCreatorScope(actor);
 
+    // The total describes the whole filtered population, so only the first
+    // page carries it; later pages would recount the same rows.
     const [rows, totalCount] = await Promise.all([
       studentsRepo.listStudentsPaginated(database, {
         cursor: query.cursor,
@@ -145,12 +172,14 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         sortBy: query.sortBy,
         creatorId,
       }),
-      studentsRepo.countTotalStudents(database, {
-        search: query.search,
-        courseId: query.courseId,
-        status: query.status,
-        creatorId,
-      }),
+      query.cursor
+        ? undefined
+        : studentsRepo.countTotalStudents(database, {
+            search: query.search,
+            courseId: query.courseId,
+            status: query.status,
+            creatorId,
+          }),
     ]);
 
     const hasNextPage = rows.length > limit;
@@ -217,8 +246,7 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       const userAvatars = avatarsByUserId.get(user.id) ?? [];
       const avatarUrl = resolveStudentAvatar(user.avatar_data_url, userAvatars);
 
-      // Progress summaries are pre-aggregated per (user, course) in SQL;
-      // the math below mirrors the previous per-row JS computation exactly.
+      // Progress summaries are pre-aggregated per (user, course) in SQL.
       const progressByCourse = new Map(
         userProgress.map((p) => [p.course_id, p]),
       );
@@ -227,22 +255,10 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       let completedCoursesCount = 0;
 
       for (const enrollment of userEnrollments) {
-        const courseLessonsCount = lessonCounts.get(enrollment.course_id) ?? 0;
-        const summary = progressByCourse.get(enrollment.course_id);
-
-        let courseProgressPercent = 0;
-        if (courseLessonsCount > 0) {
-          const completedLessons = summary?.completed_lessons ?? 0;
-          courseProgressPercent = Math.min(
-            100,
-            Math.round((completedLessons / courseLessonsCount) * 100),
-          );
-        } else if (summary && summary.progress_rows > 0) {
-          courseProgressPercent = Math.min(
-            100,
-            Math.round(summary.avg_progress),
-          );
-        }
+        const courseProgressPercent = resolveCourseProgressPercent(
+          lessonCounts.get(enrollment.course_id) ?? 0,
+          progressByCourse.get(enrollment.course_id),
+        );
 
         if (courseProgressPercent >= 100) {
           completedCoursesCount += 1;
@@ -257,18 +273,6 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
           ? Math.round(totalProgressSum / enrolledCoursesCount)
           : 0;
 
-      // Determine last active timestamp
-      let latestActive: Date | null = null;
-      for (const p of userProgress) {
-        const date = new Date(p.last_activity_at);
-        if (!latestActive || date > latestActive) {
-          latestActive = date;
-        }
-      }
-      if (!latestActive && userEnrollments.length > 0) {
-        latestActive = new Date(userEnrollments[0]!.enrolled_at);
-      }
-
       return {
         id: user.id,
         username: user.username,
@@ -279,7 +283,6 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         enrolledCoursesCount,
         completedCoursesCount,
         averageProgressPercent,
-        lastActiveAt: latestActive?.toISOString() ?? null,
       };
     });
 
@@ -386,11 +389,17 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       );
     }
 
-    const [enrolledCourses, userProgress, userAvatars] = await Promise.all([
-      studentsRepo.getStudentEnrolledCourses(database, user.id, creatorId),
-      studentsRepo.listProgressForUserIds(database, [user.id], creatorId),
-      studentsRepo.listAvatarsForUserIds(database, [user.id]),
-    ]);
+    const [enrolledCourses, progressSummaries, userAvatars] = await Promise.all(
+      [
+        studentsRepo.getStudentEnrolledCourses(database, user.id, creatorId),
+        studentsRepo.listProgressSummariesForUserIds(
+          database,
+          [user.id],
+          creatorId,
+        ),
+        studentsRepo.listAvatarsForUserIds(database, [user.id]),
+      ],
+    );
 
     const courseIds = enrolledCourses.map((c) => c.course_id);
     const lessonCounts = await studentsRepo.listCourseLessonCounts(
@@ -398,50 +407,25 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
       courseIds,
     );
 
-    // Group user progress by courseId
-    const progressByCourse = new Map<string, typeof userProgress>();
-    for (const p of userProgress) {
-      const list = progressByCourse.get(p.course_id) ?? [];
-      list.push(p);
-      progressByCourse.set(p.course_id, list);
-    }
+    const progressByCourse = new Map(
+      progressSummaries.map((summary) => [summary.course_id, summary]),
+    );
+    const totalLessonsCompleted = progressSummaries.reduce(
+      (sum, summary) => sum + summary.completed_lessons,
+      0,
+    );
 
     let completedCoursesCount = 0;
     let inProgressCoursesCount = 0;
     let totalProgressSum = 0;
-    let totalLessonsCompleted = 0;
-    let latestActive: Date | null = null;
-
-    for (const p of userProgress) {
-      if (p.progress_percent >= 90) {
-        totalLessonsCompleted += 1;
-      }
-      const date = new Date(p.updated_at);
-      if (!latestActive || date > latestActive) {
-        latestActive = date;
-      }
-    }
 
     const courses: StudentCourseDetail[] = enrolledCourses.map((c) => {
       const totalLessonsCount = lessonCounts.get(c.course_id) ?? 0;
-      const courseProgressList = progressByCourse.get(c.course_id) ?? [];
-
-      const completedLessonsCount = courseProgressList.filter(
-        (p) => p.progress_percent >= 90,
-      ).length;
-
-      let progressPercent = 0;
-      if (totalLessonsCount > 0) {
-        progressPercent = Math.min(
-          100,
-          Math.round((completedLessonsCount / totalLessonsCount) * 100),
-        );
-      } else if (courseProgressList.length > 0) {
-        const avg =
-          courseProgressList.reduce((acc, p) => acc + p.progress_percent, 0) /
-          courseProgressList.length;
-        progressPercent = Math.min(100, Math.round(avg));
-      }
+      const summary = progressByCourse.get(c.course_id);
+      const progressPercent = resolveCourseProgressPercent(
+        totalLessonsCount,
+        summary,
+      );
 
       if (progressPercent >= 100) {
         completedCoursesCount += 1;
@@ -451,14 +435,6 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
       totalProgressSum += progressPercent;
 
-      let lastAccessedAt: string | null = null;
-      for (const p of courseProgressList) {
-        const pDate = new Date(p.updated_at);
-        if (!lastAccessedAt || pDate > new Date(lastAccessedAt)) {
-          lastAccessedAt = pDate.toISOString();
-        }
-      }
-
       return {
         courseId: c.course_id,
         courseTitle: c.course_title,
@@ -467,13 +443,13 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         courseThumbnailUrl: c.course_thumbnail_url,
         difficulty: c.difficulty,
         enrolledAt: c.enrolled_at.toISOString(),
-        enrollmentStatus: c.enrollment_status,
         enrollmentSource: c.enrollment_source,
-        accessExpiresAt: c.access_expires_at?.toISOString() ?? null,
         progressPercent,
-        completedLessonsCount,
+        completedLessonsCount: summary?.completed_lessons ?? 0,
         totalLessonsCount,
-        lastAccessedAt,
+        lastAccessedAt: summary
+          ? new Date(summary.last_activity_at).toISOString()
+          : null,
       };
     });
 
@@ -483,9 +459,13 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         ? Math.round(totalProgressSum / enrolledCoursesCount)
         : 0;
 
+    // An instructor sees a learner's links only where the learner chose to
+    // publish them, exactly as on the public profile. Admins see them all.
+    const visibleLink = (url: string | null, isPublic: boolean) =>
+      !creatorId || isPublic ? url : null;
+
     return {
       student: {
-        id: user.id,
         username: user.username,
         displayName: user.display_name,
         email: user.email,
@@ -496,9 +476,9 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         bio: user.bio,
         joinedAt: user.created_at.toISOString(),
         socials: {
-          githubUrl: user.github_url,
-          linkedinUrl: user.linkedin_url,
-          websiteUrl: user.website_url,
+          githubUrl: visibleLink(user.github_url, user.github_public),
+          linkedinUrl: visibleLink(user.linkedin_url, user.linkedin_public),
+          websiteUrl: visibleLink(user.website_url, user.website_public),
         },
       },
       metrics: {
@@ -507,7 +487,6 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         inProgressCoursesCount,
         averageProgressPercent,
         totalLessonsCompleted,
-        lastActiveAt: latestActive?.toISOString() ?? null,
       },
       courses,
     };

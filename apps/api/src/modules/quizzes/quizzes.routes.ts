@@ -18,6 +18,7 @@ import {
   quizResultSchema,
   quizAssignmentSchema,
   quizSchema,
+  quizSummarySchema,
   setQuizCoursePricingRequestSchema,
   studentQuizReportSchema,
   updateQuizAssignmentRequestSchema,
@@ -111,7 +112,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
         operationId: "listMyQuizzes",
         tags: ["Quizzes"],
         response: {
-          200: jsonResponse("Quizzes", z.array(quizSchema)),
+          200: jsonResponse("Quizzes", z.array(quizSummarySchema)),
           ...errors,
         },
       },
@@ -279,7 +280,13 @@ const quizRoutes: RoutePlugin = async (app, options) => {
           ...errors,
         },
       },
-      preHandler: auth.middleware.requireMfaVerifiedIfAuthenticated,
+      // Open to visitors, but a signed-in caller must be identified: without
+      // `authenticate` the user was never loaded, so a student who had bought
+      // the quiz pass was still told to buy it.
+      preHandler: [
+        auth.middleware.authenticate,
+        auth.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
     },
     controller.getPricingPreview,
   );

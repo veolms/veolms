@@ -38,14 +38,3 @@ export function useUpdateCoupon() {
     },
   });
 }
-
-export function useDeleteCoupon() {
-  const queryClient = useQueryClient();
-
-  return useMutation<{ message: string }, ApiError, string>({
-    mutationFn: (id) => couponsService.deleteCoupon(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: couponKeys.lists() });
-    },
-  });
-}

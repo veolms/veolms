@@ -17,7 +17,11 @@ import type { ActiveSession } from "./session.repository.ts";
 import * as mfaRepository from "../mfa/mfa.repository.ts";
 import * as sessionRepository from "./session.repository.ts";
 import * as userRepository from "../authentication/authentication.repository.ts";
-import { generateRandomToken, hashToken } from "../shared/auth.utils.ts";
+import {
+  generateRandomToken,
+  hashToken,
+  toUserProfileFields,
+} from "../shared/auth.utils.ts";
 import {
   getCachedAuthContext,
   setCachedAuthContext,
@@ -318,28 +322,8 @@ export function createSessionService({ database }: SessionServiceOptions) {
 
     const context: AuthenticatedRequestContext = {
       user: {
-        id: user.id,
-        username: user.username,
+        ...toUserProfileFields(user),
         name: user.display_name,
-        displayName: user.display_name,
-        avatarDataUrl: user.avatar_data_url,
-        bio: user.bio,
-        emailPublic: Boolean(
-          user.email_public && user.email && user.email_verified_at,
-        ),
-        mobilePublic: Boolean(
-          user.mobile_public && user.phone_no && user.phone_verified_at,
-        ),
-        linkedinUrl: user.linkedin_url,
-        linkedinPublic: Boolean(user.linkedin_public && user.linkedin_url),
-        githubUrl: user.github_url,
-        githubPublic: Boolean(user.github_public && user.github_url),
-        websiteUrl: user.website_url,
-        websitePublic: Boolean(user.website_public && user.website_url),
-        email: user.email,
-        emailVerified: Boolean(user.email_verified_at),
-        phoneNo: user.phone_no,
-        mobileVerified: Boolean(user.phone_verified_at),
         roles,
         totpEnabled: skipAdminMfa ? false : totpEnabled,
         passkeyEnabled: skipAdminMfa ? false : passkeyCount > 0,

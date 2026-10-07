@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import type {
-  Payment,
   PaymentGateway,
   PaymentProvider,
   VerifyPaymentRequest,
@@ -8,14 +7,16 @@ import type {
 } from "@veolms/contracts";
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
-import type { Executor } from "../shared/repository.types.ts";
-import { CommerceErrors } from "../shared/commerce.errors.ts";
+import {
+  CommerceErrors,
+  toClientGatewayError,
+} from "../shared/commerce.errors.ts";
 import { toMinorUnits } from "../shared/currency.ts";
 import { isUniqueViolation } from "../shared/db-errors.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import { createPaymentReconciliationService } from "./payment-reconciliation.service.ts";
-import { toPaymentContract, toPaymentProvider } from "./payment.mapper.ts";
+import { toPaymentProvider } from "./payment.mapper.ts";
 
 /**
  * Course pricing is currently stored in major currency units (for example,
@@ -28,9 +29,26 @@ function toGatewayAmount(amount: number, currency: string): number {
   return toMinorUnits(amount, currency);
 }
 
+/** The order columns `initializePayment` works from. */
+type PaymentOrderRow = Pick<
+  NonNullable<Awaited<ReturnType<typeof orderRepo.findOrderById>>>,
+  | "id"
+  | "order_number"
+  | "user_id"
+  | "status"
+  | "currency"
+  | "total_amount"
+  | "expires_at"
+>;
+
 export interface PaymentService {
   initializePayment(params: {
     orderId: string;
+    /**
+     * The order row, when the caller has only just written it. Saves reading
+     * back a row that cannot have changed yet.
+     */
+    order?: PaymentOrderRow;
     customer: {
       id: string;
       name: string;
@@ -38,7 +56,6 @@ export interface PaymentService {
       phone?: string | null;
     };
   }): Promise<{
-    payment: Payment;
     gatewayOrder: {
       provider: PaymentProvider;
       gatewayOrderId: string;
@@ -51,8 +68,6 @@ export interface PaymentService {
     userId: string,
     input: VerifyPaymentRequest,
   ): Promise<VerifyPaymentResponse>;
-  getPaymentById(paymentId: string): Promise<Payment | undefined>;
-  getPaymentByOrderId(orderId: string): Promise<Payment | undefined>;
 }
 
 export interface PaymentServiceOptions {
@@ -70,9 +85,11 @@ export function createPaymentService({
    */
   async function initializePayment({
     orderId,
+    order: knownOrder,
     customer,
   }: {
     orderId: string;
+    order?: PaymentOrderRow;
     customer: {
       id: string;
       name: string;
@@ -80,7 +97,8 @@ export function createPaymentService({
       phone?: string | null;
     };
   }) {
-    const order = await orderRepo.findOrderById(database, orderId);
+    const order =
+      knownOrder ?? (await orderRepo.findOrderById(database, orderId));
     if (!order) {
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
     }
@@ -117,7 +135,6 @@ export function createPaymentService({
     if (payment && isReusable) {
       await recordPaymentAttempt(payment.id);
       return {
-        payment: toPaymentContract(payment),
         gatewayOrder: {
           provider: toPaymentProvider(payment.gateway_provider),
           gatewayOrderId: payment.gateway_order_id!,
@@ -131,18 +148,22 @@ export function createPaymentService({
     // 3. Create upstream order via the gateway abstraction (Razorpay, Stripe, etc.).
     // The gateway receives minor units; the internal order remains in the
     // major-unit format used by the current course-pricing configuration.
-    const gatewayOrder = await paymentGateway.createOrder({
-      orderId: order.id,
-      orderNumber: order.order_number,
-      amount: gatewayAmount,
-      currency: order.currency,
-      receipt: order.order_number,
-      customer,
-      notes: {
+    const gatewayOrder = await paymentGateway
+      .createOrder({
         orderId: order.id,
-        userId: order.user_id,
-      },
-    });
+        orderNumber: order.order_number,
+        amount: gatewayAmount,
+        currency: order.currency,
+        receipt: order.order_number,
+        customer,
+        notes: {
+          orderId: order.id,
+          userId: order.user_id,
+        },
+      })
+      .catch((err: unknown) => {
+        throw toClientGatewayError(err);
+      });
 
     if (!payment) {
       try {
@@ -177,7 +198,6 @@ export function createPaymentService({
         }
         await recordPaymentAttempt(winner.id);
         return {
-          payment: toPaymentContract(winner),
           gatewayOrder: {
             provider: toPaymentProvider(winner.gateway_provider),
             gatewayOrderId: winner.gateway_order_id,
@@ -212,7 +232,6 @@ export function createPaymentService({
     await recordPaymentAttempt(payment.id);
 
     return {
-      payment: toPaymentContract(payment),
       gatewayOrder: {
         provider: gatewayOrder.provider,
         gatewayOrderId: gatewayOrder.gatewayOrderId,
@@ -224,7 +243,7 @@ export function createPaymentService({
   }
 
   async function recordPaymentAttempt(paymentId: string): Promise<void> {
-    const existingAttempts = await paymentRepo.listPaymentAttempts(
+    const attemptCount = await paymentRepo.countPaymentAttempts(
       database,
       paymentId,
     );
@@ -232,7 +251,7 @@ export function createPaymentService({
       id: crypto.randomUUID(),
       payment_id: paymentId,
       gateway_payment_id: null,
-      attempt_number: existingAttempts.length + 1,
+      attempt_number: attemptCount + 1,
       status: "initiated",
     });
   }
@@ -266,13 +285,7 @@ export function createPaymentService({
     // Idempotent short-circuit if already fully captured — safe to return early
     // without going to the gateway again (signature was already verified once).
     if (order.status === "paid" && payment.status === "captured") {
-      return {
-        verified: true,
-        orderId: order.id,
-        orderStatus: "paid",
-        paymentStatus: "captured",
-        message: "Payment already verified successfully.",
-      };
+      return { verified: true, orderStatus: "paid" };
     }
 
     // 1. Verify signature via Gateway Abstraction
@@ -284,7 +297,7 @@ export function createPaymentService({
 
     if (!isValid) {
       // Record the failed attempt outside a transaction — it is diagnostic only
-      const existingAttempts = await paymentRepo.listPaymentAttempts(
+      const attemptCount = await paymentRepo.countPaymentAttempts(
         database,
         payment.id,
       );
@@ -292,7 +305,7 @@ export function createPaymentService({
         id: crypto.randomUUID(),
         payment_id: payment.id,
         gateway_payment_id: gatewayPaymentId,
-        attempt_number: existingAttempts.length + 1,
+        attempt_number: attemptCount + 1,
         status: "failed",
         error_code: "SIGNATURE_VERIFICATION_FAILED",
         error_description: "Invalid payment signature.",
@@ -311,7 +324,11 @@ export function createPaymentService({
     }
 
     // 2. Fetch authoritative payment status from Gateway (OUTSIDE transaction)
-    const paymentDetails = await paymentGateway.getPayment(gatewayPaymentId);
+    const paymentDetails = await paymentGateway
+      .getPayment(gatewayPaymentId)
+      .catch((err: unknown) => {
+        throw toClientGatewayError(err);
+      });
 
     // Verify payment belongs to this gateway order
     if (paymentDetails.gatewayOrderId !== gatewayOrderId) {
@@ -333,7 +350,7 @@ export function createPaymentService({
 
     // Explicitly require captured status (authorized is not sufficient)
     if (paymentDetails.status !== "captured") {
-      throw CommerceErrors.PAYMENT_NOT_CAPTURED(paymentDetails.status);
+      throw CommerceErrors.PAYMENT_NOT_CAPTURED();
     }
 
     // 3. Concurrency-safe fulfillment — delegates to the PaymentReconciliationService.
@@ -354,25 +371,7 @@ export function createPaymentService({
         : null,
     });
 
-    return {
-      verified: true,
-      orderId: order.id,
-      orderStatus: "paid",
-      paymentStatus: "captured",
-      message: "Payment verified and enrollments granted successfully.",
-    };
-  }
-
-  async function getPaymentById(paymentId: string) {
-    const p = await paymentRepo.findPaymentById(database, paymentId);
-    if (!p) return undefined;
-    return toPaymentContract(p);
-  }
-
-  async function getPaymentByOrderId(orderId: string) {
-    const p = await paymentRepo.findPaymentByOrderId(database, orderId);
-    if (!p) return undefined;
-    return toPaymentContract(p);
+    return { verified: true, orderStatus: "paid" };
   }
 
   // Note: refunds are NOT handled here. The real refund flow is
@@ -388,7 +387,5 @@ export function createPaymentService({
   return {
     initializePayment,
     verifyPayment,
-    getPaymentById,
-    getPaymentByOrderId,
   };
 }

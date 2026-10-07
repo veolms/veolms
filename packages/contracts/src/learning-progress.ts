@@ -25,12 +25,8 @@ export const learningProgressLessonSchema = z.strictObject({
   progressPercent: z.number().int().min(0).max(100),
 });
 
+/** Only lessons the learner has made progress on are listed. */
 export const learningProgressResponseSchema = z.strictObject({
-  courseId: z.uuid(),
-  courseSlug: z.string().min(1).max(160),
-  totalLessons: z.number().int().nonnegative(),
-  completedLessons: z.number().int().nonnegative(),
-  progressPercent: z.number().int().min(0).max(100),
   lessons: z.array(learningProgressLessonSchema),
 });
 
@@ -38,9 +34,7 @@ export const learningProgressResumeLessonSchema = z.strictObject({
   lessonId: z.uuid(),
   lessonNumber: z.number().int().positive(),
   title: z.string().min(1),
-  sectionId: z.uuid(),
   sectionTitle: z.string().min(1),
-  contentType: z.enum(["video", "document", "quiz"]),
   progressPercent: z.number().int().min(0).max(100),
 });
 
@@ -50,8 +44,6 @@ export const learningProgressResumeContextResponseSchema = z.strictObject({
   totalLessons: z.number().int().nonnegative(),
   completedLessons: z.number().int().nonnegative(),
   resumeLesson: learningProgressResumeLessonSchema.nullable(),
-  previousLesson: learningProgressResumeLessonSchema.nullable(),
-  nextLesson: learningProgressResumeLessonSchema.nullable(),
   upcomingLessons: z.array(learningProgressResumeLessonSchema).max(3),
 });
 

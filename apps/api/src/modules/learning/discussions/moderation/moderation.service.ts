@@ -2,9 +2,12 @@ import crypto from "node:crypto";
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
   AuditLogsListResponse,
+  CourseAuditLog,
+  CourseAuditLogsListResponse,
+  CourseLearningReport,
+  CourseReportsListResponse,
   CreateReportRequest,
-  LearningAuditLog,
-  LearningReport,
+  LearningAuditLogDetails,
   ListAuditLogsQuery,
   ListReportsQuery,
   ModerateNoteRequest,
@@ -17,6 +20,7 @@ import type {
   UserSuspension,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
+import { createAccessService } from "../../../access/index.ts";
 import { DiscussionErrors } from "../shared/discussion.errors.ts";
 import {
   createDiscussionAccess,
@@ -43,7 +47,7 @@ import type { ThreadsRepository } from "../threads/threads.repository.ts";
 import type {
   AuditLogRowWithActor,
   ModerationRepository,
-  ReportRowWithReporter,
+  ReportRow,
 } from "./moderation.repository.ts";
 
 function parseAuditLogDetails(value: string): Record<string, unknown> | null {
@@ -58,6 +62,91 @@ function parseAuditLogDetails(value: string): Record<string, unknown> | null {
   }
 }
 
+/**
+ * Audit details are stored as free-form JSON. Only the keys the moderation
+ * actions write are returned, and only when they hold text, so nothing else
+ * that ends up in that column reaches a client.
+ */
+function presentAuditLogDetails(
+  value: unknown,
+): LearningAuditLogDetails | null {
+  const source =
+    typeof value === "string"
+      ? parseAuditLogDetails(value)
+      : value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null;
+  if (!source) return null;
+
+  const details: LearningAuditLogDetails = {};
+  for (const key of [
+    "reason",
+    "actionTaken",
+    "courseId",
+    "expiresAt",
+  ] as const) {
+    const entry = source[key];
+    if (typeof entry === "string" || entry === null) details[key] = entry;
+  }
+  for (const key of ["reportId", "status", "scope"] as const) {
+    const entry = source[key];
+    if (typeof entry === "string") details[key] = entry;
+  }
+  return details;
+}
+
+function toIsoString(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : String(value);
+}
+
+function presentReport(row: ReportRow): CourseLearningReport {
+  return {
+    id: row.id,
+    targetType: row.targetType,
+    targetId: row.targetId,
+    courseId: row.courseId ?? null,
+    reason: row.reason,
+    details: row.details,
+    status: row.status,
+    reviewedByUserId: row.reviewedByUserId ?? null,
+    actionTaken: row.actionTaken ?? null,
+    createdAt: toIsoString(row.createdAt),
+    updatedAt: toIsoString(row.updatedAt),
+  };
+}
+
+function presentAuditLog(row: AuditLogRowWithActor): CourseAuditLog {
+  return {
+    id: row.id,
+    courseId: row.courseId ?? null,
+    actorUserId: row.actorUserId ?? null,
+    actor: row.actorUserId
+      ? {
+          id: row.actorUserId,
+          displayName: row.actorName || "Staff Member",
+          username: row.actorUsername || "staff",
+          avatarUrl: null,
+          role: mapAuthorRole(row.authorRole),
+        }
+      : undefined,
+    action: row.action,
+    targetType: row.targetType,
+    targetId: row.targetId,
+    details: presentAuditLogDetails(row.details),
+    createdAt: toIsoString(row.createdAt),
+  };
+}
+
+function nextPageCursor(
+  page: readonly { id: string; createdAt: Date | string }[],
+  hasMore: boolean,
+): string | null {
+  const last = page.at(-1);
+  return hasMore && last
+    ? encodeDiscussionCursor({ id: last.id, createdAt: toDate(last.createdAt) })
+    : null;
+}
+
 export interface ModerationService {
   createReport(
     db: DatabaseExecutor,
@@ -70,7 +159,7 @@ export interface ModerationService {
     actor: DiscussionActor,
     query: ListReportsQuery,
     scope: "course" | "platform",
-  ): Promise<ReportsListResponse>;
+  ): Promise<CourseReportsListResponse | ReportsListResponse>;
 
   updateReportStatus(
     db: DatabaseExecutor,
@@ -127,7 +216,7 @@ export interface ModerationService {
     actor: DiscussionActor,
     query: ListAuditLogsQuery,
     scope: "course" | "platform",
-  ): Promise<AuditLogsListResponse>;
+  ): Promise<CourseAuditLogsListResponse | AuditLogsListResponse>;
 }
 
 export function createModerationService({
@@ -142,7 +231,45 @@ export function createModerationService({
   moderationRepo: ModerationRepository;
 }): ModerationService {
   const courseAccess = createDiscussionAccess();
+  const access = createAccessService();
   const outbox = createDiscussionOutbox();
+
+  /**
+   * A course moderator suspends that course's participants, nobody else.
+   * The suspension notice carries the moderator's own words to the target by
+   * in-app message and email, so without this any course owner could send
+   * arbitrary text to any account, or lock an administrator out of a course.
+   */
+  async function assertCourseSuspensionTarget(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    userId: string,
+    courseId: string,
+  ): Promise<void> {
+    if (userId === actor.userId) {
+      throw httpError(403, "FORBIDDEN", "You cannot suspend yourself.");
+    }
+
+    const target = await moderationRepo.findSuspensionTarget(db, userId);
+    // Any grant counts, active or not: someone whose access has lapsed can
+    // still have posts in the course that need acting on.
+    const grants = target ? await access.listUserGrants(db, userId) : [];
+    if (!target || !grants.some((grant) => grant.courseId === courseId)) {
+      throw httpError(
+        403,
+        "FORBIDDEN",
+        "Only participants of this course can be suspended from it.",
+      );
+    }
+
+    if (mapAuthorRole(target.authorRole) === "Admin") {
+      throw httpError(
+        403,
+        "FORBIDDEN",
+        "Administrators cannot be suspended from a course.",
+      );
+    }
+  }
 
   async function assertModerationScope(
     db: DatabaseExecutor,
@@ -208,7 +335,7 @@ export function createModerationService({
         await assertReporterCanSee(db, actor, thread, "reply");
         courseId = thread.courseId;
       } else if (input.targetType === "note") {
-        const note = await notesRepo.findNoteById(db, input.targetId);
+        const note = await notesRepo.findNoteAccessTarget(db, input.targetId);
         if (!note) {
           throw httpError(404, "TARGET_NOT_FOUND", "Reported note not found");
         }
@@ -265,51 +392,41 @@ export function createModerationService({
         scope === "course" ? query.courseId : null,
       );
       const pageCursor = decodeDiscussionCursor(query.cursor);
+      const options = { ...query, pageCursor };
+
+      if (scope === "platform") {
+        const [rows, totalCount] = await Promise.all([
+          moderationRepo.listReportsWithReporter(db, options),
+          moderationRepo.countReports(db, query),
+        ]);
+        const { page, hasMore } = takePage(rows, query.limit);
+        return {
+          reports: page.map((row) => ({
+            ...presentReport(row),
+            reporterId: row.reporterId,
+            reporter: {
+              id: row.reporterId,
+              displayName: row.reporterName || "Learner",
+              username: row.reporterUsername || "user",
+              avatarUrl: null,
+              role: mapAuthorRole(row.authorRole),
+            },
+          })),
+          nextCursor: nextPageCursor(page, hasMore),
+          totalCount,
+        };
+      }
+
+      // Course scope never reads the reporter: the course owner moderates
+      // their own course and is often the person who was reported.
       const [rows, totalCount] = await Promise.all([
-        moderationRepo.listReports(db, { ...query, pageCursor }),
+        moderationRepo.listReports(db, options),
         moderationRepo.countReports(db, query),
       ]);
       const { page, hasMore } = takePage(rows, query.limit);
-      const reports: LearningReport[] = page.map((r) => ({
-        id: r.id,
-        reporterId: r.reporterId,
-        reporter: {
-          id: r.reporterId,
-          displayName: r.reporterName || "Learner",
-          username:
-            (r.reporterUsername || r.reporterEmail || "user").split("@")[0] ||
-            "user",
-          avatarUrl: null,
-          role: mapAuthorRole(r.authorRole),
-        },
-        targetType: r.targetType,
-        targetId: r.targetId,
-        courseId: r.courseId ?? null,
-        reason: r.reason,
-        details: r.details,
-        status: r.status,
-        reviewedByUserId: r.reviewedByUserId ?? null,
-        actionTaken: r.actionTaken ?? null,
-        createdAt:
-          r.createdAt instanceof Date
-            ? r.createdAt.toISOString()
-            : String(r.createdAt),
-        updatedAt:
-          r.updatedAt instanceof Date
-            ? r.updatedAt.toISOString()
-            : String(r.updatedAt),
-      }));
-
-      const last = page.at(-1);
       return {
-        reports,
-        nextCursor:
-          hasMore && last
-            ? encodeDiscussionCursor({
-                id: last.id,
-                createdAt: toDate(last.createdAt),
-              })
-            : null,
+        reports: page.map(presentReport),
+        nextCursor: nextPageCursor(page, hasMore),
         totalCount,
       };
     },
@@ -319,7 +436,7 @@ export function createModerationService({
       return withWriteTransaction(db, async (trx) => {
         const report = await trx
           .selectFrom("learning_reports")
-          .selectAll()
+          .select(["course_id", "target_type", "target_id", "reporter_id"])
           .where("id", "=", reportId)
           .executeTakeFirst();
         if (!report) {
@@ -496,7 +613,7 @@ export function createModerationService({
     async moderateNote(db, noteId, actor, input, courseId, ipAddress) {
       await assertModerationScope(db, actor, courseId);
       return withWriteTransaction(db, async (trx) => {
-        const note = await notesRepo.findNoteById(trx, noteId);
+        const note = await notesRepo.findNoteAccessTarget(trx, noteId);
         // A private note is nobody's business but its author's: moderators
         // act on shared notes only, and cannot tell a private one exists.
         if (!note || note.visibility === "private") {
@@ -594,7 +711,9 @@ export function createModerationService({
         }
 
         const thread = await threadsRepo.findThreadById(trx, reply.threadId);
-        if (courseId && thread && thread.courseId !== courseId) {
+        // Fails closed: a reply whose thread cannot be read is not shown to
+        // belong to this course, so a course moderator may not act on it.
+        if (courseId && (!thread || thread.courseId !== courseId)) {
           throw httpError(
             403,
             "FORBIDDEN",
@@ -704,6 +823,14 @@ export function createModerationService({
 
     async suspendUser(db, actor, input, ipAddress) {
       await assertModerationScope(db, actor, input.courseId);
+      if (input.courseId) {
+        await assertCourseSuspensionTarget(
+          db,
+          actor,
+          input.userId,
+          input.courseId,
+        );
+      }
       return withWriteTransaction(db, async (trx) => {
         const academyId = await resolveAcademyId(trx);
         const id = crypto.randomUUID();
@@ -756,7 +883,6 @@ export function createModerationService({
 
         return {
           id,
-          academyId,
           courseId: input.courseId || null,
           userId: input.userId,
           suspendedByUserId: actor.userId,
@@ -824,52 +950,28 @@ export function createModerationService({
       );
       const academyId = await resolveAcademyId(db);
       const pageCursor = decodeDiscussionCursor(query.cursor);
+      // Only the platform (administrator) trail carries network addresses.
+      // A course owner reads entries written by administrators too, and has
+      // no business with where those administrators connected from.
+      const includeIpAddress = scope === "platform";
       const rows = await moderationRepo.listAuditLogs(db, academyId, {
         ...query,
         pageCursor,
+        includeIpAddress,
       });
       const { page, hasMore } = takePage(rows, query.limit);
-      const logs: LearningAuditLog[] = page.map((r) => ({
-        id: r.id,
-        academyId: r.academyId,
-        courseId: r.courseId ?? null,
-        actorUserId: r.actorUserId ?? null,
-        actor: r.actorUserId
-          ? {
-              id: r.actorUserId,
-              displayName: r.actorName || "Staff Member",
-              username:
-                (r.actorUsername || r.actorEmail || "staff").split("@")[0] ||
-                "staff",
-              avatarUrl: null,
-              role: mapAuthorRole(r.authorRole),
-            }
-          : undefined,
-        action: r.action,
-        targetType: r.targetType,
-        targetId: r.targetId,
-        details:
-          typeof r.details === "string"
-            ? parseAuditLogDetails(r.details)
-            : (r.details as Record<string, unknown> | null),
-        ipAddress: r.ipAddress ?? null,
-        createdAt:
-          r.createdAt instanceof Date
-            ? r.createdAt.toISOString()
-            : String(r.createdAt),
-      }));
+      const nextCursor = nextPageCursor(page, hasMore);
 
-      const last = page.at(-1);
-      return {
-        logs,
-        nextCursor:
-          hasMore && last
-            ? encodeDiscussionCursor({
-                id: last.id,
-                createdAt: toDate(last.createdAt),
-              })
-            : null,
-      };
+      if (includeIpAddress) {
+        return {
+          logs: page.map((row) => ({
+            ...presentAuditLog(row),
+            ipAddress: row.ipAddress ?? null,
+          })),
+          nextCursor,
+        };
+      }
+      return { logs: page.map(presentAuditLog), nextCursor };
     },
   };
 }

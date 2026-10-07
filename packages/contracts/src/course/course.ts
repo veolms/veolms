@@ -10,16 +10,19 @@ export interface CoursePricingSummary {
   showDiscountBadge?: boolean;
 }
 
+/** One responsive rendition of a course thumbnail, as used in `srcset`. */
+export interface CourseThumbnailVariant {
+  url: string;
+  width: number;
+}
+
 export interface CourseSummary {
   id: string;
   slug: string;
   title: string;
   shortDescription: string;
-  difficulty?: "beginner" | "intermediate" | "advanced" | null;
   thumbnailUrl?: string | null;
-  thumbnailSrcSet?: readonly { url: string; width: number; height: number }[];
-  instructorName?: string | null;
-  categoryName?: string | null;
+  thumbnailSrcSet?: readonly CourseThumbnailVariant[];
   totalSections: number;
   totalLessons: number;
   totalDurationSeconds: number;
@@ -43,6 +46,11 @@ export const coursePricingSummarySchema = z.strictObject({
   showDiscountBadge: z.boolean().default(false),
 });
 
+export const courseThumbnailVariantSchema = z.object({
+  url: z.string(),
+  width: z.number().int().positive(),
+});
+
 const courseSummaryObjectSchema = z.strictObject({
   id: z.uuid().meta({ description: "Stable identifier of the course." }),
   slug: z
@@ -56,22 +64,8 @@ const courseSummaryObjectSchema = z.strictObject({
     .max(500)
     .default("")
     .meta({ description: "One-line summary shown in catalogue listings." }),
-  difficulty: z
-    .enum(["beginner", "intermediate", "advanced"])
-    .nullable()
-    .optional(),
   thumbnailUrl: z.string().nullable().optional(),
-  thumbnailSrcSet: z
-    .array(
-      z.object({
-        url: z.string(),
-        width: z.number().int().positive(),
-        height: z.number().int().positive(),
-      }),
-    )
-    .optional(),
-  instructorName: z.string().nullable().optional(),
-  categoryName: z.string().nullable().optional(),
+  thumbnailSrcSet: z.array(courseThumbnailVariantSchema).optional(),
   totalSections: z.number().int().nonnegative().default(0),
   totalLessons: z.number().int().nonnegative().default(0),
   totalDurationSeconds: z.number().int().nonnegative().default(0),
@@ -108,11 +102,18 @@ const publicCourseObjectSchema = z.strictObject({
 export const publicCourseSchema: z.ZodType<PublicCourse> =
   publicCourseObjectSchema;
 
+/**
+ * A title-sorted cursor carries the percent-encoded title of the last course
+ * on the page. A title in a non-Latin script encodes to nine characters per
+ * letter, so the previous limit of 256 failed response serialization.
+ */
+const COURSE_CURSOR_MAX_LENGTH = 2048;
+
 export const courseListResponseSchema = z.strictObject({
   courses: z
     .array(courseSummarySchema)
     .meta({ description: "Published courses in stable catalogue order." }),
-  nextCursor: z.string().min(1).max(256).optional(),
+  nextCursor: z.string().min(1).max(COURSE_CURSOR_MAX_LENGTH).optional(),
 });
 
 export const courseOptionsResponseSchema = z.strictObject({
@@ -127,7 +128,7 @@ export const courseOptionsResponseSchema = z.strictObject({
 export const courseListQuerySchema = z.object({
   creatorId: z.uuid().optional(),
   limit: z.coerce.number().int().min(1).max(60).optional(),
-  cursor: z.string().min(1).max(256).optional(),
+  cursor: z.string().min(1).max(COURSE_CURSOR_MAX_LENGTH).optional(),
   search: z.string().trim().max(120).optional(),
   sort: z.enum(["latest", "title"]).optional(),
 });
@@ -167,7 +168,6 @@ export const accessDurationTypeSchema = z.enum([
 
 export const courseAccessRuleSchema = z.object({
   id: z.uuid(),
-  courseId: z.uuid(),
   accessType: accessTypeSchema,
   durationType: accessDurationTypeSchema,
   durationDays: z.number().int().positive().nullable().optional(),
@@ -205,7 +205,6 @@ export const pricingTypeSchema = z.enum(["free", "paid"]);
 
 export const coursePricingSchema = z.object({
   id: z.uuid(),
-  courseId: z.uuid(),
   pricingType: pricingTypeSchema,
   price: z.number().int().nonnegative(),
   currency: z.string().min(3).max(3).default("INR"),
@@ -250,7 +249,6 @@ export type UpdateCoursePricingRequest = z.infer<
 
 export const courseSettingsSchema = z.object({
   id: z.uuid(),
-  courseId: z.uuid(),
   allowQa: z.boolean(),
   allowComments: z.boolean(),
   allowDownloads: z.boolean(),
@@ -279,12 +277,8 @@ export type UpdateCourseSettingsRequest = z.infer<
 
 export const courseIncludeItemSchema = z.object({
   id: z.uuid(),
-  courseId: z.uuid(),
   text: z.string().min(1).max(255),
-  icon: z.string().nullable().optional(),
   position: z.number().int().nonnegative(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
 });
 
 export const createCourseIncludeRequestSchema = z.object({
@@ -329,12 +323,8 @@ export const createLessonResourceRequestSchema = z.object({
 
 export const lessonResourceSchema = z.object({
   id: z.uuid(),
-  lessonId: z.uuid(),
   mediaAssetId: z.uuid(),
   title: z.string().min(1),
-  description: z.string().nullable().optional(),
-  position: z.number().int().nonnegative(),
-  createdAt: z.string(),
   mediaAsset: z
     .object({
       originalFilename: z.string(),
@@ -347,8 +337,6 @@ export const lessonResourceSchema = z.object({
 
 export const courseLessonSchema = z.object({
   id: z.uuid(),
-  courseId: z.uuid(),
-  sectionId: z.uuid(),
   title: z.string().min(1),
   description: z.string().nullable().optional(),
   contentType: z.enum(["video", "document", "quiz"]),
@@ -362,7 +350,6 @@ export const courseLessonSchema = z.object({
 
 export const courseSectionSchema = z.object({
   id: z.uuid(),
-  courseId: z.uuid(),
   title: z.string().min(1),
   position: z.number().int().nonnegative(),
   lessons: z.array(courseLessonSchema).optional(),
@@ -451,7 +438,6 @@ export const courseSchema = z.object({
     )
     .optional(),
   trailerMediaId: z.uuid().nullable().optional(),
-  trailerUrl: z.string().nullable().optional(),
   instructorAlias: z.string().max(120).nullable().optional(),
   version: z.number().int(),
   createdAt: z.string(),
@@ -460,6 +446,65 @@ export const courseSchema = z.object({
   totalSections: z.number().int().nonnegative().optional(),
   totalLessons: z.number().int().nonnegative().optional(),
   totalDurationSeconds: z.number().int().nonnegative().optional(),
+});
+
+const courseDifficultySchema = z
+  .enum(["beginner", "intermediate", "advanced"])
+  .nullable()
+  .optional();
+
+/** What `POST /courses` returns: the new draft's identity and editor seed. */
+export const courseCreatedResponseSchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  instructorAlias: z.string().max(120).nullable().optional(),
+  version: z.number().int(),
+});
+
+/** What `PATCH /courses/:id/basics` returns: the saved basics, as stored. */
+export const courseBasicsResponseSchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  shortDescription: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  difficulty: courseDifficultySchema,
+  categoryId: z.uuid().nullable().optional(),
+  instructorAlias: z.string().max(120).nullable().optional(),
+  version: z.number().int(),
+});
+
+/** Returned instead of the basics when a new trailer still has to be processed. */
+export const courseBasicsAcceptedResponseSchema = z.object({
+  version: z.number().int(),
+});
+
+/** What publishing and unpublishing return. */
+export const courseStatusResponseSchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  status: courseStatusSchema,
+  version: z.number().int(),
+});
+
+/** A course as it appears in the authoring/management list. */
+export const managedCourseSummarySchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  shortDescription: z.string().nullable().optional(),
+  difficulty: courseDifficultySchema,
+  status: courseStatusSchema,
+  creatorId: z.uuid().nullable(),
+  thumbnailMediaId: z.uuid().nullable().optional(),
+  thumbnailUrl: z.string().nullable().optional(),
+  thumbnailSrcSet: z.array(courseThumbnailVariantSchema).optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  totalSections: z.number().int().nonnegative(),
+  totalLessons: z.number().int().nonnegative(),
+  totalDurationSeconds: z.number().int().nonnegative(),
 });
 
 export const createCourseRequestSchema = z.object({
@@ -510,14 +555,23 @@ export const courseEditorDataResponseSchema = z.object({
 });
 
 export const myCoursesListResponseSchema = z.object({
+  courses: z.array(managedCourseSummarySchema),
+});
+
+/** Published courses of one creator, as `GET /courses/creator/:creatorId` returns them. */
+export const creatorCoursesListResponseSchema = z.object({
   courses: z.array(courseSchema),
 });
 
+/**
+ * `slug` is what the public page refresh uses to remove the deleted course's
+ * static page: the course can no longer be looked up once it is in the bin.
+ */
 export const courseDeleteResponseSchema = z.object({
-  purgeAt: z.string(),
   slug: z.string().optional(),
 });
 
+/** Refresh state as the refresh service tracks it. */
 export const courseStaticPageRefreshStatusSchema = z.object({
   courseId: z.uuid(),
   status: z.enum(["idle", "queued", "running", "succeeded", "failed"]),
@@ -530,11 +584,16 @@ export type CourseStaticPageRefreshStatus = z.infer<
   typeof courseStaticPageRefreshStatusSchema
 >;
 
-export const courseDeletionPurgeStateSchema = z.enum([
-  "scheduled",
-  "processing",
-  "failed",
-]);
+/** The part of the refresh state the course editor is shown. */
+export const courseStaticPageRefreshStatusResponseSchema =
+  courseStaticPageRefreshStatusSchema.pick({
+    status: true,
+    message: true,
+    runUrl: true,
+  });
+export type CourseStaticPageRefreshStatusResponse = z.infer<
+  typeof courseStaticPageRefreshStatusResponseSchema
+>;
 
 export const deletedCourseSchema = z.object({
   id: z.uuid(),
@@ -543,10 +602,6 @@ export const deletedCourseSchema = z.object({
   status: courseStatusSchema,
   creatorId: z.uuid().nullable(),
   deletedAt: z.string(),
-  purgeAt: z.string(),
-  purgeState: courseDeletionPurgeStateSchema,
-  purgeAttempts: z.number().int().nonnegative(),
-  lastPurgeError: z.string().nullable(),
 });
 
 export const deletedCoursesQuerySchema = z.object({
@@ -559,11 +614,22 @@ export const deletedCoursesListResponseSchema = z.object({
   nextCursor: z.string().nullable(),
 });
 
+/**
+ * `course.slug` is what the public page refresh uses to rebuild the restored
+ * course's static page.
+ */
 export const restoreCourseResponseSchema = z.object({
-  course: courseSchema,
+  course: z.object({
+    id: z.uuid(),
+    slug: z.string(),
+  }),
 });
 
 export type Course = z.infer<typeof courseSchema>;
+export type CourseCreatedResponse = z.infer<typeof courseCreatedResponseSchema>;
+export type CourseBasicsResponse = z.infer<typeof courseBasicsResponseSchema>;
+export type CourseStatusResponse = z.infer<typeof courseStatusResponseSchema>;
+export type ManagedCourseSummary = z.infer<typeof managedCourseSummarySchema>;
 export type CreateCourseRequest = z.infer<typeof createCourseRequestSchema>;
 export type UpdateCourseBasicsRequest = z.infer<
   typeof updateCourseBasicsRequestSchema
@@ -590,14 +656,11 @@ export const courseValidationAreaSchema = z.enum([
 ]);
 
 export const courseValidationIssueSchema = z.object({
-  code: z.string(),
   message: z.string(),
-  area: courseValidationAreaSchema.optional(),
 });
 
 export const validationItemSchema = z.object({
   valid: z.boolean(),
-  status: z.string(),
   errors: z.array(z.string()),
 });
 
@@ -611,10 +674,8 @@ export const courseValidationSectionsSchema = z.object({
 
 export const courseValidationResponseSchema = z.object({
   canPublish: z.boolean(),
-  valid: z.boolean(),
   sections: courseValidationSectionsSchema,
   errors: z.array(courseValidationIssueSchema),
-  warnings: z.array(courseValidationIssueSchema),
 });
 
 export type CourseValidationArea = z.infer<typeof courseValidationAreaSchema>;
@@ -627,22 +688,66 @@ export type CourseValidationResponse = z.infer<
   typeof courseValidationResponseSchema
 >;
 
+/**
+ * The learner-facing view of a course. It is public for published courses,
+ * so every key here is one a learner screen reads; authoring-only data
+ * (version, timestamps, media ids, access rules) stays on the editor payload.
+ */
+export const courseOverviewCourseSchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  shortDescription: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  difficulty: courseDifficultySchema,
+  status: courseStatusSchema,
+  creatorId: z.uuid().nullable(),
+  thumbnailUrl: z.string().nullable().optional(),
+  thumbnailSrcSet: z.array(courseThumbnailVariantSchema).optional(),
+  trailerMediaId: z.uuid().nullable().optional(),
+  // Null when the instructor is hidden from learners.
+  instructorAlias: z.string().max(120).nullable().optional(),
+});
+
 export const courseOverviewSchema = z.object({
-  course: courseSchema,
-  category: categorySchema.nullable().optional(),
+  course: courseOverviewCourseSchema,
+  category: z
+    .object({ name: z.string().min(1).max(100) })
+    .nullable()
+    .optional(),
+  // Null when the instructor is hidden from learners.
   creator: z
     .object({
       id: z.uuid(),
       displayName: z.string(),
-      username: z.string(),
     })
     .nullable()
     .optional(),
   sections: z.array(courseSectionSchema),
-  accessRules: courseAccessRuleSchema.nullable().optional(),
-  pricing: coursePricingSchema.nullable().optional(),
-  settings: courseSettingsSchema.nullable().optional(),
-  includes: z.array(courseIncludeItemSchema).optional(),
+  pricing: coursePricingSchema
+    .pick({
+      pricingType: true,
+      price: true,
+      currency: true,
+      salePrice: true,
+      showDiscountBadge: true,
+    })
+    .nullable()
+    .optional(),
+  settings: courseSettingsSchema
+    .pick({
+      allowQa: true,
+      allowComments: true,
+      allowNotes: true,
+      showInstructorName: true,
+      language: true,
+      estimatedDuration: true,
+    })
+    .nullable()
+    .optional(),
+  includes: z
+    .array(courseIncludeItemSchema.pick({ text: true, position: true }))
+    .optional(),
   stats: z.object({
     totalSections: z.number().int().nonnegative(),
     totalLessons: z.number().int().nonnegative(),

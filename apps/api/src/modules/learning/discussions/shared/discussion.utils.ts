@@ -171,26 +171,6 @@ export function updatedAtIdDescSql(
   )`;
 }
 
-export function createdAtIdAscSql(
-  alias: string,
-  cursor: DiscussionListCursor,
-  table: string,
-) {
-  const boundary = exactCursorTimestamp(
-    [table],
-    "created_at",
-    cursor.id,
-    cursor.createdAt,
-  );
-  return sql<boolean>`(
-    ${sql.raw(`${alias}.created_at`)} > ${boundary}
-    or (
-      ${sql.raw(`${alias}.created_at`)} = ${boundary}
-      and ${sql.raw(`${alias}.id`)} > ${cursor.id}::uuid
-    )
-  )`;
-}
-
 export function authorRoleSql(userIdColumn: string) {
   return sql<string | null>`(
     select roles.name

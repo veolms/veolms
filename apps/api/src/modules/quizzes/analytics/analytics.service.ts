@@ -1,26 +1,29 @@
 import type { QuizActor, QuizServiceOptions } from "../shared/quiz.types.ts";
-import { isAdmin } from "../shared/quiz.types.ts";
+import {
+  assertCanManageCourse,
+  isAdmin,
+  requireAcademyId,
+} from "../shared/quiz.types.ts";
 import { AppError } from "../../../lib/errors.ts";
 import * as repo from "../shared/quiz.repository.ts";
 
 type AnalyticsRow = Awaited<
   ReturnType<typeof repo.listAnalyticsAttempts>
 >[number];
+type StudentStatus = "passed" | "failed" | "in_progress" | "not_attempted";
+
 function pct(value: number, total: number) {
   return total ? (value / total) * 100 : 0;
 }
 
 export function createAnalyticsService(options: QuizServiceOptions) {
   const { database, accessService, courseService } = options;
-  async function academyId() {
-    const id = await options.getAcademyId();
-    if (!id)
-      throw new AppError(
-        503,
-        "ACADEMY_NOT_CONFIGURED",
-        "The academy is not configured.",
-      );
-    return id;
+
+  async function requireCourse(courseId: string) {
+    const course = await courseService.findCourseById(courseId);
+    if (!course)
+      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    return course;
   }
 
   async function assertOwned(actor: QuizActor, assignmentId: string) {
@@ -31,14 +34,7 @@ export function createAnalyticsService(options: QuizServiceOptions) {
         "ASSIGNMENT_NOT_FOUND",
         "Quiz assignment not found.",
       );
-    const course = await courseService.findCourseById(assignment.course_id);
-    if (!course)
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    if (!isAdmin(actor))
-      await courseService.getCourseAndVerifyOwner(
-        assignment.course_id,
-        actor.id,
-      );
+    assertCanManageCourse(actor, await requireCourse(assignment.course_id));
     if (!isAdmin(actor)) {
       const quiz = await repo.findQuiz(database, assignment.quiz_id);
       if (!quiz || quiz.creator_id !== actor.id)
@@ -54,65 +50,39 @@ export function createAnalyticsService(options: QuizServiceOptions) {
     return grouped;
   }
 
-  async function listVisibleQuizzes(actor: QuizActor) {
-    return isAdmin(actor)
-      ? repo.listQuizzesByAcademy(database, await academyId())
-      : repo.listQuizzesByCreator(database, actor.id);
-  }
-
-  type AssignmentRecord = NonNullable<
-    Awaited<ReturnType<typeof repo.findAssignment>>
-  >;
-
   /**
-   * Builds one assignment's report from an already-authorized assignment
-   * row and the course's active-student list. Names are resolved in ONE
-   * bulk query — this used to call authService.findUserById (a selectAll
-   * on users) once per student, so a course report issued roughly
-   * assignments x students concurrent queries against the shared pool.
+   * One assignment's outcomes, per student and in total, from an
+   * already-authorized assignment and the course's active-student list.
+   * Students are identified by id only: the course report never shows a
+   * name, so names are looked up by the one caller that does.
    */
-  async function buildAssignmentReport(
-    row: AssignmentRecord,
+  async function summarizeAssignment(
+    assignment: { id: string; pass_percentage: number },
     activeStudents: readonly string[],
   ) {
-    const attempts = await repo.listAnalyticsAttempts(database, row.id);
+    const attempts = await repo.listAnalyticsAttempts(database, assignment.id);
     const grouped = group(attempts);
     const studentIds = [...new Set([...activeStudents, ...grouped.keys()])];
-    const nameRows =
-      await options.authService.listUserDisplayNamesByIds(studentIds);
-    const nameById = new Map(
-      nameRows.map((user) => [user.id, user.display_name]),
-    );
     const students = studentIds.map((studentId) => {
       const records = grouped.get(studentId) ?? [];
       const latest = records[0];
-      const scored = records.filter(
-        (record) =>
-          record.status === "graded" && record.scorePercentage !== null,
-      );
-      const best = scored.reduce<number | null>(
-        (current, record) =>
-          Math.max(current ?? 0, Number(record.scorePercentage)),
-        null,
-      );
-      const status: "passed" | "failed" | "in_progress" | "not_attempted" =
+      const status: StudentStatus =
         latest?.status === "in_progress"
           ? "in_progress"
           : latest && ["graded", "submitted", "expired"].includes(latest.status)
-            ? Number(latest.scorePercentage ?? 0) >= Number(row.pass_percentage)
+            ? Number(latest.scorePercentage ?? 0) >=
+              Number(assignment.pass_percentage)
               ? "passed"
               : "failed"
             : "not_attempted";
       return {
         studentId,
-        studentName: nameById.get(studentId) ?? studentId,
         attemptCount: records.length,
         latestScore:
           latest?.scorePercentage === null ||
           latest?.scorePercentage === undefined
             ? null
             : Number(latest.scorePercentage),
-        bestScore: best,
         status,
         lastAttempt: latest?.submittedAt?.toISOString() ?? null,
       };
@@ -123,13 +93,10 @@ export function createAnalyticsService(options: QuizServiceOptions) {
           attempt.status === "graded" && attempt.scorePercentage !== null,
       )
       .map((attempt) => Number(attempt.scorePercentage));
-    const passed = students.filter(
-      (student) => student.status === "passed",
-    ).length;
     return {
       assignedStudents: studentIds.length,
       attempted: students.filter((student) => student.attemptCount > 0).length,
-      passed,
+      passed: students.filter((student) => student.status === "passed").length,
       failed: students.filter((student) => student.status === "failed").length,
       notAttempted: students.filter(
         (student) => student.status === "not_attempted",
@@ -149,15 +116,26 @@ export function createAnalyticsService(options: QuizServiceOptions) {
       database,
       row.course_id,
     );
-    return await buildAssignmentReport(row, activeStudents);
+    const report = await summarizeAssignment(row, activeStudents);
+    // Names are resolved in one bulk query, for this report only.
+    const nameById = new Map(
+      (
+        await options.authService.listUserDisplayNamesByIds(
+          report.students.map((student) => student.studentId),
+        )
+      ).map((user) => [user.id, user.display_name]),
+    );
+    return {
+      ...report,
+      students: report.students.map((student) => ({
+        ...student,
+        studentName: nameById.get(student.studentId) ?? student.studentId,
+      })),
+    };
   }
 
   async function course(actor: QuizActor, courseId: string) {
-    const courseRecord = await courseService.findCourseById(courseId);
-    if (!courseRecord)
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    if (!isAdmin(actor))
-      await courseService.getCourseAndVerifyOwner(courseId, actor.id);
+    assertCanManageCourse(actor, await requireCourse(courseId));
     const assignments = await repo.listAssignmentsForCourse(database, courseId);
     const studentIds = await accessService.listActiveUserIdsForCourse(
       database,
@@ -181,13 +159,11 @@ export function createAnalyticsService(options: QuizServiceOptions) {
       }
     }
 
-    // Serial on purpose: each report is 2 queries, and the course's
-    // active-student list is reused instead of re-fetched per assignment.
-    // The old shape ran every assignment concurrently, each with its own
-    // ownership checks, student-list query and per-student user lookups.
-    const reports: Awaited<ReturnType<typeof buildAssignmentReport>>[] = [];
+    // Serial on purpose: one query per assignment against the shared pool,
+    // with the course's active-student list reused instead of re-fetched.
+    const reports: Awaited<ReturnType<typeof summarizeAssignment>>[] = [];
     for (const item of assignments) {
-      reports.push(await buildAssignmentReport(item, studentIds));
+      reports.push(await summarizeAssignment(item, studentIds));
     }
     const scores = reports.flatMap((report) =>
       report.students
@@ -223,12 +199,23 @@ export function createAnalyticsService(options: QuizServiceOptions) {
   }
 
   async function student(actor: QuizActor, studentId: string) {
-    const quizzes = await listVisibleQuizzes(actor);
-    const assignments = await repo.listAssignmentsForQuizzes(
+    const quizzes = await repo.listQuizTitles(
+      database,
+      isAdmin(actor)
+        ? { academyId: await requireAcademyId(options) }
+        : { creatorId: actor.id },
+    );
+    const quizTitles = new Map(quizzes.map((quiz) => [quiz.id, quiz.title]));
+    const assignments = await repo.listAssignmentRefsForQuizzes(
       database,
       quizzes.map((quiz) => quiz.id),
     );
-    const attempts = await repo.listAttemptsForUser(database, studentId);
+    // Only this student's attempts on the quizzes the caller may report on.
+    const attempts = await repo.listAttemptsForAssignments(
+      database,
+      studentId,
+      assignments.map((assignment) => assignment.id),
+    );
     const items = assignments.map((assignment) => {
       const records = attempts.filter(
         (attempt) => attempt.assignment_id === assignment.id,
@@ -237,7 +224,7 @@ export function createAnalyticsService(options: QuizServiceOptions) {
       const scores = records
         .filter((attempt) => attempt.score_percentage !== null)
         .map((attempt) => Number(attempt.score_percentage));
-      const status: "passed" | "failed" | "in_progress" | "not_attempted" =
+      const status: StudentStatus =
         latest?.status === "in_progress"
           ? "in_progress"
           : latest && ["graded", "submitted", "expired"].includes(latest.status)
@@ -247,10 +234,7 @@ export function createAnalyticsService(options: QuizServiceOptions) {
             : "not_attempted";
       return {
         assignmentId: assignment.id,
-        quizTitle:
-          quizzes.find((quiz) => quiz.id === assignment.quiz_id)?.title ??
-          "Quiz",
-        courseId: assignment.course_id,
+        quizTitle: quizTitles.get(assignment.quiz_id) ?? "Quiz",
         attempts: records.length,
         bestScore: scores.length ? Math.max(...scores) : null,
         latestScore:
@@ -269,13 +253,8 @@ export function createAnalyticsService(options: QuizServiceOptions) {
       item.latestScore === null ? [] : [item.latestScore],
     );
     return {
-      studentId,
       completedQuizzes: completed.length,
       passed: passed.length,
-      pending: items.filter(
-        (item) =>
-          item.status === "in_progress" || item.status === "not_attempted",
-      ).length,
       averageScore: scores.length
         ? scores.reduce((sum, value) => sum + value, 0) / scores.length
         : 0,
