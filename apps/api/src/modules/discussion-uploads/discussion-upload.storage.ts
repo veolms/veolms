@@ -1,7 +1,6 @@
 import { createReadStream } from "node:fs";
-import { mkdir, open, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, stat, unlink } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import type { Readable } from "node:stream";
 import type { S3StorageService } from "@veolms/storage";
@@ -10,27 +9,6 @@ import { config } from "../../config.ts";
 const UPLOAD_DIRECTORY = join(process.cwd(), ".data", "discussion-uploads");
 const OBJECT_PREFIX = "protected/discussion-uploads";
 export const DISCUSSION_UPLOAD_URL_PREFIX = "/v1/discussion-uploads";
-
-export const DISCUSSION_ALLOWED_MIME_TYPES = [
-  "image/gif",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "video/mp4",
-  "video/quicktime",
-  "video/webm",
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "text/plain",
-  "text/markdown",
-  "text/csv",
-  "application/json",
-] as const;
 
 export const DISCUSSION_ALLOWED_EXTENSIONS_BY_MIME: Readonly<
   Record<string, readonly string[]>
@@ -148,20 +126,11 @@ export interface DiscussionUploadFile {
 }
 
 export interface DiscussionUploadStore {
-  putFromStream(input: {
-    mimeType: string;
-    stream: NodeJS.ReadableStream;
-  }): Promise<StoredDiscussionUpload>;
-  putFromBuffer(input: {
-    fileName: string;
-    mimeType: string;
-    data: Buffer;
-  }): Promise<StoredDiscussionUpload>;
   /**
-   * Like putFromStream, but with a caller-chosen file name, and streaming
-   * DIRECTLY to object storage when it is configured (no disk spool, no
-   * in-memory buffering — the buffered path cost up to 50MB of heap per
-   * concurrent upload). On failure the partial object/file is cleaned up.
+   * Stores a file under a caller-chosen name, streaming DIRECTLY to object
+   * storage when it is configured (no disk spool, no in-memory buffering —
+   * the buffered path cost up to 50MB of heap per concurrent upload). On
+   * failure the partial object/file is cleaned up.
    */
   putNamedFromStream(input: {
     fileName: string;
@@ -223,45 +192,6 @@ export function createDiscussionUploadStore(
   }
 
   return {
-    async putFromStream({ mimeType, stream }) {
-      const extension = DISCUSSION_DEFAULT_EXTENSION_FOR_MIME[mimeType];
-      if (!extension) throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");
-
-      const fileName = `${randomUUID()}${extension}`;
-      return writeDiskFile(fileName, mimeType, async (filePath) => {
-        const fileHandle = await open(filePath, "wx");
-        try {
-          await pipeline(stream, fileHandle.createWriteStream());
-        } finally {
-          await fileHandle.close().catch(() => undefined);
-        }
-      });
-    },
-
-    async putFromBuffer({ fileName, mimeType, data }) {
-      if (!isSafeDiscussionUploadFileName(fileName)) {
-        throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");
-      }
-
-      if (!isSupportedDiscussionUploadMimeType(mimeType)) {
-        throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");
-      }
-
-      if (s3) {
-        await s3.putObject(
-          discussionUploadStorageKey(fileName),
-          data,
-          mimeType,
-          data.length,
-        );
-        return { fileName, mimeType, size: data.length };
-      }
-
-      return writeDiskFile(fileName, mimeType, async (filePath) => {
-        await writeFile(filePath, data, { flag: "wx" });
-      });
-    },
-
     async putNamedFromStream({ fileName, mimeType, stream }) {
       if (!isSafeDiscussionUploadFileName(fileName)) {
         throw new Error("UNSUPPORTED_DISCUSSION_UPLOAD_TYPE");

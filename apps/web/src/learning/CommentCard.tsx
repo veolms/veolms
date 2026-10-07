@@ -259,9 +259,9 @@ export const CommentCard = React.memo(function CommentCard({
 
   const backendReplies = useMemo<CommentReply[]>(() => {
     return flattenReplyPages(repliesData, threadId ?? "").map((reply) =>
-      adaptLearningReplyToCommentReply(reply, effectiveUserId),
+      adaptLearningReplyToCommentReply(reply),
     );
-  }, [repliesData, effectiveUserId, threadId]);
+  }, [repliesData, threadId]);
 
   const effectiveReplies = isBackendEntity ? backendReplies : localReplies;
 

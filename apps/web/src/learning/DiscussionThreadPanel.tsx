@@ -927,9 +927,9 @@ function ThreadSlide({
       return entry.thread ?? [];
     }
     return flattenReplyPages(repliesData, replyParentId ?? "").map((reply) =>
-      adaptLearningReplyToCommentReply(reply, currentUserId),
+      adaptLearningReplyToCommentReply(reply),
     );
-  }, [isBackendMode, entry.thread, repliesData, replyParentId, currentUserId]);
+  }, [isBackendMode, entry.thread, repliesData, replyParentId]);
 
   const handleAddReply = async (
     draft: DiscussionDraft,

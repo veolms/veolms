@@ -164,7 +164,7 @@ export function createModerationController({
         discussionActor(user),
         body,
       );
-      reply.status(201).send(result);
+      await reply.status(201).send(result);
     },
 
     async listCourseReports(request, reply) {
@@ -181,7 +181,7 @@ export function createModerationController({
         },
         "course",
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async updateCourseReportStatus(request, reply) {
@@ -197,7 +197,7 @@ export function createModerationController({
         courseId,
         request.ip,
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async listPlatformReports(request, reply) {
@@ -210,7 +210,7 @@ export function createModerationController({
         query,
         "platform",
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async updatePlatformReportStatus(request, reply) {
@@ -226,7 +226,7 @@ export function createModerationController({
         undefined,
         request.ip,
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async moderateCourseThread(request, reply) {
@@ -242,7 +242,7 @@ export function createModerationController({
         courseId,
         request.ip,
       );
-      reply
+      await reply
         .status(200)
         .send({ message: `Thread action '${body.action}' applied.` });
     },
@@ -260,7 +260,7 @@ export function createModerationController({
         undefined,
         request.ip,
       );
-      reply
+      await reply
         .status(200)
         .send({ message: `Thread action '${body.action}' applied.` });
     },
@@ -278,7 +278,7 @@ export function createModerationController({
         courseId,
         request.ip,
       );
-      reply
+      await reply
         .status(200)
         .send({ message: `Reply action '${body.action}' applied.` });
     },
@@ -293,7 +293,7 @@ export function createModerationController({
         courseId,
         request.ip,
       );
-      reply.status(200).send({ message: "The note was made private." });
+      await reply.status(200).send({ message: "The note was made private." });
     },
 
     async moderatePlatformNote(request, reply) {
@@ -305,7 +305,7 @@ export function createModerationController({
         undefined,
         request.ip,
       );
-      reply.status(200).send({ message: "The note was made private." });
+      await reply.status(200).send({ message: "The note was made private." });
     },
 
     async moderatePlatformReply(request, reply) {
@@ -321,7 +321,7 @@ export function createModerationController({
         undefined,
         request.ip,
       );
-      reply
+      await reply
         .status(200)
         .send({ message: `Reply action '${body.action}' applied.` });
     },
@@ -341,7 +341,7 @@ export function createModerationController({
         },
         request.ip,
       );
-      reply.status(201).send(suspension);
+      await reply.status(201).send(suspension);
     },
 
     async suspendPlatformUser(request, reply) {
@@ -359,7 +359,7 @@ export function createModerationController({
         },
         request.ip,
       );
-      reply.status(201).send(suspension);
+      await reply.status(201).send(suspension);
     },
 
     async unsuspendCourseParticipant(request, reply) {
@@ -377,7 +377,7 @@ export function createModerationController({
         },
         request.ip,
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async unsuspendPlatformUser(request, reply) {
@@ -395,7 +395,7 @@ export function createModerationController({
         },
         request.ip,
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async listCourseAuditLogs(request, reply) {
@@ -412,7 +412,7 @@ export function createModerationController({
         },
         "course",
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async listPlatformAuditLogs(request, reply) {
@@ -425,7 +425,7 @@ export function createModerationController({
         query,
         "platform",
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
   };
 }

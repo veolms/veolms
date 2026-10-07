@@ -7,7 +7,6 @@ export interface RecentUpdateCourseRow {
   course_title: string;
   course_thumbnail_url: string | null;
   course_thumbnail_media_id: string | null;
-  recent_lesson_count: number | bigint;
   latest_updated_at: Date;
 }
 
@@ -16,7 +15,6 @@ export interface RecentUpdateLessonRow {
   lesson_id: string;
   lesson_title: string;
   lesson_number: number | bigint;
-  lesson_updated_at: Date;
 }
 
 export interface RecentUpdatesRepository {
@@ -59,7 +57,6 @@ export function createRecentUpdatesRepository({
         "c.title as course_title",
         "c.thumbnail_url as course_thumbnail_url",
         "c.thumbnail_media_id as course_thumbnail_media_id",
-        sql<number>`count(*)::int`.as("recent_lesson_count"),
         sql<Date>`max(l.updated_at)`.as("latest_updated_at"),
       ])
       .where((eb) =>
@@ -154,13 +151,7 @@ export function createRecentUpdatesRepository({
 
     return await database
       .selectFrom(recentRankedLessons)
-      .select([
-        "course_id",
-        "lesson_id",
-        "lesson_title",
-        "lesson_number",
-        "lesson_updated_at",
-      ])
+      .select(["course_id", "lesson_id", "lesson_title", "lesson_number"])
       .where("recent_lesson_rank", "<=", lessonsPerCourse)
       .orderBy("course_id", "asc")
       .orderBy("lesson_updated_at", "desc")

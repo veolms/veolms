@@ -20,8 +20,6 @@ export const publicPopularDiscussionSchema = z.strictObject({
   lessonTitle: z.string().min(1).max(255),
   replyCount: z.number().int().nonnegative(),
   likeCount: z.number().int().nonnegative(),
-  engagementScore: z.number().int().nonnegative(),
-  createdAt: z.string(),
   updatedAt: z.string(),
 });
 

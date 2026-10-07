@@ -19,7 +19,6 @@ export function isCommentOrQaThread(thread: LearningThread): boolean {
 
 export function adaptLearningThreadToComment(
   thread: ThreadEntityLike,
-  currentUserId?: string,
 ): Comment {
   const contentDraft = createDiscussionDraft(thread.content);
   if (thread.plainText) {
@@ -59,8 +58,7 @@ export function adaptLearningThreadToComment(
     role: thread.author.role,
     attachment,
     attachments: thread.attachments || [],
-    isOwn:
-      thread.isOwn ?? (currentUserId ? thread.userId === currentUserId : false),
+    isOwn: Boolean(thread.isOwn),
     createdAt: thread.createdAt,
     timestampSeconds: thread.timestampSeconds ?? null,
     acceptedAnswerId: thread.acceptedAnswerId ?? null,

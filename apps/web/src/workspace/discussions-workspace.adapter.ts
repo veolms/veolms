@@ -28,10 +28,8 @@ export interface DiscussionWorkspaceCard {
   isLocked?: boolean;
   replies: number;
   likes: number;
-  isLiked?: boolean;
   isBookmarked?: boolean;
   isFollowing?: boolean;
-  isMentioned?: boolean;
   activity: string;
   mentionedAt?: string;
   mentionActivity?: string;
@@ -124,7 +122,7 @@ export function adaptDiscussionWorkspaceItem(
     parentThreadId: item.parentThreadId ?? null,
     parentThreadTitle: item.parentThreadTitle?.trim() || null,
     timestampSeconds: item.timestampSeconds ?? null,
-    author: item.author.displayName || item.author.username,
+    author: item.author.displayName || item.author.username || "",
     authorUsername: item.author.username?.trim() || "",
     avatar: item.author.avatarUrl ?? "",
     isOwn: item.isOwn === true,
@@ -133,10 +131,8 @@ export function adaptDiscussionWorkspaceItem(
     isLocked: item.isLocked,
     replies: item.repliesCount,
     likes: item.likesCount,
-    isLiked: item.isLiked,
     isBookmarked: item.isBookmarked,
     isFollowing: item.isFollowing,
-    isMentioned: item.isMentioned,
     activity: formatRelativeTime(
       isFollowing ? item.updatedAt : item.updatedAt || item.createdAt,
     ),

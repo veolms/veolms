@@ -1,10 +1,11 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
   EngagementTargetType,
+  LockThreadResponse,
   ToggleBookmarkResponse,
   ToggleFollowResponse,
   ToggleLikeResponse,
-  UserMention,
+  UserAutocompleteItem,
 } from "@veolms/contracts";
 import { httpError } from "../../../../lib/errors.ts";
 import { withWriteTransaction } from "../shared/discussion.mentions.ts";
@@ -51,18 +52,17 @@ export interface EngagementsService {
     threadId: string,
     isLocked: boolean,
     actor: DiscussionActor,
-  ): Promise<{ threadId: string; isLocked: boolean }>;
+  ): Promise<LockThreadResponse>;
 
   searchMentions(
     db: DatabaseExecutor,
     actor: DiscussionActor,
     input: {
       query?: string;
-      q?: string;
       courseId: string;
       limit?: number;
     },
-  ): Promise<UserMention[]>;
+  ): Promise<UserAutocompleteItem[]>;
 }
 
 export function createEngagementsService({
@@ -131,7 +131,7 @@ export function createEngagementsService({
             thread.kind,
           );
         } else if (targetType === "note") {
-          const note = await notesRepo.findNoteById(trx, targetId);
+          const note = await notesRepo.findNoteAccessTarget(trx, targetId);
           if (!note) {
             throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
           }
@@ -190,33 +190,7 @@ export function createEngagementsService({
           }
         }
 
-        if (targetType === "thread") {
-          const thread = await threadsRepo.findThreadById(trx, targetId);
-          return {
-            targetType,
-            targetId,
-            liked: !alreadyLiked,
-            likesCount: Number(thread?.likesCount || 0),
-          };
-        }
-
-        if (targetType === "reply") {
-          const reply = await repliesRepo.findReplyById(trx, targetId);
-          return {
-            targetType,
-            targetId,
-            liked: !alreadyLiked,
-            likesCount: Number(reply?.likesCount || 0),
-          };
-        }
-
-        const note = await notesRepo.findNoteById(trx, targetId);
-        return {
-          targetType,
-          targetId,
-          liked: !alreadyLiked,
-          likesCount: Number(note?.likesCount || 0),
-        };
+        return { liked: !alreadyLiked };
       });
     },
 
@@ -247,15 +221,15 @@ export function createEngagementsService({
 
       if (alreadyBookmarked) {
         await engagementsRepo.removeBookmark(db, actor.userId, threadId);
-        return { threadId, bookmarked: false };
+        return { bookmarked: false };
       } else {
         await engagementsRepo.addBookmark(db, actor.userId, threadId);
-        return { threadId, bookmarked: true };
+        return { bookmarked: true };
       }
     },
 
     async toggleNoteBookmark(db, actor, noteId) {
-      const note = await notesRepo.findNoteById(db, noteId);
+      const note = await notesRepo.findNoteAccessTarget(db, noteId);
       if (!note) {
         throw httpError(404, "NOTE_NOT_FOUND", "Learning note not found");
       }
@@ -276,10 +250,10 @@ export function createEngagementsService({
 
       if (alreadyBookmarked) {
         await engagementsRepo.removeNoteBookmark(db, actor.userId, noteId);
-        return { noteId, bookmarked: false };
+        return { bookmarked: false };
       } else {
         await engagementsRepo.addNoteBookmark(db, actor.userId, noteId);
-        return { noteId, bookmarked: true };
+        return { bookmarked: true };
       }
     },
 
@@ -335,11 +309,11 @@ export function createEngagementsService({
 
         if (alreadyFollowed) {
           await engagementsRepo.removeFollow(trx, actor.userId, threadId);
-          return { threadId, following: false };
+          return { following: false };
         }
 
         await engagementsRepo.addFollow(trx, actor.userId, threadId);
-        return { threadId, following: true };
+        return { following: true };
       });
     },
 
@@ -380,7 +354,7 @@ export function createEngagementsService({
         // not one a moderator placed, which they used to be able to undo.
         const lockOwner = await threadsRepo.findLockOwner(db, threadId);
         if (lockOwner && lockOwner !== actor.userId) {
-          if (isLocked) return { threadId, isLocked: true };
+          if (isLocked) return { isLocked: true };
           throw httpError(
             403,
             "LOCKED_BY_MODERATOR",
@@ -390,11 +364,11 @@ export function createEngagementsService({
       }
 
       await threadsRepo.setLocked(db, threadId, isLocked, actor.userId);
-      return { threadId, isLocked };
+      return { isLocked };
     },
 
     async searchMentions(db, actor, input) {
-      const rawQuery = (input.query ?? input.q ?? "").trim();
+      const rawQuery = (input.query ?? "").trim();
       const needle = rawQuery.replace(/[%_\\]/g, "").toLowerCase();
       // Two characters minimum: a one-letter query pages through the whole
       // participant list a screenful at a time.
@@ -415,7 +389,13 @@ export function createEngagementsService({
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
 
-      await courseAccess.assertCanAccessCourse(db, actor, input.courseId);
+      // Only someone who may post in the course may look its people up: the
+      // list exists to mention them, and mentioning requires posting.
+      await courseAccess.assertCanParticipateInCourse(
+        db,
+        actor,
+        input.courseId,
+      );
 
       return engagementsRepo.searchUsersForMention(db, {
         query: needle,

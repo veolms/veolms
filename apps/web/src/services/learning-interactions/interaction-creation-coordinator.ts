@@ -144,7 +144,6 @@ function freezeThreadPayload(
     ...(payload.attachmentIds
       ? { attachmentIds: Object.freeze([...payload.attachmentIds]) }
       : {}),
-    ...(payload.tags ? { tags: Object.freeze([...payload.tags]) } : {}),
   };
   return Object.freeze(frozen) as unknown as CreateLearningThreadRequest;
 }
@@ -348,7 +347,6 @@ export class InteractionCreationCoordinator {
     const currentUser = authStore.getState().user;
     const immutablePayload = freezeThreadPayload(payload);
     const optimisticThread = createOptimisticLearningThread(immutablePayload, {
-      userId: currentUser?.id,
       displayName: currentUser?.displayName,
       username: currentUser?.username,
       avatarUrl: currentUser?.avatarDataUrl,
@@ -621,7 +619,6 @@ export class InteractionCreationCoordinator {
       parentServerId: resolvedParentServerId,
       localSequence,
       attachments,
-      userId: currentUser?.id,
       displayName: currentUser?.displayName,
       username: currentUser?.username,
       avatarUrl: currentUser?.avatarDataUrl,
@@ -677,7 +674,6 @@ export class InteractionCreationCoordinator {
       parentServerId,
       localSequence: ++this.replySequence,
       attachments,
-      userId: currentUser?.id,
       displayName: currentUser?.displayName,
       username: currentUser?.username,
       avatarUrl: currentUser?.avatarDataUrl,

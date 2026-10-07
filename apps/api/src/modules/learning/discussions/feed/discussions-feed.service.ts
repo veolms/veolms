@@ -31,7 +31,6 @@ import { createThreadsRepository } from "../threads/threads.repository.ts";
 import { createAttachmentsRepository } from "../attachments/attachments.repository.ts";
 import {
   createNotesService,
-  type NotesListQuery,
   type NotesService,
 } from "../notes/notes.service.ts";
 import { createNotesRepository } from "../notes/notes.repository.ts";
@@ -407,29 +406,25 @@ export function createLearningDiscussionsFeedService(options?: {
         limit: Math.max(1, threadIds.length),
         ids: threadIds,
       };
-      const noteQuery: NotesListQuery = {
-        courseId,
-        lessonId,
-        ...(context.mine ? { mine: true } : {}),
-        limit: Math.max(1, noteIds.length),
-        ids: noteIds,
-      };
 
-      const [threadResponse, noteResponse] = await Promise.all([
+      const [threadResponse, feedNotes] = await Promise.all([
         threadIds.length > 0
           ? threads.listThreads(db, threadQuery)
           : Promise.resolve({ threads: [], nextCursor: null }),
         noteIds.length > 0
-          ? notes.listNotes(db, actor!, noteQuery)
-          : Promise.resolve({ notes: [], nextCursor: null }),
+          ? notes.listNotesByIds(db, actor!, {
+              courseId,
+              lessonId,
+              ids: noteIds,
+              mine: context.mine,
+            })
+          : Promise.resolve([]),
       ]);
 
       const threadsById = new Map(
         threadResponse.threads.map((thread) => [thread.id, thread]),
       );
-      const notesById = new Map(
-        noteResponse.notes.map((note) => [note.id, note]),
-      );
+      const notesById = new Map(feedNotes.map((note) => [note.id, note]));
       const items: LessonDiscussionItem[] = [];
 
       for (const row of page) {
@@ -448,7 +443,6 @@ export function createLearningDiscussionsFeedService(options?: {
             sourceType: "thread",
             identity: `thread:${thread.id}`,
             entityId: thread.id,
-            kind,
             thread,
           });
         } else {
@@ -458,7 +452,6 @@ export function createLearningDiscussionsFeedService(options?: {
             sourceType: "note",
             identity: `note:${note.id}`,
             entityId: note.id,
-            kind: "note",
             note,
           });
         }

@@ -1042,11 +1042,11 @@ function DiscussionInner({
     if (!directThreadData || !isCommentOrQaThread(directThreadData))
       return null;
     return withSourceAwareIdentity(
-      adaptLearningThreadToComment(directThreadData, currentUser?.id),
+      adaptLearningThreadToComment(directThreadData),
       "thread",
       directThreadData.id,
     );
-  }, [currentUser?.id, directThreadData]);
+  }, [directThreadData]);
 
   const backendThreads = useMemo<Comment[]>(() => {
     if (
@@ -1073,7 +1073,7 @@ function DiscussionInner({
         );
       })
       .map((thread) => {
-        const adapted = adaptLearningThreadToComment(thread, currentUser?.id);
+        const adapted = adaptLearningThreadToComment(thread);
         const serverId = getServerEntityId(thread);
         return serverId
           ? withSourceAwareIdentity(adapted, "thread", serverId)
@@ -2266,14 +2266,6 @@ function DiscussionInner({
         }
         try {
           await learningInteractionsService.toggleNoteBookmark(threadIdStr);
-          if (queryClient) {
-            void queryClient.invalidateQueries({
-              queryKey: ["learning-notes"],
-            });
-            void queryClient.invalidateQueries({
-              queryKey: ["learning-course-notes-overview"],
-            });
-          }
           return bookmarked;
         } catch (err: any) {
           if (queryClient) {

@@ -28,7 +28,6 @@ const lessonDiscussionThreadItemSchema = z.object({
   sourceType: z.literal("thread"),
   identity: z.string().regex(/^thread:[0-9a-f-]{36}$/iu),
   entityId: z.uuid(),
-  kind: z.enum(["comment", "question"]),
   thread: learningThreadSchema,
 });
 
@@ -36,7 +35,6 @@ const lessonDiscussionNoteItemSchema = z.object({
   sourceType: z.literal("note"),
   identity: z.string().regex(/^note:[0-9a-f-]{36}$/iu),
   entityId: z.uuid(),
-  kind: z.literal("note"),
   note: learningNoteSchema,
 });
 

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   auditLogsListResponseSchema,
+  courseAuditLogsListResponseSchema,
+  courseReportsListResponseSchema,
   createReportRequestSchema,
   listAuditLogsQuerySchema,
   listReportsQuerySchema,
@@ -83,7 +85,7 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Course moderation reports",
-            reportsListResponseSchema,
+            courseReportsListResponseSchema,
           ),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Course owner or admin required"),
@@ -272,7 +274,10 @@ const moderationRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ courseId: z.uuid() }),
         querystring: listAuditLogsQuerySchema,
         response: {
-          200: jsonResponse("Course audit logs", auditLogsListResponseSchema),
+          200: jsonResponse(
+            "Course audit logs",
+            courseAuditLogsListResponseSchema,
+          ),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
         },
