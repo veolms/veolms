@@ -198,6 +198,30 @@ const serverConfigSchema = z.object({
     .default(30),
 
   // SMS Delivery
+  /**
+   * Country calling codes one-time codes may be sent to, comma separated
+   * (for example "+91" or "+91,+1"). Unset allows every country. SMS is paid
+   * per message and some destinations are premium-rate, so set this to the
+   * countries the academy actually serves.
+   */
+  SMS_ALLOWED_COUNTRY_CODES: z
+    .string()
+    .optional()
+    .transform((value, context) => {
+      const codes = (value ?? "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (codes.some((code) => !/^\+[1-9]\d{0,3}$/u.test(code))) {
+        context.addIssue({
+          code: "custom",
+          message:
+            'Expected a comma-separated list of country calling codes such as "+91,+1".',
+        });
+        return z.NEVER;
+      }
+      return codes;
+    }),
   SMS_PROVIDER: z
     .enum(["auto", "msg91", "vonage", "twilio", "console"])
     .default("auto"),

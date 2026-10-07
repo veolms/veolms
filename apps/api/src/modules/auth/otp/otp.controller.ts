@@ -16,7 +16,7 @@ export function createOtpController(context: AuthContext) {
     request: FastifyRequest<{ Body: OtpSendRequest }>,
   ): Promise<{ message: string }> {
     const { identifier, identifierType } = resolveIdentifier(request.body);
-    await otpService.sendOtp(identifier, identifierType);
+    await otpService.sendOtp(identifier, identifierType, { ip: request.ip });
     return { message: "Verification OTP sent successfully." };
   }
 
@@ -26,6 +26,7 @@ export function createOtpController(context: AuthContext) {
     await authService.sendPhoneVerificationOtp(
       request.user!.id,
       request.body.phoneNo,
+      request.ip,
     );
     return { message: "Mobile verification OTP sent successfully." };
   }
@@ -33,7 +34,7 @@ export function createOtpController(context: AuthContext) {
   async function sendEmailVerification(
     request: FastifyRequest,
   ): Promise<{ message: string }> {
-    await authService.sendEmailVerificationOtp(request.user!.id);
+    await authService.sendEmailVerificationOtp(request.user!.id, request.ip);
     return { message: "Email verification OTP sent successfully." };
   }
 

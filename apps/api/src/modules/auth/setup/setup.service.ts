@@ -123,6 +123,7 @@ export function createSetupService({
       displayName: input.name,
       emailVerified: true,
       phoneVerified: false,
+      allowBootstrapAdmin: true,
     };
     const userId = await authService.createUser(createInput);
     const user = await authService.requireUser(userId);

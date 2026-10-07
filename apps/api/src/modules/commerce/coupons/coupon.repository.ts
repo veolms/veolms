@@ -189,6 +189,7 @@ export async function insertCoupon(
     is_active?: boolean;
     restricted_course_ids?: string[] | null;
     restricted_bundle_ids?: string[] | null;
+    created_by?: string | null;
     created_at?: Date;
     updated_at?: Date;
   },
@@ -243,6 +244,8 @@ export async function getCouponRedemptionStats(
 
 export interface ListCouponsRepositoryOptions {
   courseId?: string;
+  /** Only coupons this user created (non-admin callers). */
+  createdBy?: string;
   cursor?: {
     createdAt: Date;
     id: string;
@@ -255,6 +258,10 @@ export async function listCoupons(
   options?: ListCouponsRepositoryOptions,
 ) {
   let query = database.selectFrom("coupons").selectAll();
+
+  if (options?.createdBy) {
+    query = query.where("created_by", "=", options.createdBy);
+  }
 
   if (options?.courseId) {
     const courseId = options.courseId;
@@ -325,9 +332,12 @@ export async function deleteCoupon(database: Executor, couponId: string) {
 
 export async function getCouponOverallSummary(
   database: Executor,
-  options?: { courseId?: string },
+  options?: { courseId?: string; createdBy?: string },
 ) {
   let query = database.selectFrom("coupons");
+  if (options?.createdBy) {
+    query = query.where("created_by", "=", options.createdBy);
+  }
   if (options?.courseId) {
     const courseId = options.courseId;
     query = query.where(

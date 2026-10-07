@@ -22,7 +22,7 @@ import * as oauthRepository from "../oauth/oauth.repository.ts";
 import * as userRepository from "./authentication.repository.ts";
 import type { OtpService } from "../otp/otp.service.ts";
 import type { SessionService } from "../session/session.service.ts";
-import { normalizePhoneNumber } from "../shared/auth.utils.ts";
+import { normalizePhoneIdentifier } from "../shared/auth.utils.ts";
 import {
   AVATAR_CONTENT_TYPES,
   AVATAR_UPLOAD_MAX_BYTES,
@@ -447,8 +447,11 @@ export function createAuthService({
   async function sendPhoneVerificationOtp(
     userId: string,
     phoneNo: string,
+    requesterIp?: string | null,
   ): Promise<void> {
-    const normalizedPhoneNo = normalizePhoneNumber(phoneNo);
+    // Same canonical form login and registration use, so a number verified
+    // from the profile can be used to sign in afterwards.
+    const normalizedPhoneNo = normalizePhoneIdentifier(phoneNo);
     if (normalizedPhoneNo.length < 8) {
       throw new AppError(
         400,
@@ -483,10 +486,16 @@ export function createAuthService({
       );
     }
 
-    await otpService.sendPhoneVerificationOtp(normalizedPhoneNo);
+    await otpService.sendPhoneVerificationOtp(normalizedPhoneNo, {
+      userId,
+      ip: requesterIp,
+    });
   }
 
-  async function sendEmailVerificationOtp(userId: string): Promise<void> {
+  async function sendEmailVerificationOtp(
+    userId: string,
+    requesterIp?: string | null,
+  ): Promise<void> {
     const currentUser = await userRepository.findUserById(database, userId);
     if (!currentUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
@@ -507,7 +516,10 @@ export function createAuthService({
       );
     }
 
-    await otpService.sendEmailVerificationOtp(currentUser.email);
+    await otpService.sendEmailVerificationOtp(currentUser.email, {
+      userId,
+      ip: requesterIp,
+    });
   }
 
   async function verifyEmail(userId: string, code: string): Promise<void> {
@@ -552,7 +564,7 @@ export function createAuthService({
     phoneNo: string,
     code: string,
   ) {
-    const normalizedPhoneNo = normalizePhoneNumber(phoneNo);
+    const normalizedPhoneNo = normalizePhoneIdentifier(phoneNo);
     if (normalizedPhoneNo.length < 8) {
       throw new AppError(
         400,
@@ -834,7 +846,10 @@ export function createAuthService({
   }
 
   /**
-   * Creates an account, granting the administrator role to the very first user.
+   * Creates an account. The very first account is the administrator, and
+   * only the setup-token flow (`allowBootstrapAdmin`) may create it: without
+   * that gate, whoever registered first on a fresh or restored-empty
+   * database — by OTP or OAuth, no setup token needed — owned the platform.
    *
    * The whole thing runs in one transaction behind a transaction-scoped
    * advisory lock. Counting users outside the transaction (or even inside it
@@ -886,6 +901,13 @@ export function createAuthService({
         );
 
         const isFirstUser = (await userRepository.countUsers(trx)) === 0;
+        if (isFirstUser && !input.allowBootstrapAdmin) {
+          throw new AppError(
+            403,
+            "SETUP_REQUIRED",
+            "This platform has not been set up yet. An administrator must complete setup before accounts can be created.",
+          );
+        }
 
         await userRepository.insertUser(trx, {
           id: userId,

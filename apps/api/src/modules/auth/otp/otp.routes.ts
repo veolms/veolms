@@ -73,7 +73,7 @@ const otpRoutes: RoutePlugin = async (app, options) => {
           503: errorResponse("Verification code could not be delivered."),
         },
       },
-      preHandler: context.authenticated,
+      preHandler: context.mfaVerified,
     },
     controller.sendPhoneVerification,
   );
@@ -101,7 +101,7 @@ const otpRoutes: RoutePlugin = async (app, options) => {
           409: errorResponse("Phone number is already in use."),
         },
       },
-      preHandler: context.authenticated,
+      preHandler: context.mfaVerified,
     },
     controller.verifyPhoneNumber,
   );
@@ -127,7 +127,7 @@ const otpRoutes: RoutePlugin = async (app, options) => {
           503: errorResponse("Verification code could not be delivered."),
         },
       },
-      preHandler: context.authenticated,
+      preHandler: context.mfaVerified,
     },
     controller.sendEmailVerification,
   );
@@ -153,7 +153,7 @@ const otpRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("User account was not found."),
         },
       },
-      preHandler: context.authenticated,
+      preHandler: context.mfaVerified,
     },
     controller.verifyEmail,
   );

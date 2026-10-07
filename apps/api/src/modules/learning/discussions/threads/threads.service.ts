@@ -880,8 +880,6 @@ export function createThreadsService(
       );
       const isAuthorRestrictedTab =
         tab === "q-and-a" || tab === "comments" || tab === "notes";
-      const effectiveMine =
-        isAuthorRestrictedTab && !isStaff ? true : query.mine;
 
       // Validate courseId if supplied
       if (query.courseId) {
@@ -902,17 +900,32 @@ export function createThreadsService(
         }
       }
 
-      // Notes use the canonical course-access policy for every role. The
-      // broader staff shortcut remains unchanged for the existing thread and
-      // report tabs below.
+      // The staff view (everyone's threads, moderation reports) covers only
+      // the courses the actor may moderate: all of them for an admin, the
+      // courses they created for anyone else. It used to be every course for
+      // any staff role, which exposed other instructors' threads and
+      // moderation reports — reporter identity included. Asking for a course
+      // outside that set drops the actor back to the ordinary learner view.
+      const moderatableCourseIds = isStaff
+        ? await courseAccess.listModeratableCourseIds(db, actor)
+        : [];
+      const hasStaffView =
+        isStaff &&
+        (moderatableCourseIds === "all" ||
+          !query.courseId ||
+          moderatableCourseIds.includes(query.courseId));
+      const effectiveMine =
+        isAuthorRestrictedTab && !hasStaffView ? true : query.mine;
+
+      // Notes use the canonical course-access policy for every role.
       const accessibleCourseIds =
         tab === "saved" ||
         tab === "following" ||
         tab === "notes" ||
         tab === "mentions" ||
-        !isStaff
+        !hasStaffView
           ? await courseAccess.listAccessibleCourseIds(db, actor)
-          : "all";
+          : moderatableCourseIds;
 
       if (
         accessibleCourseIds !== "all" &&
@@ -1243,7 +1256,7 @@ export function createThreadsService(
 
       // Tab: Reports (Staff / Admin only)
       if (tab === "reports") {
-        if (!isStaff) {
+        if (!hasStaffView) {
           throw httpError(
             403,
             "FORBIDDEN",
@@ -1277,6 +1290,20 @@ export function createThreadsService(
         let reportsCountQuery = db
           .selectFrom("learning_reports as rep")
           .select(sql<number>`count(*)::int`.as("count"));
+
+        if (accessibleCourseIds !== "all") {
+          const moderatableCourseIds = [...accessibleCourseIds];
+          reportsQuery = reportsQuery.where(
+            "rep.course_id",
+            "in",
+            moderatableCourseIds,
+          );
+          reportsCountQuery = reportsCountQuery.where(
+            "rep.course_id",
+            "in",
+            moderatableCourseIds,
+          );
+        }
 
         if (query.courseId) {
           reportsQuery = reportsQuery.where(

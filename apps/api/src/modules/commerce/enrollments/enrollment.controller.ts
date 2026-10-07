@@ -19,7 +19,10 @@ export function createEnrollmentController({
   async function listAcademyEnrollments(
     request: FastifyRequest<{ Querystring: AcademyEnrollmentListQuery }>,
   ) {
-    const items = await service.listAcademyEnrollments(request.query.limit);
+    const items = await service.listAcademyEnrollments(request.query.limit, {
+      id: request.user!.id,
+      roles: request.user!.roles,
+    });
     return { items };
   }
 

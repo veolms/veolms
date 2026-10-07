@@ -75,6 +75,8 @@ export interface CouponTable {
   is_active: Generated<boolean>;
   restricted_course_ids: string[] | null;
   restricted_bundle_ids: string[] | null;
+  /** Null for coupons that predate ownership; those are admin-managed. */
+  created_by: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

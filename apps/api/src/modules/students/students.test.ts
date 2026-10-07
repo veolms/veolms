@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { createStudentsService } from "./students.service.ts";
 import { AppError } from "../../lib/errors.ts";
 
+const adminActor = { id: "admin-1", roles: ["admin"] };
+
 describe("Students Service", () => {
   it("computes cursor pagination and metrics correctly when students exist", async () => {
     const mockUsers = [
@@ -61,6 +63,9 @@ describe("Students Service", () => {
           const builder: any = {
             select: () => builder,
             where: () => builder,
+            groupBy: () => builder,
+            // One row serving both shapes the service reads: the per-lesson
+            // rows (detail) and the per-course summary (list).
             execute: async () => [
               {
                 user_id: "user-1",
@@ -68,6 +73,10 @@ describe("Students Service", () => {
                 lesson_id: "les-1",
                 progress_percent: 100,
                 updated_at: new Date("2026-03-02T10:00:00Z"),
+                progress_rows: 1,
+                completed_lessons: 1,
+                avg_progress: 100,
+                last_activity_at: new Date("2026-03-02T10:00:00Z"),
               },
             ],
           };
@@ -96,7 +105,7 @@ describe("Students Service", () => {
     };
 
     const service = createStudentsService({ database: mockDatabase });
-    const response = await service.listStudents({ limit: 30 });
+    const response = await service.listStudents({ limit: 30 }, adminActor);
 
     assert.equal(response.students.length, 1);
     assert.equal(response.students[0]!.username, "learner_one");
@@ -123,7 +132,7 @@ describe("Students Service", () => {
 
     await assert.rejects(
       async () => {
-        await service.getStudentByUsername("non_existent_user");
+        await service.getStudentByUsername("non_existent_user", adminActor);
       },
       (err: any) => {
         assert.ok(err instanceof AppError);

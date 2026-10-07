@@ -270,10 +270,9 @@ export function createAssignmentService(options: QuizServiceOptions) {
     const course = await courseService.findCourseById(courseId);
     if (!course)
       throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    const canManageCourse =
-      isAdmin(actor) ||
-      course.creator_id === actor.id ||
-      actor.roles.some((role) => role.toLowerCase() === "instructor");
+    // Managing a course's assignments is admin or course-creator only; the
+    // instructor role alone used to list other instructors' draft courses.
+    const canManageCourse = isAdmin(actor) || course.creator_id === actor.id;
     if (
       !canManageCourse &&
       !(await repo.isPublishedFreeCourse(database, courseId)) &&

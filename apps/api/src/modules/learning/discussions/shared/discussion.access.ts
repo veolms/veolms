@@ -112,6 +112,15 @@ export interface DiscussionAccess {
     db: DatabaseExecutor,
     courseId: string,
   ): Promise<readonly string[] | "all">;
+  /**
+   * Courses whose discussions the actor may see as staff (everyone's
+   * threads, moderation reports): every course for an admin, otherwise only
+   * the courses the actor created.
+   */
+  listModeratableCourseIds(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+  ): Promise<readonly string[] | "all">;
   canModerateCourse(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -431,6 +440,17 @@ export function createDiscussionAccess(): DiscussionAccess {
       for (const row of threadAuthors) ids.add(row.user_id);
 
       return [...ids];
+    },
+
+    async listModeratableCourseIds(db, actor) {
+      if (isAdmin(actor)) return "all";
+      const rows = await db
+        .selectFrom("courses")
+        .select("id")
+        .where("creator_id", "=", actor.userId)
+        .where("deleted_at", "is", null)
+        .execute();
+      return rows.map((row) => row.id);
     },
 
     async canModerateCourse(db, actor, courseId) {

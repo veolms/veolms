@@ -7,9 +7,9 @@ import type {
   PaymentProvider,
 } from "@veolms/contracts";
 import type { ServerConfig } from "@veolms/config";
+import { RazorpayPaymentGateway } from "@veolms/services";
 import * as creatorGatewayRepo from "./creator-gateway.repository.ts";
 import { encryptSecret, decryptSecret } from "./crypto.helper.ts";
-import { RazorpayPaymentGateway } from "./razorpay/razorpay.gateway.ts";
 
 export interface CreatorGatewayService {
   saveCreatorConfig(

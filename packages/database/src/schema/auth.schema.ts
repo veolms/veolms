@@ -113,6 +113,10 @@ export interface OtpCodeTable {
   attempts: Generated<number>;
   expires_at: Date;
   consumed_at: Date | null;
+  /** Address the send was requested from; null on rows that predate it. */
+  requester_ip: string | null;
+  /** Signed-in user who requested the send (profile verification only). */
+  requester_user_id: string | null;
   created_at: Generated<Date>;
 }
 

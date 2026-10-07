@@ -8,7 +8,10 @@ import type {
 } from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import * as includesRepo from "./includes.repository.ts";
-import { getCourseAndVerifyOwner as verifyCourseOwner } from "../shared/courses.utils.ts";
+import {
+  getCourseAndVerifyOwner as verifyCourseOwner,
+  getCourseForViewer,
+} from "../shared/courses.utils.ts";
 
 export interface IncludesServiceOptions {
   database: Kysely<Database>;
@@ -86,7 +89,11 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
 
   async function listCourseIncludes(
     courseId: string,
+    viewer?: { id: string; roles?: readonly string[] } | null,
   ): Promise<CourseIncludeItem[]> {
+    // This list is public for published courses, but the route had no check
+    // at all, so the includes of any draft could be read by course id.
+    await getCourseForViewer(database, courseId, viewer);
     const rows = await includesRepo.findIncludesByCourseId(database, courseId);
     return rows.map(formatInclude);
   }
