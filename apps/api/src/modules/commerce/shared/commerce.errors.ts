@@ -7,12 +7,6 @@ export const CommerceErrors = {
       "COURSE_NOT_FOUND",
       `Course with id "${courseId}" was not found.`,
     ),
-  COURSE_NOT_AVAILABLE: (title: string) =>
-    new AppError(
-      400,
-      "COURSE_NOT_AVAILABLE",
-      `Course "${title}" is not available for purchase.`,
-    ),
   COURSE_ALREADY_OWNED: (title: string) =>
     new AppError(
       409,
@@ -24,12 +18,6 @@ export const CommerceErrors = {
       404,
       "BUNDLE_NOT_FOUND",
       `Course bundle with id "${bundleId}" was not found.`,
-    ),
-  BUNDLE_NOT_AVAILABLE: (title: string) =>
-    new AppError(
-      400,
-      "BUNDLE_NOT_AVAILABLE",
-      `Course bundle "${title}" is not available for purchase.`,
     ),
   BUNDLE_ALL_COURSES_OWNED: (title: string) =>
     new AppError(
@@ -50,12 +38,6 @@ export const CommerceErrors = {
       403,
       "QUIZ_COURSE_ACCESS_REQUIRED",
       `Get access to the course before buying "${title}".`,
-    ),
-  QUIZ_NOT_AVAILABLE: (title: string) =>
-    new AppError(
-      400,
-      "QUIZ_NOT_AVAILABLE",
-      `Quiz "${title}" is not available for purchase.`,
     ),
   QUIZ_ALREADY_OWNED: (title: string) =>
     new AppError(
@@ -169,11 +151,11 @@ export const CommerceErrors = {
       "PAYMENT_ALREADY_PROCESSED",
       "This payment has already been processed.",
     ),
-  PAYMENT_NOT_CAPTURED: (status: string) =>
+  PAYMENT_NOT_CAPTURED: () =>
     new AppError(
       400,
       "PAYMENT_NOT_CAPTURED",
-      `Payment cannot be finalized because gateway status is "${status}" (expected "captured").`,
+      "Payment cannot be finalized because it has not been captured yet.",
     ),
   REFUND_NOT_ALLOWED: (reason: string) =>
     new AppError(
@@ -202,3 +184,35 @@ export const CommerceErrors = {
       "Idempotency key has already been used by another account.",
     ),
 };
+
+/**
+ * What a caller is told when the payment gateway refuses a request.
+ *
+ * The gateway adapter raises `PAYMENT_GATEWAY_ERROR` with the provider's own
+ * HTTP status and error text (a rejected merchant key arrives as a 401 with
+ * the provider's wording), and a sub-500 `AppError` reaches the client
+ * verbatim. This swaps a 4xx one for a fixed 502; the original rides along as
+ * `cause`, so the error handler's log of the 5xx still shows what the provider
+ * said. Anything else — including gateway 5xx/timeouts, which the error
+ * handler already masks — is returned unchanged.
+ *
+ * Call it where the error leaves the service, after any logic that needs the
+ * provider's status (see `isDefinitiveGatewayRejection` in refund.service.ts).
+ */
+export function toClientGatewayError(err: unknown): unknown {
+  if (
+    !(err instanceof AppError) ||
+    err.code !== "PAYMENT_GATEWAY_ERROR" ||
+    err.statusCode >= 500
+  ) {
+    return err;
+  }
+
+  const clientError = new AppError(
+    502,
+    "PAYMENT_GATEWAY_ERROR",
+    "The payment provider could not process this request.",
+  );
+  clientError.cause = err;
+  return clientError;
+}

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { DatabaseExecutor as Executor } from "@veolms/database";
 import type {
+  LearnerRefundRequest,
   RefundRequest,
   RefundRequestStatus,
   CreateStudentRefundRequest,
@@ -11,6 +12,10 @@ import { AppError } from "../../../lib/errors.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as refundRequestRepo from "./refund-request.repository.ts";
+import {
+  toLearnerRefundRequest,
+  toRefundRequestContract,
+} from "./refund.mapper.ts";
 import type { RefundService } from "./refund.service.ts";
 
 export interface RefundRequestService {
@@ -18,8 +23,8 @@ export interface RefundRequestService {
     userId: string,
     orderId: string,
     request: CreateStudentRefundRequest,
-  ): Promise<RefundRequest>;
-  listStudentRefundRequests(userId: string): Promise<RefundRequest[]>;
+  ): Promise<LearnerRefundRequest>;
+  listStudentRefundRequests(userId: string): Promise<LearnerRefundRequest[]>;
   listAllRefundRequests(status?: RefundRequestStatus): Promise<RefundRequest[]>;
   reviewRefundRequest(
     adminUserId: string,
@@ -39,7 +44,7 @@ export function createRefundRequestService({
     userId: string,
     orderId: string,
     request: CreateStudentRefundRequest,
-  ): Promise<RefundRequest> {
+  ): Promise<LearnerRefundRequest> {
     const order = await orderRepo.findOrderById(database, orderId);
     if (!order || order.user_id !== userId) {
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
@@ -76,37 +81,17 @@ export function createRefundRequestService({
       updated_at: now,
     });
 
-    return {
-      id: row.id,
-      orderId: row.order_id,
-      userId: row.user_id,
-      reason: row.reason,
-      status: row.status as RefundRequest["status"],
-      adminNotes: row.admin_notes,
-      resolvedAt: row.resolved_at,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    return toLearnerRefundRequest(row);
   }
 
   async function listStudentRefundRequests(
     userId: string,
-  ): Promise<RefundRequest[]> {
+  ): Promise<LearnerRefundRequest[]> {
     const rows = await refundRequestRepo.listRefundRequestsByUser(
       database,
       userId,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      orderId: r.order_id,
-      userId: r.user_id,
-      reason: r.reason,
-      status: r.status as RefundRequest["status"],
-      adminNotes: r.admin_notes,
-      resolvedAt: r.resolved_at,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }));
+    return rows.map(toLearnerRefundRequest);
   }
 
   async function listAllRefundRequests(
@@ -116,17 +101,7 @@ export function createRefundRequestService({
       database,
       status,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      orderId: r.order_id,
-      userId: r.user_id,
-      reason: r.reason,
-      status: r.status as RefundRequest["status"],
-      adminNotes: r.admin_notes,
-      resolvedAt: r.resolved_at,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }));
+    return rows.map(toRefundRequestContract);
   }
 
   async function reviewRefundRequest(
@@ -176,17 +151,7 @@ export function createRefundRequestService({
       );
 
       return {
-        refundRequest: {
-          id: updated!.id,
-          orderId: updated!.order_id,
-          userId: updated!.user_id,
-          reason: updated!.reason,
-          status: updated!.status as RefundRequest["status"],
-          adminNotes: updated!.admin_notes,
-          resolvedAt: updated!.resolved_at,
-          createdAt: updated!.created_at,
-          updatedAt: updated!.updated_at,
-        },
+        refundRequest: toRefundRequestContract(updated!),
         refund,
       };
     } else {
@@ -201,17 +166,7 @@ export function createRefundRequestService({
       );
 
       return {
-        refundRequest: {
-          id: updated!.id,
-          orderId: updated!.order_id,
-          userId: updated!.user_id,
-          reason: updated!.reason,
-          status: updated!.status as RefundRequest["status"],
-          adminNotes: updated!.admin_notes,
-          resolvedAt: updated!.resolved_at,
-          createdAt: updated!.created_at,
-          updatedAt: updated!.updated_at,
-        },
+        refundRequest: toRefundRequestContract(updated!),
       };
     }
   }

@@ -49,73 +49,32 @@ export function useCouponsFilter(options?: {
     "all" | "percentage" | "fixed"
   >("all");
 
+  // The library-wide summary arrives with the first page only.
   const serverSummary = data?.pages[0]?.summary;
-  const serverTotalCount = data?.pages[0]?.totalCount;
 
-  const counts = useMemo(() => {
-    if (serverSummary) {
-      return {
-        all: serverSummary.totalCount,
-        active: serverSummary.activeCount,
-        scheduled: serverSummary.scheduledCount,
-        expired: serverSummary.expiredCount,
-        draft: serverSummary.inactiveCount,
-      };
-    }
+  const counts = useMemo(
+    () => ({
+      all: serverSummary?.totalCount ?? 0,
+      active: serverSummary?.activeCount ?? 0,
+      scheduled: serverSummary?.scheduledCount ?? 0,
+      expired: serverSummary?.expiredCount ?? 0,
+      draft: serverSummary?.inactiveCount ?? 0,
+    }),
+    [serverSummary],
+  );
 
-    let active = 0;
-    let scheduled = 0;
-    let expired = 0;
-    let draft = 0;
-
-    for (const coupon of coupons) {
-      const status = getCouponStatus(coupon, now);
-      if (status === "active") active += 1;
-      else if (status === "scheduled") scheduled += 1;
-      else if (status === "expired") expired += 1;
-      else draft += 1;
-    }
-
-    return {
-      all: serverTotalCount ?? coupons.length,
-      active,
-      scheduled,
-      expired,
-      draft,
-    };
-  }, [serverSummary, serverTotalCount, coupons, now]);
-
-  const summaryMetrics = useMemo(() => {
-    if (serverSummary) {
-      return {
-        totalCoupons: serverSummary.totalCount,
-        totalRedemptions: serverSummary.totalRedemptions,
-        totalDiscountGiven: serverSummary.totalDiscountGiven,
-        activeCoupons: serverSummary.activeCount,
-        expiredCoupons: serverSummary.expiredCount,
-        draftCoupons: serverSummary.inactiveCount,
-        scheduledCoupons: serverSummary.scheduledCount,
-      };
-    }
-
-    let totalRedemptions = 0;
-    let totalDiscountGiven = 0;
-
-    for (const coupon of coupons) {
-      totalRedemptions += coupon.redemptionCount ?? 0;
-      totalDiscountGiven += coupon.totalDiscountGiven ?? 0;
-    }
-
-    return {
-      totalCoupons: serverTotalCount ?? coupons.length,
-      totalRedemptions,
-      totalDiscountGiven,
-      activeCoupons: counts.active,
-      expiredCoupons: counts.expired,
-      draftCoupons: counts.draft,
-      scheduledCoupons: counts.scheduled,
-    };
-  }, [serverSummary, serverTotalCount, coupons, counts]);
+  const summaryMetrics = useMemo(
+    () => ({
+      totalCoupons: serverSummary?.totalCount ?? 0,
+      totalRedemptions: serverSummary?.totalRedemptions ?? 0,
+      totalDiscountGiven: serverSummary?.totalDiscountGiven ?? 0,
+      activeCoupons: serverSummary?.activeCount ?? 0,
+      expiredCoupons: serverSummary?.expiredCount ?? 0,
+      draftCoupons: serverSummary?.inactiveCount ?? 0,
+      scheduledCoupons: serverSummary?.scheduledCount ?? 0,
+    }),
+    [serverSummary],
+  );
 
   const filteredCoupons = useMemo(() => {
     return coupons

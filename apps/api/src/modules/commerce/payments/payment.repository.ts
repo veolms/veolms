@@ -14,6 +14,13 @@ export async function findPaymentById(database: Executor, paymentId: string) {
     .executeTakeFirst();
 }
 
+// Which of an order's payment rows `findPaymentByOrderId` returns. The order
+// screens rank theirs differently (orders/order.repository.ts's
+// listPaymentsForOrders puts `refunded` and `processing` ahead of
+// `initiated`); the two are kept apart on purpose, because aligning them
+// would change which payment existing orders resolve to here.
+const paymentRankForOrder = sql`CASE WHEN status = 'captured' THEN 0 WHEN status = 'authorized' THEN 1 WHEN status = 'pending' THEN 2 WHEN status = 'initiated' THEN 3 ELSE 4 END`;
+
 export async function findPaymentByOrderId(
   database: Executor,
   orderId: string,
@@ -22,10 +29,21 @@ export async function findPaymentByOrderId(
     .selectFrom("payments")
     .selectAll()
     .where("order_id", "=", orderId)
-    .orderBy(
-      sql`CASE WHEN status = 'captured' THEN 0 WHEN status = 'authorized' THEN 1 WHEN status = 'pending' THEN 2 WHEN status = 'initiated' THEN 3 ELSE 4 END`,
-      "asc",
-    )
+    .orderBy(paymentRankForOrder, "asc")
+    .orderBy("created_at", "desc")
+    .executeTakeFirst();
+}
+
+/** The gateway ids of the payment `findPaymentByOrderId` would return. */
+export async function findPaymentReferenceByOrderId(
+  database: Executor,
+  orderId: string,
+) {
+  return await database
+    .selectFrom("payments")
+    .select(["gateway_payment_id", "gateway_order_id"])
+    .where("order_id", "=", orderId)
+    .orderBy(paymentRankForOrder, "asc")
     .orderBy("created_at", "desc")
     .executeTakeFirst();
 }
@@ -143,30 +161,6 @@ export async function transitionPaymentStatus(
     .executeTakeFirst();
 }
 
-export async function updatePayment(
-  database: Executor,
-  paymentId: string,
-  updates: {
-    gateway_order_id?: string;
-    gateway_payment_id?: string | null;
-    gateway_key_id?: string | null;
-    amount?: number;
-    currency?: string;
-    status?: PaymentStatus;
-    payment_method?: Json | null;
-    error_code?: string | null;
-    error_description?: string | null;
-    updated_at?: Date;
-  },
-) {
-  return await database
-    .updateTable("payments")
-    .set(updates)
-    .where("id", "=", paymentId)
-    .returningAll()
-    .executeTakeFirst();
-}
-
 /**
  * Points an existing payment row at a freshly created gateway order, but
  * only while the payment is not in a final state. The guard matters: a
@@ -201,16 +195,17 @@ export async function reinitializePaymentIfNotFinal(
     .executeTakeFirst();
 }
 
-export async function listPaymentAttempts(
+/** Attempts recorded so far; the next attempt's number is this plus one. */
+export async function countPaymentAttempts(
   database: Executor,
   paymentId: string,
-) {
-  return await database
+): Promise<number> {
+  const row = await database
     .selectFrom("payment_attempts")
-    .selectAll()
+    .select((eb) => eb.fn.countAll().as("count"))
     .where("payment_id", "=", paymentId)
-    .orderBy("attempt_number", "asc")
-    .execute();
+    .executeTakeFirst();
+  return Number(row?.count ?? 0);
 }
 
 export async function insertPaymentAttempt(

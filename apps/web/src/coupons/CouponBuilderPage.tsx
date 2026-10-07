@@ -328,11 +328,12 @@ export function CouponBuilderPage({
           setErrorMessage("Could not load coupon details to update.");
           return;
         }
+        // No minOrderAmount: this form does not edit it, so the stored
+        // value must be left as it is.
         const payload: UpdateCouponRequest = {
           description: packedDescription,
           discountType,
           discountValue: money.discountValue,
-          minOrderAmount: money.minOrderAmount,
           startsAt: startDateObj.toISOString(),
           expiresAt: endDateObj.toISOString(),
           globalUsageLimit:

@@ -1,98 +1,67 @@
 import { orderPaymentMethodSchema } from "@veolms/contracts";
 import type {
-  Order,
-  OrderItemSnapshot,
-  OrderAdminDetails,
+  AdminOrder,
+  LearnerOrder,
+  OrderItemSummary,
   OrderPaymentMethod,
   OrderPaymentSummary,
 } from "@veolms/contracts";
-import type { Database, OrderItemType, OrderStatus } from "@veolms/database";
-import type { Selectable } from "kysely";
-import { toRefundContract } from "../refunds/refund.mapper.ts";
+import type { OrderStatus } from "@veolms/database";
 import { toMinorUnits } from "../shared/currency.ts";
 
 /**
- * Minimal shape needed to map a persisted order row to the `Order` API
- * contract. Deliberately structural (not tied to Kysely's
- * `Selectable<OrderTable>`) so it also accepts the plain object
- * checkout.service.ts builds inline for its free-checkout / idempotent-replay
- * paths, which never round-trip through a DB read after insert.
+ * The order columns every order response is built from. Structural rather
+ * than tied to a Kysely row type, so each caller can select just these.
+ *
+ * Order rows store major units (499 = ₹499) while the payments and refunds
+ * shown alongside them are minor units (49900 paise). An order response
+ * exposes ONE unit — minor — so a client never has to know which field came
+ * from which table; the conversion happens in this file and nowhere else.
  */
-export interface OrderRowLike {
+interface OrderRowLike {
   id: string;
   order_number: string;
-  user_id: string;
+  // OrderStatus is the same literal union on both the DB (@veolms/database)
+  // and contract (@veolms/contracts) side, so it is assigned without a cast.
+  // If the two ever drift this stops typechecking instead of silently
+  // passing a value the contract doesn't allow.
   status: OrderStatus;
   currency: string;
   subtotal_amount: number;
-  discount_amount: number;
   tax_amount: number;
   total_amount: number;
-  after_commission_amount?: number | null;
-  coupon_id: string | null;
-  idempotency_key: string | null;
-  expires_at: Date;
-  paid_at: Date | null;
   created_at: Date;
-  updated_at: Date;
 }
 
-export interface OrderItemRowLike {
-  id: string;
-  order_id: string;
-  item_type: OrderItemType;
-  course_id: string | null;
-  bundle_id: string | null;
-  title_snapshot: string;
-  unit_price: number;
+interface AdminOrderRowLike extends OrderRowLike {
   discount_amount: number;
-  tax_amount: number;
-  final_amount: number;
-  created_at: Date;
+  after_commission_amount: number | null;
+  paid_at: Date | null;
 }
 
-/**
- * Order rows store major units (499 = ₹499) while the payments and refunds
- * shown alongside them are minor units (49900 paise). The order response
- * exposes ONE unit — minor — so a client never has to know which field came
- * from which table; the conversion happens here and nowhere else.
- */
-export function toOrderItemContract(
-  row: OrderItemRowLike,
-  currency: string,
-): OrderItemSnapshot {
+interface OrderItemRowLike {
+  title_snapshot: string;
+  course_id: string | null;
+}
+
+/** The payment that represents an order — see `listPaymentsForOrders`. */
+interface OrderPaymentRowLike {
+  gateway_provider: string;
+  gateway_payment_id: string | null;
+  payment_method: unknown;
+}
+
+function toOrderItemSummary(row: OrderItemRowLike): OrderItemSummary {
   return {
-    id: row.id,
-    orderId: row.order_id,
-    // OrderItemType is the same literal union ("course" | "bundle") on both
-    // the DB (@veolms/database) and contract (@veolms/contracts) side, so
-    // this is a plain assignment — no cast. If the two unions ever drift,
-    // this line stops typechecking instead of silently passing through
-    // `as any`.
-    itemType: row.item_type,
-    courseId: row.course_id,
-    bundleId: row.bundle_id,
     titleSnapshot: row.title_snapshot,
-    unitPrice: toMinorUnits(row.unit_price, currency),
-    discountAmount: toMinorUnits(row.discount_amount, currency),
-    taxAmount: toMinorUnits(row.tax_amount, currency),
-    finalAmount: toMinorUnits(row.final_amount, currency),
-    createdAt: row.created_at,
+    courseId: row.course_id,
   };
 }
 
 /**
- * Maps a persisted order row (+ its items) to the `Order` API contract.
- *
- * `overrides` exists for the free-checkout path in checkout.service.ts: it
- * finalizes the payment (which updates `orders.status`/`paid_at` in the DB)
- * but keeps working off the in-memory row captured before that update, so it
- * needs to reflect the now-current status/paidAt without a redundant re-read.
- */
-/**
  * Projects the untyped `payments.payment_method` jsonb onto the fields the
- * contract exposes. Anything else stored in the column is dropped, and a value
- * that isn't a recognisable payment method becomes `null` rather than
+ * application knows. Anything else stored in the column is dropped, and a
+ * value that isn't a recognisable payment method becomes `null` rather than
  * leaking through or failing the response.
  */
 export function toOrderPaymentMethod(raw: unknown): OrderPaymentMethod | null {
@@ -101,10 +70,7 @@ export function toOrderPaymentMethod(raw: unknown): OrderPaymentMethod | null {
 }
 
 export function toOrderPaymentSummary(
-  payment?: Pick<
-    Selectable<Database["payments"]>,
-    "gateway_provider" | "payment_method"
-  >,
+  payment?: Pick<OrderPaymentRowLike, "gateway_provider" | "payment_method">,
 ): OrderPaymentSummary | null {
   if (!payment) return null;
   const method = toOrderPaymentMethod(payment.payment_method);
@@ -117,73 +83,49 @@ export function toOrderPaymentSummary(
   };
 }
 
-type AdminUserRow = Pick<
-  Selectable<Database["users"]>,
-  "display_name" | "username" | "email"
->;
-
-/**
- * Builds the academy-only `admin` block shown on an order. Shared by the
- * single-order and list paths so both present a row identically.
- */
-export function toOrderAdminDetails(input: {
-  order: Pick<OrderRowLike, "user_id">;
-  user?: AdminUserRow;
-  coupon?: Selectable<Database["coupons"]>;
-  payment?: Selectable<Database["payments"]>;
-  refunds: Selectable<Database["refunds"]>[];
-}): OrderAdminDetails {
-  const { order, user, coupon, payment, refunds } = input;
+/** An order as its buyer sees it (purchase history). */
+export function toLearnerOrder(
+  row: OrderRowLike,
+  items: OrderItemRowLike[],
+  payment?: OrderPaymentRowLike,
+): LearnerOrder {
   return {
-    student: {
-      id: order.user_id,
-      name: user?.display_name || user?.username || "Student",
-      displayName: user?.display_name,
-      email: user?.email ?? null,
-      username: user?.username || "student",
-    },
-    coupon: coupon
-      ? {
-          id: coupon.id,
-          code: coupon.code,
-          discountType: coupon.discount_type as "percentage" | "fixed",
-          discountValue: coupon.discount_value,
-        }
-      : null,
-    payment: payment
-      ? {
-          id: payment.id,
-          gatewayProvider: payment.gateway_provider,
-          gatewayOrderId: payment.gateway_order_id,
-          gatewayPaymentId: payment.gateway_payment_id ?? null,
-          amount: payment.amount,
-          currency: payment.currency,
-          status: payment.status,
-          paymentMethod: toOrderPaymentMethod(payment.payment_method),
-        }
-      : null,
-    refunds: refunds.map(toRefundContract),
+    id: row.id,
+    orderNumber: row.order_number,
+    status: row.status,
+    currency: row.currency,
+    subtotalAmount: toMinorUnits(row.subtotal_amount, row.currency),
+    taxAmount: toMinorUnits(row.tax_amount, row.currency),
+    totalAmount: toMinorUnits(row.total_amount, row.currency),
+    paymentSummary: toOrderPaymentSummary(payment),
+    items: items.map(toOrderItemSummary),
+    createdAt: row.created_at,
   };
 }
 
-export function toOrderContract(
-  row: OrderRowLike,
+/**
+ * An order as the academy's orders screen sees it. Shared by the single-order
+ * and list paths so both present a row identically.
+ */
+export function toAdminOrder(
+  row: AdminOrderRowLike,
   items: OrderItemRowLike[],
-  overrides?: {
-    status?: OrderStatus;
-    paidAt?: Date | null;
-    admin?: OrderAdminDetails;
-    paymentSummary?: OrderPaymentSummary | null;
+  related: {
+    user?: { display_name: string; username: string; email: string | null };
+    avatarUrl: string | null;
+    couponCode?: string;
+    payment?: OrderPaymentRowLike;
   },
-): Order {
-  const result: Order = {
+): AdminOrder {
+  const { user, avatarUrl, couponCode, payment } = related;
+  const paymentMethod = payment
+    ? toOrderPaymentMethod(payment.payment_method)
+    : null;
+
+  return {
     id: row.id,
     orderNumber: row.order_number,
-    userId: row.user_id,
-    // OrderStatus is the same literal union on both sides — see comment on
-    // itemType above; a drift here fails to typecheck instead of silently
-    // passing through `as any`.
-    status: overrides?.status ?? row.status,
+    status: row.status,
     currency: row.currency,
     subtotalAmount: toMinorUnits(row.subtotal_amount, row.currency),
     discountAmount: toMinorUnits(row.discount_amount, row.currency),
@@ -191,21 +133,27 @@ export function toOrderContract(
     totalAmount: toMinorUnits(row.total_amount, row.currency),
     // Already stored in minor units.
     afterCommissionAmount: row.after_commission_amount ?? null,
-    couponId: row.coupon_id,
-    idempotencyKey: row.idempotency_key,
-    items: items.map((item) => toOrderItemContract(item, row.currency)),
-    expiresAt: row.expires_at,
-    paidAt: overrides && "paidAt" in overrides ? overrides.paidAt : row.paid_at,
+    items: items.map(toOrderItemSummary),
+    paidAt: row.paid_at,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    admin: {
+      student: {
+        name: user?.display_name || user?.username || "Student",
+        displayName: user?.display_name ?? "",
+        email: user?.email ?? null,
+        username: user?.username || "student",
+        avatarUrl,
+      },
+      coupon: couponCode ? { code: couponCode } : null,
+      payment: payment
+        ? {
+            gatewayProvider: payment.gateway_provider,
+            gatewayPaymentId: payment.gateway_payment_id,
+            paymentMethod: paymentMethod
+              ? { method: paymentMethod.method, vpa: paymentMethod.vpa ?? null }
+              : null,
+          }
+        : null,
+    },
   };
-
-  if (overrides?.admin) {
-    result.admin = overrides.admin;
-  }
-  if (overrides && "paymentSummary" in overrides) {
-    result.paymentSummary = overrides.paymentSummary;
-  }
-
-  return result;
 }

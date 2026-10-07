@@ -35,7 +35,7 @@ export function createAccessController({
       courseId,
       validUntil: validUntil ? new Date(validUntil) : null,
     });
-    reply.status(201).send(result);
+    await reply.status(201).send(result);
   }
 
   async function revokeAccessGrant(
@@ -44,7 +44,9 @@ export function createAccessController({
   ) {
     const { grantId } = request.params;
     await service.revokeAccessGrantById(database, grantId);
-    reply.status(200).send({ message: "Access grant revoked successfully." });
+    await reply
+      .status(200)
+      .send({ message: "Access grant revoked successfully." });
   }
 
   async function listUserGrants(
@@ -53,7 +55,7 @@ export function createAccessController({
   ) {
     const { userId } = request.params;
     const grants = await service.listUserGrants(database, userId);
-    reply.status(200).send(grants);
+    await reply.status(200).send(grants);
   }
 
   return {

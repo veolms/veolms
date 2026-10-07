@@ -117,6 +117,30 @@ export async function getOrderStatusFunnel(
   };
 }
 
+/**
+ * The order columns the application reads. The GST breakdown columns
+ * (`gstin`, `cgst_amount`, `sgst_amount`, `igst_amount`) are left out: nothing
+ * reads them.
+ */
+const orderColumns = [
+  "o.id",
+  "o.order_number",
+  "o.user_id",
+  "o.status",
+  "o.currency",
+  "o.subtotal_amount",
+  "o.discount_amount",
+  "o.tax_amount",
+  "o.total_amount",
+  "o.after_commission_amount",
+  "o.coupon_id",
+  "o.idempotency_key",
+  "o.expires_at",
+  "o.paid_at",
+  "o.created_at",
+  "o.updated_at",
+] as const;
+
 export async function findOrderById(
   database: Executor,
   orderId: string,
@@ -124,7 +148,7 @@ export async function findOrderById(
 ) {
   let query = database
     .selectFrom("orders as o")
-    .selectAll("o")
+    .select(orderColumns)
     .where("o.id", "=", orderId);
 
   if (scope && scope.type === "user") {
@@ -158,7 +182,21 @@ export async function listOrders(
   // value as text; it is bound back as `::timestamptz` in the seek below.
   let query = database
     .selectFrom("orders as o")
-    .selectAll("o")
+    .select([
+      "o.id",
+      "o.order_number",
+      "o.user_id",
+      "o.status",
+      "o.currency",
+      "o.subtotal_amount",
+      "o.discount_amount",
+      "o.tax_amount",
+      "o.total_amount",
+      "o.after_commission_amount",
+      "o.coupon_id",
+      "o.paid_at",
+      "o.created_at",
+    ])
     .select(
       sql<string>`to_char(o.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`.as(
         "created_at_cursor",
@@ -428,17 +466,6 @@ export async function findOrderByIdForUpdate(
     .executeTakeFirst();
 }
 
-export async function findOrderByOrderNumber(
-  database: Executor,
-  orderNumber: string,
-) {
-  return await database
-    .selectFrom("orders")
-    .selectAll()
-    .where("order_number", "=", orderNumber)
-    .executeTakeFirst();
-}
-
 export async function findOrderByIdempotencyKey(
   database: Executor,
   idempotencyKey: string,
@@ -472,6 +499,25 @@ export async function listPendingOrdersUsingCoupon(
     query = query.where("user_id", "=", input.userId);
   }
   return await query.orderBy("created_at", "desc").execute();
+}
+
+/** How many orders `listPendingOrdersUsingCoupon` would return. */
+export async function countPendingOrdersUsingCoupon(
+  database: Executor,
+  input: { couponId: string; userId?: string; now: Date },
+): Promise<number> {
+  let query = database
+    .selectFrom("orders")
+    .select((eb) => eb.fn.countAll().as("count"))
+    .where("coupon_id", "=", input.couponId)
+    .where("status", "=", "pending")
+    .where("expires_at", ">", input.now);
+
+  if (input.userId) {
+    query = query.where("user_id", "=", input.userId);
+  }
+  const row = await query.executeTakeFirst();
+  return Number(row?.count ?? 0);
 }
 
 /**
@@ -553,6 +599,20 @@ export async function listOrderItemsByOrderIds(
   return await database
     .selectFrom("order_items")
     .selectAll()
+    .where("order_id", "in", orderIds)
+    .orderBy("created_at", "asc")
+    .execute();
+}
+
+/** The item columns an order response carries, for the orders being shown. */
+export async function listOrderItemSummariesByOrderIds(
+  database: Executor,
+  orderIds: string[],
+) {
+  if (orderIds.length === 0) return [];
+  return await database
+    .selectFrom("order_items")
+    .select(["order_id", "title_snapshot", "course_id"])
     .where("order_id", "in", orderIds)
     .orderBy("created_at", "asc")
     .execute();
@@ -650,22 +710,40 @@ export async function listUsersByIds(database: Executor, userIds: string[]) {
   if (userIds.length === 0) return [];
   return await database
     .selectFrom("users")
-    .select(["id", "display_name", "username", "email"])
+    .select(["id", "display_name", "username", "email", "avatar_data_url"])
     .where("id", "in", userIds)
     .execute();
 }
 
-export async function listPaymentsByOrderIds(
+/** The buyer details an invoice prints; a deleted account has none. */
+export async function findInvoiceBuyer(database: Executor, userId: string) {
+  return await database
+    .selectFrom("users")
+    .select(["display_name", "username", "email"])
+    .where("id", "=", userId)
+    .where("is_deleted", "=", false)
+    .executeTakeFirst();
+}
+
+/**
+ * The one payment that represents each order: the settled one if there is
+ * one, otherwise the latest attempt. One row per order, so list and detail
+ * views agree on which payment they show.
+ */
+export async function listPaymentsForOrders(
   database: Executor,
   orderIds: string[],
 ) {
   if (orderIds.length === 0) return [];
-  // Ranked so the payment that represents the order comes first: the settled
-  // one, then any retry attempts, newest first. Callers take the first row
-  // per order, which keeps list and detail views in agreement.
   return await database
     .selectFrom("payments")
-    .selectAll()
+    .distinctOn("order_id")
+    .select([
+      "order_id",
+      "gateway_provider",
+      "gateway_payment_id",
+      "payment_method",
+    ])
     .where("order_id", "in", orderIds)
     .orderBy("order_id")
     .orderBy(
@@ -676,45 +754,26 @@ export async function listPaymentsByOrderIds(
     .execute();
 }
 
-export async function listPaymentSummariesByOrderIds(
-  database: Executor,
-  orderIds: string[],
-) {
-  if (orderIds.length === 0) return [];
-  return await database
-    .selectFrom("payments")
-    .select(["order_id", "gateway_provider", "payment_method"])
-    .where("order_id", "in", orderIds)
-    .orderBy("order_id")
-    .orderBy(
-      sql`case status when 'captured' then 0 when 'refunded' then 1 when 'processing' then 2 when 'initiated' then 3 else 4 end`,
-    )
-    .orderBy("created_at", "desc")
-    .orderBy("id", "desc")
-    .execute();
-}
-
-export async function listCouponsByIds(
+export async function listCouponCodesByIds(
   database: Executor,
   couponIds: string[],
 ) {
   if (couponIds.length === 0) return [];
   return await database
     .selectFrom("coupons")
-    .selectAll()
+    .select(["id", "code"])
     .where("id", "in", couponIds)
     .execute();
 }
 
-export async function listRefundsByOrderIds(
-  database: Executor,
-  orderIds: string[],
-) {
-  if (orderIds.length === 0) return [];
-  return await database
-    .selectFrom("refunds")
-    .selectAll()
-    .where("order_id", "in", orderIds)
-    .orderBy("created_at", "desc")
-    .execute();
+/**
+ * Id of the academy this deployment serves. Admin-view requests resolve it on
+ * every call, so it reads the one column they use.
+ */
+export async function findAcademyId(database: Executor) {
+  const academy = await database
+    .selectFrom("academy")
+    .select("id")
+    .executeTakeFirst();
+  return academy?.id;
 }

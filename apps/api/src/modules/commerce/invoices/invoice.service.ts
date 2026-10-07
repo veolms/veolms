@@ -6,7 +6,6 @@ import { escapeHtml } from "@veolms/services/email";
 import { formatMoney, toMinorUnits } from "../shared/currency.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
-import * as authRepo from "../../auth/authentication/authentication.repository.ts";
 import * as setupRepo from "../../auth/setup/setup.repository.ts";
 
 export interface InvoiceService {
@@ -40,10 +39,12 @@ export function createInvoiceService({
       );
     }
 
-    const items = await orderRepo.listOrderItems(database, orderId);
-    const payment = await paymentRepo.findPaymentByOrderId(database, orderId);
-    const user = await authRepo.findUserById(database, order.user_id);
-    const academy = await setupRepo.findAcademy(database);
+    const [items, payment, user, academy] = await Promise.all([
+      orderRepo.listOrderItems(database, orderId),
+      paymentRepo.findPaymentReferenceByOrderId(database, orderId),
+      orderRepo.findInvoiceBuyer(database, order.user_id),
+      setupRepo.findAcademy(database),
+    ]);
 
     const paymentRef =
       payment?.gateway_payment_id ?? payment?.gateway_order_id ?? "N/A";

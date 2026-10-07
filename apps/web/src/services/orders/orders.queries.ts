@@ -4,9 +4,9 @@ import {
   useQuery,
 } from "@tanstack/react-query";
 import type {
-  Order,
-  OrdersListResponse,
-  OrdersListQueryInput,
+  AdminOrdersListResponse,
+  LearnerOrdersListResponse,
+  OrderResponse,
   OrderStatsQuery,
   OrderStatsResponse,
   Invoice,
@@ -14,24 +14,53 @@ import type {
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { orderKeys } from "./orders.keys";
-import { ordersService } from "./orders.service";
+import { ordersService, type OrdersListParams } from "./orders.service";
+
+const DEFAULT_ORDERS_PAGE_SIZE = 30;
 
 /**
- * Infinite-scrolling query for orders (admin or student view).
+ * Infinite-scrolling query for every order in the academy (admin view).
  * Uses cursor-based keyset pagination — each page returns a `nextCursor`
  * that feeds into the next `getNextPageParam` call.
  */
-export function useOrders(
-  params?: OrdersListQueryInput,
+export function useAdminOrders(
+  params?: OrdersListParams,
   options?: { enabled?: boolean },
 ) {
-  const limit = params?.limit ?? 30;
-  const queryParams = { ...params, limit };
+  const queryParams = {
+    ...params,
+    limit: params?.limit ?? DEFAULT_ORDERS_PAGE_SIZE,
+  };
 
-  return useInfiniteQuery<OrdersListResponse, ApiError>({
-    queryKey: orderKeys.list(queryParams),
+  return useInfiniteQuery<AdminOrdersListResponse, ApiError>({
+    queryKey: orderKeys.list({ ...queryParams, view: "admin" }),
     queryFn: ({ pageParam }) =>
-      ordersService.listOrders({
+      ordersService.listAdminOrders({
+        ...queryParams,
+        cursor: pageParam as string | undefined,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: options?.enabled ?? true,
+    placeholderData: keepPreviousData,
+    staleTime: 30 * 1000,
+  });
+}
+
+/** Infinite-scrolling query for the signed-in user's own purchases. */
+export function useMyOrders(
+  params?: OrdersListParams,
+  options?: { enabled?: boolean },
+) {
+  const queryParams = {
+    ...params,
+    limit: params?.limit ?? DEFAULT_ORDERS_PAGE_SIZE,
+  };
+
+  return useInfiniteQuery<LearnerOrdersListResponse, ApiError>({
+    queryKey: orderKeys.list({ ...queryParams, view: "student" }),
+    queryFn: ({ pageParam }) =>
+      ordersService.listMyOrders({
         ...queryParams,
         cursor: pageParam as string | undefined,
       }),
@@ -59,7 +88,7 @@ export function useOrderStats(
 }
 
 export function useOrder(orderId: string | null, view?: OrderView) {
-  return useQuery<Order, ApiError>({
+  return useQuery<OrderResponse, ApiError>({
     queryKey: orderId
       ? orderKeys.detail(orderId, view)
       : ["orders", "detail", null],

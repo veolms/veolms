@@ -22,26 +22,48 @@ export interface BundleService {
   deleteBundle(id: string): Promise<void>;
 }
 
+type BundleRow = NonNullable<
+  Awaited<ReturnType<typeof bundleRepo.findBundleById>>
+>;
+
 export function createBundleService({
   database,
 }: {
   database: Kysely<Database>;
 }): BundleService {
-  async function hydrateBundle(
-    bundle: NonNullable<Awaited<ReturnType<typeof bundleRepo.findBundleById>>>,
-  ): Promise<CourseBundle> {
-    const courseItems = await bundleRepo.listBundleCourses(database, bundle.id);
-    const items: BundleItem[] = courseItems.map((c) => ({
-      id: c.item_id,
-      bundleId: c.bundle_id,
-      courseId: c.course_id,
-      courseTitle: c.course_title,
-      courseSlug: c.course_slug,
-      courseThumbnailMediaId: c.course_thumbnail_media_id,
-      createdAt: c.created_at,
-    }));
+  /**
+   * Attaches each bundle's courses with one query for the whole set. The
+   * public endpoints pass `publishedCoursesOnly`: a published bundle may
+   * still hold a draft or archived course, and those must not be named to
+   * visitors.
+   */
+  async function hydrateBundles(
+    bundles: BundleRow[],
+    options: { publishedCoursesOnly?: boolean } = {},
+  ): Promise<CourseBundle[]> {
+    const courseItems = await bundleRepo.listBundleCoursesForBundleIds(
+      database,
+      bundles.map((bundle) => bundle.id),
+    );
+    const itemsByBundleId = new Map<string, BundleItem[]>();
+    for (const c of courseItems) {
+      if (options.publishedCoursesOnly && c.course_status !== "published") {
+        continue;
+      }
+      const items = itemsByBundleId.get(c.bundle_id) ?? [];
+      items.push({
+        id: c.item_id,
+        bundleId: c.bundle_id,
+        courseId: c.course_id,
+        courseTitle: c.course_title,
+        courseSlug: c.course_slug,
+        courseThumbnailMediaId: c.course_thumbnail_media_id,
+        createdAt: c.created_at,
+      });
+      itemsByBundleId.set(c.bundle_id, items);
+    }
 
-    return {
+    return bundles.map((bundle) => ({
       id: bundle.id,
       slug: bundle.slug,
       title: bundle.title,
@@ -50,15 +72,23 @@ export function createBundleService({
       status: bundle.status,
       price: bundle.price,
       currency: bundle.currency,
-      items,
+      items: itemsByBundleId.get(bundle.id) ?? [],
       createdAt: bundle.created_at,
       updatedAt: bundle.updated_at,
-    };
+    }));
+  }
+
+  async function hydrateBundle(
+    bundle: BundleRow,
+    options: { publishedCoursesOnly?: boolean } = {},
+  ): Promise<CourseBundle> {
+    const [hydrated] = await hydrateBundles([bundle], options);
+    return hydrated!;
   }
 
   async function listPublishedBundles(): Promise<CourseBundle[]> {
     const bundles = await bundleRepo.listPublishedBundles(database);
-    return await Promise.all(bundles.map(hydrateBundle));
+    return await hydrateBundles(bundles, { publishedCoursesOnly: true });
   }
 
   async function getBundleBySlug(slug: string): Promise<CourseBundle> {
@@ -66,12 +96,12 @@ export function createBundleService({
     if (!bundle || bundle.status !== "published") {
       throw CommerceErrors.BUNDLE_NOT_FOUND(slug);
     }
-    return await hydrateBundle(bundle);
+    return await hydrateBundle(bundle, { publishedCoursesOnly: true });
   }
 
   async function listAllBundles(): Promise<CourseBundle[]> {
     const bundles = await bundleRepo.listAllBundles(database);
-    return await Promise.all(bundles.map(hydrateBundle));
+    return await hydrateBundles(bundles);
   }
 
   async function getBundleById(id: string): Promise<CourseBundle> {

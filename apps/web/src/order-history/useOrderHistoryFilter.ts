@@ -5,7 +5,7 @@ import {
   useDebounceValue,
 } from "../hooks/useDebounce";
 import type { OrderHistoryItem } from "./orderHistoryData";
-import { useOrders } from "../services/orders";
+import { useMyOrders } from "../services/orders";
 import { adaptOrderToOrderHistoryItem } from "../orders/orderAdapter";
 
 export interface UseOrderHistoryFilterReturn {
@@ -81,7 +81,6 @@ export function useOrderHistoryFilter(
   );
   const queryParams = useMemo(
     () => ({
-      view: "student" as const,
       limit: 30,
       sortOrder,
       ...dateBounds,
@@ -96,7 +95,7 @@ export function useOrderHistoryFilter(
     isFetchingNextPage,
     fetchNextPage,
     refetch,
-  } = useOrders(queryParams);
+  } = useMyOrders(queryParams);
 
   const ordersList = useMemo(
     () =>

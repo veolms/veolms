@@ -60,25 +60,6 @@ export async function countCouponRedemptionsByUser(
   return Number(result?.count ?? 0);
 }
 
-export async function insertCouponRedemption(
-  database: Executor,
-  values: {
-    id: string;
-    coupon_id: string;
-    user_id: string;
-    order_id: string;
-    discount_amount: number;
-    created_at?: Date;
-  },
-) {
-  return await database
-    .insertInto("coupon_redemptions")
-    .values(values)
-    .onConflict((oc) => oc.columns(["coupon_id", "order_id"]).doNothing())
-    .returningAll()
-    .executeTakeFirst(); // returns undefined if conflict — that is correct and expected
-}
-
 export type InsertCouponRedemptionResult =
   | {
       success: true;
@@ -215,45 +196,21 @@ export async function insertCoupon(
     .executeTakeFirstOrThrow();
 }
 
-export async function listCouponRedemptionStats(
+/** Redemption counts for one page of the coupon list. */
+export async function listCouponRedemptionCounts(
   database: Executor,
-  couponIds?: string[],
+  couponIds: string[],
 ) {
-  if (couponIds !== undefined && couponIds.length === 0) {
-    return [];
-  }
-  let query = database
+  if (couponIds.length === 0) return [];
+  return await database
     .selectFrom("coupon_redemptions")
     .select((eb) => [
       "coupon_id",
       eb.fn.countAll<number>().as("redemption_count"),
-      eb.fn.sum<number>("discount_amount").as("total_discount_given"),
-    ]);
-
-  if (couponIds && couponIds.length > 0) {
-    query = query.where("coupon_id", "in", couponIds);
-  }
-
-  return await query.groupBy("coupon_id").execute();
-}
-
-export async function getCouponRedemptionStats(
-  database: Executor,
-  couponId: string,
-) {
-  const result = await database
-    .selectFrom("coupon_redemptions")
-    .select((eb) => [
-      eb.fn.countAll<number>().as("redemption_count"),
-      eb.fn.sum<number>("discount_amount").as("total_discount_given"),
     ])
-    .where("coupon_id", "=", couponId)
-    .executeTakeFirst();
-
-  return {
-    redemptionCount: Number(result?.redemption_count ?? 0),
-    totalDiscountGiven: Number(result?.total_discount_given ?? 0),
-  };
+    .where("coupon_id", "in", couponIds)
+    .groupBy("coupon_id")
+    .execute();
 }
 
 export interface ListCouponsRepositoryOptions {
@@ -271,7 +228,22 @@ export async function listCoupons(
   database: Executor,
   options?: ListCouponsRepositoryOptions,
 ) {
-  let query = database.selectFrom("coupons").selectAll();
+  // Only what the coupon library renders; the full configuration is served
+  // by the single-coupon endpoints.
+  let query = database
+    .selectFrom("coupons")
+    .select([
+      "id",
+      "code",
+      "description",
+      "discount_type",
+      "discount_value",
+      "starts_at",
+      "expires_at",
+      "global_usage_limit",
+      "is_active",
+      "created_at",
+    ]);
 
   if (options?.createdBy) {
     query = query.where("created_by", "=", options.createdBy);
@@ -354,54 +326,46 @@ export async function getCouponOverallSummary(
   database: Executor,
   options?: { courseId?: string; createdBy?: string },
 ) {
-  let query = database.selectFrom("coupons");
-  if (options?.createdBy) {
-    query = query.where("created_by", "=", options.createdBy);
-  }
-  if (options?.courseId) {
-    const courseId = options.courseId;
-    query = query.where(
-      sql<boolean>`(
-        restricted_course_ids is null
-        or cardinality(restricted_course_ids) = 0
-        or ${courseId}::uuid = any(restricted_course_ids)
-      )`,
-    );
-  }
-
-  const coupons = await query
-    .select(["id", "is_active", "starts_at", "expires_at"])
-    .execute();
-
-  const totalCount = coupons.length;
-  const now = Date.now();
-  let activeCount = 0;
-  let scheduledCount = 0;
-  let expiredCount = 0;
-  let inactiveCount = 0;
-
-  for (const c of coupons) {
-    if (!c.is_active) {
-      inactiveCount += 1;
-    } else {
-      const startsAt = new Date(c.starts_at).getTime();
-      const expiresAt = new Date(c.expires_at).getTime();
-      if (startsAt > now) {
-        scheduledCount += 1;
-      } else if (expiresAt < now) {
-        expiredCount += 1;
-      } else {
-        activeCount += 1;
-      }
+  function scopedCoupons() {
+    let query = database.selectFrom("coupons");
+    if (options?.createdBy) {
+      query = query.where("created_by", "=", options.createdBy);
     }
+    if (options?.courseId) {
+      const courseId = options.courseId;
+      query = query.where(
+        sql<boolean>`(
+          restricted_course_ids is null
+          or cardinality(restricted_course_ids) = 0
+          or ${courseId}::uuid = any(restricted_course_ids)
+        )`,
+      );
+    }
+    return query;
   }
 
-  let totalRedemptions = 0;
-  let totalDiscountGiven = 0;
-
-  if (coupons.length > 0) {
-    const couponIds = coupons.map((c) => c.id);
-    const redemptionStats = await database
+  // An inactive coupon is "inactive" whatever its dates; an active one is
+  // scheduled, expired or live depending on where `now` falls in its window.
+  const now = sql<Date>`${new Date()}::timestamptz`;
+  const [counts, redemptions] = await Promise.all([
+    scopedCoupons()
+      .select([
+        sql<number>`count(*)::int`.as("total_count"),
+        sql<number>`(count(*) filter (where not is_active))::int`.as(
+          "inactive_count",
+        ),
+        sql<number>`(count(*) filter (
+          where is_active and starts_at > ${now}
+        ))::int`.as("scheduled_count"),
+        sql<number>`(count(*) filter (
+          where is_active and starts_at <= ${now} and expires_at < ${now}
+        ))::int`.as("expired_count"),
+        sql<number>`(count(*) filter (
+          where is_active and starts_at <= ${now} and expires_at >= ${now}
+        ))::int`.as("active_count"),
+      ])
+      .executeTakeFirst(),
+    database
       .selectFrom("coupon_redemptions")
       .select([
         sql<number>`count(*)::int`.as("total_redemptions"),
@@ -409,20 +373,17 @@ export async function getCouponOverallSummary(
           "total_discount_given",
         ),
       ])
-      .where("coupon_id", "in", couponIds)
-      .executeTakeFirst();
-
-    totalRedemptions = Number(redemptionStats?.total_redemptions ?? 0);
-    totalDiscountGiven = Number(redemptionStats?.total_discount_given ?? 0);
-  }
+      .where("coupon_id", "in", scopedCoupons().select("id"))
+      .executeTakeFirst(),
+  ]);
 
   return {
-    totalCount,
-    activeCount,
-    scheduledCount,
-    expiredCount,
-    inactiveCount,
-    totalRedemptions,
-    totalDiscountGiven,
+    totalCount: Number(counts?.total_count ?? 0),
+    activeCount: Number(counts?.active_count ?? 0),
+    scheduledCount: Number(counts?.scheduled_count ?? 0),
+    expiredCount: Number(counts?.expired_count ?? 0),
+    inactiveCount: Number(counts?.inactive_count ?? 0),
+    totalRedemptions: Number(redemptions?.total_redemptions ?? 0),
+    totalDiscountGiven: Number(redemptions?.total_discount_given ?? 0),
   };
 }

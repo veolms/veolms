@@ -10,7 +10,7 @@ import {
   type RefObject,
 } from "react";
 import { useVirtualizer, useWindowVirtualizer } from "@tanstack/react-virtual";
-import type { Order, OrderSortOrder } from "@veolms/contracts";
+import type { AdminOrder, OrderSortOrder } from "@veolms/contracts";
 import { ArrowDownIcon as ArrowDown } from "@phosphor-icons/react/ArrowDown";
 import { ArrowUpIcon as ArrowUp } from "@phosphor-icons/react/ArrowUp";
 import {
@@ -53,7 +53,7 @@ const orderListGridColumns =
   "grid-cols-[minmax(220px,1.4fr)_minmax(210px,1.5fr)_minmax(110px,0.8fr)_minmax(130px,0.9fr)_minmax(130px,0.9fr)_minmax(120px,0.8fr)_minmax(56px,0.35fr)]";
 
 export interface OrdersTableProps {
-  orders: readonly Order[];
+  orders: readonly AdminOrder[];
   isLoading: boolean;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -62,7 +62,7 @@ export interface OrdersTableProps {
   onToggleSortOrder: () => void;
   selectedOrderId: string | null;
   onSelectOrder: (orderId: string) => void;
-  onRequestRefund: (order: Order) => void;
+  onRequestRefund: (order: AdminOrder) => void;
   onNavigatePage?: NavigateTo;
   setNotice?: (message: string) => void;
   isFiltered?: boolean;
@@ -126,7 +126,7 @@ function useOrderScrollMargin(
 }
 
 interface OrderRowProps {
-  order: Order;
+  order: AdminOrder;
   dataIndex: number;
   isSelected: boolean;
   isMenuOpen: boolean;
@@ -134,7 +134,7 @@ interface OrderRowProps {
   measureElement: (element: Element | null) => void;
   transform: string;
   onSelectOrder: (orderId: string) => void;
-  onRequestRefund: (order: Order) => void;
+  onRequestRefund: (order: AdminOrder) => void;
   onNavigatePage?: NavigateTo;
   setNotice?: (message: string) => void;
 }
@@ -228,6 +228,7 @@ const OrderRow = memo(function OrderRow({
           <StudentAvatar
             name={studentName}
             username={student?.username}
+            avatarUrl={student?.avatarUrl}
             size="md"
           />
           <div className="min-w-0">

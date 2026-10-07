@@ -1,6 +1,6 @@
 import { memo, useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import type { Order } from "@veolms/contracts";
+import type { AdminOrder } from "@veolms/contracts";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
@@ -25,7 +25,7 @@ const SECONDARY_ACTION_CLASS =
   "inline-flex h-9.5 items-center justify-center rounded-[10px] border-none bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--text)_13%,var(--surface))] active:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] px-5 text-[0.82rem] font-semibold text-(--text) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_10%,transparent))] transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap";
 
 export interface OrderRefundModalProps {
-  order: Order | null;
+  order: AdminOrder | null;
   onClose: () => void;
   setNotice?: (message: string) => void;
 }

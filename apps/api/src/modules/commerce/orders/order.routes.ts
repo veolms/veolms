@@ -1,13 +1,13 @@
 import { z } from "zod";
 import {
-  orderSchema,
+  orderResponseSchema,
   invoiceSchema,
   ordersListQuerySchema,
   ordersListResponseSchema,
   orderStatsQuerySchema,
   orderStatsResponseSchema,
   orderDirectRefundRequestSchema,
-  refundSchema,
+  refundResultSchema,
 } from "@veolms/contracts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import { errorResponse } from "../../../lib/errors.ts";
@@ -72,7 +72,7 @@ const orderRoutes: RoutePlugin = async (app, options) => {
         tags: ["Commerce - Orders"],
         summary: "Get order statistics",
         description:
-          "Computes net revenue, total orders, unique buyers, and refunds for the orders matching the filters (refunds are those made against the same orders, so net revenue is never negative). Figures describe a single currency: pass currency to choose, otherwise the most-ordered one is used and all present currencies are listed in currencies. Results are cached for up to 30 seconds.",
+          "Computes net revenue, total orders, unique buyers, and refunds for the orders matching the filters (refunds are those made against the same orders, so net revenue is never negative). Figures describe a single currency: pass currency to choose, otherwise the most-ordered one is used and named in currency. Results are cached for up to 30 seconds.",
         querystring: orderStatsQuerySchema,
         response: {
           200: jsonResponse("Order statistics", orderStatsResponseSchema),
@@ -100,7 +100,7 @@ const orderRoutes: RoutePlugin = async (app, options) => {
           view: z.enum(["admin", "student"]).optional(),
         }),
         response: {
-          200: jsonResponse("Order details", orderSchema),
+          200: jsonResponse("Order details", orderResponseSchema),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden"),
           404: errorResponse("Order not found"),
@@ -180,7 +180,7 @@ const orderRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "Refund processed successfully, or the original refund when the idempotency key was already used",
-            refundSchema,
+            refundResultSchema,
           ),
           400: errorResponse("Refund not allowed"),
           401: errorResponse("Unauthorized"),
