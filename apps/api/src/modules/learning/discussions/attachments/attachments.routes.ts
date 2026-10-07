@@ -129,6 +129,13 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/attachments/link-preview",
     {
+      // Each call makes the server fetch a caller-chosen URL.
+      config: {
+        rateLimit: {
+          max: 20,
+          timeWindow: "1 minute",
+        },
+      },
       preHandler: permissions.requireAuthenticated,
       schema: {
         operationId: "getLearningLinkPreview",
