@@ -91,7 +91,12 @@ import {
 } from "../learning/player/learningMiniPlayerStore";
 import type { NavigateTo, NavigationOptions } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
-import { buildLoginPath } from "../routing/routeAccess";
+import {
+  buildLoginDialogPath,
+  buildLoginPath,
+  LOGIN_PATH,
+} from "../routing/routeAccess";
+import { LoginDialogHost } from "../auth/LoginDialogHost";
 import {
   getNavigationDestination,
   getRoleNavigationItems,
@@ -579,7 +584,21 @@ export default function AcademyLayout() {
         // Keep the confirmed signed-out state fresh so the login route can
         // render immediately without revalidating the same session query.
         queryClient.setQueryData(authKeys.me(), null);
-        void navigate(buildLoginPath(requestedPath), { replace: true });
+        void navigate(
+          buildLoginDialogPath(requestedPath, locationPathRef.current),
+        );
+        return;
+      }
+
+      // "Log in" from anywhere opens the pop-up over the page the visitor
+      // is on (or the page the link was heading for), not a login page.
+      if (requestedPathname === LOGIN_PATH) {
+        const loginReturnTo = new URLSearchParams(
+          requestedPath.split("#", 1)[0]?.split("?")[1] ?? "",
+        ).get("returnTo");
+        void navigate(
+          buildLoginDialogPath(loginReturnTo, locationPathRef.current),
+        );
         return;
       }
 
@@ -1168,7 +1187,7 @@ export default function AcademyLayout() {
           bootstrapError?.code === "MFA_REQUIRED"
             ? {
                 kind: "login" as const,
-                message: "Log in to access this lesson.",
+                message: "Log in to access the lesson.",
                 actionLabel: "Log in",
                 onAction: openPersistentPlayerLogin,
               }
@@ -1669,10 +1688,8 @@ export default function AcademyLayout() {
           staticCourseRouteData?.publishedCoursePageNeedsRefresh
         }
         initialCourseOverview={staticCourseRouteData?.courseOverview}
-        initialHomeDiscovery={staticCourseRouteData?.homeDiscovery}
-        initialHomePopularDiscussions={
-          staticCourseRouteData?.homePopularDiscussions
-        }
+        initialGuestHomePage={staticCourseRouteData?.guestHomePage}
+        initialGuestHomeCopy={staticCourseRouteData?.guestHomeCopy}
         page={route.page}
         section={activeRouteSection}
         settingsTab={route.settingsTab}
@@ -1743,6 +1760,7 @@ export default function AcademyLayout() {
           />
         </Suspense>
       ) : null}
+      <LoginDialogHost />
     </AcademyRouteGuard>
   );
 }

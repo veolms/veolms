@@ -2,6 +2,7 @@ import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { HouseIcon as House } from "@phosphor-icons/react/House";
+import { LayoutIcon as Layout } from "@phosphor-icons/react/Layout";
 import { ToteIcon as Tote } from "@phosphor-icons/react/Tote";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
@@ -88,6 +89,7 @@ const adminNavigation: readonly NavigationItem[] = [
     "/analytics",
   ),
   createNavigationItem("admin-coupons", "Coupons", Tag, "/coupons"),
+  createNavigationItem("admin-home-page", "Home Page", Layout, "/home-page"),
   createNavigationItem("creator-settings", "Settings", GearSix, "/settings"),
 ];
 
@@ -111,6 +113,7 @@ const navigationTones: Record<string, string> = {
   Dashboard: "#5da9ff",
   Courses: "#f472b6",
   Coupons: "#fbbf24",
+  "Home Page": "#38bdf8",
   Students: "#2dd4bf",
   Reviews: "#f1be4b",
   "My Quiz": "#f87171",

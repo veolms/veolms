@@ -5,6 +5,7 @@ export type CourseEnrollmentFilter =
   | "all"
   | "enrolled"
   | "not-enrolled"
+  | "free"
   | "wishlist"
   | "published"
   | "draft"
@@ -28,6 +29,13 @@ export interface CoursePricing {
   price: string;
   originalPrice: string;
   discount: string;
+  /**
+   * Show `discount` as a badge on the card: the creator's choice for a paid
+   * course, always on for a free course that names its original price.
+   */
+  showDiscountBadge?: boolean;
+  /** The course costs nothing to enroll in. */
+  free?: boolean;
 }
 
 export interface Course {
@@ -141,6 +149,7 @@ export interface CourseQuickFilterCounts {
   all: number;
   enrolled: number;
   "not-enrolled": number;
+  free: number;
   published: number;
   draft: number;
   bin: number;
@@ -175,6 +184,7 @@ export function getCourseQuickFilterCounts(
       all: pool.length,
       enrolled,
       "not-enrolled": pool.length - enrolled,
+      free: pool.filter((course) => course.pricing?.free).length,
       published: 0,
       draft: 0,
       bin: 0,
@@ -193,6 +203,7 @@ export function getCourseQuickFilterCounts(
     all: pool.length,
     enrolled: 0,
     "not-enrolled": 0,
+    free: 0,
     published,
     draft,
     bin: 0,
@@ -230,6 +241,12 @@ export function getVisibleCourses(
       role === "student" &&
       enrollmentFilter === "not-enrolled" &&
       course.enrolled
+    )
+      return false;
+    if (
+      role === "student" &&
+      enrollmentFilter === "free" &&
+      !course.pricing?.free
     )
       return false;
     if (

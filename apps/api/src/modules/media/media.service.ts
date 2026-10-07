@@ -888,6 +888,8 @@ export function createMediaService({
       pricing_type: string | null;
       is_preview: boolean;
       is_published?: boolean;
+      /** The course's first published lesson. */
+      is_first_lesson?: boolean;
     },
     user?: PlaybackUser,
   ): Promise<void> {
@@ -906,8 +908,15 @@ export function createMediaService({
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
-    // Preview lessons and explicitly free courses are intentionally public.
-    if (context.is_preview || context.pricing_type === "free") return;
+    // Preview lessons are public. A free course is open to anyone who is
+    // signed in; a visitor who is not gets its first lesson only.
+    if (context.is_preview) return;
+    if (
+      context.pricing_type === "free" &&
+      (user || context.is_first_lesson === true)
+    ) {
+      return;
+    }
 
     if (!user) {
       throw new AppError(
@@ -1069,7 +1078,12 @@ export function createMediaService({
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
-    await assertPlaybackAccess(context, user);
+    // Lesson numbers count the published lessons in order, so number one is
+    // the course's first lesson for everyone this rule applies to.
+    await assertPlaybackAccess(
+      { ...context, is_first_lesson: lessonNumber === 1 },
+      user,
+    );
     return context;
   }
 
@@ -1292,9 +1306,11 @@ export function createMediaService({
       contentType: hlsContentType(hlsPath),
       contentLength: file.contentLength,
       isManifest: /\.m3u8$/i.test(hlsPath),
+      // Only what a signed-out visitor may play is cacheable for everyone.
       isPublic:
         context.course_status === "published" &&
-        (context.is_preview || context.pricing_type === "free"),
+        (context.is_preview ||
+          (context.pricing_type === "free" && context.is_first_lesson)),
     };
   }
 

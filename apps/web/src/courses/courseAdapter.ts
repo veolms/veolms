@@ -40,13 +40,6 @@ export function formatCoursePricing(
   pricing?: CoursePricingSummary,
 ): CoursePricing | undefined {
   if (!pricing) return undefined;
-  if (pricing.pricingType === "free") {
-    return {
-      price: "Free",
-      originalPrice: "",
-      discount: "",
-    };
-  }
   const currency = pricing.currency || "INR";
   const formatAmount = (amount: number) =>
     new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
@@ -54,6 +47,27 @@ export function formatCoursePricing(
       currency,
       maximumFractionDigits: 0,
     }).format(amount);
+
+  if (pricing.pricingType === "free") {
+    // A free course that names what it would otherwise cost shows that
+    // price struck through beside a price of zero, and always carries the
+    // "Free" badge so the zero is not read as a typo.
+    if (pricing.price > 0) {
+      return {
+        price: formatAmount(0),
+        originalPrice: formatAmount(Number(pricing.price)),
+        discount: "Free",
+        showDiscountBadge: true,
+        free: true,
+      };
+    }
+    return {
+      price: "Free",
+      originalPrice: "",
+      discount: "",
+      free: true,
+    };
+  }
 
   const formattedPrice = formatAmount(Number(pricing.price));
 
@@ -70,6 +84,7 @@ export function formatCoursePricing(
       price: formattedSalePrice,
       originalPrice: formattedPrice,
       discount: `${discountPercent}% off`,
+      showDiscountBadge: pricing.showDiscountBadge === true,
     };
   }
 

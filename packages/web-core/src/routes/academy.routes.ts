@@ -30,6 +30,10 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "courses-not-enrolled",
       caseSensitive: true,
     }),
+    route("courses/free", marker, {
+      id: "courses-free",
+      caseSensitive: true,
+    }),
     route("courses/wishlist", marker, {
       id: "courses-wishlist",
       caseSensitive: true,
@@ -99,6 +103,10 @@ export function getAcademyRoutes(): RouteConfigEntry {
       caseSensitive: true,
     }),
     route("coupons", marker, { id: "coupons", caseSensitive: true }),
+    route("home-page", marker, {
+      id: "home-page-settings",
+      caseSensitive: true,
+    }),
     route("coupons/create", marker, {
       id: "coupon-create",
       caseSensitive: true,

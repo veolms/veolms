@@ -102,6 +102,7 @@ export interface PublicPopularThreadRow {
   title: string | null;
   snippet: string;
   authorName: string | null;
+  authorUsername: string | null;
   authorAvatarUrl: string | null;
   courseId: string;
   lessonId: string;
@@ -449,7 +450,12 @@ export interface ThreadsRepository {
 
   listPublicPopularThreads(
     db: DatabaseExecutor,
-    options: { academyId: string; limit: number },
+    options: {
+      academyId: string;
+      limit: number;
+      /** Keep only each author's most popular thread. */
+      onePerAuthor?: boolean;
+    },
   ): Promise<PublicPopularThreadRow[]>;
 
   countThreads(
@@ -903,8 +909,8 @@ export function createThreadsRepository(): ThreadsRepository {
       return rows as ThreadRowWithAuthor[];
     },
 
-    async listPublicPopularThreads(db, { academyId, limit }) {
-      const rows = await db
+    async listPublicPopularThreads(db, { academyId, limit, onePerAuthor }) {
+      const ranked = db
         .selectFrom("learning_threads as t")
         .innerJoin("courses as c", "c.id", "t.course_id")
         .innerJoin("course_lessons as l", "l.id", "t.lesson_id")
@@ -919,6 +925,7 @@ export function createThreadsRepository(): ThreadsRepository {
           "t.title as title",
           sql<string>`left(t.plain_text, 500)`.as("snippet"),
           "u.display_name as authorName",
+          "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
           "c.id as courseId",
           "l.id as lessonId",
@@ -931,6 +938,13 @@ export function createThreadsRepository(): ThreadsRepository {
           )::int`.as("engagementScore"),
           "t.created_at as createdAt",
           "t.updated_at as updatedAt",
+          sql<number>`row_number() over (
+            partition by t.user_id
+            order by
+              (coalesce(t.replies_count, 0) + coalesce(t.likes_count, 0)) desc,
+              t.updated_at desc,
+              t.id desc
+          )`.as("authorRank"),
         ])
         .where("t.academy_id", "=", academyId)
         .where("t.kind", "in", ["comment", "question"])
@@ -943,19 +957,18 @@ export function createThreadsRepository(): ThreadsRepository {
             pricing: "p",
           }),
         )
-        .where(discussionVisibilityPredicate("t", null, false))
-        .orderBy(
-          sql<number>`(
-            coalesce(t.replies_count, 0) + coalesce(t.likes_count, 0)
-          )`,
-          "desc",
-        )
-        .orderBy("t.updated_at", "desc")
-        .orderBy("t.id", "desc")
-        .limit(Math.min(20, limit))
+        .where(discussionVisibilityPredicate("t", null, false));
+
+      let query = db.selectFrom(ranked.as("r")).selectAll("r");
+      if (onePerAuthor) query = query.where("r.authorRank", "=", 1);
+      const rows = await query
+        .orderBy("r.engagementScore", "desc")
+        .orderBy("r.updatedAt", "desc")
+        .orderBy("r.id", "desc")
+        .limit(Math.min(40, limit))
         .execute();
 
-      return rows.map((row) => ({
+      return rows.map(({ authorRank: _authorRank, ...row }) => ({
         ...row,
         kind: row.kind as "comment" | "question",
         replyCount: Number(row.replyCount ?? 0),

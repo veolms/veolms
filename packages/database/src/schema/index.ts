@@ -13,6 +13,7 @@ export * from "./notifications.schema.ts";
 export * from "./json.schema.ts";
 export * from "./quizzes.schema.ts";
 export * from "./learning-goals.schema.ts";
+export * from "./home-page.schema.ts";
 export * from "./learning-progress.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
@@ -121,6 +122,7 @@ import type {
   LearningDailyActivityTable,
   UserLearningSettingsTable,
 } from "./learning-goals.schema.ts";
+import type { HomePageSettingsTable } from "./home-page.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 
 export interface Database {
@@ -218,6 +220,7 @@ export interface Database {
   learning_daily_activity: LearningDailyActivityTable;
   learning_progress: LearningProgressTable;
   user_learning_settings: UserLearningSettingsTable;
+  home_page_settings: HomePageSettingsTable;
 
   // Derived from lesson descriptions
   lesson_chapters: LessonChapterTable;

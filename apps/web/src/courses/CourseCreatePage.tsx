@@ -12,6 +12,7 @@ import {
 import "../styles/features/course-wizard.css";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { createPortal } from "react-dom";
+import { Checkbox } from "../components/Checkbox";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
 import { CourseQuizPricingCard } from "./CourseQuizPricingCard";
@@ -1127,6 +1128,8 @@ export interface PricingFormState {
   sellingPrice: string;
   originalPrice: string;
   currency: string;
+  /** Show the discount as a badge on the course's cards. Off by default. */
+  showDiscountBadge: boolean;
 }
 
 export type PricingState = PricingFormState;
@@ -1136,16 +1139,35 @@ export const initialPricingState: PricingFormState = {
   sellingPrice: "",
   originalPrice: "",
   currency: "INR",
+  showDiscountBadge: false,
 };
+
+/**
+ * A course has one price. Selling it for zero is what makes it free: there
+ * is no separate free/paid choice, so the type always follows the price.
+ */
+export const derivePricingType = (sellingPrice: string): PricingType =>
+  parseFloat(sellingPrice.replace(/,/g, "").trim()) === 0 ? "free" : "paid";
 
 export const normalizePricingState = (
   raw?: Partial<PricingFormState> | null,
-): PricingFormState => ({
-  pricingType: raw?.pricingType === "free" ? "free" : "paid",
-  sellingPrice: raw?.sellingPrice ? String(raw.sellingPrice).trim() : "",
-  originalPrice: raw?.originalPrice ? String(raw.originalPrice).trim() : "",
-  currency: raw?.currency ? String(raw.currency).trim() : "INR",
-});
+): PricingFormState => {
+  const sellingPrice = raw?.sellingPrice ? String(raw.sellingPrice).trim() : "";
+  return {
+    pricingType: derivePricingType(sellingPrice),
+    sellingPrice,
+    originalPrice: raw?.originalPrice ? String(raw.originalPrice).trim() : "",
+    currency: raw?.currency ? String(raw.currency).trim() : "INR",
+    showDiscountBadge: raw?.showDiscountBadge === true,
+  };
+};
+
+/**
+ * The badge needs a discount to announce: it only counts while the course
+ * has an original price above what it sells for (which is zero when free).
+ */
+export const hasDiscountBadge = (state: PricingFormState): boolean =>
+  state.showDiscountBadge && state.originalPrice.trim() !== "";
 
 export const isPricingEqual = (
   a: PricingFormState,
@@ -1154,16 +1176,12 @@ export const isPricingEqual = (
   const normA = normalizePricingState(a);
   const normB = normalizePricingState(b);
 
-  if (normA.pricingType !== normB.pricingType) return false;
   if (normA.currency !== normB.currency) return false;
-
-  if (normA.pricingType === "free") {
-    return true;
-  }
 
   return (
     normA.sellingPrice === normB.sellingPrice &&
-    normA.originalPrice === normB.originalPrice
+    normA.originalPrice === normB.originalPrice &&
+    hasDiscountBadge(normA) === hasDiscountBadge(normB)
   );
 };
 
@@ -1467,17 +1485,14 @@ export function validatePricing(pricing: PricingState): {
   isValid: boolean;
   error: string | null;
 } {
-  if (pricing.pricingType === "free") {
-    return { isValid: true, error: null };
-  }
-
   const rawSell = pricing.sellingPrice.replace(/,/g, "").trim();
   const sellNum = parseFloat(rawSell);
 
-  if (!rawSell || isNaN(sellNum) || sellNum <= 0) {
+  // Zero is a valid price: it makes the course free.
+  if (!rawSell || isNaN(sellNum) || sellNum < 0) {
     return {
       isValid: false,
-      error: "Please enter a valid selling price greater than 0.",
+      error: "Please enter a selling price. Enter 0 to make the course free.",
     };
   }
 
@@ -1656,14 +1671,6 @@ const inclusionGhostHtml = (text: string) => `
 `;
 
 export function buildPricingPayload(state: PricingFormState) {
-  if (state.pricingType === "free") {
-    return {
-      pricingType: "free" as const,
-      price: 0,
-      salePrice: null,
-      currency: state.currency || "INR",
-    };
-  }
   const rawSell = state.sellingPrice.replace(/,/g, "").trim();
   const rawOrig = state.originalPrice.replace(/,/g, "").trim();
   const sellNum = Math.round(parseFloat(rawSell));
@@ -1673,11 +1680,16 @@ export function buildPricingPayload(state: PricingFormState) {
   const salePrice =
     origNum && origNum > 0 ? (isNaN(sellNum) ? null : sellNum) : null;
 
+  // What the learner pays: the sale price when there is an original price
+  // to strike through, otherwise the price itself.
+  const charged = salePrice ?? price;
+
   return {
-    pricingType: "paid" as const,
+    pricingType: charged === 0 ? ("free" as const) : ("paid" as const),
     price,
     salePrice,
     currency: state.currency || "INR",
+    showDiscountBadge: salePrice !== null && state.showDiscountBadge,
   };
 }
 
@@ -1865,6 +1877,7 @@ export function buildLocalPreviewData({
     price: pricingPayload.price,
     salePrice: pricingPayload.salePrice,
     currency: pricingPayload.currency,
+    showDiscountBadge: pricingPayload.showDiscountBadge,
   };
 
   const settingsData: CourseEditorDataResponse["settings"] = {
@@ -2334,55 +2347,12 @@ export function CourseWizardSkeleton({
           </div>
         ) : activeStep === "pricing" ? (
           <div className="flex w-full flex-col gap-5">
-            {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
-              {/* Card 1: Course pricing */}
+            <div className="grid grid-cols-1 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+              {/* Price details */}
               <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
                 <div className="mb-4.5">
                   <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    1. Course pricing
-                  </h3>
-                  <p className="m-0 text-(--muted) text-[0.83rem]">
-                    Choose how you want to sell this course.
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  {/* Radio Option: Free */}
-                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
-                    <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                        Free
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Anyone who can access the course can enroll for free.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Radio Option: Paid */}
-                  <div className="relative flex items-center gap-3.5 border border-[color-mix(in_srgb,var(--accent)_60%,transparent)] rounded-xl p-3.5 px-4 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                    <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
-                      <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                    </div>
-                    <div className="flex flex-1 flex-col gap-0.75">
-                      <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                        Paid
-                      </strong>
-                      <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                        Learners must purchase the course to get access.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Price details */}
-              <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow)">
-                <div className="mb-4.5">
-                  <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                    2. Price details
+                    Price details
                   </h3>
                   <p className="m-0 text-(--muted) text-[0.83rem]">
                     Set the pricing for your course.
@@ -4495,7 +4465,11 @@ export function CourseCreatePage({
   const isPricingDirtyRef = useRef(isPricingDirty);
   isPricingDirtyRef.current = isPricingDirty;
 
-  const pricing = pricingDraft;
+  // Normalised on every render so the type always follows the price typed.
+  const pricing = useMemo(
+    () => normalizePricingState(pricingDraft),
+    [pricingDraft],
+  );
   const [pricingValidationError, setPricingValidationError] = useState<
     string | null
   >(null);
@@ -5239,19 +5213,12 @@ export function CourseCreatePage({
 
       if (editorData.pricing) {
         const p = editorData.pricing;
-        const isFree = p.pricingType === "free";
         const hasSale = p.salePrice != null && p.salePrice !== undefined;
         const confirmedPricing: PricingFormState = normalizePricingState({
-          pricingType: isFree ? "free" : "paid",
-          sellingPrice: isFree
-            ? ""
-            : hasSale
-              ? String(p.salePrice)
-              : p.price > 0
-                ? String(p.price)
-                : "",
-          originalPrice: !isFree && hasSale ? String(p.price) : "",
+          sellingPrice: hasSale ? String(p.salePrice) : String(p.price),
+          originalPrice: hasSale && p.price > 0 ? String(p.price) : "",
           currency: p.currency || "INR",
+          showDiscountBadge: p.showDiscountBadge === true,
         });
         setServerPricing(confirmedPricing);
         serverPricingRef.current = confirmedPricing;
@@ -7954,19 +7921,12 @@ export function CourseCreatePage({
 
       // Stale-response protection: Only update baseline if we are still at targetVersion
       if (pricingVersionRef.current === targetVersion) {
-        const isFree = res.pricingType === "free";
         const hasSale = res.salePrice != null && res.salePrice !== undefined;
         const newBaseline: PricingFormState = normalizePricingState({
-          pricingType: isFree ? "free" : "paid",
-          sellingPrice: isFree
-            ? ""
-            : hasSale
-              ? String(res.salePrice)
-              : res.price > 0
-                ? String(res.price)
-                : "",
-          originalPrice: !isFree && hasSale ? String(res.price) : "",
+          sellingPrice: hasSale ? String(res.salePrice) : String(res.price),
+          originalPrice: hasSale && res.price > 0 ? String(res.price) : "",
           currency: res.currency || "INR",
+          showDiscountBadge: res.showDiscountBadge === true,
         });
         setServerPricing(newBaseline);
         serverPricingRef.current = newBaseline;
@@ -8015,11 +7975,13 @@ export function CourseCreatePage({
               ...pricingDraftRef.current,
               sellingPrice: previousSnapshot.sellingPrice,
               originalPrice: previousSnapshot.originalPrice,
+              showDiscountBadge: previousSnapshot.showDiscountBadge,
             };
             setPricingDraft((prev) => ({
               ...prev,
               sellingPrice: previousSnapshot.sellingPrice,
               originalPrice: previousSnapshot.originalPrice,
+              showDiscountBadge: previousSnapshot.showDiscountBadge,
             }));
             const field = lastEditedPricingFieldRef.current;
             if (field) {
@@ -8093,51 +8055,6 @@ export function CourseCreatePage({
     }
   };
 
-  const handlePricingTypeChange = async (type: PricingType) => {
-    if (pricingDraftRef.current.pricingType === type) return;
-
-    clearPricingControlStatus("pricingType");
-    if (pricingDebounceTimerRef.current) {
-      clearTimeout(pricingDebounceTimerRef.current);
-      pricingDebounceTimerRef.current = null;
-    }
-
-    const previousSnapshot = { ...pricingDraftRef.current };
-    const version = ++pricingVersionRef.current;
-    pricingControlVersionsRef.current.pricingType = version;
-
-    // 1. Optimistic update
-    pricingDraftRef.current = {
-      ...pricingDraftRef.current,
-      pricingType: type,
-    };
-    setPricingDraft((prev) => ({ ...prev, pricingType: type }));
-    if (pricingValidationError) setPricingValidationError(null);
-
-    // 2. If switching to paid and price is not valid yet, keep in local draft without firing API
-    if (type === "paid") {
-      const validation = validatePricing(pricingDraftRef.current);
-      if (!validation.isValid) {
-        return;
-      }
-    }
-
-    // 3. Persist immediately
-    inFlightPricingControlsRef.current.pricingType =
-      (inFlightPricingControlsRef.current.pricingType || 0) + 1;
-    markPricingControlSaving("pricingType", true);
-
-    try {
-      await executeSerializedPricingMutation(
-        "pricingType",
-        version,
-        previousSnapshot,
-      );
-    } catch {
-      // Error handled in executeSerializedPricingMutation
-    }
-  };
-
   const handleSellingPriceChange = (val: string) => {
     lastEditedPricingFieldRef.current = "sellingPrice";
     clearPricingControlStatus("sellingPrice");
@@ -8157,6 +8074,23 @@ export function CourseCreatePage({
       pricingDebounceTimerRef.current = null;
       void persistPricingDetails();
     }, 400);
+  };
+
+  // The badge is one click, not typing: it is saved at once.
+  const handleShowDiscountBadgeChange = (checked: boolean) => {
+    lastEditedPricingFieldRef.current = "originalPrice";
+    clearPricingControlStatus("originalPrice");
+    clearPricingControlStatus("pricingDetails");
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      showDiscountBadge: checked,
+    };
+    setPricingDraft((prev) => ({ ...prev, showDiscountBadge: checked }));
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+      pricingDebounceTimerRef.current = null;
+    }
+    void persistPricingDetails();
   };
 
   const handleOriginalPriceChange = (val: string) => {
@@ -8196,8 +8130,8 @@ export function CourseCreatePage({
     setPricingDraft((prev) => ({ ...prev, currency: val }));
     if (pricingValidationError) setPricingValidationError(null);
 
-    // If paid and current price is invalid, keep currency in local draft until price is valid
-    if (pricingDraftRef.current.pricingType === "paid") {
+    // While the price is not valid yet, keep the currency in the local draft
+    {
       const validation = validatePricing(pricingDraftRef.current);
       if (!validation.isValid) {
         return;
@@ -8230,7 +8164,15 @@ export function CourseCreatePage({
 
   const previewPricing: CourseOverviewPricingProps =
     pricing.pricingType === "free"
-      ? { price: "Free", amount: 0, currency: previewCurrency }
+      ? previewOriginalAmount > 0
+        ? {
+            price: `${currencySymbol}0`,
+            originalPrice: `${currencySymbol}${pricing.originalPrice.trim()}`,
+            discount: "Free",
+            amount: 0,
+            currency: previewCurrency,
+          }
+        : { price: "Free", amount: 0, currency: previewCurrency }
       : {
           price: pricing.sellingPrice.trim()
             ? `${currencySymbol}${pricing.sellingPrice.trim()}`
@@ -9271,20 +9213,12 @@ export function CourseCreatePage({
         courseId: targetCourseId,
         payload,
       });
-
-      const isFree = res.pricingType === "free";
       const hasSale = res.salePrice != null && res.salePrice !== undefined;
       const newBaseline: PricingFormState = normalizePricingState({
-        pricingType: isFree ? "free" : "paid",
-        sellingPrice: isFree
-          ? ""
-          : hasSale
-            ? String(res.salePrice)
-            : res.price > 0
-              ? String(res.price)
-              : "",
-        originalPrice: !isFree && hasSale ? String(res.price) : "",
+        sellingPrice: hasSale ? String(res.salePrice) : String(res.price),
+        originalPrice: hasSale && res.price > 0 ? String(res.price) : "",
         currency: res.currency || "INR",
+        showDiscountBadge: res.showDiscountBadge === true,
       });
 
       setServerPricing(newBaseline);
@@ -12991,122 +12925,19 @@ export function CourseCreatePage({
                     </div>
                   )}
 
-                  {/* Top 2-Column Grid: 1. Course pricing & 2. Price details */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
-                    {/* Card 1: Course pricing */}
-                    <div className="flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200">
-                      <div className="flex items-center justify-between mb-4.5">
-                        <div>
-                          <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                            1. Course pricing
-                          </h3>
-                          <p className="m-0 text-(--muted) text-[0.83rem]">
-                            Choose how you want to sell this course.
-                          </p>
-                        </div>
-                        <PricingControlStatusIndicator
-                          status={getPricingControlDisplayStatus("pricingType")}
-                          testId="pricing-field-status-pricingType"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-3">
-                        {/* Radio Option: Free */}
-                        <div
-                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                            isSavingPricing ||
-                            isPricingControlSaving("pricingType")
-                              ? "opacity-60 cursor-not-allowed"
-                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                          } ${
-                            pricing.pricingType === "free"
-                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                          }`}
-                          onClick={() =>
-                            !isSavingPricing &&
-                            !isPricingControlSaving("pricingType") &&
-                            handlePricingTypeChange("free")
-                          }
-                        >
-                          <div
-                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                              pricing.pricingType === "free"
-                                ? "border-(--accent)"
-                                : "border-(--muted)"
-                            }`}
-                          >
-                            {pricing.pricingType === "free" && (
-                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                            )}
-                          </div>
-                          <div className="flex flex-1 flex-col gap-0.75">
-                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                              Free
-                            </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                              Anyone who can access the course can enroll for
-                              free.
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Radio Option: Paid */}
-                        <div
-                          className={`relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 transition-[border-color,background-color] duration-150 ease-out select-none ${
-                            isSavingPricing ||
-                            isPricingControlSaving("pricingType")
-                              ? "opacity-60 cursor-not-allowed"
-                              : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))]"
-                          } ${
-                            pricing.pricingType === "paid"
-                              ? "is-selected border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]"
-                              : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]"
-                          }`}
-                          onClick={() =>
-                            !isSavingPricing &&
-                            !isPricingControlSaving("pricingType") &&
-                            handlePricingTypeChange("paid")
-                          }
-                        >
-                          <div
-                            className={`flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
-                              pricing.pricingType === "paid"
-                                ? "border-(--accent)"
-                                : "border-(--muted)"
-                            }`}
-                          >
-                            {pricing.pricingType === "paid" && (
-                              <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                            )}
-                          </div>
-                          <div className="flex flex-1 flex-col gap-0.75">
-                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                              Paid
-                            </strong>
-                            <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                              Learners must purchase the course to get access.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Card 2: Price details */}
+                  <div className="grid grid-cols-1 gap-5 max-[768px]:gap-3.5 w-full min-w-0">
+                    {/* Price details */}
                     <div
-                      className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200 ${
-                        pricing.pricingType === "free"
-                          ? "is-disabled opacity-55 pointer-events-none"
-                          : ""
-                      }`}
+                      className={`flex flex-col border border-[color-mix(in_srgb,var(--text)_8%,transparent)] rounded-[14px] p-5 pb-6 bg-(--surface) shadow-(--card-shadow) transition-opacity duration-200 `}
                     >
                       <div className="flex items-center justify-between mb-4.5">
                         <div>
                           <h3 className="m-0 mb-1 text-(--text) text-[1.05rem] font-bold">
-                            2. Price details
+                            Price details
                           </h3>
                           <p className="m-0 text-(--muted) text-[0.83rem]">
-                            Set the pricing for your course.
+                            Set the price for your course. A price of 0 makes it
+                            free.
                           </p>
                         </div>
                       </div>
@@ -13134,7 +12965,6 @@ export function CourseCreatePage({
                             onValueChange={handleCurrencyChange}
                             options={currencyOptions}
                             disabled={
-                              pricing.pricingType === "free" ||
                               isSavingPricing ||
                               isPricingControlSaving("pricingType") ||
                               isPricingControlSaving("currency")
@@ -13176,7 +13006,6 @@ export function CourseCreatePage({
                               inputMode="numeric"
                               pattern="[0-9]*"
                               disabled={
-                                pricing.pricingType === "free" ||
                                 isSavingPricing ||
                                 isPricingControlSaving("pricingType")
                               }
@@ -13192,7 +13021,8 @@ export function CourseCreatePage({
                             />
                           </div>
                           <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
-                            This is the price learners will pay.
+                            This is the price learners will pay. Enter 0 to make
+                            the course free.
                           </p>
                         </div>
 
@@ -13222,7 +13052,6 @@ export function CourseCreatePage({
                               inputMode="numeric"
                               pattern="[0-9]*"
                               disabled={
-                                pricing.pricingType === "free" ||
                                 isSavingPricing ||
                                 isPricingControlSaving("pricingType")
                               }
@@ -13238,7 +13067,8 @@ export function CourseCreatePage({
                             />
                           </div>
                           <p className="m-0 mt-1 text-(--muted) text-[0.78rem]">
-                            Enter original price to show discount.
+                            Optional. Shown struck through beside the selling
+                            price.
                           </p>
                         </div>
 
@@ -13256,7 +13086,7 @@ export function CourseCreatePage({
                           if (
                             !isNaN(sell) &&
                             !isNaN(orig) &&
-                            sell > 0 &&
+                            sell >= 0 &&
                             orig > sell
                           ) {
                             discountPercent = Math.round(
@@ -13269,8 +13099,7 @@ export function CourseCreatePage({
                             <div className="flex items-center gap-3 mt-1 flex-wrap">
                               <div
                                 className={`inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border rounded-lg px-2.5 py-1.5 text-[0.80rem] font-bold transition-[border-color,background-color,color] duration-150 ease-out ${
-                                  isValidDiscount &&
-                                  pricing.pricingType === "paid"
+                                  isValidDiscount
                                     ? "is-active border-green-500/40 text-green-400 bg-green-500/12"
                                     : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] text-(--muted) bg-[color-mix(in_srgb,var(--text)_5%,transparent)]"
                                 }`}
@@ -13281,8 +13110,7 @@ export function CourseCreatePage({
                                   className="shrink-0"
                                 />
                                 <span className="whitespace-nowrap leading-none">
-                                  {isValidDiscount &&
-                                  pricing.pricingType === "paid"
+                                  {isValidDiscount
                                     ? `${discountPercent}% OFF`
                                     : "0% OFF"}
                                 </span>
@@ -13290,6 +13118,16 @@ export function CourseCreatePage({
                               <span className="text-(--muted) text-[0.8rem] leading-tight">
                                 Discount is calculated automatically.
                               </span>
+                              <Checkbox
+                                id="pricing-show-discount-badge"
+                                className="basis-full -ml-2.5"
+                                checked={
+                                  isValidDiscount && pricing.showDiscountBadge
+                                }
+                                disabled={!isValidDiscount}
+                                onCheckedChange={handleShowDiscountBadgeChange}
+                                label="Show this discount as a badge on the course card"
+                              />
                             </div>
                           );
                         })()}

@@ -1,16 +1,18 @@
 import {
   courseListResponseSchema,
   courseOverviewSchema,
+  guestHomePageResponseSchema,
   homeDiscoveryResponseSchema,
   publicPopularDiscussionsResponseSchema,
   type CourseListResponse,
   type CourseOverviewResponse,
+  type GuestHomePageResponse,
   type HomeDiscoveryResponse,
-  type PublicPopularDiscussion,
 } from "@veolms/contracts";
+import { DEFAULT_HOME_PAGE_SETTINGS } from "@veolms/contracts/home-page-defaults";
 import {
-  GUEST_HOME_COURSES_PER_SECTION,
   GUEST_HOME_DISCUSSION_COUNT,
+  selectGuestHomeCourses,
 } from "../home/guestHomeLimits";
 import { fetchStaticBuildApi } from "./staticBuildApi";
 
@@ -18,8 +20,22 @@ export interface AcademyStaticPageData {
   publishedCoursePage?: CourseListResponse;
   publishedCoursePageNeedsRefresh?: boolean;
   courseOverview?: CourseOverviewResponse;
-  homeDiscovery?: HomeDiscoveryResponse;
-  homePopularDiscussions?: PublicPopularDiscussion[];
+  guestHomePage?: GuestHomePageResponse;
+  /**
+   * The home page's words without its courses and discussions, carried by
+   * every other page so that opening the home page from there shows its copy
+   * at once; only the course rows are then still to load.
+   */
+  guestHomeCopy?: GuestHomePageResponse;
+}
+
+function toGuestHomeCopy(page: GuestHomePageResponse): GuestHomePageResponse {
+  return {
+    ...page,
+    popularCourses: { ...page.popularCourses, courses: [] },
+    freeCourses: { ...page.freeCourses, courses: [] },
+    discussions: { ...page.discussions, items: [] },
+  };
 }
 
 const PUBLISHED_COURSE_PAGE_SIZE = 24;
@@ -46,10 +62,11 @@ const STATIC_API_RETRY_BUDGET_MS = 7_000;
 async function fetchStaticApiData<T>(
   path: string,
   parse: (value: unknown) => T,
+  retryBudgetMs = STATIC_API_RETRY_BUDGET_MS,
 ) {
   const response = await fetchStaticBuildApi(
     `${getStaticApiBaseUrl()}${path}`,
-    STATIC_API_RETRY_BUDGET_MS,
+    retryBudgetMs,
   );
   if (!response.ok) {
     throw new Error(
@@ -64,61 +81,86 @@ async function fetchStaticApiData<T>(
   return parse(payload);
 }
 
-let homeDiscoveryPromise: Promise<HomeDiscoveryResponse> | undefined;
+let guestHomePagePromise: Promise<GuestHomePageResponse> | undefined;
 
-function loadHomeDiscovery() {
-  homeDiscoveryPromise ??= fetchStaticApiData("/home/discovery", (value) => {
-    const result = homeDiscoveryResponseSchema.safeParse(value);
-    if (!result.success) {
-      throw new Error(
-        "The build API returned invalid home discovery sections.",
-      );
-    }
-    // The guest home shows a fixed number of courses per section, so only
-    // those are serialized into the prerendered document.
-    const discovery = result.data as HomeDiscoveryResponse;
-    return {
-      ...discovery,
-      popularCourses: discovery.popularCourses.slice(
-        0,
-        GUEST_HOME_COURSES_PER_SECTION,
-      ),
-      freeCourses: discovery.freeCourses.slice(
-        0,
-        GUEST_HOME_COURSES_PER_SECTION,
-      ),
-      recentCourses: discovery.recentCourses.slice(
-        0,
-        GUEST_HOME_COURSES_PER_SECTION,
-      ),
-    };
-  });
-  return homeDiscoveryPromise;
-}
-
-let homePopularDiscussionsPromise:
-  Promise<PublicPopularDiscussion[] | undefined> | undefined;
-
-function loadHomePopularDiscussions() {
-  homePopularDiscussionsPromise ??= fetchStaticApiData(
-    "/discussions/popular",
-    (value) => {
+/**
+ * The home page an API that predates the configurable home page can still
+ * supply: the default copy around its discovery courses and discussions. A
+ * web build can run before the API it talks to has been updated.
+ */
+async function loadDefaultGuestHomePage(): Promise<GuestHomePageResponse> {
+  const [courses, discussions] = await Promise.all([
+    fetchStaticApiData("/home/discovery", (value) => {
+      const result = homeDiscoveryResponseSchema.safeParse(value);
+      if (!result.success) {
+        throw new Error(
+          "The build API returned invalid home discovery sections.",
+        );
+      }
+      return selectGuestHomeCourses(result.data as HomeDiscoveryResponse);
+    }),
+    fetchStaticApiData("/discussions/popular", (value) => {
       const result = publicPopularDiscussionsResponseSchema.safeParse(value);
       if (!result.success) {
         throw new Error("The build API returned invalid popular discussions.");
       }
       return result.data.discussions.slice(0, GUEST_HOME_DISCUSSION_COUNT);
+    }).catch(() => []),
+  ]);
+  const {
+    hero,
+    highlights,
+    popularCourses,
+    freeCourses,
+    discussions: rail,
+  } = DEFAULT_HOME_PAGE_SETTINGS;
+  return {
+    version: "build-default",
+    hero,
+    highlights,
+    popularCourses: {
+      visible: popularCourses.visible,
+      title: popularCourses.title,
+      subtitle: popularCourses.subtitle,
+      courses: courses.popularCourses,
     },
-  ).catch((error: unknown) => {
-    // The panel is secondary content: without build-time data the guest home
-    // falls back to loading it in the browser instead of failing the build.
+    freeCourses: {
+      visible: freeCourses.visible,
+      title: freeCourses.title,
+      subtitle: freeCourses.subtitle,
+      courses: courses.freeCourses,
+    },
+    discussions: {
+      visible: rail.visible,
+      title: rail.title,
+      items: discussions,
+    },
+  };
+}
+
+function loadGuestHomePage() {
+  guestHomePagePromise ??= fetchStaticApiData("/home/guest-page", (value) => {
+    const result = guestHomePageResponseSchema.safeParse(value);
+    if (!result.success) {
+      throw new Error("The build API returned an invalid guest home page.");
+    }
+    const page = result.data as GuestHomePageResponse;
+    // Only the first page of comments is built into the page.
+    return {
+      ...page,
+      discussions: {
+        ...page.discussions,
+        items: page.discussions.items.slice(0, GUEST_HOME_DISCUSSION_COUNT),
+      },
+    };
+  }).catch((error: unknown) => {
     console.warn(
-      "Guest home popular discussions were not prerendered:",
+      "The configured guest home page was not available; prerendering the default one:",
       error instanceof Error ? error.message : error,
     );
-    return undefined;
+    return loadDefaultGuestHomePage();
   });
-  return homePopularDiscussionsPromise;
+  return guestHomePagePromise;
 }
 
 function loadPublishedCourses() {
@@ -146,29 +188,90 @@ function loadPublishedCourses() {
   return publishedCoursePagePromise;
 }
 
+let developmentGuestHomePage: GuestHomePageResponse | undefined;
+let developmentGuestHomePageRefresh: Promise<void> | undefined;
+
+function refreshDevelopmentGuestHomePage() {
+  developmentGuestHomePageRefresh ??= fetchStaticApiData(
+    "/home/guest-page",
+    (value) => {
+      const result = guestHomePageResponseSchema.safeParse(value);
+      if (!result.success) {
+        throw new Error("The API returned an invalid guest home page.");
+      }
+      return result.data as GuestHomePageResponse;
+    },
+    0,
+  )
+    .then((page) => {
+      developmentGuestHomePage = page;
+    })
+    // When the API is not up the page loads itself in the browser as before.
+    .catch(() => undefined)
+    .finally(() => {
+      developmentGuestHomePageRefresh = undefined;
+    });
+  return developmentGuestHomePageRefresh;
+}
+
+/**
+ * The dev server does not prerender, so its home page would wait for a
+ * request made after the app has started and show placeholders meanwhile.
+ * Handing the page to the document instead lets the first render already
+ * hold the configured copy, as the production build does.
+ *
+ * The document must not wait for the API on every load, so the last page
+ * read is served at once and refreshed behind it; only the first load after
+ * the dev server starts waits. The browser checks the page against the
+ * current settings once it is idle, which corrects a copy that is one load
+ * behind.
+ */
+export async function loadDevelopmentHomePageData(request: Request) {
+  const pathname = new URL(request.url).pathname.replace(/[/]$/u, "") || "/";
+  const refresh = refreshDevelopmentGuestHomePage();
+  if (!developmentGuestHomePage) await refresh;
+  if (!developmentGuestHomePage) return null;
+  return (
+    pathname === "/" || pathname === "/home"
+      ? { guestHomePage: developmentGuestHomePage }
+      : { guestHomeCopy: toGuestHomeCopy(developmentGuestHomePage) }
+  ) satisfies AcademyStaticPageData;
+}
+
 export async function loadAcademyStaticPageData(
   request: Request,
   courseSlug?: string,
-) {
+): Promise<AcademyStaticPageData | null> {
   if (process.env.VEO_REACT_ROUTER_BUILD !== "true") return null;
+  const pageData = await loadStaticPageData(request, courseSlug);
+  if (pageData?.guestHomePage) return pageData;
+  // Secondary to the page being built: without it the home page loads its
+  // copy in the browser when it is opened from this page.
+  const guestHomeCopy = await loadGuestHomePage()
+    .then(toGuestHomeCopy)
+    .catch(() => undefined);
+  return guestHomeCopy ? { ...pageData, guestHomeCopy } : pageData;
+}
+
+async function loadStaticPageData(
+  request: Request,
+  courseSlug?: string,
+): Promise<AcademyStaticPageData | null> {
   const pathname =
     new URL(request.url).pathname
       .replace(/(?:_)?\.data$/u, "")
       .replace(/\/$/u, "") || "/";
   if (pathname === "/" || pathname === "/courses") {
-    const [publishedCourses, homeDiscovery, homePopularDiscussions] =
-      await Promise.all([
-        loadPublishedCourses(),
-        // The guest home is rendered entirely from this build-time data, so
-        // it is prerendered whole and needs no API request in the browser.
-        pathname === "/" ? loadHomeDiscovery() : undefined,
-        pathname === "/" ? loadHomePopularDiscussions() : undefined,
-      ]);
+    const [publishedCourses, guestHomePage] = await Promise.all([
+      loadPublishedCourses(),
+      // The guest home is rendered entirely from this build-time data, so
+      // it is prerendered whole; the browser only checks it for changes.
+      pathname === "/" ? loadGuestHomePage() : undefined,
+    ]);
     return {
       publishedCoursePage: publishedCourses.page,
       publishedCoursePageNeedsRefresh: publishedCourses.needsRefresh,
-      ...(homeDiscovery ? { homeDiscovery } : {}),
-      ...(homePopularDiscussions ? { homePopularDiscussions } : {}),
+      ...(guestHomePage ? { guestHomePage } : {}),
     } satisfies AcademyStaticPageData;
   }
   if (pathname.startsWith("/courses/") && pathname.endsWith("/overview")) {

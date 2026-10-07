@@ -270,12 +270,14 @@ export function createCourseService({
             row.sale_price !== null && row.sale_price !== undefined
               ? Number(row.sale_price)
               : null,
+          showDiscountBadge: row.show_discount_badge === true,
         }
       : {
           pricingType: "free",
           price: 0,
           currency: "INR",
           salePrice: null,
+          showDiscountBadge: false,
         };
 
     const { thumbnailUrl, thumbnailSrcSet } = resolvePublicThumbnailUrls(
@@ -467,6 +469,28 @@ export function createCourseService({
     ]);
 
     return { popularCourses, freeCourses, recentCourses };
+  }
+
+  /**
+   * Published courses as public summaries, for callers that curate their own
+   * selection (the configurable home page). `courseIds` returns exactly those
+   * courses, in the given order, skipping any that are no longer published.
+   */
+  async function listPublicCourseSummaries(options: {
+    limit: number;
+    order: "popular" | "recent";
+    freeOnly?: boolean;
+    courseIds?: readonly string[];
+  }) {
+    const rows = await courseRepo.listHomeDiscoveryCourses(database, options);
+    const summaries = await Promise.all(rows.map(toPublicCourseSummary));
+    if (!options.courseIds) return summaries;
+
+    const position = new Map(options.courseIds.map((id, index) => [id, index]));
+    return summaries.sort(
+      (left, right) =>
+        (position.get(left.id) ?? 0) - (position.get(right.id) ?? 0),
+    );
   }
 
   /**
@@ -1083,6 +1107,8 @@ export function createCourseService({
             price: pricing.price,
             currency: pricing.currency,
             salePrice: pricing.sale_price,
+            // Absent until the migration that adds the column has run.
+            showDiscountBadge: pricing.show_discount_badge === true,
           }
         : null,
       settings: settings
@@ -1330,6 +1356,8 @@ export function createCourseService({
             price: pricing.price,
             currency: pricing.currency,
             salePrice: pricing.sale_price,
+            // Absent until the migration that adds the column has run.
+            showDiscountBadge: pricing.show_discount_badge === true,
           }
         : null,
       settings: settings
@@ -1494,6 +1522,7 @@ export function createCourseService({
     listMyCourseSummaries,
     listPublishedCourses,
     getHomeDiscovery,
+    listPublicCourseSummaries,
     listPublishedCourseOptions,
     getPublishedCourseBySlug,
     listAvailableCoursesByCreator,

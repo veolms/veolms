@@ -96,6 +96,8 @@ export interface CoursePricingTable {
   price: number;
   currency: Generated<string>;
   sale_price: number | null;
+  /** Show the discount as a badge on the course's cards. */
+  show_discount_badge: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

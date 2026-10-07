@@ -1,37 +1,24 @@
-import type {
-  CourseSummary,
-  HomeDiscoveryResponse,
-  PublicPopularDiscussion,
-} from "@veolms/contracts";
+import type { CourseSummary } from "@veolms/contracts";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense } from "react";
 import { PublicCourseCard } from "../courses/CourseCard";
 import { CourseCardSkeleton } from "../courses/CourseCardSkeleton";
-import {
-  courseCatalogueHorizontalRowClasses,
-  courseCatalogueStaticRowClasses,
-} from "../courses/CourseCatalogueSkeleton";
+import { courseCatalogueHorizontalRowClasses } from "../courses/CourseCatalogueSkeleton";
 import { adaptCourseSummaryToCatalogueCourse } from "../courses/courseAdapter";
 import { useHomeDiscovery } from "../services/home";
 import { usePopularDiscussions } from "../services/learning-interactions";
 import type { NavigateTo } from "../routing/navigation";
-import { HomeCourseRow, HomeStaticCourseRow } from "./HomeCourseRow";
+import { HomeCourseRow } from "./HomeCourseRow";
 import { HomeSectionHeader } from "./HomePresentation";
-import { GuestHomeDiscussions } from "./GuestHomeDiscussions";
-import {
-  GUEST_HOME_COURSES_PER_SECTION,
-  GUEST_HOME_DISCUSSION_COUNT,
-} from "./guestHomeLimits";
 import { useHomeTimeGreeting } from "./homeGreeting";
 import "../styles/features/student-learning.css";
 import "../styles/features/home.css";
 import "../styles/features/guest-home.css";
 
-// The full discussion cards belong to the discussions workspace. Only the
-// signed-in variant shows them, so the guest home does not pay for that
-// feature's code and styles.
+// The full discussion cards belong to the discussions workspace, which is
+// loaded on its own so this page can paint its course rows first.
 const PopularDiscussionsPanel = lazy(() =>
   import("./PopularDiscussionsPanel").then((module) => ({
     default: module.PopularDiscussionsPanel,
@@ -47,8 +34,6 @@ interface DiscoveryHomeProps {
   accessibleCourseIds?: ReadonlySet<string>;
   onDiscussionNavigatePage?: NavigateTo;
   onDiscussionAccessDenied?: () => void;
-  initialDiscovery?: HomeDiscoveryResponse;
-  initialPopularDiscussions?: PublicPopularDiscussion[];
 }
 
 function DiscoveryHomeState({
@@ -97,9 +82,8 @@ function DiscoveryCourseSection({
   publicAction,
   subtitle,
   viewAllLabel = "View all",
+  viewAllHref = "/courses",
   hideWhenEmpty = false,
-  staticRow = false,
-  prioritizeImages = true,
 }: {
   title: string;
   courses: readonly CourseSummary[];
@@ -111,11 +95,8 @@ function DiscoveryCourseSection({
   publicAction: "view" | "enroll";
   subtitle?: string;
   viewAllLabel?: string;
+  viewAllHref?: string;
   hideWhenEmpty?: boolean;
-  /** A fixed grid of the given cards instead of the horizontal scroller. */
-  staticRow?: boolean;
-  /** Load the leading thumbnails eagerly; only the first section needs it. */
-  prioritizeImages?: boolean;
 }) {
   const sectionId =
     "guest-home-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -148,7 +129,7 @@ function DiscoveryCourseSection({
       <PublicCourseCard
         key={course.id}
         course={adaptCourseSummaryToCatalogueCourse(course)}
-        imagePriority={prioritizeImages && index < 2}
+        imagePriority={index < 2}
         publicAction={publicAction}
         onNavigatePage={onNavigatePage}
         studentHome
@@ -167,31 +148,21 @@ function DiscoveryCourseSection({
         id={sectionId}
         subtitle={subtitle}
         action={viewAllLabel}
-        onAction={() => onNavigatePage("/courses")}
+        onAction={() => onNavigatePage(viewAllHref)}
       />
 
       <div
         className="guest-home__course-row min-w-0 max-w-full"
         data-course-grid-section
       >
-        {staticRow ? (
-          <HomeStaticCourseRow
-            id={sectionId + "-courses"}
-            label={title}
-            viewportClassName={courseCatalogueStaticRowClasses}
-          >
-            {rowContent}
-          </HomeStaticCourseRow>
-        ) : (
-          <HomeCourseRow
-            id={sectionId + "-courses"}
-            label={title}
-            isBusy={isLoading || isFetching}
-            viewportClassName={courseCatalogueHorizontalRowClasses}
-          >
-            {rowContent}
-          </HomeCourseRow>
-        )}
+        <HomeCourseRow
+          id={sectionId + "-courses"}
+          label={title}
+          isBusy={isLoading || isFetching}
+          viewportClassName={courseCatalogueHorizontalRowClasses}
+        >
+          {rowContent}
+        </HomeCourseRow>
       </div>
     </section>
   );
@@ -266,37 +237,13 @@ export function DiscoveryHome({
   accessibleCourseIds,
   onDiscussionNavigatePage,
   onDiscussionAccessDenied,
-  initialDiscovery,
-  initialPopularDiscussions,
 }: DiscoveryHomeProps) {
-  // The guest home is a fixed page: a few courses per section in a plain
-  // grid and a short discussion list. In the production build both come from
-  // build-time data, so the whole page is prerendered and no request is made
-  // here; without that data (the dev server) the same layout loads them.
-  const isGuest = mode === "guest";
-  const discoveryQuery = useHomeDiscovery({
-    enabled: !(isGuest && initialDiscovery),
-  });
-  const discussionsQuery = usePopularDiscussions({
-    enabled: !(isGuest && initialPopularDiscussions),
-  });
-  const discovery =
-    isGuest && initialDiscovery ? initialDiscovery : discoveryQuery.data;
-  const popularDiscussions =
-    isGuest && initialPopularDiscussions
-      ? initialPopularDiscussions
-      : discussionsQuery.data?.discussions;
-  const sectionCourses = (courses: readonly CourseSummary[] | undefined) =>
-    isGuest
-      ? (courses ?? []).slice(0, GUEST_HOME_COURSES_PER_SECTION)
-      : (courses ?? []);
-  const discussions = useMemo(
-    () =>
-      isGuest
-        ? (popularDiscussions ?? []).slice(0, GUEST_HOME_DISCUSSION_COUNT)
-        : (popularDiscussions ?? []),
-    [isGuest, popularDiscussions],
-  );
+  // The signed-out home is its own page (GuestHome); this one is the
+  // discovery view a signed-in learner sees before enrolling in anything.
+  const discoveryQuery = useHomeDiscovery();
+  const discussionsQuery = usePopularDiscussions();
+  const discovery = discoveryQuery.data;
+  const discussions = discussionsQuery.data?.discussions ?? [];
 
   return (
     <main className={`student-home guest-home guest-home--${mode}`}>
@@ -311,7 +258,7 @@ export function DiscoveryHome({
           ) : null}
           <DiscoveryCourseSection
             title="Popular Courses"
-            courses={sectionCourses(discovery?.popularCourses)}
+            courses={discovery?.popularCourses ?? []}
             isLoading={discoveryQuery.isLoading}
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
@@ -319,11 +266,10 @@ export function DiscoveryHome({
             onNavigatePage={onNavigatePage}
             publicAction={mode === "authenticated" ? "enroll" : "view"}
             subtitle="Explore courses learners are enjoying right now."
-            staticRow={isGuest}
           />
           <DiscoveryCourseSection
             title="Free Courses"
-            courses={sectionCourses(discovery?.freeCourses)}
+            courses={discovery?.freeCourses ?? []}
             isLoading={discoveryQuery.isLoading}
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
@@ -331,14 +277,13 @@ export function DiscoveryHome({
             onNavigatePage={onNavigatePage}
             publicAction={mode === "authenticated" ? "enroll" : "view"}
             subtitle="Start learning with courses available at no cost."
-            staticRow={isGuest}
-            prioritizeImages={!isGuest}
             viewAllLabel="Explore all"
+            viewAllHref="/courses/free"
             hideWhenEmpty
           />
           <DiscoveryCourseSection
             title="Recently Added"
-            courses={sectionCourses(discovery?.recentCourses)}
+            courses={discovery?.recentCourses ?? []}
             isLoading={discoveryQuery.isLoading}
             isError={discoveryQuery.isError}
             isFetching={discoveryQuery.isFetching}
@@ -346,33 +291,23 @@ export function DiscoveryHome({
             onNavigatePage={onNavigatePage}
             publicAction={mode === "authenticated" ? "enroll" : "view"}
             subtitle="Discover the latest courses added to the catalogue."
-            staticRow={isGuest}
-            prioritizeImages={!isGuest}
           />
         </div>
 
         <aside className="guest-home__discussion-column">
-          {isGuest ? (
-            <GuestHomeDiscussions
+          <Suspense fallback={null}>
+            <PopularDiscussionsPanel
               className="guest-home__discussion-panel"
+              isLoading={discussionsQuery.isLoading}
+              isError={discussionsQuery.isError}
+              isFetching={discussionsQuery.isFetching}
               discussions={discussions}
-              onNavigatePage={onDiscussionNavigatePage}
+              onRetry={() => void discussionsQuery.refetch()}
+              accessibleCourseIds={accessibleCourseIds}
+              onDiscussionNavigatePage={onDiscussionNavigatePage}
+              onDiscussionAccessDenied={onDiscussionAccessDenied}
             />
-          ) : (
-            <Suspense fallback={null}>
-              <PopularDiscussionsPanel
-                className="guest-home__discussion-panel"
-                isLoading={discussionsQuery.isLoading}
-                isError={discussionsQuery.isError}
-                isFetching={discussionsQuery.isFetching}
-                discussions={discussions}
-                onRetry={() => void discussionsQuery.refetch()}
-                accessibleCourseIds={accessibleCourseIds}
-                onDiscussionNavigatePage={onDiscussionNavigatePage}
-                onDiscussionAccessDenied={onDiscussionAccessDenied}
-              />
-            </Suspense>
-          )}
+          </Suspense>
         </aside>
       </div>
     </main>

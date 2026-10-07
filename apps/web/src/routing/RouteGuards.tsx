@@ -20,7 +20,7 @@ import { useAuthStore } from "../store/auth.store";
 import {
   APP_HOME_PATH,
   buildMfaChallengePath,
-  buildLoginPath,
+  buildLoginDialogPath,
   resolveCourseAuthorRouteFallback,
   shouldRedirectFromCourseAuthorPath,
   isGuestLandingPath,
@@ -46,7 +46,7 @@ function hasMfaSessionState(user: unknown): user is MfaGateUser {
   );
 }
 
-function useSessionAccess() {
+export function useSessionAccess() {
   const { data: user, isPending, isFetched } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -126,7 +126,7 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
         const returnPath = `${location.pathname}${location.search}`;
         const destination =
           path === "/discussions" || path.startsWith("/discussions/")
-            ? buildLoginPath(returnPath)
+            ? buildLoginDialogPath(returnPath)
             : APP_HOME_PATH;
         navigate(destination, { replace: true });
       }
@@ -193,7 +193,7 @@ export function AuthRouteGuard() {
 
     if (path === "/mfa-setup") {
       if (!access.isAuthenticated) {
-        navigate(buildLoginPath(), { replace: true });
+        navigate(buildLoginDialogPath(), { replace: true });
         return;
       }
 

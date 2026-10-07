@@ -275,6 +275,53 @@ type ComposerMode = "collapsed" | "desktop" | "mobile";
 
 const DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT = 0.62;
 const DISCUSSION_VIRTUAL_OVERSCAN = 5;
+
+/**
+ * Brings a discussion entry to the middle of the screen at once and keeps it
+ * there while the page settles. The list is virtualized and the lesson above
+ * it is still loading, so the first jump lands on a layout that then grows.
+ * It runs for `checks` looks at the page (150ms apart) and gives up as soon
+ * as the visitor scrolls, taps or types.
+ */
+function keepEntryCentered(
+  elementId: string,
+  checks: number,
+): { stop: () => void; isRunning: () => boolean } {
+  const interactions = [
+    "wheel",
+    "touchstart",
+    "keydown",
+    "pointerdown",
+  ] as const;
+  let timer: number | undefined;
+  let remaining = checks;
+  let running = true;
+  const stop = () => {
+    running = false;
+    window.clearTimeout(timer);
+    for (const name of interactions) {
+      window.removeEventListener(name, stop, true);
+    }
+  };
+  const check = () => {
+    const target = document.getElementById(elementId);
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      const offCenter = rect.top + rect.height / 2 - window.innerHeight / 2;
+      if (Math.abs(offCenter) > 24) {
+        target.scrollIntoView({ behavior: "auto", block: "center" });
+      }
+    }
+    remaining -= 1;
+    if (remaining > 0) timer = window.setTimeout(check, 150);
+    else stop();
+  };
+  for (const name of interactions) {
+    window.addEventListener(name, stop, { capture: true, passive: true });
+  }
+  check();
+  return { stop, isRunning: () => running };
+}
 const DISCUSSION_VIRTUAL_ESTIMATE_SIZE = 240;
 
 export const getDiscussionComposerCollapsedSnapPoint = (
@@ -1017,8 +1064,24 @@ function DiscussionInner({
   );
 
   const rawThreadId = noteDeepLinkId ? null : searchParams.get("thread");
-  const threadIdFromUrl =
+  const linkedThreadId =
     rawThreadId && rawThreadId.trim().length > 0 ? rawThreadId.trim() : null;
+  // A thread link with `focus=comment` does not open the thread. The comment
+  // is brought to the top of the list, scrolled to and highlighted instead.
+  // The id is kept in state because the link's parameters are dropped once
+  // that has happened, and the comment should stay where the visitor found it.
+  const spotlightIdFromUrl =
+    linkedThreadId && searchParams.get("focus") === "comment"
+      ? linkedThreadId
+      : null;
+  const [spotlightThreadId, setSpotlightThreadId] = useState<string | null>(
+    spotlightIdFromUrl,
+  );
+  if (spotlightIdFromUrl && spotlightIdFromUrl !== spotlightThreadId) {
+    setSpotlightThreadId(spotlightIdFromUrl);
+  }
+  const threadIdFromUrl = spotlightIdFromUrl ? null : linkedThreadId;
+  const directThreadId = threadIdFromUrl ?? spotlightThreadId;
   const initialThreadDeepLinkId = useState<string | null>(
     () => threadIdFromUrl,
   )[0];
@@ -1027,14 +1090,17 @@ function DiscussionInner({
     data: directThreadData,
     isLoading: isDirectThreadLoading,
     isError: isDirectThreadError,
-  } = useThreadDetails(threadIdFromUrl ?? "", {
+  } = useThreadDetails(directThreadId ?? "", {
     enabled: Boolean(
-      threadIdFromUrl &&
+      directThreadId &&
       isBackendMode &&
-      isThreadDeepLinkReady &&
-      lessonContentAccess === "granted" &&
-      courseId &&
-      lessonId,
+      // A comment a link points at is asked for straight away, without
+      // waiting for the lesson around it: the visitor came for the comment.
+      (spotlightThreadId ||
+        (isThreadDeepLinkReady &&
+          lessonContentAccess === "granted" &&
+          courseId &&
+          lessonId)),
     ),
   });
 
@@ -1314,11 +1380,122 @@ function DiscussionInner({
     setNoteDeepLinkHandled(false);
   }, [noteDeepLinkId]);
   const isNoteDeepLinkPending = Boolean(noteDeepLinkId && !noteDeepLinkHandled);
+  const spotlightEntry = useMemo(() => {
+    if (!spotlightThreadId) return null;
+    const entry =
+      visibleEntries.find(
+        (candidate) => getServerEntityId(candidate) === spotlightThreadId,
+      ) ??
+      (directThreadComment &&
+      getServerEntityId(directThreadComment) === spotlightThreadId
+        ? directThreadComment
+        : null);
+    if (!entry) return null;
+    return entryFilter === "all" || entryFilter === entry.entryKind
+      ? entry
+      : null;
+  }, [directThreadComment, entryFilter, spotlightThreadId, visibleEntries]);
   const displayEntries = isNoteDeepLinkPending
     ? visibleEntries.filter(
         (entry) => getServerEntityId(entry) === noteDeepLinkId,
       )
-    : visibleEntries;
+    : spotlightEntry
+      ? [
+          spotlightEntry,
+          ...visibleEntries.filter(
+            (entry) => getServerEntityId(entry) !== spotlightThreadId,
+          ),
+        ]
+      : visibleEntries;
+  const spotlightEntryClientId = spotlightEntry
+    ? getClientEntityId(spotlightEntry)
+    : null;
+  const spotlitThreadRef = useRef<string | null>(null);
+  const spotlightScrollRef = useRef<ReturnType<
+    typeof keepEntryCentered
+  > | null>(null);
+  useEffect(() => () => spotlightScrollRef.current?.stop(), []);
+  const [highlightedThreadId, setHighlightedThreadId] = useState<string | null>(
+    null,
+  );
+  const clearHighlightedThread = useCallback(
+    () => setHighlightedThreadId(null),
+    [],
+  );
+  // The comment shows as soon as it has loaded, ahead of the lesson and the
+  // rest of the list. Jump straight to it and hold it in the middle of the
+  // screen while everything else arrives around it.
+  useEffect(() => {
+    if (
+      !spotlightThreadId ||
+      !spotlightEntryClientId ||
+      spotlitThreadRef.current === spotlightThreadId
+    ) {
+      return;
+    }
+    const target = document.getElementById(
+      `discussion-entry-${spotlightEntryClientId}`,
+    );
+    if (!target) return;
+
+    spotlitThreadRef.current = spotlightThreadId;
+    spotlightScrollRef.current?.stop();
+    spotlightScrollRef.current = keepEntryCentered(target.id, 80);
+    // The card shows the highlight itself once it is on screen: the list is
+    // virtualized, so the element found here may be replaced on the way.
+    setHighlightedThreadId(spotlightThreadId);
+  }, [
+    displayEntries.length,
+    isAllInitialLoading,
+    isThreadsLoading,
+    spotlightEntryClientId,
+    spotlightThreadId,
+  ]);
+  const isSpotlightListReady =
+    isThreadDeepLinkReady &&
+    !isInteractionCapabilitiesLoading &&
+    !isAllInitialLoading &&
+    !isThreadsLoading;
+  const settledSpotlightRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !spotlightThreadId ||
+      !spotlightEntryClientId ||
+      !isSpotlightListReady ||
+      spotlitThreadRef.current !== spotlightThreadId ||
+      settledSpotlightRef.current === spotlightThreadId
+    ) {
+      return;
+    }
+    settledSpotlightRef.current = spotlightThreadId;
+    // The lesson and the list are in: hold the comment for a moment longer
+    // while they lay out, unless the visitor has already moved the page.
+    if (spotlightScrollRef.current?.isRunning()) {
+      spotlightScrollRef.current.stop();
+      spotlightScrollRef.current = keepEntryCentered(
+        `discussion-entry-${spotlightEntryClientId}`,
+        14,
+      );
+    }
+    // The link has done its work: a reload or a resumed session should open
+    // the lesson normally, not highlight the comment again. Its parameters
+    // stay until now because the lesson route reads them to find the lesson.
+    setSearchParams(
+      (prev) => {
+        if (prev.get("thread") !== spotlightThreadId) return prev;
+        const next = new URLSearchParams(prev);
+        next.delete("thread");
+        next.delete("focus");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [
+    isSpotlightListReady,
+    setSearchParams,
+    spotlightEntryClientId,
+    spotlightThreadId,
+  ]);
   const noteDeepLinkReadyForFocus = Boolean(
     noteDeepLinkId &&
     !noteDeepLinkHandled &&
@@ -2446,6 +2623,9 @@ function DiscussionInner({
         entries={displayEntries}
         noteDeepLinkTargetId={noteDeepLinkReadyForFocus ? noteDeepLinkId : null}
         onNoteDeepLinkHandled={consumeNoteDeepLink}
+        linkedThreadId={spotlightEntry ? spotlightThreadId : null}
+        highlightedThreadId={highlightedThreadId}
+        onThreadHighlightShown={clearHighlightedThread}
         discussionCount={discussionCount}
         draftIsTooLong={draftIsTooLong}
         draftAttachmentCount={draftAttachmentCount}
@@ -2715,6 +2895,11 @@ interface ThreadSurfaceProps {
   entries: Comment[];
   noteDeepLinkTargetId?: string | null;
   onNoteDeepLinkHandled?: (noteId: string) => void;
+  /** The thread a link led to; it is labelled "Highlighted" in the list. */
+  linkedThreadId?: string | null;
+  /** The same thread while its highlight has still to play. */
+  highlightedThreadId?: string | null;
+  onThreadHighlightShown?: () => void;
   discussionCount?: number;
   draftIsTooLong: boolean;
   draftAttachmentCount: number;
@@ -3200,8 +3385,8 @@ function ParticipationPromptContent({
         {participationState === "pending"
           ? "Checking participation access…"
           : participationActionLabel === "Get access"
-            ? "Get access to participate in this lesson's discussions."
-            : "Log in to participate in this lesson's discussions."}
+            ? "Get access to participate in discussions."
+            : "Log in to participate in discussions."}
       </p>
       {participationState !== "pending" && onParticipationAction ? (
         <button
@@ -3230,6 +3415,9 @@ function ThreadSurface({
   entries,
   noteDeepLinkTargetId = null,
   onNoteDeepLinkHandled,
+  linkedThreadId = null,
+  highlightedThreadId = null,
+  onThreadHighlightShown,
   discussionCount,
   draftIsTooLong,
   draftAttachmentCount,
@@ -3577,6 +3765,17 @@ function ThreadSurface({
           entry.entryKind === "note" &&
           getServerEntityId(entry) === noteDeepLinkTargetId,
         )}
+        showHighlightedLabel={Boolean(
+          linkedThreadId &&
+          entry.entryKind !== "note" &&
+          getServerEntityId(entry) === linkedThreadId,
+        )}
+        isHighlighted={Boolean(
+          highlightedThreadId &&
+          entry.entryKind !== "note" &&
+          getServerEntityId(entry) === highlightedThreadId,
+        )}
+        onHighlightShown={onThreadHighlightShown}
       />
     ),
     [
@@ -3599,6 +3798,9 @@ function ThreadSurface({
       capabilities.allowNotes,
       canParticipate,
       noteDeepLinkTargetId,
+      linkedThreadId,
+      highlightedThreadId,
+      onThreadHighlightShown,
       userRole,
     ],
   );
@@ -3627,19 +3829,6 @@ function ThreadSurface({
     </div>
   );
 
-  const participationPrompt = !canParticipate ? (
-    <div
-      className="flex flex-col items-center justify-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--surface)_52%,transparent)] px-4 py-4 text-center"
-      data-testid="learning-discussion-login-prompt"
-    >
-      <ParticipationPromptContent
-        participationState={participationState}
-        participationActionLabel={participationActionLabel}
-        onParticipationAction={onParticipationAction}
-      />
-    </div>
-  ) : null;
-
   const showMobileParticipationPrompt =
     isPhone && enabledKinds.length > 0 && !canParticipate;
 
@@ -3652,7 +3841,12 @@ function ThreadSurface({
           : "This lesson's discussions are not available yet."
       : "Checking lesson access before loading discussions.";
 
-  if (lessonContentAccess !== "granted") {
+  // While the lesson itself is still loading there is nothing to check yet:
+  // the discussion shows its usual loading state, not an access message.
+  const isWaitingForLesson =
+    lessonContentAccess === "pending" && isInteractionCapabilitiesLoading;
+
+  if (lessonContentAccess !== "granted" && !isWaitingForLesson) {
     const accessStateMessage = (
       <div
         className="flex min-h-48 flex-col items-center justify-center py-12 text-center"
@@ -3805,8 +3999,22 @@ function ThreadSurface({
     </div>
   );
 
-  const discussionContent = isInteractionCapabilitiesLoading ? (
+  // A comment a link points at arrives before the lesson and the rest of
+  // the list, and shows above their loading state instead of waiting.
+  const linkedEntry = linkedThreadId
+    ? entries.find((entry) => getServerEntityId(entry) === linkedThreadId)
+    : undefined;
+  const discussionLoadingWithLinkedEntry = linkedEntry ? (
+    <>
+      {renderEntry(linkedEntry)}
+      {discussionLoadingContent}
+    </>
+  ) : (
     discussionLoadingContent
+  );
+
+  const discussionContent = isInteractionCapabilitiesLoading ? (
+    discussionLoadingWithLinkedEntry
   ) : isThreadDeepLinkPending ? (
     <div
       className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-center"
@@ -3817,7 +4025,7 @@ function ThreadSurface({
       <LoadingSpinnerIcon size={24} />
     </div>
   ) : isAllInitialLoading ? (
-    discussionLoadingContent
+    discussionLoadingWithLinkedEntry
   ) : entryFilter === "note" && isNotesLoading && entries.length === 0 ? (
     discussionLoadingContent
   ) : entryFilter === "note" && isNotesError && entries.length === 0 ? (
@@ -3938,7 +4146,9 @@ function ThreadSurface({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {!isPhone && discussionDescription}
-      {!isPhone && enabledKinds.length > 0 && (
+      {/* Someone who cannot post (signed out, or without access) gets no
+          composer and no prompt in its place: just the discussion. */}
+      {!isPhone && enabledKinds.length > 0 && canParticipate && (
         <div
           ref={composerHostRef}
           data-comment-composer-container
@@ -3972,7 +4182,7 @@ function ThreadSurface({
               onClose={closeComposer}
               courseId={courseId}
             />
-          ) : canParticipate ? (
+          ) : (
             <CompactComposer
               draft={draft}
               attachmentCount={draftAttachmentCount}
@@ -3980,8 +4190,6 @@ function ThreadSurface({
               avatar={authorAvatar}
               onOpen={() => setComposerMode("desktop")}
             />
-          ) : (
-            participationPrompt
           )}
         </div>
       )}

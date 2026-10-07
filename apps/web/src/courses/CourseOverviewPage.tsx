@@ -224,6 +224,17 @@ function toOverviewPricingProps(
 ): CourseOverviewPricingProps {
   const currency = pr?.currency || "INR";
   if (!pr || pr.pricingType === "free") {
+    // A free course that names what it would otherwise cost shows that
+    // price struck through beside a price of zero.
+    if (pr && pr.price > 0) {
+      return {
+        price: formatPriceWithCurrency(0, currency),
+        originalPrice: formatPriceWithCurrency(pr.price, currency),
+        discount: "Free",
+        amount: 0,
+        currency,
+      };
+    }
     return { price: "Free", amount: 0, currency };
   }
 
@@ -1029,14 +1040,20 @@ function CourseHeroSection({
                   <span
                     className={`text-(--text) font-[850] leading-none whitespace-nowrap ${priceTextClasses[priceSizeVariant]}`}
                   >
-                    {isFree ? "Free" : displayPrice}
+                    {isFree
+                      ? originalPrice
+                        ? basePrice
+                        : "Free"
+                      : displayPrice}
                   </span>
-                  {!isFree && (originalPrice || appliedCoupon) && (
+                  {(isFree
+                    ? originalPrice
+                    : originalPrice || appliedCoupon) && (
                     <span className="text-(--muted) text-[1.05rem] font-medium line-through whitespace-nowrap">
-                      {appliedCoupon ? basePrice : originalPrice}
+                      {!isFree && appliedCoupon ? basePrice : originalPrice}
                     </span>
                   )}
-                  {!isFree && displayDiscount && (
+                  {(isFree ? originalPrice : true) && displayDiscount && (
                     <span className="inline-flex items-center rounded-md px-2 py-0.75 bg-(--accent-soft,color-mix(in_srgb,var(--accent)_18%,transparent)) text-(--accent-ink,var(--accent)) text-[0.75rem] font-[750] leading-none whitespace-nowrap">
                       {displayDiscount}
                     </span>

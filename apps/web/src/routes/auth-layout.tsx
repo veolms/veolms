@@ -6,6 +6,8 @@ import { useAuthAppearance } from "../auth/useAuthAppearance";
 import { queryClient } from "../lib/query-client";
 import { AuthRouteGuard } from "../routing/RouteGuards";
 import {
+  buildLoginDialogPath,
+  LOGIN_PATH,
   normalizeAppPath,
   resolveAuthenticatedDestination,
   resolveSessionAccess,
@@ -47,6 +49,13 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
         resolveAuthenticatedDestination(url.searchParams.get("returnTo")),
       );
     }
+  }
+
+  // Logging in happens in a pop-up over a page. A visitor who opens /login
+  // is sent to the page they were heading for (or the home page) with the
+  // pop-up open. Someone half-way through two-factor stays on this screen.
+  if (!user && path === LOGIN_PATH) {
+    return redirect(buildLoginDialogPath(url.searchParams.get("returnTo")));
   }
 
   return null;

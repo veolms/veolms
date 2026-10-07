@@ -23,7 +23,6 @@ import {
 import { productName } from "../routing/routeDescriptors";
 import { useLogin, useRegister, useSendOtp } from "../services/auth";
 import { authStore } from "../store/auth.store";
-import { ToastNotification } from "../ToastNotification";
 import { GoogleOneTap } from "./GoogleOneTap.tsx";
 
 function resolvePayload(identifier: AuthIdentifier) {
@@ -47,7 +46,18 @@ function getOtpStep(flow: AuthFlowState): OtpStepState | null {
     : null;
 }
 
-export function LoginView() {
+export function LoginView({
+  returnTo: returnToOverride,
+  onAuthenticated,
+}: {
+  /**
+   * Where the visitor goes once signed in. The login pop-up passes the page
+   * it is open over; without it the address's `returnTo` is used.
+   */
+  returnTo?: string;
+  /** Takes over from navigating away once the visitor is signed in. */
+  onAuthenticated?: () => void;
+} = {}) {
   const [flow, dispatch] = useReducer(authFlowReducer, initialAuthFlowState);
   const [identifierError, setIdentifierError] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
@@ -76,7 +86,8 @@ export function LoginView() {
   } | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+  const requestedReturnTo = returnToOverride ?? searchParams.get("returnTo");
+  const returnTo = sanitizeReturnTo(requestedReturnTo);
   const returnPath = returnTo?.split(/[?#]/, 1)[0] ?? "";
   const isReturningToDiscussions =
     returnPath === "/discussions" || returnPath.startsWith("/discussions/");
@@ -102,10 +113,14 @@ export function LoginView() {
 
   useEffect(() => {
     if (flow.status !== "authenticated") return;
-    navigate(resolveAuthenticatedDestination(searchParams.get("returnTo")), {
+    if (onAuthenticated) {
+      onAuthenticated();
+      return;
+    }
+    navigate(resolveAuthenticatedDestination(requestedReturnTo), {
       replace: true,
     });
-  }, [flow.status, navigate, searchParams]);
+  }, [flow.status, navigate, onAuthenticated, requestedReturnTo]);
 
   const handleSendCode = async (identifier: AuthIdentifier) => {
     if (sendOtpMutation.isPending) return;
@@ -438,7 +453,9 @@ export function LoginView() {
           Welcome to {productName}
         </h1>
         <p className="auth-card__subheading">
-          Log in or create an account to continue.
+          {isReturningToDiscussions
+            ? "Log in to continue to Discussions."
+            : "Log in or create an account to continue."}
         </p>
 
         <div className="auth-card__form-slot">
@@ -455,7 +472,7 @@ export function LoginView() {
           <SocialLoginActions
             onError={setIdentifierError}
             oneTapPending={oneTapPending}
-            returnTo={searchParams.get("returnTo")}
+            returnTo={requestedReturnTo}
           />
         </div>
       </>
@@ -479,13 +496,10 @@ export function LoginView() {
               setIdentifierError(message);
             }}
             onPendingChange={setOneTapPending}
-            returnTo={searchParams.get("returnTo")}
+            returnTo={requestedReturnTo}
           />
         ) : null}
       </section>
-      {isReturningToDiscussions ? (
-        <ToastNotification message="Log in to continue to Discussions." />
-      ) : null}
     </>
   );
 }

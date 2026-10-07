@@ -2,7 +2,10 @@ import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-ic
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { CertificateIcon as Certificate } from "@phosphor-icons/react/Certificate";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { ClockIcon as Clock } from "@phosphor-icons/react/Clock";
+import { MonitorPlayIcon as MonitorPlay } from "@phosphor-icons/react/MonitorPlay";
 import { CopySimpleIcon as CopySimple } from "@phosphor-icons/react/CopySimple";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
@@ -17,6 +20,7 @@ import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNet
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
+import { Fragment, type ReactNode } from "react";
 import { getCourseRouteKey } from "./catalogue";
 import type { Course, CourseRole } from "./catalogue";
 import { CourseActionMenu, MenuAction, MenuDivider } from "./CourseActionMenu";
@@ -29,6 +33,30 @@ export {
 
 const courseOverviewPath = (course: Course) =>
   `/courses/${encodeURIComponent(getCourseRouteKey(course))}/overview`;
+
+/** A figure the card can show under the title. */
+export type CourseCardFactName = "sections" | "lectures" | "duration";
+
+const DEFAULT_COURSE_CARD_FACTS: readonly CourseCardFactName[] = [
+  "sections",
+  "lectures",
+  "duration",
+];
+
+const courseCardFacts: Record<
+  CourseCardFactName,
+  (course: Course) => { Icon: typeof BookOpen; text: string }
+> = {
+  sections: (course) => ({
+    Icon: BookOpen,
+    text: `${course.sections} Sections`,
+  }),
+  lectures: (course) => ({
+    Icon: MonitorPlay,
+    text: `${course.lectures} Lectures`,
+  }),
+  duration: (course) => ({ Icon: Clock, text: course.duration }),
+};
 
 export interface CourseCardProps {
   course: Course;
@@ -55,6 +83,10 @@ export interface CourseCardProps {
   isDeleting?: boolean;
   isAdmin?: boolean;
   currentUserId?: string;
+  /** Which figures the line under the title shows, in order. */
+  facts?: readonly CourseCardFactName[];
+  /** Whether each of those figures is led by its icon. */
+  factIcons?: boolean;
 }
 
 export function CourseCard({
@@ -82,6 +114,8 @@ export function CourseCard({
   isDeleting = false,
   isAdmin = false,
   currentUserId,
+  facts = DEFAULT_COURSE_CARD_FACTS,
+  factIcons = true,
 }: CourseCardProps) {
   const isPublic = variant === "public";
   const isPublicEnrollmentAction = isPublic && publicAction === "enroll";
@@ -176,8 +210,8 @@ export function CourseCard({
     <article
       className={`group relative min-w-0 overflow-hidden rounded-2xl border transition-[background-color,box-shadow,opacity,border-color] duration-200 ${
         isDeleting
-          ? "border-(--border) bg-(--card-surface,var(--surface)) opacity-60 pointer-events-none select-none"
-          : "border-(--border) bg-(--card-surface,var(--surface)) shadow-(--card-shadow) hover:bg-(--card-surface-hover,var(--hover)) hover:shadow-(--card-hover-shadow)"
+          ? "border-(--card-border,var(--border)) bg-(--card-surface,var(--surface)) bg-(image:--raised-surface-image) opacity-60 pointer-events-none select-none"
+          : "border-(--card-border,var(--border)) bg-(--card-surface,var(--surface)) bg-(image:--raised-surface-image) shadow-(--card-shadow) hover:bg-(--card-surface-hover,var(--hover)) hover:shadow-(--card-hover-shadow)"
       }`}
       aria-label={`${course.title}${isDeleting ? ", deleting..." : isPublic ? ", public course" : role === "creator" ? `, ${course.lifecycleStatus}` : course.enrolled ? `, ${progress}% complete` : ", not enrolled"}`}
       aria-busy={isDeleting}
@@ -185,7 +219,7 @@ export function CourseCard({
       data-deleting={isDeleting ? "true" : undefined}
     >
       <div
-        className="relative aspect-video overflow-hidden rounded-t-2xl bg-(--track)"
+        className="relative aspect-video overflow-hidden rounded-t-2xl bg-[#05070c]"
         data-course-card-media
       >
         {course.thumbnail ? (
@@ -193,15 +227,6 @@ export function CourseCard({
         ) : (
           <CourseThumbnailPlaceholder />
         )}
-
-        {studentHome && Boolean(course.pricing?.discount) ? (
-          <span
-            className="pointer-events-none absolute left-2.5 top-2.5 z-20 inline-flex shrink-0 items-center whitespace-nowrap rounded-md bg-emerald-700 px-1.5 py-1 text-[0.72rem] font-bold leading-none text-white"
-            aria-hidden="true"
-          >
-            {course.pricing?.discount}
-          </span>
-        ) : null}
 
         <button
           type="button"
@@ -212,7 +237,7 @@ export function CourseCard({
           disabled={isDeleting}
         >
           <span className="absolute inset-0 bg-slate-950/50 opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100" />
-          <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full border-2 border-white bg-slate-950/55 text-white opacity-0 shadow-[0_10px_28px_rgba(0,0,0,0.32)] transition-[opacity,transform] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100">
+          <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full bg-white/25 text-white opacity-0 ring-2 ring-white/80 backdrop-blur-sm shadow-[0_10px_28px_rgba(0,0,0,0.45)] transition-[opacity,transform] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100">
             <Play size={30} weight="fill" />
           </span>
         </button>
@@ -267,16 +292,23 @@ export function CourseCard({
             <h2 className="truncate text-base font-semibold leading-10 tracking-[-0.015em] text-(--text) lg:text-lg">
               {course.title}
             </h2>
-            <p className="mt-0.5 truncate text-[0.75rem] leading-6 text-(--muted)">
-              {course.sections} Sections{" "}
-              <span className="mx-px inline-block" aria-hidden="true">
-                •
-              </span>{" "}
-              {course.lectures} Lectures{" "}
-              <span className="mx-px inline-block" aria-hidden="true">
-                •
-              </span>{" "}
-              {course.duration}
+            <p className="mt-0.5 flex min-w-0 items-center gap-x-2 overflow-hidden text-[0.8125rem] leading-6 whitespace-nowrap text-(--muted)">
+              {facts.map((fact, index) => {
+                const { Icon, text } = courseCardFacts[fact](course);
+                const isLast = index === facts.length - 1;
+                return (
+                  <Fragment key={fact}>
+                    {index > 0 ? <span aria-hidden="true">•</span> : null}
+                    {/* Only the last fact gives way when the line is short. */}
+                    <CourseCardFact
+                      Icon={factIcons ? Icon : undefined}
+                      className={isLast ? "min-w-0 truncate" : undefined}
+                    >
+                      {text}
+                    </CourseCardFact>
+                  </Fragment>
+                );
+              })}
             </p>
           </div>
 
@@ -494,15 +526,10 @@ export function CourseCard({
             !course.enrolled &&
             Boolean(course.pricing) && (
               <div
-                className={`${studentHome ? "mb-4 flex flex-wrap items-center gap-x-2 gap-y-1" : "mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"}`}
+                className={`${studentHome ? "mt-3 mb-4 flex flex-wrap items-center gap-x-2 gap-y-1" : "mt-3 mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"}`}
                 data-course-card-pricing
                 aria-label={`Course price ${course.pricing?.price}`}
               >
-                <strong
-                  className={`${studentHome ? "shrink-0 " : ""}text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)`}
-                >
-                  {course.pricing?.price}
-                </strong>
                 {Boolean(course.pricing?.originalPrice) && (
                   <span
                     className={`${studentHome ? "shrink-0 whitespace-nowrap " : ""}text-[0.95rem] font-medium leading-none text-(--muted) line-through`}
@@ -510,11 +537,19 @@ export function CourseCard({
                     {course.pricing?.originalPrice}
                   </span>
                 )}
-                {!studentHome && Boolean(course.pricing?.discount) && (
-                  <span className="inline-flex items-center rounded-md bg-emerald-500/20 px-2 py-1 text-[0.72rem] font-bold leading-none text-emerald-300">
-                    {course.pricing?.discount}
-                  </span>
-                )}
+                <strong
+                  className={`${studentHome ? "shrink-0 " : ""}text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)`}
+                >
+                  {course.pricing?.price}
+                </strong>
+                {/* Paid courses opt in from their pricing settings; a free
+                    course with an original price always shows "Free". */}
+                {course.pricing?.showDiscountBadge &&
+                  Boolean(course.pricing.discount) && (
+                    <span className="inline-flex items-center self-center rounded-lg bg-[color-mix(in_srgb,var(--success)_14%,transparent)] px-2.5 py-1.5 text-[0.8rem] leading-none font-bold text-[color-mix(in_srgb,var(--success)_72%,var(--text))]">
+                      {course.pricing.discount}
+                    </span>
+                  )}
               </div>
             )}
 
@@ -705,6 +740,24 @@ export function CourseCard({
         </div>
       )}
     </article>
+  );
+}
+
+/** One fact in the card's summary line: an icon and its figure. */
+function CourseCardFact({
+  Icon,
+  className = "shrink-0",
+  children,
+}: {
+  Icon?: typeof BookOpen;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${className}`}>
+      {Icon ? <Icon className="shrink-0" size={16} aria-hidden="true" /> : null}
+      <span className="min-w-0 truncate">{children}</span>
+    </span>
   );
 }
 
