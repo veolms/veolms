@@ -1,5 +1,18 @@
 import { sql, type Kysely } from "kysely";
 import type { Database, DatabaseExecutor } from "@veolms/database";
+import { hasDiscountBadgeColumn } from "../shared/discount-badge-column.ts";
+
+/**
+ * The discount badge flag of a listed course. Before the migration that adds
+ * the column has run, every course reads as "badge off".
+ */
+function discountBadgeColumn(columnExists: boolean) {
+  return columnExists
+    ? sql<boolean | null>`course_pricing.show_discount_badge`.as(
+        "show_discount_badge",
+      )
+    : sql<boolean | null>`false`.as("show_discount_badge");
+}
 
 export async function insertCourse(
   database: Kysely<Database>,
@@ -134,6 +147,7 @@ export async function listPublishedCourses(
     sort?: "latest" | "title";
   },
 ) {
+  const showDiscountBadge = await hasDiscountBadgeColumn(database);
   let query = database
     .selectFrom("courses")
     .leftJoin(
@@ -157,6 +171,7 @@ export async function listPublishedCourses(
       "course_pricing.price",
       "course_pricing.currency",
       "course_pricing.sale_price",
+      discountBadgeColumn(showDiscountBadge),
       "course_settings.certificate_enabled",
       "course_settings.estimated_duration",
       // Learners only see sections that have a published lesson, so that is
@@ -253,8 +268,13 @@ export async function listHomeDiscoveryCourses(
     limit: number;
     order: "popular" | "recent";
     freeOnly?: boolean;
+    /** Restrict the result to these courses (still published only). */
+    courseIds?: readonly string[];
   },
 ) {
+  if (options.courseIds && options.courseIds.length === 0) return [];
+  const showDiscountBadge = await hasDiscountBadgeColumn(database);
+
   const enrollmentCounts = database
     .selectFrom("enrollments")
     .select(["course_id", sql<number>`count(*)::int`.as("enrollment_count")])
@@ -283,6 +303,7 @@ export async function listHomeDiscoveryCourses(
       "course_pricing.price",
       "course_pricing.currency",
       "course_pricing.sale_price",
+      discountBadgeColumn(showDiscountBadge),
       "course_settings.certificate_enabled",
       "course_settings.estimated_duration",
       // Same section count as the catalogue: only sections a learner sees.
@@ -336,6 +357,10 @@ export async function listHomeDiscoveryCourses(
     query = query.where(
       sql<boolean>`coalesce(course_pricing.pricing_type, 'free') = 'free'`,
     );
+  }
+
+  if (options.courseIds) {
+    query = query.where("courses.id", "in", [...options.courseIds]);
   }
 
   if (options.order === "popular") {

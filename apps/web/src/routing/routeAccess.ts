@@ -39,6 +39,7 @@ const RESERVED_PROFILE_PATHS = new Set([
   "/notifications",
   "/settings",
   "/coupons",
+  "/home-page",
   "/logout",
   LOGIN_PATH,
   "/register",
@@ -82,6 +83,7 @@ export function isCourseAuthorPath(pathname: string): boolean {
     normalized.startsWith("/analytics/") ||
     normalized === "/coupons" ||
     normalized.startsWith("/coupons/") ||
+    normalized === "/home-page" ||
     normalized === "/quizzes/create" ||
     (normalized.startsWith("/quizzes/") &&
       !normalized.startsWith("/quizzes/attempt/"))
@@ -115,6 +117,7 @@ export function isCoursesPublicPath(pathname: string): boolean {
     path === "/courses" ||
     path === "/courses/enrolled" ||
     path === "/courses/not-enrolled" ||
+    path === "/courses/free" ||
     path === "/courses/wishlist"
   );
 }
@@ -197,6 +200,67 @@ export function buildLoginPath(returnTo?: string | null): string {
     return LOGIN_PATH;
   }
   return `${LOGIN_PATH}?returnTo=${encodeURIComponent(target)}`;
+}
+
+/** The query parameter that opens the login pop-up over a page. */
+export const LOGIN_DIALOG_PARAM = "login";
+
+function canGuestStayOn(path: string): boolean {
+  const pathname = path.split(/[?#]/, 1)[0] || "/";
+  return !requiresAcademyAuth(pathname) || isGuestLandingPath(pathname);
+}
+
+/**
+ * The address that shows the login pop-up. Logging in happens in a pop-up
+ * over a page rather than on a page of its own, so this picks the page to
+ * show behind it:
+ *
+ * - `returnTo`, when a signed-out visitor may be on it (a lesson, a course);
+ * - otherwise the page they are on now, or the home page, with `returnTo`
+ *   kept in the address so they are taken there once signed in.
+ */
+export function buildLoginDialogPath(
+  returnTo?: string | null,
+  currentPath?: string | null,
+): string {
+  const target = sanitizeReturnTo(returnTo);
+  const current = sanitizeReturnTo(currentPath);
+  const behind =
+    target && canGuestStayOn(target)
+      ? target
+      : current && canGuestStayOn(current)
+        ? current
+        : APP_HOME_PATH;
+  const url = new URL(behind, "https://procodrr.local");
+  url.searchParams.set(LOGIN_DIALOG_PARAM, "1");
+  if (target && behind !== target) url.searchParams.set("returnTo", target);
+  else url.searchParams.delete("returnTo");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+/** A page's query string without the login pop-up's parameters. */
+export function stripLoginDialogParams(search: string): string {
+  const params = new URLSearchParams(search);
+  if (!params.has(LOGIN_DIALOG_PARAM)) return search;
+  params.delete(LOGIN_DIALOG_PARAM);
+  params.delete("returnTo");
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+/**
+ * Carries an open login pop-up over to an address a page rewrites itself to
+ * (a lesson settling on its canonical address, for instance), so tidying the
+ * address does not close the pop-up.
+ */
+export function keepLoginDialogOpen(search: string, nextPath: string): string {
+  const params = new URLSearchParams(search);
+  if (!params.has(LOGIN_DIALOG_PARAM)) return nextPath;
+  const url = new URL(nextPath, "https://procodrr.local");
+  url.searchParams.set(LOGIN_DIALOG_PARAM, "1");
+  const returnTo = params.get("returnTo");
+  if (returnTo) url.searchParams.set("returnTo", returnTo);
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 export function buildMfaChallengePath(returnTo?: string | null): string {

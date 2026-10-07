@@ -189,7 +189,10 @@ export function presentPricing(
   pricing: Pick<
     Selectable<Database["course_pricing"]>,
     "id" | "pricing_type" | "price" | "currency" | "sale_price"
-  >,
+  > & {
+    // Absent until the migration that adds the column has run.
+    show_discount_badge?: boolean | null;
+  },
 ): CoursePricing {
   return {
     id: pricing.id,
@@ -197,6 +200,7 @@ export function presentPricing(
     price: pricing.price,
     currency: pricing.currency,
     salePrice: pricing.sale_price,
+    showDiscountBadge: pricing.show_discount_badge === true,
   };
 }
 

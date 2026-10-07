@@ -6,7 +6,6 @@ import {
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "./discussion-editor/types";
 import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
-import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 
 export const DESCRIPTION_SURFACE_BASE =
   "bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] shadow-[0_14px_38px_color-mix(in_srgb,var(--canvas)_34%,transparent),0_1px_0_color-mix(in_srgb,var(--text)_6%,transparent)]";
@@ -175,11 +174,21 @@ export function LessonDescription({
       >
         <LessonDescriptionHeading />
         {isLoading ? (
-          <CenteredLoadingSpinner
-            label="Loading lesson description"
-            className="min-h-20 w-full"
-            size={20}
-          />
+          // Two placeholder lines the size of the collapsed description, so
+          // the text takes their place without the panel changing height.
+          <div
+            role="status"
+            aria-busy="true"
+            aria-label="Loading lesson description"
+            className={`animate-pulse ${DESCRIPTION_PREVIEW_TYPOGRAPHY}`}
+          >
+            <div className="flex h-[1lh] items-center">
+              <span className="h-3.5 w-full rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+            </div>
+            <div className="flex h-[1lh] items-center">
+              <span className="h-3.5 w-3/5 rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
+            </div>
+          </div>
         ) : expanded ? (
           <DiscussionMarkdown
             content={draftContent}

@@ -319,7 +319,12 @@ export const meta = () => [
 ];
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  if (process.env.VEO_REACT_ROUTER_BUILD !== "true") return null;
+  if (process.env.VEO_REACT_ROUTER_BUILD !== "true") {
+    if (!import.meta.env.DEV) return null;
+    const { loadDevelopmentHomePageData } =
+      await import("./routes/academyStaticPageData");
+    return loadDevelopmentHomePageData(request);
+  }
 
   const { loadAcademyStaticPageData } =
     await import("./routes/academyStaticPageData");

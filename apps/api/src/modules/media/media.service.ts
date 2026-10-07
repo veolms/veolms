@@ -165,19 +165,16 @@ const VIDEO_JOB_FAILED_MESSAGE = "Video processing failed. Please try again.";
 const WEBHOOK_UNAUTHORIZED_MESSAGE = "Webhook authentication failed.";
 
 /**
- * Whether a lesson plays without a session or a grant: a preview lesson, or
- * any lesson of a course that is free and not access-restricted. A
- * restricted course needs a grant even when it costs nothing, the same rule
- * learning progress and discussions apply.
+ * Whether a course's lessons play without a grant: it is free and not
+ * access-restricted. A restricted course needs a grant even when it costs
+ * nothing, the same rule learning progress and discussions apply.
  */
-function isPubliclyPlayable(context: {
-  is_preview: boolean;
+function isOpenFreeCourse(context: {
   pricing_type: string | null;
   access_type: string | null;
 }): boolean {
   return (
-    context.is_preview ||
-    (context.pricing_type === "free" && context.access_type !== "restricted")
+    context.pricing_type === "free" && context.access_type !== "restricted"
   );
 }
 
@@ -857,6 +854,8 @@ export function createMediaService({
       access_type: string | null;
       is_preview: boolean;
       is_published?: boolean;
+      /** The course's first published lesson. */
+      is_first_lesson?: boolean;
     },
     user?: PlaybackUser,
   ): Promise<void> {
@@ -875,8 +874,16 @@ export function createMediaService({
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
-    // Preview lessons and explicitly free courses are intentionally public.
-    if (isPubliclyPlayable(context)) return;
+    // Preview lessons are public. A free course that is not
+    // access-restricted is open to anyone who is signed in; a visitor who
+    // is not gets its first lesson only.
+    if (context.is_preview) return;
+    if (
+      isOpenFreeCourse(context) &&
+      (user || context.is_first_lesson === true)
+    ) {
+      return;
+    }
 
     if (!user) {
       throw new AppError(
@@ -1044,7 +1051,12 @@ export function createMediaService({
       throw new AppError(404, "LESSON_NOT_FOUND", "Lesson not found.");
     }
 
-    await assertPlaybackAccess(context, user);
+    // Lesson numbers count the published lessons in order, so number one is
+    // the course's first lesson for everyone this rule applies to.
+    await assertPlaybackAccess(
+      { ...context, is_first_lesson: lessonNumber === 1 },
+      user,
+    );
     return context;
   }
 
@@ -1262,8 +1274,11 @@ export function createMediaService({
       contentType: hlsContentType(hlsPath),
       contentLength: file.contentLength,
       isManifest: /\.m3u8$/i.test(hlsPath),
+      // Only what a signed-out visitor may play is cacheable for everyone.
       isPublic:
-        context.course_status === "published" && isPubliclyPlayable(context),
+        context.course_status === "published" &&
+        (context.is_preview ||
+          (isOpenFreeCourse(context) && context.is_first_lesson === true)),
     };
   }
 

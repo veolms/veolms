@@ -1,0 +1,26 @@
+/* Guest home, application shell exception.
+
+   The page is edge to edge: its hero touches the frame on three sides, so the
+   shell's page padding has to go. That padding belongs to the shell's
+   scrollport, an ancestor of this feature, and Tailwind utilities on the page
+   cannot style an ancestor; `:has()` from a feature stylesheet can. Nothing
+   else belongs here: the page itself is styled with Tailwind. */
+.courses-main:has(.guest-home-page) {
+  padding: 0;
+}
+
+/* Outside the framed layout the shell paints its rounded surface on this
+   element without clipping it, so the hero's square corners would cover the
+   rounding. The framed layout already clips at the frame, and must keep its
+   own vertical scrolling. */
+:root:not([data-content-layout="framed"]) .courses-main:has(.guest-home-page) {
+  overflow: clip;
+}
+
+/* Phones: keep the shell's room for the fixed bottom navigation. */
+@media (max-width: 640px) {
+  .courses-main:has(.guest-home-page) {
+    overflow: clip;
+    padding-bottom: calc(104px + var(--app-viewport-safe-area-max-bottom));
+  }
+}

@@ -1,4 +1,4 @@
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import type {
   Database,
   DatabaseExecutor,
@@ -454,10 +454,29 @@ export async function findPlaybackMediaContext(
       "course_access_rules.access_type as access_type",
       "course_lessons.is_preview as is_preview",
       "course_lessons.is_published as is_published",
+      // Whether this is the course's first published lesson, in the same
+      // order the lesson numbers use: section position, then lesson position.
+      sql<boolean>`not exists (
+        select 1
+        from course_lessons earlier
+        join course_sections earlier_section
+          on earlier_section.id = earlier.section_id
+        where earlier.course_id = course_lessons.course_id
+          and earlier.deleted_at is null
+          and earlier.is_published = true
+          and earlier_section.deleted_at is null
+          and (earlier_section.position, earlier.position, earlier.id)
+            < (course_sections.position, course_lessons.position, course_lessons.id)
+      )`.as("is_first_lesson"),
       "media_assets.type as media_type",
       "media_assets.status as media_status",
       "media_assets.storage_key as media_storage_key",
     ])
+    .innerJoin(
+      "course_sections",
+      "course_sections.id",
+      "course_lessons.section_id",
+    )
     .where("course_lessons.content_media_id", "=", mediaId)
     .where("media_assets.id", "=", mediaId)
     .where("courses.deleted_at", "is", null)

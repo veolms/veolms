@@ -31,6 +31,7 @@ import type {
   CourseSort,
   CourseStatusFilter,
 } from "./catalogue";
+import { courseSurfaceElevation } from "../components/cardElevation";
 import { courseMatchesWishlist, getCourseRouteKey } from "./catalogue";
 
 function useCourseCatalogueBreakpoint(query: string) {
@@ -162,6 +163,7 @@ export function CourseCatalogue({
           ["all", "All"],
           ["enrolled", "Enrolled"],
           ["not-enrolled", "Not Enrolled"],
+          ["free", "Free"],
         ]
   ) satisfies readonly (readonly [CourseEnrollmentFilter, string])[];
 
@@ -216,14 +218,22 @@ export function CourseCatalogue({
     if (value === "all") return quickFilterCounts.all;
     if (value === "enrolled") return quickFilterCounts.enrolled;
     if (value === "not-enrolled") return quickFilterCounts["not-enrolled"];
+    if (value === "free") return quickFilterCounts.free;
     if (value === "published") return quickFilterCounts.published;
     if (value === "draft") return quickFilterCounts.draft;
     if (value === "bin") return quickFilterCounts.bin;
     return 0;
   };
 
+  // By day the page's resting controls are raised like the sidebar's selected
+  // menu item (its fill, its shadow, no outline), as the course cards are.
+  // The search field belongs to a shared component, so it is styled from
+  // here; it keeps its accent outline while it is being typed in.
+  const raisedSearchField =
+    "[:root[data-theme=light]:not([data-elevated-surfaces=false])_&_[data-expandable-search-field]:not(:focus-within)]:border-transparent [:root[data-theme=light]:not([data-elevated-surfaces=false])_&_[data-expandable-search-field]:not(:focus-within)]:bg-(image:--raised-surface-image) [:root[data-theme=light]:not([data-elevated-surfaces=false])_&_[data-expandable-search-field]:not(:focus-within)]:shadow-(--sidebar-menu-active-shadow)";
+
   const quickFilterTabClassName =
-    "inline-flex min-h-9 shrink-0 items-center gap-2 rounded-(--control-radius-structured) border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))] px-3.5 text-xs! leading-5! font-semibold max-[640px]:font-semibold! text-(--text-secondary) shadow-[0_5px_14px_color-mix(in_srgb,var(--accent-shadow)_16%,transparent)] transition-[background-color,border-color,color,box-shadow] hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-(--hover) hover:text-(--text) aria-selected:border-[color-mix(in_srgb,var(--accent)_70%,transparent)] aria-selected:bg-(--accent) aria-selected:text-(--on-accent) aria-selected:shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_45%,transparent)] aria-selected:hover:bg-(--accent-hover) sm:min-h-9 sm:px-4 sm:text-[0.8rem]!";
+    "inline-flex min-h-9 shrink-0 items-center gap-2 rounded-(--control-radius-structured) border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--surface-strong)_84%,var(--canvas))] px-3.5 text-xs! leading-5! font-semibold max-[640px]:font-semibold! text-(--text-secondary) shadow-[0_5px_14px_color-mix(in_srgb,var(--accent-shadow)_16%,transparent)] transition-[background-color,border-color,color,box-shadow] hover:border-[color-mix(in_srgb,var(--text)_24%,transparent)] hover:bg-(--hover) hover:text-(--text) aria-selected:border-[color-mix(in_srgb,var(--accent)_70%,transparent)] aria-selected:bg-(--accent) aria-selected:text-(--on-accent) aria-selected:shadow-[0_7px_18px_color-mix(in_srgb,var(--accent-shadow)_45%,transparent)] aria-selected:hover:bg-(--accent-hover) sm:min-h-9 sm:px-4 sm:text-[0.8rem]! [:root[data-theme=light]:not([data-elevated-surfaces=false])_&:not([aria-selected=true])]:border-transparent [:root[data-theme=light]:not([data-elevated-surfaces=false])_&:not([aria-selected=true])]:bg-(image:--raised-surface-image) [:root[data-theme=light]:not([data-elevated-surfaces=false])_&:not([aria-selected=true])]:shadow-(--sidebar-menu-active-shadow)";
   const quickFilterCountClassName = (active: boolean) =>
     [
       "inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] border px-1 text-[0.625rem]! leading-none font-bold tabular-nums",
@@ -304,7 +314,7 @@ export function CourseCatalogue({
   return (
     <section
       aria-label={activeSection}
-      className="mx-auto w-full max-w-[1800px]"
+      className={`mx-auto w-full max-w-[1800px] ${courseSurfaceElevation} ${raisedSearchField}`}
     >
       {preloadFirstCourseImage && firstImageCourse?.thumbnail ? (
         <link
@@ -453,7 +463,7 @@ export function CourseCatalogue({
             onValueChange={onSortChange}
             ariaLabel="Sort courses"
             options={sortOptions}
-            triggerClassName="h-10! w-42.5! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)!"
+            triggerClassName="h-10! w-42.5! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)! [:root[data-theme=light]:not([data-elevated-surfaces=false])_&[data-state=closed]]:border-transparent! [:root[data-theme=light]:not([data-elevated-surfaces=false])_&[data-state=closed]]:bg-(image:--raised-surface-image)! [:root[data-theme=light]:not([data-elevated-surfaces=false])_&[data-state=closed]]:shadow-(--sidebar-menu-active-shadow)!"
           />
           {role === "student" && (
             <ThemedSelect
@@ -461,7 +471,7 @@ export function CourseCatalogue({
               onValueChange={onStatusFilterChange}
               ariaLabel="Filter course status"
               options={statusOptions}
-              triggerClassName="h-10! w-35! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)!"
+              triggerClassName="h-10! w-35! rounded-(--control-radius-structured)! border! border-(--border)! bg-[color-mix(in_srgb,var(--surface)_76%,transparent)]! px-3! text-[0.78rem]! text-(--text-secondary)! [:root[data-theme=light]:not([data-elevated-surfaces=false])_&[data-state=closed]]:border-transparent! [:root[data-theme=light]:not([data-elevated-surfaces=false])_&[data-state=closed]]:bg-(image:--raised-surface-image)! [:root[data-theme=light]:not([data-elevated-surfaces=false])_&[data-state=closed]]:shadow-(--sidebar-menu-active-shadow)!"
             />
           )}
         </div>

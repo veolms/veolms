@@ -160,6 +160,19 @@ interface CommentCardProps {
   canEdit?: boolean;
   canDelete?: boolean;
   isDeepLinkTarget?: boolean;
+  /**
+   * A link pointed at this entry: once the card is on screen its highlight
+   * pulses, then `onHighlightShown` is called.
+   */
+  isHighlighted?: boolean;
+  onHighlightShown?: () => void;
+  /**
+   * Marks the entry a link led to: a "Highlighted" label, a tint of the
+   * accent colour behind it and an accent bar on its leading edge. In the
+   * lesson's list the tint runs out through the lesson panel's side padding
+   * to its edges, while the entry's content stays in line with the others.
+   */
+  showHighlightedLabel?: boolean;
   constrainToContainer?: boolean;
 }
 
@@ -186,8 +199,65 @@ export const CommentCard = React.memo(function CommentCard({
   canEdit = true,
   canDelete = true,
   isDeepLinkTarget = false,
+  isHighlighted = false,
+  onHighlightShown,
+  showHighlightedLabel = false,
   constrainToContainer = false,
 }: CommentCardProps) {
+  const articleRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const article = articleRef.current;
+    if (!isHighlighted || !article) return undefined;
+    if (
+      typeof article.animate !== "function" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      onHighlightShown?.();
+      return undefined;
+    }
+
+    let animation: Animation | undefined;
+    const play = () => {
+      const accent =
+        getComputedStyle(article).getPropertyValue("--accent").trim() ||
+        "currentColor";
+      const tint = (amount: number) =>
+        `color-mix(in srgb, ${accent} ${amount}%, transparent)`;
+      const edge = (amount: number) => `inset 3px 0 0 ${tint(amount)}`;
+      // Two soft pulses that settle on the resting tint the card keeps.
+      animation = article.animate(
+        [
+          { backgroundColor: tint(10), boxShadow: edge(100) },
+          { backgroundColor: tint(26), boxShadow: edge(100), offset: 0.15 },
+          { backgroundColor: tint(10), boxShadow: edge(100), offset: 0.4 },
+          { backgroundColor: tint(24), boxShadow: edge(100), offset: 0.6 },
+          { backgroundColor: tint(10), boxShadow: edge(100) },
+        ],
+        { duration: 2800, delay: 200, easing: "ease-in-out" },
+      );
+      animation.onfinish = () => onHighlightShown?.();
+    };
+
+    // Wait until the card is in view, so the pulse is not spent while the
+    // page is still scrolling to it.
+    if (typeof IntersectionObserver !== "function") {
+      play();
+      return () => animation?.cancel();
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        play();
+      },
+      { threshold: 0.6 },
+    );
+    observer.observe(article);
+    return () => {
+      observer.disconnect();
+      animation?.cancel();
+    };
+  }, [isHighlighted, onHighlightShown]);
   const queryClient = useContext(QueryClientContext);
   const [localLiked, setLocalLiked] = useState(comment.liked ?? false);
   const isCommentLiked = isBackendMode ? Boolean(comment.liked) : localLiked;
@@ -444,13 +514,14 @@ export const CommentCard = React.memo(function CommentCard({
 
   return (
     <article
+      ref={articleRef}
       id={`discussion-entry-${clientId}`}
       data-discussion-entry={entryKind}
       data-note-id={isNote ? (serverId ?? clientId) : undefined}
       aria-current={isDeepLinkTarget ? "location" : undefined}
       tabIndex={isDeepLinkTarget ? -1 : undefined}
       data-deletion-pending={deletion.hidden || undefined}
-      className={`relative ${constrainToContainer ? "py-3.5 sm:py-4" : "-mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4"} ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${isDeepLinkTarget ? "focus:outline-2 focus:outline-offset-2 focus:outline-(--accent)" : ""} ${deletion.hidden ? "min-h-19" : ""}`}
+      className={`relative ${constrainToContainer ? "py-3.5 sm:py-4" : "-mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4"} ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${isDeepLinkTarget ? "focus:outline-2 focus:outline-offset-2 focus:outline-(--accent)" : ""} ${deletion.hidden ? "min-h-19" : ""} ${showHighlightedLabel ? `bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] shadow-[inset_3px_0_0_var(--accent)] ${constrainToContainer ? "-mx-(--learning-lesson-content-inset) px-(--learning-lesson-content-inset)" : ""}` : ""}`}
       onClick={(event) => {
         if (!hasReplies) return;
         const target = event.target;
@@ -532,6 +603,11 @@ export const CommentCard = React.memo(function CommentCard({
                       />
                     )}
                   </span>
+                  {showHighlightedLabel && (
+                    <span className="rounded-md bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-1.5 py-0.5 text-[11px] font-semibold text-(--accent-ink,var(--accent))">
+                      Highlighted
+                    </span>
+                  )}
                   {isQuestion && Boolean(comment.isSolved) && (
                     <span
                       data-testid="qa-solved-badge"

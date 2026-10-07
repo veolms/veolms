@@ -72,8 +72,14 @@ export function preloadPrerenderedBodies(): Promise<unknown> | null {
   const pending: Promise<unknown>[] = [];
   // A browser that was signed in last time never shows the guest home; its
   // prerendered copy is hidden from the first paint, so nothing waits on it.
+  // The dev server's document is not prerendered and carries no preloads, but
+  // it is handed the home page's data (see loadDevelopmentHomePageData), so
+  // the page renders on the first pass there too. Loading its module first
+  // keeps that pass from showing the loading state while the module arrives.
+  const isDevelopmentHome =
+    import.meta.env.DEV && ["/", "/home"].includes(window.location.pathname);
   if (
-    documentPreloads(GUEST_HOME_CHUNK_URL_PLACEHOLDER) &&
+    (isDevelopmentHome || documentPreloads(GUEST_HOME_CHUNK_URL_PLACEHOLDER)) &&
     !document.documentElement.dataset.sessionHint
   ) {
     pending.push(guestHomeBody.preload());

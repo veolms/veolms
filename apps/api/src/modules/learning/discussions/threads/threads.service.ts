@@ -148,6 +148,12 @@ export interface ThreadsService {
 
   listPublicPopularDiscussions(
     db: DatabaseExecutor,
+    options?: {
+      /** At most 40; 20 when left out. */
+      limit?: number;
+      /** Keep only each author's most popular discussion. */
+      onePerAuthor?: boolean;
+    },
   ): Promise<PublicPopularDiscussionsResponse>;
 }
 
@@ -721,12 +727,13 @@ export function createThreadsService(
       });
     },
 
-    async listPublicPopularDiscussions(db) {
+    async listPublicPopularDiscussions(db, options) {
       const academyId = await resolveAcademyId(db);
       const rows: PublicPopularThreadRow[] =
         await threadsRepo.listPublicPopularThreads(db, {
           academyId,
-          limit: 20,
+          limit: options?.limit ?? 20,
+          onePerAuthor: options?.onePerAuthor,
         });
 
       return {
@@ -743,6 +750,7 @@ export function createThreadsService(
               row.authorName?.trim() || "Anonymous Learner",
               100,
             ),
+            username: row.authorUsername,
             avatarUrl: row.authorAvatarUrl,
             avatarSrcSet: avatarSrcSetFromUrl(row.authorAvatarUrl),
           },

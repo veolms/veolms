@@ -874,19 +874,24 @@ export function LessonVideoPlayer({
           {isPending ? (
             <VideoLoadingSpinner />
           ) : (
-            <div className="relative z-20 max-w-sm space-y-4">
-              <div className="space-y-1">
-                <h2 className="text-base font-semibold">
-                  {playbackAccessError.kind === "login"
-                    ? "Login required"
-                    : playbackAccessError.kind === "access"
+            <div className="relative z-20 max-w-md space-y-4">
+              {playbackAccessError.kind === "login" ? (
+                // Signing in is the whole message here, so it stands alone.
+                <h2 className="text-xl font-bold tracking-[-0.01em] sm:text-2xl">
+                  {playbackAccessError.message}
+                </h2>
+              ) : (
+                <div className="space-y-1">
+                  <h2 className="text-base font-semibold">
+                    {playbackAccessError.kind === "access"
                       ? "Course access required"
                       : "Unable to play this video"}
-                </h2>
-                <p className="text-sm text-white/70">
-                  {playbackAccessError.message}
-                </p>
-              </div>
+                  </h2>
+                  <p className="text-sm text-white/70">
+                    {playbackAccessError.message}
+                  </p>
+                </div>
+              )}
               {playbackAccessError.onAction ? (
                 <button
                   type="button"

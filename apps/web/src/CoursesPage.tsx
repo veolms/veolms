@@ -24,8 +24,7 @@ import type {
 import type {
   CourseListResponse,
   CourseOverviewResponse,
-  HomeDiscoveryResponse,
-  PublicPopularDiscussion,
+  GuestHomePageResponse,
 } from "@veolms/contracts";
 import {
   normalizeSettingsTab,
@@ -105,6 +104,7 @@ import {
   prefetchCourseEditor,
   useRestoreCourse,
 } from "./services/courses";
+import { prefetchGuestHomePage } from "./services/home";
 import {
   enrolledCoursesQueryOptions,
   useEnrolledCourses,
@@ -114,10 +114,6 @@ import {
   adaptCourseSummaryToCatalogueCourse,
   adaptDeletedCourseToCatalogueCourse,
 } from "./courses/courseAdapter";
-import {
-  courseThumbnailSizes,
-  getCourseThumbnailSrcSet,
-} from "./courses/courseThumbnail";
 import {
   CATALOGUE_CHUNK_URL_PLACEHOLDER,
   CATALOGUE_CSS_URLS_PLACEHOLDER,
@@ -132,6 +128,7 @@ import {
   courseCatalogueBody,
   guestHomeBody,
 } from "./routing/prerenderedBodies";
+import { guestHeroImage } from "./home/guest/guestHeroImage";
 
 // Resolved at module scope: the placeholders are replaced with literal URL
 // lists at build time, so these arrays are constants.
@@ -411,6 +408,11 @@ const PublicProfilePageRoute = lazy(() =>
     default: module.PublicProfilePage,
   })),
 );
+const HomePageSettingsPage = lazy(() =>
+  import("./home-page-settings/HomePageSettingsPage").then((module) => ({
+    default: module.HomePageSettingsPage,
+  })),
+);
 const CouponBuilderPage = lazy(() =>
   import("./coupons/CouponBuilderPage").then((module) => ({
     default: module.CouponBuilderPage,
@@ -433,8 +435,8 @@ interface CoursesPageProps {
   initialPublishedCoursePage?: CourseListResponse;
   initialPublishedCoursePageNeedsRefresh?: boolean;
   initialCourseOverview?: CourseOverviewResponse;
-  initialHomeDiscovery?: HomeDiscoveryResponse;
-  initialHomePopularDiscussions?: PublicPopularDiscussion[];
+  initialGuestHomePage?: GuestHomePageResponse;
+  initialGuestHomeCopy?: GuestHomePageResponse;
   onOpenCourse: (
     course: Course | LearningCourse,
     options?: CourseOpenOptions,
@@ -446,7 +448,7 @@ interface CoursesPageProps {
   cataloguePathname?: string;
   routeCatalogueEnrollmentFilter?: Extract<
     CourseEnrollmentFilter,
-    "all" | "enrolled" | "not-enrolled" | "wishlist"
+    "all" | "enrolled" | "not-enrolled" | "free" | "wishlist"
   >;
   page?: string;
   section?: string | null;
@@ -922,8 +924,8 @@ export function CoursesPage({
   initialPublishedCoursePage,
   initialPublishedCoursePageNeedsRefresh = false,
   initialCourseOverview,
-  initialHomeDiscovery,
-  initialHomePopularDiscussions,
+  initialGuestHomePage,
+  initialGuestHomeCopy,
   onOpenCourse,
   onNavigatePage,
   onNavigateBack,
@@ -1443,6 +1445,7 @@ export function CoursesPage({
     onDismiss: () => setSettingsQuickMenu(null),
   });
   const toggleSettingsNavigationRef = useRef<(() => void) | null>(null);
+  const toggleAppearanceRef = useRef<(() => void) | null>(null);
   const mobileMenuSnapPoints = useMemo(
     () => [mobileMenuCollapsedSnapPoint, 1],
     [mobileMenuCollapsedSnapPoint],
@@ -2517,6 +2520,21 @@ export function CoursesPage({
         return;
       }
 
+      // Shift+D switches between the light and dark themes on any page.
+      if (
+        event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        event.code === "KeyD" &&
+        !event.repeat &&
+        !isEditingText
+      ) {
+        event.preventDefault();
+        toggleAppearanceRef.current?.();
+        return;
+      }
+
       if (event.key === "Escape") {
         setCourseMenu(null);
         setPendingProfileMenuOpen(false);
@@ -3081,6 +3099,7 @@ export function CoursesPage({
     if (mobile) setMobilePaletteMenu(false);
     else setPaletteMenu(false);
   };
+  toggleAppearanceRef.current = toggleAppearance;
   const updateReadingMode = (preferences: Partial<ReadingModePreferences>) => {
     const next = persistReadingModePreferences({
       ...readReadingModePreferences(),
@@ -4196,6 +4215,26 @@ export function CoursesPage({
     }
   }, [page, sessionPresentAtBoot]);
 
+  // A visitor who arrived on another page is likely to open the home page
+  // next. Its code and its courses are fetched once the browser is idle, so
+  // it opens complete instead of showing its rows loading.
+  useEffect(() => {
+    // A browser that was signed in last time has its own home, not this.
+    if (sessionPresentAtBoot || isAuthenticated || page === "home") {
+      return undefined;
+    }
+    const warm = () => {
+      void guestHomeBody.preload();
+      void prefetchGuestHomePage(queryClient);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(warm, { timeout: 4000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(warm, 1500);
+    return () => window.clearTimeout(timer);
+  }, [isAuthenticated, page, queryClient, sessionPresentAtBoot]);
+
   // The signed-in home used to load strictly in sequence: session check,
   // then its code, then its data, then the dashboard code. Its code can
   // download while the session check is still in flight, and its data can be
@@ -4269,15 +4308,19 @@ export function CoursesPage({
       );
     }
     if (effectiveRole === "student" && surfacePage === "home") {
-      // The guest home's first popular-course thumbnail is the page's LCP
-      // image. Emitting its preload here (not inside the lazy GuestHome)
-      // places it in the prerendered document head, so the browser starts
-      // the download before hydration instead of after the auth check.
-      const homeLcpCourse = initialHomeDiscovery?.popularCourses?.[0]
-        ? adaptCourseSummaryToCatalogueCourse(
-            initialHomeDiscovery.popularCourses[0],
-          )
-        : undefined;
+      const guestHomeCourseCardActions = {
+        wishlisted,
+        onWishlist: toggleWishlist,
+        onOpenCourse,
+        courseMenu,
+        setCourseMenu,
+        setNotice,
+      };
+      // The guest home's hero picture is the page's largest paint. Emitting
+      // its preload here (not inside the lazy GuestHome) places it in the
+      // prerendered document head, so the browser starts the download before
+      // hydration instead of after the auth check. One link per art-directed
+      // source, matching the hero's <picture>.
       return (
         <Suspense fallback={<AcademyPageFallback />}>
           {/* Having the lazy guest-home chunk preloaded by the document
@@ -4291,20 +4334,22 @@ export function CoursesPage({
             <link key={href} rel="modulepreload" href={href} />
           ))}
           <ChunkStylesheets hrefs={GUEST_HOME_CSS_URLS} />
-          {homeLcpCourse?.thumbnail ? (
+          {[guestHeroImage.phone, guestHeroImage.wide].map((source) => (
             <link
+              key={source.media}
               rel="preload"
               as="image"
-              href={homeLcpCourse.thumbnail}
-              imageSrcSet={getCourseThumbnailSrcSet(homeLcpCourse)}
-              imageSizes={courseThumbnailSizes}
+              media={source.media}
+              href={source.src}
+              imageSrcSet={source.srcSet}
+              imageSizes={source.sizes}
               fetchPriority="high"
             />
-          ) : null}
+          ))}
           {(
             isAuthReady
               ? !isAuthenticated
-              : Boolean(initialHomeDiscovery) && showGuestHomeWhilePending
+              : Boolean(initialGuestHomePage) && showGuestHomeWhilePending
           ) ? (
             // Paint the seeded guest home while the session check runs so
             // the prerendered document carries real content (and the LCP
@@ -4319,9 +4364,9 @@ export function CoursesPage({
               <div className="guest-home-preview">
                 <GuestHome
                   onNavigatePage={onNavigatePage}
-                  setNotice={setNotice}
-                  initialDiscovery={initialHomeDiscovery}
-                  initialPopularDiscussions={initialHomePopularDiscussions}
+                  courseCardActions={guestHomeCourseCardActions}
+                  initialPage={initialGuestHomePage}
+                  initialCopy={initialGuestHomeCopy}
                 />
               </div>
               {isAuthReady ? null : (
@@ -4339,15 +4384,15 @@ export function CoursesPage({
               setNotice={setNotice}
               studentName={shellProfileDisplayName}
               pendingContent={
-                initialHomeDiscovery && showGuestHomeWhilePending ? (
+                initialGuestHomePage && showGuestHomeWhilePending ? (
                   // Keep the already-painted guest home on screen until the
                   // dashboard is ready: one content swap instead of flashing
                   // spinner states between them.
                   <GuestHome
                     onNavigatePage={onNavigatePage}
-                    setNotice={setNotice}
-                    initialDiscovery={initialHomeDiscovery}
-                    initialPopularDiscussions={initialHomePopularDiscussions}
+                    courseCardActions={guestHomeCourseCardActions}
+                    initialPage={initialGuestHomePage}
+                    initialCopy={initialGuestHomeCopy}
                   />
                 ) : (
                   <AcademyPageFallback />
@@ -4464,6 +4509,18 @@ export function CoursesPage({
         <Suspense fallback={<AcademyPageFallback />}>
           <CouponBuilderPage
             couponId={couponId}
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
+        </Suspense>
+      );
+    }
+    if (surfacePage === "home-page-settings") {
+      if (!isAuthReady) return <AcademyPageFallback />;
+      return (
+        <Suspense fallback={<AcademyPageFallback />}>
+          <HomePageSettingsPage
+            canManage={Boolean(activeUser) && isAdmin}
             onNavigatePage={onNavigatePage}
             setNotice={setNotice}
           />
@@ -5084,7 +5141,8 @@ export function CoursesPage({
                         }
                         aria-controls="desktop-theme-menu"
                         aria-label={`${resolvedTheme === "dark" ? "Dark" : "Light"} mode active. Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
-                        title={`${resolvedTheme === "dark" ? "Dark" : "Light"} mode - switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
+                        title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode (Shift+D)`}
+                        aria-keyshortcuts="Shift+D"
                         onClick={(event) => {
                           if (consumeAppearanceGestureClick(event)) return;
                           themeRevealOriginRef.current =
@@ -5738,7 +5796,8 @@ export function CoursesPage({
                           }
                           aria-controls="mobile-theme-menu"
                           aria-label={`${resolvedTheme === "dark" ? "Dark" : "Light"} mode active. Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
-                          title={`${resolvedTheme === "dark" ? "Dark" : "Light"} mode - switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
+                          title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode (Shift+D)`}
+                          aria-keyshortcuts="Shift+D"
                           onClick={(event) => {
                             if (consumeAppearanceGestureClick(event)) return;
                             themeRevealOriginRef.current =

@@ -1,7 +1,7 @@
 /* codex palette - light mode. */
 :root[data-theme="light"][data-palette="codex"] {
-  --canvas: #f1f1f3;
-  --header: #f3f3f5;
+  --canvas: #e3e3e7;
+  --header: #e5e5e9;
   --surface: #ffffff;
   --hover: #e8e8eb;
   --selected: #e1e1e5;
@@ -17,8 +17,8 @@
   --accent-border: rgba(37, 37, 41, 0.25);
   --accent-shadow: rgba(24, 24, 27, 0.16);
   --on-accent: #f9f9fa;
-  --app-shell: #e7e7ea;
-  --main-surface: #f7f7f8;
+  --app-shell: #dadadf;
+  --main-surface: #ebebee;
   --surface-strong: #eeeef0;
   --progress-track: #c2c2c8;
   --on-accent-glyph: #f9f9fa;

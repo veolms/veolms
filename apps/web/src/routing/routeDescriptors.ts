@@ -23,6 +23,7 @@ export type ShellPage =
   | "courses"
   | "coupons"
   | "coupon-builder"
+  | "home-page-settings"
   | "reviews"
   | "quizzes"
   | "quiz-builder"
@@ -119,6 +120,12 @@ export const routeDescriptors = {
     description: "Browse available courses and continue learning in ProCodrr.",
   },
   "courses-not-enrolled": {
+    kind: "shell",
+    page: "courses",
+    title: "Courses",
+    description: "Browse available courses and continue learning in ProCodrr.",
+  },
+  "courses-free": {
     kind: "shell",
     page: "courses",
     title: "Courses",
@@ -359,6 +366,14 @@ export const routeDescriptors = {
     description:
       "Create and manage discount coupons, promotional offers and special campaigns for your learners.",
   },
+  "home-page-settings": {
+    kind: "shell",
+    page: "home-page-settings",
+    section: "Home Page",
+    title: "Home Page",
+    description:
+      "Choose what signed-out visitors see on the academy home page.",
+  },
   "coupon-create": {
     kind: "shell",
     page: "coupon-builder",
@@ -399,6 +414,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   dashboard: "/",
   courses: "/courses",
   coupons: "/coupons",
+  "home-page-settings": "/home-page",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "create-course": "/courses/create",
@@ -424,6 +440,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   Coupons: "/coupons",
   "/Coupons": "/coupons",
   "/coupons": "/coupons",
+  "Home Page": "/home-page",
   "/my-learning": "/courses",
   Students: "/students",
   Reviews: "/reviews",
@@ -445,6 +462,7 @@ const canonicalPathsByRouteId = {
   dashboard: "/dashboard",
   courses: "/courses",
   coupons: "/coupons",
+  "home-page-settings": "/home-page",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "course-create": "/courses/create",
@@ -452,6 +470,7 @@ const canonicalPathsByRouteId = {
   "course-edit": "/courses/:courseId/edit/:editTab",
   "courses-enrolled": "/courses/enrolled",
   "courses-not-enrolled": "/courses/not-enrolled",
+  "courses-free": "/courses/free",
   "courses-wishlist": "/courses/wishlist",
   wishlist: "/wishlist",
   students: "/students",

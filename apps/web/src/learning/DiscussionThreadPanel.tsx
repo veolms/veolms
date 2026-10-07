@@ -1237,8 +1237,8 @@ function ThreadSlide({
               {participationState === "pending"
                 ? "Checking participation access…"
                 : participationActionLabel === "Get access"
-                  ? "Get access to participate in this lesson's discussions."
-                  : "Log in to participate in this lesson's discussions."}
+                  ? "Get access to participate in discussions."
+                  : "Log in to participate in discussions."}
             </p>
             {participationState !== "pending" && onParticipationAction ? (
               <button

@@ -6,6 +6,8 @@ import type {
   UpdateCoursePricingRequest,
   UpdateCourseSettingsRequest,
 } from "@veolms/contracts";
+import { httpError } from "../../../lib/errors.ts";
+import { hasDiscountBadgeColumn } from "../shared/discount-badge-column.ts";
 import * as configRepo from "./configuration.repository.ts";
 import { getCourseAndVerifyOwner as verifyCourseOwner } from "../shared/courses.utils.ts";
 import {
@@ -73,28 +75,46 @@ export function createConfigurationService({
 
     const now = new Date();
 
-    const price = updates.pricingType === "free" ? 0 : updates.price;
+    // A course has one price, optionally with the price it is marked down
+    // from. Selling it for zero is what makes it free, so the pricing type is
+    // derived here and whatever the client sent for it is ignored.
+    const price = updates.price;
     const currency = updates.currency ?? "INR";
-    const salePrice =
-      updates.pricingType === "free" ? null : (updates.salePrice ?? null);
+    const salePrice = updates.salePrice ?? null;
+    const pricingType: "free" | "paid" =
+      (salePrice ?? price) === 0 ? "free" : "paid";
+
+    // A badge needs a discount to announce.
+    const showDiscountBadge =
+      salePrice !== null && updates.showDiscountBadge === true;
+    const canStoreBadge = await hasDiscountBadgeColumn(database);
+    if (showDiscountBadge && !canStoreBadge) {
+      throw httpError(
+        503,
+        "DISCOUNT_BADGE_UNAVAILABLE",
+        "The discount badge cannot be turned on until the database migration that adds it has been run.",
+      );
+    }
 
     const id = await configRepo.upsertPricing(database, {
       id: crypto.randomUUID(),
       course_id: courseId,
-      pricing_type: updates.pricingType,
+      pricing_type: pricingType,
       price,
       currency,
       sale_price: salePrice,
+      ...(canStoreBadge ? { show_discount_badge: showDiscountBadge } : {}),
       created_at: now,
       updated_at: now,
     });
 
     return presentPricing({
       id,
-      pricing_type: updates.pricingType,
+      pricing_type: pricingType,
       price,
       currency,
       sale_price: salePrice,
+      show_discount_badge: showDiscountBadge,
     });
   }
 

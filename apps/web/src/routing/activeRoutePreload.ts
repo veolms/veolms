@@ -51,6 +51,7 @@ export async function preloadActiveRouteForHydration(pathname: string) {
     pathname === "/courses" ||
     pathname === "/courses/enrolled" ||
     pathname === "/courses/not-enrolled" ||
+    pathname === "/courses/free" ||
     pathname === "/courses/wishlist" ||
     pathname === "/wishlist"
   ) {

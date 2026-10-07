@@ -973,7 +973,7 @@ export function LearningWorkspace({
     ) {
       return {
         kind: "login",
-        message: "Log in to access this lesson.",
+        message: "Log in to access the lesson.",
         actionLabel: "Log in",
         onAction: onOpenLogin,
       };
@@ -1004,18 +1004,19 @@ export function LearningWorkspace({
     protectedPlayback && !playbackBootstrap && !playbackBootstrapError,
   );
   const lessonContentAccess = useMemo<LessonContentAccessState>(() => {
-    if (isAuthResolutionPending || !courseOverview || !adaptedCurriculum) {
-      return "pending";
-    }
+    if (!courseOverview || !adaptedCurriculum) return "pending";
 
     const lesson = adaptedCurriculum.lessonsByNumber.get(selectedLesson);
     if (!lesson) return "pending";
 
+    // Anyone may read a public lesson's discussions, so they do not wait to
+    // learn who the visitor is: they load alongside the rest of the lesson.
     const isPublicLesson =
       courseOverview.course.status === "published" &&
       lesson.isPublished &&
       (lesson.isPreview || courseOverview.pricing?.pricingType === "free");
     if (isPublicLesson) return "granted";
+    if (isAuthResolutionPending) return "pending";
     if (!isAuthenticated) return "denied";
 
     const isCourseOwner =

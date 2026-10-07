@@ -6,6 +6,8 @@ export interface CoursePricingSummary {
   price: number;
   currency: string;
   salePrice: number | null;
+  /** Show the discount as a badge ("20% off") on the course's cards. */
+  showDiscountBadge?: boolean;
 }
 
 /** One responsive rendition of a course thumbnail, as used in `srcset`. */
@@ -41,6 +43,7 @@ export const coursePricingSummarySchema = z.strictObject({
   price: z.number().int().nonnegative(),
   currency: z.string().min(3).max(3).default("INR"),
   salePrice: z.number().int().nonnegative().nullable().default(null),
+  showDiscountBadge: z.boolean().default(false),
 });
 
 export const courseThumbnailVariantSchema = z.object({
@@ -206,14 +209,21 @@ export const coursePricingSchema = z.object({
   price: z.number().int().nonnegative(),
   currency: z.string().min(3).max(3).default("INR"),
   salePrice: z.number().int().nonnegative().nullable().optional(),
+  showDiscountBadge: z.boolean().optional(),
 });
 
 export const updateCoursePricingRequestSchema = z
   .object({
-    pricingType: pricingTypeSchema,
+    /**
+     * Ignored: a course is free exactly when it sells for zero, so the API
+     * derives the type from the price. Accepted for older clients.
+     */
+    pricingType: pricingTypeSchema.optional(),
     price: z.number().int().nonnegative(),
     currency: z.string().min(3).max(3).default("INR"),
     salePrice: z.number().int().nonnegative().nullable().optional(),
+    /** Show the discount as a badge on the course's cards. Off by default. */
+    showDiscountBadge: z.boolean().optional(),
   })
   .refine(
     (data) => {
@@ -715,7 +725,13 @@ export const courseOverviewSchema = z.object({
     .optional(),
   sections: z.array(courseSectionSchema),
   pricing: coursePricingSchema
-    .pick({ pricingType: true, price: true, currency: true, salePrice: true })
+    .pick({
+      pricingType: true,
+      price: true,
+      currency: true,
+      salePrice: true,
+      showDiscountBadge: true,
+    })
     .nullable()
     .optional(),
   settings: courseSettingsSchema

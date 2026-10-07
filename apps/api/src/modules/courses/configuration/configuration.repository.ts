@@ -90,6 +90,8 @@ export async function upsertPricing(
     price: number;
     currency: string;
     sale_price: number | null;
+    /** Left out while the column does not exist yet (migration pending). */
+    show_discount_badge?: boolean;
     created_at: Date;
     updated_at: Date;
   },
@@ -103,6 +105,9 @@ export async function upsertPricing(
         price: values.price,
         currency: values.currency,
         sale_price: values.sale_price,
+        ...(values.show_discount_badge === undefined
+          ? {}
+          : { show_discount_badge: values.show_discount_badge }),
         updated_at: values.updated_at,
       }),
     )

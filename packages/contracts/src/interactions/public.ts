@@ -4,6 +4,8 @@ import { avatarImageVariantSchema } from "../auth/user.ts";
 
 const publicDiscussionAuthorSchema = z.strictObject({
   displayName: z.string().min(1).max(100),
+  /** Null for a deleted account, and absent from an older API. */
+  username: z.string().max(100).nullable().default(null),
   avatarUrl: z.string().max(3_000).nullable(),
   avatarSrcSet: z.array(avatarImageVariantSchema).default([]),
 });
