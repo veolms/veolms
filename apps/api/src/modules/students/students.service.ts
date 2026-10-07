@@ -9,10 +9,26 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { AppError } from "../../lib/errors.ts";
+import { ADMIN_ROLE } from "../auth/index.ts";
 import * as studentsRepo from "./students.repository.ts";
 
 export interface StudentsServiceOptions {
   database: Kysely<Database>;
+}
+
+/** The staff member asking for student data. */
+export interface StudentsActor {
+  id: string;
+  roles: readonly string[];
+}
+
+/**
+ * Admins see every student. Anyone else is limited to learners enrolled in
+ * courses they created, and to those courses' enrollments and progress — the
+ * returned id is that restriction; undefined means unrestricted.
+ */
+function resolveCreatorScope(actor: StudentsActor): string | undefined {
+  return actor.roles.includes(ADMIN_ROLE) ? undefined : actor.id;
 }
 
 export function resolveStudentAvatar(
@@ -114,8 +130,10 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
   async function listStudents(
     query: StudentListQuery,
+    actor: StudentsActor,
   ): Promise<StudentListResponse> {
     const limit = query.limit || 50;
+    const creatorId = resolveCreatorScope(actor);
 
     const [rows, totalCount] = await Promise.all([
       studentsRepo.listStudentsPaginated(database, {
@@ -125,11 +143,13 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         courseId: query.courseId,
         status: query.status,
         sortBy: query.sortBy,
+        creatorId,
       }),
       studentsRepo.countTotalStudents(database, {
         search: query.search,
         courseId: query.courseId,
         status: query.status,
+        creatorId,
       }),
     ]);
 
@@ -147,12 +167,16 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     const userIds = pageRows.map((u) => u.id);
 
     const [allEnrollments, allProgress, allAvatars] = await Promise.all([
-      studentsRepo.listEnrollmentsForUserIds(database, userIds),
+      studentsRepo.listEnrollmentsForUserIds(database, userIds, creatorId),
       // Aggregated per (user, course) in SQL: the raw-row variant shipped
       // thousands of progress rows per page and page throughput was bound
       // by Node parsing them (measured ~21 req/s at 25 connections while
       // every individual query finished in tens of milliseconds).
-      studentsRepo.listProgressSummariesForUserIds(database, userIds),
+      studentsRepo.listProgressSummariesForUserIds(
+        database,
+        userIds,
+        creatorId,
+      ),
       studentsRepo.listAvatarsForUserIds(database, userIds),
     ]);
 
@@ -344,8 +368,16 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
 
   async function getStudentByUsername(
     username: string,
+    actor: StudentsActor,
   ): Promise<StudentDetailResponse> {
-    const user = await studentsRepo.findStudentByUsername(database, username);
+    const creatorId = resolveCreatorScope(actor);
+    // Out-of-scope accounts answer exactly like unknown usernames, so the
+    // endpoint cannot be used to probe who exists or studies elsewhere.
+    const user = await studentsRepo.findStudentByUsername(
+      database,
+      username,
+      creatorId,
+    );
     if (!user) {
       throw new AppError(
         404,
@@ -355,8 +387,8 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
     }
 
     const [enrolledCourses, userProgress, userAvatars] = await Promise.all([
-      studentsRepo.getStudentEnrolledCourses(database, user.id),
-      studentsRepo.listProgressForUserIds(database, [user.id]),
+      studentsRepo.getStudentEnrolledCourses(database, user.id, creatorId),
+      studentsRepo.listProgressForUserIds(database, [user.id], creatorId),
       studentsRepo.listAvatarsForUserIds(database, [user.id]),
     ]);
 
@@ -457,7 +489,9 @@ export function createStudentsService({ database }: StudentsServiceOptions) {
         username: user.username,
         displayName: user.display_name,
         email: user.email,
-        phoneNo: user.phone_no,
+        // Phone numbers are admin-only: an instructor reaches their learners
+        // through the platform, not through a personal number.
+        phoneNo: creatorId ? null : user.phone_no,
         avatarUrl: resolveStudentAvatar(user.avatar_data_url, userAvatars),
         bio: user.bio,
         joinedAt: user.created_at.toISOString(),
