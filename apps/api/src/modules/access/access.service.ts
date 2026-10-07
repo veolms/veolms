@@ -56,6 +56,23 @@ export interface AccessService {
     orderId: string,
     courseId: string,
   ): Promise<void>;
+
+  /** Courses whose live grant currently belongs to an order. */
+  listActiveCourseIdsForOrder(
+    database: Executor,
+    orderId: string,
+  ): Promise<string[]>;
+
+  /** Moves a course grant to another order without interrupting access. */
+  reassignGrantToOrder(
+    database: Executor,
+    input: {
+      fromOrderId: string;
+      courseId: string;
+      toOrderId: string;
+      source: "purchase" | "bundle_purchase";
+    },
+  ): Promise<void>;
 }
 
 export function createAccessService(): AccessService {
@@ -232,6 +249,28 @@ export function createAccessService(): AccessService {
     );
   }
 
+  async function listActiveCourseIdsForOrder(
+    database: Executor,
+    orderId: string,
+  ): Promise<string[]> {
+    return await accessRepo.listActiveGrantCourseIdsByOrderId(
+      database,
+      orderId,
+    );
+  }
+
+  async function reassignGrantToOrder(
+    database: Executor,
+    input: {
+      fromOrderId: string;
+      courseId: string;
+      toOrderId: string;
+      source: "purchase" | "bundle_purchase";
+    },
+  ): Promise<void> {
+    await accessRepo.reassignAccessGrantOrder(database, input);
+  }
+
   return {
     grantAccess,
     grantManualAccess,
@@ -241,5 +280,7 @@ export function createAccessService(): AccessService {
     listActiveUserIdsForCourse,
     revokeAccessForOrder,
     revokeAccessForOrderCourse,
+    listActiveCourseIdsForOrder,
+    reassignGrantToOrder,
   };
 }

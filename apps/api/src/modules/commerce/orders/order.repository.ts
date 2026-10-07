@@ -474,6 +474,57 @@ export async function listPendingOrdersUsingCoupon(
   return await query.orderBy("created_at", "desc").execute();
 }
 
+/**
+ * Another paid order of the same buyer that still entitles them to a
+ * course — bought directly, or inside a bundle — other than the order being
+ * refunded. Items that have themselves been refunded do not count.
+ *
+ * access_grants and enrollments hold ONE row per (user, course), owned by
+ * the most recent purchase. So when that owning order is refunded and this
+ * returns an order, the row is handed to it instead of being revoked;
+ * otherwise a bundle refund took away a course the buyer had also bought on
+ * its own.
+ */
+export async function findOtherPaidOrderCoveringCourse(
+  database: Executor,
+  input: { userId: string; courseId: string; excludeOrderId: string },
+) {
+  return await database
+    .selectFrom("orders as o")
+    .innerJoin("order_items as oi", "oi.order_id", "o.id")
+    .select(["o.id as order_id", "oi.item_type"])
+    .where("o.user_id", "=", input.userId)
+    .where("o.id", "!=", input.excludeOrderId)
+    .where("o.status", "in", ["paid", "partially_refunded"])
+    .where((eb) =>
+      eb.or([
+        eb("oi.course_id", "=", input.courseId),
+        eb(
+          "oi.bundle_id",
+          "in",
+          eb
+            .selectFrom("course_bundle_items as cbi")
+            .select("cbi.bundle_id")
+            .where("cbi.course_id", "=", input.courseId),
+        ),
+      ]),
+    )
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom("refunds as r")
+            .select("r.id")
+            .whereRef("r.order_item_id", "=", "oi.id")
+            .where("r.status", "in", ["pending", "processed"]),
+        ),
+      ),
+    )
+    .orderBy("o.paid_at", "desc")
+    .limit(1)
+    .executeTakeFirst();
+}
+
 export async function listOrderItems(database: Executor, orderId: string) {
   return await database
     .selectFrom("order_items")
