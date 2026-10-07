@@ -173,7 +173,14 @@ export function sanitizeReturnTo(
   }
 
   try {
-    const url = new URL(value, "https://procodrr.local");
+    const base = "https://procodrr.local";
+    const url = new URL(value, base);
+    // Checked after parsing, because the parser rewrites the path:
+    // "/.//evil.com" and "/\\evil.com" both come out as "//evil.com",
+    // which a browser follows to another site.
+    if (url.origin !== base || url.pathname.startsWith("//")) {
+      return null;
+    }
     const path = normalizeAppPath(url.pathname);
     if (isAuthFlowPath(path)) {
       return null;

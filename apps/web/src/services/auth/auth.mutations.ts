@@ -73,6 +73,16 @@ function persistAuthenticatedSession(
   // account boundary so a prior account's fallback sessions cannot be
   // associated with the newly authenticated account.
   clearCoursePlayerSessions();
+  // A different account than the one last signed in on this page — after
+  // a sign-out, or after its session simply expired. Whatever was cached
+  // for the previous account (enrolments, orders, notifications) must not
+  // be shown to this one while it is still considered fresh.
+  const previousUserId = authStore.getLastSignedInUserId();
+  if (previousUserId && previousUserId !== data.user.id) {
+    queryClient.removeQueries({
+      predicate: (query) => query.queryKey[0] !== authKeys.all[0],
+    });
+  }
   authStore.setUser(data.user);
   resetRegisteredInteractionState();
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });

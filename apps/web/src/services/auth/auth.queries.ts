@@ -34,7 +34,7 @@ export function currentUserQueryOptions(queryClient: QueryClient) {
       }
 
       if (profile) {
-        authStore.setUser(profile);
+        authStore.setUser(profile, { refresh: true });
       } else {
         authStore.clearAuth();
         queryClient.removeQueries({ queryKey: authKeys.avatars() });

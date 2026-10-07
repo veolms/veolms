@@ -531,6 +531,9 @@ function CourseHeroSection({
   const user = useAuthStore((state) => state.user);
   const preview = useCheckoutPreview();
   const createOrder = useCreateCheckoutOrder();
+  const checkoutIntentRef = useRef<{ intent: string; key: string } | null>(
+    null,
+  );
   const verify = useVerifyPayment();
   const isEnrolled = Boolean(user && course.enrolled);
 
@@ -685,10 +688,18 @@ function CourseHeroSection({
         catalogPrice: baseNumericPrice,
       });
       const coupon = appliedCoupon?.code?.trim();
+      const couponCode = !isFree && coupon ? coupon.toUpperCase() : undefined;
+      // The key identifies this purchase, not this click: a second click on
+      // the same course, amount and coupon must reach the same order. A new
+      // key per click made the server see every retry as a new purchase.
+      const intent = JSON.stringify([item, couponCode ?? null]);
+      if (checkoutIntentRef.current?.intent !== intent) {
+        checkoutIntentRef.current = { intent, key: crypto.randomUUID() };
+      }
       const order = await createOrder.mutateAsync({
         items: [item],
-        ...(!isFree && coupon ? { couponCode: coupon.toUpperCase() } : {}),
-        idempotencyKey: crypto.randomUUID(),
+        ...(couponCode ? { couponCode } : {}),
+        idempotencyKey: checkoutIntentRef.current.key,
       });
 
       if (!order.gateway) {
@@ -2004,17 +2015,31 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   const defaultInstructorName =
     authUser?.displayName || authUser?.username || "Instructor";
 
-  const { data: apiOverview, isLoading: isOverviewLoading } = useCourseOverview(
-    courseSlug,
-    {
-      enabled:
-        !props.initialOverview &&
-        !props.previewData &&
-        !props.customCourse &&
-        Boolean(courseSlug),
-      initialData: props.initialOverview,
-    },
-  );
+  // The prerendered overview belongs to the page that was first loaded. It
+  // is passed down for every course route afterwards, so use it only for
+  // its own course: seeding another route with it showed the first course's
+  // title, price and curriculum there — and its Pay button bought it.
+  const seededOverview =
+    props.initialOverview &&
+    courseSlug &&
+    (props.initialOverview.course.slug === courseSlug ||
+      props.initialOverview.course.id === courseSlug)
+      ? props.initialOverview
+      : undefined;
+
+  const {
+    data: apiOverview,
+    isLoading: isOverviewLoading,
+    error: overviewError,
+    refetch: refetchOverview,
+  } = useCourseOverview(courseSlug, {
+    enabled:
+      !seededOverview &&
+      !props.previewData &&
+      !props.customCourse &&
+      Boolean(courseSlug),
+    initialData: seededOverview,
+  });
 
   // If previewData is provided, adapt it cleanly from persisted server state
   const adaptedFromPreview = props.previewData
@@ -2063,6 +2088,24 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
   ) {
     return (
       <CourseOverviewSkeleton onNavigateCourses={props.onNavigateCourses} />
+    );
+  }
+
+  // A failed request is not a missing course. Saying "not found" for a
+  // dropped connection or a server error told people a course they own
+  // had been removed.
+  if (!courseWithEnrollment && overviewError && overviewError.status !== 404) {
+    return (
+      <div className="w-full max-w-275 mx-auto box-border text-(--text)">
+        <div className="courses-empty" role="alert">
+          <BookOpen size={34} />
+          <h2>This course could not be loaded</h2>
+          <p>Check your connection and try again.</p>
+          <button type="button" onClick={() => void refetchOverview()}>
+            Try again
+          </button>
+        </div>
+      </div>
     );
   }
 
