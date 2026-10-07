@@ -175,14 +175,35 @@ export async function countOtpsSince(
     identifierType: IdentifierType;
     purpose: string;
     since: Date;
+    /** Count only sends requested from this address. */
+    requesterIp?: string | undefined;
   },
 ): Promise<number> {
-  const row = await database
+  let query = database
     .selectFrom("otp_codes")
     .select((eb) => eb.fn.count<string>("id").as("count"))
     .where("identifier", "=", input.identifier)
     .where("identifier_type", "=", input.identifierType)
     .where("purpose", "=", input.purpose)
+    .where("created_at", ">", input.since);
+
+  if (input.requesterIp) {
+    query = query.where("requester_ip", "=", input.requesterIp);
+  }
+
+  const row = await query.executeTakeFirst();
+  return Number(row?.count ?? 0);
+}
+
+/** Sends a signed-in user has requested, across every destination. */
+export async function countOtpsRequestedByUserSince(
+  database: Executor,
+  input: { userId: string; since: Date },
+): Promise<number> {
+  const row = await database
+    .selectFrom("otp_codes")
+    .select((eb) => eb.fn.count<string>("id").as("count"))
+    .where("requester_user_id", "=", input.userId)
     .where("created_at", ">", input.since)
     .executeTakeFirst();
 
@@ -198,6 +219,8 @@ export async function insertOtp(
     purpose: string;
     codeHash: string;
     expiresAt: Date;
+    requesterIp?: string | null | undefined;
+    requesterUserId?: string | null | undefined;
   },
 ): Promise<void> {
   await database
@@ -211,6 +234,8 @@ export async function insertOtp(
       attempts: 0,
       expires_at: input.expiresAt,
       consumed_at: null,
+      requester_ip: input.requesterIp ?? null,
+      requester_user_id: input.requesterUserId ?? null,
     })
     .execute();
 }

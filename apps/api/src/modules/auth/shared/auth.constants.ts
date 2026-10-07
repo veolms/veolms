@@ -20,9 +20,27 @@ export const OTP_MAX_ATTEMPTS = 3;
 /** Minimum gap between sends for one identifier and purpose. */
 export const OTP_RESEND_WINDOW_MS = 60 * 1000;
 
-/** Ceiling per identifier and purpose, so the resend gap cannot be looped. */
+/**
+ * Daily sends one requester may trigger for one identifier and purpose, so
+ * the resend gap cannot be looped. Counted per requesting address: a single
+ * outsider can no longer use up someone else's allowance.
+ */
 export const OTP_DAILY_LIMIT = 10;
 export const OTP_DAILY_WINDOW_MS = DAY_MS;
+
+/**
+ * Hard daily ceiling for one identifier and purpose across ALL requesters.
+ * Bounds delivery cost (and inbox flooding) when requests for the same
+ * destination arrive from many addresses.
+ */
+export const OTP_IDENTIFIER_DAILY_CEILING = 30;
+
+/**
+ * Daily verification sends one signed-in user may trigger across every
+ * destination. Without it a single session could request codes for an
+ * unlimited number of different phone numbers.
+ */
+export const OTP_USER_DAILY_LIMIT = 10;
 
 // --- Sessions ---------------------------------------------------------------
 

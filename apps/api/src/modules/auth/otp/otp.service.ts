@@ -9,13 +9,16 @@ import {
   otpVerificationEmail,
   otpVerificationSms,
 } from "@veolms/services";
+import { config } from "../../../config.ts";
 import {
   OTP_DAILY_LIMIT,
   OTP_DAILY_WINDOW_MS,
+  OTP_IDENTIFIER_DAILY_CEILING,
   OTP_MAX_ATTEMPTS,
   OTP_RESEND_WINDOW_MS,
   OTP_TTL_MINUTES,
   OTP_TTL_MS,
+  OTP_USER_DAILY_LIMIT,
 } from "../shared/auth.constants.ts";
 import type { IdentifierType, OtpPurpose } from "../shared/auth.types.ts";
 import * as otpRepository from "./otp.repository.ts";
@@ -26,6 +29,39 @@ export interface OtpServiceOptions {
   database: Kysely<Database>;
   services: AppServices;
   academyName: string;
+}
+
+/** Who is asking for a code; drives the per-requester send limits. */
+export interface OtpRequester {
+  ip?: string | null | undefined;
+  userId?: string | null | undefined;
+}
+
+/** E.164: "+", country code, subscriber number — 8 to 15 digits in total. */
+const E164_PHONE_PATTERN = /^\+[1-9]\d{7,14}$/u;
+
+/**
+ * SMS costs money per message and some destinations are premium-rate, so a
+ * phone destination must be a well-formed international number and, when
+ * the operator configured an allow-list, belong to a served country.
+ */
+function assertSmsDestinationAllowed(phoneNo: string): void {
+  if (!E164_PHONE_PATTERN.test(phoneNo)) {
+    throw new AppError(
+      400,
+      "INVALID_PHONE_NUMBER",
+      "Enter a valid mobile number including its country code.",
+    );
+  }
+
+  const allowed = config.SMS_ALLOWED_COUNTRY_CODES;
+  if (allowed.length > 0 && !allowed.some((code) => phoneNo.startsWith(code))) {
+    throw new AppError(
+      400,
+      "PHONE_COUNTRY_NOT_SUPPORTED",
+      "Verification by SMS is not available for this country.",
+    );
+  }
 }
 
 export function createOtpService({
@@ -64,8 +100,15 @@ export function createOtpService({
     identifier: string,
     identifierType: IdentifierType,
     purpose: OtpPurpose,
+    requester: OtpRequester,
   ): Promise<void> {
     const now = Date.now();
+    const dailyLimitExceeded = () =>
+      new AppError(
+        429,
+        "DAILY_LIMIT_EXCEEDED",
+        "Too many verification code requests. Please try again tomorrow.",
+      );
 
     const recentlySent = await otpRepository.hasOtpSince(database, {
       identifier,
@@ -82,36 +125,64 @@ export function createOtpService({
       );
     }
 
-    const sentToday = await otpRepository.countOtpsSince(database, {
+    const daySince = new Date(now - OTP_DAILY_WINDOW_MS);
+
+    // A signed-in user's sends are capped across ALL destinations: the
+    // per-destination allowance alone let one session request codes for an
+    // unlimited number of different phone numbers.
+    if (requester.userId) {
+      const sentByUser = await otpRepository.countOtpsRequestedByUserSince(
+        database,
+        { userId: requester.userId, since: daySince },
+      );
+      if (sentByUser >= OTP_USER_DAILY_LIMIT) throw dailyLimitExceeded();
+    }
+
+    // The daily allowance is counted per requesting address, so a stranger
+    // requesting codes for someone else's address spends their own allowance
+    // rather than the owner's. Without an address it falls back to the
+    // destination-wide count.
+    const sentByRequester = await otpRepository.countOtpsSince(database, {
       identifier,
       identifierType,
       purpose,
-      since: new Date(now - OTP_DAILY_WINDOW_MS),
+      since: daySince,
+      requesterIp: requester.ip ?? undefined,
     });
+    if (sentByRequester >= OTP_DAILY_LIMIT) throw dailyLimitExceeded();
 
-    if (sentToday >= OTP_DAILY_LIMIT) {
-      throw new AppError(
-        429,
-        "DAILY_LIMIT_EXCEEDED",
-        "Too many verification code requests. Please try again tomorrow.",
-      );
+    // Hard ceiling across every requester: bounds delivery cost and inbox
+    // flooding when requests for one destination come from many addresses.
+    if (requester.ip) {
+      const sentToIdentifier = await otpRepository.countOtpsSince(database, {
+        identifier,
+        identifierType,
+        purpose,
+        since: daySince,
+      });
+      if (sentToIdentifier >= OTP_IDENTIFIER_DAILY_CEILING) {
+        throw dailyLimitExceeded();
+      }
     }
   }
 
   async function sendOtp(
     identifier: string,
     identifierType: IdentifierType,
+    requester: OtpRequester = {},
   ): Promise<void> {
     const purpose = await resolveOtpPurpose(identifier, identifierType);
-    await sendOtpWithPurpose(identifier, identifierType, purpose);
+    await sendOtpWithPurpose(identifier, identifierType, purpose, requester);
   }
 
   async function sendOtpWithPurpose(
     identifier: string,
     identifierType: IdentifierType,
     purpose: OtpPurpose,
+    requester: OtpRequester = {},
   ): Promise<void> {
-    await assertOtpSendAllowed(identifier, identifierType, purpose);
+    if (identifierType === "phone") assertSmsDestinationAllowed(identifier);
+    await assertOtpSendAllowed(identifier, identifierType, purpose, requester);
 
     const code = crypto.randomInt(100_000, 1_000_000).toString();
     const now = new Date();
@@ -131,6 +202,8 @@ export function createOtpService({
       purpose,
       codeHash: hashToken(code),
       expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+      requesterIp: requester.ip,
+      requesterUserId: requester.userId,
     });
 
     const delivery =
@@ -165,12 +238,18 @@ export function createOtpService({
     }
   }
 
-  async function sendPhoneVerificationOtp(phoneNo: string): Promise<void> {
-    await sendOtpWithPurpose(phoneNo, "phone", "phone_verification");
+  async function sendPhoneVerificationOtp(
+    phoneNo: string,
+    requester: OtpRequester = {},
+  ): Promise<void> {
+    await sendOtpWithPurpose(phoneNo, "phone", "phone_verification", requester);
   }
 
-  async function sendEmailVerificationOtp(email: string): Promise<void> {
-    await sendOtpWithPurpose(email, "email", "email_verification");
+  async function sendEmailVerificationOtp(
+    email: string,
+    requester: OtpRequester = {},
+  ): Promise<void> {
+    await sendOtpWithPurpose(email, "email", "email_verification", requester);
   }
 
   const invalidCode = (statusCode = 401) =>
