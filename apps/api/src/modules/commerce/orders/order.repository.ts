@@ -450,6 +450,30 @@ export async function findOrderByIdempotencyKey(
     .executeTakeFirst();
 }
 
+/**
+ * Unpaid, unexpired orders that carry a coupon. A coupon use is only
+ * recorded as a redemption when the order is paid, so until then these
+ * orders are what is holding it: they count against the coupon's limits.
+ * An order stops counting when it is paid (it becomes a redemption),
+ * expires, or is cancelled.
+ */
+export async function listPendingOrdersUsingCoupon(
+  database: Executor,
+  input: { couponId: string; userId?: string; now: Date },
+) {
+  let query = database
+    .selectFrom("orders")
+    .selectAll()
+    .where("coupon_id", "=", input.couponId)
+    .where("status", "=", "pending")
+    .where("expires_at", ">", input.now);
+
+  if (input.userId) {
+    query = query.where("user_id", "=", input.userId);
+  }
+  return await query.orderBy("created_at", "desc").execute();
+}
+
 export async function listOrderItems(database: Executor, orderId: string) {
   return await database
     .selectFrom("order_items")

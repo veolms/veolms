@@ -18,6 +18,19 @@ export async function findCouponById(database: Executor, id: string) {
     .executeTakeFirst();
 }
 
+/**
+ * Loads a coupon under a row lock, serialising every limit check for it.
+ * Must be called inside a transaction.
+ */
+export async function findCouponByIdForUpdate(database: Executor, id: string) {
+  return await database
+    .selectFrom("coupons")
+    .selectAll()
+    .where("id", "=", id)
+    .forUpdate()
+    .executeTakeFirst();
+}
+
 export async function countCouponRedemptionsGlobal(
   database: Executor,
   couponId: string,
