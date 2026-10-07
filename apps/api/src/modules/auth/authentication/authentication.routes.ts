@@ -72,7 +72,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
         tags: ["Auth"],
         summary: "Register a new user",
         description:
-          "Registers a user and assigns the administrator role (if first user) or student role.",
+          "Registers a user with the student role. Refused with SETUP_REQUIRED until the platform's first administrator has been created through setup.",
         body: registerRequestSchema,
         response: {
           201: jsonResponse("Registration successful.", loginResponseSchema),
@@ -180,7 +180,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("User account was not found."),
         },
       },
-      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+      preHandler: context.mfaVerified,
     },
     controller.updateProfile,
   );
@@ -206,7 +206,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
           503: errorResponse("Avatar storage is not configured."),
         },
       },
-      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+      preHandler: context.mfaVerified,
     },
     controller.presignAvatarUpload,
   );
@@ -230,7 +230,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
           503: errorResponse("Avatar CDN delivery is not configured."),
         },
       },
-      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+      preHandler: context.mfaVerified,
     },
     controller.completeAvatarUpload,
   );
@@ -250,7 +250,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("User account was not found."),
         },
       },
-      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+      preHandler: context.mfaVerified,
     },
     controller.listAvatars,
   );
@@ -271,7 +271,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("Avatar or user account was not found."),
         },
       },
-      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+      preHandler: context.mfaVerified,
     },
     controller.selectAvatar,
   );
@@ -294,7 +294,7 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
           404: errorResponse("User account was not found."),
         },
       },
-      preHandler: [middleware.authenticate, middleware.requireAuthenticated],
+      preHandler: context.mfaVerified,
     },
     controller.deleteUploadedAvatars,
   );
