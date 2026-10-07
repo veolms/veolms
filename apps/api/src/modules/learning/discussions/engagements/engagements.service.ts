@@ -375,7 +375,21 @@ export function createEngagementsService({
         );
       }
 
-      await threadsRepo.setLocked(db, threadId, isLocked);
+      if (!canStaffModerate) {
+        // The author may lock their own thread and lift their own lock —
+        // not one a moderator placed, which they used to be able to undo.
+        const lockOwner = await threadsRepo.findLockOwner(db, threadId);
+        if (lockOwner && lockOwner !== actor.userId) {
+          if (isLocked) return { threadId, isLocked: true };
+          throw httpError(
+            403,
+            "LOCKED_BY_MODERATOR",
+            "This discussion was locked by a moderator and can only be unlocked by course staff.",
+          );
+        }
+      }
+
+      await threadsRepo.setLocked(db, threadId, isLocked, actor.userId);
       return { threadId, isLocked };
     },
 

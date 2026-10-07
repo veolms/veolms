@@ -145,6 +145,12 @@ export interface NotesRepository {
   ): Promise<void>;
 
   deleteNote(db: DatabaseExecutor, noteId: string): Promise<void>;
+
+  /** Moderation: make the note private and stop it being shared again. */
+  holdPrivate(db: DatabaseExecutor, noteId: string): Promise<void>;
+
+  /** Whether a moderator has made this note private. */
+  isHeldPrivate(db: DatabaseExecutor, noteId: string): Promise<boolean>;
 }
 
 function applyNoteFilters<O>(
@@ -383,6 +389,27 @@ export function createNotesRepository(): NotesRepository {
         .set(updateData)
         .where("id", "=", noteId)
         .execute();
+    },
+
+    async holdPrivate(db, noteId) {
+      await db
+        .updateTable("learning_notes")
+        .set({
+          visibility: "private",
+          moderated_private_at: new Date(),
+          updated_at: new Date(),
+        })
+        .where("id", "=", noteId)
+        .execute();
+    },
+
+    async isHeldPrivate(db, noteId) {
+      const row = await db
+        .selectFrom("learning_notes")
+        .select("moderated_private_at")
+        .where("id", "=", noteId)
+        .executeTakeFirst();
+      return Boolean(row?.moderated_private_at);
     },
 
     async deleteNote(db, noteId) {

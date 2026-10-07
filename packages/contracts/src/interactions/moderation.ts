@@ -111,6 +111,17 @@ export const moderateReplyRequestSchema = z.object({
 });
 export type ModerateReplyRequest = z.infer<typeof moderateReplyRequestSchema>;
 
+/**
+ * A shared note is the learner's own study material, so moderation takes it
+ * out of view rather than deleting it: the note becomes private and its
+ * author can no longer share it.
+ */
+export const moderateNoteRequestSchema = z.object({
+  action: z.enum(["make_private"]),
+  reason: z.string().max(500).optional(),
+});
+export type ModerateNoteRequest = z.infer<typeof moderateNoteRequestSchema>;
+
 export const suspendUserRequestSchema = z.object({
   userId: z.uuid(),
   courseId: z.uuid().nullable().optional(),

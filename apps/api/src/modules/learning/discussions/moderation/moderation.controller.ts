@@ -4,6 +4,7 @@ import type {
   CreateReportRequest,
   ListAuditLogsQuery,
   ListReportsQuery,
+  ModerateNoteRequest,
   ModerateReplyRequest,
   ModerateThreadRequest,
   SuspendUserRequest,
@@ -78,6 +79,22 @@ export interface ModerationController {
     request: FastifyRequest<{
       Params: { replyId: string };
       Body: ModerateReplyRequest;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void>;
+
+  moderateCourseNote(
+    request: FastifyRequest<{
+      Params: { courseId: string; noteId: string };
+      Body: ModerateNoteRequest;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void>;
+
+  moderatePlatformNote(
+    request: FastifyRequest<{
+      Params: { noteId: string };
+      Body: ModerateNoteRequest;
     }>,
     reply: FastifyReply,
   ): Promise<void>;
@@ -264,6 +281,31 @@ export function createModerationController({
       reply
         .status(200)
         .send({ message: `Reply action '${body.action}' applied.` });
+    },
+
+    async moderateCourseNote(request, reply) {
+      const { courseId, noteId } = request.params;
+      await service.moderateNote(
+        database,
+        noteId,
+        discussionActor(request.user!),
+        request.body,
+        courseId,
+        request.ip,
+      );
+      reply.status(200).send({ message: "The note was made private." });
+    },
+
+    async moderatePlatformNote(request, reply) {
+      await service.moderateNote(
+        database,
+        request.params.noteId,
+        discussionActor(request.user!),
+        request.body,
+        undefined,
+        request.ip,
+      );
+      reply.status(200).send({ message: "The note was made private." });
     },
 
     async moderatePlatformReply(request, reply) {

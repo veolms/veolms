@@ -493,11 +493,16 @@ export interface ThreadsRepository {
     replyId: string | null,
   ): Promise<void>;
 
+  /** `lockedByUserId` is recorded on lock and cleared on unlock. */
   setLocked(
     db: DatabaseExecutor,
     threadId: string,
     isLocked: boolean,
+    lockedByUserId: string,
   ): Promise<void>;
+
+  /** Who holds the lock on a locked thread, if that was recorded. */
+  findLockOwner(db: DatabaseExecutor, threadId: string): Promise<string | null>;
 
   setStatus(
     db: DatabaseExecutor,
@@ -1138,11 +1143,22 @@ export function createThreadsRepository(): ThreadsRepository {
         .execute();
     },
 
-    async setLocked(db, threadId, isLocked) {
+    async findLockOwner(db, threadId) {
+      const row = await db
+        .selectFrom("learning_threads")
+        .select("locked_by_user_id")
+        .where("id", "=", threadId)
+        .where("is_locked", "=", true)
+        .executeTakeFirst();
+      return row?.locked_by_user_id ?? null;
+    },
+
+    async setLocked(db, threadId, isLocked, lockedByUserId) {
       await db
         .updateTable("learning_threads")
         .set({
           is_locked: isLocked,
+          locked_by_user_id: isLocked ? lockedByUserId : null,
           updated_at: new Date(),
         })
         .where("id", "=", threadId)

@@ -73,6 +73,17 @@ function emailContent(
   };
 }
 
+/** "hide" → "hidden": the notice read "Your thread was hide". */
+function moderationActionPhrase(action: string): string {
+  const phrases: Record<string, string> = {
+    hide: "hidden",
+    delete: "deleted",
+    lock: "locked",
+    make_private: "made private",
+  };
+  return phrases[action] ?? action;
+}
+
 export function renderNotificationTemplate(
   templateKey: NotificationTemplateKey,
   data: NotificationTemplateData,
@@ -179,7 +190,7 @@ export function renderNotificationTemplate(
     case "moderation.content_moderated":
       inApp = {
         title: "Content moderation update",
-        body: `Your ${stringValue(data, "contentType")} was ${stringValue(data, "action")}${data.reason ? `: ${stringValue(data, "reason")}` : "."}`,
+        body: `Your ${stringValue(data, "contentType")} was ${moderationActionPhrase(stringValue(data, "action"))}${data.reason ? `: ${stringValue(data, "reason")}` : "."}`,
       };
       break;
     case "moderation.user_suspended":
