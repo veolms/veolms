@@ -127,6 +127,7 @@ export class LearningReminderWorker {
         to_char((now() at time zone s.time_zone)::date, 'YYYY-MM-DD')
           as local_date
       from user_learning_settings s
+      inner join users u on u.id = s.user_id and u.is_deleted = false
       where s.reminders_enabled
         and s.daily_goal_minutes is not null
         and lower(to_char(now() at time zone s.time_zone, 'dy'))

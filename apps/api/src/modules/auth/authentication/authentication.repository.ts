@@ -40,11 +40,13 @@ export function listNotificationRecipientsByIds(
   userIds: readonly string[],
 ) {
   if (userIds.length === 0) {
-    return Promise.resolve([] as { id: string; email: string | null }[]);
+    return Promise.resolve(
+      [] as { id: string; email: string | null; isDeleted: boolean }[],
+    );
   }
   return database
     .selectFrom("users")
-    .select(["id", "email"])
+    .select(["id", "email", "is_deleted as isDeleted"])
     .where("id", "in", [...userIds])
     .execute();
 }

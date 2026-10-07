@@ -58,10 +58,18 @@ function emailContent(
   const actionHtml = actionUrl
     ? `<p style="margin-top: 20px;"><a href="${escapeHtml(actionUrl)}">Open VeoLMS</a></p>`
     : "";
+  // Every email says where its notifications are controlled; none did, so
+  // the only way to stop them was to find the settings page unprompted.
+  const settingsUrl = new URL(
+    "/settings/notifications",
+    config.WEB_URL,
+  ).toString();
+  const footer = `\n\nManage which emails you receive: ${settingsUrl}`;
+  const footerHtml = `<p style="margin-top: 28px; font-size: 12px; color: #777;">You can choose which emails you receive in your <a href="${escapeHtml(settingsUrl)}" style="color: #777;">notification settings</a>.</p>`;
   return {
     subject,
-    text: `${body}${action}`,
-    html: `<div style="font-family: sans-serif; line-height: 1.5; color: #222;"><h2>${escapeHtml(subject)}</h2><p>${escapeHtml(body)}</p>${actionHtml}</div>`,
+    text: `${body}${action}${footer}`,
+    html: `<div style="font-family: sans-serif; line-height: 1.5; color: #222;"><h2>${escapeHtml(subject)}</h2><p>${escapeHtml(body)}</p>${actionHtml}${footerHtml}</div>`,
   };
 }
 

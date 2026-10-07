@@ -8,6 +8,7 @@ export * from "./video-playback.ts";
 export * from "./discussion.ts";
 export * from "./interactions/index.ts";
 export * from "./notification.ts";
+export * from "./notification-types.ts";
 export * from "./learning-goals.ts";
 export * from "./learning-progress.ts";
 export * from "./learning-recent-updates.ts";
