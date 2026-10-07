@@ -1412,13 +1412,41 @@ export function createCourseService({
     };
   }
 
+  /**
+   * The three direct-update endpoints below (thumbnail, details, archive)
+   * were guarded by a route permission only, so anyone holding that
+   * permission could change ANY course. They go through the same ownership
+   * gate as every other course mutation.
+   */
   async function updateCourseThumbnail(
     courseId: string,
+    creatorId: string,
+    userRoles: readonly string[] | undefined,
     payload: { thumbnailUrl: string; thumbnailMediaId?: string | null },
   ) {
-    const course = await courseRepo.findCourseById(database, courseId);
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
+
+    // Same rule as updateCourseBasics: the asset must be an image the caller
+    // owns. Unchecked, any media id could be attached here — and a media
+    // asset attached to a published course is served publicly, which turned
+    // this endpoint into a way to expose paid lesson files.
+    if (payload.thumbnailMediaId) {
+      const thumb = await mediaService.getMediaAsset(
+        payload.thumbnailMediaId,
+        creatorId,
+        userRoles,
+      );
+      if (
+        !thumb ||
+        thumb.type !== "image" ||
+        !ALLOWED_THUMBNAIL_MIME_TYPES.has(thumb.mime_type)
+      ) {
+        throw new AppError(
+          400,
+          "INVALID_THUMBNAIL",
+          "Thumbnail must be a valid image asset.",
+        );
+      }
     }
 
     await courseRepo.updateCourseDirect(database, courseId, {
@@ -1432,6 +1460,8 @@ export function createCourseService({
 
   async function updateCourseDetails(
     courseId: string,
+    creatorId: string,
+    userRoles: readonly string[] | undefined,
     payload: {
       title?: string;
       subtitle?: string | null;
@@ -1441,10 +1471,7 @@ export function createCourseService({
       categoryId?: string | null;
     },
   ) {
-    const course = await courseRepo.findCourseById(database, courseId);
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    }
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     const updates: Record<string, unknown> = {};
     if (payload.title !== undefined) updates.title = payload.title;
@@ -1463,11 +1490,12 @@ export function createCourseService({
     return await formatCourseDto(updated!);
   }
 
-  async function archiveCourse(courseId: string) {
-    const course = await courseRepo.findCourseById(database, courseId);
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    }
+  async function archiveCourse(
+    courseId: string,
+    creatorId: string,
+    userRoles: readonly string[] | undefined,
+  ) {
+    await getCourseAndVerifyOwner(courseId, creatorId, userRoles);
 
     await courseRepo.updateCourseDirect(database, courseId, {
       status: "archived",
