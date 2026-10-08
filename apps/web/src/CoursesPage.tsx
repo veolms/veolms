@@ -85,6 +85,8 @@ import { FloatingScrollbar } from "./shell/FloatingScrollbar";
 import { useMobileProfileDrawerSize } from "./shell/useMobileProfileDrawerSize";
 import { ShellProfileAvatar } from "./shell/ShellProfileAvatar";
 import { ProfileButtonPlaceholder } from "./shell/ProfileButtonPlaceholder";
+import { FrameEdge } from "./shell/FrameEdge";
+import { ShellDragSurface } from "./shell/ShellDragSurface";
 import { SidebarResizeReadout } from "./shell/SidebarResizeReadout";
 import { SidebarToggleIcon } from "./shell/SidebarToggleIcon";
 import { useCurrentUser, useSignOut } from "./services/auth";
@@ -5527,6 +5529,7 @@ export function CoursesPage({
         </div>
       )}
 
+      <ShellDragSurface />
       <div className="courses-main-frame">
         <main
           id="courses-main-scrollport"
@@ -5627,6 +5630,7 @@ export function CoursesPage({
             ) : null}
           </div>
         </main>
+        <FrameEdge surface="lesson" />
       </div>
 
       <FloatingScrollbar
@@ -6161,6 +6165,10 @@ export function CoursesPage({
           onDismiss={() => setNotice(null)}
         />
       )}
+
+      {/* Last, where the shell's `::after` overlay draws it on mouse
+          devices: above everything else that shares its level. */}
+      <FrameEdge surface="shell" />
     </div>
   );
 }

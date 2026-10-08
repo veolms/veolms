@@ -241,7 +241,12 @@ export function CourseCard({
           disabled={isDeleting}
         >
           <span className="absolute inset-0 bg-slate-950/50 opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100" />
-          <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full bg-black/70 text-white opacity-0 backdrop-blur-[2px] shadow-[0_10px_28px_rgba(0,0,0,0.5)] transition-[opacity,transform] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100">
+          {/* The blur is only on while the button shows, and fades with it. A
+              backdrop filter gets a compositor layer even at zero opacity,
+              and that layer pushes the rest of the card into another one
+              above it; on every card of a page those layers made a sidebar
+              drag drop parts of the cards on tablets. */}
+          <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full bg-black/70 text-white opacity-0 shadow-[0_10px_28px_rgba(0,0,0,0.5)] transition-[opacity,transform,backdrop-filter] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-hover/media:backdrop-blur-[2px] group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100 group-focus-visible/media:backdrop-blur-[2px]">
             <Play size={30} weight="fill" />
           </span>
         </button>

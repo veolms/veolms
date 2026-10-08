@@ -3,18 +3,41 @@
   --sidebar-expanded-width: var(--sidebar-width);
 }
 
+/* The shell's live geometry while the sidebar is dragged: the first is
+   written on `.courses-app` for every movement of the pointer, and the second
+   follows from it. An unregistered custom property is inherited, so each of
+   those writes made the browser work out the style of every element on the
+   page again (about 17ms of each frame on a tablet). Registered as not
+   inherited, a write restyles the shell alone. The few boxes further in that
+   read one ask for it with `inherit`. The initial value is the collapsed
+   rail, as in the `var()` fallbacks. */
+@property --sidebar-resize-preview-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 76px;
+}
+
+@property --main-surface-inline-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 .courses-app {
   --shell-frame-block-space: 22px;
   grid-template-columns: var(--sidebar-expanded-width) minmax(0, 1fr);
   gap: 0;
   padding: 12px 12px 10px 0;
-  background:
+  /* Named so that the drag surface can paint the same backdrop from a box of
+     its own while the sidebar is dragged (shell-drag-surface.css). */
+  --shell-backdrop:
     radial-gradient(
       circle at 16% 2%,
       color-mix(in srgb, var(--accent) 4%, transparent),
       transparent 26%
     ),
     var(--app-shell);
+  background: var(--shell-backdrop);
 }
 
 .courses-app--collapsed,
@@ -147,8 +170,9 @@
   }
 
   /* Keep the shell's inset edge above sticky page content. Box shadows on the
-     scrollport itself paint behind descendants, so the shell overlay restores
-     the continuous rounded highlight without taking up layout space. */
+     scrollport itself paint behind descendants, so the shell restores the
+     continuous rounded highlight above the page without taking up layout
+     space, in the box these rules describe. */
   :root[data-content-layout="framed"] .courses-app {
     --main-surface-inline-start: var(--sidebar-expanded-width);
     position: relative;
@@ -167,7 +191,10 @@
     --main-surface-inline-start: 14px;
   }
 
+  /* The same box as a shell-level overlay. The desktop lesson page gives it a
+     shadow to cast (learning-split-layout.css). */
   :root[data-content-layout="framed"] .courses-app::after {
+    --main-surface-inline-start: inherit;
     content: "";
     position: absolute;
     z-index: 46;
@@ -177,10 +204,20 @@
     left: var(--main-surface-inline-start);
     border-radius: 18px;
     pointer-events: none;
-    box-shadow: var(
-      --application-frame-edge-shadow,
-      var(--surface-depth-edge-shadow, none)
-    );
+  }
+
+  /* With a mouse or trackpad the overlay draws the edge highlight. On touch
+     devices it paints nothing and FrameEdge draws the edge instead: a box
+     this size above the page costs the compositor a frame-sized layer however
+     little it draws, and a high-density tablet does not have the tile memory
+     for it while the sidebar is dragged. */
+  @media not (pointer: coarse) {
+    :root[data-content-layout="framed"] .courses-app::after {
+      box-shadow: var(
+        --application-frame-edge-shadow,
+        var(--surface-depth-edge-shadow, none)
+      );
+    }
   }
 }
 
@@ -421,6 +458,7 @@
 :root
   .courses-app--hidden.courses-app--edge-open.courses-app--resizing
   > .courses-sidebar {
+  --sidebar-resize-preview-width: inherit;
   width: min(var(--sidebar-resize-preview-width), calc(100vw - 28px));
   transition: none;
 }

@@ -1412,6 +1412,24 @@
     transition: opacity 180ms ease;
   }
 
+  /* The framed shell fills the viewport and never scrolls, so laying the glow
+     out against the shell gives the same box as fixing it to the viewport.
+     It matters to the compositor, though: a fixed box cannot share the page's
+     own layer, and the main frame stacked above it then needs a layer of its
+     own too. Those two viewport-sized layers took a sidebar drag past
+     Chrome's tile memory limit on high-density Android tablets, which drew
+     frames with whole parts of the page missing.
+
+     Touch devices only. On a low-density desktop monitor those extra layers
+     are also what makes Chrome draw the page's text with greyscale rather
+     than subpixel antialiasing, so removing them there would change how
+     every line of text in the frame looks. */
+  @media (pointer: coarse) {
+    :root[data-content-layout="framed"] .courses-app::before {
+      position: absolute;
+    }
+  }
+
   .courses-sidebar {
     isolation: isolate;
   }

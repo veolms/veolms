@@ -222,6 +222,8 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   .learning-persistent-player--full
   .ambient-canvas {
   opacity: 0;
+  /* Transparent, so not painted either (see .ambient-canvas). */
+  visibility: hidden;
   filter: none;
   transition: none;
 }
