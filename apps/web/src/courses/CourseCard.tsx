@@ -17,6 +17,7 @@ import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSi
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
+import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
@@ -73,6 +74,8 @@ export interface CourseCardProps {
   onPublish?: (course: Course) => void;
   onDeleteRequested?: (course: Course) => void;
   onRestoreRequested?: (course: Course) => Promise<void> | void;
+  /** Offers "Unenroll" on a free course the learner is enrolled in. */
+  onUnenrollRequested?: (course: Course) => void;
   onNavigatePage: (destination: string) => void;
   menuOpen: boolean;
   setMenuOpen: (courseId: string | null) => void;
@@ -104,6 +107,7 @@ export function CourseCard({
   onPublish,
   onDeleteRequested,
   onRestoreRequested,
+  onUnenrollRequested,
   onNavigatePage,
   menuOpen,
   setMenuOpen,
@@ -481,6 +485,19 @@ export function CourseCard({
                       )
                     }
                   />
+                  {onUnenrollRequested && course.pricing?.free ? (
+                    <>
+                      <MenuDivider />
+                      <MenuAction
+                        Icon={SignOut}
+                        label="Unenroll"
+                        destructive
+                        onClick={() =>
+                          closeThen(() => onUnenrollRequested(course))
+                        }
+                      />
+                    </>
+                  ) : null}
                 </>
               ) : (
                 <>

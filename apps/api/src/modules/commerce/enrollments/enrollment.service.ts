@@ -6,6 +6,13 @@ import type { Executor } from "../shared/repository.types.ts";
 import { sql } from "kysely";
 import { toEnrolledCourseContract } from "./enrollment.mapper.ts";
 import * as enrollmentRepo from "./enrollment.repository.ts";
+import * as orderRepo from "../orders/order.repository.ts";
+import * as courseConfigRepo from "../../courses/configuration/configuration.repository.ts";
+import { CommerceErrors } from "../shared/commerce.errors.ts";
+import {
+  createCourseAccessService,
+  type CourseAccessService,
+} from "../shared/course-access.service.ts";
 import {
   createStudentsService,
   type StudentsService,
@@ -18,6 +25,11 @@ export interface EnrollmentService {
     userId: string,
     userRoles?: readonly string[],
   ): Promise<EnrolledCourse[]>;
+  /**
+   * Removes the learner from a free course they joined at no cost. Their
+   * progress is kept, so enrolling again picks up where they left off.
+   */
+  unenrollFromFreeCourse(userId: string, courseId: string): Promise<void>;
   listAcademyEnrollments(
     limit: number,
     actor: { id: string; roles: readonly string[] },
@@ -43,10 +55,12 @@ export function createEnrollmentService({
   database,
   courseService,
   studentsService = createStudentsService({ database }),
+  courseAccessService = createCourseAccessService(),
 }: {
   database: Executor;
   courseService: Pick<CourseService, "resolveCourseThumbnailUrls">;
   studentsService?: Pick<StudentsService, "resolveStudentAvatars">;
+  courseAccessService?: Pick<CourseAccessService, "withdrawCourseFromOrder">;
 }): EnrollmentService {
   async function listAcademyEnrollments(
     limit: number,
@@ -233,6 +247,62 @@ export function createEnrollmentService({
     );
   }
 
+  async function unenrollFromFreeCourse(
+    userId: string,
+    courseId: string,
+  ): Promise<void> {
+    await database.transaction().execute(async (trx) => {
+      const enrollment = await enrollmentRepo.findEnrollment(
+        trx,
+        userId,
+        courseId,
+      );
+      if (!enrollment || enrollment.status !== "active") {
+        throw CommerceErrors.ENROLLMENT_NOT_FOUND();
+      }
+
+      // Only an enrollment that cost nothing, in a course that is still
+      // free, can be left: the learner can come back whenever they like.
+      // Anything bought (on its own or in a bundle) or granted by staff
+      // stays, so a paid place is never given up by accident.
+      const orderId = enrollment.order_id;
+      if (!orderId || enrollment.source !== "direct_purchase") {
+        throw CommerceErrors.UNENROLL_NOT_ALLOWED();
+      }
+      const [[pricing], orderItems] = await Promise.all([
+        courseConfigRepo.findPricingByCourseIds(trx, [courseId]),
+        orderRepo.listOrderItems(trx, orderId),
+      ]);
+      const orderItem = orderItems.find(
+        (item) => item.item_type === "course" && item.course_id === courseId,
+      );
+      if (
+        pricing?.pricing_type !== "free" ||
+        !orderItem ||
+        orderItem.final_amount !== 0
+      ) {
+        throw CommerceErrors.UNENROLL_NOT_ALLOWED();
+      }
+
+      await courseAccessService.withdrawCourseFromOrder(
+        trx,
+        { id: orderId, user_id: userId },
+        courseId,
+      );
+
+      // An order with nothing left on it is closed. One that still holds
+      // another course (several free courses enrolled together) stays paid.
+      const remainingCourseIds =
+        await enrollmentRepo.listActiveEnrollmentCourseIdsByOrderId(
+          trx,
+          orderId,
+        );
+      if (remainingCourseIds.length === 0) {
+        await orderRepo.cancelFreeOrder(trx, orderId);
+      }
+    });
+  }
+
   async function getEnrollmentStats(
     filters: enrollmentRepo.EnrollmentAnalyticsFilters,
   ) {
@@ -265,6 +335,7 @@ export function createEnrollmentService({
   return {
     listAcademyEnrollments,
     listEnrolledCourses,
+    unenrollFromFreeCourse,
     getEnrollmentStats,
     getEnrollmentActivityBuckets,
     listTopCoursesByEnrollment,

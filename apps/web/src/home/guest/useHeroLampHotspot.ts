@@ -1,5 +1,6 @@
 import { useEffect, useState, type RefObject } from "react";
 import { guestHeroImage } from "./guestHeroImage";
+import { heroPictureOrigin, measureHeroPicture } from "./heroPictureGeometry";
 
 /** The lamp's click target, in pixels from the hero's top-left corner. */
 export interface HeroLampHotspot {
@@ -29,14 +30,6 @@ const MIN_HOTSPOT_HEIGHT_PX = 48;
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-function readObjectPosition(image: HTMLImageElement) {
-  const [x = "50%", y = "50%"] =
-    getComputedStyle(image).objectPosition.split(" ");
-  const fraction = (value: string) =>
-    value.endsWith("%") ? Number.parseFloat(value) / 100 : 0.5;
-  return { x: fraction(x), y: fraction(y) };
-}
-
 /**
  * Places the lamp's click target over the lamp. The picture covers the hero
  * (`object-fit: cover`) at a breakpoint-dependent position, so where the lamp
@@ -52,21 +45,13 @@ export function useHeroLampHotspot(
   useEffect(() => {
     const image = imageRef.current;
     if (!image) return undefined;
+    const hero = image.closest("section");
     const phoneQuery = window.matchMedia(guestHeroImage.phone.media);
 
     const measure = () => {
-      const crop = phoneQuery.matches ? "phone" : "wide";
-      const picture = guestHeroImage[crop];
+      const { crop, picture, boxWidth, boxHeight, scale, offsetX, offsetY } =
+        measureHeroPicture(image, phoneQuery.matches);
       const lamp = lampInPicture[crop];
-      const boxWidth = image.clientWidth;
-      const boxHeight = image.clientHeight;
-      const scale = Math.max(
-        boxWidth / picture.width,
-        boxHeight / picture.height,
-      );
-      const position = readObjectPosition(image);
-      const offsetX = (boxWidth - picture.width * scale) * position.x;
-      const offsetY = (boxHeight - picture.height * scale) * position.y;
 
       // Where the lamp is, held inside the hero.
       let left = clamp(
@@ -101,9 +86,12 @@ export function useHeroLampHotspot(
         top = Math.max(0, bottom - MIN_HOTSPOT_HEIGHT_PX);
       }
 
+      // The target is placed in the hero, which on a phone is not the box
+      // the picture is positioned in.
+      const origin = heroPictureOrigin(image);
       setStyle({
-        left: image.offsetLeft + left,
-        top: image.offsetTop + top,
+        left: origin.left + left,
+        top: origin.top + top,
         width: right - left,
         height: bottom - top,
       });
@@ -112,6 +100,9 @@ export function useHeroLampHotspot(
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(image);
+    // On phones the picture sits below the copy, so it moves (without
+    // changing size) whenever the copy above it changes height.
+    if (hero) observer.observe(hero);
     phoneQuery.addEventListener("change", measure);
     return () => {
       observer.disconnect();

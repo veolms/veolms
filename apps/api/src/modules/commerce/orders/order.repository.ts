@@ -627,6 +627,27 @@ export async function updateOrderStatus(
     .executeTakeFirst();
 }
 
+/**
+ * Closes a no-cost order the learner has left. A cancelled order no longer
+ * counts as one that still covers its courses (see
+ * findOtherPaidOrderCoveringCourse), and it gives up its idempotency key so
+ * that enrolling again creates a new order instead of replaying this one.
+ */
+export async function cancelFreeOrder(database: Executor, orderId: string) {
+  return await database
+    .updateTable("orders")
+    .set({
+      status: "cancelled",
+      idempotency_key: null,
+      updated_at: new Date(),
+    })
+    .where("id", "=", orderId)
+    .where("status", "=", "paid")
+    .where("total_amount", "=", 0)
+    .returningAll()
+    .executeTakeFirst();
+}
+
 export async function markOrderPaidIfPending(
   database: Executor,
   orderId: string,

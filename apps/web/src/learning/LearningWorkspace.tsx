@@ -292,7 +292,31 @@ interface CurriculumResize {
   collapsedAtStart: boolean;
   collapsed: boolean;
   previewWidth: number;
+  /** The width its content is laid out at: the last one at or over the minimum. */
+  expandedWidth: number;
   handle: HTMLElement;
+}
+
+/**
+ * How long the pointer rests in a drag of the course content before React is
+ * told the width the drag has reached (see moveCurriculumResize).
+ */
+const CURRICULUM_RESIZE_STATE_SYNC_MS = 140;
+
+/**
+ * Puts the width a drag has reached straight onto the document, where the
+ * split layout reads it, so the page is laid out for it in the same frame.
+ */
+function applyCurriculumResizeToDocument(resize: CurriculumResize) {
+  const root = document.documentElement;
+  root.style.setProperty(
+    "--learning-curriculum-width",
+    `${resize.previewWidth}px`,
+  );
+  root.style.setProperty(
+    "--learning-curriculum-expanded-width",
+    `${resize.expandedWidth}px`,
+  );
 }
 
 interface CurriculumPointerEvent {
@@ -629,6 +653,19 @@ export function LearningWorkspace({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const lessonDrawerSkipFinalFocusRef = useRef(false);
   const curriculumResizeRef = useRef<CurriculumResize | null>(null);
+  const curriculumResizeSyncTimerRef = useRef<number | undefined>(undefined);
+  useEffect(
+    () => () => window.clearTimeout(curriculumResizeSyncTimerRef.current),
+    [],
+  );
+  // While the course content is dragged its width goes straight onto the
+  // document, ahead of React's state (see moveCurriculumResize). Whatever a
+  // render has just written there from that state, the document is put back
+  // on the width the pointer has reached.
+  useLayoutEffect(() => {
+    const resize = curriculumResizeRef.current;
+    if (resize) applyCurriculumResizeToDocument(resize);
+  });
   const floatingLessonDrawerResizeRef =
     useRef<FloatingLessonDrawerResize | null>(null);
   const curriculumResizeMoveRef = useRef<
@@ -1268,28 +1305,49 @@ export function LearningWorkspace({
   // Where the page's elastic scroller sits. With the video showing, it goes
   // a little below the middle of the space left under the video. With the
   // video put away, it sits where the course content's own scroller does.
+  //
+  // The video's height changes on every frame of a resize (of the video, the
+  // course content or the sidebar). A variable set on the page is inherited
+  // by everything in it, so setting it there restyles the whole page; done
+  // each frame, that halved the frame rate of those resizes. So while the
+  // height is changing the scroller alone is told, and the page hears once
+  // it has settled, for a scroller that is only mounted later.
   useEffect(() => {
     const playerWrap = playerWrapRef.current;
     const main = playerWrap?.closest<HTMLElement>(".courses-main");
     if (!playerWrap || !main) return undefined;
+    const property = "--learning-elastic-scroller-clearance";
+    const findScroller = () =>
+      main.querySelector<HTMLElement>(":scope > .elastic-scroller");
+    let settleTimer: number | undefined;
+    let clearance = "";
+    const tellPage = () => {
+      window.clearTimeout(settleTimer);
+      if (main.style.getPropertyValue(property) !== clearance) {
+        main.style.setProperty(property, clearance);
+      }
+    };
     const place = () => {
       const videoHeight = playerWrap.getBoundingClientRect().height;
-      const clearance =
+      clearance = `${Math.round(
         videoHeight <= 0
           ? 268
-          : Math.max(96, (main.clientHeight - videoHeight) * 0.45);
-      main.style.setProperty(
-        "--learning-elastic-scroller-clearance",
-        `${Math.round(clearance)}px`,
-      );
+          : Math.max(96, (main.clientHeight - videoHeight) * 0.45),
+      )}px`;
+      findScroller()?.style.setProperty(property, clearance);
+      window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(tellPage, 160);
     };
     const sizes = new ResizeObserver(place);
     sizes.observe(playerWrap);
     sizes.observe(main);
     place();
+    tellPage();
     return () => {
       sizes.disconnect();
-      main.style.removeProperty("--learning-elastic-scroller-clearance");
+      window.clearTimeout(settleTimer);
+      findScroller()?.style.removeProperty(property);
+      main.style.removeProperty(property);
     };
   }, []);
 
@@ -1387,61 +1445,6 @@ export function LearningWorkspace({
     deepLinkInitializationPending,
   ]);
   const curriculumShortcutLabel = shortcutPlatform === "mac" ? "⌥+C" : "Alt+C";
-
-  useLayoutEffect(() => {
-    const main = mainRef.current;
-    const playerWrap = playerWrapRef.current;
-    if (!main || !playerWrap) return undefined;
-
-    const stickyCompactLayout = window.matchMedia(
-      "(max-width: 640px) and (orientation: portrait)",
-    );
-    let frame: number | null = null;
-    const observer =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(() => schedulePlayerHeightSync());
-
-    const syncPlayerHeight = () => {
-      frame = null;
-      if (!stickyCompactLayout.matches) {
-        main.style.removeProperty("--learning-mobile-player-height");
-        return;
-      }
-
-      const nextHeight = playerWrap.getBoundingClientRect().height;
-      if (!Number.isFinite(nextHeight)) return;
-      main.style.setProperty(
-        "--learning-mobile-player-height",
-        `${Math.round(nextHeight * 2) / 2}px`,
-      );
-    };
-
-    function schedulePlayerHeightSync() {
-      if (frame !== null) return;
-      frame = window.requestAnimationFrame(syncPlayerHeight);
-    }
-
-    const syncObservation = () => {
-      observer?.disconnect();
-      if (stickyCompactLayout.matches) {
-        observer?.observe(playerWrap);
-        schedulePlayerHeightSync();
-      } else {
-        if (frame !== null) window.cancelAnimationFrame(frame);
-        frame = null;
-        main.style.removeProperty("--learning-mobile-player-height");
-      }
-    };
-
-    syncObservation();
-    stickyCompactLayout.addEventListener("change", syncObservation);
-    return () => {
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      observer?.disconnect();
-      stickyCompactLayout.removeEventListener("change", syncObservation);
-    };
-  }, [theaterMode]);
 
   const getLessonDrawerCollapsedSnapPoint = useCallback(() => {
     return getPhoneLessonDrawerCollapsedSnapPoint(
@@ -2350,6 +2353,7 @@ export function LearningWorkspace({
         previewWidth: curriculumCollapsed
           ? CURRICULUM_COLLAPSED_WIDTH
           : curriculumWidth,
+        expandedWidth: curriculumWidth,
         handle,
       };
       setCurriculumResizePreviewWidth(
@@ -2372,6 +2376,14 @@ export function LearningWorkspace({
   // pointer makes it, from nothing to the maximum: it never jumps to a
   // width of its own. Where it settles (closed, its minimum, or the width
   // it was dragged to) is decided when the pointer is released.
+  //
+  // The width is written onto the document directly, so the split is laid
+  // out for it in this same frame. It used to travel through React state
+  // alone, which re-rendered the whole workspace for every movement of the
+  // pointer; those renders took several frames each, so the layout followed
+  // the pointer in jumps. React still hears the width at once where it
+  // changes what is rendered (closed or open, sliding closed or not), and
+  // otherwise when the pointer comes to rest.
   const moveCurriculumResize = useCallback((event: CurriculumPointerEvent) => {
     const resize = curriculumResizeRef.current;
     if (!resize || resize.pointerId !== event.pointerId) return;
@@ -2392,11 +2404,27 @@ export function LearningWorkspace({
       setCurriculumCollapsed(hidden);
     }
 
+    const slidingClosed = previewWidth < CURRICULUM_MIN_WIDTH;
+    const rendersDifferently =
+      resize.previewWidth < CURRICULUM_MIN_WIDTH !== slidingClosed;
     resize.previewWidth = previewWidth;
-    setCurriculumResizePreviewWidth(previewWidth);
+    if (!slidingClosed) resize.expandedWidth = previewWidth;
+    applyCurriculumResizeToDocument(resize);
 
-    if (previewWidth >= CURRICULUM_MIN_WIDTH) {
-      setCurriculumWidth(previewWidth);
+    const syncState = () => {
+      const current = curriculumResizeRef.current;
+      if (current !== resize) return;
+      setCurriculumResizePreviewWidth(resize.previewWidth);
+      setCurriculumWidth(resize.expandedWidth);
+    };
+    window.clearTimeout(curriculumResizeSyncTimerRef.current);
+    if (rendersDifferently) {
+      syncState();
+    } else {
+      curriculumResizeSyncTimerRef.current = window.setTimeout(
+        syncState,
+        CURRICULUM_RESIZE_STATE_SYNC_MS,
+      );
     }
   }, []);
   const endCurriculumResize = useCallback(
@@ -2404,6 +2432,7 @@ export function LearningWorkspace({
       const resize = curriculumResizeRef.current;
       if (!resize || resize.pointerId !== event.pointerId) return;
       curriculumResizeRef.current = null;
+      window.clearTimeout(curriculumResizeSyncTimerRef.current);
       setCurriculumResizing(false);
       setCurriculumResizePreviewWidth(null);
       resize.handle?.releasePointerCapture?.(resize.pointerId);

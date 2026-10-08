@@ -47,7 +47,7 @@ import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldChec
 import { StudentIcon as Student } from "@phosphor-icons/react/Student";
 import { ToastNotification, type ToastMessage } from "./ToastNotification";
 import { SunIcon as Sun } from "@phosphor-icons/react/Sun";
-import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
+import { GuestProfileIcon } from "./icons/GuestProfileIcon";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import logoDarkSvg from "./assets/procodrr-logo-dark.svg?raw";
 import type { LearningCourse } from "./StudentPages";
@@ -760,6 +760,22 @@ const SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS =
 
 /** At this sidebar width or narrower, a drag stacks the dock vertically. */
 const SIDEBAR_DOCK_VERTICAL_MAX_WIDTH = 180;
+/**
+ * How long the pointer rests in a drag before React is told the width the
+ * drag has reached (see previewSidebarResizeWidth).
+ */
+const SIDEBAR_RESIZE_STATE_SYNC_MS = 140;
+
+/**
+ * Everything a dragged sidebar's width decides about what is rendered: which
+ * way the appearance dock lies, whether the sidebar's content has come into
+ * view, and whether it is down to the collapsed rail. Two widths with the
+ * same key render the same shell.
+ */
+const getSidebarResizeRenderKey = (width: number) =>
+  (width > SIDEBAR_DOCK_VERTICAL_MAX_WIDTH ? 4 : 0) +
+  (width >= SIDEBAR_COLLAPSED_WIDTH + SIDEBAR_CONTENT_REVEAL_DISTANCE ? 2 : 0) +
+  (width <= SIDEBAR_COLLAPSED_WIDTH ? 1 : 0);
 
 // The dock has no box of its own (background, padding, shadow): its buttons
 // stand directly on the sidebar at the menu items' height and icon size, and
@@ -895,7 +911,7 @@ function LoginProfileButton({
           aria-hidden="true"
           className="courses-profile__login-icon flex size-13.5 shrink-0 items-center justify-center text-(--accent) [.mobile-menu-sheet\_\_profile_&]:size-13 [&>svg]:size-[52px] [&>svg]:shrink-0"
         >
-          <UserCircle size={45.36} weight="thin" />
+          <GuestProfileIcon size={45.36} />
         </i>
       )}
       <span className="courses-profile__login-copy">
@@ -1488,6 +1504,11 @@ export function CoursesPage({
     );
   };
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
+  const sidebarResizeSyncTimerRef = useRef<number | undefined>(undefined);
+  useEffect(
+    () => () => window.clearTimeout(sidebarResizeSyncTimerRef.current),
+    [],
+  );
   const sidebarScreenSwipeStartRef = useRef<
     ((event: SidebarScreenSwipeStartEvent) => void) | null
   >(null);
@@ -3617,6 +3638,21 @@ export function CoursesPage({
     }
   }, [sidebarClassName]);
 
+  // While the sidebar is dragged its width goes straight onto the shell,
+  // ahead of React's state (see previewSidebarResizeWidth). Whatever a render
+  // has just written for it, the shell is put back on the width the pointer
+  // has reached; out of a drag, on the state's own value.
+  useLayoutEffect(() => {
+    const width =
+      (sidebarResizing ? sidebarResizeRef.current?.previewWidth : undefined) ??
+      sidebarResizePreviewWidth ??
+      SIDEBAR_COLLAPSED_WIDTH;
+    coursesAppRef.current?.style.setProperty(
+      "--sidebar-resize-preview-width",
+      `${width}px`,
+    );
+  });
+
   useEffect(() => {
     if (sidebarTooltipTimerRef.current !== null) {
       window.clearTimeout(sidebarTooltipTimerRef.current);
@@ -3827,6 +3863,57 @@ export function CoursesPage({
     });
   };
 
+  /**
+   * Takes a dragged sidebar to a new width.
+   *
+   * The width is written onto the shell directly, so the sidebar and the
+   * page beside it are laid out for it in this same frame. It used to travel
+   * through React state alone, which re-rendered the whole shell for every
+   * movement of the pointer: each of those renders took several frames, so
+   * the layout followed the pointer in jumps and the text on the page
+   * shuddered as it was dragged.
+   *
+   * React still hears the width where it changes what is rendered, at once,
+   * and otherwise when the pointer comes to rest (the handle's reported
+   * value). With the live size readout on, it hears every width as before.
+   */
+  const previewSidebarResizeWidth = (previousWidth: number, width: number) => {
+    window.clearTimeout(sidebarResizeSyncTimerRef.current);
+    const rendersDifferently =
+      getSidebarResizeRenderKey(previousWidth) !==
+      getSidebarResizeRenderKey(width);
+
+    if (rendersDifferently) {
+      // The appearance dock may be about to turn. Its controls glide from
+      // where they are now, which React last measured when it last rendered.
+      const dock = appearanceControlsRef.current;
+      if (dock) {
+        appearanceControlRectsRef.current = [
+          ...dock.querySelectorAll<HTMLElement>(
+            ":scope > button, :scope > .sidebar-palette-wrap",
+          ),
+        ].map((control) => control.getBoundingClientRect());
+      }
+    }
+
+    coursesAppRef.current?.style.setProperty(
+      "--sidebar-resize-preview-width",
+      `${width}px`,
+    );
+
+    if (
+      rendersDifferently ||
+      sidebarPreferences.showResizeDimensions === true
+    ) {
+      setSidebarResizePreviewWidth(width);
+      return;
+    }
+    sidebarResizeSyncTimerRef.current = window.setTimeout(() => {
+      const resize = sidebarResizeRef.current;
+      if (resize?.active) setSidebarResizePreviewWidth(resize.previewWidth);
+    }, SIDEBAR_RESIZE_STATE_SYNC_MS);
+  };
+
   const startSidebarResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (
       (compactNavigation && !sidebarPresentedAsOverlay) ||
@@ -3940,14 +4027,16 @@ export function CoursesPage({
       maximumWidth,
       Math.max(minimumWidth, resize.startWidth + deltaX),
     );
+    const previousPreviewWidth = resize.previewWidth;
     resize.previewWidth = previewWidth;
-    setSidebarResizePreviewWidth(previewWidth);
+    previewSidebarResizeWidth(previousPreviewWidth, previewWidth);
   };
 
   const endSidebarResize = (event: PointerPositionEvent, cancelled = false) => {
     const resize = sidebarResizeRef.current;
     if (!resize || resize.pointerId !== event.pointerId) return;
     sidebarResizeRef.current = null;
+    window.clearTimeout(sidebarResizeSyncTimerRef.current);
     try {
       resize.handle?.releasePointerCapture?.(resize.pointerId);
     } catch {
@@ -4395,6 +4484,15 @@ export function CoursesPage({
               onNavigatePage={onNavigatePage}
               setNotice={setNotice}
               studentName={shellProfileDisplayName}
+              notEnrolledContent={
+                <GuestHome
+                  onNavigatePage={onNavigatePage}
+                  courseCardActions={guestHomeCourseCardActions}
+                  initialPage={initialGuestHomePage}
+                  initialCopy={initialGuestHomeCopy}
+                  learnerName={activeUser?.displayName?.trim() ?? ""}
+                />
+              }
               pendingContent={
                 initialGuestHomePage && showGuestHomeWhilePending ? (
                   // Keep the already-painted guest home on screen until the
@@ -5595,9 +5693,9 @@ export function CoursesPage({
                     avatarSrcSet={shellProfileAvatarSrcSet}
                   />
                 ) : (
-                  <UserCircle
+                  <GuestProfileIcon
                     size={24}
-                    weight="regular"
+                    ringWidth={16}
                     className="!text-(--accent)"
                     aria-hidden="true"
                   />
