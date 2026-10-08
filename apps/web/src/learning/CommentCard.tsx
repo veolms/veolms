@@ -167,8 +167,8 @@ interface CommentCardProps {
   isHighlighted?: boolean;
   onHighlightShown?: () => void;
   /**
-   * Marks the entry a link led to: a "Highlighted" label, a tint of the
-   * accent colour behind it and an accent bar on its leading edge. In the
+   * Marks the entry a link led to with a tint of the accent colour behind
+   * it and an accent bar on its leading edge (no text label). In the
    * lesson's list the tint runs out through the lesson panel's side padding
    * to its edges, while the entry's content stays in line with the others.
    */
@@ -521,7 +521,7 @@ export const CommentCard = React.memo(function CommentCard({
       aria-current={isDeepLinkTarget ? "location" : undefined}
       tabIndex={isDeepLinkTarget ? -1 : undefined}
       data-deletion-pending={deletion.hidden || undefined}
-      className={`relative ${constrainToContainer ? "py-3.5 sm:py-4" : "-mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4"} ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${isDeepLinkTarget ? "focus:outline-2 focus:outline-offset-2 focus:outline-(--accent)" : ""} ${deletion.hidden ? "min-h-19" : ""} ${showHighlightedLabel ? `bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] shadow-[inset_3px_0_0_var(--accent)] ${constrainToContainer ? "-mx-(--learning-lesson-content-inset) px-(--learning-lesson-content-inset)" : ""}` : ""}`}
+      className={`relative ${constrainToContainer ? "-mx-(--learning-lesson-content-inset) px-(--learning-lesson-content-inset) py-3.5 sm:py-4" : "-mx-3 px-3 py-3.5 sm:-mx-4 sm:px-4 sm:py-4"} ${hasReplies ? "cursor-pointer transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[color-mix(in_srgb,var(--text)_4%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_7%,transparent)]" : ""} ${isDeepLinkTarget ? "focus:outline-2 focus:outline-offset-2 focus:outline-(--accent)" : ""} ${deletion.hidden ? "min-h-19" : ""} ${showHighlightedLabel ? `max-sm:mt-4 bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] shadow-[inset_3px_0_0_var(--accent)]` : ""}`}
       onClick={(event) => {
         if (!hasReplies) return;
         const target = event.target;
@@ -603,11 +603,6 @@ export const CommentCard = React.memo(function CommentCard({
                       />
                     )}
                   </span>
-                  {showHighlightedLabel && (
-                    <span className="rounded-md bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-1.5 py-0.5 text-[11px] font-semibold text-(--accent-ink,var(--accent))">
-                      Highlighted
-                    </span>
-                  )}
                   {isQuestion && Boolean(comment.isSolved) && (
                     <span
                       data-testid="qa-solved-badge"
@@ -671,7 +666,7 @@ export const CommentCard = React.memo(function CommentCard({
                   onEdit={() => onEdit(comment)}
                   onShare={() =>
                     serverId
-                      ? void shareDiscussionEntry(
+                      ? shareDiscussionEntry(
                           serverId,
                           comment.name,
                           comment.text,
@@ -1161,14 +1156,9 @@ function ReplyCard({
                     setEditing(true);
                   }}
                   onShare={() =>
-                    void shareDiscussionEntry(
-                      reply.id,
-                      reply.name,
-                      reply.text,
-                      {
-                        parentThreadId,
-                      },
-                    )
+                    shareDiscussionEntry(reply.id, reply.name, reply.text, {
+                      parentThreadId,
+                    })
                   }
                   canDelete={
                     canParticipate &&
@@ -1409,11 +1399,18 @@ interface CommentActionMenuProps {
   textToCopy?: string;
   onCopyTextNotice?: (message: string) => void;
   onEdit: () => void;
-  onShare: () => void;
+  /**
+   * Resolves to whether a link was copied; to nothing when the share was
+   * handed to the device's own share sheet.
+   */
+  onShare: () => void | Promise<boolean | undefined>;
   onDelete: () => void;
   onReport: () => void;
   className: string;
 }
+
+/** How long a "Copied" label stays up before its menu closes. */
+const COPIED_LABEL_MS = 1300;
 
 export function CommentActionMenu({
   name,
@@ -1449,12 +1446,46 @@ export function CommentActionMenu({
   const canBookmark = Boolean(onToggleBookmark);
   const canFollow =
     (kind === "comment" || kind === "question") && Boolean(onToggleFollow);
+  // Copying answers inside the menu: the item that was chosen turns into
+  // "Copied" for a moment, then the menu closes.
+  const [copyResult, setCopyResult] = useState<{
+    item: "share" | "text";
+    copied: boolean;
+  } | null>(null);
+  const showCopyResult = (item: "share" | "text", copied: boolean) => {
+    setCopyResult({ item, copied });
+    window.setTimeout(() => setCopyResult(null), COPIED_LABEL_MS + 200);
+  };
+  const copyLabel = (item: "share" | "text", label: string, done: string) =>
+    copyResult?.item === item
+      ? copyResult.copied
+        ? done
+        : "Couldn't copy"
+      : label;
+  const copyIcon = (item: "share" | "text", icon: typeof CopySimple) =>
+    copyResult?.item === item && copyResult.copied ? CheckCircle : icon;
+
+  const shareAction = (
+    <MenuAction
+      Icon={copyIcon("share", ShareNetwork)}
+      label={copyLabel("share", `Share ${actionLabel}`, "Link copied")}
+      stayOpenMs={COPIED_LABEL_MS}
+      onClick={() => {
+        void Promise.resolve(onShare()).then((copied) => {
+          if (typeof copied === "boolean") showCopyResult("share", copied);
+        });
+      }}
+    />
+  );
   const copyTextAction = textToCopy?.trim() ? (
     <MenuAction
-      Icon={CopySimple}
-      label="Copy text"
+      Icon={copyIcon("text", CopySimple)}
+      label={copyLabel("text", "Copy text", "Copied")}
+      stayOpenMs={COPIED_LABEL_MS}
       onClick={() => {
-        void copyTextToClipboard(textToCopy, onCopyTextNotice);
+        void copyTextToClipboard(textToCopy).then((copied) =>
+          showCopyResult("text", copied),
+        );
       }}
     />
   ) : null;
@@ -1507,13 +1538,8 @@ export function CommentActionMenu({
                 onClick={onToggleBookmark}
               />
             )}
-            <MenuAction
-              Icon={ShareNetwork}
-              label={`Share ${actionLabel}`}
-              onClick={onShare}
-            />
+            {shareAction}
             {copyTextAction}
-            <MenuDivider />
             <MenuAction
               Icon={Flag}
               label={`Report ${actionLabel}`}
@@ -1544,11 +1570,7 @@ export function CommentActionMenu({
               onClick={onToggleFollow}
             />
           )}
-          <MenuAction
-            Icon={ShareNetwork}
-            label={`Share ${actionLabel}`}
-            onClick={onShare}
-          />
+          {shareAction}
           {copyTextAction}
           {canLock && onToggleLock && (
             <MenuAction
@@ -1590,11 +1612,7 @@ export function CommentActionMenu({
               onClick={onToggleFollow}
             />
           )}
-          <MenuAction
-            Icon={ShareNetwork}
-            label={`Share ${actionLabel}`}
-            onClick={onShare}
-          />
+          {shareAction}
           {copyTextAction}
           {canLock && onToggleLock && (
             <MenuAction
@@ -1610,7 +1628,6 @@ export function CommentActionMenu({
               onClick={onToggleAccept}
             />
           )}
-          <MenuDivider />
           <MenuAction
             Icon={Flag}
             label={`Report ${actionLabel}`}
@@ -1622,23 +1639,58 @@ export function CommentActionMenu({
   );
 }
 
+/**
+ * The address that opens a lesson with one comment or question brought to
+ * the top of its discussion and highlighted, the way the home page's comment
+ * cards open one. It carries nothing else from the current address.
+ */
+export function getHighlightedCommentUrl(threadId: string | number): string {
+  const url = new URL(window.location.pathname, window.location.origin);
+  url.searchParams.set("thread", String(threadId));
+  url.searchParams.set("focus", "comment");
+  return url.toString();
+}
+
 export async function shareDiscussionEntry(
   entryId: string | number,
   name: string,
   text: string,
-  options?: { parentThreadId?: string | number; isNote?: boolean },
-) {
-  if (typeof window === "undefined") return;
+  options?: {
+    parentThreadId?: string | number;
+    isNote?: boolean;
+  },
+): Promise<boolean | undefined> {
+  if (typeof window === "undefined") return undefined;
+
+  // A comment or a question is shared as a link straight to it, through the
+  // device's own share sheet. Where there is none, or it will not open (an
+  // embedded browser, most desktop Firefox), the link is copied instead.
+  if (!options?.isNote && !options?.parentThreadId) {
+    const link = getHighlightedCommentUrl(entryId);
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: `${name}'s discussion entry`,
+          text: text.trim() || undefined,
+          url: link,
+        });
+        return undefined;
+      } catch (error) {
+        // Closing the share sheet is not a failure, and not a wish to copy.
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return undefined;
+        }
+      }
+    }
+    return await copyTextToClipboard(link);
+  }
 
   const url = new URL(window.location.href);
   if (options?.isNote) {
     url.hash = `discussion-entry-${entryId}`;
-  } else if (options?.parentThreadId) {
+  } else {
     url.searchParams.set("thread", String(options.parentThreadId));
     url.hash = `discussion-entry-${entryId}`;
-  } else {
-    url.searchParams.set("thread", String(entryId));
-    url.hash = "";
   }
   const shareText = text.trim();
 
@@ -1649,15 +1701,16 @@ export async function shareDiscussionEntry(
         text: shareText || undefined,
         url: url.toString(),
       });
-      return;
+      return undefined;
     }
 
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(
-        [shareText, url.toString()].filter(Boolean).join("\n\n"),
-      );
-    }
+    return await copyTextToClipboard(
+      [shareText, url.toString()].filter(Boolean).join("\n\n"),
+    );
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") return;
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return undefined;
+    }
+    return false;
   }
 }

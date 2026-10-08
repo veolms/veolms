@@ -46,6 +46,8 @@ interface CurriculumProps {
   topRequest?: number;
   persistenceKey: string;
   isLessonAvailable?: (lessonNumber: number) => boolean;
+  /** Lessons the visitor cannot play yet; their cards show a lock. */
+  lockedLessonNumbers?: ReadonlySet<number>;
   isLoading?: boolean;
   scrollportId?: string;
   scrollportRef?: RefObject<HTMLElement | null>;
@@ -83,6 +85,7 @@ export function Curriculum({
   topRequest = 0,
   persistenceKey,
   isLessonAvailable,
+  lockedLessonNumbers,
   isLoading = false,
   scrollportId,
   scrollportRef,
@@ -733,6 +736,7 @@ export function Curriculum({
                             lessonProgress={lessonProgress}
                             onSelectLesson={onSelectLesson}
                             isLessonAvailable={isLessonAvailable}
+                            lockedLessonNumbers={lockedLessonNumbers}
                             onClose={onClose}
                             activeLessonRef={activeLessonRef}
                             scrollportRef={curriculumRef}

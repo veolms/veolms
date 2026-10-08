@@ -30,6 +30,11 @@ export function useControlsVisibility({
   const previousPausedRef = useRef(true);
   const activeSourceKeyRef = useRef<string | null>(null);
   const hasPlayedActiveSourceRef = useRef(false);
+  // Before a source has played, its controls are held on screen so the
+  // viewer is not left looking at a still frame with nothing to press. A
+  // tap on the empty picture is the viewer asking for them to go, though,
+  // and ends that hold: from then on taps show and hide them as usual.
+  const firstPlayHoldDismissedRef = useRef(false);
   const deferredTouchPointersRef = useRef(new Set<number>());
   const {
     controlsLocked,
@@ -70,10 +75,13 @@ export function useControlsVisibility({
     if (activeSourceKeyRef.current !== sourceKey) {
       activeSourceKeyRef.current = sourceKey;
       hasPlayedActiveSourceRef.current = false;
+      firstPlayHoldDismissedRef.current = false;
     }
     if (playing) hasPlayedActiveSourceRef.current = true;
     const firstPlaybackPending =
-      keepVisibleUntilFirstPlay && !hasPlayedActiveSourceRef.current;
+      keepVisibleUntilFirstPlay &&
+      !hasPlayedActiveSourceRef.current &&
+      !firstPlayHoldDismissedRef.current;
 
     const pointerQuery =
       typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -161,6 +169,13 @@ export function useControlsVisibility({
     };
 
     const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.pointerType === "touch" &&
+        event.target instanceof Element &&
+        event.target.closest("[data-player-zoom-surface]")
+      ) {
+        firstPlayHoldDismissedRef.current = true;
+      }
       if (delaysControlsReveal(event.target)) {
         deferredTouchPointers.delete(event.pointerId);
         inputModeRef.current = "pointer";

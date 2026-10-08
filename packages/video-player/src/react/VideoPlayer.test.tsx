@@ -464,7 +464,7 @@ describe("VideoPlayer integration", () => {
     expect(playFeedback).toHaveClass("hidden", "sm:grid");
     expect(playFeedback).toHaveAttribute("aria-hidden", "true");
     expect(playSurface).toHaveClass(
-      "size-[78px]",
+      "size-12",
       "rounded-full",
       "bg-black/60",
       "backdrop-blur-[16px]",
@@ -476,7 +476,7 @@ describe("VideoPlayer integration", () => {
     );
     expect(
       playSurface?.querySelector('[data-playback-feedback-icon="play"]'),
-    ).toHaveClass("size-10", "translate-x-0.5");
+    ).toHaveClass("size-6", "translate-x-0.5");
 
     act(() => vi.advanceTimersByTime(999));
     expect(

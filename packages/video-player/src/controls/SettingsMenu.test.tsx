@@ -47,7 +47,6 @@ describe("SettingsMenu playback speed", () => {
     expect(openIcon).toHaveAttribute("data-settings-icon-state", "open");
     expect(openIcon).toHaveStyle({ transform: "rotate(60deg)" });
     expect(screen.getByRole("menu", { name: "Video settings" })).toHaveClass(
-      "backdrop-blur-sm",
       "!mb-8",
       "bottom-full",
     );
@@ -56,7 +55,7 @@ describe("SettingsMenu playback speed", () => {
   it("opens below the trigger when side is bottom", () => {
     renderPlaybackRateSettings("main", false, "bottom");
     const menu = screen.getByRole("menu", { name: "Video settings" });
-    expect(menu).toHaveClass("top-full", "mt-2", "backdrop-blur-sm");
+    expect(menu).toHaveClass("top-full", "mt-2");
     expect(menu).not.toHaveClass("bottom-full", "!mb-8");
   });
 
@@ -172,7 +171,7 @@ describe("SettingsMenu playback speed", () => {
     },
   );
 
-  it("offers an accessible 0.25×–8× custom speed slider and step buttons", () => {
+  it("offers an accessible 0.25×–8× custom speed slider and 0.05× step buttons", () => {
     const { setPlaybackRate } = renderPlaybackRateSettings();
     const slider = screen.getByRole("slider", {
       name: "Custom playback speed",
@@ -186,18 +185,18 @@ describe("SettingsMenu playback speed", () => {
 
     fireEvent.click(
       screen.getByRole("menuitem", {
-        name: "Decrease playback speed by 0.25×",
+        name: "Decrease playback speed by 0.05×",
       }),
     );
     fireEvent.click(
       screen.getByRole("menuitem", {
-        name: "Increase playback speed by 0.25×",
+        name: "Increase playback speed by 0.05×",
       }),
     );
     fireEvent.change(slider, { target: { value: "7.25" } });
 
-    expect(setPlaybackRate).toHaveBeenNthCalledWith(1, 1);
-    expect(setPlaybackRate).toHaveBeenNthCalledWith(2, 1.5);
+    expect(setPlaybackRate).toHaveBeenNthCalledWith(1, 1.2);
+    expect(setPlaybackRate).toHaveBeenNthCalledWith(2, 1.3);
     expect(setPlaybackRate).toHaveBeenNthCalledWith(3, 7.25);
     expect(screen.getByRole("menu", { name: "Video settings" })).toBeVisible();
   });

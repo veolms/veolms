@@ -1,6 +1,7 @@
 import {
   useCallback,
   useRef,
+  useState,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
@@ -16,13 +17,24 @@ import {
   positionTimelineMarkers,
   timeToPositionPercent,
 } from "./timelineMath";
-import { TimelinePreview } from "./TimelinePreview";
+import { TimelinePreview, type TimelinePreviewLayout } from "./TimelinePreview";
 
 const KEYBOARD_SEEK_SECONDS = 5;
 /** Visual gap between two chapter segments of the track, in pixels. */
 const SEGMENT_GAP_PX = 3;
+// The hovered chapter grows by being made taller rather than scaled: a
+// scaled track stretches its rounded ends into flat ovals, a taller one
+// keeps them fully round.
 const TRACK_CLASS =
   "absolute top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height,scale] duration-150 group-hover/timeline:h-1.5 group-focus-within/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5";
+
+/**
+ * While the thumb is being dragged, it catches on the start of a chapter
+ * once it is this close to it, and the device gives a short buzz (where the
+ * browser can make it).
+ */
+const CHAPTER_SNAP_DISTANCE_PX = 8;
+const CHAPTER_SNAP_VIBRATION_MS = 35;
 
 interface TimelineSegment {
   id: string;
@@ -64,16 +76,26 @@ export interface TimelineProps {
   className?: string;
   ariaLabel?: string;
   showPreview?: boolean;
+  previewLayout?: TimelinePreviewLayout;
 }
 
 export function Timeline({
   ariaLabel = "Video timeline",
   className = "",
+  previewLayout = "follow",
   showPreview = true,
 }: TimelineProps) {
   const controller = usePlayerController();
   const trackRef = useRef<HTMLDivElement | null>(null);
   const pointerIdRef = useRef<number | null>(null);
+  // The chapter start the dragged thumb is currently caught on, so that it
+  // buzzes once on arriving there and not on every move while it stays.
+  const snappedChapterTimeRef = useRef<number | null>(null);
+  // Where the video was when the drag began. A drag that wanders off and
+  // comes back to this point catches on it too, and letting go there
+  // leaves the video where it was: "release to cancel".
+  const scrubOriginRef = useRef<{ time: number; left: boolean } | null>(null);
+  const [cancelArmed, setCancelArmed] = useState(false);
   const {
     buffered,
     chapters,
@@ -116,26 +138,76 @@ export function Timeline({
     [controller, duration],
   );
 
+  // Where a drag at `clientX` puts the playhead: on the pointer, or on the
+  // start of a chapter when the pointer is close enough to one.
+  const scrubAtPointer = useCallback(
+    (clientX: number) => {
+      const bounds = trackRef.current?.getBoundingClientRect();
+      if (!bounds || bounds.width <= 0) return 0;
+      const time = pointerPositionToTime(clientX, bounds, duration);
+      const snapSeconds = (CHAPTER_SNAP_DISTANCE_PX / bounds.width) * duration;
+      let snapped: number | null = null;
+      const origin = scrubOriginRef.current;
+      const nearOrigin =
+        origin !== null && Math.abs(origin.time - time) <= snapSeconds;
+      if (origin && !nearOrigin) origin.left = true;
+      const cancelling = Boolean(origin?.left && nearOrigin);
+      setCancelArmed(cancelling);
+      if (cancelling && origin) snapped = origin.time;
+      for (const chapter of cancelling ? [] : chapters) {
+        const start = chapter.startTime;
+        if (start <= 0 || start >= duration) continue;
+        const distance = Math.abs(start - time);
+        if (
+          distance <= snapSeconds &&
+          (snapped === null || distance < Math.abs(snapped - time))
+        ) {
+          snapped = start;
+        }
+      }
+      if (snapped !== null && snappedChapterTimeRef.current !== snapped) {
+        try {
+          navigator.vibrate?.(CHAPTER_SNAP_VIBRATION_MS);
+        } catch {
+          // Haptics are a nicety; the snap itself still happens.
+        }
+      }
+      snappedChapterTimeRef.current = snapped;
+      const target = snapped ?? time;
+      controller.setPreviewTime(target);
+      return target;
+    },
+    [chapters, controller, duration],
+  );
+
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!Number.isFinite(duration) || duration <= 0) return;
     event.preventDefault();
     pointerIdRef.current = event.pointerId;
+    snappedChapterTimeRef.current = null;
+    scrubOriginRef.current = { time: currentTime, left: false };
     event.currentTarget.setPointerCapture(event.pointerId);
     controller.setScrubbing(true);
     controller.setControlsVisible(true);
-    controller.seekTo(previewAtPointer(event.clientX));
+    controller.seekTo(scrubAtPointer(event.clientX));
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "touch" && pointerIdRef.current === null) return;
-    const time = previewAtPointer(event.clientX);
-    if (pointerIdRef.current === event.pointerId) controller.seekTo(time);
+    if (pointerIdRef.current === event.pointerId) {
+      controller.seekTo(scrubAtPointer(event.clientX));
+      return;
+    }
+    previewAtPointer(event.clientX);
   };
 
   const finishPointerInteraction = (event: PointerEvent<HTMLDivElement>) => {
     if (pointerIdRef.current !== event.pointerId) return;
-    controller.seekTo(previewAtPointer(event.clientX));
+    controller.seekTo(scrubAtPointer(event.clientX));
     pointerIdRef.current = null;
+    snappedChapterTimeRef.current = null;
+    scrubOriginRef.current = null;
+    setCancelArmed(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -188,7 +260,20 @@ export function Timeline({
       data-scrubbing={scrubbing ? "true" : "false"}
     >
       {showPreview && previewTime !== null ? (
-        <TimelinePreview duration={duration} previewTime={previewTime} />
+        <TimelinePreview
+          duration={duration}
+          layout={previewLayout}
+          previewTime={previewTime}
+        />
+      ) : null}
+      {cancelArmed ? (
+        <div
+          role="status"
+          data-timeline-release-to-cancel=""
+          className="pointer-events-none absolute bottom-[calc(100%+5.5rem)] left-1/2 z-90 -translate-x-1/2 rounded-full bg-black/75 px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap text-white shadow-[0_6px_18px_rgb(0_0_0/0.35)]"
+        >
+          Release to cancel
+        </div>
       ) : null}
       <div
         ref={trackRef}
@@ -210,6 +295,8 @@ export function Timeline({
         onPointerCancel={(event) => {
           if (pointerIdRef.current !== event.pointerId) return;
           pointerIdRef.current = null;
+          scrubOriginRef.current = null;
+          setCancelArmed(false);
           controller.setScrubbing(false);
           controller.setPreviewTime(null);
         }}
@@ -239,7 +326,7 @@ export function Timeline({
                 data-timeline-track=""
                 data-timeline-segment={segmented ? "" : undefined}
                 data-hovered={hovered ? "true" : undefined}
-                className={`${TRACK_CLASS} data-[hovered=true]:scale-y-[1.7]`}
+                className={`${TRACK_CLASS} sm:data-[hovered=true]:h-2.5!`}
                 style={{
                   left: `calc(${timeToPositionPercent(segment.start, duration)}% + ${leadingGap}px)`,
                   width: segmented

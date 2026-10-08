@@ -57,7 +57,12 @@
   :root[data-content-layout="framed"]
     .courses-main-frame:has([data-learning-split-pane]) {
     --learning-split-radius: 18px;
-    /* The gutter closes with the pane instead of leaving a 12px strip. */
+    /* The room the course content takes from the lesson card: its width
+       plus the 12px gutter. Over the last 12px of closing the gutter's
+       share is given back too, so a fully closed panel leaves the lesson
+       card at its full width. The gutter itself does not shrink: the panel
+       keeps its 12px distance from the card and slides out past the page's
+       edge instead (see the pane's `right` below). */
     --learning-split-gap: min(12px, var(--learning-curriculum-width, 400px));
     --learning-split-pane-space: calc(
       var(--learning-curriculum-width, 400px) + var(--learning-split-gap)
@@ -134,7 +139,9 @@
       position: fixed;
       z-index: 40;
       top: 12px;
-      right: 12px;
+      /* 12px from the edge while open. As it closes its last 12px it moves
+         out through that margin, staying 12px clear of the lesson card. */
+      right: var(--learning-split-gap);
       width: var(--learning-curriculum-width, 400px);
       height: calc(100dvh - var(--shell-frame-block-space, 22px));
       border-radius: var(--learning-split-radius);
@@ -169,22 +176,16 @@
       border-radius: inherit;
     }
 
-    /* The whole gutter resizes, not only the grip in its middle. */
+    /* The whole gutter resizes, not only the grip in its middle, and the
+       rail reaches 2px over the card on either side of it so it is easier
+       to catch. The gutter is always the 12px before the content's edge,
+       whether the content is open, closing or closed (when the gutter is
+       the page's own margin beside the lesson card), so this one rule
+       serves every state. */
     & .learning-curriculum__resize-rail {
-      left: calc(-1 * var(--learning-split-gap));
-      width: var(--learning-split-gap);
+      left: -14px;
+      width: 16px;
+      justify-content: center;
     }
-  }
-
-  /* With the course content closed there is no gutter, so the rail covers
-     the lesson card's edge instead and the content can be dragged back out.
-     Keyed on the document state, which is right from first paint; the
-     column's own class is not until React has rendered once. */
-  :root[data-content-layout="framed"][data-learning-curriculum-state="collapsed"]
-    .courses-main-frame:has([data-learning-split-pane])
-    .learning-curriculum__resize-rail {
-    left: -20px;
-    width: 20px;
-    justify-content: flex-end;
   }
 }

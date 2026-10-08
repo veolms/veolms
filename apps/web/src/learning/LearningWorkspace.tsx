@@ -53,6 +53,17 @@ import {
   LEARNING_DESKTOP_MINIMIZE_MEDIA_QUERY,
 } from "./player/learningPlayerMotion";
 import {
+  LESSON_PLAYER_COMPACT_HEIGHT,
+  LESSON_PLAYER_MAX_HEIGHT_PROPERTY,
+  LESSON_PLAYER_SEEK_TIME_ONLY_HEIGHT,
+  LESSON_PLAYER_SHORT_HEIGHT,
+  LESSON_PLAYER_TINY_HEIGHT,
+  LessonPlayerHeightHandle,
+  useLessonHiddenVideoPullDown,
+  useLessonPlayerHeight,
+  useLessonTitleHeightSwipe,
+} from "./player/LessonPlayerHeightHandle";
+import {
   DEFAULT_LEARNING_PLAYER_PREFERENCES,
   getInitialLearningPlayerPreferences,
   publishLearningPlayerBootstrap,
@@ -280,9 +291,6 @@ interface CurriculumResize {
   expandedWidthAtStart: number;
   collapsedAtStart: boolean;
   collapsed: boolean;
-  collapsedAnchorX: number;
-  collapsedAnchorWidth: number;
-  expandedAnchorX: number | null;
   previewWidth: number;
   handle: HTMLElement;
 }
@@ -489,7 +497,7 @@ export function LearningWorkspace({
   const [lessonDrawerFocusRequest, setLessonDrawerFocusRequest] = useState(0);
   const [lessonDrawerTopRequest, setLessonDrawerTopRequest] = useState(0);
   const [lessonDrawerScrollTarget, setLessonDrawerScrollTarget] = useState<
-    "current" | "top"
+    "current" | "keep" | "top"
   >("current");
   const [curriculumWidth, setCurriculumWidth] = useState(
     () => getInitialLearningShellState().curriculumWidth,
@@ -1061,6 +1069,54 @@ export function LearningWorkspace({
     resolvedAuthUser?.roles,
     selectedLesson,
   ]);
+  /**
+   * The lessons this visitor cannot play, by the same rules the server
+   * applies to video: a free preview is open to everyone; a free course is
+   * open to anyone signed in, and its first lesson to everyone; anything
+   * else needs access to the course. Nothing is marked while the session or
+   * the visitor's courses are still loading, so locks never flash on and off.
+   */
+  const lockedLessonNumbers = useMemo<ReadonlySet<number>>(() => {
+    const locked = new Set<number>();
+    if (!courseOverview || !adaptedCurriculum || isAuthResolutionPending) {
+      return locked;
+    }
+    const isCourseOwner =
+      resolvedAuthUser?.id === courseOverview.course.creatorId;
+    const isAdmin = resolvedAuthUser?.roles?.some(
+      (role) => role.trim().toLowerCase() === "admin",
+    );
+    if (isCourseOwner || isAdmin) return locked;
+
+    const isFreeCourse = courseOverview.pricing?.pricingType === "free";
+    if (isFreeCourse && isAuthenticated) return locked;
+    if (!isFreeCourse && isAuthenticated) {
+      if (!enrolledCoursesQuery.isFetched) return locked;
+      const hasCourse = enrolledCoursesQuery.data?.courses.some(
+        (course) => course.courseId === courseOverview.course.id,
+      );
+      if (hasCourse) return locked;
+    }
+
+    const firstLessonNumber = Math.min(
+      ...adaptedCurriculum.lessonsByNumber.keys(),
+    );
+    for (const [number, lesson] of adaptedCurriculum.lessonsByNumber) {
+      if (lesson.isPreview) continue;
+      if (isFreeCourse && number === firstLessonNumber) continue;
+      locked.add(number);
+    }
+    return locked;
+  }, [
+    adaptedCurriculum,
+    courseOverview,
+    enrolledCoursesQuery.data?.courses,
+    enrolledCoursesQuery.isFetched,
+    isAuthResolutionPending,
+    isAuthenticated,
+    resolvedAuthUser?.id,
+    resolvedAuthUser?.roles,
+  ]);
   const lessonContentAccessReason =
     lessonContentAccess === "denied"
       ? isAuthenticated
@@ -1188,6 +1244,99 @@ export function LearningWorkspace({
     nextLessonId,
   ]);
 
+  // The video is not kept in view for a quiz (there is none) or in theater
+  // mode (it already fills the page).
+  const stickyPlayer = !showingQuiz && !theaterMode;
+  // The viewer can drag the video area shorter to see more of the page.
+  const [playerHeight, setPlayerHeight] = useLessonPlayerHeight();
+  const appliedPlayerHeight = theaterMode ? null : playerHeight;
+  const shortPlayer =
+    appliedPlayerHeight !== null &&
+    appliedPlayerHeight <= LESSON_PLAYER_SHORT_HEIGHT;
+  const seekTimeOnly =
+    appliedPlayerHeight !== null &&
+    appliedPlayerHeight <= LESSON_PLAYER_SEEK_TIME_ONLY_HEIGHT;
+  // Touch: a shortened or hidden video is pulled back out from the page
+  // under it.
+  useLessonHiddenVideoPullDown(
+    stickyPlayer ? appliedPlayerHeight : null,
+    setPlayerHeight,
+  );
+  // Touch: swiping the lesson title up or down resizes the video too.
+  const { onHeaderPointerMove, onHeaderPointerLeave, ...titleSwipeHandlers } =
+    useLessonTitleHeightSwipe(playerHeight, setPlayerHeight);
+  // Where the page's elastic scroller sits. With the video showing, it goes
+  // a little below the middle of the space left under the video. With the
+  // video put away, it sits where the course content's own scroller does.
+  useEffect(() => {
+    const playerWrap = playerWrapRef.current;
+    const main = playerWrap?.closest<HTMLElement>(".courses-main");
+    if (!playerWrap || !main) return undefined;
+    const place = () => {
+      const videoHeight = playerWrap.getBoundingClientRect().height;
+      const clearance =
+        videoHeight <= 0
+          ? 268
+          : Math.max(96, (main.clientHeight - videoHeight) * 0.45);
+      main.style.setProperty(
+        "--learning-elastic-scroller-clearance",
+        `${Math.round(clearance)}px`,
+      );
+    };
+    const sizes = new ResizeObserver(place);
+    sizes.observe(playerWrap);
+    sizes.observe(main);
+    place();
+    return () => {
+      sizes.disconnect();
+      main.style.removeProperty("--learning-elastic-scroller-clearance");
+    };
+  }, []);
+
+  // Alt+V: a video at full height is put away at the top; one that is
+  // shortened or put away goes back to full height (like double-clicking
+  // the resize grip).
+  useEffect(() => {
+    if (!stickyPlayer) return undefined;
+    const handleToggleVideoShortcut = (event: KeyboardEvent) => {
+      if (
+        event.code !== "KeyV" ||
+        !event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing
+      ) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest(
+          "input, textarea, select, [role='textbox'], [contenteditable]:not([contenteditable='false'])",
+        )
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setPlayerHeight(playerHeight === null ? 0 : null);
+    };
+    window.addEventListener("keydown", handleToggleVideoShortcut);
+    return () =>
+      window.removeEventListener("keydown", handleToggleVideoShortcut);
+  }, [playerHeight, setPlayerHeight, stickyPlayer]);
+  // Putting the video away at the top also stops it: nothing would show
+  // that it is still running. It plays again from the keyboard shortcut,
+  // or once it is dragged back into view and played there.
+  useEffect(() => {
+    if (appliedPlayerHeight !== 0) return;
+    const video = document.querySelector<HTMLVideoElement>(
+      ".learning-persistent-player--full video",
+    );
+    if (video && !video.paused) video.pause();
+  }, [appliedPlayerHeight]);
   const selectedLessonRecord = useMemo(() => {
     if (!adaptedCurriculum) return null;
     return adaptedCurriculum.lessonsByNumber.get(selectedLesson) ?? null;
@@ -1544,7 +1693,7 @@ export function LearningWorkspace({
   }, [theaterMode]);
 
   const showLessonDrawer = useCallback(
-    (scrollTarget: "current" | "top") => {
+    (scrollTarget: "current" | "keep" | "top") => {
       setFullscreenLessonPanelOpen(false);
       setLessonDrawerForcedFloating(false);
       if (!isCourseContentDrawerLayout()) {
@@ -1558,7 +1707,7 @@ export function LearningWorkspace({
       setLessonDrawerScrollTarget(scrollTarget);
       if (scrollTarget === "current") {
         setLessonDrawerFocusRequest((request) => request + 1);
-      } else {
+      } else if (scrollTarget === "top") {
         setLessonDrawerTopRequest((request) => request + 1);
       }
       previousFocusRef.current = document.activeElement as HTMLElement | null;
@@ -1585,6 +1734,21 @@ export function LearningWorkspace({
     () => showLessonDrawer("current"),
     [showLessonDrawer],
   );
+
+  // The lesson title opens the course content without moving its list.
+  // Clicked again while the content is already open, it brings the lecture
+  // that is playing into view.
+  const openLessonDrawerInPlace = useCallback(() => {
+    const alreadyOpen = isCourseContentDrawerLayout()
+      ? lessonDrawer
+      : !curriculumCollapsed;
+    showLessonDrawer(alreadyOpen ? "current" : "keep");
+  }, [
+    curriculumCollapsed,
+    isCourseContentDrawerLayout,
+    lessonDrawer,
+    showLessonDrawer,
+  ]);
 
   const openLessonDrawerAtTop = useCallback(
     () => showLessonDrawer("top"),
@@ -2183,11 +2347,6 @@ export function LearningWorkspace({
         expandedWidthAtStart: curriculumWidth,
         collapsedAtStart: curriculumCollapsed,
         collapsed: curriculumCollapsed,
-        collapsedAnchorX: clientX,
-        collapsedAnchorWidth: curriculumCollapsed
-          ? CURRICULUM_COLLAPSED_WIDTH
-          : curriculumWidth,
-        expandedAnchorX: null,
         previewWidth: curriculumCollapsed
           ? CURRICULUM_COLLAPSED_WIDTH
           : curriculumWidth,
@@ -2209,56 +2368,37 @@ export function LearningWorkspace({
     beginCurriculumResize(event.pointerId, event.clientX, event.currentTarget);
   };
 
+  // While the gutter is held, the course content is exactly as wide as the
+  // pointer makes it, from nothing to the maximum: it never jumps to a
+  // width of its own. Where it settles (closed, its minimum, or the width
+  // it was dragged to) is decided when the pointer is released.
   const moveCurriculumResize = useCallback((event: CurriculumPointerEvent) => {
     const resize = curriculumResizeRef.current;
     if (!resize || resize.pointerId !== event.pointerId) return;
 
-    let previewWidth: number;
+    const previewWidth = Math.min(
+      CURRICULUM_MAX_WIDTH,
+      Math.max(
+        CURRICULUM_COLLAPSED_WIDTH,
+        resize.startWidth + resize.startX - event.clientX,
+      ),
+    );
 
-    if (resize.collapsed) {
-      const candidateWidth = Math.min(
-        CURRICULUM_MAX_WIDTH,
-        Math.max(
-          CURRICULUM_COLLAPSED_WIDTH,
-          resize.collapsedAnchorWidth + resize.collapsedAnchorX - event.clientX,
-        ),
-      );
-
-      if (candidateWidth >= CURRICULUM_SNAP_WIDTH) {
-        resize.collapsed = false;
-        resize.expandedAnchorX = event.clientX;
-        previewWidth = CURRICULUM_MIN_WIDTH;
-        setCurriculumCollapsed(false);
-      } else {
-        previewWidth = candidateWidth;
-      }
-    } else {
-      const candidateWidth =
-        resize.expandedAnchorX === null
-          ? resize.startWidth + resize.startX - event.clientX
-          : CURRICULUM_MIN_WIDTH + resize.expandedAnchorX - event.clientX;
-      previewWidth = Math.min(
-        CURRICULUM_MAX_WIDTH,
-        Math.max(CURRICULUM_COLLAPSED_WIDTH, candidateWidth),
-      );
-
-      if (candidateWidth <= CURRICULUM_SNAP_WIDTH) {
-        resize.collapsed = true;
-        resize.collapsedAnchorX = event.clientX;
-        resize.collapsedAnchorWidth = previewWidth;
-        resize.expandedAnchorX = null;
-        setCurriculumCollapsed(true);
-      }
+    // The content itself shows for as long as there is any width to show it
+    // in, so it slides out from the edge instead of appearing at a threshold.
+    const hidden = previewWidth <= CURRICULUM_COLLAPSED_WIDTH;
+    if (resize.collapsed !== hidden) {
+      resize.collapsed = hidden;
+      setCurriculumCollapsed(hidden);
     }
 
     resize.previewWidth = previewWidth;
     setCurriculumResizePreviewWidth(previewWidth);
 
-    if (!resize.collapsed && previewWidth >= CURRICULUM_MIN_WIDTH) {
+    if (previewWidth >= CURRICULUM_MIN_WIDTH) {
       setCurriculumWidth(previewWidth);
     }
   }, []);
-
   const endCurriculumResize = useCallback(
     (event: CurriculumPointerEvent, cancelled = false) => {
       const resize = curriculumResizeRef.current;
@@ -2273,7 +2413,10 @@ export function LearningWorkspace({
         setCurriculumWidth(resize.expandedWidthAtStart);
         return;
       }
-      if (resize.collapsed) {
+      // Let go less than half-way to the minimum width, it closes (and
+      // keeps the width it had for next time). Anything wider stays open,
+      // at the minimum width if it was let go narrower than that.
+      if (resize.previewWidth < CURRICULUM_SNAP_WIDTH) {
         setCurriculumCollapsed(true);
         setCurriculumWidth(resize.expandedWidthAtStart);
         return;
@@ -2449,6 +2592,7 @@ export function LearningWorkspace({
           scrollControlBottomClearance="calc(100dvh - 228px)"
           selectedLesson={selectedLesson}
           lessonProgress={lessonProgress}
+          lockedLessonNumbers={lockedLessonNumbers}
           onSelectLesson={selectLesson}
           onOpenCourseOverview={onOpenCourseOverview}
           courseNavigationActionLabel={courseNavigationActionLabel}
@@ -2481,6 +2625,7 @@ export function LearningWorkspace({
       fullscreenVideoWidthPercent,
       handleOpenLessonQuiz,
       lessonProgress,
+      lockedLessonNumbers,
       onOpenCourseOverview,
       selectLesson,
       selectedLesson,
@@ -2525,6 +2670,8 @@ export function LearningWorkspace({
 
   const lessonPlayerProps = useMemo<LessonVideoPlayerProps>(
     () => ({
+      shortPlayer,
+      seekTimeOnly,
       media: currentLessonMedia,
       description: selectedLessonDescription,
       playbackBootstrap,
@@ -2582,6 +2729,8 @@ export function LearningWorkspace({
       resumePersistenceKey: `${coursePersistenceKey}-lesson-${selectedLesson}`,
     }),
     [
+      shortPlayer,
+      seekTimeOnly,
       autoPlayOnLessonChange,
       autoplayEnabled,
       chaptersPanelHost,
@@ -2676,12 +2825,19 @@ export function LearningWorkspace({
   ]);
 
   const lessonHeader = (contained = false, titleLoading = false) => (
-    <header className="learning-workspace__lesson-header">
+    <header
+      className="learning-workspace__lesson-header"
+      // Tells the video's resize grip when a mouse is over its strip (at
+      // phone width the strip lies over the top of this header).
+      onPointerMove={stickyPlayer ? onHeaderPointerMove : undefined}
+      onPointerLeave={stickyPlayer ? onHeaderPointerLeave : undefined}
+    >
       <button
         id="learning-course-content-trigger"
         ref={lessonTriggerRef}
         type="button"
-        className="learning-workspace__lesson-heading"
+        className={`learning-workspace__lesson-heading ${appliedPlayerHeight === null ? "max-[640px]:touch-pan-up" : "max-[640px]:touch-none"}`}
+        {...(stickyPlayer ? titleSwipeHandlers : undefined)}
         style={
           contained
             ? {
@@ -2694,7 +2850,7 @@ export function LearningWorkspace({
         }
         aria-label={`Open course lessons for ${currentLesson[1]}`}
         aria-expanded={lessonDrawer}
-        onClick={openLessonDrawer}
+        onClick={openLessonDrawerInPlace}
       >
         <div className="min-w-0">
           {titleLoading ? (
@@ -2767,7 +2923,13 @@ export function LearningWorkspace({
         <section className="learning-workspace__lesson-column">
           <div
             ref={playerWrapRef}
-            className="learning-workspace__player-wrap"
+            // Above phone width the video stays at the top of the page while
+            // the title and description scroll away beneath it. (On a phone
+            // the page does not scroll; the area under the video does.) The
+            // player itself is positioned on this slot, so it follows. The
+            // slot sits above the page that scrolls behind it, so the strip
+            // that resizes the video is never covered.
+            className={`learning-workspace__player-wrap ${stickyPlayer ? "min-[641px]:sticky! min-[641px]:top-0 min-[641px]:z-40" : ""}`}
             data-learning-player-motion-target=""
           >
             {showingQuiz ? (
@@ -2853,9 +3015,36 @@ export function LearningWorkspace({
               </div>
             ) : registerPersistentPlayer ? (
               <div
-                className="pointer-events-none relative z-10 aspect-video w-full overflow-visible bg-black"
+                className="pointer-events-none relative z-10 aspect-video w-full overflow-visible bg-black max-h-(--learning-player-max-height)"
                 aria-hidden="true"
                 data-learning-player-anchor=""
+                data-learning-player-shortened={
+                  appliedPlayerHeight === null ? undefined : ""
+                }
+                data-learning-player-hidden={
+                  appliedPlayerHeight === 0 ? "" : undefined
+                }
+                data-learning-player-tiny={
+                  appliedPlayerHeight !== null &&
+                  appliedPlayerHeight <= LESSON_PLAYER_TINY_HEIGHT
+                    ? ""
+                    : undefined
+                }
+                data-learning-player-short={shortPlayer ? "" : undefined}
+                data-learning-player-very-short={seekTimeOnly ? "" : undefined}
+                data-learning-player-compact={
+                  appliedPlayerHeight !== null &&
+                  appliedPlayerHeight <= LESSON_PLAYER_COMPACT_HEIGHT
+                    ? ""
+                    : undefined
+                }
+                style={
+                  appliedPlayerHeight === null
+                    ? undefined
+                    : ({
+                        [LESSON_PLAYER_MAX_HEIGHT_PROPERTY]: `${appliedPlayerHeight}px`,
+                      } as CSSProperties)
+                }
               >
                 {persistentPlayerMounted ? null : (
                   <div
@@ -2869,6 +3058,12 @@ export function LearningWorkspace({
             ) : (
               <LessonVideoPlayer {...lessonPlayerProps} />
             )}
+            {stickyPlayer && registerPersistentPlayer ? (
+              <LessonPlayerHeightHandle
+                height={playerHeight}
+                onChange={setPlayerHeight}
+              />
+            ) : null}
           </div>
 
           <div className="learning-workspace__lesson-content-clip">
@@ -3027,6 +3222,7 @@ export function LearningWorkspace({
                 selectedLesson={selectedLesson}
                 lessonProgress={lessonProgress}
                 onSelectLesson={selectLesson}
+                lockedLessonNumbers={lockedLessonNumbers}
                 onOpenCourseOverview={onOpenCourseOverview}
                 courseNavigationActionLabel={courseNavigationActionLabel}
                 courseTitle={courseTitle}
@@ -3141,6 +3337,7 @@ export function LearningWorkspace({
             <div
               data-base-ui-swipe-ignore=""
               data-floating-curriculum-resize=""
+              data-resizing={floatingLessonDrawerResizing ? "" : undefined}
               data-learning-swipe-ignore=""
               className="group/resize absolute inset-y-0 left-0 z-40 flex w-5 cursor-ew-resize touch-none items-center justify-start focus-visible:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
               role="separator"
@@ -3169,7 +3366,7 @@ export function LearningWorkspace({
             >
               <span
                 aria-hidden="true"
-                className="h-[calc(100%-28px)] w-0.5 rounded-full bg-[linear-gradient(180deg,transparent,color-mix(in_srgb,var(--accent)_54%,var(--border))_16%,color-mix(in_srgb,var(--accent)_54%,var(--border))_84%,transparent)] opacity-70 shadow-[0_0_0_transparent] transition-[width,opacity,box-shadow] duration-160 group-hover/resize:w-0.75 group-hover/resize:opacity-100 group-hover/resize:shadow-[0_0_14px_color-mix(in_srgb,var(--accent)_42%,transparent)] group-focus-visible/resize:w-0.75 group-focus-visible/resize:opacity-100"
+                className="h-[calc(100%-28px)] w-0.5 rounded-full bg-[linear-gradient(180deg,transparent,color-mix(in_srgb,var(--accent)_54%,var(--border))_16%,color-mix(in_srgb,var(--accent)_54%,var(--border))_84%,transparent)] opacity-0 shadow-[0_0_0_transparent] transition-opacity duration-160 group-hover/resize:opacity-70 group-focus-visible/resize:opacity-70 group-data-resizing/resize:opacity-100"
               />
             </div>
           )}
@@ -3185,6 +3382,7 @@ export function LearningWorkspace({
               scrollportId="lesson-drawer-curriculum-scrollport"
               selectedLesson={selectedLesson}
               lessonProgress={lessonProgress}
+              lockedLessonNumbers={lockedLessonNumbers}
               onSelectLesson={selectLesson}
               onOpenCourseOverview={onOpenCourseOverview}
               courseNavigationActionLabel={courseNavigationActionLabel}

@@ -115,7 +115,7 @@ export function CourseCard({
   isAdmin = false,
   currentUserId,
   facts = DEFAULT_COURSE_CARD_FACTS,
-  factIcons = true,
+  factIcons = false,
 }: CourseCardProps) {
   const isPublic = variant === "public";
   const isPublicEnrollmentAction = isPublic && publicAction === "enroll";
@@ -237,7 +237,7 @@ export function CourseCard({
           disabled={isDeleting}
         >
           <span className="absolute inset-0 bg-slate-950/50 opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100" />
-          <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full bg-white/25 text-white opacity-0 ring-2 ring-white/80 backdrop-blur-sm shadow-[0_10px_28px_rgba(0,0,0,0.45)] transition-[opacity,transform] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100">
+          <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full bg-black/70 text-white opacity-0 backdrop-blur-[2px] shadow-[0_10px_28px_rgba(0,0,0,0.5)] transition-[opacity,transform] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100">
             <Play size={30} weight="fill" />
           </span>
         </button>

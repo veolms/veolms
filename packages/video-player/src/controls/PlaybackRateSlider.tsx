@@ -18,6 +18,12 @@ export interface PlaybackRateSliderProps {
   quickRates?: readonly number[];
 }
 
+/**
+ * The minus and plus buttons nudge the speed in finer steps than the slider
+ * moves in, for settling on a speed between its stops.
+ */
+const PLAYBACK_RATE_BUTTON_STEP = 0.05;
+
 export function PlaybackRateSlider({
   onRateChange,
   playbackRate,
@@ -51,7 +57,7 @@ export function PlaybackRateSlider({
         Math.max(
           MIN_CUSTOM_PLAYBACK_RATE,
           Math.round(
-            (sliderValue + direction * CUSTOM_PLAYBACK_RATE_STEP) * 100,
+            (sliderValue + direction * PLAYBACK_RATE_BUTTON_STEP) * 100,
           ) / 100,
         ),
       ),
@@ -77,7 +83,7 @@ export function PlaybackRateSlider({
           role="menuitem"
           tabIndex={-1}
           data-menu-keep-open=""
-          aria-label={`Decrease playback speed by ${formatPlaybackRate(CUSTOM_PLAYBACK_RATE_STEP)}`}
+          aria-label={`Decrease playback speed by ${formatPlaybackRate(PLAYBACK_RATE_BUTTON_STEP)}`}
           aria-disabled={sliderValue <= MIN_CUSTOM_PLAYBACK_RATE || undefined}
           disabled={sliderValue <= MIN_CUSTOM_PLAYBACK_RATE}
           className={`grid size-11 !min-h-11 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)] text-(--video-player-menu-text) transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_16%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-menu-text) disabled:cursor-not-allowed disabled:opacity-35 sm:size-9 sm:!min-h-9 ${mobileInteraction ? "!size-11 !min-h-11" : ""}`}
@@ -110,7 +116,7 @@ export function PlaybackRateSlider({
           role="menuitem"
           tabIndex={-1}
           data-menu-keep-open=""
-          aria-label={`Increase playback speed by ${formatPlaybackRate(CUSTOM_PLAYBACK_RATE_STEP)}`}
+          aria-label={`Increase playback speed by ${formatPlaybackRate(PLAYBACK_RATE_BUTTON_STEP)}`}
           aria-disabled={sliderValue >= MAX_CUSTOM_PLAYBACK_RATE || undefined}
           disabled={sliderValue >= MAX_CUSTOM_PLAYBACK_RATE}
           className={`grid size-11 !min-h-11 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)] text-(--video-player-menu-text) transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_16%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-menu-text) disabled:cursor-not-allowed disabled:opacity-35 sm:size-9 sm:!min-h-9 ${mobileInteraction ? "!size-11 !min-h-11" : ""}`}

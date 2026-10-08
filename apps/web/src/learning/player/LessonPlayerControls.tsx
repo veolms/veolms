@@ -86,7 +86,7 @@ const getWideViewportServerSnapshot = () => false;
  */
 const EXPAND_MOTION_HIDDEN_CLASS =
   "[[data-learning-player-restore-phase=expanding]_&]:!invisible [[data-learning-player-restore-phase=expanding]_&]:!opacity-0 [[data-learning-player-restore-phase=expanding]_&]:!transition-none [[data-learning-player-restore-phase=expanding]_&_*]:!pointer-events-none";
-const MOBILE_TEXT_PILL_HIT_CLASS = `${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} isolate !rounded-full !bg-transparent transition-colors duration-150 ease-out before:pointer-events-none before:absolute before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:transition-colors before:duration-150 before:ease-out before:content-[''] hover:!bg-transparent hover:before:bg-(--video-player-control-surface-hover) active:!bg-transparent active:before:bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)`;
+const MOBILE_TEXT_PILL_HIT_CLASS = `${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} isolate !rounded-full !bg-transparent transition-colors duration-150 ease-out before:pointer-events-none before:absolute before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:transition-colors before:duration-150 before:ease-out before:content-[''] hover:!bg-transparent hover:before:bg-(--video-player-control-surface-hover) active:!bg-transparent active:before:bg-(--video-player-control-surface-active) focus-visible:!bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text)`;
 
 function CircularFullscreenButton() {
   return (
@@ -96,7 +96,7 @@ function CircularFullscreenButton() {
     >
       <FullscreenButton
         className={`${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} group/fullscreen !size-11 !rounded-full !bg-transparent !p-0 !shadow-none drop-shadow-none hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent`}
-        iconContainerClassName="pointer-events-none relative z-10 grid size-8 place-items-center rounded-full bg-(--video-player-control-surface) shadow-(--video-player-control-shadow) backdrop-blur-sm transition-colors duration-150 ease-out group-hover/fullscreen:bg-(--video-player-control-surface-hover) group-active/fullscreen:bg-(--video-player-control-surface-active) group-focus-visible/fullscreen:bg-(--video-player-control-surface-hover)"
+        iconContainerClassName="pointer-events-none relative z-10 grid size-8 place-items-center rounded-full bg-(--video-player-control-surface) shadow-(--video-player-control-shadow) transition-colors duration-150 ease-out group-hover/fullscreen:bg-(--video-player-control-surface-hover) group-active/fullscreen:bg-(--video-player-control-surface-active) group-focus-visible/fullscreen:bg-(--video-player-control-surface-hover)"
         iconSize={20}
       />
     </div>
@@ -134,7 +134,7 @@ function PlayerControlSurface({
 }) {
   return (
     <div
-      className={`${PLAYER_SURFACE_CLASS} box-border border border-solid border-transparent ${blurred ? "backdrop-blur-sm" : ""} ${className}`}
+      className={`${PLAYER_SURFACE_CLASS} box-border border border-solid border-transparent ${blurred ? "" : ""} ${className}`}
       data-player-control-cluster={cluster}
     >
       {children}
@@ -155,6 +155,16 @@ export interface CourseLessonsSecondPressHoldProps {
 }
 
 export interface LessonPlayerControlsProps {
+  /**
+   * The video area is short (see LESSON_PLAYER_SHORT_HEIGHT): the seek
+   * tooltip becomes the centred pill, as on a phone.
+   */
+  shortPlayer?: boolean;
+  /**
+   * The video area is too short for anything above the control bar: the
+   * seek pill shows the time alone and sits in the bar's own row.
+   */
+  seekTimeOnly?: boolean;
   ambientEnabled: boolean;
   autoplayEnabled: boolean;
   showAutoplayControl?: boolean;
@@ -469,6 +479,8 @@ function MenuToggle({ checked }: { checked: boolean }) {
 }
 
 export function LessonPlayerControls({
+  shortPlayer = false,
+  seekTimeOnly = false,
   ambientEnabled,
   autoplayEnabled,
   showAutoplayControl = true,
@@ -609,10 +621,55 @@ export function LessonPlayerControls({
       inert={visible ? undefined : true}
     >
       <Timeline
-        className={`pointer-events-none overflow-visible [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-7 max-sm:[&_[data-video-player-preview]]:!bottom-8 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:rounded-none max-sm:[&_[data-timeline-track]]:!scale-y-100 max-sm:[&_[data-timeline-thumb]]:z-80 ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-7 [&_[data-video-player-preview]]:!bottom-8 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!rounded-none [&_[data-timeline-thumb]]:!z-80" : ""}`}
+        previewLayout={
+          mobileInteraction || shortPlayer ? "centered-pill" : "follow-pill"
+        }
+        className={`${shortPlayer && !mobileInteraction ? (seekTimeOnly ? "[&_[data-video-player-preview]]:!bottom-5.5 [&_[data-video-player-preview]]:!mb-0 [&_[data-video-player-preview]>span+span]:hidden" : "[&_[data-video-player-preview]]:!bottom-17 [&_[data-video-player-preview]]:!mb-0") : ""} pointer-events-none overflow-visible [&_[role=slider]]:pointer-events-auto max-sm:[&_[role=slider]]:h-7 max-sm:[&_[data-video-player-preview]]:!bottom-8 max-sm:[&_[data-video-player-preview]]:!mb-0 max-sm:[&_[data-timeline-buffered-range]]:rounded-none max-sm:[&_[data-timeline-progress]]:rounded-none max-sm:[&_[data-timeline-track]]:rounded-none max-sm:[&_[data-timeline-track]]:!scale-y-100 max-sm:[&_[data-timeline-thumb]]:z-80 ${mobileTimelineGeometry} ${forcedMobileTimelineGeometry} ${mobileInteraction ? "[&_[role=slider]]:!h-7 [&_[data-video-player-preview]]:!bottom-8 [&_[data-video-player-preview]]:!mb-0 [&_[data-timeline-buffered-range]]:!rounded-none [&_[data-timeline-progress]]:!rounded-none [&_[data-timeline-track]]:!rounded-none [&_[data-timeline-thumb]]:!z-80" : ""}`}
       />
     </div>
   );
+
+  const mobileSheetPanelClassName = mobileLandscapeFullscreen
+    ? fullscreenCoursePanelVisible
+      ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(100dvh,var(--learning-fullscreen-video-width))] !-translate-x-1/2"
+      : "[&&]:!rounded-b-none mx-auto max-w-[100dvh]"
+    : undefined;
+  const mobileSheetPortalTarget = mobileLandscapeFullscreen
+    ? mobileSettingsSheetHost
+    : undefined;
+  // On a phone the chapters button sits in the bottom-left corner, right
+  // after the time.
+  const mobileChaptersButton =
+    hasChapters && mobileInteraction ? (
+      <LessonChaptersSheetMenu
+        // On the lesson page the sheet snaps like the course content
+        // drawer: edge to edge, its top just above the video's bottom.
+        // Fullscreen letterboxes the video inside the shell, so the
+        // shell's bottom says nothing there and the sheet keeps its
+        // own size.
+        getSheetHeight={
+          mobileFullscreen
+            ? undefined
+            : () => {
+                const videoBottom =
+                  timelineHost?.getBoundingClientRect().bottom;
+                if (!Number.isFinite(videoBottom) || videoBottom! <= 0) {
+                  return null;
+                }
+                return getPhoneLessonDrawerCollapsedSnapPoint(
+                  window.innerHeight,
+                  videoBottom,
+                );
+              }
+        }
+        mobileSheetPanelClassName={mobileSheetPanelClassName}
+        mobileSheetPortalTarget={mobileSheetPortalTarget}
+        // A 32px circle, like the fullscreen button in the opposite corner.
+        triggerClassName={getPlayerIconPillClass(mobileInteraction)
+          .replace("!w-auto", "!w-8")
+          .replaceAll("!px-2", "!px-0")}
+      />
+    ) : null;
 
   const mobileTimeCorner = (
     <div
@@ -627,9 +684,17 @@ export function LessonPlayerControls({
       }`}
     >
       <div
-        className={`pointer-events-auto sm:hidden ${mobileInteraction ? "sm:!block" : ""}`}
+        className={`pointer-events-auto flex items-center gap-1 sm:hidden ${mobileInteraction ? "sm:!flex" : ""}`}
       >
         <LessonTimeControl mobile />
+        {mobileChaptersButton ? (
+          <span
+            data-player-control-hit-area="chapters"
+            className="grid size-8 place-items-center rounded-full bg-(--video-player-control-surface) shadow-(--video-player-control-shadow)"
+          >
+            {mobileChaptersButton}
+          </span>
+        ) : null}
       </div>
       <div
         className={`pointer-events-auto hidden items-center gap-2 sm:flex ${mobileInteraction ? "sm:!hidden" : ""}`}
@@ -661,7 +726,7 @@ export function LessonPlayerControls({
         ) : null}
         <VolumeControl
           collapsible
-          className={`${PLAYER_SURFACE_CLASS} relative isolate h-10.5 !w-10.5 shrink-0 rounded-full p-1 backdrop-blur-sm before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-transparent before:transition-colors before:duration-150 before:ease-out before:content-[''] hover:!w-31.5 hover:before:bg-(--video-player-control-surface-hover) focus-within:!w-31.5 focus-within:before:bg-(--video-player-control-surface-hover) [&>*]:relative [&>*]:z-10 [&_.player-volume-slider]:!h-8.5`}
+          className={`${PLAYER_SURFACE_CLASS} relative isolate h-10.5 !w-10.5 shrink-0 rounded-full p-1 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-transparent before:transition-colors before:duration-150 before:ease-out before:content-[''] hover:!w-31.5 hover:before:bg-(--video-player-control-surface-hover) focus-within:!w-31.5 focus-within:before:bg-(--video-player-control-surface-hover) [&>*]:relative [&>*]:z-10 [&_.player-volume-slider]:!h-8.5`}
           muteButtonClassName={`${PLAYER_INNER_CONTROL_CLASS} ${MOBILE_INVISIBLE_HIT_SURFACE_CLASS} !size-8.5`}
         />
         <LessonTimeControl />
@@ -743,15 +808,6 @@ export function LessonPlayerControls({
     </div>
   );
 
-  const mobileSheetPanelClassName = mobileLandscapeFullscreen
-    ? fullscreenCoursePanelVisible
-      ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(100dvh,var(--learning-fullscreen-video-width))] !-translate-x-1/2"
-      : "[&&]:!rounded-b-none mx-auto max-w-[100dvh]"
-    : undefined;
-  const mobileSheetPortalTarget = mobileLandscapeFullscreen
-    ? mobileSettingsSheetHost
-    : undefined;
-
   // On desktop, fullscreen sits in the same pill as autoplay and settings.
   // The circular settings variant is a single round button, so it keeps the
   // separate fullscreen button.
@@ -759,7 +815,7 @@ export function LessonPlayerControls({
   const playerActions = (
     <PlayerControlSurface
       cluster="player-actions"
-      className={`relative isolate flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:backdrop-blur-sm before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${circularSettingsControl ? "!size-9 !rounded-full !p-0 !justify-center sm:!size-9 sm:!p-0 [&>div]:!size-9 [&>div>button]:!size-9" : ""}`}
+      className={`relative isolate flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${circularSettingsControl ? "!size-9 !rounded-full !p-0 !justify-center sm:!size-9 sm:!p-0 [&>div]:!size-9 [&>div>button]:!size-9" : ""}`}
     >
       <ZoomLevelIndicator className="mr-0.5" />
       {showAutoplayControl ? (
@@ -767,33 +823,6 @@ export function LessonPlayerControls({
           enabled={autoplayEnabled}
           mobileInteraction={mobileInteraction}
           onEnabledChange={onAutoplayEnabledChange}
-        />
-      ) : null}
-      {hasChapters && mobileInteraction ? (
-        <LessonChaptersSheetMenu
-          // On the lesson page the sheet snaps like the course content
-          // drawer: edge to edge, its top just above the video's bottom.
-          // Fullscreen letterboxes the video inside the shell, so the
-          // shell's bottom says nothing there and the sheet keeps its
-          // own size.
-          getSheetHeight={
-            mobileFullscreen
-              ? undefined
-              : () => {
-                  const videoBottom =
-                    timelineHost?.getBoundingClientRect().bottom;
-                  if (!Number.isFinite(videoBottom) || videoBottom! <= 0) {
-                    return null;
-                  }
-                  return getPhoneLessonDrawerCollapsedSnapPoint(
-                    window.innerHeight,
-                    videoBottom,
-                  );
-                }
-          }
-          mobileSheetPanelClassName={mobileSheetPanelClassName}
-          mobileSheetPortalTarget={mobileSheetPortalTarget}
-          triggerClassName={getPlayerIconPillClass(mobileInteraction)}
         />
       ) : null}
       <span

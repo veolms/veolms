@@ -18,6 +18,7 @@ import {
   defaultRangeExtractor,
   useVirtualizer,
   useWindowVirtualizer,
+  type Virtualizer,
 } from "@tanstack/react-virtual";
 import { useInRouterContext, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
@@ -34,7 +35,10 @@ import { CommentCard } from "./CommentCard";
 import type { Comment, CommentReply } from "./CommentCard";
 import { CommentComposer } from "./CommentComposer";
 import { DiscussionAvatar } from "./DiscussionAvatar";
-import { getApplicationScrollElement } from "../shell/applicationScroll";
+import {
+  getApplicationScrollElement,
+  withKeepScroll,
+} from "../shell/applicationScroll";
 import {
   applyDiscussionFeed,
   DISCUSSION_FEED_SORT_OPTIONS,
@@ -277,7 +281,8 @@ const DISCUSSION_COMPOSER_FALLBACK_SNAP_POINT = 0.62;
 const DISCUSSION_VIRTUAL_OVERSCAN = 5;
 
 /**
- * Brings a discussion entry to the middle of the screen at once and keeps it
+ * Brings a discussion entry into view at once (the middle of the screen, or
+ * just under the video where that stays at the top) and keeps it
  * there while the page settles. The list is virtualized and the lesson above
  * it is still loading, so the first jump lands on a layout that then grows.
  * It runs for `checks` looks at the page (150ms apart) and gives up as soon
@@ -307,9 +312,28 @@ function keepEntryCentered(
     const target = document.getElementById(elementId);
     if (target) {
       const rect = target.getBoundingClientRect();
-      const offCenter = rect.top + rect.height / 2 - window.innerHeight / 2;
-      if (Math.abs(offCenter) > 24) {
-        target.scrollIntoView({ behavior: "auto", block: "center" });
+      // Where the video stays at the top of the page, the middle of the
+      // screen is partly behind it: the entry goes just below the video.
+      const playerSlot = document.querySelector<HTMLElement>(
+        ".learning-workspace__player-wrap",
+      );
+      const scroller = getApplicationScrollElement();
+      if (
+        playerSlot &&
+        scroller &&
+        getComputedStyle(playerSlot).position === "sticky"
+      ) {
+        const wantedTop =
+          scroller.getBoundingClientRect().top + playerSlot.offsetHeight + 16;
+        const offset = rect.top - wantedTop;
+        if (Math.abs(offset) > 12) {
+          scroller.scrollBy({ top: offset, behavior: "auto" });
+        }
+      } else {
+        const offCenter = rect.top + rect.height / 2 - window.innerHeight / 2;
+        if (Math.abs(offCenter) > 24) {
+          target.scrollIntoView({ behavior: "auto", block: "center" });
+        }
       }
     }
     remaining -= 1;
@@ -483,7 +507,7 @@ const isStoredEntries = (value: unknown): value is Comment[] =>
 
 type SetURLSearchParams = (
   nextInit?: URLSearchParams | ((prev: URLSearchParams) => URLSearchParams),
-  navigateOpts?: { replace?: boolean },
+  navigateOpts?: { replace?: boolean; state?: unknown },
 ) => void;
 
 interface DiscussionInnerProps extends DiscussionProps {
@@ -1414,7 +1438,16 @@ function DiscussionInner({
   const spotlightScrollRef = useRef<ReturnType<
     typeof keepEntryCentered
   > | null>(null);
-  useEffect(() => () => spotlightScrollRef.current?.stop(), []);
+  useEffect(
+    () => () => {
+      spotlightScrollRef.current?.stop();
+      // Forget that the jump was made, so a re-run of the effects (which
+      // React does in development, and on a remount) starts it again
+      // instead of finding it "done" with its hold already stopped.
+      spotlitThreadRef.current = null;
+    },
+    [],
+  );
   const [highlightedThreadId, setHighlightedThreadId] = useState<string | null>(
     null,
   );
@@ -1423,8 +1456,10 @@ function DiscussionInner({
     [],
   );
   // The comment shows as soon as it has loaded, ahead of the lesson and the
-  // rest of the list. Jump straight to it and hold it in the middle of the
-  // screen while everything else arrives around it.
+  // rest of the list, and the page jumps to it straight away. Everything
+  // else then arrives around it: what loads above it keeps the height its
+  // placeholder had, and the hold below only steps in if the comment still
+  // ends up away from the middle of the screen.
   useEffect(() => {
     if (
       !spotlightThreadId ||
@@ -1440,7 +1475,7 @@ function DiscussionInner({
 
     spotlitThreadRef.current = spotlightThreadId;
     spotlightScrollRef.current?.stop();
-    spotlightScrollRef.current = keepEntryCentered(target.id, 80);
+    spotlightScrollRef.current = keepEntryCentered(target.id, 100);
     // The card shows the highlight itself once it is on screen: the list is
     // virtualized, so the element found here may be replaced on the way.
     setHighlightedThreadId(spotlightThreadId);
@@ -1451,9 +1486,12 @@ function DiscussionInner({
     spotlightEntryClientId,
     spotlightThreadId,
   ]);
-  const isSpotlightListReady =
+  // Once the lesson and the whole list are in, the hold is wound down. It
+  // was already stopped if the visitor moved the page themselves.
+  const isSpotlightPageReady =
     isThreadDeepLinkReady &&
     !isInteractionCapabilitiesLoading &&
+    !isLessonDescriptionLoading &&
     !isAllInitialLoading &&
     !isThreadsLoading;
   const settledSpotlightRef = useRef<string | null>(null);
@@ -1461,41 +1499,38 @@ function DiscussionInner({
     if (
       !spotlightThreadId ||
       !spotlightEntryClientId ||
-      !isSpotlightListReady ||
+      !isSpotlightPageReady ||
       spotlitThreadRef.current !== spotlightThreadId ||
       settledSpotlightRef.current === spotlightThreadId
     ) {
       return;
     }
     settledSpotlightRef.current = spotlightThreadId;
-    // The lesson and the list are in: hold the comment for a moment longer
-    // while they lay out, unless the visitor has already moved the page.
     if (spotlightScrollRef.current?.isRunning()) {
       spotlightScrollRef.current.stop();
       spotlightScrollRef.current = keepEntryCentered(
         `discussion-entry-${spotlightEntryClientId}`,
-        14,
+        8,
       );
     }
-    // The link has done its work: a reload or a resumed session should open
-    // the lesson normally, not highlight the comment again. Its parameters
-    // stay until now because the lesson route reads them to find the lesson.
+  }, [isSpotlightPageReady, spotlightEntryClientId, spotlightThreadId]);
+  // The link has done its work once the lesson route has found the lesson
+  // (it reads these parameters to do so): a reload or a resumed session
+  // should open the lesson normally, not highlight the comment again. The
+  // address change asks the app to leave the scroll position alone.
+  useEffect(() => {
+    if (!spotlightIdFromUrl || !isThreadDeepLinkReady) return;
     setSearchParams(
       (prev) => {
-        if (prev.get("thread") !== spotlightThreadId) return prev;
+        if (prev.get("thread") !== spotlightIdFromUrl) return prev;
         const next = new URLSearchParams(prev);
         next.delete("thread");
         next.delete("focus");
         return next;
       },
-      { replace: true },
+      { replace: true, state: withKeepScroll(window.history.state?.usr) },
     );
-  }, [
-    isSpotlightListReady,
-    setSearchParams,
-    spotlightEntryClientId,
-    spotlightThreadId,
-  ]);
+  }, [isThreadDeepLinkReady, setSearchParams, spotlightIdFromUrl]);
   const noteDeepLinkReadyForFocus = Boolean(
     noteDeepLinkId &&
     !noteDeepLinkHandled &&
@@ -2610,6 +2645,7 @@ function DiscussionInner({
         onDismiss={() => setCreationToast(null)}
       />
       <ThreadSurface
+        scrollMemoryKey={persistenceKey}
         lessonDescription={lessonDescription}
         isLessonDescriptionLoading={isLessonDescriptionLoading}
         mobileLessonHeader={mobileLessonHeader}
@@ -2882,6 +2918,8 @@ export function Discussion(props: DiscussionProps) {
 }
 
 interface ThreadSurfaceProps {
+  /** Names this lesson's discussion when its scroll position is remembered. */
+  scrollMemoryKey?: string;
   lessonDescription?: string | null;
   isLessonDescriptionLoading?: boolean;
   mobileLessonHeader?: React.ReactNode;
@@ -2895,7 +2933,7 @@ interface ThreadSurfaceProps {
   entries: Comment[];
   noteDeepLinkTargetId?: string | null;
   onNoteDeepLinkHandled?: (noteId: string) => void;
-  /** The thread a link led to; it is labelled "Highlighted" in the list. */
+  /** The thread a link led to; its card keeps a highlight in the list. */
   linkedThreadId?: string | null;
   /** The same thread while its highlight has still to play. */
   highlightedThreadId?: string | null;
@@ -3101,14 +3139,20 @@ function DiscussionViewportVirtualFeed({
     props.protectedEntryIndices,
   );
   const feedRef = useRef<HTMLDivElement>(null);
+  const marginMeasuredRef = useRef(false);
   const phoneScrollMargin = useDiscussionPhoneVirtualFeedScrollMargin(
     feedRef,
     viewportRef,
+    marginMeasuredRef,
   );
 
   const virtualizer = useVirtualizer({
     count: props.entries.length,
     getScrollElement: () => viewportRef.current,
+    // The list can mount while the page is already scrolled (a linked
+    // comment, a filter change). Without this the virtualizer assumes it
+    // starts at the top and scrolls the page there.
+    initialOffset: () => viewportRef.current?.scrollTop ?? 0,
     estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
     getItemKey: (index) => getClientEntityId(props.entries[index]!),
     initialRect: { width: 1024, height: 768 },
@@ -3116,6 +3160,7 @@ function DiscussionViewportVirtualFeed({
     rangeExtractor,
     scrollMargin: phoneScrollMargin,
   });
+  keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
 
   return (
     <>
@@ -3150,9 +3195,35 @@ function getDiscussionVirtualFeedScrollMargin(
   return feedRect.top + window.scrollY;
 }
 
+/**
+ * The virtualizer keeps the reader's place by shifting the scroll position
+ * when an entry above them turns out taller or shorter than estimated. On
+ * its first pass the list does not yet know how far down the page it starts,
+ * so it takes entries that are really below the reader for ones above them
+ * and moves the page. Until that distance has been measured it must not
+ * adjust anything; after that this is the library's own rule.
+ */
+function keepScrollAdjustmentsUntilMeasured<
+  TScrollElement extends Element | Window,
+>(
+  virtualizer: Virtualizer<TScrollElement, Element>,
+  measuredRef: React.RefObject<boolean>,
+) {
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
+    item,
+    _delta,
+    instance,
+  ) =>
+    measuredRef.current &&
+    item.start + item.size <=
+      (instance.scrollOffset ?? 0) + instance.scrollAdjustments &&
+    instance.scrollDirection !== "backward";
+}
+
 function useDiscussionPhoneVirtualFeedScrollMargin(
   feedRef: React.RefObject<HTMLDivElement | null>,
   viewportRef: React.RefObject<HTMLDivElement | null>,
+  measuredRef: React.RefObject<boolean>,
 ) {
   const [phoneScrollMargin, setPhoneScrollMargin] = useState(0);
 
@@ -3164,6 +3235,7 @@ function useDiscussionPhoneVirtualFeedScrollMargin(
     if (!scrollport || !header) return undefined;
 
     const syncScrollMargin = () => {
+      measuredRef.current = true;
       const nextScrollMargin = getDiscussionVirtualFeedScrollMargin(
         feedRef.current,
         scrollport,
@@ -3185,7 +3257,7 @@ function useDiscussionPhoneVirtualFeedScrollMargin(
     return () => {
       resizeObserver.disconnect();
     };
-  }, [feedRef, viewportRef]);
+  }, [feedRef, measuredRef, viewportRef]);
 
   return phoneScrollMargin;
 }
@@ -3211,11 +3283,13 @@ function useDiscussionVirtualFeedScrollMargin(
   useWindowScroll: boolean,
   layoutKey: string | undefined,
   itemCount: number,
+  measuredRef: React.RefObject<boolean>,
 ) {
   const [scrollMargin, setScrollMargin] = useState(0);
 
   useLayoutEffect(() => {
     const syncScrollMargin = () => {
+      measuredRef.current = true;
       const nextScrollMargin = getDiscussionVirtualFeedScrollMargin(
         feedRef.current,
         useWindowScroll ? null : getApplicationScrollElement(),
@@ -3228,21 +3302,27 @@ function useDiscussionVirtualFeedScrollMargin(
     syncScrollMargin();
     window.addEventListener("resize", syncScrollMargin);
     return () => window.removeEventListener("resize", syncScrollMargin);
-  }, [feedRef, itemCount, layoutKey, useWindowScroll]);
+  }, [feedRef, itemCount, layoutKey, measuredRef, useWindowScroll]);
 
   return scrollMargin;
 }
 
 function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
   const feedRef = useRef<HTMLDivElement>(null);
+  const marginMeasuredRef = useRef(false);
   const scrollMargin = useDiscussionVirtualFeedScrollMargin(
     feedRef,
     true,
     props.layoutKey,
     props.entries.length,
+    marginMeasuredRef,
   );
   const virtualizer = useWindowVirtualizer({
     count: props.entries.length,
+    // The list can mount while the page is already scrolled (a linked
+    // comment, a filter change). Without this the virtualizer assumes it
+    // starts at the top and scrolls the page there.
+    initialOffset: () => window.scrollY,
     estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
     getItemKey: (index) => getClientEntityId(props.entries[index]!),
     initialRect: { width: 1024, height: 768 },
@@ -3253,6 +3333,7 @@ function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
     ),
     scrollMargin,
   });
+  keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
 
   useEffect(() => {
     virtualizer.measure();
@@ -3273,15 +3354,21 @@ function DiscussionWindowVirtualFeed(props: DiscussionVirtualFeedProps) {
 
 function DiscussionScrollportVirtualFeed(props: DiscussionVirtualFeedProps) {
   const feedRef = useRef<HTMLDivElement>(null);
+  const marginMeasuredRef = useRef(false);
   const scrollMargin = useDiscussionVirtualFeedScrollMargin(
     feedRef,
     false,
     props.layoutKey,
     props.entries.length,
+    marginMeasuredRef,
   );
   const virtualizer = useVirtualizer({
     count: props.entries.length,
     getScrollElement: getApplicationScrollElement,
+    // The list can mount while the page is already scrolled (a linked
+    // comment, a filter change). Without this the virtualizer assumes it
+    // starts at the top and scrolls the page there.
+    initialOffset: () => getApplicationScrollElement()?.scrollTop ?? 0,
     estimateSize: () => DISCUSSION_VIRTUAL_ESTIMATE_SIZE,
     getItemKey: (index) => getClientEntityId(props.entries[index]!),
     initialRect: { width: 1024, height: 768 },
@@ -3292,6 +3379,7 @@ function DiscussionScrollportVirtualFeed(props: DiscussionVirtualFeedProps) {
     ),
     scrollMargin,
   });
+  keepScrollAdjustmentsUntilMeasured(virtualizer, marginMeasuredRef);
 
   useEffect(() => {
     virtualizer.measure();
@@ -3368,40 +3456,88 @@ function DiscussionLoadingRow({
   );
 }
 
-interface ParticipationPromptContentProps {
-  participationState: LessonParticipationState;
-  participationActionLabel?: string;
-  onParticipationAction?: () => void;
-}
+/**
+ * Where each lesson's phone discussion was scrolled to, for as long as the
+ * app stays open. On a phone the lesson's description and comments scroll in
+ * their own area under the video, which is rebuilt whenever the lesson is
+ * left and reopened (minimizing the player and expanding it again does
+ * that), so its position is kept here rather than in the element.
+ */
+const phoneDiscussionScrollPositions = new Map<string, number>();
 
-function ParticipationPromptContent({
-  participationState,
-  participationActionLabel,
-  onParticipationAction,
-}: ParticipationPromptContentProps) {
-  return (
-    <>
-      <p className="text-sm font-medium text-(--muted)">
-        {participationState === "pending"
-          ? "Checking participation access…"
-          : participationActionLabel === "Get access"
-            ? "Get access to participate in discussions."
-            : "Log in to participate in discussions."}
-      </p>
-      {participationState !== "pending" && onParticipationAction ? (
-        <button
-          type="button"
-          onClick={onParticipationAction}
-          className="inline-flex min-h-9 items-center rounded-lg bg-(--accent) px-3 py-1.5 text-xs font-semibold text-(--on-accent) transition-colors hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-        >
-          {participationActionLabel ?? "Log in"}
-        </button>
-      ) : null}
-    </>
-  );
+function usePhoneDiscussionScrollMemory({
+  viewportRef,
+  memoryKey,
+  enabled,
+  contentReady,
+}: {
+  viewportRef: React.RefObject<HTMLDivElement | null>;
+  memoryKey: string | undefined;
+  enabled: boolean;
+  /** The lesson and its comments are in, so the page is its real height. */
+  contentReady: boolean;
+}) {
+  const restoringRef = useRef(false);
+  const restoredKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !memoryKey || !enabled) return undefined;
+    const remember = () => {
+      // Its own attempts to get back to the old position are not the reader
+      // scrolling, and must not overwrite what is being restored.
+      if (restoringRef.current) return;
+      phoneDiscussionScrollPositions.set(memoryKey, viewport.scrollTop);
+    };
+    viewport.addEventListener("scroll", remember, { passive: true });
+    return () => viewport.removeEventListener("scroll", remember);
+  }, [contentReady, enabled, memoryKey, viewportRef]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (
+      !viewport ||
+      !memoryKey ||
+      !enabled ||
+      !contentReady ||
+      restoredKeyRef.current === memoryKey
+    ) {
+      return undefined;
+    }
+    restoredKeyRef.current = memoryKey;
+    const remembered = phoneDiscussionScrollPositions.get(memoryKey) ?? 0;
+    if (remembered < 1) return undefined;
+
+    // The list measures its comments as they appear, so the remembered
+    // position may not be reachable at once. Keep going back to it until it
+    // holds, the reader takes over, or a couple of seconds have passed.
+    const interactions = ["wheel", "touchstart", "keydown", "pointerdown"];
+    let timer: number | undefined;
+    let attempts = 0;
+    restoringRef.current = true;
+    const stop = () => {
+      restoringRef.current = false;
+      window.clearTimeout(timer);
+      for (const name of interactions) {
+        window.removeEventListener(name, stop, true);
+      }
+    };
+    const restore = () => {
+      viewport.scrollTop = remembered;
+      attempts += 1;
+      if (attempts < 16) timer = window.setTimeout(restore, 120);
+      else stop();
+    };
+    for (const name of interactions) {
+      window.addEventListener(name, stop, { capture: true, passive: true });
+    }
+    restore();
+    return stop;
+  }, [contentReady, enabled, memoryKey, viewportRef]);
 }
 
 function ThreadSurface({
+  scrollMemoryKey,
   lessonDescription,
   isLessonDescriptionLoading = false,
   mobileLessonHeader,
@@ -3483,6 +3619,17 @@ function ThreadSurface({
   const composerHostRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
   const discussionViewportRef = useRef<HTMLDivElement>(null);
+  usePhoneDiscussionScrollMemory({
+    viewportRef: discussionViewportRef,
+    memoryKey: scrollMemoryKey,
+    // A linked comment decides where the page goes instead.
+    enabled: isPhone && lessonContentAccess === "granted" && !linkedThreadId,
+    contentReady:
+      !isInteractionCapabilitiesLoading &&
+      !isLessonDescriptionLoading &&
+      !isAllInitialLoading &&
+      !isThreadsLoading,
+  });
   // Description expansion moves the feed origin; refresh virtual scroll margin.
   const [descriptionLayoutRevision, setDescriptionLayoutRevision] = useState(0);
   const compactComposerScrollHidden =
@@ -3829,9 +3976,6 @@ function ThreadSurface({
     </div>
   );
 
-  const showMobileParticipationPrompt =
-    isPhone && enabledKinds.length > 0 && !canParticipate;
-
   const lessonAccessMessage =
     lessonContentAccess === "denied"
       ? lessonContentAccessReason === "login"
@@ -3912,7 +4056,7 @@ function ThreadSurface({
               overflowX: "hidden",
               overflowY: "auto",
               overscrollBehaviorX: "none",
-              overscrollBehaviorY: "none",
+              overscrollBehaviorY: "auto",
               touchAction: "pan-y",
             }}
           >
@@ -4143,6 +4287,16 @@ function ThreadSurface({
     </>
   );
 
+  // With a linked comment the list keeps at least a screen of height, while
+  // it loads and after: the comment can then be brought to the middle of the
+  // screen before the rest of the list exists, and the page does not lose
+  // that scroll position in the instant the placeholders are swapped out.
+  const sizedDiscussionContent = linkedThreadId ? (
+    <div className="min-h-dvh">{discussionContent}</div>
+  ) : (
+    discussionContent
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {!isPhone && discussionDescription}
@@ -4204,7 +4358,11 @@ function ThreadSurface({
       <div
         className={
           isPhone
-            ? "mt-2.5 flex min-h-0 min-w-0 flex-1 flex-col"
+            ? // No gap above the scroller on a phone: it starts at the
+              // video's edge and carries the space as its own padding, so
+              // what scrolls up passes under the timeline instead of being
+              // cut off a little below it.
+              "flex min-h-0 min-w-0 flex-1 flex-col"
             : "mt-2.5 min-w-0 max-w-full"
         }
         data-discussion-feed-list
@@ -4213,14 +4371,19 @@ function ThreadSurface({
           <div
             ref={discussionViewportRef}
             data-discussion-scroll-viewport
-            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto"
+            // The scroller runs out through the lesson panel's side padding
+            // and pads itself by the same amount, so its content stays where
+            // it was while a highlighted comment's tint can reach the screen
+            // edges instead of being clipped at the padding.
+            className="-mx-(--learning-lesson-content-inset) flex min-h-0 min-w-0 flex-1 flex-col touch-pan-y overflow-x-hidden overflow-y-auto px-(--learning-lesson-content-inset) pt-2.5"
             style={{
               minHeight: 0,
-              maxWidth: "100%",
               overflowX: "hidden",
               overflowY: "auto",
               overscrollBehaviorX: "none",
-              overscrollBehaviorY: "none",
+              // Pulling down at the top of the lesson's description and
+              // comments reloads the page, as it does anywhere else.
+              overscrollBehaviorY: "auto",
               touchAction: "pan-y",
             }}
           >
@@ -4233,22 +4396,18 @@ function ThreadSurface({
               {discussionFilters}
               {discussionToolbar}
             </div>
-            {discussionContent}
-            {showMobileParticipationPrompt && (
+            {sizedDiscussionContent}
+            {/* Someone who cannot post gets no composer and no prompt in its
+                place. The list still ends clear of the bottom navigation. */}
+            {isPhone && !canParticipate && mobileBottomNavigation ? (
               <div
                 aria-hidden="true"
-                className={`pointer-events-none invisible opacity-0 shrink-0 ${mobileBottomNavigation ? "pb-[calc(58px+var(--app-viewport-safe-area-bottom))]" : ""}`}
-              >
-                <MobileParticipationPromptSurface
-                  participationState={participationState}
-                  participationActionLabel={participationActionLabel}
-                  onParticipationAction={onParticipationAction}
-                />
-              </div>
-            )}
+                className="h-[calc(58px+var(--app-viewport-safe-area-bottom))] shrink-0"
+              />
+            ) : null}
           </div>
         ) : (
-          <div className="min-w-0 max-w-full">{discussionContent}</div>
+          <div className="min-w-0 max-w-full">{sizedDiscussionContent}</div>
         )}
       </div>
 
@@ -4348,15 +4507,6 @@ function ThreadSurface({
           </DrawerContent>
         </Drawer>
       )}
-      {showMobileParticipationPrompt ? (
-        <MobileParticipationPromptPortal
-          mobileBottomNavigation={mobileBottomNavigation}
-          scrollHidden={mobileBottomNavigationHidden}
-          participationState={participationState}
-          participationActionLabel={participationActionLabel}
-          onParticipationAction={onParticipationAction}
-        />
-      ) : null}
     </div>
   );
 }
@@ -4376,72 +4526,6 @@ const MOBILE_COMPOSER_SURFACE_BASE =
   "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-transparent backdrop-blur-xl px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))]";
 const MOBILE_BOTTOM_ACTION_OFFSET_CLASS =
   "bottom-[calc(58px+var(--app-viewport-safe-area-bottom))]";
-
-interface MobileParticipationPromptSurfaceProps extends ParticipationPromptContentProps {
-  testId?: string;
-  scrollHidden?: boolean;
-}
-
-function MobileParticipationPromptSurface({
-  participationState,
-  participationActionLabel,
-  onParticipationAction,
-  testId,
-  scrollHidden = false,
-}: MobileParticipationPromptSurfaceProps) {
-  return (
-    <div
-      data-learning-mobile-participation-surface
-      data-testid={testId}
-      data-scroll-hidden={scrollHidden}
-      aria-hidden={scrollHidden}
-      className={`${MOBILE_COMPOSER_SURFACE_BASE} w-full min-w-0 max-w-full transition-[transform,opacity,visibility] will-change-transform motion-reduce:transition-none ${scrollHidden ? "pointer-events-none invisible translate-y-[calc(100%+58px+var(--app-viewport-safe-area-bottom)+4px)] opacity-0 duration-180 ease-[cubic-bezier(0.4,0,1,1)]" : "visible translate-y-0 opacity-100 duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]"}`}
-    >
-      <div className="flex min-w-0 flex-col items-center gap-1.5 px-1 py-1 text-center">
-        <ParticipationPromptContent
-          participationState={participationState}
-          participationActionLabel={participationActionLabel}
-          onParticipationAction={onParticipationAction}
-        />
-      </div>
-    </div>
-  );
-}
-
-interface MobileParticipationPromptPortalProps extends ParticipationPromptContentProps {
-  mobileBottomNavigation: boolean;
-  scrollHidden: boolean;
-}
-
-function MobileParticipationPromptPortal({
-  mobileBottomNavigation,
-  scrollHidden,
-  participationState,
-  participationActionLabel,
-  onParticipationAction,
-}: MobileParticipationPromptPortalProps) {
-  const layerTarget = document.querySelector<HTMLElement>(
-    "[data-learning-motion-stage]",
-  );
-
-  return createPortal(
-    <div
-      data-learning-mobile-participation-layer
-      className={`pointer-events-none fixed inset-x-0 z-130 box-border min-w-0 max-w-full overflow-x-clip ${mobileBottomNavigation ? MOBILE_BOTTOM_ACTION_OFFSET_CLASS : "bottom-0"}`}
-    >
-      <div className="pointer-events-auto min-w-0 max-w-full">
-        <MobileParticipationPromptSurface
-          testId="learning-discussion-login-prompt"
-          participationState={participationState}
-          participationActionLabel={participationActionLabel}
-          onParticipationAction={onParticipationAction}
-          scrollHidden={scrollHidden}
-        />
-      </div>
-    </div>,
-    layerTarget ?? document.body,
-  );
-}
 
 interface MobileCompactComposerPortalProps {
   draft: DiscussionDraft;

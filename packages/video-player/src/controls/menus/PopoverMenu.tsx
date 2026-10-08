@@ -522,9 +522,13 @@ export function PopoverMenu({
       onKeyDown={handleMenuKeyDown}
     >
       {isMobileSheet ? (
+        // The header floats over the top of the list (the list starts
+        // under it, see its top padding): frosted rather than solid, so
+        // rows show faintly as they pass behind, and with a soft edge
+        // below so they fade out instead of being cut off in a line.
         <div
           data-video-player-mobile-sheet-drag-handle=""
-          className="flex min-h-16 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-2 px-4 pb-3 pt-2 active:cursor-grabbing"
+          className="relative z-10 -mb-16 flex h-16 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-2 bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] px-5 pb-3 pt-2 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-5 after:bg-linear-to-b after:from-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] after:to-transparent after:content-[''] active:cursor-grabbing"
           onPointerDown={handleMobileSheetDragStart}
           onPointerMove={handleMobileSheetDragMove}
           onPointerUp={finishMobileSheetDrag}
@@ -536,7 +540,7 @@ export function PopoverMenu({
           />
           <div
             id={`${menuId}-title`}
-            className="w-full text-center text-base font-semibold text-(--video-player-menu-text)"
+            className="w-full text-left text-lg font-semibold tracking-[-0.01em] text-(--video-player-menu-text)"
           >
             {resolvedMenuLabel}
           </div>
@@ -546,7 +550,7 @@ export function PopoverMenu({
         <div
           role="menu"
           aria-label={resolvedMenuLabel}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pt-18 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
         >
           {typeof children === "function"
             ? children({ close: closeMenu })

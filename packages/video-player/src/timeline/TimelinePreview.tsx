@@ -81,9 +81,17 @@ function SpriteFrame({ frame }: { frame: StoryboardFrame }) {
   );
 }
 
-export interface TimelinePreviewProps {
+export type TimelinePreviewLayout = "follow" | "follow-pill" | "centered-pill";
+
+interface TimelinePreviewProps {
   duration: number;
   previewTime: number;
+  /**
+   * `follow` (the default) is a card that travels with the pointer;
+   * `centered-pill` is a single line fixed over the middle of the timeline;
+   * `follow-pill` is that same line, travelling with the pointer.
+   */
+  layout?: TimelinePreviewLayout;
 }
 
 /**
@@ -108,9 +116,44 @@ function ChapterThumbnail({ src }: { src: string }) {
 
 export function TimelinePreview({
   duration,
+  layout = "follow",
   previewTime,
 }: TimelinePreviewProps) {
   const controllerData = useTimelinePreviewData(previewTime);
+  if (layout === "centered-pill" || layout === "follow-pill") {
+    // One line: the time, then the chapter it falls in. The pill grows with
+    // the chapter's name; only a name too long for the player is cut short.
+    // Centred, it stays over the middle of the timeline wherever the thumb
+    // is. Following, it travels with the pointer, and leans inward near
+    // either end so it does not run off the player.
+    const pillPosition = timeToPositionPercent(previewTime, duration);
+    const pillTranslate =
+      pillPosition < 14 ? 0 : pillPosition > 86 ? -100 : -50;
+    return (
+      <div
+        style={
+          layout === "follow-pill"
+            ? {
+                left: `${pillPosition}%`,
+                transform: `translateX(${pillTranslate}%)`,
+              }
+            : undefined
+        }
+        className={`pointer-events-none absolute bottom-full z-30 mb-2.5 flex h-9.5 w-max max-w-[calc(100%-1.5rem)] items-center ${layout === "centered-pill" ? "left-1/2 -translate-x-1/2" : ""} gap-2.5 rounded-full bg-(--video-player-control-surface,rgb(5_7_11/0.5)) px-3.5 text-sm font-semibold text-(--video-player-control-text,#fff) shadow-(--video-player-control-shadow) `}
+        data-video-player-preview=""
+        data-video-player-preview-mode="pill"
+      >
+        <span className="shrink-0 tabular-nums">
+          {formatMediaTime(previewTime)}
+        </span>
+        {controllerData.chapterTitle ? (
+          <span className="min-w-0 truncate font-medium opacity-85">
+            {controllerData.chapterTitle}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
   const position = timeToPositionPercent(previewTime, duration);
   const translate = position < 14 ? 0 : position > 86 ? -100 : -50;
   const hasRichPreview = Boolean(

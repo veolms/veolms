@@ -382,11 +382,47 @@
     box-shadow 150ms ease;
 }
 
+/* Three steps: faint at rest, clearer under the pointer, and brightest
+   (with its glow) only while the sidebar is actually being dragged. */
 .sidebar-resize-handle:hover::after,
-.sidebar-resize-handle:focus-visible::after,
+.sidebar-resize-handle:focus-visible::after {
+  opacity: 0.62;
+}
+
 .courses-app--resizing .sidebar-resize-handle::after {
   opacity: 1;
   box-shadow: 0 0 16px color-mix(in srgb, var(--accent-shadow) 65%, transparent);
+}
+
+/* The floating sidebar (opened over the page) keeps its edge clean, like the
+   floating course content: no line at rest, the line under the pointer, and
+   the same line a little brighter while it is dragged. */
+.courses-app--hidden.courses-app--edge-open .sidebar-resize-handle::after {
+  opacity: 0;
+}
+
+.courses-app--hidden.courses-app--edge-open .sidebar-resize-handle:hover::after,
+.courses-app--hidden.courses-app--edge-open
+  .sidebar-resize-handle:focus-visible::after {
+  opacity: 0.7;
+}
+
+.courses-app--hidden.courses-app--edge-open.courses-app--resizing
+  .sidebar-resize-handle::after {
+  opacity: 1;
+  box-shadow: none;
+}
+
+/* The floating sidebar takes its width from the saved sidebar width, which
+   only changes when a drag ends. While its edge is being dragged it follows
+   the drag's own width instead, with no transition, so it resizes under the
+   pointer. (Only that drag sets `--resizing` on a floating sidebar; the
+   swipes that open and close it do not.) */
+:root
+  .courses-app--hidden.courses-app--edge-open.courses-app--resizing
+  > .courses-sidebar {
+  width: min(var(--sidebar-resize-preview-width), calc(100vw - 28px));
+  transition: none;
 }
 
 .sidebar-resize-handle:focus-visible {

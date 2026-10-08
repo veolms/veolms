@@ -4,17 +4,28 @@ import {
   useChapters,
   usePlayerTheme,
 } from "@veolms/video-player";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../../../lib/utils";
 import { LessonChapterRows } from "./LessonChapterRows";
+
+const subscribeToFullscreen = (onChange: () => void) => {
+  document.addEventListener("fullscreenchange", onChange);
+  return () => document.removeEventListener("fullscreenchange", onChange);
+};
+const getFullscreenActive = () => Boolean(document.fullscreenElement);
+const getServerFullscreenActive = () => false;
 
 export interface LessonChaptersPanelProps {
   id: string;
   open: boolean;
   lessonTitle?: string;
   /**
-   * `side` covers the course content column; `player` slides over the right
-   * edge of the video when that column is not on screen.
+   * `side` covers the course content column. `player` is for when that
+   * column is not on screen: the panel then comes in from the right edge of
+   * the app at full height, over a dimmed page, the way the course content
+   * drawer does (and closes on a click outside it). In fullscreen, where
+   * only the video is on screen, it slides over the video's right edge.
    */
   placement: "side" | "player";
   onClose: () => void;
@@ -35,6 +46,13 @@ export function LessonChaptersPanel({
   const { activeChapterId, chapters } = useChapters();
   const listRef = useRef<HTMLDivElement>(null);
   const inPlayer = placement === "player";
+  const fullscreen = useSyncExternalStore(
+    subscribeToFullscreen,
+    getFullscreenActive,
+    getServerFullscreenActive,
+  );
+  // Out of fullscreen the panel leaves the video for the app's own edge.
+  const floating = inPlayer && !fullscreen && typeof document !== "undefined";
 
   // Keep the playing chapter in view without scrolling the page itself.
   useEffect(() => {
@@ -55,20 +73,28 @@ export function LessonChaptersPanel({
     }
   }, [activeChapterId, open]);
 
-  return (
+  const panel = (
     <aside
       id={id}
       aria-label="Chapters"
       aria-hidden={open ? undefined : true}
       inert={open ? undefined : true}
       data-lesson-chapters-panel={placement}
-      data-video-player-control-layer={inPlayer ? "" : undefined}
+      data-video-player-control-layer={inPlayer && !floating ? "" : undefined}
       style={inPlayer ? getPlayerThemeStyle(playerTheme) : undefined}
       className={cn(
-        "pointer-events-auto absolute inset-y-0 right-0 flex flex-col transition-[translate,visibility,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
-        open ? "visible translate-x-0" : "invisible translate-x-full",
+        "pointer-events-auto flex flex-col transition-[translate,visibility,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+        floating
+          ? "fixed top-3 right-3 z-[901] h-[calc(100dvh-var(--shell-frame-block-space,22px))] w-[min(24rem,calc(100vw-1.5rem))] rounded-[18px]"
+          : "absolute inset-y-0 right-0",
+        open
+          ? "visible translate-x-0"
+          : floating
+            ? "invisible translate-x-[calc(100%+0.75rem)]"
+            : "invisible translate-x-full",
+        inPlayer && !floating ? "z-190 w-[min(22rem,88%)] rounded-l-2xl" : "",
         inPlayer
-          ? "z-190 w-[min(22rem,88%)] rounded-l-2xl bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_90%,transparent)] text-(--video-player-menu-text) shadow-[-18px_0_48px_rgba(0,0,0,0.42)] backdrop-blur-md"
+          ? "bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_90%,transparent)] text-(--video-player-menu-text) shadow-[-18px_0_48px_rgba(0,0,0,0.42)] backdrop-blur-md"
           : "w-full border-l border-(--border) bg-(--surface) text-(--text) shadow-[-12px_0_32px_color-mix(in_srgb,black_14%,transparent)]",
       )}
       onKeyDown={(event) => {
@@ -126,5 +152,21 @@ export function LessonChaptersPanel({
         <LessonChapterRows tone={inPlayer ? "player" : "app"} />
       </div>
     </aside>
+  );
+
+  if (!floating) return panel;
+  return createPortal(
+    <>
+      <div
+        aria-hidden="true"
+        className={cn(
+          "fixed inset-0 z-[900] bg-black/45 transition-opacity duration-300 motion-reduce:transition-none",
+          open ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+        onClick={onClose}
+      />
+      {panel}
+    </>,
+    document.body,
   );
 }
