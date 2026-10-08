@@ -20,6 +20,13 @@ const QUICK_FILL_SCALE_DELTA = 0.08;
 const ZOOM_FEEDBACK_DURATION_MS = 1_800;
 const ZOOM_TRANSITION_DURATION_MS = 220;
 const POINTER_TOUCH_DEDUPE_MS = 90;
+// Mouse: a press on the picture that is dragged zooms about the point that
+// was pressed; with Shift held, it pans a zoomed picture instead. The drag
+// has to start before the press would count as a long press, which belongs
+// to the gesture surface, and it ends when the pointer leaves the player.
+const MOUSE_DRAG_START_WINDOW_MS = 450;
+/** Dragging this far from the pressed point doubles the zoom. */
+const MOUSE_ZOOM_DRAG_PX_PER_DOUBLING = 120;
 
 interface GesturePoint {
   x: number;
@@ -45,6 +52,29 @@ interface PanGesture {
   startPanY: number;
   startX: number;
   startY: number;
+}
+
+/**
+ * A mouse press on the picture. Once it moves it becomes a drag that zooms
+ * about the point that was pressed, growing with the distance dragged from
+ * it. Pressed with Shift held, it pans the picture instead.
+ */
+interface MouseDragGesture {
+  pointerId: number;
+  pressedAt: number;
+  root: HTMLElement;
+  x: number;
+  y: number;
+  active: boolean;
+  contentX: number;
+  contentY: number;
+  geometry: PlayerZoomGeometry;
+  localX: number;
+  localY: number;
+  mode: "pan" | "zoom";
+  startPanX: number;
+  startPanY: number;
+  startScale: number;
 }
 
 interface ZoomGestureHandlers {
@@ -104,6 +134,11 @@ export function usePlayerZoomGestures(
   const suppressedPointersRef = useRef(new Set<number>());
   const pinchRef = useRef<PinchGesture | null>(null);
   const panRef = useRef<PanGesture | null>(null);
+  const mouseDragRef = useRef<MouseDragGesture | null>(null);
+  // A drag that was ended early (the pointer left the player) still has a
+  // release coming, which must not reach the surface as a click.
+  const endedMouseDragPointerRef = useRef<number | null>(null);
+  const hoveredRootRef = useRef<HTMLElement | null>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPointerEventAtRef = useRef(Number.NEGATIVE_INFINITY);
@@ -307,11 +342,230 @@ export function usePlayerZoomGestures(
       suppressedPointersRef.current.clear();
       pinchRef.current = null;
       panRef.current = null;
+      mouseDragRef.current = null;
     },
     [clearFeedbackTimer, clearTransitionTimer],
   );
 
+  // Shift over the picture offers the pan: an open hand, closed from the
+  // moment the picture is pressed until it is let go. Set on the surface
+  // itself, and as important, because host pages give buttons a cursor of
+  // their own that a value inherited from the player would lose to.
+  const syncPanCursor = useCallback((shiftKey: boolean) => {
+    const surface = hoveredRootRef.current?.querySelector<HTMLElement>(
+      "[data-player-zoom-surface]",
+    );
+    if (!surface) return;
+    if (mouseDragRef.current?.mode === "pan") {
+      surface.style.setProperty("cursor", "grabbing", "important");
+    } else if (shiftKey) {
+      surface.style.setProperty("cursor", "grab", "important");
+    } else {
+      surface.style.removeProperty("cursor");
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Shift") syncPanCursor(event.type === "keydown");
+    };
+    window.addEventListener("keydown", handleKey);
+    window.addEventListener("keyup", handleKey);
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("keyup", handleKey);
+      hoveredRootRef.current
+        ?.querySelector<HTMLElement>("[data-player-zoom-surface]")
+        ?.style.removeProperty("cursor");
+      hoveredRootRef.current = null;
+    };
+  }, [syncPanCursor]);
+
+  // The drag is over the moment the pointer is outside the player or the
+  // button is no longer down, whichever the page hears of first. The player
+  // cannot count on being told: without pointer capture it gets no moves
+  // from outside itself and no release that happens there, and the drag
+  // would carry on when the pointer came back. So this listens on the
+  // window, ahead of the player's own handlers.
+  useEffect(() => {
+    const endAbandonedMouseDrag = (event: PointerEvent) => {
+      const drag = mouseDragRef.current;
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      const moving = event.type === "pointermove";
+      const insidePlayer =
+        event.target instanceof Node && drag.root.contains(event.target);
+      // A release on the player is the ordinary end of the drag.
+      if (!moving && insidePlayer) return;
+      const bounds = drag.root.getBoundingClientRect();
+      const stillDragging =
+        moving &&
+        (event.buttons & 1) === 1 &&
+        event.clientX >= bounds.left &&
+        event.clientX <= bounds.right &&
+        event.clientY >= bounds.top &&
+        event.clientY <= bounds.bottom;
+      if (stillDragging) return;
+      mouseDragRef.current = null;
+      if (drag.active) {
+        // If the button is still down, its release must not count as a click.
+        if (moving && (event.buttons & 1) === 1) {
+          endedMouseDragPointerRef.current = drag.pointerId;
+        }
+        finishGesture();
+      }
+      syncPanCursor(event.shiftKey);
+    };
+    window.addEventListener("pointermove", endAbandonedMouseDrag, true);
+    window.addEventListener("pointerup", endAbandonedMouseDrag, true);
+    window.addEventListener("pointercancel", endAbandonedMouseDrag, true);
+    return () => {
+      window.removeEventListener("pointermove", endAbandonedMouseDrag, true);
+      window.removeEventListener("pointerup", endAbandonedMouseDrag, true);
+      window.removeEventListener("pointercancel", endAbandonedMouseDrag, true);
+    };
+  }, [finishGesture, syncPanCursor]);
+
+  const onMousePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    mouseDragRef.current = null;
+    endedMouseDragPointerRef.current = null;
+    const onSurface =
+      event.target instanceof Element &&
+      event.target.closest("[data-player-zoom-surface]") !== null;
+    if (event.button !== 0 || !onSurface) return false;
+    const press = {
+      pointerId: event.pointerId,
+      pressedAt: Date.now(),
+      root: getPlayerRoot(event.currentTarget),
+      x: event.clientX,
+      y: event.clientY,
+    };
+    const zoom = controller.getSnapshot().ui.zoom;
+    const geometry = getGeometry(event.currentTarget);
+    const local = getLocalPoint(event.currentTarget, press);
+    mouseDragRef.current = {
+      ...press,
+      active: false,
+      contentX:
+        (local.x - geometry.containerWidth / 2 - zoom.panX) / zoom.scale,
+      contentY:
+        (local.y - geometry.containerHeight / 2 - zoom.panY) / zoom.scale,
+      geometry,
+      localX: local.x,
+      localY: local.y,
+      mode: event.shiftKey ? "pan" : "zoom",
+      startPanX: zoom.panX,
+      startPanY: zoom.panY,
+      startScale: zoom.scale,
+    };
+    hoveredRootRef.current = press.root;
+    syncPanCursor(event.shiftKey);
+    // The surface still sees this press: left unmoved, it is a click.
+    return false;
+  };
+
+  const onMousePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const root = getPlayerRoot(event.currentTarget);
+    hoveredRootRef.current = root;
+    const drag = mouseDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      syncPanCursor(event.shiftKey);
+      return false;
+    }
+    const bounds = root.getBoundingClientRect();
+    if (
+      event.clientX < bounds.left ||
+      event.clientX > bounds.right ||
+      event.clientY < bounds.top ||
+      event.clientY > bounds.bottom
+    ) {
+      // Out of the player: the drag is over, wherever the button is let go.
+      mouseDragRef.current = null;
+      syncPanCursor(event.shiftKey);
+      if (!drag.active) return false;
+      endedMouseDragPointerRef.current = drag.pointerId;
+      finishGesture();
+      return true;
+    }
+    const deltaX = event.clientX - drag.x;
+    const deltaY = event.clientY - drag.y;
+    if (!drag.active && Math.hypot(deltaX, deltaY) < PAN_START_DISTANCE_PX) {
+      return false;
+    }
+    if (!drag.active) {
+      if (Date.now() - drag.pressedAt > MOUSE_DRAG_START_WINDOW_MS) {
+        mouseDragRef.current = null;
+        return false;
+      }
+      drag.active = true;
+      beginVisualFeedback();
+      syncPanCursor(event.shiftKey);
+    }
+    event.preventDefault();
+
+    if (drag.mode === "pan") {
+      const pan = clampPlayerPan(
+        { x: drag.startPanX + deltaX, y: drag.startPanY + deltaY },
+        drag.startScale,
+        drag.geometry,
+      );
+      controller.setZoomState({
+        feedbackVisible: true,
+        gestureActive: true,
+        panX: pan.x,
+        panY: pan.y,
+      });
+      return true;
+    }
+
+    // The pressed point of the picture stays under the place it was pressed,
+    // and the picture grows the further the pointer is dragged from it.
+    const scale = clampPlayerZoom(
+      drag.startScale *
+        2 ** (Math.hypot(deltaX, deltaY) / MOUSE_ZOOM_DRAG_PX_PER_DOUBLING),
+    );
+    const pan = clampPlayerPan(
+      {
+        x:
+          drag.localX -
+          drag.geometry.containerWidth / 2 -
+          drag.contentX * scale,
+        y:
+          drag.localY -
+          drag.geometry.containerHeight / 2 -
+          drag.contentY * scale,
+      },
+      scale,
+      drag.geometry,
+    );
+    controller.setZoomState({
+      feedbackVisible: true,
+      gestureActive: true,
+      panX: pan.x,
+      panY: pan.y,
+      scale,
+      transitioning: false,
+    });
+    return true;
+  };
+
+  const onMousePointerEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    const drag = mouseDragRef.current;
+    mouseDragRef.current = null;
+    syncPanCursor(event.shiftKey);
+    if (endedMouseDragPointerRef.current === event.pointerId) {
+      endedMouseDragPointerRef.current = null;
+      event.preventDefault();
+      return true;
+    }
+    if (!drag?.active) return false;
+    event.preventDefault();
+    finishGesture();
+    syncPanCursor(event.shiftKey);
+    return true;
+  };
+
   const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType === "mouse") return onMousePointerDown(event);
     if (event.pointerType !== "touch") return false;
     if (
       event.isPrimary &&
@@ -346,6 +600,7 @@ export function usePlayerZoomGestures(
   };
 
   const onPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType === "mouse") return onMousePointerMove(event);
     if (event.pointerType !== "touch") return false;
     lastPointerEventAtRef.current = Date.now();
     if (!pointerPointsRef.current.has(event.pointerId)) return false;
@@ -388,6 +643,7 @@ export function usePlayerZoomGestures(
   };
 
   const onPointerEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType === "mouse") return onMousePointerEnd(event);
     if (event.pointerType !== "touch") return false;
     lastPointerEventAtRef.current = Date.now();
     const pinchWasActive = pinchRef.current !== null;

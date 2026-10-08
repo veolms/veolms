@@ -44,6 +44,7 @@ import {
 } from "../routing/routeAccess";
 import { useCurrentUser } from "../services/auth";
 import { useCourseOverview } from "../services/courses";
+import { withKeepScroll } from "../shell/applicationScroll";
 import { useAuthStore } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
@@ -234,6 +235,7 @@ export default function LearningRoute() {
     if (currentPath !== nextPath) {
       void navigate(keepLoginDialogOpen(location.search, nextPath), {
         replace: true,
+        state: withKeepScroll(location.state),
       });
     }
   }, [
@@ -270,6 +272,7 @@ export default function LearningRoute() {
     });
     void navigate(keepLoginDialogOpen(location.search, nextPath), {
       replace: true,
+      state: withKeepScroll(location.state),
     });
   }, [
     canonicalCourseSlug,

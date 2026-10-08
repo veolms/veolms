@@ -110,6 +110,7 @@ import {
   resolveWorkspaceRole,
 } from "../shell/workspaceRole";
 import {
+  asksToKeepScroll,
   followApplicationScrollPosition,
   readApplicationScrollPosition,
   scrollApplicationTo,
@@ -501,6 +502,15 @@ export default function AcademyLayout() {
     const previousPath = renderedLocationPathRef.current;
     const pending = pendingScrollPositionRef.current;
     if (previousPath === currentLocationPath && !pending) return;
+    // The page only tidied its own address: the reader stays where they are.
+    if (
+      previousPath !== currentLocationPath &&
+      !pending &&
+      asksToKeepScroll(location.state)
+    ) {
+      renderedLocationPathRef.current = currentLocationPath;
+      return;
+    }
 
     if (previousPath !== currentLocationPath) {
       if (pending?.sourcePath !== previousPath) {

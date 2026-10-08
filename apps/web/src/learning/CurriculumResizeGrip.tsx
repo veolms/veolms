@@ -3,14 +3,15 @@
  * content. It only shows where to grab: the rail around it (`group/rail`)
  * owns the pointer and keyboard handling, so the whole gutter resizes.
  *
- * While the course content is collapsed there is no gutter, so the grip
- * stays out of the way until the rail at the lesson's edge is hovered.
+ * The gutter is empty at rest. The grip appears, muted, while the gutter is
+ * hovered (or has keyboard focus), and grows and takes the accent colour
+ * only once a drag is under way.
  */
 export function CurriculumResizeGrip() {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none block h-16 w-1 shrink-0 rounded-full bg-[color-mix(in_srgb,var(--accent)_54%,var(--border))] opacity-50 transition-[height,opacity,background-color] duration-160 ease-out group-hover/rail:h-20 group-hover/rail:bg-(--accent) group-hover/rail:opacity-100 group-focus-visible/rail:h-20 group-focus-visible/rail:bg-(--accent) group-focus-visible/rail:opacity-100 motion-reduce:transition-none [[data-learning-curriculum-state=collapsed]_&]:opacity-0 [[data-learning-curriculum-state=collapsed]_&]:group-hover/rail:opacity-100 [.is-curriculum-resizing_&]:h-20 [.is-curriculum-resizing_&]:bg-(--accent) [.is-curriculum-resizing_&]:opacity-100"
+      className="pointer-events-none block h-16 w-1 shrink-0 rounded-full bg-[color-mix(in_srgb,var(--accent)_54%,var(--border))] opacity-0 transition-[height,opacity,background-color] duration-160 ease-out group-hover/rail:opacity-50 group-focus-visible/rail:opacity-50 motion-reduce:transition-none [.is-curriculum-resizing_&]:h-20 [.is-curriculum-resizing_&]:bg-(--accent) [.is-curriculum-resizing_&]:opacity-100"
     />
   );
 }

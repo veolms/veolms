@@ -35,6 +35,7 @@ import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CenteredLoadingSpinner } from "./components/LoadingSpinner";
+import { LongScrollElasticScroller } from "./components/elastic-scroller";
 import { CornersInIcon as CornersIn } from "@phosphor-icons/react/CornersIn";
 import { CornersOutIcon as CornersOut } from "@phosphor-icons/react/CornersOut";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
@@ -755,10 +756,10 @@ const SIDEBAR_PROFILE_BUTTON_CLASS =
 // the same vertical line in the expanded row.
 // Idle items carry a faint fill, about half as strong as the hover fill.
 const SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS =
-  "[:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:rounded-[50%]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[corner-shape:squircle] h-[57px]! min-h-[57px]! pl-4! [&_svg]:size-[25px]! [&_svg]:basis-[25px]! text-base! [:root:not([data-sidebar-state=collapsed])_.courses-app:not(.courses-app--collapsed)_&]:rounded-xl! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:rounded-xl! [&:not(.is-active):not(:hover)]:bg-[color-mix(in_srgb,var(--surface)_35%,transparent)]! [.courses-app--resizing_&]:overflow-hidden!";
+  "[:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:rounded-[50%]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[corner-shape:squircle] h-[57px]! min-h-[57px]! pl-4! [&_svg]:size-[26px]! [&_svg]:basis-[26px]! text-base! [:root:not([data-sidebar-state=collapsed])_.courses-app:not(.courses-app--collapsed)_&]:rounded-xl! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:rounded-xl! [&:not(.is-active):not(:hover)]:bg-[color-mix(in_srgb,var(--surface)_35%,transparent)]! [.courses-app--resizing_&]:overflow-hidden!";
 
 /** At this sidebar width or narrower, a drag stacks the dock vertically. */
-const SIDEBAR_DOCK_VERTICAL_MAX_WIDTH = 160;
+const SIDEBAR_DOCK_VERTICAL_MAX_WIDTH = 180;
 
 // The dock has no box of its own (background, padding, shadow): its buttons
 // stand directly on the sidebar at the menu items' height and icon size, and
@@ -774,7 +775,7 @@ const SIDEBAR_DOCK_VERTICAL_MAX_WIDTH = 160;
 // source as the menu icons (so they follow the icon style setting), and each
 // icon's glow follows its own colour instead of the theme accent.
 const SIDEBAR_DOCK_CLASS =
-  "[&.sidebar-appearance--vertical_button:not([data-theme-swatch])]:w-full! [&.sidebar-appearance--vertical_button:not([data-theme-swatch])]:basis-auto! [&.sidebar-appearance--vertical_.sidebar-palette-wrap]:w-full! [&.sidebar-appearance--vertical_.sidebar-palette-wrap]:h-auto! [&.sidebar-appearance--vertical_.sidebar-palette-wrap]:basis-auto! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[&_button:not([data-theme-swatch])]:rounded-[50%]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[&_button:not([data-theme-swatch])]:[corner-shape:squircle]! bg-transparent! p-0! shadow-none! [&_button:not([data-theme-swatch],.is-active,[aria-expanded=true],[aria-pressed=true])]:bg-[color-mix(in_srgb,var(--surface)_35%,transparent)]! [&_button:not([data-theme-swatch],.is-active,[aria-expanded=true],[aria-pressed=true])]:hover:bg-[color-mix(in_srgb,var(--surface)_72%,transparent)]! in-data-[theme=light]:[&_button:not([data-theme-swatch],.is-active,[aria-expanded=true],[aria-pressed=true])]:hover:bg-[color-mix(in_srgb,var(--selected)_68%,var(--surface))]! [&_button>svg]:size-[25px] [&_button:not([data-theme-swatch])]:h-[57px]! [&_button:not([data-theme-swatch])]:min-h-[57px]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:[&_button>svg]:size-[25px] [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:[&_button:not([data-theme-swatch])]:rounded-xl! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:[&_button:not([data-theme-swatch])]:[corner-shape:round]! [:root:not([data-sidebar-state=collapsed])_.courses-app:not(.courses-app--collapsed)_&]:[&_button:not([data-theme-swatch])]:rounded-xl! [&_button:not([data-theme-swatch])]:hover:border-transparent! mt-2! gap-2! [&_[data-appearance-mode-toggle]>svg]:text-(--dock-appearance-icon-color)! [&_[data-reading-mode-trigger]>svg]:text-(--dock-reading-mode-icon-color)! [&_button>svg]:[filter:drop-shadow(0_2px_6px_color-mix(in_srgb,currentColor_38%,transparent))]!";
+  "[&.sidebar-appearance--vertical_button:not([data-theme-swatch])]:w-full! [&.sidebar-appearance--vertical_button:not([data-theme-swatch])]:basis-auto! [&.sidebar-appearance--vertical_.sidebar-palette-wrap]:w-full! [&.sidebar-appearance--vertical_.sidebar-palette-wrap]:h-auto! [&.sidebar-appearance--vertical_.sidebar-palette-wrap]:basis-auto! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[&_button:not([data-theme-swatch])]:rounded-[50%]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[&_button:not([data-theme-swatch])]:[corner-shape:squircle]! bg-transparent! p-0! shadow-none! [&_button:not([data-theme-swatch],.is-active,[aria-expanded=true],[aria-pressed=true])]:bg-[color-mix(in_srgb,var(--surface)_35%,transparent)]! [&_button:not([data-theme-swatch],.is-active,[aria-expanded=true],[aria-pressed=true])]:hover:bg-[color-mix(in_srgb,var(--surface)_72%,transparent)]! in-data-[theme=light]:[&_button:not([data-theme-swatch],.is-active,[aria-expanded=true],[aria-pressed=true])]:hover:bg-[color-mix(in_srgb,var(--selected)_68%,var(--surface))]! [&_button>svg]:size-[26px] [&_button:not([data-theme-swatch])]:h-[57px]! [&_button:not([data-theme-swatch])]:min-h-[57px]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:[&_button>svg]:size-[26px] [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:[&_button:not([data-theme-swatch])]:rounded-xl! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:[&_button:not([data-theme-swatch])]:[corner-shape:round]! [:root:not([data-sidebar-state=collapsed])_.courses-app:not(.courses-app--collapsed)_&]:[&_button:not([data-theme-swatch])]:rounded-xl! [&_button:not([data-theme-swatch])]:hover:border-transparent! mt-2! gap-2! [&_[data-appearance-mode-toggle]>svg]:text-(--dock-appearance-icon-color)! [&_[data-reading-mode-trigger]>svg]:text-(--dock-reading-mode-icon-color)! [&_button>svg]:[filter:drop-shadow(0_2px_6px_color-mix(in_srgb,currentColor_38%,transparent))]!";
 
 // While the sidebar is animating or being dragged between its two states it
 // still counts as collapsed but is no longer narrow. In that in-between
@@ -825,16 +826,27 @@ const SIDEBAR_DOCK_CLASS =
 // collapsed. The stylesheet makes it 2px taller once an outward drag passes
 // its content threshold, which pushed the whole menu down mid-drag.
 //
-// At rest on the rail the icon carries a 2px pad in the sidebar's own
-// background colour, so no edge of the logo's first letter shows around it.
+// On the settled rail the logo's first letter is drawn a little smaller than
+// in the open sidebar, small enough to sit wholly behind the collapse icon
+// when the icon shows. (The icon used to carry a pad in the sidebar's
+// background colour to cover the letter's edges instead; over the lesson
+// video's ambient glow that pad showed as a dark ring.)
+// The window the letter shows through is narrowed to match (20px), or the
+// smaller wordmark would bring the start of its second letter into it.
 // On hover, in both sidebar states, the button's own hover background and
 // glow are switched off and the icon gets a single outline in the theme's
-// accent colour. The pad behind the icon takes the same colour then, so no
-// second, darker line shows between the icon and its outline.
+// accent colour, with the same colour behind it.
+// The compact (48px) brand slot and its lower logo apply only to the settled
+// collapsed sidebar. While a drag has the full wordmark showing
+// (`resize-content-visible`), the stylesheet gives the slot its expanded
+// 50px and shifts the menu to match; forcing the compact size there as well
+// moved the logo and the whole menu by 2px mid-drag.
+// The logo keeps its 38px box in the compact slot too, so the mark sits at
+// the same height in every state.
 const SIDEBAR_BRAND_CLASS =
-  "courses-sidebar__brand [.courses-app:not(.courses-app--collapsed)_&]:[&>.courses-logo-clip]:max-w-[min(156px,calc(100%-36px))]! [.courses-app--collapsed_&]:flex-row! [.courses-app--collapsed_&]:items-end! [.courses-app--collapsed_&]:justify-start! [.courses-app--collapsed_&]:pl-[19.375px]! [.courses-app--collapsed_&]:pr-[7px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:static! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:block! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:w-[156px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:opacity-100! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:transform-none! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:[clip-path:inset(0)]! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:max-w-[min(156px,max(0px,calc(100%-36px)))]! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:static! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:block! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:w-[156px]! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:opacity-100! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:transform-none! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:[clip-path:inset(0)]! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:max-w-[min(156px,max(24px,calc(100%-36px)))]! [&>.courses-logo-clip>svg]:origin-left [&>.courses-logo-clip>svg]:scale-110 [&>.courses-logo-clip]:translate-y-[4px] [&>.courses-logo-clip]:-translate-x-[0.5px] [.courses-app--collapsed_&]:h-12! [.courses-app--collapsed_&]:min-h-12! [.courses-app--collapsed_&]:[&>.courses-logo-clip]:translate-y-[6px]";
+  "courses-sidebar__brand [.courses-app:not(.courses-app--collapsed)_&]:[&>.courses-logo-clip]:max-w-[min(156px,calc(100%-36px))]! [.courses-app--collapsed_&]:flex-row! [.courses-app--collapsed_&]:items-end! [.courses-app--collapsed_&]:justify-start! [.courses-app--collapsed_&]:pl-[19.375px]! [.courses-app--collapsed_&]:pr-[7px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:static! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:block! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:w-[156px]! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:opacity-100! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:transform-none! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:[clip-path:inset(0)]! [.courses-app--collapsed.courses-app--resizing_&]:[&>.courses-logo-clip]:max-w-[min(156px,max(0px,calc(100%-36px)))]! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:static! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:block! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:w-[156px]! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:opacity-100! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:transform-none! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:[clip-path:inset(0)]! [[data-collapsed-sidebar-logo=true]_.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:max-w-[min(156px,max(20px,calc(100%-36px)))]! [&>.courses-logo-clip>svg]:origin-left [&>.courses-logo-clip>svg]:scale-110 [.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip>svg]:scale-95 [&>.courses-logo-clip]:translate-y-[4px] [&>.courses-logo-clip]:-translate-x-[0.5px] [.courses-app--collapsed:not(.courses-app--resize-content-visible)_&]:h-12! [.courses-app--collapsed:not(.courses-app--resize-content-visible)_&]:min-h-12! [.courses-app--collapsed:not(.courses-app--resize-content-visible)_&]:[&>.courses-logo-clip]:translate-y-[6px] [.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>.courses-logo-clip]:-translate-x-[2px] [.courses-app--collapsed:not(.courses-app--resize-content-visible)_&]:[&>.courses-logo-clip]:h-[38px]!";
 const SIDEBAR_COLLAPSE_BUTTON_CLASS =
-  "sidebar-collapse [.courses-app:not(.courses-app--collapsed)_&]:absolute! [.courses-app:not(.courses-app--collapsed)_&]:top-[14px]! [.courses-app:not(.courses-app--collapsed)_&]:bottom-auto! [.courses-app:not(.courses-app--collapsed)_&]:left-[calc(100%-39px-clamp(0px,(112px-100%)*0.1,4px))]! [.courses-app--collapsed_&]:absolute! [.courses-app--collapsed_&]:top-[14px]! [.courses-app--collapsed_&]:bottom-auto! [.courses-app--collapsed_&]:left-auto! [.courses-app--collapsed_&]:right-[calc(7.5px+clamp(0px,(120px-100%)*0.1,4px))]! [.courses-app--collapsed.courses-app--resizing_&]:opacity-100! [.courses-app--collapsed.courses-app--resizing_&]:pointer-events-auto! [.courses-app--collapsed:not(.courses-app--resizing)_.courses-sidebar:not(:hover)_&]:delay-[220ms]! [&>span]:scale-[1.16] [&>span]:translate-y-[0.5px] [.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>span]:rounded-[24%] [.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>span]:bg-(--app-shell) [.courses-app--collapsed:not(.courses-app--resizing)_&]:[&>span]:shadow-[0_0_0_2px_var(--app-shell)] hover:bg-transparent! hover:shadow-none! hover:[&>span]:rounded-[24%]! hover:[&>span]:bg-[color-mix(in_srgb,var(--accent)_55%,var(--app-shell))]! hover:[&>span]:shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_55%,var(--app-shell))]!";
+  "sidebar-collapse [.courses-app:not(.courses-app--collapsed)_&]:absolute! [.courses-app:not(.courses-app--collapsed)_&]:top-[14px]! [.courses-app:not(.courses-app--collapsed)_&]:bottom-auto! [.courses-app:not(.courses-app--collapsed)_&]:left-[calc(100%-39px-clamp(0px,(112px-100%)*0.1,4px))]! [.courses-app--collapsed_&]:absolute! [.courses-app--collapsed_&]:top-[14px]! [.courses-app--collapsed_&]:bottom-auto! [.courses-app--collapsed_&]:left-auto! [.courses-app--collapsed_&]:right-[calc(7.5px+clamp(0px,(120px-100%)*0.1,4px))]! [.courses-app--collapsed.courses-app--resizing_&]:opacity-100! [.courses-app--collapsed.courses-app--resizing_&]:pointer-events-auto! [.courses-app--collapsed:not(.courses-app--resizing)_.courses-sidebar:not(:hover)_&]:delay-[220ms]! [&>span]:scale-[1.16] [&>span]:translate-y-[0.5px] hover:bg-transparent! hover:shadow-none! hover:[&>span]:rounded-[24%]! hover:[&>span]:bg-[color-mix(in_srgb,var(--accent)_55%,var(--app-shell))]! hover:[&>span]:shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_55%,var(--app-shell))]!";
 
 function LoginProfileButton({
   className,
@@ -4955,7 +4967,7 @@ export function CoursesPage({
                       }
                       onBlur={hideCollapsedNavigationTooltip}
                     >
-                      <Icon size={23} weight={active ? "fill" : "regular"} />
+                      <Icon size={26} weight={active ? "fill" : "regular"} />
                       <span className="courses-nav__text">{displayLabel}</span>
                       {showKeyboardShortcuts && (
                         <ShortcutKeys
@@ -5439,6 +5451,27 @@ export function CoursesPage({
             .filter(Boolean)
             .join(" ")}
         >
+          {/* Long pages only (lists of students, orders, discussions, a
+              lesson's comments): a page that scrolls a little gets none.
+              A lesson's page counts as long sooner, since its video stays
+              in view and leaves less room to read in. */}
+          <LongScrollElasticScroller
+            scrollportRef={mainScrollportRef}
+            ariaControls="courses-main-scrollport"
+            scrollAreaLabel="Page"
+            contentRevision={`${page}:${cataloguePathname}`}
+            // Above the lesson video, which stays in view over this page:
+            // the control stretches up over it while it is dragged.
+            className="z-45!"
+            // The lesson page says where it goes (it depends on how much of
+            // the video is showing); see LearningWorkspace.
+            bottomClearance={
+              renderMain
+                ? "var(--learning-elastic-scroller-clearance, 268px)"
+                : 96
+            }
+            minScrollScreens={renderMain ? 1 : 2}
+          />
           <div
             ref={learningMotionStageRef}
             className={

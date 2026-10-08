@@ -1402,7 +1402,7 @@ function ThreadRootEntry({
               onEdit={onEdit}
               onShare={() =>
                 serverId
-                  ? void shareDiscussionEntry(serverId, entry.name, entry.text)
+                  ? shareDiscussionEntry(serverId, entry.name, entry.text)
                   : undefined
               }
               onDelete={onDelete}

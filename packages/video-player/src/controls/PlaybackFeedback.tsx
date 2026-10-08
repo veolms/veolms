@@ -74,7 +74,7 @@ export function PlaybackFeedback({
     >
       <span
         key={feedback.id}
-        className="grid size-[78px] place-items-center rounded-full border-0 bg-black/60 text-white shadow-none backdrop-blur-[16px]"
+        className="grid size-12 place-items-center rounded-full border-0 bg-black/60 text-white shadow-none backdrop-blur-[16px]"
         data-playback-feedback-bezel=""
         data-playback-feedback-duration={durationMs}
         data-playback-feedback-surface=""
@@ -88,11 +88,11 @@ export function PlaybackFeedback({
           active
           aria-hidden="true"
           className={classNames(
-            "size-10",
+            "size-6",
             feedback.kind === "play" && "translate-x-0.5",
           )}
           data-playback-feedback-icon={feedback.kind}
-          size={44}
+          size={26}
         />
       </span>
     </div>

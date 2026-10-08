@@ -95,6 +95,10 @@ export interface LessonVideoPlayerProps {
   lessonIndex?: number;
   totalLessons?: number;
   theaterMode: boolean;
+  /** The video area has been dragged short (LESSON_PLAYER_SHORT_HEIGHT). */
+  shortPlayer?: boolean;
+  /** Shorter still (LESSON_PLAYER_SEEK_TIME_ONLY_HEIGHT). */
+  seekTimeOnly?: boolean;
   onTheaterToggle: () => void;
   autoPlayOnMediaChange?: boolean;
   autoplayEnabled?: boolean;
@@ -210,6 +214,8 @@ export function LessonVideoPlayer({
   onTheaterToggle,
   onSeekToTimestampReady,
   resumePersistenceKey,
+  shortPlayer = false,
+  seekTimeOnly = false,
   theaterMode,
   presentation = "full",
   playbackBootstrap,
@@ -1049,6 +1055,8 @@ export function LessonVideoPlayer({
           />
         ) : (
           <LessonPlayerControls
+            shortPlayer={shortPlayer && presentation === "full"}
+            seekTimeOnly={seekTimeOnly && presentation === "full"}
             ambientEnabled={ambientEnabled}
             autoplayEnabled={autoplayEnabled}
             showAutoplayControl={showAutoplayControl}

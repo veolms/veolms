@@ -90,3 +90,28 @@ export const scrollApplicationTo = (options: ScrollToOptions): void => {
     }
   }
 };
+
+/**
+ * Navigation state that tells the app shell to leave the scroll position
+ * where it is. The shell normally puts a page back at its remembered
+ * position (or the top) whenever the address changes; a page that only
+ * tidies its own address (a lesson settling on its canonical address, a
+ * link's one-off parameters being dropped) passes this so the reader is not
+ * moved.
+ */
+export const KEEP_SCROLL_NAVIGATION_STATE = "academyKeepScroll";
+
+export function withKeepScroll(state: unknown): Record<string, unknown> {
+  return {
+    ...(typeof state === "object" && state !== null ? state : {}),
+    [KEEP_SCROLL_NAVIGATION_STATE]: true,
+  };
+}
+
+export function asksToKeepScroll(state: unknown): boolean {
+  return (
+    typeof state === "object" &&
+    state !== null &&
+    (state as Record<string, unknown>)[KEEP_SCROLL_NAVIGATION_STATE] === true
+  );
+}

@@ -64,6 +64,31 @@ interface RememberedLessonPageLayout extends LearningPlayerExpandTarget {
 
 export type LearningPlayerPresentation = "full" | "mini";
 
+// On a scrolled lesson page the player stays in view and the title,
+// description and comments pass behind it. When the player shrinks away to
+// the corner, that hidden part would show for a moment in the space it
+// leaves. Cut it off for as long as the page stays where it is: the page is
+// on its way out, and if the minimize is called off, the next scroll puts
+// everything back.
+function hideLessonContentBehindPlayer(scrollport: HTMLElement | null) {
+  const slot = document.querySelector<HTMLElement>(
+    ".learning-workspace__player-wrap",
+  );
+  const content = slot?.parentElement?.querySelector<HTMLElement>(
+    ":scope > .learning-workspace__lesson-content-clip",
+  );
+  if (!slot || !content || !scrollport) return;
+  const covered =
+    slot.getBoundingClientRect().bottom - content.getBoundingClientRect().top;
+  if (covered <= 0) return;
+  content.style.clipPath = `inset(${covered.toFixed(1)}px 0 0 0)`;
+  scrollport.addEventListener(
+    "scroll",
+    () => content.style.removeProperty("clip-path"),
+    { once: true, passive: true },
+  );
+}
+
 export interface PersistentLearningPlayerRegistration {
   anchor: HTMLElement | null;
   courseRouteKey: string;
@@ -253,7 +278,14 @@ export function PersistentLearningPlayerHost({
       return;
     }
     const rect = host.getBoundingClientRect();
-    const top = rect.top + (mainScrollportRef.current?.scrollTop ?? 0);
+    const scrollTop = mainScrollportRef.current?.scrollTop ?? 0;
+    // A player that stays in view while the page scrolls has not moved with
+    // it, so the scroll distance is added to where its column starts rather
+    // than to where the player is now.
+    const columnTop = document
+      .querySelector<HTMLElement>(".learning-workspace__lesson-column")
+      ?.getBoundingClientRect().top;
+    const top = Math.min(rect.top, columnTop ?? rect.top) + scrollTop;
     if (
       rect.width <= 0 ||
       rect.left < 0 ||
@@ -264,7 +296,6 @@ export function PersistentLearningPlayerHost({
     }
     // The page around the player, so its stand-ins can be laid out for the
     // next expand before the page itself exists.
-    const scrollTop = mainScrollportRef.current?.scrollTop ?? 0;
     const measurePagePart = (selector: string): LearningPagePartRect | null => {
       const partRect = document
         .querySelector<HTMLElement>(selector)
@@ -295,6 +326,7 @@ export function PersistentLearningPlayerHost({
     // The player is about to leave: this is its resting place. (Skipped
     // while the window is held away from it.)
     rememberFullPlayerRect();
+    hideLessonContentBehindPlayer(mainScrollportRef.current);
   }, [rememberFullPlayerRect]);
 
   useEffect(() => {
@@ -319,7 +351,9 @@ export function PersistentLearningPlayerHost({
       const target = event.target;
       if (
         target instanceof Element &&
-        target.closest('.player-volume-group, [role="menu"], [role="dialog"]')
+        target.closest(
+          '.player-volume-group, [role="menu"], [role="dialog"], [data-lesson-chapters-panel]',
+        )
       ) {
         return;
       }
@@ -531,13 +565,33 @@ export function PersistentLearningPlayerHost({
       ? handleMiniSelectLesson
       : (player.onSelectLesson ?? (() => {}));
 
+  // A video area the viewer has dragged shorter (see LessonPlayerHeightHandle)
+  // is wider than the picture. The player fills the area, the picture keeps
+  // its shape in the middle, and the player itself goes see-through so the
+  // ambient glow behind it shows in the space on either side (plain black
+  // when the glow is off).
+  // On a phone, a video dragged down to a compact height keeps only its
+  // essential controls (play, time, fullscreen): the
+  // lesson, chapter, autoplay, settings, sound and minimize buttons go.
+  // On a wider screen a short video's timeline moves down onto the
+  // video's bottom edge, where a phone has it.
+  // Shorter than that, the two controls along its top (minimize and
+  // chapters) go, leaving the picture to the control bar.
+  // Smaller still, it keeps just a reduced play button.
+  // On a phone the controls along the top step aside while the timeline is
+  // being dragged, leaving the picture to the time-and-chapter pill.
+  // The player's controls are put away while the video area is being
+  // resized and while it is fully hidden: they are laid out for a video
+  // of some height and would pile up over a sliver of one.
+  // A zoomed picture is not cut off at its own shape: it grows into that
+  // space too, up to the edges of the player.
   const playerHost = (
     <aside
       ref={hostRef}
       className={
         mini
           ? "fixed z-130 m-0 touch-none overflow-hidden rounded-xl border-0 bg-black p-0 shadow-[0_18px_48px_rgba(0,0,0,0.52)] ring-1 ring-white/14 ring-inset select-none flex flex-col group/mini-player-shell data-[mini-player-mode=dragging]:cursor-grabbing data-[mini-player-mode=dismissing]:pointer-events-none data-[mini-player-mode=dismissing]:transition-[transform,opacity] data-[mini-player-mode=dismissing]:duration-200 data-[mini-player-mode=dismissing]:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
-          : "learning-persistent-player--full group/window-motion z-[39] overflow-visible bg-transparent data-[learning-player-window-motion]:flex data-[learning-player-window-motion]:h-[calc(anchor-size(height)+52px*var(--learning-player-window-inverse-scale,1))]! data-[learning-player-window-motion]:flex-col"
+          : "learning-persistent-player--full group/window-motion z-[39] overflow-visible bg-transparent min-[641px]:[.courses-main:has([data-learning-player-very-short])_&]:[&_:is([data-player-control-hit-area='chapters'],[data-learning-player-minimize-layer])]:hidden! min-[641px]:[.courses-main:has([data-learning-player-short])_&]:[&_[data-player-timeline-wrap]]:inset-x-0! min-[641px]:[.courses-main:has([data-learning-player-short])_&]:[&_[data-player-timeline-wrap]]:bottom-0! min-[641px]:[.courses-main:has([data-learning-player-short])_&]:[&_[data-player-timeline-wrap]]:translate-y-1/2! max-[640px]:[&:has([data-player-timeline-wrap]_[role=slider][data-scrubbing=true])]:[&_:is([data-learning-player-minimize-layer],[data-player-control-cluster]:has([aria-label='Autoplay_next_lesson']),[aria-label='Chapters'],[data-mobile-volume-control],[aria-label='Settings'])]:invisible! max-[640px]:[.courses-main:has([data-learning-player-tiny])_&]:[&_:is([data-player-control-hit-area]:has([aria-label*='elapsed']),[data-player-control-hit-area]:has([aria-label='Toggle_fullscreen']),[aria-label*='elapsed'],[aria-label='Toggle_fullscreen'])]:hidden! max-[640px]:[.courses-main:has([data-learning-player-tiny])_&]:[&_[data-player-control-cluster='mobile-play']]:scale-65 max-[640px]:[.courses-main:has([data-learning-player-compact])_&]:[&_:is([data-player-control-cluster]:has([aria-label='Previous_lesson']),[data-player-control-cluster]:has([aria-label='Next_lesson']),[aria-label='Autoplay_next_lesson'],[aria-label='Chapters'],[data-player-control-hit-area='chapters'],[aria-label='Settings'],[data-player-control-hit-area='course-lessons'],[data-learning-player-minimize-layer],[data-mobile-volume-control])]:hidden! [.courses-main:has([data-learning-player-resizing],[data-learning-player-hidden])_&]:[&_[data-video-player-control-layer]]:invisible! [.courses-main:has([data-learning-player-resizing],[data-learning-player-hidden])_&]:[&_[data-player-bottom-corner-controls-layer]]:invisible! [.courses-main:has([data-learning-player-resizing],[data-learning-player-hidden])_&]:[&_[data-player-timeline-wrap]]:invisible! [.courses-main:has([data-learning-player-shortened])_&]:[&_.video-shell]:h-full [.courses-main:has([data-learning-player-shortened])_&]:[&_.youtube-player]:aspect-auto! [.courses-main:has([data-learning-player-shortened])_&]:[&_.youtube-player]:h-full! [.courses-main:has([data-learning-player-shortened])_&]:[&_.video-shell]:bg-black [.courses-main:has([data-learning-player-shortened])_&]:[&_.youtube-player]:bg-transparent! [.courses-main:has([data-learning-player-shortened])_&]:[&_[data-player-zoom-viewport]]:right-auto! [.courses-main:has([data-learning-player-shortened])_&]:[&_[data-player-zoom-viewport]]:left-1/2! [.courses-main:has([data-learning-player-shortened])_&]:[&_[data-player-zoom-viewport]]:aspect-video [.courses-main:has([data-learning-player-shortened])_&]:[&_[data-player-zoom-viewport]]:-translate-x-1/2 [.courses-main:has([data-learning-player-shortened])_&]:[&_[data-player-zoom-viewport]]:overflow-visible! data-[learning-player-window-motion]:flex data-[learning-player-window-motion]:h-[calc(anchor-size(height)+52px*var(--learning-player-window-inverse-scale,1))]! data-[learning-player-window-motion]:flex-col"
       }
       style={mini ? miniStyle : undefined}
       aria-label={

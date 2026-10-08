@@ -40,6 +40,14 @@ export interface MenuActionProps {
   onIntent?: () => void;
   destructive?: boolean;
   disabled?: boolean;
+  /**
+   * Runs `onClick` on the click itself and keeps the menu open for this
+   * long afterwards, so the item can show what happened ("Copied") before
+   * the menu closes. Without it the menu closes first and then runs
+   * `onClick`, which is too late for anything the browser only allows
+   * during a click, such as copying.
+   */
+  stayOpenMs?: number;
 }
 
 export function MenuAction({
@@ -50,8 +58,13 @@ export function MenuAction({
   onIntent,
   destructive,
   disabled = false,
+  stayOpenMs,
 }: MenuActionProps) {
   const dismissThen = useContext(CourseMenuDismissContext);
+  const closeTimerRef = useRef<number | undefined>(undefined);
+  // The item is gone once the menu closes; a pending close must not then
+  // act on a menu that is already shut.
+  useEffect(() => () => window.clearTimeout(closeTimerRef.current), []);
 
   return (
     <button
@@ -71,6 +84,15 @@ export function MenuAction({
       onFocus={onIntent}
       onClick={(event) => {
         event.stopPropagation();
+        if (stayOpenMs !== undefined) {
+          onClick();
+          window.clearTimeout(closeTimerRef.current);
+          closeTimerRef.current = window.setTimeout(
+            () => dismissThen?.(() => undefined),
+            stayOpenMs,
+          );
+          return;
+        }
         if (dismissThen) dismissThen(onClick);
         else onClick();
       }}
@@ -367,8 +389,17 @@ export function CourseActionMenu({
             setMenuPressPulse(0);
           }}
           onPointerLeave={() => setMenuPressPulse(0)}
-          onFocus={() => {
-            if (!menuPointerInteractionRef.current) setMenuKeyboardFocus(true);
+          onFocus={(event) => {
+            // Only a keyboard gets the standing focus ring. A touch focuses
+            // the button after its pointer events are over, so "not
+            // mid-press" alone would count a tap as keyboard focus and
+            // leave the circle on; the browser's own verdict settles it.
+            if (
+              !menuPointerInteractionRef.current &&
+              event.currentTarget.matches(":focus-visible")
+            ) {
+              setMenuKeyboardFocus(true);
+            }
           }}
           onBlur={() => {
             menuPointerInteractionRef.current = false;

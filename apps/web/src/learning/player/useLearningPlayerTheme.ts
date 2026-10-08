@@ -40,7 +40,11 @@ export function useLearningPlayerTheme(): PlayerThemeDefinition {
       tokens: {
         accent: "var(--accent)",
         accentContrast: "var(--on-accent, #fff)",
-        menuSurface: "color-mix(in srgb, var(--surface) 46%, transparent)",
+        // Mostly opaque, and a step darker than the app's surface (towards
+        // its canvas colour): the menu has no blur behind it, so it has to
+        // carry its own contrast over a bright picture.
+        menuSurface:
+          "color-mix(in srgb, color-mix(in srgb, var(--surface) 45%, var(--canvas)) 90%, transparent)",
         menuSolidSurface: "var(--surface)",
         menuText: "var(--text)",
         menuTextMuted: "var(--text-secondary)",

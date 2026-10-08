@@ -5,7 +5,6 @@ import { memo } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import type { LessonResource } from "@veolms/contracts";
 import type { Lesson } from "./courseContent";
-import { CurriculumProgressBar } from "./CurriculumProgressBar";
 import { LessonResourcesMenu } from "./LessonResourcesMenu";
 import { LESSON_CARD_ACTION_CLASS } from "./lessonCardAction";
 import "./curriculum-lesson-card.css";
@@ -51,6 +50,12 @@ export interface CurriculumLessonCardProps {
   progress: number;
   isActive: boolean;
   isAvailable: boolean;
+  /**
+   * The visitor cannot play this lesson yet (not signed in, or without
+   * access to the course). The card still opens the lesson, where they are
+   * asked to log in or get access; a lock marks it in the list.
+   */
+  isLocked?: boolean;
   onSelectLesson: (lessonNumber: number) => void;
   onClose?: () => void;
   activeLessonRef?: RefObject<HTMLButtonElement | null>;
@@ -67,9 +72,8 @@ export interface CurriculumLessonCardProps {
 }
 
 /**
- * One lesson in the course content list. Watch progress is a thin bar along
- * the card's bottom edge with the percentage beside the duration; a finished
- * lesson swaps both for a green check. The open lesson has an accent wash
+ * One lesson in the course content list. Watch progress is the percentage
+ * beside the duration; a finished lesson shows a green check instead. The open lesson has an accent wash
  * and an animated equalizer instead of any outline.
  *
  * The lesson itself is one button; the quiz and resources actions sit beside
@@ -80,6 +84,7 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
   progress,
   isActive,
   isAvailable,
+  isLocked = false,
   onSelectLesson,
   onClose,
   activeLessonRef,
@@ -97,14 +102,16 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
     status === "done" || progress >= LESSON_PROGRESS_COMPLETE_THRESHOLD;
   const watched = completed ? 100 : Math.max(0, Math.min(100, progress));
   const inProgress = !completed && watched > 0;
-  // The open lesson keeps its bar even once it counts as completed (watching
-  // past the completion threshold must not make the bar vanish mid-watch);
-  // other completed lessons show only the check.
-  const showProgressBar = watched > 0 && (inProgress || isActive);
-  const showQuiz = isAvailable && hasQuiz && Boolean(onOpenQuiz);
+  // A locked lesson shows its lock where the quiz and resources would be:
+  // neither can be opened without the lesson.
+  const showLock = isAvailable && isLocked;
+  const showQuiz = isAvailable && !isLocked && hasQuiz && Boolean(onOpenQuiz);
   const showResources =
-    isAvailable && Boolean(resourceCourseKey) && Boolean(resources?.length);
-  const hasActions = showQuiz || showResources;
+    isAvailable &&
+    !isLocked &&
+    Boolean(resourceCourseKey) &&
+    Boolean(resources?.length);
+  const hasActions = showLock || showQuiz || showResources;
   const lengthLabel =
     (contentType && NON_VIDEO_LESSON_LABELS[contentType]) || duration;
 
@@ -164,7 +171,8 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
         >
           {!isAvailable ? (
             <LockSimple size={13} weight="fill" aria-hidden="true" />
-          ) : isActive ? (
+          ) : isActive && !showLock ? (
+            // Nothing is playing on a locked lesson, so no equalizer.
             <NowPlayingGlyph />
           ) : completed ? (
             <CheckCircle
@@ -181,13 +189,23 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
           <span className="sr-only">
             {!isAvailable
               ? ", log in to watch"
-              : `${isActive ? ", now playing" : ""}${completed ? ", completed" : ""}`}
+              : `${isActive && !showLock ? ", now playing" : ""}${completed ? ", completed" : ""}${showLock ? ", locked" : ""}`}
           </span>
         </span>
       </button>
-      {showProgressBar ? <CurriculumProgressBar percent={watched} /> : null}
       {hasActions ? (
         <div className="absolute right-2.5 bottom-2.5 flex items-center gap-1.5">
+          {showLock ? (
+            // Not a button: the card itself opens the lesson. It lets a
+            // click through to the card underneath.
+            <span
+              className="pointer-events-none inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--accent)_22%,var(--canvas))] text-(--accent-ink,var(--accent))"
+              title="Locked"
+              aria-hidden="true"
+            >
+              <LockSimple size={16} weight="fill" />
+            </span>
+          ) : null}
           {showQuiz ? (
             <button
               type="button"

@@ -35,14 +35,7 @@ export function LessonChaptersToggleButton({
       <span className="relative z-10 inline-flex items-center gap-2 leading-none">
         <ChaptersIcon size={17} active={open} />
         <span>Chapters</span>
-        <CaretRight
-          size={14}
-          aria-hidden="true"
-          className={cn(
-            "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
-            open && "rotate-180",
-          )}
-        />
+        <CaretRight size={14} aria-hidden="true" />
       </span>
     </button>
   );

@@ -102,11 +102,7 @@ export function SettingsMenu({
       align="end"
       side={side}
       panelClassName={
-        mobileInteraction
-          ? undefined
-          : side === "top"
-            ? "backdrop-blur-sm !mb-8"
-            : "backdrop-blur-sm"
+        mobileInteraction ? undefined : side === "top" ? "!mb-8" : ""
       }
       closeOnItemSelect={!(mobilePresentation === "sheet" && mobileInteraction)}
       triggerClassName={`player-control !w-auto !min-h-0 !border-0 !py-0 ${triggerAppearanceClass}`}

@@ -124,6 +124,8 @@ interface CurriculumLessonRowsProps {
   lessonProgress: Readonly<Record<number, number>>;
   onSelectLesson: (lessonNumber: number) => void;
   isLessonAvailable?: (lessonNumber: number) => boolean;
+  /** Lessons the visitor cannot play yet; their cards show a lock. */
+  lockedLessonNumbers?: ReadonlySet<number>;
   onClose?: () => void;
   activeLessonRef: RefObject<HTMLButtonElement | null>;
   scrollportRef: RefObject<HTMLElement | null>;
@@ -189,6 +191,7 @@ function CurriculumLesson({
   return (
     <CurriculumLessonCard
       {...shared}
+      isLocked={rows.lockedLessonNumbers?.has(number) ?? false}
       resources={rows.lessonResources?.get(number)}
       resourceCourseKey={rows.resourceCourseKey}
       hasQuiz={rows.quizLessonNumbers?.has(number) ?? false}
