@@ -3046,21 +3046,9 @@ export function LearningWorkspace({
           )}
         </div>
       </button>
-      {/* While the quiz is open its own bar carries "Back to video", at the
-          top where the learner is working. Repeating it here put the same
-          button on screen twice. */}
-      {hasLessonQuiz(selectedLesson) && activeLessonView !== "quiz" ? (
-        <button
-          type="button"
-          onClick={() => handleOpenLessonQuiz(selectedLesson)}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
-          aria-label={`Open quiz for lesson ${selectedLesson}: ${currentLesson[1]}`}
-          title="Open lesson quiz"
-        >
-          <Exam size={12} weight="bold" className="text-(--accent)" />
-          <span>Quiz</span>
-        </button>
-      ) : null}
+      {/* No quiz button here: the course content list marks a lesson that
+          has a quiz and opens it, and the open quiz carries its own way
+          back to the video. */}
     </header>
   );
 

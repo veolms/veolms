@@ -1,9 +1,7 @@
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
-import {
-  QUIZ_TEXT_RESPONSE_MAX_LENGTH,
-  type LearnerQuizAttempt,
-} from "@veolms/contracts";
+import type { LearnerQuizAttempt } from "@veolms/contracts";
 import { QUIZ_EYEBROW } from "./QuizStage";
+import { QuizWrittenAnswer } from "./QuizWrittenAnswer";
 
 type QuizQuestion = LearnerQuizAttempt["questions"][number];
 
@@ -63,27 +61,13 @@ export function QuizQuestionView({
       </p>
 
       {question.questionType === "short_answer" ? (
-        <div className="mt-5 sm:mt-6">
-          <input
-            id={`question-input-${question.id}`}
-            type="text"
-            aria-labelledby={promptId}
-            disabled={disabled}
-            value={textResponse}
-            onChange={(event) => onTextChange(event.target.value)}
-            placeholder="Your answer"
-            // The server takes no more than this; without the cap here a
-            // longer answer made the save of every answer fail.
-            maxLength={QUIZ_TEXT_RESPONSE_MAX_LENGTH}
-            autoComplete="off"
-            enterKeyHint="done"
-            className="h-13 w-full rounded-[14px] bg-(--card-surface-raised,var(--surface-strong)) px-4 text-base! font-medium! text-(--text) ring-1 ring-[color-mix(in_srgb,var(--text)_12%,transparent)] transition-shadow outline-none ring-inset placeholder:font-normal placeholder:text-(--muted) focus:ring-2 focus:ring-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
-          />
-          <p className="mt-2 text-xs leading-relaxed text-(--muted)">
-            Write your answer in your own words. Letters, numbers, symbols and
-            code are all fine.
-          </p>
-        </div>
+        <QuizWrittenAnswer
+          questionId={question.id}
+          labelledBy={promptId}
+          value={textResponse}
+          disabled={disabled}
+          onChange={onTextChange}
+        />
       ) : (
         <fieldset
           disabled={disabled}
