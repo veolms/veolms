@@ -24,6 +24,7 @@ import {
 } from "../shared/auth.constants.ts";
 import * as mfaRepository from "./mfa.repository.ts";
 import * as sessionRepository from "../session/session.repository.ts";
+import { evictCachedUserSessions } from "../shared/session-auth-cache.ts";
 import {
   decryptSecret,
   encryptSecret,
@@ -101,6 +102,10 @@ export function createMfaService({
     }
 
     await mfaRepository.deleteTotpCredential(database, user.id);
+    // The cached auth context still says the factor is enrolled. Without
+    // this, the settings page's next read of the account showed the removed
+    // authenticator as active until the cache entry expired.
+    evictCachedUserSessions(user.id);
     return { message: "Authenticator app removed successfully." };
   }
 
@@ -127,6 +132,8 @@ export function createMfaService({
     }
 
     await mfaRepository.deleteAllUserPasskeys(database, user.id);
+    // See disableTotp: drop the cached "passkey enrolled" state.
+    evictCachedUserSessions(user.id);
     return { message: "Passkeys removed successfully." };
   }
 

@@ -79,6 +79,9 @@ export function LoginView({
   const registrationOtpCodesRef = useRef<
     Partial<Record<"email" | "mobile", string>>
   >({});
+  // The name typed on the name step, kept while the visitor is sent back to
+  // the code step, so it is still filled in when they return.
+  const keptAccountNameRef = useRef("");
   const otpSnapshotRef = useRef<{
     identifier: AuthIdentifier;
     code: string;
@@ -222,7 +225,11 @@ export function LoginView({
 
         registrationOtpCodesRef.current[identifier.method] = code;
         setPendingSecondaryMethod(null);
-        dispatch({ type: "OTP_VERIFIED", next: "newUserName" });
+        dispatch({
+          type: "OTP_VERIFIED",
+          next: "newUserName",
+          name: keptAccountNameRef.current,
+        });
         return;
       }
 
@@ -272,9 +279,20 @@ export function LoginView({
 
       dispatch({ type: "ACCOUNT_CREATED" });
     } catch (err: unknown) {
-      const errorObj = err as { message?: string };
+      const errorObj = err as { code?: string; message?: string };
       const message =
         errorObj?.message || "Something went wrong. Please try again.";
+
+      // For a new account the server checks the code only now. A refused code
+      // used to be reported under the Name field, which the visitor cannot
+      // fix there; show it on the code step instead and keep the name.
+      if (errorObj?.code === "INVALID_CODE" && !primaryVerifiedIdentifier) {
+        keptAccountNameRef.current = name;
+        setOtpError(message);
+        dispatch({ type: "ACCOUNT_CODE_REJECTED" });
+        return;
+      }
+
       setAccountError(message);
       dispatch({ type: "ACCOUNT_CREATION_FAILED", message });
     }
@@ -308,10 +326,12 @@ export function LoginView({
           name={"name" in flow ? flow.name : ""}
           onBackToOtp={() => {
             setAccountError(null);
+            keptAccountNameRef.current = "name" in flow ? flow.name : "";
             dispatch({ type: "OTP_SENT" });
           }}
           onIdentifierChange={() => {
             setAccountError(null);
+            keptAccountNameRef.current = "";
             registrationOtpCodesRef.current = {};
             setPrimaryVerifiedIdentifier(null);
             setPendingSecondaryMethod(null);
@@ -345,6 +365,7 @@ export function LoginView({
           }}
           onIdentifierChange={() => {
             setOtpError(null);
+            keptAccountNameRef.current = "";
             registrationOtpCodesRef.current = {};
             setPrimaryVerifiedIdentifier(null);
             setPendingSecondaryMethod(null);
