@@ -59,6 +59,7 @@ export default function MfaSetupRoute() {
           allowAuthenticator={Boolean(user?.totpEnabled)}
           allowPasskey={Boolean(user?.passkeyEnabled)}
           onBack={() => navigate(backPath, { replace: true })}
+          onSignOut={() => navigate("/logout", { replace: true })}
           onDone={() => {
             const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
             navigate(returnTo ?? APP_HOME_PATH, { replace: true });

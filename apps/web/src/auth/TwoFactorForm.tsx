@@ -22,6 +22,8 @@ export interface TwoFactorFormProps {
   onSubmit: (code: string) => void;
   onUsePasskey: () => void;
   onBack?: () => void;
+  /** Ends the half-signed-in session when the visitor cannot pass this step. */
+  onSignOut?: () => void;
   allowPasskey?: boolean;
   allowAuthenticator?: boolean;
 }
@@ -35,6 +37,7 @@ const PASSKEY_ACTION = "Continue with passkey";
 const USE_AUTHENTICATOR_ACTION = "Use authenticator app instead";
 const USE_BACKUP_CODE_ACTION = "Use a backup code instead";
 const USE_PASSKEY_ACTION = "Use passkey instead";
+const SIGN_OUT_ACTION = "Sign out";
 
 const METHOD_TABS: readonly (readonly [TwoFactorMethod, string, IconName])[] = [
   ["passkey", "Passkey", "passkey"],
@@ -52,6 +55,7 @@ export function TwoFactorForm({
   onSubmit,
   onUsePasskey,
   onBack,
+  onSignOut,
   status,
 }: TwoFactorFormProps) {
   const verifying = status === "verifying";
@@ -325,6 +329,18 @@ export function TwoFactorForm({
             ) : null}
           </form>
         )}
+
+        {/* A half-signed-in session must have a way out: without it, a
+            visitor who cannot pass this step was held on this screen. */}
+        {onSignOut ? (
+          <button
+            className="auth-two-factor__alternate"
+            onClick={onSignOut}
+            type="button"
+          >
+            {SIGN_OUT_ACTION}
+          </button>
+        ) : null}
       </div>
     </div>
   );

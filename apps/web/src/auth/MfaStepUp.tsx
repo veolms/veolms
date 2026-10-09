@@ -12,6 +12,7 @@ export interface MfaStepUpProps {
   allowAuthenticator: boolean;
   onDone: () => void;
   onBack?: () => void;
+  onSignOut?: () => void;
 }
 
 export function MfaStepUp({
@@ -19,6 +20,7 @@ export function MfaStepUp({
   allowPasskey,
   onBack,
   onDone,
+  onSignOut,
 }: MfaStepUpProps) {
   const [method, setMethod] = useState<"passkey" | "authenticator">(
     allowPasskey ? "passkey" : "authenticator",
@@ -87,6 +89,7 @@ export function MfaStepUp({
       onSubmit={handleVerifyTotp}
       onUsePasskey={handlePasskeyLogin}
       onBack={onBack}
+      onSignOut={onSignOut}
       status={verifying ? "verifying" : "idle"}
     />
   );
