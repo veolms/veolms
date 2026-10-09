@@ -617,6 +617,10 @@ export function ProfileSettings({
   const isMobileVerified = Boolean(draftProfile.mobileVerified);
   const mobileCountry: CountryOption =
     findCountry(mobileCountryId) ?? getDefaultCountry();
+  const formattedMobileNumber = formatNationalPhoneNumber(
+    draftProfile.mobileNumber ?? "",
+    mobileCountry,
+  );
 
   const revokeAvatarCropSource = useCallback(() => {
     const source = avatarCropSourceRef.current;
@@ -1065,7 +1069,7 @@ export function ProfileSettings({
     };
   });
   useEffect(() => {
-    if (!/^d{6}$/.test(activeVerificationCode)) {
+    if (!/^\d{6}$/.test(activeVerificationCode)) {
       autoSubmittedCodeRef.current = "";
       return;
     }
@@ -1532,7 +1536,9 @@ export function ProfileSettings({
                     className="block w-full"
                   >
                     <div className="settings-profile__phone-control">
-                      <span className="settings-profile__input-shell settings-profile__input-shell--status settings-profile__input-shell--phone">
+                      <span
+                        className={`settings-profile__input-shell settings-profile__input-shell--status settings-profile__input-shell--phone${isMobileVerified ? " settings-profile__input-shell--phone-verified" : ""}`}
+                      >
                         <CountryCodeSelect
                           disabled={!canEdit || isMobileVerified}
                           onCountryChange={updateMobileCountry}
@@ -1544,12 +1550,16 @@ export function ProfileSettings({
                           name="mobileNumber"
                           type="tel"
                           inputMode="numeric"
-                          value={formatNationalPhoneNumber(
-                            draftProfile.mobileNumber ?? "",
-                            mobileCountry,
-                          )}
+                          value={formattedMobileNumber}
                           autoComplete="tel-national"
                           readOnly={isMobileVerified}
+                          style={
+                            isMobileVerified
+                              ? {
+                                  width: `${formattedMobileNumber.length + 1}ch`,
+                                }
+                              : undefined
+                          }
                           disabled={!canEdit}
                           placeholder={
                             isMobileVerified ? undefined : "98765 43210"
