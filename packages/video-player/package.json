@@ -8,16 +8,14 @@
     "./chapters": "./src/chapters/index.ts",
     "./shaka": "./src/engines/shaka/index.ts",
     "./shaka-preload": "./src/engines/shaka/shaka-early-preload.ts",
-    "./styles.css": "./src/styles/player.css",
-    "./testing": "./src/testing/index.ts"
+    "./styles.css": "./src/styles/player.css"
   },
   "sideEffects": [
     "**/*.css"
   ],
   "scripts": {
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -32,13 +30,9 @@
     "react-dom": ">=18.2 <20"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^7.0.0",
-    "@testing-library/react": "^16.3.2",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
-    "jsdom": "^30.0.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "vitest": "^4.1.10"
+    "react-dom": "19.2.8"
   }
 }
