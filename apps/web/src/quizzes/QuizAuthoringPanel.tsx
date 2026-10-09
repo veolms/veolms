@@ -60,6 +60,8 @@ import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import {
   browserDraftStorageKey,
   parseQuizBuilderBrowserDraft,
+  quizQuestionProblem,
+  sendableQuizOptions,
   toCreateQuizQuestionRequest,
   type QuizBuilderBrowserDraft,
   type QuizBuilderQuestionDraft,
@@ -109,6 +111,9 @@ const initialOptions = (): OptionDraft[] => [
   { text: "Option 2", isCorrect: false },
 ];
 
+/** Amber that stays readable on every palette, light and dark. */
+const CAUTION_TEXT = "text-[color-mix(in_srgb,#f59e0b_52%,var(--text))]";
+
 const inputClass =
   "h-9 sm:h-10 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] px-2.5 sm:px-3.5 text-xs sm:text-sm text-(--text) outline-none transition-all placeholder:text-(--muted) focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20";
 
@@ -142,7 +147,7 @@ const QUESTION_TYPES: readonly {
   {
     type: "short_answer",
     label: "Short Answer",
-    description: "Learners type exact answer",
+    description: "Learners type the answer",
     icon: FileText,
   },
 ];
@@ -181,6 +186,29 @@ function AutoSaveIndicator({
   return <AutosaveStatus status={syncStatus} />;
 }
 
+/**
+ * Says where a validation issue is, from its path ("/questions/1/options/0/
+ * text"). The message that comes with it describes the value, not the field.
+ */
+function describeQuizIssue(path: unknown): string | null {
+  const segments = (
+    Array.isArray(path) ? path.map(String) : String(path ?? "").split("/")
+  ).filter(Boolean);
+  const field = segments.at(-1);
+  const questionAt = segments.indexOf("questions");
+  const questionNumber =
+    questionAt >= 0 && /^d+$/.test(segments[questionAt + 1] ?? "")
+      ? Number(segments[questionAt + 1]) + 1
+      : null;
+  const where = questionNumber ? `Question ${questionNumber}: ` : "";
+  if (field === "text" && segments.includes("options")) {
+    return `${where}an answer or option is empty. Fill it in or remove it.`;
+  }
+  if (field === "prompt") return `${where}the question itself is empty.`;
+  if (field === "title") return "Give the quiz a title.";
+  return null;
+}
+
 function quizErrorMessage(error: unknown) {
   if (!error) return null;
   const apiError = error as {
@@ -189,10 +217,10 @@ function quizErrorMessage(error: unknown) {
     details?: {
       error?: {
         message?: string;
-        issues?: Array<{ message?: string; path?: string[] }>;
+        issues?: Array<{ message?: string; path?: string | string[] }>;
       };
       message?: string;
-      issues?: Array<{ message?: string; path?: string[] }>;
+      issues?: Array<{ message?: string; path?: string | string[] }>;
     };
   };
   if (apiError.code === "ACADEMY_NOT_CONFIGURED") {
@@ -200,6 +228,8 @@ function quizErrorMessage(error: unknown) {
   }
   const issues = apiError.details?.error?.issues ?? apiError.details?.issues;
   if (Array.isArray(issues) && issues.length > 0) {
+    const located = describeQuizIssue(issues[0]?.path);
+    if (located) return located;
     const firstIssue = issues[0]?.message;
     if (firstIssue) return firstIssue;
   }
@@ -319,6 +349,12 @@ export function QuizAuthoringPanel({
   >(null);
   const questionDebounceRef = useRef<number | null>(null);
   const pendingSaveAfterCreateRef = useRef(false);
+  // Why a save or publish was held back before it reached the server: the
+  // number of the unfinished question and what it still needs.
+  const [unfinishedQuestion, setUnfinishedQuestion] = useState<{
+    number: number;
+    problem: string;
+  } | null>(null);
 
   const create = useCreateQuizWithQuestions();
   const addQuestion = useAddQuizQuestion();
@@ -620,6 +656,12 @@ export function QuizAuthoringPanel({
     ],
   );
 
+  // `editQuestion` is declared further down; the save path reaches it
+  // through this ref to open the question that is holding a save back.
+  const openQuestionForEditingRef = useRef<
+    ((question: EditableQuestion) => void) | null
+  >(null);
+
   const persistBrowserDraft = useCallback(
     (onSaved?: (newQuiz: NonNullable<typeof quiz.data>) => void) => {
       if (quizId || create.isPending) return;
@@ -640,6 +682,24 @@ export function QuizAuthoringPanel({
           : question,
       );
       setDraftQuestions(questions);
+
+      // An unfinished question is not sent. The server would refuse the
+      // whole quiz for it, in words that name neither question nor field.
+      const unfinishedAt = questions.findIndex((question) =>
+        quizQuestionProblem(question),
+      );
+      if (unfinishedAt >= 0) {
+        const unfinished = questions[unfinishedAt]!;
+        setUnfinishedQuestion({
+          number: unfinishedAt + 1,
+          problem: quizQuestionProblem(unfinished)!,
+        });
+        if (unfinished.id !== editingQuestionId) {
+          openQuestionForEditingRef.current?.(unfinished);
+        }
+        return;
+      }
+      setUnfinishedQuestion(null);
       setCreateSaveStatus("saving");
 
       create.mutate(
@@ -786,7 +846,8 @@ export function QuizAuthoringPanel({
       const targetQuestionId = overrideQuestionId ?? editingQuestionId;
       if (!targetQuestionId) return;
       const qType = overrideType ?? questionType;
-      const qOptions = overrideOptions ?? options;
+      const editedOptions = overrideOptions ?? options;
+      const qOptions = sendableQuizOptions(qType, editedOptions);
       const qPromptValue =
         overridePrompt !== undefined ? overridePrompt : prompt;
       const qPrompt = qPromptValue.trim();
@@ -808,7 +869,8 @@ export function QuizAuthoringPanel({
                     prompt: qPromptValue,
                     points: qPoints,
                     explanation: qExplValue,
-                    options: qOptions,
+                    // The draft keeps every row as typed, empty ones too.
+                    options: editedOptions,
                   }
                 : question,
             ),
@@ -975,6 +1037,7 @@ export function QuizAuthoringPanel({
     },
     [updateQuestion],
   );
+  openQuestionForEditingRef.current = editQuestion;
 
   const handleToggleExpandQuestion = (question: EditableQuestion) => {
     if (editingQuestionId === question.id) {
@@ -1164,6 +1227,23 @@ export function QuizAuthoringPanel({
       return;
     }
     if (!version) return;
+    // An unfinished question is not saved, so publishing now would publish
+    // the quiz without the change the author is in the middle of.
+    const editingAt = version.questions.findIndex(
+      (question) => question.id === editingQuestionId,
+    );
+    const editingProblemNow =
+      editingAt >= 0
+        ? quizQuestionProblem({ questionType, prompt, options })
+        : null;
+    if (editingProblemNow) {
+      setUnfinishedQuestion({
+        number: editingAt + 1,
+        problem: editingProblemNow,
+      });
+      return;
+    }
+    setUnfinishedQuestion(null);
     if (
       version.publishedAt &&
       quiz.data &&
@@ -1313,6 +1393,24 @@ export function QuizAuthoringPanel({
   const canPersistBrowserDraft = Boolean(
     quizTitle.trim() || lessonTitle?.trim(),
   );
+  // The question open in the editor, as it stands right now.
+  const editingProblem = editingQuestionId
+    ? quizQuestionProblem({ questionType, prompt, options })
+    : null;
+  // Shown after a save or publish was held back, and gone as soon as the
+  // question it points at is finished.
+  const unfinishedNotice = (() => {
+    if (!unfinishedQuestion) return null;
+    const flagged = editableQuestions[unfinishedQuestion.number - 1];
+    if (!flagged) return null;
+    const problem =
+      flagged.id === editingQuestionId
+        ? editingProblem
+        : quizQuestionProblem(flagged);
+    return problem
+      ? `Question ${unfinishedQuestion.number} is not finished: ${problem}.`
+      : null;
+  })();
 
   // Render: Unified Quiz Authoring Panel
   return (
@@ -1843,12 +1941,12 @@ export function QuizAuthoringPanel({
                           <div className="rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-[inset_0_1px_3px_color-mix(in_srgb,black_10%,transparent)] space-y-3">
                             <div>
                               <span className="text-xs font-bold text-(--text) tracking-tight">
-                                Correct Answer (Learner Input Box)
+                                Accepted answer
                               </span>
                               <p className="mt-0.5 text-[0.72rem] text-(--muted)">
-                                Learners will see a text input box to type their
-                                response. Enter the correct answer below (graded
-                                case-insensitively).
+                                Learners type their answer. It is marked correct
+                                when it matches an answer below. Capital letters
+                                and spaces around it do not matter.
                               </p>
                             </div>
 
@@ -1878,8 +1976,13 @@ export function QuizAuthoringPanel({
                                   }}
                                   onBlur={() => flushQuestionSave()}
                                   className={`${inputClass} w-full !h-9.5 sm:!h-10 text-sm`}
-                                  aria-label="Expected correct answer"
-                                  placeholder="Type the expected answer (e.g. Photosynthesis)..."
+                                  // Choosing Short Answer leaves this empty,
+                                  // and the question cannot be saved until it
+                                  // is filled: put the cursor here.
+                                  autoFocus={!options[0]?.text}
+                                  aria-label="Accepted answer"
+                                  aria-invalid={!options[0]?.text.trim()}
+                                  placeholder="e.g. Photosynthesis"
                                 />
                               </div>
 
@@ -1887,8 +1990,7 @@ export function QuizAuthoringPanel({
                               {options.length > 1 && (
                                 <div className="pt-1.5 space-y-2">
                                   <span className="block text-[0.72rem] font-semibold text-(--text-secondary)">
-                                    Alternative accepted answers (optional
-                                    variations):
+                                    Also accept
                                   </span>
                                   {options.slice(1).map((option, altIndex) => {
                                     const realIndex = altIndex + 1;
@@ -1919,7 +2021,7 @@ export function QuizAuthoringPanel({
                                           onBlur={() => flushQuestionSave()}
                                           className={`${inputClass} flex-1 min-w-0 !h-9 text-xs sm:text-sm`}
                                           aria-label={`Alternative accepted answer ${realIndex}`}
-                                          placeholder={`Alternative answer variation ${realIndex} (e.g. abbreviation)...`}
+                                          placeholder="Another spelling or an abbreviation"
                                         />
                                         <button
                                           type="button"
@@ -1962,10 +2064,7 @@ export function QuizAuthoringPanel({
                                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-(--accent) hover:underline cursor-pointer"
                                 >
                                   <Plus size={13} weight="bold" />
-                                  <span>
-                                    + Add another acceptable variation
-                                    (optional)
-                                  </span>
+                                  <span>Add another accepted answer</span>
                                 </button>
                               </div>
                             </div>
@@ -2098,7 +2197,20 @@ export function QuizAuthoringPanel({
                               <span>Done Editing</span>
                             </button>
                           </div>
-                          <AutoSaveIndicator status={questionSaveStatus} />
+                          {/* An unfinished question is not saved. Saying
+                              so here beats a save indicator that stays
+                              silent while nothing is being saved. */}
+                          {editingProblem ? (
+                            <p
+                              role="status"
+                              className={`text-xs font-semibold ${CAUTION_TEXT}`}
+                            >
+                              {quizId ? "Not saved yet" : "Not finished"}:{" "}
+                              {editingProblem}.
+                            </p>
+                          ) : (
+                            <AutoSaveIndicator status={questionSaveStatus} />
+                          )}
                         </div>
                       </div>
                     )}
@@ -2606,6 +2718,27 @@ export function QuizAuthoringPanel({
               </div>
             )}
           </div>
+        </div>
+      ) : null}
+
+      {unfinishedNotice ? (
+        <div
+          role="alert"
+          className={`flex items-center justify-between gap-3 p-3 sm:p-3.5 rounded-xl border border-[color-mix(in_srgb,#f59e0b_30%,transparent)] bg-[color-mix(in_srgb,#f59e0b_10%,transparent)] text-xs sm:text-sm font-medium ${CAUTION_TEXT}`}
+        >
+          <div className="flex items-center gap-2">
+            <WarningCircle size={16} className="shrink-0" />
+            <span>{unfinishedNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUnfinishedQuestion(null)}
+            className="flex size-6 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[color-mix(in_srgb,#f59e0b_18%,transparent)] cursor-pointer"
+            aria-label="Dismiss notice"
+            title="Dismiss notice"
+          >
+            <X size={14} weight="bold" />
+          </button>
         </div>
       ) : null}
 
