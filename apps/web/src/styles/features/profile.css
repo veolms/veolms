@@ -1162,7 +1162,11 @@
   caret-color: var(--accent);
 }
 
-.settings-profile__verification-dialog .auth-otp {
+/* The code boxes are styled by the login page's stylesheet, which this page
+   does not load. These rules used to target a class the dialog no longer
+   has, so the boxes stacked vertically with their screen-reader labels
+   showing. */
+.settings-profile__verification-dialog-card .auth-otp {
   --auth-h-field: clamp(36px, 10vw, 52px);
 
   display: grid;
@@ -1172,7 +1176,21 @@
   width: 100%;
 }
 
-.settings-profile__verification-dialog .auth-otp__digit {
+.settings-profile__verification-dialog-card .auth-otp__slot {
+  min-width: 0;
+}
+
+.settings-profile__verification-dialog-card .auth-otp__label {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.settings-profile__verification-dialog-card .auth-otp__digit {
   width: 100%;
   height: var(--auth-h-field);
   min-height: 0;
@@ -1188,23 +1206,24 @@
   text-align: center;
 }
 
-.settings-profile__verification-dialog .auth-otp__digit::placeholder {
+.settings-profile__verification-dialog-card .auth-otp__digit::placeholder {
   color: var(--muted);
   opacity: 0.65;
 }
 
-.settings-profile__verification-dialog .auth-otp__digit:focus-visible {
+.settings-profile__verification-dialog-card .auth-otp__digit:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
   outline-offset: 2px;
   border-color: var(--accent);
 }
 
-.settings-profile__verification-dialog .auth-otp__digit[aria-invalid="true"] {
+.settings-profile__verification-dialog-card
+  .auth-otp__digit[aria-invalid="true"] {
   border-color: var(--danger, #f27991);
   background: color-mix(in srgb, var(--danger, #f27991) 9%, var(--canvas));
 }
 
-.settings-profile__verification-dialog .auth-otp__digit:disabled {
+.settings-profile__verification-dialog-card .auth-otp__digit:disabled {
   color: var(--muted);
   background: color-mix(in srgb, var(--surface) 62%, transparent);
 }
@@ -1638,8 +1657,11 @@
   margin-right: auto;
 }
 
-.settings-profile__form-footer p[data-autosave-state="unsaved"] {
+.settings-profile__form-footer p[data-autosave-state] {
   flex-basis: 56ch;
+}
+
+.settings-profile__form-footer p[data-autosave-state="error"] {
   color: var(--danger, #f27991);
 }
 
