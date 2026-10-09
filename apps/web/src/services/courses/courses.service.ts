@@ -43,6 +43,11 @@ import type {
   UpdateCourseSettingsRequest,
 } from "@veolms/contracts";
 
+/** The most courses the API returns in one catalogue request. */
+const COURSE_LIST_PAGE_SIZE = 60;
+/** Far more pages than any catalogue has; only guards against a cursor that never ends. */
+const MAX_COURSE_LIST_PAGES = 50;
+
 export const coursesService = {
   list: (params?: CourseListQuery): Promise<CourseListResponse> => {
     return api.get<CourseListResponse>("/courses", {
@@ -51,6 +56,29 @@ export const coursesService = {
       // indefinitely. The local API responds in well under a second.
       timeout: 5_000,
     });
+  },
+
+  /**
+   * The whole published catalogue. One request returns at most 60 courses
+   * and a cursor for the rest. Screens that filter the catalogue in the
+   * browser used to read that first page only, so in an academy with more
+   * than 60 courses the newer ones never appeared in them.
+   */
+  listAll: async (): Promise<{ courses: CourseSummary[] }> => {
+    const courses: CourseSummary[] = [];
+    const followedCursors = new Set<string>();
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_COURSE_LIST_PAGES; page += 1) {
+      const response = await coursesService.list({
+        limit: COURSE_LIST_PAGE_SIZE,
+        ...(cursor ? { cursor } : {}),
+      });
+      courses.push(...response.courses);
+      cursor = response.nextCursor;
+      if (!cursor || followedCursors.has(cursor)) break;
+      followedCursors.add(cursor);
+    }
+    return { courses };
   },
 
   listOptions: (): Promise<CourseOptionsResponse> =>

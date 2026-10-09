@@ -3,7 +3,8 @@
 // page. username-rules is dependency-free and stays in lockstep with
 // publicProfileUsernameParamsSchema.
 import { isValidPublicProfileUsername } from "@veolms/contracts/username-rules";
-import { getCourseTitle } from "../learning/courseMetadata";
+import { getDemoCourseTitle } from "../learning/courseMetadata";
+import type { AcademyStaticPageData } from "../routes/academyStaticPageData";
 import {
   SETTINGS_DEFAULT_TAB,
   readDiscussionTab,
@@ -702,10 +703,37 @@ export const getAuthRouteMeta = (
   description,
 });
 
+interface RouteMetaMatch {
+  id: string;
+  loaderData?: unknown;
+}
+
+/**
+ * The name to put in a course page's title. The real one is used when the
+ * data this document was built with already holds it — the prerendered
+ * overview of this course, or the first catalogue page; nothing is fetched
+ * for a title. Any other course gets no name: every unknown course used to
+ * be titled "UI/UX Design Mastery", a demo course.
+ */
+const getRouteCourseTitle = (
+  courseSlug: string | undefined,
+  matches: readonly (RouteMetaMatch | undefined)[] | undefined,
+): string | undefined => {
+  if (!courseSlug) return undefined;
+  const pageData = matches?.find((match) => match?.id === "root")
+    ?.loaderData as AcademyStaticPageData | null | undefined;
+  const loadedCourse = [
+    pageData?.courseOverview?.course,
+    ...(pageData?.publishedCoursePage?.courses ?? []),
+  ].find((course) => course?.slug === courseSlug || course?.id === courseSlug);
+  return loadedCourse?.title.trim() || getDemoCourseTitle(courseSlug);
+};
+
 export const getRouteMeta = (
   routeId: string | undefined,
   params: RouteParams = {},
   pathname?: string,
+  matches?: readonly (RouteMetaMatch | undefined)[],
 ): RouteMetadata => {
   const effectiveRouteId =
     pathname === undefined || routeId === undefined
@@ -713,18 +741,22 @@ export const getRouteMeta = (
       : getEffectiveRouteId(routeId, pathname);
 
   if (effectiveRouteId === "learning") {
-    const title = getCourseTitle(params.courseSlug);
+    const title = getRouteCourseTitle(params.courseSlug, matches);
     return {
-      title: `${title} \u00B7 ${productName}`,
-      description: `Continue ${title} in the focused ${productName} learning workspace.`,
+      title: `${title ?? "Course"} \u00B7 ${productName}`,
+      description: title
+        ? `Continue ${title} in the focused ${productName} learning workspace.`
+        : `Continue learning in the focused ${productName} learning workspace.`,
     };
   }
 
   if (effectiveRouteId === "course-overview") {
-    const title = getCourseTitle(params.courseSlug);
+    const title = getRouteCourseTitle(params.courseSlug, matches);
     return {
-      title: `${title} · ${productName}`,
-      description: `Course overview for ${title} on ${productName}.`,
+      title: `${title ?? "Course"} · ${productName}`,
+      description: title
+        ? `Course overview for ${title} on ${productName}.`
+        : `Course overview on ${productName}.`,
     };
   }
 

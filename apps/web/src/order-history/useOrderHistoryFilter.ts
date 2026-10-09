@@ -42,7 +42,8 @@ function getDateBounds(range: string): { from?: Date; to?: Date } {
   const now = new Date();
   if (range === "all") return {};
 
-  if (range === "2024" || range === "2025") {
+  // Any four-digit year the filter bar offers, not a fixed pair of years.
+  if (/^\d{4}$/.test(range)) {
     return {
       from: new Date(Number(range), 0, 1),
       to: new Date(Number(range), 11, 31, 23, 59, 59, 999),

@@ -48,6 +48,10 @@ interface WebkitFullscreenElement extends HTMLElement {
   webkitRequestFullscreen?: () => Promise<void> | void;
 }
 
+interface WebkitFullscreenVideo extends HTMLVideoElement {
+  webkitEnterFullscreen?: () => void;
+}
+
 interface PictureInPictureDocument {
   pictureInPictureEnabled?: boolean;
   pictureInPictureElement?: Element | null;
@@ -494,7 +498,9 @@ export class PlayerController {
       this.getPresentationContainer() as WebkitFullscreenElement | null;
     if (!container) return;
     if (container.requestFullscreen) await container.requestFullscreen();
-    else await container.webkitRequestFullscreen?.();
+    else if (container.webkitRequestFullscreen)
+      await container.webkitRequestFullscreen();
+    else this.enterVideoFullscreen();
     this.syncFullscreen();
   }
 
@@ -617,6 +623,21 @@ export class PlayerController {
       ui: { ...this.#snapshot.ui, ...update },
     };
     this.notify();
+  }
+
+  /**
+   * A browser that cannot make an element fullscreen (Safari on iPhone) can
+   * still hand the video itself to the system's fullscreen player. Without
+   * this the fullscreen button did nothing there. The system player has its
+   * own controls and its own way out, and this page is not what it shows,
+   * so the player's fullscreen state is left as it is.
+   */
+  private enterVideoFullscreen(): void {
+    try {
+      (this.#media as WebkitFullscreenVideo | null)?.webkitEnterFullscreen?.();
+    } catch {
+      // Refused until the video has loaded enough to show; a later press works.
+    }
   }
 
   private syncFullscreen(): void {

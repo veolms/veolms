@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
+import { authStore } from "../store/auth.store";
 import { courseMatchesWishlist, type Course } from "./catalogue";
 
 export const WISHLIST_STORAGE_KEY = "veolms-wishlist";
@@ -8,6 +9,41 @@ const EMPTY_WISHLIST = new Set<string>();
 
 let cachedSerialized = "";
 let cachedSnapshot: ReadonlySet<string> = EMPTY_WISHLIST;
+let carriedOverStorageKey = "";
+
+/**
+ * The wishlist used to be one entry for the whole browser, so a second
+ * account on the same browser saw the first one's saved courses. A signed-in
+ * account now has its own entry; a guest keeps the original one.
+ */
+function getWishlistStorageKey(): string {
+  const signedInUserId = authStore.getState().user?.id;
+  // Before the session check answers, the identity hint still names the
+  // account this tab was signed in to.
+  const userId = signedInUserId ?? authStore.getIdentityHint()?.userId;
+  if (!userId) {
+    carriedOverStorageKey = "";
+    return WISHLIST_STORAGE_KEY;
+  }
+
+  const storageKey = `${WISHLIST_STORAGE_KEY}-${userId}`;
+  if (signedInUserId && carriedOverStorageKey !== storageKey) {
+    carriedOverStorageKey = storageKey;
+    try {
+      // The first account to sign in takes over the browser-wide list saved
+      // before wishlists were per account, or as a guest. It is moved, not
+      // copied, so the next account does not receive it as well.
+      const guestWishlist = localStorage.getItem(WISHLIST_STORAGE_KEY);
+      if (guestWishlist !== null && localStorage.getItem(storageKey) === null) {
+        localStorage.setItem(storageKey, guestWishlist);
+        localStorage.removeItem(WISHLIST_STORAGE_KEY);
+      }
+    } catch {
+      // Storage may be unavailable in private mode.
+    }
+  }
+  return storageKey;
+}
 
 function parseWishlistIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -31,7 +67,7 @@ function buildSnapshotFromSerialized(serialized: string): ReadonlySet<string> {
 
 export function readWishlistIds(): ReadonlySet<string> {
   if (typeof window === "undefined") return EMPTY_WISHLIST;
-  const serialized = localStorage.getItem(WISHLIST_STORAGE_KEY) || "[]";
+  const serialized = localStorage.getItem(getWishlistStorageKey()) || "[]";
   return buildSnapshotFromSerialized(serialized);
 }
 
@@ -40,7 +76,7 @@ export function writeWishlistIds(ids: Iterable<string>) {
   try {
     const serialized = JSON.stringify([...ids]);
     if (serialized === cachedSerialized) return;
-    localStorage.setItem(WISHLIST_STORAGE_KEY, serialized);
+    localStorage.setItem(getWishlistStorageKey(), serialized);
     buildSnapshotFromSerialized(serialized);
     window.dispatchEvent(new Event(WISHLIST_CHANGE_EVENT));
   } catch {
@@ -77,14 +113,17 @@ export function subscribeToWishlist(onStoreChange: () => void) {
 
   const onLocalChange = () => onStoreChange();
   const onStorage = (event: StorageEvent) => {
-    if (event.key === WISHLIST_STORAGE_KEY) onStoreChange();
+    if (event.key?.startsWith(WISHLIST_STORAGE_KEY)) onStoreChange();
   };
 
   window.addEventListener(WISHLIST_CHANGE_EVENT, onLocalChange);
   window.addEventListener("storage", onStorage);
+  // Signing in or out changes whose wishlist is shown.
+  const unsubscribeFromAuth = authStore.subscribe(onStoreChange);
   return () => {
     window.removeEventListener(WISHLIST_CHANGE_EVENT, onLocalChange);
     window.removeEventListener("storage", onStorage);
+    unsubscribeFromAuth();
   };
 }
 

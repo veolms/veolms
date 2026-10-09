@@ -768,7 +768,26 @@ export function StudentHome({
               <button
                 type="button"
                 className="primary-learning-action"
-                onClick={() => onOpenCourse(heroCourse)}
+                onClick={() => {
+                  // The card names the lesson to continue with. Opening the
+                  // course without naming it landed on whichever lesson this
+                  // browser last remembered, or the first one on a new
+                  // device. A mini player already on this course is still
+                  // brought back instead, as it is when a course is opened.
+                  const resumeLesson = isCompletedHero
+                    ? null
+                    : resumeContext?.resumeLesson;
+                  if (resumeContext && resumeLesson) {
+                    onNavigatePage(
+                      getCoursePlayerPath(
+                        resumeContext.courseSlug,
+                        resumeLesson.lessonNumber,
+                      ),
+                    );
+                    return;
+                  }
+                  onOpenCourse(heroCourse);
+                }}
               >
                 {isCompletedHero ? (
                   <BookOpen size={18} weight="regular" />

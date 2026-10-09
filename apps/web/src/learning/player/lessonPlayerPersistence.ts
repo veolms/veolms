@@ -273,3 +273,18 @@ export function writeResumePosition(
     // Resume persistence is optional and must never interrupt playback.
   }
 }
+
+/**
+ * Forgets where a lesson was left, so it opens from the beginning next time.
+ * Writing a position of 0 does not do this: writeResumePosition ignores it.
+ */
+export function clearResumePosition(
+  mediaKey: string,
+  storage: Pick<StorageMutator, "removeItem"> | null = getBrowserStorage(),
+): void {
+  try {
+    storage?.removeItem(lessonPlayerStorageKeys.resume(mediaKey));
+  } catch {
+    // Resume persistence is optional and must never interrupt playback.
+  }
+}

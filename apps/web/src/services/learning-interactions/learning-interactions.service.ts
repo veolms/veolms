@@ -36,7 +36,7 @@ import type {
   UserAutocompleteQuery,
   UserAutocompleteResponse,
 } from "@veolms/contracts";
-import { api } from "../../lib/api-client";
+import { api, getApiRequestUrl } from "../../lib/api-client";
 import { mediaService } from "../media/media.service";
 import { requireServerEntityId } from "./interaction-entities";
 
@@ -248,6 +248,31 @@ export const learningInteractionsService = {
   deleteNote(noteId: string): Promise<{ message: string }> {
     const serverId = requireServerEntityId(noteId);
     return api.delete<{ message: string }>(`/notes/${serverId}`);
+  },
+
+  /**
+   * The same delete as above, sent so the browser finishes it after the page
+   * is gone. An ordinary request is cancelled when the tab closes or reloads.
+   */
+  async deleteKeepalive(
+    kind: "thread" | "reply" | "note",
+    entityId: string,
+  ): Promise<void> {
+    const serverId = requireServerEntityId(entityId);
+    const path =
+      kind === "thread"
+        ? `/threads/${serverId}`
+        : kind === "reply"
+          ? `/replies/${serverId}`
+          : `/notes/${serverId}`;
+    const response = await fetch(getApiRequestUrl(path), {
+      method: "DELETE",
+      credentials: "include",
+      keepalive: true,
+    });
+    if (!response.ok) {
+      throw new Error(`Request failed with status code ${response.status}`);
+    }
   },
 
   // Attachments

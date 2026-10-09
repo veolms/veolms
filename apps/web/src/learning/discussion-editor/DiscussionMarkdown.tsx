@@ -261,8 +261,164 @@ interface DiscussionMarkdownProps {
 type MarkdownNode = {
   type: string;
   value?: string;
+  url?: string;
   children?: MarkdownNode[];
+  data?: { hName?: string };
 };
+
+interface HighlightDelimiter {
+  canOpen: boolean;
+  canClose: boolean;
+}
+
+const HIGHLIGHT_MARKER = "==";
+const HIGHLIGHT_PUNCTUATION = /[\p{S}\p{P}]/u;
+
+// Same flanking rules as the editor's `==` syntax, so a posted highlight is
+// exactly what the editor showed: `a == b` and `x===y` stay plain text.
+function highlightDelimiterFlags(
+  before: string,
+  after: string,
+): HighlightDelimiter {
+  const spacedBefore = /\s|^$/.test(before);
+  const spacedAfter = /\s|^$/.test(after);
+  const punctBefore = HIGHLIGHT_PUNCTUATION.test(before);
+  const punctAfter = HIGHLIGHT_PUNCTUATION.test(after);
+  return {
+    canOpen: !spacedAfter && (!punctAfter || spacedBefore || punctBefore),
+    canClose: !spacedBefore && (!punctBefore || spacedAfter || punctAfter),
+  };
+}
+
+// The character a marker touches across a node boundary. Inline markup
+// (bold, code, links) starts and ends with punctuation in the source.
+function highlightBoundaryCharacter(
+  sibling: MarkdownNode | undefined,
+  side: "before" | "after",
+) {
+  if (!sibling) return "";
+  if (sibling.type === "break") return "\n";
+  if (sibling.type !== "text") return "*";
+  const value = sibling.value ?? "";
+  return side === "before" ? value.slice(-1) : value.slice(0, 1);
+}
+
+function isHighlightDelimiter(
+  piece: MarkdownNode | HighlightDelimiter,
+): piece is HighlightDelimiter {
+  return "canOpen" in piece;
+}
+
+function mergeAdjacentTextNodes(nodes: MarkdownNode[]): MarkdownNode[] {
+  const merged: MarkdownNode[] = [];
+  for (const node of nodes) {
+    const previous = merged.at(-1);
+    if (node.type === "text" && previous?.type === "text") {
+      merged[merged.length - 1] = {
+        type: "text",
+        value: `${previous.value ?? ""}${node.value ?? ""}`,
+      };
+    } else {
+      merged.push(node);
+    }
+  }
+  return merged;
+}
+
+function wrapHighlightedChildren(children: MarkdownNode[]): MarkdownNode[] {
+  const pieces: (MarkdownNode | HighlightDelimiter)[] = [];
+  children.forEach((child, index) => {
+    const text = child.type === "text" ? (child.value ?? "") : "";
+    if (!text.includes(HIGHLIGHT_MARKER)) {
+      pieces.push(child);
+      return;
+    }
+
+    let textStart = 0;
+    for (const run of text.matchAll(/=+/g)) {
+      if (run[0].length !== HIGHLIGHT_MARKER.length) continue;
+      const start = run.index ?? 0;
+      const end = start + HIGHLIGHT_MARKER.length;
+      if (start > textStart) {
+        pieces.push({ type: "text", value: text.slice(textStart, start) });
+      }
+      pieces.push(
+        highlightDelimiterFlags(
+          start > 0
+            ? text.slice(start - 1, start)
+            : highlightBoundaryCharacter(children[index - 1], "before"),
+          end < text.length
+            ? text.slice(end, end + 1)
+            : highlightBoundaryCharacter(children[index + 1], "after"),
+        ),
+      );
+      textStart = end;
+    }
+    if (textStart < text.length) {
+      pieces.push({ type: "text", value: text.slice(textStart) });
+    }
+  });
+
+  const result: MarkdownNode[] = [];
+  const openers: number[] = [];
+  let wrapped = false;
+  for (const piece of pieces) {
+    if (!isHighlightDelimiter(piece)) {
+      result.push(piece);
+      continue;
+    }
+
+    const opener = openers.at(-1);
+    if (piece.canClose && opener !== undefined && opener < result.length - 1) {
+      openers.pop();
+      const content = result.splice(opener + 1);
+      result[opener] = {
+        type: "highlight",
+        data: { hName: "mark" },
+        children: mergeAdjacentTextNodes(content),
+      };
+      wrapped = true;
+      continue;
+    }
+
+    if (piece.canOpen) openers.push(result.length);
+    result.push({ type: "text", value: HIGHLIGHT_MARKER });
+  }
+
+  // Without a matched pair the block is returned untouched.
+  return wrapped ? mergeAdjacentTextNodes(result) : children;
+}
+
+// A bare URL becomes a link whose label is the URL itself; its text must
+// stay as written.
+function isBareUrlLink(node: MarkdownNode) {
+  const label = node.children?.length === 1 ? node.children[0] : undefined;
+  return (
+    node.type === "link" &&
+    label?.type === "text" &&
+    Boolean(label.value) &&
+    Boolean(node.url?.endsWith(label.value ?? ""))
+  );
+}
+
+/**
+ * The editor's Highlight button writes `==text==` and shows it highlighted,
+ * but Markdown has no such syntax, so posted content showed the raw markers.
+ * A matched pair inside one block becomes a `<mark>` through the syntax tree
+ * (raw HTML stays skipped). Inline code and code blocks are not text nodes,
+ * so markers inside them are left alone.
+ */
+function remarkHighlightMarks() {
+  return (tree: MarkdownNode) => {
+    const visit = (node: MarkdownNode) => {
+      if (!node.children || isBareUrlLink(node)) return;
+      node.children.forEach(visit);
+      node.children = wrapHighlightedChildren(node.children);
+    };
+
+    visit(tree);
+  };
+}
 
 function remarkLessonDescriptionSoftBreaks() {
   return (tree: MarkdownNode) => {
@@ -400,8 +556,12 @@ export function DiscussionMarkdown({
       <ReactMarkdown
         remarkPlugins={
           preserveSoftBreaks
-            ? [remarkGfm, remarkLessonDescriptionSoftBreaks]
-            : [remarkGfm]
+            ? [
+                remarkGfm,
+                remarkHighlightMarks,
+                remarkLessonDescriptionSoftBreaks,
+              ]
+            : [remarkGfm, remarkHighlightMarks]
         }
         skipHtml
         urlTransform={safeMarkdownUrl}
@@ -570,6 +730,11 @@ export function DiscussionMarkdown({
             <del>
               {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
             </del>
+          ),
+          mark: ({ children }) => (
+            <mark className="rounded-[0.2em] bg-[color-mix(in_srgb,var(--accent)_22%,transparent)] box-decoration-clone px-0.5 text-inherit">
+              {renderInlineTimestampsInNode(children, inlineTimestampOptions)}
+            </mark>
           ),
           ul: ({ children }) => (
             <ul className="my-2 list-disc space-y-1 pl-6">{children}</ul>
