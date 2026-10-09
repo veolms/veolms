@@ -1384,10 +1384,12 @@ export function CoursesPage({
     () => new Set(),
   );
 
-  const shellProfileDisplayName =
+  // The home greeting takes the name without the placeholder: given "Your
+  // name" it greeted a learner who has no display name as "Good morning, Your".
+  const shellProfileKnownName =
     activeUser?.displayName?.trim() ||
-    (!authUserFetched ? authIdentityHint?.displayName : undefined) ||
-    "Your name";
+    (!authUserFetched ? authIdentityHint?.displayName : undefined);
+  const shellProfileDisplayName = shellProfileKnownName || "Your name";
   const shellProfileSubtitle = useMemo(
     () =>
       getShellProfileSubtitle(
@@ -4493,7 +4495,7 @@ export function CoursesPage({
               onOpenCourse={onOpenCourse}
               onNavigatePage={onNavigatePage}
               setNotice={setNotice}
-              studentName={shellProfileDisplayName}
+              studentName={shellProfileKnownName}
               notEnrolledContent={
                 <GuestHome
                   onNavigatePage={onNavigatePage}

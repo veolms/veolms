@@ -210,7 +210,7 @@ export function CourseCatalogue({
           ["title", "A-Z"],
         ]
       : [
-          ["latest", "Recently Accessed"],
+          ["latest", "Default order"],
           ["title", "A-Z"],
           ["progress", "Progress"],
         ]
