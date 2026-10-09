@@ -1,6 +1,8 @@
+import { useMemo, useSyncExternalStore } from "react";
 import { getDeviceTimeZone } from "../lib/device-time-zone";
 import { learningProgressService } from "../services/learning-progress";
 import {
+  getLearningProgressMap,
   getPendingLearningProgress,
   markLearningProgressSynced,
   readLearningProgress,
@@ -28,6 +30,22 @@ const SYNC_INTERVAL_MS = 15_000;
 const MAX_BATCH_ITEMS = 100;
 
 const lastSyncAtByCourse = new Map<string, number>();
+
+// Bumped on every recorded change, so a mini player's lesson list can show
+// progress as it is made instead of the figures it was handed when the
+// lesson page closed.
+let progressRevision = 0;
+const progressListeners = new Set<() => void>();
+
+function subscribeToDetachedProgress(listener: () => void) {
+  progressListeners.add(listener);
+  return () => {
+    progressListeners.delete(listener);
+  };
+}
+
+const getProgressRevision = () => progressRevision;
+const getServerProgressRevision = () => 0;
 const syncingCourses = new Set<string>();
 
 async function syncDetachedLearningProgress(
@@ -87,6 +105,30 @@ export function recordDetachedLearningProgress(
   if (next === current) return;
 
   writeLearningProgress(userId, courseKey, next);
+  progressRevision += 1;
+  for (const listener of progressListeners) listener();
   // A finished lesson is sent at once; anything else on the usual interval.
   void syncDetachedLearningProgress(target, Math.round(progressPercent) >= 100);
+}
+
+/**
+ * Per-lesson progress (by lesson number) as stored for this learner and
+ * course, re-read whenever the mini player records more.
+ */
+export function useDetachedLessonProgress(
+  target: DetachedProgressTarget | undefined,
+): Readonly<Record<number, number>> {
+  const revision = useSyncExternalStore(
+    subscribeToDetachedProgress,
+    getProgressRevision,
+    getServerProgressRevision,
+  );
+  const userId = target?.userId;
+  const courseKey = target?.courseKey;
+  return useMemo(
+    () => getLearningProgressMap(readLearningProgress(userId, courseKey)),
+    // `revision` is the signal that the stored progress has changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [courseKey, revision, userId],
+  );
 }

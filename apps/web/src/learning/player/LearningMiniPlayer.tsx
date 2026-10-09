@@ -2,7 +2,9 @@ import {
   VideoPlayer,
   type VideoPlayerEvent,
   type VideoPlayerHandle,
+  type VideoSource,
 } from "@veolms/video-player";
+import type { VideoPlaybackBootstrap } from "@veolms/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../learning-feature.css";
 import type {
@@ -21,7 +23,15 @@ import {
 import {
   getCachedVideoPlaybackBootstrap,
   getVideoPlaybackBootstrap,
+  refreshVideoPlaybackToken,
 } from "../videoPlaybackBootstrap";
+import {
+  recordDetachedLearningProgress,
+  useDetachedLessonProgress,
+} from "../detachedLearningProgress";
+import { createLearningLessonVideoSource } from "./lessonVideoSource";
+import { CenteredLoadingSpinner } from "../../components/LoadingSpinner";
+import { useAuthStore } from "../../store/auth.store";
 import { useLearningMiniPlayerGestures } from "./useLearningMiniPlayerGestures";
 import { useLearningPlayerTheme } from "./useLearningPlayerTheme";
 import { MiniPlayerControls } from "./MiniPlayerControls";
@@ -138,12 +148,55 @@ export function LearningMiniPlayer({
   const { data: courseOverview } = useCourseOverview(session.courseSlug, {
     enabled: Boolean(session.courseSlug),
   });
-  const curriculumSections = useMemo<CourseSection[]>(
+  const adaptedCurriculum = useMemo(
     () =>
-      courseOverview
-        ? adaptCourseOverviewToCurriculum(courseOverview).sections
-        : EMPTY_CURRICULUM_SECTIONS,
+      courseOverview ? adaptCourseOverviewToCurriculum(courseOverview) : null,
     [courseOverview],
+  );
+  const curriculumSections: CourseSection[] =
+    adaptedCurriculum?.sections ?? EMPTY_CURRICULUM_SECTIONS;
+
+  // This player has no lesson page behind it (it was brought back after a
+  // reload), so it records what is watched itself. Without this nothing
+  // watched here counted, and the lesson list's progress never moved.
+  const userId = useAuthStore((state) => state.user?.id);
+  const progressCourseKey = courseOverview?.course.slug;
+  const progressTarget = useMemo(
+    () =>
+      userId && progressCourseKey && adaptedCurriculum
+        ? {
+            userId,
+            courseKey: progressCourseKey,
+            lessonIdsByNumber: new Map(
+              [...adaptedCurriculum.lessonsByNumber.entries()].map(
+                ([lessonNumber, lesson]) => [lessonNumber, lesson.id] as const,
+              ),
+            ),
+          }
+        : undefined,
+    [adaptedCurriculum, progressCourseKey, userId],
+  );
+  const lessonProgress = useDetachedLessonProgress(progressTarget);
+  const recordedProgressRef = useRef<{
+    mediaKey: string;
+    percent: number;
+  } | null>(null);
+  const recordProgress = useCallback(
+    (progress: number) => {
+      if (!progressTarget) return;
+      const percent = Math.max(0, Math.min(100, Math.round(progress)));
+      const recorded = recordedProgressRef.current;
+      if (
+        recorded &&
+        recorded.mediaKey === session.mediaKey &&
+        recorded.percent >= percent
+      ) {
+        return;
+      }
+      recordedProgressRef.current = { mediaKey: session.mediaKey, percent };
+      recordDetachedLearningProgress(progressTarget, selectedLesson, percent);
+    },
+    [progressTarget, selectedLesson, session.mediaKey],
   );
   const curriculumLessonsById = useMemo(
     () => createLessonsById(curriculumSections),
@@ -305,15 +358,21 @@ export function LearningMiniPlayer({
     (event: VideoPlayerEvent) => {
       if (event.type === "timeupdate") {
         currentTimeRef.current = event.detail.currentTime;
+        if (event.detail.duration > 0) {
+          recordProgress(
+            (event.detail.currentTime / event.detail.duration) * 100,
+          );
+        }
       } else if (event.type === "playing") {
         completePreparation();
       } else if (event.type === "seeked") {
         completePreparation();
       } else if (event.type === "pause" || event.type === "ended") {
         persistCurrentTime();
+        if (event.type === "ended") recordProgress(100);
       }
     },
-    [completePreparation, persistCurrentTime],
+    [completePreparation, persistCurrentTime, recordProgress],
   );
 
   const handleReady = useCallback(() => {
@@ -351,6 +410,104 @@ export function LearningMiniPlayer({
     [persistCurrentTime],
   );
 
+  // A session read back from storage after a reload has lost the part of its
+  // source that authorises each video request (a function cannot be stored),
+  // and the access token it was started with has expired. Played as stored,
+  // a protected lesson failed with "connection was interrupted" until it was
+  // closed and opened again. Fresh playback details are fetched first, and
+  // the source is rebuilt the way the lesson page builds it.
+  const sourceAuthorisesRequests =
+    typeof session.source.networking?.requestFilter === "function";
+  const playbackCourseSlug = session.courseSlug;
+  const playbackLessonNumber = session.selectedLesson;
+  const needsPlaybackBootstrap =
+    !sourceAuthorisesRequests &&
+    Boolean(playbackCourseSlug) &&
+    playbackLessonNumber !== undefined;
+  const [fetchedBootstrap, setFetchedBootstrap] = useState<{
+    mediaKey: string;
+    bootstrap: VideoPlaybackBootstrap | null;
+  } | null>(null);
+  const sessionMediaKey = session.mediaKey;
+  useEffect(() => {
+    if (
+      !needsPlaybackBootstrap ||
+      !playbackCourseSlug ||
+      playbackLessonNumber === undefined
+    ) {
+      return undefined;
+    }
+    let cancelled = false;
+    void getVideoPlaybackBootstrap({
+      courseSlug: playbackCourseSlug,
+      lessonNumber: playbackLessonNumber,
+    }).then(
+      (bootstrap) => {
+        if (!cancelled) {
+          setFetchedBootstrap({ mediaKey: sessionMediaKey, bootstrap });
+        }
+      },
+      () => {
+        // Could not be fetched: fall back to the stored source, which still
+        // plays a lesson that needs no token.
+        if (!cancelled) {
+          setFetchedBootstrap({ mediaKey: sessionMediaKey, bootstrap: null });
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    needsPlaybackBootstrap,
+    playbackCourseSlug,
+    playbackLessonNumber,
+    sessionMediaKey,
+  ]);
+  const settledBootstrap =
+    fetchedBootstrap?.mediaKey === sessionMediaKey ? fetchedBootstrap : null;
+  const awaitingPlaybackBootstrap =
+    needsPlaybackBootstrap && settledBootstrap === null;
+  const playbackBootstrap = settledBootstrap?.bootstrap ?? null;
+  const playerSource = useMemo<VideoSource>(() => {
+    if (
+      !playbackBootstrap ||
+      !playbackCourseSlug ||
+      playbackLessonNumber === undefined
+    ) {
+      return { ...session.source, startTime: session.currentTime };
+    }
+    return createLearningLessonVideoSource({
+      media: {
+        fileName: sessionMediaKey,
+        src: playbackBootstrap.manifestUrl,
+        duration:
+          playbackBootstrap.duration ?? session.source.metadata?.duration ?? 0,
+      },
+      lessonTitle: session.lessonTitle,
+      mediaKey: sessionMediaKey,
+      startTime: session.currentTime,
+      protectedPlayback: playbackBootstrap.source === "paid-bootstrap-api",
+      segmentToken: playbackBootstrap.segmentToken,
+      segmentTokenExpiresAt: playbackBootstrap.segmentTokenExpiresAt,
+      refreshSegmentToken: playbackBootstrap.segmentToken
+        ? () =>
+            refreshVideoPlaybackToken({
+              courseSlug: playbackCourseSlug,
+              lessonNumber: playbackLessonNumber,
+            })
+        : undefined,
+    });
+  }, [
+    playbackBootstrap,
+    playbackCourseSlug,
+    playbackLessonNumber,
+    session.currentTime,
+    session.lessonTitle,
+    session.source,
+    sessionMediaKey,
+  ]);
+
   return (
     <aside
       ref={miniPlayerRef}
@@ -373,39 +530,49 @@ export function LearningMiniPlayer({
       </span>
       <MiniPlayerResizeHandles expanded={isExpanded} />
       <MiniPlayerReadingModeEffects />
-      <VideoPlayer
-        ref={playerRef}
-        source={{ ...session.source, startTime: session.currentTime }}
-        theme={playerTheme}
-        engine="shaka"
-        autoPlay={preparing ? false : session.playing}
-        keyboardEnabled={false}
-        zoomEnabled={false}
-        mediaProps={{ muted: preparing || session.muted }}
-        onReady={handleReady}
-        onEvent={handleEvent}
-        onErrorOverlayClose={handleClose}
-        ariaLabel={`Mini player video for ${session.lessonTitle}`}
-        className="!rounded-none"
-        playerClassName="!rounded-none !shadow-none"
-        centralControl={false}
-        playbackFeedback={false}
-        bufferingIndicator={<LearningMiniPlayerBufferingIndicator />}
-        controls={
-          <MiniPlayerControls
-            lessonTitle={session.lessonTitle}
-            courseTitle={session.courseTitle}
-            lessonIndex={session.lessonIndex}
-            totalLessons={session.totalLessons}
-            canGoNext={nextLessonId !== undefined}
-            canGoPrevious={previousLessonId !== undefined}
-            onGoNext={handleGoNext}
-            onGoPrevious={handleGoPrevious}
-            onClose={handleClose}
-            onRestore={handleRestore}
+      {awaitingPlaybackBootstrap ? (
+        <div className="aspect-video w-full bg-black text-white/70">
+          <CenteredLoadingSpinner
+            label="Loading video"
+            className="h-full w-full"
+            size={22}
           />
-        }
-      />
+        </div>
+      ) : (
+        <VideoPlayer
+          ref={playerRef}
+          source={playerSource}
+          theme={playerTheme}
+          engine="shaka"
+          autoPlay={preparing ? false : session.playing}
+          keyboardEnabled={false}
+          zoomEnabled={false}
+          mediaProps={{ muted: preparing || session.muted }}
+          onReady={handleReady}
+          onEvent={handleEvent}
+          onErrorOverlayClose={handleClose}
+          ariaLabel={`Mini player video for ${session.lessonTitle}`}
+          className="!rounded-none"
+          playerClassName="!rounded-none !shadow-none"
+          centralControl={false}
+          playbackFeedback={false}
+          bufferingIndicator={<LearningMiniPlayerBufferingIndicator />}
+          controls={
+            <MiniPlayerControls
+              lessonTitle={session.lessonTitle}
+              courseTitle={session.courseTitle}
+              lessonIndex={session.lessonIndex}
+              totalLessons={session.totalLessons}
+              canGoNext={nextLessonId !== undefined}
+              canGoPrevious={previousLessonId !== undefined}
+              onGoNext={handleGoNext}
+              onGoPrevious={handleGoPrevious}
+              onClose={handleClose}
+              onRestore={handleRestore}
+            />
+          }
+        />
+      )}
       <MiniPlayerInfoBar
         lessonTitle={session.lessonTitle}
         courseTitle={session.courseTitle}
@@ -432,6 +599,7 @@ export function LearningMiniPlayer({
             sections={curriculumSections}
             lessonsById={curriculumLessonsById}
             selectedLesson={selectedLesson}
+            lessonProgress={lessonProgress}
             onSelectLesson={handleSelectLesson}
             courseTitle={session.courseTitle ?? ""}
             persistenceKey={session.courseSlug ?? "default"}

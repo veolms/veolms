@@ -24,6 +24,7 @@ import {
 } from "./learningPlayerMotion";
 import {
   recordDetachedLearningProgress,
+  useDetachedLessonProgress,
   type DetachedProgressTarget,
 } from "../detachedLearningProgress";
 import { LearningExpandPlaceholderSheet } from "./LearningExpandPlaceholderSheet";
@@ -546,6 +547,24 @@ export function PersistentLearningPlayerHost({
   const recordsDetachedProgress = Boolean(
     detachedProgressTarget && detachedLessonNumber !== undefined,
   );
+  // The progress handed over with the player is a snapshot from the moment
+  // the lesson page closed. While detached, the lesson list shows what has
+  // been recorded since as well, so its rings move as the video plays.
+  const liveDetachedProgress = useDetachedLessonProgress(
+    detachedProgressTarget,
+  );
+  const registeredLessonProgress = player.lessonProgress;
+  const miniLessonProgress = useMemo(() => {
+    if (!detachedProgressTarget) return registeredLessonProgress;
+    const merged: Record<number, number> = { ...registeredLessonProgress };
+    for (const [lessonNumber, progress] of Object.entries(
+      liveDetachedProgress,
+    )) {
+      const key = Number(lessonNumber);
+      merged[key] = Math.max(merged[key] ?? 0, progress);
+    }
+    return merged;
+  }, [detachedProgressTarget, liveDetachedProgress, registeredLessonProgress]);
 
   const lessonVideoPlayerProps = useMemo(() => {
     const retryPlayback = mini ? onRetryMiniPlayerPlayback : undefined;
@@ -701,7 +720,7 @@ export function PersistentLearningPlayerHost({
             sections={miniCurriculumSections}
             lessonsById={player.curriculumLessonsById ?? EMPTY_LESSONS_BY_ID}
             selectedLesson={miniSelectedLesson}
-            lessonProgress={player.lessonProgress}
+            lessonProgress={miniLessonProgress}
             onSelectLesson={curriculumSelectLesson}
             courseTitle={player.playerProps.courseTitle ?? ""}
             persistenceKey={player.courseRouteKey}
