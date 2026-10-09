@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import {
   useMutation,
   useQueryClient,
@@ -5,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import type { ApiError } from "../../lib/api-error";
 import { courseKeys } from "../courses/courses.keys";
+import { ordersService } from "../orders/orders.service";
 import { quizKeys } from "../quizzes/quizzes.keys";
 import { paymentService } from "./payment.service";
 
@@ -44,4 +46,45 @@ export function useVerifyPayment() {
       await invalidateAfterPurchase(queryClient);
     },
   });
+}
+
+const PAID_ORDER_POLL_INTERVAL_MS = 5_000;
+// Six minutes: long enough to outlast the server's five-minute recovery cycle.
+const PAID_ORDER_POLL_ATTEMPTS = 72;
+
+/**
+ * Waits for an order the gateway has already charged to be marked paid.
+ *
+ * The verify call is one of three ways an order is fulfilled; the gateway
+ * webhook and the recovery scheduler are the others. When verify fails after
+ * the learner has paid, the order still becomes paid shortly afterwards, so
+ * the page watches for that instead of asking the learner to pay again.
+ * Resolves true once the order is paid, false if it is not within the window
+ * or the wait is aborted.
+ */
+export function useAwaitPaidOrder() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    async (orderId: string, signal?: AbortSignal): Promise<boolean> => {
+      for (let attempt = 0; attempt < PAID_ORDER_POLL_ATTEMPTS; attempt += 1) {
+        if (signal?.aborted) return false;
+        try {
+          const order = await ordersService.getOrder(orderId);
+          if (order.status === "paid") {
+            await invalidateAfterPurchase(queryClient);
+            return true;
+          }
+        } catch {
+          // A dropped connection is the usual reason for being here; keep
+          // waiting rather than report a failure the learner cannot act on.
+        }
+        if (signal?.aborted) return false;
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, PAID_ORDER_POLL_INTERVAL_MS),
+        );
+      }
+      return false;
+    },
+    [queryClient],
+  );
 }

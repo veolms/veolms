@@ -1638,6 +1638,11 @@
   margin-right: auto;
 }
 
+.settings-profile__form-footer p[data-autosave-state="unsaved"] {
+  flex-basis: 56ch;
+  color: var(--danger, #f27991);
+}
+
 .settings-profile__form-footer > button {
   flex: 0 0 auto;
 }

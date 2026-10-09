@@ -10,7 +10,11 @@ import type { QuizResult } from "@veolms/contracts";
 import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
 import { getApiError } from "../lib/api-error";
-import { AutosaveStatus, useAutosync } from "../lib/autosync";
+import {
+  AutosaveStatus,
+  isAutosaveUnsaved,
+  useAutosync,
+} from "../lib/autosync";
 import {
   useMyQuizAssignments,
   useQuizAttempt,
@@ -38,6 +42,11 @@ interface QuizAttemptPanelProps {
   quizTitle?: string;
   activeAttemptId?: string | null;
   maxAttempts?: number;
+  /** Attempts the student has already made on this assignment. */
+  attemptCount?: number;
+  /** Best graded score so far, as a percentage. */
+  bestScore?: number | null;
+  latestPassed?: boolean | null;
   onContinueCourse?: () => void;
   onBackToVideo?: () => void;
   onPassed?: (result: QuizResult) => void;
@@ -50,6 +59,9 @@ export function QuizAttemptPanel({
   quizTitle,
   activeAttemptId = null,
   maxAttempts = 1,
+  attemptCount = 0,
+  bestScore = null,
+  latestPassed = null,
   onContinueCourse,
   onBackToVideo,
   onPassed,
@@ -57,6 +69,11 @@ export function QuizAttemptPanel({
 }: QuizAttemptPanelProps) {
   const [attemptId, setAttemptId] = useState(activeAttemptId);
   const [result, setResult] = useState<QuizResult | null>(null);
+  // A first attempt starts as the quiz opens. Once the student has attempted
+  // it, opening the quiz again only shows where they stand: starting another
+  // attempt (and its timer) takes an explicit click.
+  const [startConfirmed, setStartConfirmed] = useState(false);
+  const awaitingStartConfirmation = attemptCount > 0 && !startConfirmed;
   const prevAssignmentIdRef = useRef(assignmentId);
   const startRequestedForAssignmentRef = useRef<string | null>(null);
   // An attempt whose result the student has moved on from. The parent's
@@ -70,6 +87,7 @@ export function QuizAttemptPanel({
       dismissedAttemptIdRef.current = null;
       setAttemptId(activeAttemptId);
       setResult(null);
+      setStartConfirmed(false);
       return;
     }
     if (
@@ -165,6 +183,7 @@ export function QuizAttemptPanel({
     sync: (draft) =>
       quizzesService.saveAnswers(attempt!.id, toBulkQuizAnswers(draft)),
   });
+  const answersUnsaved = isAutosaveUnsaved(autosync.status);
   const autosyncValue = autosync.value;
   const autosyncIsRestoring = autosync.isRestoring;
   const flushAutosync = autosync.flush;
@@ -175,6 +194,7 @@ export function QuizAttemptPanel({
       attemptId ||
       isStarting ||
       result ||
+      awaitingStartConfirmation ||
       startRequestedForAssignmentRef.current === assignmentId
     )
       return;
@@ -186,7 +206,15 @@ export function QuizAttemptPanel({
 
     startRequestedForAssignmentRef.current = assignmentId;
     startAttempt(assignmentId, { onSuccess: (next) => setAttemptId(next.id) });
-  }, [assignmentId, attemptId, isStarting, preview, result, startAttempt]);
+  }, [
+    assignmentId,
+    attemptId,
+    awaitingStartConfirmation,
+    isStarting,
+    preview,
+    result,
+    startAttempt,
+  ]);
 
   useEffect(() => {
     if (
@@ -265,6 +293,7 @@ export function QuizAttemptPanel({
     expiryRefreshRef.current = null;
     startRequestedForAssignmentRef.current = null;
     resetStart();
+    setStartConfirmed(true);
     setResult(null);
     setAttemptId(null);
   };
@@ -307,6 +336,24 @@ export function QuizAttemptPanel({
             onSuccess: (next) => setAttemptId(next.id),
           });
         }}
+      />
+    );
+  }
+
+  if (!attemptId && !isStarting && !startError && awaitingStartConfirmation) {
+    return (
+      <QuizPreviousAttemptsCard
+        quizTitle={resolvedQuizTitle}
+        attemptCount={attemptCount}
+        maxAttempts={maxAttempts}
+        bestScore={bestScore}
+        latestPassed={latestPassed}
+        lessonBadge={lessonBadge}
+        onBackToVideo={onBackToVideo}
+        onContinueCourse={onContinueCourse}
+        onStart={
+          attemptCount < maxAttempts ? () => setStartConfirmed(true) : undefined
+        }
       />
     );
   }
@@ -573,15 +620,28 @@ export function QuizAttemptPanel({
                     : formatQuizRemainingTime(remainingSeconds)}
               </span>
               <span
-                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-400"
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                  answersUnsaved
+                    ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                }`}
                 style={{ boxShadow: "var(--card-compact-shadow)" }}
               >
-                <CheckCircle
-                  size={13}
-                  weight="bold"
-                  className="text-emerald-400"
-                  aria-hidden="true"
-                />
+                {answersUnsaved ? (
+                  <WarningCircle
+                    size={13}
+                    weight="bold"
+                    className="text-amber-400"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <CheckCircle
+                    size={13}
+                    weight="bold"
+                    className="text-emerald-400"
+                    aria-hidden="true"
+                  />
+                )}
                 <AutosaveStatus status={autosync.status} />
               </span>
             </div>
@@ -870,6 +930,115 @@ export function QuizAttemptPanel({
   );
 }
 
+/**
+ * Shown when a student who has already attempted the quiz opens it again:
+ * where they stand, and an explicit way to start another attempt if one is
+ * left.
+ */
+function QuizPreviousAttemptsCard({
+  quizTitle,
+  attemptCount,
+  maxAttempts,
+  bestScore,
+  latestPassed,
+  lessonBadge,
+  onBackToVideo,
+  onContinueCourse,
+  onStart,
+}: {
+  quizTitle: string;
+  attemptCount: number;
+  maxAttempts: number;
+  bestScore: number | null;
+  latestPassed: boolean | null;
+  lessonBadge?: string;
+  onBackToVideo?: () => void;
+  onContinueCourse?: () => void;
+  onStart?: () => void;
+}) {
+  const attemptsLeft = Math.max(0, maxAttempts - attemptCount);
+  return (
+    <section
+      data-quiz-surface=""
+      className="mx-auto max-w-2xl rounded-[14px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface,var(--surface)) p-3.5 sm:p-8 text-(--text)"
+      style={{ boxShadow: "var(--card-shadow)" }}
+    >
+      {onBackToVideo || lessonBadge ? (
+        <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+          {onBackToVideo ? (
+            <button
+              type="button"
+              onClick={onBackToVideo}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
+            >
+              <ArrowLeft size={13} weight="bold" />
+              <span>Back to video</span>
+            </button>
+          ) : (
+            <span />
+          )}
+          {lessonBadge ? (
+            <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
+              <Exam size={14} className="text-(--accent)" weight="bold" />
+              <span>{lessonBadge}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <p className="text-[0.68rem] sm:text-xs font-bold uppercase tracking-[0.18em] text-(--accent)">
+        {latestPassed ? "Quiz passed" : "Quiz attempted"}
+      </p>
+      <h1 className="mt-1 sm:mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+        {quizTitle}
+      </h1>
+      <div className="mt-4 sm:mt-6 grid grid-cols-2 gap-2.5 sm:gap-3 text-sm">
+        <div
+          className="rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-2.5 sm:p-4"
+          style={{ boxShadow: "var(--card-compact-shadow)" }}
+        >
+          <span className="block text-[0.68rem] sm:text-xs font-semibold text-(--muted)">
+            Best score
+          </span>
+          <strong className="text-base sm:text-lg font-bold text-(--text)">
+            {bestScore === null ? "—" : `${bestScore.toFixed(0)}%`}
+          </strong>
+        </div>
+        <div
+          className="rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-2.5 sm:p-4"
+          style={{ boxShadow: "var(--card-compact-shadow)" }}
+        >
+          <span className="block text-[0.68rem] sm:text-xs font-semibold text-(--muted)">
+            Attempts used
+          </span>
+          <strong className="text-base sm:text-lg font-bold text-(--text)">
+            {attemptCount} of {maxAttempts}
+          </strong>
+        </div>
+      </div>
+      <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-(--muted)">
+        {onStart
+          ? `You have ${attemptsLeft} attempt${attemptsLeft === 1 ? "" : "s"} left. A new attempt starts as soon as you choose it.`
+          : "You have used all attempts for this quiz."}
+      </p>
+      <div className="mt-5 sm:mt-6 flex flex-wrap gap-2.5">
+        {onStart ? (
+          <Button onClick={onStart} className="h-9 sm:h-10 text-xs sm:text-sm">
+            Start attempt {attemptCount + 1}
+          </Button>
+        ) : null}
+        {onContinueCourse ? (
+          <Button
+            className="h-9 sm:h-10 text-xs sm:text-sm rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) text-(--text) shadow-none hover:bg-(--hover)"
+            onClick={onContinueCourse}
+          >
+            Continue Course
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function QuizResultCard({
   result,
   maxAttempts = 1,
@@ -910,7 +1079,7 @@ function QuizResultCard({
       <p
         className={`mt-1.5 sm:mt-2 text-xs sm:text-sm font-bold uppercase tracking-wider ${result.passed ? "text-emerald-500" : "text-red-500"}`}
       >
-        {result.passed ? "PASSED" : "TRY AGAIN"}
+        {result.passed ? "PASSED" : onRetry ? "TRY AGAIN" : "NOT PASSED"}
       </p>
       {result.status === "expired" ? (
         <p className="mt-2 text-xs sm:text-sm text-(--muted)">
@@ -987,12 +1156,14 @@ function QuizResultCard({
                     ? answer.textResponse || "No answer"
                     : answer.selectedOptionTexts?.join(", ") || "No answer"}
                 </p>
-                {!answer.isCorrect ? (
+                {/* The server sends no correct answers while they are
+                    withheld (until the last attempt or the due date). */}
+                {!answer.isCorrect && answer.correctOptionTexts?.length ? (
                   <p className="mt-1 text-sm text-(--muted)">
                     <span className="font-semibold text-(--text)">
                       Correct answer:
                     </span>{" "}
-                    {answer.correctOptionTexts?.join(" or ") || "None"}
+                    {answer.correctOptionTexts.join(" or ")}
                   </p>
                 ) : null}
                 {answer.explanation ? (

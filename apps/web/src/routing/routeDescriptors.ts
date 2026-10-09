@@ -80,6 +80,16 @@ const discussionsRouteBase = {
   description: "Bring course conversations, questions, and replies together.",
 } as const;
 
+export const NOT_FOUND_SECTION = "Not Found";
+
+const notFoundRouteDescriptor = {
+  kind: "shell",
+  page: "placeholder",
+  section: NOT_FOUND_SECTION,
+  title: "Page not found",
+  description: "This page does not exist or is no longer available.",
+} as const;
+
 export const routeDescriptors = {
   "root-courses": {
     kind: "shell",
@@ -188,13 +198,10 @@ export const routeDescriptors = {
     title: "Public profile",
     description: "View this member's public profile.",
   },
-  reviews: {
-    kind: "shell",
-    page: "reviews",
-    section: "Reviews",
-    title: "Reviews",
-    description: "Keep an eye on learner feedback and course sentiment.",
-  },
+  // Course reviews have no backend yet. The page behind this address was a
+  // design mock with sample reviews and a submit that saved nothing, so the
+  // address answers "not found" until reviews are real.
+  reviews: notFoundRouteDescriptor,
   quizzes: {
     kind: "shell",
     page: "quizzes",
@@ -266,13 +273,8 @@ export const routeDescriptors = {
     title: "Orders",
     description: "Review purchases, refunds, and commerce activity.",
   },
-  messages: {
-    kind: "shell",
-    page: "placeholder",
-    section: "Messages",
-    title: "Messages",
-    description: "Manage direct communication with your learners.",
-  },
+  // Messaging is not built; the address answers "not found".
+  messages: notFoundRouteDescriptor,
   "purchase-history": {
     kind: "shell",
     page: "purchase-history",
@@ -388,13 +390,9 @@ export const routeDescriptors = {
     title: "Edit Coupon",
     description: "Maintain coupon parameters, limits, and validity.",
   },
-  "home-fallback": {
-    kind: "shell",
-    page: "home",
-    title: "Home",
-    description:
-      "Continue learning and review recent student activity in ProCodrr.",
-  },
+  // An address no page answers to. It used to render Home under the wrong
+  // address; it now says the page was not found.
+  "home-fallback": notFoundRouteDescriptor,
 } as const satisfies Record<string, ShellRouteDescriptor>;
 
 const learningDescriptor = {

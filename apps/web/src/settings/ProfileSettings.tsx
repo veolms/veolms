@@ -523,6 +523,7 @@ export function ProfileSettings({
     update,
     mergeFromServer,
     status: autosaveStatus,
+    error: autosaveError,
   } = useAutosync<
     EditableProfile,
     Awaited<ReturnType<typeof authService.updateProfile>>
@@ -1771,7 +1772,7 @@ export function ProfileSettings({
                   Sign in to edit your profile.
                 </p>
               ) : (
-                <AutosaveStatus status={autosaveStatus} />
+                <AutosaveStatus status={autosaveStatus} error={autosaveError} />
               )}
             </div>
           </div>
