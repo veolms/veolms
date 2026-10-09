@@ -165,7 +165,8 @@ export function CouponBuilderPage({
   const [expiresAt, setExpiresAt] = useState(defaultEnd);
   const [hasUsageLimit, setHasUsageLimit] = useState(false);
   const [usageLimit, setUsageLimit] = useState<number | "">(2000);
-  const [hasPerUserLimit, setHasPerUserLimit] = useState(true);
+  // Every coupon has a per-user limit of at least 1; there is no "unlimited".
+  // The switch that used to sit here saved a limit of 1 when turned off.
   const [perUserLimit, setPerUserLimit] = useState<number | "">(1);
   const [restrictedCourseIds, setRestrictedCourseIds] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -226,7 +227,6 @@ export function CouponBuilderPage({
       );
       setHasUsageLimit(Boolean(existingCoupon.globalUsageLimit));
       setUsageLimit(existingCoupon.globalUsageLimit ?? 2000);
-      setHasPerUserLimit(Boolean(existingCoupon.perUserLimit));
       setPerUserLimit(existingCoupon.perUserLimit ?? 1);
       setRestrictedCourseIds(existingCoupon.restrictedCourseIds ?? []);
       setErrorMessage(null);
@@ -243,7 +243,6 @@ export function CouponBuilderPage({
       setExpiresAt(defaultEnd);
       setHasUsageLimit(false);
       setUsageLimit(2000);
-      setHasPerUserLimit(true);
       setPerUserLimit(1);
       setRestrictedCourseIds(presetCourseId ? [presetCourseId] : []);
       setErrorMessage(null);
@@ -338,8 +337,7 @@ export function CouponBuilderPage({
           expiresAt: endDateObj.toISOString(),
           globalUsageLimit:
             hasUsageLimit && usageLimit ? Number(usageLimit) : null,
-          perUserLimit:
-            hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
+          perUserLimit: perUserLimit ? Number(perUserLimit) : 1,
           isActive: existingCoupon.isActive,
           restrictedCourseIds:
             restrictedCourseIds.length > 0 ? restrictedCourseIds : null,
@@ -357,8 +355,7 @@ export function CouponBuilderPage({
           expiresAt: endDateObj.toISOString(),
           globalUsageLimit:
             hasUsageLimit && usageLimit ? Number(usageLimit) : undefined,
-          perUserLimit:
-            hasPerUserLimit && perUserLimit ? Number(perUserLimit) : 1,
+          perUserLimit: perUserLimit ? Number(perUserLimit) : 1,
           isActive: true,
           restrictedCourseIds:
             restrictedCourseIds.length > 0 ? restrictedCourseIds : undefined,
@@ -581,22 +578,20 @@ export function CouponBuilderPage({
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Switch
-                checked={hasPerUserLimit}
-                onChange={setHasPerUserLimit}
-                label="Limit per user"
-              />
-              <span className="text-sm text-(--text)">
-                Limit per user (optional)
-              </span>
+              <label
+                htmlFor="coupon-per-user-limit"
+                className="text-sm text-(--text)"
+              >
+                Limit per user
+              </label>
               <input
+                id="coupon-per-user-limit"
                 type="number"
                 min={1}
                 value={perUserLimit}
-                disabled={!hasPerUserLimit}
                 onChange={handlePerUserLimitChange}
                 placeholder="1"
-                className={`${fieldClass} w-24 disabled:opacity-40`}
+                className={`${fieldClass} w-24`}
               />
               <span className="text-[12px] text-(--muted)">
                 Maximum uses per individual user

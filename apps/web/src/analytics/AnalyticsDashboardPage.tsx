@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { LoadingCards } from "../components/analytics/StatTiles";
 import { Button } from "../components/Button";
@@ -116,6 +117,27 @@ function AnalyticsContent({ isAdmin }: { isAdmin: boolean }) {
   const dateRangeParams = useDateRangeParams(range);
   const myCourses = useMyCourses();
 
+  // A course card's "Analytics" link opens this page with ?course=<id>, which
+  // used to be ignored. It is read once and becomes the selected course only
+  // if it is one of the courses in the list below.
+  const [searchParams] = useSearchParams();
+  const [requestedCourseId, setRequestedCourseId] = useState(
+    () => searchParams.get("course") || null,
+  );
+  const myCourseRecords = myCourses.data?.courses;
+  useEffect(() => {
+    if (!requestedCourseId || !myCourseRecords) return;
+    setRequestedCourseId(null);
+    if (myCourseRecords.some((course) => course.id === requestedCourseId)) {
+      setCourseId(requestedCourseId);
+    }
+  }, [requestedCourseId, myCourseRecords]);
+
+  const changeCourse = (nextCourseId: string) => {
+    setRequestedCourseId(null);
+    setCourseId(nextCourseId);
+  };
+
   const params = {
     ...dateRangeParams,
     courseId: courseId === "all" ? undefined : courseId,
@@ -151,7 +173,7 @@ function AnalyticsContent({ isAdmin }: { isAdmin: boolean }) {
           <>
             <ThemedSelect
               value={courseId}
-              onValueChange={setCourseId}
+              onValueChange={changeCourse}
               options={courseOptions}
               ariaLabel="Course"
               searchable

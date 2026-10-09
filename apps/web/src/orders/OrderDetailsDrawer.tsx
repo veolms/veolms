@@ -328,7 +328,7 @@ export const OrderDetailsDrawer = memo(function OrderDetailsDrawer({
               </div>
 
               <div className="flex items-center justify-between text-(--muted)">
-                <span>GST (18%)</span>
+                <span>Tax</span>
                 <span className="font-semibold text-(--text)">
                   {formatCurrency(taxPaise, order.currency)}
                 </span>
