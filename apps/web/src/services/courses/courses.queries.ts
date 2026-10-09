@@ -55,7 +55,12 @@ export function useCourseOverview(
     queryFn: () => coursesService.getOverview(idOrSlug!),
     enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
     initialData: options?.initialData,
-    staleTime: options?.initialData ? Infinity : 60 * 1000,
+    // Seeded data is the course as it was when the page was prerendered.
+    // Dating it at zero has it checked against the API once after load, so
+    // a price, curriculum or publish change since that build shows up —
+    // the same rule the guest home page follows.
+    initialDataUpdatedAt: options?.initialData ? 0 : undefined,
+    staleTime: 60 * 1000,
     retry: false,
   });
 }
@@ -156,11 +161,11 @@ export function useInfiniteCourses(options: {
           pageParams: [undefined],
         }
       : undefined,
-    staleTime: canUseInitialData
-      ? options.initialDataNeedsRefresh
-        ? 0
-        : Infinity
-      : 5 * 60 * 1000,
+    // The prerendered first page is checked against the API once after load
+    // (see useCourseOverview): treated as fresh forever, a course published,
+    // repriced or unpublished since the last build never showed.
+    initialDataUpdatedAt: canUseInitialData ? 0 : undefined,
+    staleTime: 5 * 60 * 1000,
     retry: false,
   });
 }
