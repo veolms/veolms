@@ -95,12 +95,14 @@ import {
   getPublicPreviewLessonNumbers,
 } from "./coursePlayerAccess";
 import { useAuthStore } from "../store/auth.store";
-import { QuizAttemptPanel } from "../quizzes/QuizAttemptPanel";
+import {
+  QuizAttemptPanel,
+  QuizStageMessage,
+} from "../quizzes/QuizAttemptPanel";
 import { useCourseOverview } from "../services/courses";
 import { useCurrentUser } from "../services/auth";
 import { useEnrolledCourses } from "../services/enrollments";
 import { useCourseQuizAssignments } from "../services/quizzes/quizzes.queries";
-import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { adaptCourseOverviewToCurriculum } from "./courseCurriculumAdapter";
 import {
@@ -2988,30 +2990,19 @@ export function LearningWorkspace({
           )}
         </div>
       </button>
-      {hasLessonQuiz(selectedLesson) ? (
+      {/* While the quiz is open its own bar carries "Back to video", at the
+          top where the learner is working. Repeating it here put the same
+          button on screen twice. */}
+      {hasLessonQuiz(selectedLesson) && activeLessonView !== "quiz" ? (
         <button
           type="button"
-          onClick={() => {
-            if (activeLessonView === "quiz") {
-              resumeLessonVideoPlayback();
-            } else {
-              handleOpenLessonQuiz(selectedLesson);
-            }
-          }}
-          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 ${
-            activeLessonView === "quiz"
-              ? "border border-(--accent) bg-[color-mix(in_srgb,var(--accent)_15%,var(--surface))] text-(--accent)"
-              : "border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
-          }`}
+          onClick={() => handleOpenLessonQuiz(selectedLesson)}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer shadow-(--card-compact-shadow) shrink-0 border border-[color-mix(in_srgb,var(--text)_15%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] text-(--text) hover:border-(--accent) hover:text-(--accent)"
           aria-label={`Open quiz for lesson ${selectedLesson}: ${currentLesson[1]}`}
-          title={
-            activeLessonView === "quiz"
-              ? "Return to video lesson"
-              : "Open lesson quiz"
-          }
+          title="Open lesson quiz"
         >
           <Exam size={12} weight="bold" className="text-(--accent)" />
-          <span>{activeLessonView === "quiz" ? "Back to video" : "Quiz"}</span>
+          <span>Quiz</span>
         </button>
       ) : null}
     </header>
@@ -3057,7 +3048,9 @@ export function LearningWorkspace({
             data-learning-player-motion-target=""
           >
             {showingQuiz ? (
-              <div className="w-full max-w-4xl mx-auto p-3 sm:p-5 md:p-6 lg:p-7">
+              // The quiz takes the video's place edge to edge, as the video
+              // does. It used to sit in a padded box holding a second card.
+              <div className="w-full min-w-0">
                 {currentQuizAssignment ? (
                   <QuizAttemptPanel
                     key={`${currentQuizAssignment.id}-${currentLessonUuid ?? selectedLesson}`}
@@ -3082,49 +3075,37 @@ export function LearningWorkspace({
                     }
                   />
                 ) : (
-                  <section
-                    className="mx-auto w-full max-w-3xl rounded-[16px] sm:rounded-[20px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-6 text-(--text)"
-                    style={{ boxShadow: "var(--card-shadow)" }}
-                  >
-                    <div className="flex items-center justify-between gap-3 mb-4">
-                      <button
-                        type="button"
-                        onClick={resumeLessonVideoPlayback}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95"
-                      >
-                        <ArrowLeft size={14} weight="bold" />
-                        <span>Back to video</span>
-                      </button>
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-                        <Exam
-                          size={14}
-                          className="text-(--accent)"
-                          weight="bold"
-                        />
-                        <span>Lesson {selectedLesson} Quiz</span>
-                      </div>
-                    </div>
-                    <p
-                      role={
-                        quizAssignmentLoading || courseQuizAssignments.isLoading
-                          ? "status"
-                          : "alert"
-                      }
-                      aria-label={
-                        quizAssignmentLoading || courseQuizAssignments.isLoading
-                          ? "Loading quiz assignment"
-                          : undefined
-                      }
-                      className={`text-sm sm:text-base text-(--muted) ${quizAssignmentLoading || courseQuizAssignments.isLoading ? "grid min-h-12 place-items-center" : ""}`}
-                    >
-                      {quizAssignmentLoading ||
+                  <QuizStageMessage
+                    lessonBadge={`Lesson ${selectedLesson} Quiz`}
+                    onBackToVideo={resumeLessonVideoPlayback}
+                    role={
+                      quizAssignmentLoading || courseQuizAssignments.isLoading
+                        ? "status"
+                        : "alert"
+                    }
+                    label={
+                      quizAssignmentLoading || courseQuizAssignments.isLoading
+                        ? "Loading quiz assignment"
+                        : undefined
+                    }
+                    visual={
+                      quizAssignmentLoading ||
                       courseQuizAssignments.isLoading ? (
-                        <LoadingSpinnerIcon size={20} />
-                      ) : (
-                        "This Quiz is not currently assigned to your course access."
-                      )}
-                    </p>
-                  </section>
+                        <span className="text-(--muted)">
+                          <LoadingSpinnerIcon size={26} />
+                        </span>
+                      ) : undefined
+                    }
+                    title={
+                      quizAssignmentLoading || courseQuizAssignments.isLoading
+                        ? undefined
+                        : "This quiz is not available to you"
+                    }
+                  >
+                    {quizAssignmentLoading || courseQuizAssignments.isLoading
+                      ? null
+                      : "It is not currently assigned to your course access."}
+                  </QuizStageMessage>
                 )}
               </div>
             ) : isDedicatedQuizLesson && !hasLessonQuiz(selectedLesson) ? (

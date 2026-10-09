@@ -9,20 +9,27 @@ export interface QuizAttemptDraft {
   currentQuestionId: string | null;
 }
 
+export function isQuestionAnswered(
+  question: LearnerQuizAttempt["questions"][number],
+  draft: QuizAttemptDraft,
+) {
+  const answer = draft.answers[question.id];
+  if (!answer) return false;
+  if (question.questionType === "short_answer") {
+    return Boolean(
+      answer.textResponse && answer.textResponse.trim().length > 0,
+    );
+  }
+  return (answer.selectedOptionIds?.length ?? 0) > 0;
+}
+
 export function answeredQuestionCount(
   attempt: LearnerQuizAttempt,
   draft: QuizAttemptDraft,
 ) {
-  return attempt.questions.filter((question) => {
-    const answer = draft.answers[question.id];
-    if (!answer) return false;
-    if (question.questionType === "short_answer") {
-      return Boolean(
-        answer.textResponse && answer.textResponse.trim().length > 0,
-      );
-    }
-    return (answer.selectedOptionIds?.length ?? 0) > 0;
-  }).length;
+  return attempt.questions.filter((question) =>
+    isQuestionAnswered(question, draft),
+  ).length;
 }
 
 export function hasAnsweredEveryQuestion(
