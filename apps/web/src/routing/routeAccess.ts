@@ -345,10 +345,15 @@ export function resolveAuthenticatedDestination(
   return sanitizeReturnTo(returnTo) ?? APP_HOME_PATH;
 }
 
+/**
+ * Where "Back" on the two-factor step leads: the login pop-up it was reached
+ * from. The sign-in is called off first (see `cancelPendingLogin`), so this
+ * is the pop-up for a visitor who is signed out again.
+ */
 export function resolveMfaBackPath(
   returnTo: string | null | undefined,
 ): string {
-  return buildLoginPath(returnTo);
+  return buildLoginDialogPath(returnTo);
 }
 
 export function shouldRedirectToMfaChallenge(

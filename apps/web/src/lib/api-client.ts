@@ -8,6 +8,7 @@ import {
   shouldRedirectToMfaChallenge,
 } from "../routing/routeAccess";
 import { isReactRouterBuildRequest } from "./react-router-build";
+import { shouldFollowMfaRequired } from "../store/pendingMfaLogin";
 import { setApiClient } from "@veolms/web-core";
 
 export { getApiError, type ApiError };
@@ -191,6 +192,12 @@ function redirectToMfaSetup(apiError: ApiError): void {
 
   const currentPath = window.location.pathname.replace(/\/$/, "") || "/";
   if (!shouldRedirectToMfaChallenge(currentPath, apiError)) {
+    return;
+  }
+  // Not when the route guards already know and are dealing with it: for a
+  // sign-in that was walked away from they end the session, and sending the
+  // tab to the two-factor step here would bring that sign-in back.
+  if (!shouldFollowMfaRequired(queryClient.getQueryData(authKeys.me()))) {
     return;
   }
 
