@@ -73,7 +73,9 @@ export function LessonEndScreenOverlay({
       aria-label="Lecture completed"
       className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4 sm:p-6 backdrop-blur-[8px] transition-opacity duration-200 select-none pointer-events-auto"
     >
-      <div className="relative flex w-full max-w-md sm:max-w-lg min-w-0 flex-col overflow-hidden rounded-[20px] sm:rounded-[24px] border-none bg-(--card-surface,var(--surface)) text-(--text) shadow-[var(--surface-frame-edge-shadow),var(--card-floating-shadow)] animate-in zoom-in-95 duration-150">
+      {/* max-h-full with its own scroll: on a player dragged short the card
+          was taller than the video and its buttons were cut off. */}
+      <div className="relative flex max-h-full w-full max-w-md sm:max-w-lg min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-[20px] sm:rounded-[24px] border-none bg-(--card-surface,var(--surface)) text-(--text) shadow-[var(--surface-frame-edge-shadow),var(--card-floating-shadow)] animate-in zoom-in-95 duration-150">
         {hasNextLesson && nextLesson ? (
           <>
             {/* Header Section */}

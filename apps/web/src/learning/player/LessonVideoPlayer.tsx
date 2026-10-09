@@ -1006,6 +1006,19 @@ export function LessonVideoPlayer({
     );
   }
 
+  // The end screen is a dialog over the video, drawn inside the player. The
+  // timeline and the corner controls are drawn in the shell around it, a
+  // layer no z-index inside the player can reach, so they were painted
+  // across the dialog and its buttons. While it is up the chrome stands
+  // down; closing it, restarting or seeking back brings the chrome back.
+  const endScreenVisible =
+    presentation === "full" &&
+    !minimizeGesture.controlsSuppressed &&
+    showCompletionOverlay &&
+    showEndScreen;
+  const chromeSuppressed =
+    minimizeGesture.controlsSuppressed || endScreenVisible;
+
   return (
     <VeoVideoPlayer
       ref={playerRef}
@@ -1077,7 +1090,7 @@ export function LessonVideoPlayer({
           <LessonCentralControls
             canGoNext={canGoNext}
             canGoPrevious={canGoPrevious}
-            controlsSuppressed={minimizeGesture.controlsSuppressed}
+            controlsSuppressed={chromeSuppressed}
             onGoNext={onGoNext}
             onGoPrevious={onGoPrevious}
           />
@@ -1108,7 +1121,7 @@ export function LessonVideoPlayer({
             showLessonNavigation={showLessonNavigation}
             canGoNext={canGoNext}
             canGoPrevious={canGoPrevious}
-            controlsSuppressed={minimizeGesture.controlsSuppressed}
+            controlsSuppressed={chromeSuppressed}
             courseLessonsOpen={courseLessonsOpen}
             courseLessonsDrawerOpen={courseLessonsDrawerOpen}
             courseLessonsPanel={courseLessonsPanel}
@@ -1134,7 +1147,7 @@ export function LessonVideoPlayer({
         presentation === "full" && !minimizeGesture.controlsSuppressed ? (
           <>
             <LessonAmbientProjection enabled={ambientEnabled} />
-            {showCompletionOverlay && showEndScreen ? (
+            {endScreenVisible ? (
               <LessonEndScreenOverlay
                 nextLesson={
                   canGoNext
