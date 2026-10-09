@@ -53,10 +53,19 @@ export const OrderRefundModal = memo(function OrderRefundModal({
     [openOrderId],
   );
 
-  // Lock body scroll and listen for ESC key
+  // Lock body scroll and listen for ESC key, only while the dialog is open.
+  // This component stays mounted while closed, and locking then left the
+  // Orders page unable to scroll wherever the window is the scroller.
   useEffect(() => {
+    if (!openOrderId) return;
+
+    // When the refund is started from the details drawer, the drawer already
+    // holds the lock and re-applies it on every render. Writing "hidden" back
+    // from here after the drawer released it made the drawer save "hidden" as
+    // the page's own value, and scrolling stayed locked after both closed.
     const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const lockedHere = originalOverflow !== "hidden";
+    if (lockedHere) document.body.style.overflow = "hidden";
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -64,10 +73,10 @@ export const OrderRefundModal = memo(function OrderRefundModal({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = originalOverflow;
+      if (lockedHere) document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, openOrderId]);
 
   if (!order) return null;
 

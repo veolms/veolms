@@ -22,30 +22,33 @@ export interface OrderHistoryFiltersBarProps {
   onResetFilters?: () => void;
 }
 
+// The year options follow the calendar: fixed years stopped at 2025 and left
+// later purchases with no year to pick.
+const currentYear = new Date().getFullYear();
+
 const dateRangeOptions: readonly [string, string][] = [
   ["all", "All dates"],
   ["30d", "Last 30 days"],
   ["3m", "Last 3 months"],
   ["6m", "Last 6 months"],
-  ["2025", "Year 2025"],
-  ["2024", "Year 2024"],
+  [String(currentYear), `Year ${currentYear}`],
+  [String(currentYear - 1), `Year ${currentYear - 1}`],
 ];
 
+// Only statuses and payment methods an order in this list can actually have:
+// cancelled orders are shown as Failed, and the payment method is known only
+// as UPI or not UPI.
 const statusOptions: readonly [string, string][] = [
   ["all", "All statuses"],
   ["completed", "Completed"],
   ["processing", "Processing"],
   ["refunded", "Refunded"],
   ["failed", "Failed"],
-  ["canceled", "Canceled"],
 ];
 
 const paymentMethodOptions: readonly [string, string][] = [
   ["all", "All payment methods"],
-  ["visa", "Visa"],
-  ["mastercard", "Mastercard"],
   ["upi", "UPI"],
-  ["paypal", "PayPal"],
   ["other", "Other"],
 ];
 

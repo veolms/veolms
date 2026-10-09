@@ -112,6 +112,13 @@ export interface UseOrdersFilterReturn {
   isLoadingStats: boolean;
   isLoading: boolean;
   isError: boolean;
+  /**
+   * Set when the list request failed and there are no rows to show:
+   * "forbidden" when the server refused it (no billing permission),
+   * "failed" for anything else. A failed refresh of rows already on screen
+   * leaves this null.
+   */
+  loadError: "forbidden" | "failed" | null;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   fetchNextPage: () => void;
@@ -239,11 +246,15 @@ export function useOrdersFilter(options?: {
     data,
     isLoading,
     isError,
+    error,
     hasNextPage = false,
     isFetchingNextPage,
     fetchNextPage,
     refetch,
   } = useAdminOrders(queryParams, { enabled });
+
+  const loadError =
+    isError && !data ? (error?.status === 403 ? "forbidden" : "failed") : null;
 
   // Stats query
   const statsParams = useMemo(() => {
@@ -352,6 +363,7 @@ export function useOrdersFilter(options?: {
     isLoadingStats,
     isLoading,
     isError,
+    loadError,
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,

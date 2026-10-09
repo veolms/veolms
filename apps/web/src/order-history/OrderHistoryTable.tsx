@@ -57,6 +57,11 @@ function OrderActions({
     }
   };
 
+  // An invoice exists only once an order has been paid (refunded orders were
+  // paid first). For any other order the download opened a raw error page.
+  const hasInvoice =
+    order.status === "completed" || order.status === "refunded";
+
   return (
     <CourseActionMenu
       open={open}
@@ -66,22 +71,26 @@ function OrderActions({
       className="relative z-30 ml-auto shrink-0 inline-block"
       dismissOnScroll
     >
-      <MenuAction
-        Icon={FileText}
-        label="View invoice"
-        onClick={() => {
-          setOpen(false);
-          onViewInvoice(order);
-        }}
-      />
-      <MenuAction
-        Icon={DownloadSimple}
-        label="Download invoice"
-        onClick={() => {
-          setOpen(false);
-          onDownloadReceipt(order);
-        }}
-      />
+      {hasInvoice && (
+        <>
+          <MenuAction
+            Icon={FileText}
+            label="View invoice"
+            onClick={() => {
+              setOpen(false);
+              onViewInvoice(order);
+            }}
+          />
+          <MenuAction
+            Icon={DownloadSimple}
+            label="Download invoice"
+            onClick={() => {
+              setOpen(false);
+              onDownloadReceipt(order);
+            }}
+          />
+        </>
+      )}
       <MenuAction
         Icon={Copy}
         label="Copy order ID"
