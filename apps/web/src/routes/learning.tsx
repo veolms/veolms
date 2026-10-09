@@ -175,8 +175,12 @@ export default function LearningRoute() {
   }, [targetLessonUuid, allApiLessons]);
 
   const lessonId = resolvedFromUuid ?? routeLessonId;
+  // Any link that names its lesson by id — a discussion deep link or a quiz
+  // link from the Quizzes page or a notification — has to wait for the course
+  // to load. Canonicalising earlier rewrote the address to the last-watched
+  // lesson and dropped the id.
   const isLessonUuidResolutionPending = Boolean(
-    deepLinkLessonUuid && isCourseOverviewLoading && !courseOverview,
+    targetLessonUuid && isCourseOverviewLoading && !courseOverview,
   );
   const isDeepLinkRouteSettled =
     !hasDiscussionDeepLink ||

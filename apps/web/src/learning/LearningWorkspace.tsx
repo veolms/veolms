@@ -783,6 +783,9 @@ export function LearningWorkspace({
           quizTitle: foundCourse.quizTitle,
           maxAttempts: foundCourse.maxAttempts,
           activeAttemptId: null,
+          attemptCount: 0,
+          bestScore: null,
+          latestPassed: null,
         };
       }
     }
@@ -1160,6 +1163,16 @@ export function LearningWorkspace({
       lessonIdsByNumber,
       enabled: Boolean(courseOverview?.course.slug),
     });
+  // Handed to the persistent player so progress is still recorded while it
+  // plays as the mini player, after this page has unmounted.
+  const progressCourseKey = courseOverview?.course.slug;
+  const detachedProgressTarget = useMemo(
+    () =>
+      userId && progressCourseKey
+        ? { userId, courseKey: progressCourseKey, lessonIdsByNumber }
+        : undefined,
+    [lessonIdsByNumber, progressCourseKey, userId],
+  );
   const lessonProgress = useMemo(() => {
     if (Object.keys(localLessonProgress).length === 0) {
       return persistedLessonProgress;
@@ -2790,11 +2803,13 @@ export function LearningWorkspace({
       curriculumLessonsById,
       lessonProgress,
       isLessonAvailable,
+      progressTarget: detachedProgressTarget,
     });
   }, [
     courseSlug,
     curriculumLessonsById,
     curriculumSections,
+    detachedProgressTarget,
     isLessonAvailable,
     lessonPlayerProps,
     lessonProgress,
@@ -2924,6 +2939,9 @@ export function LearningWorkspace({
                     quizTitle={currentQuizAssignment.quizTitle}
                     activeAttemptId={currentQuizAssignment.activeAttemptId}
                     maxAttempts={currentQuizAssignment.maxAttempts}
+                    attemptCount={currentQuizAssignment.attemptCount}
+                    bestScore={currentQuizAssignment.bestScore}
+                    latestPassed={currentQuizAssignment.latestPassed}
                     onBackToVideo={resumeLessonVideoPlayback}
                     onPassed={() => updateSelectedLessonProgress(100)}
                     lessonBadge={`Lesson ${selectedLesson} Quiz`}
