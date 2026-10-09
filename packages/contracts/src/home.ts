@@ -131,6 +131,7 @@ const guestHomeCourseSectionSchema = z.strictObject({
 export const guestHomePageResponseSchema = z.strictObject({
   version: z.string(),
   hero: homePageHeroSchema,
+  heroLessonPosterUrl: z.string().nullable().optional(),
   highlights: homePageHighlightsSchema,
   popularCourses: guestHomeCourseSectionSchema,
   freeCourses: guestHomeCourseSectionSchema,
@@ -151,6 +152,13 @@ export interface GuestHomeCourseSection {
 export interface GuestHomePageResponse {
   version: string;
   hero: HomePageHero;
+  /**
+   * The thumbnail of the course whose lesson plays on the hero's laptop
+   * (`HOME_PAGE_HERO_LESSON`), whether or not a row shows that course. Null
+   * when the course has none or is not published; left out by an API that
+   * predates it.
+   */
+  heroLessonPosterUrl?: string | null;
   highlights: HomePageHighlights;
   popularCourses: GuestHomeCourseSection;
   freeCourses: GuestHomeCourseSection;

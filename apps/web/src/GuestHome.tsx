@@ -1,5 +1,8 @@
 import type { GuestHomePageResponse } from "@veolms/contracts";
-import { DEFAULT_HOME_PAGE_SETTINGS } from "@veolms/contracts/home-page-defaults";
+import {
+  DEFAULT_HOME_PAGE_SETTINGS,
+  HOME_PAGE_HERO_LESSON,
+} from "@veolms/contracts/home-page-defaults";
 import { useEffect, useState } from "react";
 import {
   GuestHomeCourseSection,
@@ -24,12 +27,6 @@ import { useGuestHomePage } from "./services/home";
 import "./home/guest/guest-home-shell.css";
 
 const FREE_COURSES_SECTION_ID = "guest-home-free-courses";
-
-/** The lesson that plays on the laptop in the hero picture. */
-const HERO_LAPTOP_LESSON = {
-  courseSlug: "fundamentals-of-backend-and-nodejs",
-  lessonNumber: 1,
-};
 
 /**
  * True once the browser is idle after hydration. The prerendered page is
@@ -124,12 +121,16 @@ export function GuestHome({
   const showFreeCourses =
     free.visible && (isLoading || isError || free.courses.length > 0);
   const showCourses = popular.visible || showFreeCourses;
-  // Until it is played the laptop shows that lesson's course, when the page
-  // happens to list it; otherwise its screen stays dark behind the button.
+  // Until it is played the laptop shows that lesson's course. The page says
+  // which picture that is; an API that does not yet leaves it to the rows,
+  // when one happens to list the course, and the screen stays dark behind
+  // the button otherwise.
   const heroLaptopPoster =
+    copy?.heroLessonPosterUrl ??
     [...popular.courses, ...free.courses].find(
-      (course) => course.slug === HERO_LAPTOP_LESSON.courseSlug,
-    )?.thumbnailUrl ?? undefined;
+      (course) => course.slug === HOME_PAGE_HERO_LESSON.courseSlug,
+    )?.thumbnailUrl ??
+    undefined;
   const showBody = showCourses || highlights.visible || discussions.visible;
 
   return (
@@ -145,7 +146,7 @@ export function GuestHome({
         }
         laptopScreen={
           <HeroLaptopVideo
-            lesson={HERO_LAPTOP_LESSON}
+            lesson={HOME_PAGE_HERO_LESSON}
             poster={heroLaptopPoster}
           />
         }
