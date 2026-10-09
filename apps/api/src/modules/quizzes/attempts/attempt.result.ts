@@ -124,16 +124,19 @@ export function presentAttemptResult(input: {
             const correctOptions = questionOptions.filter(
               (option) => option.is_correct,
             );
-            const correctTexts = correctOptions.map(
-              (option) => option.option_text,
-            );
+            // A short answer has no key. Questions written before it
+            // became a free response may still hold accepted answers;
+            // they are not a "correct answer" to show.
+            const correctTexts =
+              question.question_type === "short_answer"
+                ? []
+                : correctOptions.map((option) => option.option_text);
             const graded = gradeQuizQuestion({
               questionType: question.question_type,
               points: Number(question.points),
               selectedOptionIds: selected,
               correctOptionIds: correctOptions.map((option) => option.id),
               textResponse,
-              acceptedOptionTexts: correctTexts,
             });
             return [
               {

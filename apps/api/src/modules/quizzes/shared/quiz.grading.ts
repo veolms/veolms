@@ -1,4 +1,4 @@
-import { comparableQuizText } from "./quiz.text.ts";
+import { cleanQuizTextAnswer } from "./quiz.text.ts";
 
 export interface QuizGradeQuestion {
   questionType?: string;
@@ -6,7 +6,6 @@ export interface QuizGradeQuestion {
   selectedOptionIds?: readonly string[];
   correctOptionIds?: readonly string[];
   textResponse?: string | null;
-  acceptedOptionTexts?: readonly string[];
 }
 
 export function gradeQuizQuestion({
@@ -15,15 +14,12 @@ export function gradeQuizQuestion({
   selectedOptionIds = [],
   correctOptionIds = [],
   textResponse,
-  acceptedOptionTexts = [],
 }: QuizGradeQuestion) {
   if (questionType === "short_answer") {
-    const typed = comparableQuizText(textResponse ?? "");
-    const isCorrect =
-      typed.length > 0 &&
-      acceptedOptionTexts.some(
-        (accepted) => comparableQuizText(accepted) === typed,
-      );
+    // A short answer is a free response: there is no key to match it
+    // against. Anything the learner wrote earns the points; a blank answer,
+    // or one made only of characters that are not text, earns none.
+    const isCorrect = cleanQuizTextAnswer(textResponse ?? "").length > 0;
     return { isCorrect, pointsAwarded: isCorrect ? points : 0 };
   }
   const selected = [...new Set(selectedOptionIds)].sort();

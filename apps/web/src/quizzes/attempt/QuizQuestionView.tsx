@@ -22,7 +22,7 @@ const ANSWER_HINT: Record<QuizQuestion["questionType"], string> = {
   single_choice: "Choose one answer",
   multiple_choice: "Select all that apply",
   true_false: "True or false",
-  short_answer: "Type your answer",
+  short_answer: "Write your answer",
 };
 
 export function QuizQuestionView({
@@ -76,17 +76,12 @@ export function QuizQuestionView({
             // longer answer made the save of every answer fail.
             maxLength={QUIZ_TEXT_RESPONSE_MAX_LENGTH}
             autoComplete="off"
-            // The answer is compared with the accepted ones, so a phone
-            // keyboard must not "correct" or capitalise what was typed.
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
             enterKeyHint="done"
             className="h-13 w-full rounded-[14px] bg-(--card-surface-raised,var(--surface-strong)) px-4 text-base! font-medium! text-(--text) ring-1 ring-[color-mix(in_srgb,var(--text)_12%,transparent)] transition-shadow outline-none ring-inset placeholder:font-normal placeholder:text-(--muted) focus:ring-2 focus:ring-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
           />
           <p className="mt-2 text-xs leading-relaxed text-(--muted)">
-            Type anything: letters, numbers, symbols or code. Capital letters
-            and extra spaces do not matter.
+            Write your answer in your own words. Letters, numbers, symbols and
+            code are all fine.
           </p>
         </div>
       ) : (

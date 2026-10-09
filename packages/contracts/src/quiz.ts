@@ -155,7 +155,9 @@ export const createQuizQuestionRequestSchema = z.strictObject({
   points: z.number().finite().positive().max(10_000),
   position: z.number().int().nonnegative().optional(),
   explanation: z.string().max(5_000).nullable().optional(),
-  options: z.array(quizOptionInputSchema).min(1).max(100),
+  // Empty for a short answer, which is a free response with no key. The
+  // choice types are held to "at least one correct option" by the API.
+  options: z.array(quizOptionInputSchema).max(100),
 });
 export const createQuizWithQuestionsRequestSchema =
   createQuizRequestSchema.extend({
@@ -164,7 +166,7 @@ export const createQuizWithQuestionsRequestSchema =
 export const updateQuizQuestionRequestSchema = createQuizQuestionRequestSchema
   .partial()
   .extend({
-    options: z.array(quizOptionInputSchema).min(1).max(100).optional(),
+    options: z.array(quizOptionInputSchema).max(100).optional(),
   });
 export const assignQuizRequestSchema = z.strictObject({
   quizVersionId: uuid,

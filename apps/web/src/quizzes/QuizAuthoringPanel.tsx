@@ -147,7 +147,7 @@ const QUESTION_TYPES: readonly {
   {
     type: "short_answer",
     label: "Short Answer",
-    description: "Learners type the answer",
+    description: "Learners write anything",
     icon: FileText,
   },
 ];
@@ -884,10 +884,11 @@ export function QuizAuthoringPanel({
 
       if (
         !quizId ||
-        !qPrompt ||
-        qOptions.length === 0 ||
-        qOptions.some((option) => !option.text.trim()) ||
-        !qOptions.some((option) => option.isCorrect) ||
+        quizQuestionProblem({
+          questionType: qType,
+          prompt: qPromptValue,
+          options: editedOptions,
+        }) ||
         updateQuestion.isPending
       )
         return;
@@ -979,14 +980,8 @@ export function QuizAuthoringPanel({
       ];
       setOptions(nextOptions);
     } else if (nextType === "short_answer") {
-      const existingText = options[0]?.text?.trim() || "";
-      const isPlaceholder =
-        /^Option\s*\d+$/i.test(existingText) ||
-        existingText.toLowerCase() === "true" ||
-        existingText.toLowerCase() === "false";
-      nextOptions = [
-        { text: isPlaceholder ? "" : existingText, isCorrect: true },
-      ];
+      // A free response has no options.
+      nextOptions = [];
       setOptions(nextOptions);
     } else if (
       options.length < 2 ||
@@ -1713,7 +1708,7 @@ export function QuizAuthoringPanel({
                         </span>
                         <span className="hidden md:inline-block text-[0.72rem] text-(--muted)">
                           {question.questionType === "short_answer"
-                            ? "Text input answer"
+                            ? "Free response"
                             : `${correctCount} correct choice${correctCount === 1 ? "" : "s"}`}
                         </span>
                         <button
@@ -1938,135 +1933,24 @@ export function QuizAuthoringPanel({
 
                         {/* Short Answer (Input Box Question) vs Multiple Choice Options */}
                         {questionType === "short_answer" ? (
-                          <div className="rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-[inset_0_1px_3px_color-mix(in_srgb,black_10%,transparent)] space-y-3">
+                          // A free response: the learner writes anything and
+                          // there is nothing to match it against, so there
+                          // is nothing for the author to fill in here.
+                          <div className="flex items-start gap-3 rounded-[10px] sm:rounded-[12px] bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] p-3 sm:p-4 border border-[color-mix(in_srgb,var(--text)_8%,transparent)] shadow-[inset_0_1px_3px_color-mix(in_srgb,black_10%,transparent)]">
+                            <FileText
+                              size={18}
+                              weight="duotone"
+                              className="mt-0.5 shrink-0 text-(--accent)"
+                            />
                             <div>
                               <span className="text-xs font-bold text-(--text) tracking-tight">
-                                Accepted answer
+                                Learners get a text box
                               </span>
-                              <p className="mt-0.5 text-[0.72rem] text-(--muted)">
-                                Learners type their answer. It is marked correct
-                                when it matches an answer below. Capital letters
-                                and spaces around it do not matter.
+                              <p className="mt-0.5 text-[0.72rem] leading-relaxed text-(--muted)">
+                                They can write anything. Any answer earns this
+                                question&apos;s full points; a blank answer
+                                earns none. There is no correct answer to set.
                               </p>
-                            </div>
-
-                            {/* Primary Answer Box */}
-                            <div className="space-y-2.5">
-                              <div>
-                                <input
-                                  value={options[0]?.text ?? ""}
-                                  onChange={(event) => {
-                                    const val = event.target.value;
-                                    const nextOpts = [
-                                      {
-                                        ...(options[0] ?? {}),
-                                        text: val,
-                                        isCorrect: true,
-                                      },
-                                      ...options.slice(1).map((o) => ({
-                                        ...o,
-                                        isCorrect: true,
-                                      })),
-                                    ];
-                                    setOptions(nextOpts);
-                                    scheduleAutoSaveQuestion(
-                                      undefined,
-                                      nextOpts,
-                                    );
-                                  }}
-                                  onBlur={() => flushQuestionSave()}
-                                  className={`${inputClass} w-full !h-9.5 sm:!h-10 text-sm`}
-                                  // Choosing Short Answer leaves this empty,
-                                  // and the question cannot be saved until it
-                                  // is filled: put the cursor here.
-                                  autoFocus={!options[0]?.text}
-                                  aria-label="Accepted answer"
-                                  aria-invalid={!options[0]?.text.trim()}
-                                  placeholder="e.g. Photosynthesis"
-                                />
-                              </div>
-
-                              {/* Alternative accepted answers (if any) */}
-                              {options.length > 1 && (
-                                <div className="pt-1.5 space-y-2">
-                                  <span className="block text-[0.72rem] font-semibold text-(--text-secondary)">
-                                    Also accept
-                                  </span>
-                                  {options.slice(1).map((option, altIndex) => {
-                                    const realIndex = altIndex + 1;
-                                    return (
-                                      <div
-                                        key={option.id ?? realIndex}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <input
-                                          value={option.text}
-                                          onChange={(event) => {
-                                            const nextOpts = options.map(
-                                              (item, idx) =>
-                                                idx === realIndex
-                                                  ? {
-                                                      ...item,
-                                                      text: event.target.value,
-                                                      isCorrect: true,
-                                                    }
-                                                  : item,
-                                            );
-                                            setOptions(nextOpts);
-                                            scheduleAutoSaveQuestion(
-                                              undefined,
-                                              nextOpts,
-                                            );
-                                          }}
-                                          onBlur={() => flushQuestionSave()}
-                                          className={`${inputClass} flex-1 min-w-0 !h-9 text-xs sm:text-sm`}
-                                          aria-label={`Alternative accepted answer ${realIndex}`}
-                                          placeholder="Another spelling or an abbreviation"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const nextOpts = options.filter(
-                                              (_, idx) => idx !== realIndex,
-                                            );
-                                            setOptions(nextOpts);
-                                            scheduleAutoSaveQuestion(
-                                              undefined,
-                                              nextOpts,
-                                            );
-                                          }}
-                                          title={`Remove alternative answer ${realIndex}`}
-                                          aria-label={`Remove alternative answer ${realIndex}`}
-                                          className="flex size-8 shrink-0 items-center justify-center rounded-lg text-(--muted) hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
-                                        >
-                                          <Trash size={14} />
-                                        </button>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-
-                              <div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextOptions = [
-                                      ...options,
-                                      { text: "", isCorrect: true },
-                                    ];
-                                    setOptions(nextOptions);
-                                    scheduleAutoSaveQuestion(
-                                      undefined,
-                                      nextOptions,
-                                    );
-                                  }}
-                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-(--accent) hover:underline cursor-pointer"
-                                >
-                                  <Plus size={13} weight="bold" />
-                                  <span>Add another accepted answer</span>
-                                </button>
-                              </div>
                             </div>
                           </div>
                         ) : (

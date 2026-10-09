@@ -163,25 +163,21 @@ export function parseQuizBuilderBrowserDraft(
 /**
  * The options of a question as they are sent to the server.
  *
- * A short-answer question keeps its accepted answers as options, and the
- * editor adds an empty row for each "add another" press. An empty row is an
- * answer the author has not typed, not an answer: it is left out, and every
- * one that remains counts as correct.
+ * A short answer is a free response: the learner writes anything and there
+ * is no key to match it against, so it is sent with no options. A draft that
+ * was a choice question a moment ago may still be holding some.
  */
 export function sendableQuizOptions(
   questionType: QuizQuestionType,
   options: readonly QuizBuilderOptionDraft[],
 ): QuizBuilderOptionDraft[] {
-  if (questionType !== "short_answer") return [...options];
-  return options
-    .filter((option) => option.text.trim())
-    .map((option) => ({ ...option, isCorrect: true }));
+  return questionType === "short_answer" ? [] : [...options];
 }
 
 /**
  * What keeps a question from being saved, as an instruction the author can
  * act on; null when nothing does. The server refuses a question with an
- * empty prompt or an empty answer, and its own wording for that ("Too small:
+ * empty prompt or an empty option, and its own wording for that ("Too small:
  * expected string to have >=1 characters") names neither the question nor
  * the field.
  */
@@ -191,11 +187,8 @@ export function quizQuestionProblem(question: {
   options: readonly QuizBuilderOptionDraft[];
 }): string | null {
   if (!question.prompt.trim()) return "write the question";
-  if (question.questionType === "short_answer") {
-    return sendableQuizOptions(question.questionType, question.options).length
-      ? null
-      : "add the answer learners should type";
-  }
+  // Nothing more to fill in: a short answer has no options.
+  if (question.questionType === "short_answer") return null;
   if (question.options.length === 0) return "add at least one option";
   if (question.options.some((option) => !option.text.trim())) {
     return "fill in or remove the empty option";

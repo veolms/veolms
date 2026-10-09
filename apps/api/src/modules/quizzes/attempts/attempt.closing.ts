@@ -105,7 +105,6 @@ export async function gradeLockedAttempt(
       selectedOptionIds: response?.selectedOptionIds ?? [],
       correctOptionIds: correctOptions.map((option) => option.id),
       textResponse: response?.textResponse ?? null,
-      acceptedOptionTexts: correctOptions.map((option) => option.option_text),
     });
     return { question, answer, answered: hasQuizAnswer(response), ...score };
   });
