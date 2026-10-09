@@ -57,9 +57,9 @@ const LearningWorkspace = lazy(() =>
   })),
 );
 
-export function meta({ location, params }: Route.MetaArgs) {
+export function meta({ location, matches, params }: Route.MetaArgs) {
   const descriptors = Object.entries(
-    getRouteMeta("learning", params, location.pathname),
+    getRouteMeta("learning", params, location.pathname, matches),
   ).map(([name, content]) =>
     name === "title" ? { title: content } : { name, content },
   );

@@ -24,7 +24,7 @@ export function useCourses(options?: {
 }) {
   return useQuery<{ courses: CourseSummary[] }, ApiError>({
     queryKey: courseKeys.lists(),
-    queryFn: () => coursesService.list(),
+    queryFn: () => coursesService.listAll(),
     enabled: options?.enabled ?? true,
     initialData: options?.initialData,
     staleTime: options?.initialData ? Infinity : 5 * 60 * 1000,
