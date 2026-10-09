@@ -2,7 +2,7 @@ import type { AutosyncStatus } from "./types";
 
 interface AutosaveStatusProps {
   status: AutosyncStatus;
-  /** Why the last save did not go through, shown after the status text. */
+  /** Why the draft has not been saved, shown with the status text. */
   error?: string;
 }
 
@@ -18,33 +18,37 @@ export function isAutosaveUnsaved(status: AutosyncStatus): boolean {
   return UNSAVED_STATUSES.has(status);
 }
 
-function getAutosaveMessage(status: AutosyncStatus): string {
+function getAutosaveMessage(status: AutosyncStatus, detail: string): string {
   switch (status) {
     case "syncing":
     case "pending":
       return "Saving…";
     case "offline":
       return "Offline — not saved yet";
+    // The draft is waiting on the person (a field to finish, a number to
+    // verify). That is a next step, not a failure, so the reason is the
+    // whole message.
     case "blocked":
+      return detail || "Not saved yet";
     case "error":
     case "conflict":
-      return "Not saved";
+      return detail ? `Not saved. ${detail}` : "Not saved";
     default:
       return "Saved";
   }
 }
 
 export function AutosaveStatus({ status, error }: AutosaveStatusProps) {
-  const message = getAutosaveMessage(status);
-  const detail = isAutosaveUnsaved(status) && error ? error : "";
-
+  const failed = status === "error" || status === "conflict";
   return (
     <p
       role="status"
       aria-live="polite"
-      data-autosave-state={isAutosaveUnsaved(status) ? "unsaved" : undefined}
+      data-autosave-state={
+        failed ? "error" : isAutosaveUnsaved(status) ? "waiting" : undefined
+      }
     >
-      {detail ? `${message}. ${detail}` : message}
+      {getAutosaveMessage(status, error ?? "")}
     </p>
   );
 }
