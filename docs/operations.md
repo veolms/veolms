@@ -75,6 +75,25 @@ pnpm purge:course-deletions
 Webhook events (processed, >30 days) and processed outbox events are
 cleaned automatically by the in-process schedulers.
 
+## Two-factor lockout (break-glass reset)
+
+Someone who has lost their passkey or authenticator app signs in with one of
+the backup codes issued when the factor was set up. When those are gone too,
+nothing a signed-out visitor can reach removes a factor — the sign-in first
+step is a code sent to the mailbox, so a mailbox-based reset would make the
+second step worthless. The way back in is an operator, after confirming out
+of band that the request comes from the account's owner:
+
+```bash
+pnpm --filter @veolms/api user:mfa-reset <email-or-phone>   # asks to confirm
+pnpm --filter @veolms/api user:mfa-reset <email-or-phone> --yes
+```
+
+It removes the account's passkeys, authenticator app and backup codes and
+ends all its sessions. Administrators and instructors are asked to set up
+two-factor again on their next sign-in; other accounts sign in with the first
+step alone. Run it on the API host so it reads that environment's `.env`.
+
 ## Performance-related env added in this work
 
 | Env                                    | Default | Purpose                                                                                                                                            |
