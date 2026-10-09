@@ -12,9 +12,12 @@ import type {
   LearningPlayerPlaybackSnapshot,
 } from "./learningMiniPlayerTypes";
 import {
+  clearResumePosition,
+  readResumePosition,
   writeMiniPlayerRestore,
   writeResumePosition,
 } from "./lessonPlayerPersistence";
+import { readLearningPreferences } from "../../settings/settingsPreferences";
 import {
   getLearningMiniPlayerSnapshot,
   openLearningMiniPlayerSession,
@@ -55,6 +58,7 @@ import { useCourseOverview } from "../../services/courses";
 const EMPTY_CURRICULUM_SECTIONS: CourseSection[] = [];
 
 const MAX_HANDOFF_DRIFT_SECONDS = 0.35;
+const RESUME_PERSIST_INTERVAL_MS = 5_000;
 
 export interface LearningMiniPlayerProps {
   session: LearningMiniPlayerSession;
@@ -76,7 +80,22 @@ export function LearningMiniPlayer({
   const playerRef = useRef<VideoPlayerHandle>(null);
   const miniPlayerRef = useRef<HTMLElement>(null);
   const playerTheme = useLearningPlayerTheme();
-  const currentTimeRef = useRef(session.currentTime);
+  // Where to start. A session handed over by the lesson page carries the
+  // live position. One read back from storage after a reload only knows
+  // where the video was when it was minimized (or 0 for a lesson picked
+  // from this player's list), so it restarted from there instead of where
+  // the learner had got to. The resume position is saved every few seconds
+  // while a lesson plays, so that is used when there is one.
+  const startTime = useMemo(
+    () =>
+      session.getLivePlaybackSnapshot
+        ? session.currentTime
+        : readResumePosition(session.mediaKey) || session.currentTime,
+    [session],
+  );
+  const currentTimeRef = useRef(startTime);
+  const lessonEndedRef = useRef(false);
+  const lastResumePersistAtRef = useRef(0);
   const preparationCompletedRef = useRef(false);
   const preparationFramePendingRef = useRef(false);
   const preparationStartedRef = useRef(false);
@@ -88,7 +107,11 @@ export function LearningMiniPlayer({
     const currentTime =
       playerRef.current?.getSnapshot().media.currentTime ??
       currentTimeRef.current;
-    writeResumePosition(session.mediaKey, currentTime);
+    // A lesson that has finished has no place to resume from; saving its
+    // end would reopen it on its last second.
+    if (!lessonEndedRef.current) {
+      writeResumePosition(session.mediaKey, currentTime);
+    }
     return currentTime;
   }, [session.mediaKey]);
 
@@ -239,6 +262,11 @@ export function LearningMiniPlayer({
           lessonPath: session.lessonPath,
         }) ?? session.lessonPath;
       const openLesson = (manifestUrl: string, mediaKey: string) => {
+        // A lesson picked here resumes where it was left, as it does on the
+        // lesson page, unless the learner has turned resuming off.
+        if (!readLearningPreferences().resumeFromLastPosition) {
+          clearResumePosition(mediaKey);
+        }
         openLearningMiniPlayerSession({
           ...session,
           lessonTitle: newLesson[1],
@@ -358,28 +386,43 @@ export function LearningMiniPlayer({
     (event: VideoPlayerEvent) => {
       if (event.type === "timeupdate") {
         currentTimeRef.current = event.detail.currentTime;
+        // Saved as the lesson plays, not only on pause: a reload or a
+        // closed tab gives no chance to save the position afterwards.
+        const now = Date.now();
+        if (
+          !lessonEndedRef.current &&
+          now - lastResumePersistAtRef.current >= RESUME_PERSIST_INTERVAL_MS
+        ) {
+          lastResumePersistAtRef.current = now;
+          writeResumePosition(session.mediaKey, event.detail.currentTime);
+        }
         if (event.detail.duration > 0) {
           recordProgress(
             (event.detail.currentTime / event.detail.duration) * 100,
           );
         }
       } else if (event.type === "playing") {
+        lessonEndedRef.current = false;
         completePreparation();
       } else if (event.type === "seeked") {
+        lessonEndedRef.current = false;
         completePreparation();
-      } else if (event.type === "pause" || event.type === "ended") {
+      } else if (event.type === "pause") {
         persistCurrentTime();
-        if (event.type === "ended") recordProgress(100);
+      } else if (event.type === "ended") {
+        lessonEndedRef.current = true;
+        clearResumePosition(session.mediaKey);
+        recordProgress(100);
       }
     },
-    [completePreparation, persistCurrentTime, recordProgress],
+    [completePreparation, persistCurrentTime, recordProgress, session.mediaKey],
   );
 
   const handleReady = useCallback(() => {
     if (preparing && preparationStartedRef.current) return;
     if (preparing) preparationStartedRef.current = true;
     const livePlayback = session.getLivePlaybackSnapshot?.() ?? {
-      currentTime: session.currentTime,
+      currentTime: startTime,
       muted: session.muted,
       playbackRate: session.playbackRate,
       playing: session.playing,
@@ -401,7 +444,7 @@ export function LearningMiniPlayer({
       preparationStartedRef.current = false;
       pendingPreparationRef.current = null;
     });
-  }, [completePreparation, preparing, session]);
+  }, [completePreparation, preparing, session, startTime]);
 
   useEffect(
     () => () => {
@@ -409,6 +452,15 @@ export function LearningMiniPlayer({
     },
     [persistCurrentTime],
   );
+
+  // The last few seconds before the page goes away (reload, closed tab).
+  useEffect(() => {
+    const persistOnPageHide = () => {
+      persistCurrentTime();
+    };
+    window.addEventListener("pagehide", persistOnPageHide);
+    return () => window.removeEventListener("pagehide", persistOnPageHide);
+  }, [persistCurrentTime]);
 
   // A session read back from storage after a reload has lost the part of its
   // source that authorises each video request (a function cannot be stored),
@@ -475,7 +527,7 @@ export function LearningMiniPlayer({
       !playbackCourseSlug ||
       playbackLessonNumber === undefined
     ) {
-      return { ...session.source, startTime: session.currentTime };
+      return { ...session.source, startTime };
     }
     return createLearningLessonVideoSource({
       media: {
@@ -486,7 +538,7 @@ export function LearningMiniPlayer({
       },
       lessonTitle: session.lessonTitle,
       mediaKey: sessionMediaKey,
-      startTime: session.currentTime,
+      startTime,
       protectedPlayback: playbackBootstrap.source === "paid-bootstrap-api",
       segmentToken: playbackBootstrap.segmentToken,
       segmentTokenExpiresAt: playbackBootstrap.segmentTokenExpiresAt,
@@ -502,10 +554,10 @@ export function LearningMiniPlayer({
     playbackBootstrap,
     playbackCourseSlug,
     playbackLessonNumber,
-    session.currentTime,
     session.lessonTitle,
     session.source,
     sessionMediaKey,
+    startTime,
   ]);
 
   return (
