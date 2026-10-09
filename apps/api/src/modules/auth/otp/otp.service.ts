@@ -15,7 +15,6 @@ import {
   OTP_DAILY_WINDOW_MS,
   OTP_IDENTIFIER_DAILY_CEILING,
   OTP_MAX_ATTEMPTS,
-  OTP_RESEND_WINDOW_MS,
   OTP_TTL_MINUTES,
   OTP_TTL_MS,
   OTP_USER_DAILY_LIMIT,
@@ -110,18 +109,21 @@ export function createOtpService({
         "Too many verification code requests. Please try again tomorrow.",
       );
 
+    const resendCooldownSeconds = config.OTP_RESEND_COOLDOWN_SECONDS;
     const recentlySent = await otpRepository.hasOtpSince(database, {
       identifier,
       identifierType,
       purpose,
-      since: new Date(now - OTP_RESEND_WINDOW_MS),
+      since: new Date(now - resendCooldownSeconds * 1000),
     });
 
     if (recentlySent) {
       throw new AppError(
         429,
         "RATE_LIMIT_EXCEEDED",
-        "Please wait 60 seconds before requesting another code.",
+        `Please wait ${resendCooldownSeconds} ${
+          resendCooldownSeconds === 1 ? "second" : "seconds"
+        } before requesting another code.`,
       );
     }
 

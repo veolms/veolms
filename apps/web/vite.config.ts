@@ -459,6 +459,11 @@ export default defineConfig(({ command, mode }) => {
         config.STATIC_BUILD_API_URL,
       ),
       "import.meta.env.VITE_CDN_URL": JSON.stringify(config.VITE_CDN_URL),
+      // The API's own setting, handed to the login form so its countdown
+      // ends when the API starts accepting another send.
+      "import.meta.env.OTP_RESEND_COOLDOWN_SECONDS": JSON.stringify(
+        config.OTP_RESEND_COOLDOWN_SECONDS,
+      ),
     },
     plugins: [
       earlyHlsPreloadPlugin(),

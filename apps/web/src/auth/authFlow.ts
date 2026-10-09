@@ -123,7 +123,13 @@ export const OTP_ACTION_LABELS = {
   changeMobile: "Change mobile number",
 } as const;
 
-export const RESEND_COOLDOWN_SECONDS = 60;
+/**
+ * How long the API makes a visitor wait between two codes. Filled in from
+ * OTP_RESEND_COOLDOWN_SECONDS when the app is built or served, so the
+ * countdown and the API never disagree.
+ */
+export const RESEND_COOLDOWN_SECONDS: number =
+  Number(import.meta.env.OTP_RESEND_COOLDOWN_SECONDS) || 60;
 
 export function formatResendCountdown(seconds: number): string {
   return `${Math.max(0, seconds)}s`;
