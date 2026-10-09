@@ -2,6 +2,7 @@ import {
   DEFAULT_HOME_PAGE_SETTINGS,
   HOME_PAGE_COURSES_PER_SECTION,
   HOME_PAGE_DISCUSSION_COUNT,
+  HOME_PAGE_HERO_LESSON,
   homePageSettingsSchema,
   type CourseSummary,
   type GuestHomePageResponse,
@@ -57,7 +58,10 @@ export function createHomePageService({
   threadsService,
 }: {
   database: Kysely<Database>;
-  courseService: Pick<CourseService, "listPublicCourseSummaries">;
+  courseService: Pick<
+    CourseService,
+    "listPublicCourseSummaries" | "getPublishedCourseBySlug"
+  >;
   threadsService: Pick<ThreadsService, "listPublicPopularDiscussions">;
 }): HomePageService {
   let cachedGuestPage:
@@ -136,6 +140,28 @@ export function createHomePageService({
     ].slice(0, HOME_PAGE_COURSES_PER_SECTION);
   }
 
+  /**
+   * The picture the hero's laptop shows until its lesson is played: that
+   * lesson's course thumbnail. The rows only list the course on some
+   * academies, so it is looked up when neither of them does.
+   */
+  async function resolveHeroLessonPosterUrl(
+    shownCourses: readonly CourseSummary[],
+  ): Promise<string | null> {
+    const { courseSlug } = HOME_PAGE_HERO_LESSON;
+    const shown = shownCourses.find((course) => course.slug === courseSlug);
+    if (shown) return shown.thumbnailUrl ?? null;
+
+    const course = await courseService.getPublishedCourseBySlug(courseSlug);
+    if (!course) return null;
+    const [summary] = await courseService.listPublicCourseSummaries({
+      courseIds: [course.id],
+      limit: 1,
+      order: "popular",
+    });
+    return summary?.thumbnailUrl ?? null;
+  }
+
   function resolveDiscussions(
     section: HomePageSettings["discussions"],
     popular: readonly PublicPopularDiscussion[],
@@ -167,10 +193,15 @@ export function createHomePageService({
       settings.freeCourses,
       popularCourses,
     );
+    const heroLessonPosterUrl = await resolveHeroLessonPosterUrl([
+      ...popularCourses,
+      ...freeCourses,
+    ]);
 
     return {
       version: updatedAt?.toISOString() ?? "default",
       hero: settings.hero,
+      heroLessonPosterUrl,
       highlights: settings.highlights,
       popularCourses: {
         visible: settings.popularCourses.visible,
