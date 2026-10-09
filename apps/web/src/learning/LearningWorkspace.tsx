@@ -76,6 +76,10 @@ import {
 } from "./courseContent";
 import { mediaService } from "../services/media";
 import { Curriculum } from "./Curriculum";
+import {
+  applyCurriculumDragWidth,
+  clearCurriculumDragWidth,
+} from "./curriculumDragWidth";
 import { CurriculumResizeGrip } from "./CurriculumResizeGrip";
 import {
   FULLSCREEN_VIDEO_WIDTH_DEFAULT_PERCENT,
@@ -302,22 +306,6 @@ interface CurriculumResize {
  * told the width the drag has reached (see moveCurriculumResize).
  */
 const CURRICULUM_RESIZE_STATE_SYNC_MS = 140;
-
-/**
- * Puts the width a drag has reached straight onto the document, where the
- * split layout reads it, so the page is laid out for it in the same frame.
- */
-function applyCurriculumResizeToDocument(resize: CurriculumResize) {
-  const root = document.documentElement;
-  root.style.setProperty(
-    "--learning-curriculum-width",
-    `${resize.previewWidth}px`,
-  );
-  root.style.setProperty(
-    "--learning-curriculum-expanded-width",
-    `${resize.expandedWidth}px`,
-  );
-}
 
 interface CurriculumPointerEvent {
   pointerId: number;
@@ -658,14 +646,32 @@ export function LearningWorkspace({
     () => () => window.clearTimeout(curriculumResizeSyncTimerRef.current),
     [],
   );
-  // While the course content is dragged its width goes straight onto the
-  // document, ahead of React's state (see moveCurriculumResize). Whatever a
-  // render has just written there from that state, the document is put back
-  // on the width the pointer has reached.
+  // While the course content is dragged, the width the pointer has reached is
+  // written onto the elements sized from it, ahead of React's state (see
+  // moveCurriculumResize). It is put back after every render of a drag, in
+  // case the render replaced one of those elements, and taken off by the
+  // render that ends the drag: the same commit that gives the document the
+  // width the content settles at, so the page never shows a width in between.
+  const curriculumDragWidthAppliedRef = useRef(false);
   useLayoutEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
     const resize = curriculumResizeRef.current;
-    if (resize) applyCurriculumResizeToDocument(resize);
+    if (resize) {
+      curriculumDragWidthAppliedRef.current = true;
+      applyCurriculumDragWidth(workspace, resize);
+    } else if (curriculumDragWidthAppliedRef.current) {
+      curriculumDragWidthAppliedRef.current = false;
+      clearCurriculumDragWidth(workspace);
+    }
   });
+  // Two of those elements belong to the shell and outlive this page.
+  useLayoutEffect(() => {
+    const workspace = workspaceRef.current;
+    return () => {
+      if (workspace) clearCurriculumDragWidth(workspace);
+    };
+  }, []);
   const floatingLessonDrawerResizeRef =
     useRef<FloatingLessonDrawerResize | null>(null);
   const curriculumResizeMoveRef = useRef<
@@ -2377,13 +2383,14 @@ export function LearningWorkspace({
   // width of its own. Where it settles (closed, its minimum, or the width
   // it was dragged to) is decided when the pointer is released.
   //
-  // The width is written onto the document directly, so the split is laid
-  // out for it in this same frame. It used to travel through React state
-  // alone, which re-rendered the whole workspace for every movement of the
-  // pointer; those renders took several frames each, so the layout followed
-  // the pointer in jumps. React still hears the width at once where it
-  // changes what is rendered (closed or open, sliding closed or not), and
-  // otherwise when the pointer comes to rest.
+  // The width is written directly onto the elements sized from it (see
+  // curriculumDragWidth.ts), so the split is laid out for it in this same
+  // frame. It used to travel through React state alone, which re-rendered
+  // the whole workspace for every movement of the pointer; those renders
+  // took several frames each, so the layout followed the pointer in jumps.
+  // React still hears the width at once where it changes what is rendered
+  // (closed or open, sliding closed or not), and otherwise when the pointer
+  // comes to rest.
   const moveCurriculumResize = useCallback((event: CurriculumPointerEvent) => {
     const resize = curriculumResizeRef.current;
     if (!resize || resize.pointerId !== event.pointerId) return;
@@ -2409,7 +2416,11 @@ export function LearningWorkspace({
       resize.previewWidth < CURRICULUM_MIN_WIDTH !== slidingClosed;
     resize.previewWidth = previewWidth;
     if (!slidingClosed) resize.expandedWidth = previewWidth;
-    applyCurriculumResizeToDocument(resize);
+    const workspace = workspaceRef.current;
+    if (workspace) {
+      curriculumDragWidthAppliedRef.current = true;
+      applyCurriculumDragWidth(workspace, resize);
+    }
 
     const syncState = () => {
       const current = curriculumResizeRef.current;

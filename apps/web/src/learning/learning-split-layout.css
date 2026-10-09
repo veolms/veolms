@@ -3,10 +3,11 @@
 
    Plain CSS because Tailwind cannot reasonably express it: the shell frame
    has to react to a pane rendered deep inside it (`:has()` on an ancestor,
-   minus the player-motion states), the animated `--learning-curriculum-width`
-   must be owned by one ancestor of both cards, and the rules replace legacy
-   unlayered declarations on the same elements. Everything here is keyed on
-   the `data-learning-split-*` hooks, so nothing applies without the pane.
+   minus the player-motion states), the width both cards are sized from is
+   held in registered properties (`@property`, below), and the rules replace
+   legacy unlayered declarations on the same elements. Everything here is
+   keyed on the `data-learning-split-*` hooks, so nothing applies without the
+   pane.
 
    How it works: the shell frame is the only box that can clip both the page
    scroller and the persistent player, so the frame itself becomes the lesson
@@ -18,7 +19,67 @@
    (the page behind the lesson is laid out in it) and the lesson reserves the
    pane's space instead, so nothing inside the lesson moves. An expanding
    player needs no such step: the stand-in page it travels with already has
-   this shape and covers the frame until the real page is in place. */
+   this shape and covers the frame until the real page is in place.
+
+   The course content's width, and why none of the properties below is
+   inherited: `--learning-curriculum-width` is the page's value, set on the
+   document before first paint and inherited by everything. A change to an
+   inherited property re-styles every element under it, so a width that
+   changes on every frame cannot live there: animating it on the frame, or
+   writing it on the document while the gutter was dragged, re-styled the
+   whole lesson page for each frame, and neither could keep up.
+
+   So the page's value only ever changes in one step. Each element that is
+   sized from the width holds a copy of its own, `--learning-split-width`,
+   and animates that copy when the page's value changes. A drag of the gutter
+   writes the width it has reached onto those same elements, as
+   `--learning-curriculum-drag-width` (curriculumDragWidth.ts), and the copy
+   follows that for as long as it is set. A change to any of these re-styles
+   the element it is on and nothing under it.
+
+   The two drag properties are registered without an initial value, so that
+   `var()` falls back to the page's value whenever no drag has set them. */
+@property --learning-curriculum-drag-width {
+  syntax: "*";
+  inherits: false;
+}
+
+/* The width the course content's own contents are laid out at during a drag:
+   the last width at or over its minimum, so that it slides shut instead of
+   being squeezed. */
+@property --learning-curriculum-drag-content-width {
+  syntax: "*";
+  inherits: false;
+}
+
+/* `none` until an element is given a width, and a width cannot be animated
+   from `none`. The shell and its frame are on screen before the lesson page
+   is; with a length here they would slide from it to the real width as the
+   page arrives, instead of starting there. */
+@property --learning-split-width {
+  syntax: "<length> | none";
+  inherits: false;
+  initial-value: none;
+}
+
+@property --learning-split-gap {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 12px;
+}
+
+@property --learning-split-pane-space {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 412px;
+}
+
+@property --learning-split-lesson-reserve {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 @media (min-width: 1081px) {
   /* The shell normally draws the edge highlight of the full-width frame (its
      overlay with a mouse, FrameEdge on touch devices); here the frame draws
@@ -35,19 +96,63 @@
      card, and cutting it off at the gutter leaves a hard edge in the glow. */
   :root[data-content-layout="framed"]
     .courses-app:has(> .courses-main-frame [data-learning-split-pane])::after {
+    /* A drag writes its width on the shell; the overlay has to ask for it. */
+    --learning-curriculum-drag-width: inherit;
     z-index: 0;
     left: auto;
-    width: var(--learning-curriculum-width, 400px);
+    width: var(--learning-split-width);
     box-shadow: var(--application-frame-shadow, var(--card-shadow));
-    transition: --learning-curriculum-width 280ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
+  /* Everything sized from the course content's width takes its own copy of
+     it (see the top of this file) and animates that copy, all with the same
+     timing, so they move as one. */
+  :root[data-content-layout="framed"]
+    .courses-app:has(> .courses-main-frame [data-learning-split-pane])::after,
+  :root[data-content-layout="framed"]
+    .courses-main-frame:has([data-learning-split-pane]),
+  :root[data-content-layout="framed"]
+    .courses-main-frame:has([data-learning-split-pane])
+    :is([data-learning-split-lesson], [data-learning-split-pane]) {
+    --learning-split-width: var(
+      --learning-curriculum-drag-width,
+      var(--learning-curriculum-width, 400px)
+    );
+    /* The room the course content takes from the lesson card: its width
+       plus the 12px gutter. Over the last 12px of closing the gutter's
+       share is given back too, so a fully closed panel leaves the lesson
+       card at its full width. The gutter itself does not shrink: the panel
+       keeps its 12px distance from the card and slides out past the page's
+       edge instead (see the pane's `right` below). */
+    --learning-split-gap: min(12px, var(--learning-split-width));
+    --learning-split-pane-space: calc(
+      var(--learning-split-width) + var(--learning-split-gap)
+    );
+    transition: --learning-split-width 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Keep the head bootstrap width on first paint, and follow the pointer
+     exactly while the gutter is dragged. */
   :root[data-content-layout="framed"][data-app-hydrated="false"]
     .courses-app:has(> .courses-main-frame [data-learning-split-pane])::after,
   :root[data-content-layout="framed"]
     .courses-app:has(> .courses-main-frame [data-learning-split-pane]):has(
       .learning-workspace.is-curriculum-resizing
-    )::after {
+    )::after,
+  :root[data-content-layout="framed"][data-app-hydrated="false"]
+    .courses-main-frame:has([data-learning-split-pane]),
+  :root[data-content-layout="framed"]
+    .courses-main-frame:has([data-learning-split-pane]):has(
+      .learning-workspace.is-curriculum-resizing
+    ),
+  :root[data-content-layout="framed"][data-app-hydrated="false"]
+    .courses-main-frame:has([data-learning-split-pane])
+    :is([data-learning-split-lesson], [data-learning-split-pane]),
+  :root[data-content-layout="framed"]
+    .courses-main-frame:has([data-learning-split-pane]):has(
+      .learning-workspace.is-curriculum-resizing
+    )
+    :is([data-learning-split-lesson], [data-learning-split-pane]) {
     transition: none;
   }
 
@@ -72,21 +177,11 @@
   :root[data-content-layout="framed"]
     .courses-main-frame:has([data-learning-split-pane]) {
     --learning-split-radius: 18px;
-    /* The room the course content takes from the lesson card: its width
-       plus the 12px gutter. Over the last 12px of closing the gutter's
-       share is given back too, so a fully closed panel leaves the lesson
-       card at its full width. The gutter itself does not shrink: the panel
-       keeps its 12px distance from the card and slides out past the page's
-       edge instead (see the pane's `right` below). */
-    --learning-split-gap: min(12px, var(--learning-curriculum-width, 400px));
-    --learning-split-pane-space: calc(
-      var(--learning-curriculum-width, 400px) + var(--learning-split-gap)
-    );
-    --learning-split-lesson-reserve: var(--learning-split-pane-space);
     position: relative;
-    transition: --learning-curriculum-width 280ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
+  /* The frame makes room for the course content, except while the player is
+     minimizing: then the lesson reserves that room itself (below). */
   :root[data-content-layout="framed"]
     .courses-main-frame:has([data-learning-split-pane]):not(
       :has(
@@ -97,19 +192,11 @@
         [data-learning-player-window-motion]
       )
     ) {
-    --learning-split-lesson-reserve: 0px;
     margin-right: var(--learning-split-pane-space);
-  }
 
-  /* Keep the head bootstrap width on first paint, and follow the pointer
-     exactly while the gutter is dragged. */
-  :root[data-content-layout="framed"][data-app-hydrated="false"]
-    .courses-main-frame:has([data-learning-split-pane]),
-  :root[data-content-layout="framed"]
-    .courses-main-frame:has([data-learning-split-pane]):has(
-      .learning-workspace.is-curriculum-resizing
-    ) {
-    transition: none;
+    & [data-learning-split-lesson] {
+      --learning-split-lesson-reserve: 0px;
+    }
   }
 
   /* The lesson card's own edge highlight, above the lesson: an overlay with a
@@ -141,8 +228,8 @@
 
   :root[data-content-layout="framed"]
     .courses-main-frame:has([data-learning-split-pane]) {
-    /* The frame animates the width; a second transition here would chase it. */
     & [data-learning-split-lesson] {
+      --learning-split-lesson-reserve: var(--learning-split-pane-space);
       box-sizing: border-box;
       grid-template-columns: minmax(0, 1fr);
       column-gap: 0;
@@ -154,7 +241,6 @@
         )
       );
       padding-right: var(--learning-split-lesson-reserve);
-      transition: none;
     }
 
     & [data-learning-split-lesson] > .learning-workspace__lesson-column {
@@ -170,7 +256,7 @@
       /* 12px from the edge while open. As it closes its last 12px it moves
          out through that margin, staying 12px clear of the lesson card. */
       right: var(--learning-split-gap);
-      width: var(--learning-curriculum-width, 400px);
+      width: var(--learning-split-width);
       height: calc(100dvh - var(--shell-frame-block-space, 22px));
       border-radius: var(--learning-split-radius);
     }

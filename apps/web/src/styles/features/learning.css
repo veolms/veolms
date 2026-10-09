@@ -21,18 +21,22 @@
 }
 
 .learning-workspace__main {
+  /* This element's own copy of the course content's width: the page's value,
+     or the width a drag of the gutter has reached. The copy is what animates,
+     because it is not inherited (learning-split-layout.css explains). */
+  --learning-split-width: var(
+    --learning-curriculum-drag-width,
+    var(--learning-curriculum-width, 400px)
+  );
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(
-      0,
-      var(--learning-curriculum-width, 400px)
-    );
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--learning-split-width));
   column-gap: 0;
   width: min(100%, 1840px);
   height: 100%;
   min-height: 100vh;
   margin: 0 auto;
   padding: 0;
-  transition: --learning-curriculum-width 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: --learning-split-width 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Keep the head bootstrap width on first paint. The registered custom
@@ -533,7 +537,10 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   }
 
   .learning-curriculum__viewport > .learning-curriculum {
-    width: var(--learning-curriculum-expanded-width, 400px);
+    width: var(
+      --learning-curriculum-drag-content-width,
+      var(--learning-curriculum-expanded-width, 400px)
+    );
     max-width: none;
   }
 
