@@ -1,0 +1,115 @@
+/* The shell's backdrop and the main frame's surface, painted from boxes of
+   their own while the sidebar is dragged on a touch-first device.
+
+   Plain CSS because Tailwind cannot reasonably express it: the rules replace
+   unlayered legacy declarations on `.courses-app` and `.courses-main-frame`,
+   and they are keyed on the shell's drag state. Everything here is scoped to
+   that state and to the `data-shell-drag-surface` boxes ShellDragSurface
+   renders, so nothing applies outside a drag.
+
+   Why: dragging the sidebar changes the shell's style on every frame, and
+   Chrome then repaints whatever the shell and the frame draw themselves: the
+   backdrop, the frame's surface and its shadow. All of that sits in the
+   page's root layer together with the sidebar's glow, so a phone or tablet
+   GPU re-rastered a full screen of blurs on every frame of a drag (about a
+   third of each frame on a 3200px-wide tablet). Painted from these boxes
+   instead, none of it changes while the sidebar moves:
+
+   - the backdrop is the same background on a box whose style stays put;
+   - the frame's surface and shadow are the frame's own, drawn on two boxes of
+     a fixed size. The "cap" carries the frame's left end and moves with the
+     sidebar's edge; the "body" carries the rest, anchored to the right, and
+     is uncovered or covered by its clip. Each sits in a layer that is
+     rastered once and then only moved or clipped.
+
+   The pieces repeat the frame's geometry (12px from the top and right, 10px
+   from the bottom, 18px corners; see foundation.css). They meet 140px in
+   from the frame's left edge, which is further than the frame's shadow
+   reaches (a 72px blur fades out within about 108px), so each piece is
+   exactly what the whole frame would draw there. The clips are boxes, not
+   clip paths: a box's clip lands on whole device pixels, so the two pieces
+   meet without a seam.
+
+   Not used where the frame is not the plain full-height frame: while the
+   sidebar floats over the page (the frame does not move then), and on the
+   desktop lesson page, whose frame is narrower and shares the shell's
+   overlay. Not on narrow screens, where a wide sidebar could leave the frame
+   too short for the two pieces. */
+@media (min-width: 900px) and (pointer: coarse) {
+  :root[data-content-layout="framed"]
+    .courses-app--resizing:not(.courses-app--hidden):not(
+      :has([data-learning-split-pane])
+    ) {
+    background: none;
+
+    & > .courses-main-frame {
+      background: transparent;
+      box-shadow: none;
+    }
+
+    & > [data-shell-drag-surface] {
+      display: block;
+    }
+  }
+
+  [data-shell-drag-surface] {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  /* Under everything else the shell stacks, where its own background was. */
+  [data-shell-drag-surface="backdrop"] {
+    z-index: -1;
+    inset: 0;
+    background: var(--shell-backdrop);
+  }
+
+  /* On the frame's level and before it in the document, so the frame's
+     content paints over them as it does over the frame's own surface. The
+     frame's left edge is a property the shell does not hand down by itself
+     (see its registration in foundation.css), so each asks for it. */
+  [data-shell-drag-surface="cap"],
+  [data-shell-drag-surface="body"] {
+    --main-surface-inline-start: inherit;
+    z-index: 1;
+    top: 0;
+    bottom: 0;
+    overflow: hidden;
+  }
+
+  [data-shell-drag-surface="cap"] {
+    left: calc(var(--main-surface-inline-start) - 120px);
+    width: 260px;
+  }
+
+  [data-shell-drag-surface="body"] {
+    right: 0;
+    left: calc(var(--main-surface-inline-start) + 140px);
+  }
+
+  /* The frame's surface, edge and shadow, as foundation.css gives them to
+     `.courses-main-frame`. `will-change` gives each a layer of its own. */
+  [data-shell-drag-surface] > i {
+    position: absolute;
+    top: 12px;
+    bottom: 10px;
+    border-radius: 18px;
+    background: var(--main-surface);
+    box-shadow: var(--application-frame-shadow, var(--card-shadow));
+    will-change: opacity;
+  }
+
+  /* Starts at the frame's left edge and runs on past the cap's clip. */
+  [data-shell-drag-surface="cap"] > i {
+    left: 120px;
+    width: 420px;
+  }
+
+  /* Ends at the frame's right edge and starts left of any place the clip can
+     uncover. Its size depends on the viewport alone, so a drag never changes
+     it. */
+  [data-shell-drag-surface="body"] > i {
+    right: 12px;
+    width: calc(100vw - 112px);
+  }
+}

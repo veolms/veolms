@@ -162,7 +162,7 @@ function HomePageSettingsForm({
       <SettingsSection
         id="home-page-highlights-heading"
         title="Highlight cards"
-        description="The four cards under the hero. Each keeps its icon and colour."
+        description="The four cards above the student comments. Each keeps its icon and colour."
         visible={draft.highlights.visible}
         onVisibleChange={(visible) =>
           update("highlights", { ...draft.highlights, visible })

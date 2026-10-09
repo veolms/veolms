@@ -62,6 +62,17 @@ export interface CourseAccessService {
     order: OrderRefLike,
     item: OrderItemRefLike,
   ): Promise<void>;
+
+  /**
+   * Ends the access an order gives to one course without looking for
+   * another order to take it over: the learner is leaving the course, not
+   * being refunded.
+   */
+  withdrawCourseFromOrder(
+    database: Executor,
+    order: OrderRefLike,
+    courseId: string,
+  ): Promise<void>;
 }
 
 export function createCourseAccessService({
@@ -288,9 +299,27 @@ export function createCourseAccessService({
     }
   }
 
+  async function withdrawCourseFromOrder(
+    database: Executor,
+    order: OrderRefLike,
+    courseId: string,
+  ): Promise<void> {
+    await accessService.revokeAccessForOrderCourse(
+      database,
+      order.id,
+      courseId,
+    );
+    await enrollmentRepo.revokeEnrollmentsForOrderCourse(
+      database,
+      order.id,
+      courseId,
+    );
+  }
+
   return {
     grantAccessForOrder,
     revokeAccessForOrder,
     revokeAccessForOrderItem,
+    withdrawCourseFromOrder,
   };
 }

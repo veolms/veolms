@@ -20,12 +20,19 @@
    player needs no such step: the stand-in page it travels with already has
    this shape and covers the frame until the real page is in place. */
 @media (min-width: 1081px) {
-  /* The shell's overlay normally paints the edge highlight of the full-width
-     frame; the frame paints its own below, at whatever width it has. Here the
-     overlay becomes the course content card's shadow instead. It has to sit
-     at shell level, above the player's ambient glow and under the lesson
-     card: a shadow on the card itself is painted over the lesson card, and
-     cutting it off at the gutter leaves a hard edge in the glow. */
+  /* The shell normally draws the edge highlight of the full-width frame (its
+     overlay with a mouse, FrameEdge on touch devices); here the frame draws
+     its own below, at whatever width it has, and the shell's is not drawn. */
+  :root[data-content-layout="framed"]
+    .courses-app:has(> .courses-main-frame [data-learning-split-pane])
+    > [data-frame-edge="shell"] {
+    display: none;
+  }
+
+  /* The shell's overlay box becomes the course content card's shadow instead.
+     It has to sit at shell level, above the player's ambient glow and under
+     the lesson card: a shadow on the card itself is painted over the lesson
+     card, and cutting it off at the gutter leaves a hard edge in the glow. */
   :root[data-content-layout="framed"]
     .courses-app:has(> .courses-main-frame [data-learning-split-pane])::after {
     z-index: 0;
@@ -52,6 +59,14 @@
       :has([data-learning-split-pane])
     )::after {
     content: none;
+  }
+
+  :root[data-content-layout="framed"]
+    .courses-app:has([data-learning-expand-sheet-active]):not(
+      :has([data-learning-split-pane])
+    )
+    > [data-frame-edge="shell"] {
+    display: none;
   }
 
   :root[data-content-layout="framed"]
@@ -97,18 +112,31 @@
     transition: none;
   }
 
-  :root[data-content-layout="framed"]
-    .courses-main-frame:has([data-learning-split-pane])::after {
-    content: "";
-    position: absolute;
-    z-index: 46;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    box-shadow: var(
-      --application-frame-edge-shadow,
-      var(--surface-depth-edge-shadow, none)
-    );
+  /* The lesson card's own edge highlight, above the lesson: an overlay with a
+     mouse or trackpad, FrameEdge's strips on touch devices (FrameEdge
+     explains the split, and why its group has no box). */
+  @media not (pointer: coarse) {
+    :root[data-content-layout="framed"]
+      .courses-main-frame:has([data-learning-split-pane])::after {
+      content: "";
+      position: absolute;
+      z-index: 46;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: var(
+        --application-frame-edge-shadow,
+        var(--surface-depth-edge-shadow, none)
+      );
+    }
+  }
+
+  @media (pointer: coarse) {
+    :root[data-content-layout="framed"]
+      .courses-main-frame:has([data-learning-split-pane])
+      > [data-frame-edge="lesson"] {
+      display: contents;
+    }
   }
 
   :root[data-content-layout="framed"]

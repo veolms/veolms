@@ -72,7 +72,7 @@ export const DEFAULT_HOME_PAGE_SETTINGS: HomePageSettings = {
     description:
       "Deep understanding and practical foundations give you the confidence to build beyond tutorials.",
     primaryActionLabel: "Explore Courses",
-    secondaryActionLabel: "Try a free course",
+    secondaryActionLabel: "Watch Free Courses",
   },
   highlights: {
     visible: true,

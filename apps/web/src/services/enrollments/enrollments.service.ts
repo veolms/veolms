@@ -2,6 +2,7 @@ import { api } from "../../lib/api-client";
 import type {
   AcademyEnrollmentListResponse,
   EnrolledCoursesResponse,
+  UnenrollCourseResponse,
 } from "@veolms/contracts";
 
 export const enrollmentsService = {
@@ -12,5 +13,10 @@ export const enrollmentsService = {
   },
   listEnrolledCourses: (): Promise<EnrolledCoursesResponse> => {
     return api.get<EnrolledCoursesResponse>("/enrollments/courses");
+  },
+  unenrollFromCourse: (courseId: string): Promise<UnenrollCourseResponse> => {
+    return api.delete<UnenrollCourseResponse>(
+      `/enrollments/courses/${encodeURIComponent(courseId)}`,
+    );
   },
 };

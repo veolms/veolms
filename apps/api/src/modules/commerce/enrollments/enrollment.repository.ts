@@ -178,6 +178,20 @@ function toCourseIdList(courseId: string | string[] | undefined): string[] {
   return Array.isArray(courseId) ? courseId : [courseId];
 }
 
+/** One learner's enrollment in one course, whatever its status. */
+export async function findEnrollment(
+  database: Executor,
+  userId: string,
+  courseId: string,
+) {
+  return await database
+    .selectFrom("enrollments")
+    .selectAll()
+    .where("user_id", "=", userId)
+    .where("course_id", "=", courseId)
+    .executeTakeFirst();
+}
+
 export async function listUserEnrolledCourseIds(
   database: Executor,
   userId: string,

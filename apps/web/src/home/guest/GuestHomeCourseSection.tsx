@@ -11,6 +11,7 @@ import { adaptCourseSummaryToCatalogueCourse } from "../../courses/courseAdapter
 import type { NavigateTo } from "../../routing/navigation";
 import { GUEST_HOME_COURSES_PER_SECTION } from "../guestHomeLimits";
 import { GuestHomeSectionHeader } from "./GuestHomeSectionHeader";
+import { guestHomeCourseRowBleed } from "./guestHomeSpacing";
 
 /**
  * What the home page's course cards need from the page shell to behave like
@@ -41,6 +42,7 @@ const guestHomeCardFacts = ["sections", "lectures"] as const;
  */
 const courseRowClasses = [
   "grid grid-cols-1 gap-4",
+  guestHomeCourseRowBleed,
   "@max-lg/courses:[&>*:nth-child(n+3)]:hidden",
   "@lg/courses:grid-cols-2 @lg/courses:@max-2xl/courses:[&>*:nth-child(n+3)]:hidden",
   "@2xl/courses:grid-cols-3 @2xl/courses:gap-5 @2xl/courses:@max-[100rem]/courses:[&>*:nth-child(n+4)]:hidden",

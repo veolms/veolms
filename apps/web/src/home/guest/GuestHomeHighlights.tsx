@@ -1,4 +1,3 @@
-import { guestHomeBlockStart, guestHomeGutter } from "./guestHomeSpacing";
 import type { HomePageHighlight } from "@veolms/contracts/home-page-defaults";
 import { BookOpenTextIcon as BookOpenText } from "@phosphor-icons/react/BookOpenText";
 import { CodeIcon as Code } from "@phosphor-icons/react/Code";
@@ -14,7 +13,12 @@ const highlightStyles = [
   { icon: Target, tone: "bg-amber-500/15 text-amber-500" },
 ] as const;
 
-/** What the courses promise: four small cards under the hero. */
+/**
+ * What the courses promise: four small cards between the course rows and
+ * what students say about them. They lie flat on the page, with no shadow
+ * or raised surface: lifted like the page's buttons, they read as four more
+ * things to press.
+ */
 export function GuestHomeHighlights({
   items,
 }: {
@@ -23,7 +27,7 @@ export function GuestHomeHighlights({
   return (
     <ul
       aria-label="What you get"
-      className={`grid grid-cols-2 gap-3 @3xl/home:grid-cols-4 @3xl/home:gap-4 ${guestHomeGutter} ${guestHomeBlockStart}`}
+      className="grid min-w-0 grid-cols-2 gap-3 @3xl/home:grid-cols-4 @3xl/home:gap-4"
     >
       {items
         .slice(0, highlightStyles.length)
@@ -32,7 +36,7 @@ export function GuestHomeHighlights({
           return (
             <li
               key={index}
-              className="flex min-w-0 items-center gap-3 rounded-xl bg-(--card-surface,var(--surface)) bg-(image:--raised-surface-image) p-3 shadow-(--raised-surface-shadow) @3xl/home:gap-3.5 @3xl/home:px-4 @3xl/home:py-3.5"
+              className="flex min-w-0 items-center gap-3 rounded-xl bg-(--card-surface,var(--surface)) p-3 @3xl/home:gap-3.5 @3xl/home:px-4 @3xl/home:py-3.5"
             >
               <span
                 aria-hidden="true"

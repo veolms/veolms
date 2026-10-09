@@ -2,6 +2,8 @@ import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotc
 import { HeartIcon as Heart } from "@phosphor-icons/react/Heart";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useRef,
@@ -33,6 +35,14 @@ import type {
 } from "./catalogue";
 import { courseSurfaceElevation } from "../components/cardElevation";
 import { courseMatchesWishlist, getCourseRouteKey } from "./catalogue";
+
+// Only a learner leaving a free course needs this, so it stays out of the
+// catalogue's own code.
+const UnenrollCourseModal = lazy(() =>
+  import("./UnenrollCourseModal").then((module) => ({
+    default: module.UnenrollCourseModal,
+  })),
+);
 
 function useCourseCatalogueBreakpoint(query: string) {
   const subscribe = useCallback(
@@ -126,6 +136,7 @@ export function CourseCatalogue({
   deletingCourseIds,
 }: CourseCatalogueProps) {
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null);
+  const [pendingUnenroll, setPendingUnenroll] = useState<Course | null>(null);
   const quickFilterTabsRef = useRef<HTMLDivElement>(null);
   const [hasQuickFilterOverflow, setHasQuickFilterOverflow] = useState(false);
   const [localDeletingIds, setLocalDeletingIds] = useState<Set<string>>(
@@ -301,6 +312,7 @@ export function CourseCatalogue({
       }}
       onDeleteRequested={setPendingDelete}
       onRestoreRequested={onRestoreCourse}
+      onUnenrollRequested={role === "student" ? setPendingUnenroll : undefined}
       onNavigatePage={onNavigatePage}
       menuOpen={courseMenu === course.id}
       setMenuOpen={setCourseMenu}
@@ -611,6 +623,15 @@ export function CourseCatalogue({
         }}
         onClose={() => setPendingDelete(null)}
       />
+      {pendingUnenroll ? (
+        <Suspense fallback={null}>
+          <UnenrollCourseModal
+            course={pendingUnenroll}
+            onClose={() => setPendingUnenroll(null)}
+            setNotice={setNotice}
+          />
+        </Suspense>
+      ) : null}
     </section>
   );
 }

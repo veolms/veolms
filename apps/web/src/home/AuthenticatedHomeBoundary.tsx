@@ -13,11 +13,6 @@ const StudentHome = lazy(() =>
     default: module.StudentHome,
   })),
 );
-const DiscoveryHome = lazy(() =>
-  import("./DiscoveryHome").then((module) => ({
-    default: module.DiscoveryHome,
-  })),
-);
 const StudentHomeZeroProgress = lazy(() =>
   import("../StudentHomeZeroProgress").then((module) => ({
     default: module.StudentHomeZeroProgress,
@@ -37,6 +32,13 @@ interface AuthenticatedHomeBoundaryProps {
    * which scored large layout shifts in Lighthouse.
    */
   pendingContent?: ReactNode;
+  /**
+   * The home of a learner who has not enrolled in anything yet: the guest
+   * home with a hero that greets them. It is returned from the same place
+   * as `pendingContent`, so a guest home that is already on screen is kept
+   * and only its hero copy changes.
+   */
+  notEnrolledContent: ReactNode;
 }
 
 function HomeState({
@@ -154,6 +156,7 @@ export function AuthenticatedHomeBoundary({
   setNotice,
   studentName,
   pendingContent,
+  notEnrolledContent,
 }: AuthenticatedHomeBoundaryProps) {
   const enrollmentQuery = useEnrolledCourses();
   const enrollmentData = enrollmentQuery.data;
@@ -181,20 +184,7 @@ export function AuthenticatedHomeBoundary({
   }
 
   if (enrollmentData.courses.length === 0) {
-    return (
-      <Suspense fallback={pendingContent ?? <HomeLoadingState />}>
-        <DiscoveryHome
-          mode="authenticated"
-          onNavigatePage={onNavigatePage}
-          studentName={studentName}
-          accessibleCourseIds={new Set()}
-          onDiscussionNavigatePage={onNavigatePage}
-          onDiscussionAccessDenied={() =>
-            setNotice?.("You don't have access to this course.")
-          }
-        />
-      </Suspense>
-    );
+    return <>{notEnrolledContent}</>;
   }
 
   const hasMeaningfulLearningProgress = enrollmentData.courses.some(

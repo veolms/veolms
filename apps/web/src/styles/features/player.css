@@ -193,13 +193,25 @@ html:has(.learning-session-dialog[open]) {
   height: 98%;
   pointer-events: none;
   opacity: 0;
+  /* Not painted at all while it is transparent, which is whenever ambient
+     mode is off. A transparent canvas is still a compositor layer, and one
+     that lies under the page forces the whole surface above it (the lesson
+     frame and its shadow) into a separate layer the size of the screen. It
+     is hidden only once the fade-out has finished. */
+  visibility: hidden;
   filter: blur(38px) saturate(1.55);
   transform: scale(1.065);
-  transition: opacity 320ms ease;
+  transition:
+    opacity 320ms ease,
+    visibility 0s linear 320ms;
 }
 
 .ambient-canvas--visible {
   opacity: 0.62;
+  visibility: visible;
+  transition:
+    opacity 320ms ease,
+    visibility 0s;
 }
 
 .ambient-canvas--shell {

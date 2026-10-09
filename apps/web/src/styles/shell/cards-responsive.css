@@ -102,6 +102,34 @@
     overflow: clip;
   }
 
+  /* A sidebar being dragged changes size on every frame, and each time
+     Chrome's compositor decides afresh which of its pieces share a layer. On
+     phone and tablet GPUs a piece whose layer has just been remade is missing
+     from that frame, so the sidebar blinked while it was dragged, and worst
+     as the drag began. Two things keep it whole:
+
+     - The pinned sidebar has a layer of its own all the time, not only from
+       the moment a drag starts, so starting one remakes nothing. The hint
+       names opacity, not transform: a layer expected to move is not kept on
+       the pixel grid, which would soften the sidebar's text wherever it sits
+       on a fraction of a device pixel.
+     - The handle's line lights up at once. Its fade ran on the compositor,
+       which gave the line a layer for 150ms and reshuffled the sidebar's
+       around it, right at the start of every drag.
+
+     Only on touch-first devices: a desktop does not drop the sidebar, and
+     promoting it there would switch its text from subpixel to greyscale
+     smoothing. */
+  @media (pointer: coarse) {
+    .courses-app:not(.courses-app--hidden) > .courses-sidebar {
+      will-change: opacity;
+    }
+
+    .sidebar-resize-handle::after {
+      transition: none;
+    }
+  }
+
   .courses-sidebar {
     /* The shell already contributes its 12px top inset. A second sticky inset
        moved the pinned sidebar and all of its contents down on reveal. */

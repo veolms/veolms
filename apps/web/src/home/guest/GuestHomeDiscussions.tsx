@@ -6,6 +6,7 @@ import { getCoursePlayerPath } from "../../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../../routing/navigation";
 import { GuestHomeLink } from "./GuestHomeLink";
 import { GuestHomeSectionHeader } from "./GuestHomeSectionHeader";
+import { guestHomeCommentGridBleed } from "./guestHomeSpacing";
 
 function getInitials(name: string) {
   const words = name.split(/\s+/u).filter(Boolean);
@@ -77,8 +78,7 @@ function getDiscussionDestination(discussion: PublicPopularDiscussion) {
 const commentCard =
   "rounded-2xl bg-(--card-surface,var(--surface)) bg-(image:--raised-surface-image) p-5 shadow-(--raised-surface-shadow)";
 
-const commentGrid =
-  "mt-5 grid grid-cols-1 gap-4 @xl/comments:grid-cols-2 @4xl/comments:grid-cols-3 @4xl/comments:gap-5";
+const commentGrid = `mt-5 grid grid-cols-1 gap-4 @xl/comments:grid-cols-2 @4xl/comments:grid-cols-3 @4xl/comments:gap-5 ${guestHomeCommentGridBleed}`;
 
 export function GuestHomeDiscussions({
   title,

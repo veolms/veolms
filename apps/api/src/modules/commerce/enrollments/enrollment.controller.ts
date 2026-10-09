@@ -1,5 +1,9 @@
 import type { FastifyRequest } from "fastify";
-import type { AcademyEnrollmentListQuery } from "@veolms/contracts";
+import type {
+  AcademyEnrollmentListQuery,
+  UnenrollCourseParams,
+  UnenrollCourseResponse,
+} from "@veolms/contracts";
 import type { EnrollmentService } from "./enrollment.service.ts";
 
 export function createEnrollmentController({
@@ -26,5 +30,13 @@ export function createEnrollmentController({
     return { items };
   }
 
-  return { listEnrolledCourses, listAcademyEnrollments };
+  async function unenrollFromCourse(
+    request: FastifyRequest<{ Params: UnenrollCourseParams }>,
+  ): Promise<UnenrollCourseResponse> {
+    const { courseId } = request.params;
+    await service.unenrollFromFreeCourse(request.user!.id, courseId);
+    return { courseId };
+  }
+
+  return { listEnrolledCourses, listAcademyEnrollments, unenrollFromCourse };
 }

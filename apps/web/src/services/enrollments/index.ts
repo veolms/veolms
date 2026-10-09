@@ -4,4 +4,5 @@ export {
   enrolledCoursesQueryOptions,
   useEnrolledCourses,
   useRecentEnrollments,
+  useUnenrollFromCourse,
 } from "./enrollments.queries";

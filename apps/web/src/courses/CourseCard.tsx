@@ -17,6 +17,7 @@ import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSi
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { ShareNetworkIcon as ShareNetwork } from "@phosphor-icons/react/ShareNetwork";
+import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
@@ -73,6 +74,8 @@ export interface CourseCardProps {
   onPublish?: (course: Course) => void;
   onDeleteRequested?: (course: Course) => void;
   onRestoreRequested?: (course: Course) => Promise<void> | void;
+  /** Offers "Unenroll" on a free course the learner is enrolled in. */
+  onUnenrollRequested?: (course: Course) => void;
   onNavigatePage: (destination: string) => void;
   menuOpen: boolean;
   setMenuOpen: (courseId: string | null) => void;
@@ -104,6 +107,7 @@ export function CourseCard({
   onPublish,
   onDeleteRequested,
   onRestoreRequested,
+  onUnenrollRequested,
   onNavigatePage,
   menuOpen,
   setMenuOpen,
@@ -237,7 +241,12 @@ export function CourseCard({
           disabled={isDeleting}
         >
           <span className="absolute inset-0 bg-slate-950/50 opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100" />
-          <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full bg-black/70 text-white opacity-0 backdrop-blur-[2px] shadow-[0_10px_28px_rgba(0,0,0,0.5)] transition-[opacity,transform] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100">
+          {/* The blur is only on while the button shows, and fades with it. A
+              backdrop filter gets a compositor layer even at zero opacity,
+              and that layer pushes the rest of the card into another one
+              above it; on every card of a page those layers made a sidebar
+              drag drop parts of the cards on tablets. */}
+          <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full bg-black/70 text-white opacity-0 shadow-[0_10px_28px_rgba(0,0,0,0.5)] transition-[opacity,transform,backdrop-filter] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-hover/media:backdrop-blur-[2px] group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100 group-focus-visible/media:backdrop-blur-[2px]">
             <Play size={30} weight="fill" />
           </span>
         </button>
@@ -481,6 +490,19 @@ export function CourseCard({
                       )
                     }
                   />
+                  {onUnenrollRequested && course.pricing?.free ? (
+                    <>
+                      <MenuDivider />
+                      <MenuAction
+                        Icon={SignOut}
+                        label="Unenroll"
+                        destructive
+                        onClick={() =>
+                          closeThen(() => onUnenrollRequested(course))
+                        }
+                      />
+                    </>
+                  ) : null}
                 </>
               ) : (
                 <>

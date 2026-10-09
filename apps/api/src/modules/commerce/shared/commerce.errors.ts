@@ -13,6 +13,18 @@ export const CommerceErrors = {
       "COURSE_ALREADY_OWNED",
       `You are already enrolled in "${title}".`,
     ),
+  ENROLLMENT_NOT_FOUND: () =>
+    new AppError(
+      404,
+      "ENROLLMENT_NOT_FOUND",
+      "You are not enrolled in this course.",
+    ),
+  UNENROLL_NOT_ALLOWED: () =>
+    new AppError(
+      409,
+      "UNENROLL_NOT_ALLOWED",
+      "You can only unenroll from a free course you joined at no cost.",
+    ),
   BUNDLE_NOT_FOUND: (bundleId: string) =>
     new AppError(
       404,

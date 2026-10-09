@@ -52,3 +52,15 @@ export const academyEnrollmentListResponseSchema = z.strictObject({
 export type AcademyEnrollmentListResponse = z.infer<
   typeof academyEnrollmentListResponseSchema
 >;
+
+export const unenrollCourseParamsSchema = z.strictObject({
+  courseId: z.uuid(),
+});
+export type UnenrollCourseParams = z.infer<typeof unenrollCourseParamsSchema>;
+
+export const unenrollCourseResponseSchema = z.strictObject({
+  courseId: z.uuid(),
+});
+export type UnenrollCourseResponse = z.infer<
+  typeof unenrollCourseResponseSchema
+>;

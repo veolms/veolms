@@ -8,6 +8,11 @@ import {
 import { GuestHomeDiscussions } from "./home/guest/GuestHomeDiscussions";
 import { GuestHomeHero } from "./home/guest/GuestHomeHero";
 import { GuestHomeHighlights } from "./home/guest/GuestHomeHighlights";
+import { HeroLaptopVideo } from "./home/guest/HeroLaptopVideo";
+import {
+  getNewLearnerGreeting,
+  getNewLearnerHero,
+} from "./home/guest/newLearnerHero";
 import {
   guestHomeBlockStart,
   guestHomeGutter,
@@ -19,6 +24,12 @@ import { useGuestHomePage } from "./services/home";
 import "./home/guest/guest-home-shell.css";
 
 const FREE_COURSES_SECTION_ID = "guest-home-free-courses";
+
+/** The lesson that plays on the laptop in the hero picture. */
+const HERO_LAPTOP_LESSON = {
+  courseSlug: "fundamentals-of-backend-and-nodejs",
+  lessonNumber: 1,
+};
 
 /**
  * True once the browser is idle after hydration. The prerendered page is
@@ -46,6 +57,9 @@ function useIdleAfterMount(skip: boolean) {
  * what students say below them. Its copy, its sections and what they
  * show are configured by the academy admin (Home Page in the admin menu).
  *
+ * A signed-in learner who has not enrolled in anything yet gets the same
+ * page (`learnerName`), with the hero greeting them instead.
+ *
  * In the production build the page arrives prerendered from build-time data
  * (`initialPage`). The browser then asks for the current page once it is
  * idle, so a change saved after that build still shows up without a new
@@ -57,6 +71,7 @@ export function GuestHome({
   courseCardActions,
   initialPage,
   initialCopy,
+  learnerName,
 }: {
   onNavigatePage: NavigateTo;
   courseCardActions: GuestHomeCourseCardActions;
@@ -67,6 +82,11 @@ export function GuestHome({
    * rows wait for the page.
    */
   initialCopy?: GuestHomePageResponse;
+  /**
+   * Set for a signed-in learner with no enrolments, even when the account
+   * has no display name (an empty string).
+   */
+  learnerName?: string;
 }) {
   const idle = useIdleAfterMount(!initialPage);
   const pageQuery = useGuestHomePage({
@@ -92,29 +112,44 @@ export function GuestHome({
     items: [],
   };
   const highlights = copy?.highlights ?? defaults.highlights;
+  const configuredHero = copy?.hero ?? (isError ? defaults.hero : undefined);
+  const isNewLearner = learnerName !== undefined;
+  const hero =
+    configuredHero && isNewLearner
+      ? getNewLearnerHero(configuredHero)
+      : configuredHero;
 
   // The free row is an extra: once the page is in and holds no free course,
   // the row and the hero action pointing at it are left out.
   const showFreeCourses =
     free.visible && (isLoading || isError || free.courses.length > 0);
   const showCourses = popular.visible || showFreeCourses;
-  const showBody = showCourses || discussions.visible;
+  // Until it is played the laptop shows that lesson's course, when the page
+  // happens to list it; otherwise its screen stays dark behind the button.
+  const heroLaptopPoster =
+    [...popular.courses, ...free.courses].find(
+      (course) => course.slug === HERO_LAPTOP_LESSON.courseSlug,
+    )?.thumbnailUrl ?? undefined;
+  const showBody = showCourses || highlights.visible || discussions.visible;
 
   return (
     <div
       className={`guest-home-page @container/home min-w-0 ${courseSurfaceElevation}`}
     >
       <GuestHomeHero
-        hero={copy?.hero ?? (isError ? defaults.hero : undefined)}
+        hero={hero}
+        greeting={isNewLearner ? getNewLearnerGreeting(learnerName) : undefined}
         onNavigatePage={onNavigatePage}
         freeCoursesSectionId={
           showFreeCourses ? FREE_COURSES_SECTION_ID : undefined
         }
+        laptopScreen={
+          <HeroLaptopVideo
+            lesson={HERO_LAPTOP_LESSON}
+            poster={heroLaptopPoster}
+          />
+        }
       />
-      {highlights.visible ? (
-        <GuestHomeHighlights items={highlights.items} />
-      ) : null}
-
       {showBody ? (
         <div
           className={`grid min-w-0 pb-[clamp(1.75rem,3.6cqw,3rem)] ${guestHomeSectionGap} ${guestHomeGutter} ${guestHomeBlockStart}`}
@@ -151,6 +186,10 @@ export function GuestHome({
                 />
               ) : null}
             </div>
+          ) : null}
+
+          {highlights.visible ? (
+            <GuestHomeHighlights items={highlights.items} />
           ) : null}
 
           {discussions.visible ? (

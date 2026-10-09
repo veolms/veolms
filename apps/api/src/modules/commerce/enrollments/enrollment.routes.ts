@@ -2,6 +2,8 @@ import {
   academyEnrollmentListQuerySchema,
   academyEnrollmentListResponseSchema,
   enrolledCoursesResponseSchema,
+  unenrollCourseParamsSchema,
+  unenrollCourseResponseSchema,
 } from "@veolms/contracts";
 import { jsonResponse } from "../../../lib/responses.ts";
 import { errorResponse } from "../../../lib/errors.ts";
@@ -68,6 +70,33 @@ const enrollmentRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.listEnrolledCourses,
+  );
+
+  // DELETE /enrollments/courses/:courseId — Leave a free course
+  app.delete(
+    "/enrollments/courses/:courseId",
+    {
+      preHandler: ctx.requireAuthenticated,
+      schema: {
+        operationId: "unenrollFromCourse",
+        tags: ["Commerce - Enrollments"],
+        summary: "Unenroll from a free course",
+        description:
+          "Removes the authenticated student from a free course they enrolled in at no cost. " +
+          "Learning progress is kept. Purchased, bundled, and staff-granted enrollments cannot be removed this way.",
+        params: unenrollCourseParamsSchema,
+        response: {
+          200: jsonResponse(
+            "The course the student was unenrolled from",
+            unenrollCourseResponseSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          404: errorResponse("Not enrolled in this course"),
+          409: errorResponse("This enrollment cannot be removed"),
+        },
+      },
+    },
+    controller.unenrollFromCourse,
   );
 };
 
