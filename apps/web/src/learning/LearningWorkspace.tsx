@@ -941,6 +941,27 @@ export function LearningWorkspace({
     setPlaybackBootstrapAttempt((attempt) => attempt + 1);
   }, []);
 
+  // There is no lesson to show: the course did not load (a wrong address,
+  // or a course that has been unpublished), or it has no lessons. The page
+  // used to carry on as if a lesson were there, with an empty title, a video
+  // that could only be retried in vain and discussions that never finished
+  // checking access. A discussion link reports a course that fails to load
+  // in its own way.
+  const courseUnavailable: "not-found" | "no-lessons" | null =
+    !isApiRoute || isDiscussionDeepLink
+      ? null
+      : isCourseOverviewError && !isCourseOverviewFetching && !courseOverview
+        ? "not-found"
+        : courseOverview && firstCurriculumLessonId === undefined
+          ? "no-lessons"
+          : null;
+  const retryCourseOverview = useCallback(() => {
+    // The video was asked for while the course was failing, so it is asked
+    // for again along with the course.
+    retryPlaybackBootstrap();
+    void refetchCourseOverview();
+  }, [refetchCourseOverview, retryPlaybackBootstrap]);
+
   useEffect(() => {
     setPlaybackBootstrapError(null);
     if (!courseSlug) {
@@ -1012,8 +1033,32 @@ export function LearningWorkspace({
   const playbackAccessError = useMemo<
     LessonVideoPlayerProps["playbackAccessError"]
   >(() => {
-    if (!playbackBootstrapError) return null;
+    if (courseUnavailable === "no-lessons") {
+      return {
+        kind: "retry",
+        title: "No lessons yet",
+        message: "This course doesn't have any lessons to watch yet.",
+        actionLabel: "Try again",
+        link: { label: "Browse courses", href: "/courses" },
+      };
+    }
+    const courseNotFound: LessonVideoPlayerProps["playbackAccessError"] =
+      courseUnavailable === "not-found"
+        ? {
+            kind: "retry",
+            title: "Course not found",
+            message:
+              "It may have been unpublished, or the address may be wrong.",
+            actionLabel: "Try again",
+            onAction: retryCourseOverview,
+            link: { label: "Browse courses", href: "/courses" },
+          }
+        : null;
 
+    if (!playbackBootstrapError) return courseNotFound;
+
+    // Asked to log in, a visitor is still asked to: a course that is not
+    // public may load once they have.
     if (
       playbackBootstrapError.status === 401 ||
       playbackBootstrapError.code === "UNAUTHORIZED" ||
@@ -1026,6 +1071,8 @@ export function LearningWorkspace({
         onAction: onOpenLogin,
       };
     }
+
+    if (courseNotFound) return courseNotFound;
 
     if (playbackBootstrapError.status === 403) {
       return {
@@ -1043,9 +1090,11 @@ export function LearningWorkspace({
       onAction: retryPlaybackBootstrap,
     };
   }, [
+    courseUnavailable,
     onOpenCourseOverview,
     onOpenLogin,
     playbackBootstrapError,
+    retryCourseOverview,
     retryPlaybackBootstrap,
   ]);
   const playbackBootstrapPending = Boolean(
@@ -3114,9 +3163,11 @@ export function LearningWorkspace({
                     }
               }
             >
-              {!phoneLessonDrawerViewport &&
+              {!courseUnavailable &&
+                !phoneLessonDrawerViewport &&
                 lessonHeader(false, isLearningBootstrapLoading)}
-              {isLearningDeepLinkReady || isLearningBootstrapLoading ? (
+              {courseUnavailable ? null : isLearningDeepLinkReady ||
+                isLearningBootstrapLoading ? (
                 <Discussion
                   key={discussionPersistenceKey}
                   persistenceKey={discussionPersistenceKey}

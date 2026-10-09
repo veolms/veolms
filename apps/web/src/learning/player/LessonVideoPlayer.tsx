@@ -49,6 +49,7 @@ import {
 } from "./learningMiniPlayerStore";
 import {
   clampPlayerVolume,
+  clearResumePosition,
   consumeMiniPlayerRestore,
   lessonPlayerStorageKeys,
   readAmbientPreference,
@@ -71,6 +72,8 @@ import { useLearningPlayerMinimizeShortcut } from "./useLearningPlayerMinimizeSh
 import { cn } from "../../lib/utils";
 
 const RESUME_PERSIST_INTERVAL_MS = 5_000;
+// A lesson left this close to its end counts as finished when it is reopened.
+const FINISHED_LESSON_RESUME_TAIL_SECONDS = 3;
 const LESSON_PLAYER_CONTROLS_IDLE_DELAY_MS = 1_000;
 const MAX_MINI_PLAYER_RESTORE_DRIFT_SECONDS = 0.35;
 const LESSON_PLAYER_SHORTCUTS = {
@@ -155,6 +158,10 @@ export interface LessonVideoPlayerProps {
     message: string;
     actionLabel: string;
     onAction?: () => void;
+    /** Shown as the heading in place of the one the kind would get. */
+    title?: string;
+    /** A way out to another page, shown under the action. */
+    link?: { label: string; href: string };
   } | null;
   /** Prevents the fallback media source from loading before protected bootstrap resolves. */
   playbackBootstrapPending?: boolean;
@@ -252,6 +259,8 @@ export function LessonVideoPlayer({
   const mediaKey = resumePersistenceKey ?? media.fileName;
   const activeMediaKeyRef = useRef(mediaKey);
   const requestedMediaKeyRef = useRef(mediaKey);
+  // The lesson whose stored resume position has already been applied.
+  const resumeAppliedMediaKeyRef = useRef<string | null>(null);
   const restoreAutoplayRef = useRef(consumeMiniPlayerRestore(mediaKey));
   const restoreFramePendingRef = useRef(false);
   const restoreResyncAttemptedRef = useRef(false);
@@ -462,8 +471,24 @@ export function LessonVideoPlayer({
         const snapshot = playerRef.current?.getSnapshot();
         const actualDuration = event.detail.duration;
         const loadedPosition = snapshot?.media.currentTime ?? 0;
-        const clampedPosition =
-          actualDuration > 0
+        // A lesson reopened at its end, or within moments of it, used to
+        // start on its last second, finish again at once and move on to the
+        // next lesson. It starts over instead. Only the position stored for
+        // a lesson being opened is treated this way: a reload during
+        // playback, or a hand-over from the mini player, stays where the
+        // viewer is.
+        const opensStoredPosition =
+          resumeAppliedMediaKeyRef.current !== activeMediaKeyRef.current &&
+          restoreAutoplayRef.current === null;
+        resumeAppliedMediaKeyRef.current = activeMediaKeyRef.current;
+        const reopenedAtEnd =
+          opensStoredPosition &&
+          actualDuration > 0 &&
+          loadedPosition >=
+            actualDuration - FINISHED_LESSON_RESUME_TAIL_SECONDS;
+        const clampedPosition = reopenedAtEnd
+          ? 0
+          : actualDuration > 0
             ? Math.min(loadedPosition, Math.max(0, actualDuration - 1))
             : loadedPosition;
         if (clampedPosition !== loadedPosition) {
@@ -552,9 +577,12 @@ export function LessonVideoPlayer({
         if (snapshot) latestPositionRef.current = snapshot.media.currentTime;
         persistResumePosition(true);
       } else if (event.type === "ended") {
-        const snapshot = playerRef.current?.getSnapshot();
-        if (snapshot) latestPositionRef.current = snapshot.media.currentTime;
-        persistResumePosition(true);
+        // A finished lesson has nowhere to resume from. Storing its end as
+        // the place to resume reopened it on its last second. The position
+        // in hand is dropped too, so moving on to another lesson after it
+        // ends does not store the end again.
+        latestPositionRef.current = 0;
+        clearResumePosition(activeMediaKeyRef.current);
         if (activeMediaKeyRef.current === requestedMediaKeyRef.current) {
           onProgressChange?.(100);
           onLessonEnded?.();
@@ -613,7 +641,7 @@ export function LessonVideoPlayer({
     const player = playerRef.current;
     if (!player) return;
     latestPositionRef.current = 0;
-    writeResumePosition(activeMediaKeyRef.current, 0);
+    clearResumePosition(activeMediaKeyRef.current);
     player.seekTo(0);
     void player.play().catch(() => undefined);
   }, []);
@@ -889,9 +917,10 @@ export function LessonVideoPlayer({
               ) : (
                 <div className="space-y-1">
                   <h2 className="text-base font-semibold">
-                    {playbackAccessError.kind === "access"
-                      ? "Course access required"
-                      : "Unable to play this video"}
+                    {playbackAccessError.title ??
+                      (playbackAccessError.kind === "access"
+                        ? "Course access required"
+                        : "Unable to play this video")}
                   </h2>
                   <p className="text-sm text-white/70">
                     {playbackAccessError.message}
@@ -906,6 +935,14 @@ export function LessonVideoPlayer({
                 >
                   {playbackAccessError.actionLabel}
                 </button>
+              ) : null}
+              {presentation === "full" && playbackAccessError.link ? (
+                <a
+                  href={playbackAccessError.link.href}
+                  className="pointer-events-auto mx-auto block w-fit text-sm font-medium text-white/80 underline underline-offset-4 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  {playbackAccessError.link.label}
+                </a>
               ) : null}
             </div>
           )}
