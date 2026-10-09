@@ -934,6 +934,7 @@ function ThreadSlide({
   const handleAddReply = async (
     draft: DiscussionDraft,
     attachments?: LocalComposerAttachment[],
+    onCreateFailure?: () => void,
   ): Promise<boolean> => {
     if (isBackendMode) {
       const localAttachments = [...(attachments ?? [])];
@@ -956,7 +957,10 @@ function ThreadSlide({
             __clientId: replyClientId,
             __localAttachments: localAttachments,
           }),
-        onFailure: onReplyCreateError,
+        onFailure: () => {
+          onCreateFailure?.();
+          onReplyCreateError?.();
+        },
       });
       return true;
     }
@@ -1805,6 +1809,7 @@ function ThreadReplyComposer({
   onSubmit: (
     draft: DiscussionDraft,
     attachments?: LocalComposerAttachment[],
+    onCreateFailure?: () => void,
   ) => Promise<boolean> | boolean;
   courseId?: string;
 }) {
@@ -1812,6 +1817,13 @@ function ThreadReplyComposer({
   const [draft, setDraft] = useState<DiscussionDraft>(
     createEmptyDiscussionDraft,
   );
+  const draftRef = useRef(draft);
+  // The editor reads its text only when it mounts, so a reply put back after
+  // a failed post is shown by giving the editor a fresh identity.
+  const [draftRestoreToken, setDraftRestoreToken] = useState(0);
+  const entryKey = entry.clientId ?? entry.id;
+  const entryKeyRef = useRef(entryKey);
+  const isMountedRef = useRef(false);
   const [replyAttachments, setReplyAttachments] = useState<
     LocalComposerAttachment[]
   >([]);
@@ -1826,6 +1838,21 @@ function ThreadReplyComposer({
   useEffect(() => {
     replyAttachmentsRef.current = replyAttachments;
   }, [replyAttachments]);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    entryKeyRef.current = entryKey;
+  }, [entryKey]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(
     () => () => {
@@ -1857,8 +1884,45 @@ function ThreadReplyComposer({
     if (!canSubmit || isPendingSubmission) return;
     setIsSubmitting(true);
     setSubmitError("");
+    const submittedDraft = draft;
+    const submittedAttachments = replyAttachments;
+    const submittedEntryKey = entryKey;
+    // A reply that failed to post used to leave only a toast: the composer
+    // had already been emptied, so the text was gone. Put it back, but only
+    // into this thread's composer and only while it is still empty, so it
+    // never replaces newer input.
+    const restoreSubmittedReply = () => {
+      if (
+        !isMountedRef.current ||
+        entryKeyRef.current !== submittedEntryKey ||
+        hasDiscussionDraftContent(draftRef.current) ||
+        replyAttachmentsRef.current.length > 0
+      ) {
+        return;
+      }
+
+      // The failed creation already released these previews, so a restored
+      // image or video needs a new one.
+      const restoredAttachments = submittedAttachments.map((attachment) =>
+        attachment.localPreviewUrl
+          ? {
+              ...attachment,
+              localPreviewUrl: URL.createObjectURL(attachment.file),
+            }
+          : attachment,
+      );
+      draftRef.current = submittedDraft;
+      replyAttachmentsRef.current = restoredAttachments;
+      setDraft(submittedDraft);
+      setReplyAttachments(restoredAttachments);
+      setDraftRestoreToken((current) => current + 1);
+    };
     try {
-      const success = await onSubmit(draft, replyAttachments);
+      const success = await onSubmit(
+        draft,
+        replyAttachments,
+        restoreSubmittedReply,
+      );
       if (success) {
         setDraft(createEmptyDiscussionDraft());
         setReplyAttachments([]);
@@ -1888,7 +1952,11 @@ function ThreadReplyComposer({
       className="-mx-4 -mb-4 mt-0 grid shrink-0 grid-rows-[auto_auto] overflow-hidden rounded-t-xl bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] transition-colors duration-150 focus-within:bg-[color-mix(in_srgb,var(--surface)_90%,var(--canvas))] sm:mx-0 sm:mb-0 sm:rounded-xl"
     >
       <DiscussionEditor
-        documentId={`thread-reply-${entry.id}`}
+        documentId={
+          draftRestoreToken === 0
+            ? `thread-reply-${entry.id}`
+            : `thread-reply-${entry.id}-restored-${draftRestoreToken}`
+        }
         resetToken={composerKey}
         value={draft}
         label={`Reply to ${entry.name}`}
