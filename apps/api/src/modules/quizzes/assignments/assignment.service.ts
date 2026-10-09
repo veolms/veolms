@@ -201,35 +201,57 @@ export function createAssignmentService(options: QuizServiceOptions) {
         "INVALID_AVAILABILITY_WINDOW",
         "Quiz availability must end after it starts.",
       );
-    const row = await repo.updateAssignment(database, assignmentId, {
-      ...(quizVersionId !== undefined
-        ? { quiz_version_id: quizVersionId }
-        : {}),
-      ...(payload.required !== undefined ? { required: payload.required } : {}),
-      ...(payload.passPercentage !== undefined
-        ? { pass_percentage: payload.passPercentage }
-        : {}),
-      ...(payload.maxAttempts !== undefined
-        ? { max_attempts: payload.maxAttempts }
-        : {}),
-      ...(payload.timeLimitSeconds !== undefined
-        ? { time_limit_seconds: payload.timeLimitSeconds }
-        : {}),
-      ...(payload.shuffleQuestions !== undefined
-        ? { shuffle_questions: payload.shuffleQuestions }
-        : {}),
-      ...(payload.shuffleOptions !== undefined
-        ? { shuffle_options: payload.shuffleOptions }
-        : {}),
-      ...(payload.feedbackMode !== undefined
-        ? { feedback_mode: payload.feedbackMode }
-        : {}),
-      ...(payload.availableFrom !== undefined
-        ? { available_from: payload.availableFrom }
-        : {}),
-      ...(payload.availableUntil !== undefined
-        ? { available_until: payload.availableUntil }
-        : {}),
+    const movesToAnotherVersion =
+      quizVersionId !== undefined && quizVersionId !== current.quiz_version_id;
+    const now = new Date();
+    const row = await database.transaction().execute(async (trx) => {
+      const updated = await repo.updateAssignment(trx, assignmentId, {
+        ...(quizVersionId !== undefined
+          ? { quiz_version_id: quizVersionId }
+          : {}),
+        ...(payload.required !== undefined
+          ? { required: payload.required }
+          : {}),
+        ...(payload.passPercentage !== undefined
+          ? { pass_percentage: payload.passPercentage }
+          : {}),
+        ...(payload.maxAttempts !== undefined
+          ? { max_attempts: payload.maxAttempts }
+          : {}),
+        ...(payload.timeLimitSeconds !== undefined
+          ? { time_limit_seconds: payload.timeLimitSeconds }
+          : {}),
+        ...(payload.shuffleQuestions !== undefined
+          ? { shuffle_questions: payload.shuffleQuestions }
+          : {}),
+        ...(payload.shuffleOptions !== undefined
+          ? { shuffle_options: payload.shuffleOptions }
+          : {}),
+        ...(payload.feedbackMode !== undefined
+          ? { feedback_mode: payload.feedbackMode }
+          : {}),
+        ...(payload.availableFrom !== undefined
+          ? { available_from: payload.availableFrom }
+          : {}),
+        ...(payload.availableUntil !== undefined
+          ? { available_until: payload.availableUntil }
+          : {}),
+      });
+      // The learners still working on the version being replaced restart on
+      // the new one (see the repository function). A quiz whose window has
+      // already closed has no one left to restart.
+      if (
+        movesToAnotherVersion &&
+        !(updated.available_until && updated.available_until < now)
+      ) {
+        await repo.deleteOpenAttemptsOnOtherVersions(
+          trx,
+          assignmentId,
+          updated.quiz_version_id,
+          now,
+        );
+      }
+      return updated;
     });
     return presentAssignment(row);
   }

@@ -277,17 +277,29 @@ export function createAttemptService(options: QuizServiceOptions) {
     );
     if (existing) {
       const now = new Date();
-      if (
-        !isPastDeadline(
-          attemptDeadline(existing, assignment),
-          now,
-          ANSWER_SAVE_GRACE_MS,
-        )
-      )
+      const stillOpen = !isPastDeadline(
+        attemptDeadline(existing, assignment),
+        now,
+        ANSWER_SAVE_GRACE_MS,
+      );
+      if (stillOpen && existing.quiz_version_id === version.id)
         return buildAttempt(existing, assignment);
-      // Time ran out on the previous attempt: grade what was saved before
-      // a new attempt is opened.
-      await closer.closeIfOverdue(existing.id, now, ANSWER_SAVE_GRACE_MS);
+      if (stillOpen) {
+        // Open on a version the assignment has since moved away from. The
+        // move clears these out; this one was started while it happened.
+        // It goes the same way, and a fresh attempt on the current version
+        // is opened below under the same attempt number.
+        await repo.deleteOpenAttemptsOnOtherVersions(
+          database,
+          assignmentId,
+          version.id,
+          now,
+        );
+      } else {
+        // Time ran out on the previous attempt: grade what was saved
+        // before a new attempt is opened.
+        await closer.closeIfOverdue(existing.id, now, ANSWER_SAVE_GRACE_MS);
+      }
     }
     checkRateLimit(
       startAttemptTimestamps,
