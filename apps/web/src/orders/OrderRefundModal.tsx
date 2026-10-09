@@ -12,7 +12,7 @@ import {
   minorUnitsPerMajor,
   toMajorUnits,
 } from "@veolms/contracts/commerce/money";
-import { formatCurrency } from "./orderHelpers";
+import { formatCurrency, getCurrencySymbol } from "./orderHelpers";
 
 // 3D design system surface tokens: 0 borders, pure tactile depth via theme-adaptive shadows & highlights
 const MODAL_FRAME_CLASS =
@@ -82,6 +82,8 @@ export const OrderRefundModal = memo(function OrderRefundModal({
 
   // order.totalAmount is minor units; the input is typed in major units.
   const totalPaid = toMajorUnits(order.totalAmount, order.currency);
+  // The field was labelled ₹ whatever currency the order was paid in.
+  const currencySymbol = getCurrencySymbol(order.currency);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,11 +245,11 @@ export const OrderRefundModal = memo(function OrderRefundModal({
                   htmlFor="refund-amount"
                   className="block text-[0.78rem] font-semibold text-(--text-secondary) mb-1.5"
                 >
-                  Refund Amount (₹)
+                  Refund Amount ({currencySymbol})
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[0.84rem] font-semibold text-(--muted)">
-                    ₹
+                    {currencySymbol}
                   </span>
                   <input
                     id="refund-amount"
@@ -258,7 +260,10 @@ export const OrderRefundModal = memo(function OrderRefundModal({
                     placeholder={`Max ${formatCurrency(order.totalAmount, order.currency)}`}
                     value={partialAmountInr}
                     onChange={(e) => setPartialAmountInr(e.target.value)}
-                    className="w-full rounded-[12px] border-none bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pl-8 pr-3.5 py-2.5 text-[0.82rem] sm:text-[0.85rem] text-(--text) outline-none placeholder:text-(--muted) shadow-[inset_0_2px_4px_color-mix(in_srgb,black_20%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] focus:shadow-[inset_0_0_0_1.5px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all"
+                    className={`w-full rounded-[12px] border-none bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] ${
+                      // Room for a symbol longer than one character (A$, CHF).
+                      currencySymbol.length > 1 ? "pl-14" : "pl-8"
+                    } pr-3.5 py-2.5 text-[0.82rem] sm:text-[0.85rem] text-(--text) outline-none placeholder:text-(--muted) shadow-[inset_0_2px_4px_color-mix(in_srgb,black_20%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] focus:shadow-[inset_0_0_0_1.5px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all`}
                     required
                   />
                 </div>

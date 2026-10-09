@@ -23,6 +23,22 @@ export function formatCurrency(
 }
 
 /**
+ * The symbol formatCurrency shows for a currency (₹ for INR, $ for USD), for
+ * labelling a field where an amount in that currency is typed.
+ */
+export function getCurrencySymbol(currency: string = "INR"): string {
+  const code = currency.toUpperCase();
+  return (
+    new Intl.NumberFormat(code === "INR" ? "en-IN" : "en-US", {
+      style: "currency",
+      currency: code,
+    })
+      .formatToParts(0)
+      .find((part) => part.type === "currency")?.value ?? code
+  );
+}
+
+/**
  * Formats raw number with thousand separators (e.g. 512, 1,234).
  */
 export function formatNumber(value: number): string {

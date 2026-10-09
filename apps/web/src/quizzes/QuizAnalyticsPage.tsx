@@ -1223,6 +1223,8 @@ function LearnerQuizDashboard({
   const [filter, setFilter] = useState<LearnerFilter>("all");
   const available = assignments.data?.assignments ?? [];
   const attempts = history.data ?? [];
+  const assignmentsFailed = assignments.isError && !assignments.data;
+  const historyFailed = history.isError && !history.data;
   const completed = attempts.filter((item) => item.status === "graded");
   const passed = completed.filter((item) => item.passed).length;
   const average = completed.length
@@ -1344,7 +1346,21 @@ function LearnerQuizDashboard({
               />
             ))
           )}
-          {!assignments.isLoading && filtered.length === 0 ? (
+          {assignmentsFailed ? (
+            // A failed request used to read as "No quizzes assigned yet".
+            <div className="sm:col-span-2 xl:col-span-3">
+              <EmptyState
+                icon={<ChartBar size={22} />}
+                title="Quizzes could not be loaded"
+                message="Please check your connection and try again."
+                action={
+                  <Button onClick={() => void assignments.refetch()}>
+                    Try again
+                  </Button>
+                }
+              />
+            </div>
+          ) : !assignments.isLoading && filtered.length === 0 ? (
             <div className="sm:col-span-2 xl:col-span-3">
               <EmptyState
                 icon={<ChartBar size={22} />}
@@ -1396,7 +1412,20 @@ function LearnerQuizDashboard({
               </span>
             </div>
           ))}
-          {attempts.length === 0 ? (
+          {historyFailed ? (
+            // A failed request used to read as an empty history.
+            <EmptyState
+              compact
+              icon={<Clock size={22} />}
+              title="Your history could not be loaded"
+              message="Please check your connection and try again."
+              action={
+                <Button onClick={() => void history.refetch()}>
+                  Try again
+                </Button>
+              }
+            />
+          ) : attempts.length === 0 ? (
             <EmptyState
               compact
               icon={<Clock size={22} />}

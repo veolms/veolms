@@ -9,6 +9,7 @@ import { Lock } from "@phosphor-icons/react/Lock";
 import { Tag } from "@phosphor-icons/react/Tag";
 import { Button } from "../components/Button";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import { productName } from "../routing/routeDescriptors";
 import { useCurrentUser } from "../services/auth";
 import {
   useCreateCheckoutOrder,
@@ -58,6 +59,9 @@ export function QuizEnrollmentCard({
   const { data: user } = useCurrentUser();
   const pricingPreviewQuery = useQuizPricingPreview(courseId, assignmentId);
   const createOrder = useCreateCheckoutOrder();
+  const checkoutIntentRef = useRef<{ intent: string; key: string } | null>(
+    null,
+  );
   const verify = useVerifyPayment();
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -155,6 +159,13 @@ export function QuizEnrollmentCard({
         throw new Error("This quiz is not available for purchase.");
       }
 
+      // The key identifies this purchase, not this click: a second click on
+      // the same quiz must reach the same order. A new key per click made
+      // the server see every retry as a new purchase.
+      const intent = preview.quizPricingId;
+      if (checkoutIntentRef.current?.intent !== intent) {
+        checkoutIntentRef.current = { intent, key: crypto.randomUUID() };
+      }
       const order = await createOrder.mutateAsync({
         items: [
           {
@@ -162,10 +173,14 @@ export function QuizEnrollmentCard({
             quizPricingId: preview.quizPricingId,
           },
         ],
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: checkoutIntentRef.current.key,
       });
 
-      if (!order.gateway) {
+      // No payment step (nothing to pay), or the same purchase was already
+      // paid on an earlier attempt whose confirmation did not reach this
+      // page: access is granted, and reopening the gateway would only show
+      // an error for an order that is complete.
+      if (!order.gateway || order.order.status === "paid") {
         await queryClient.invalidateQueries({ queryKey: quizKeys.all });
         await pricingPreviewQuery.refetch();
         setIsProcessing(false);
@@ -182,7 +197,7 @@ export function QuizEnrollmentCard({
         key: order.gateway.keyId,
         amount: order.gateway.amount,
         currency: order.gateway.currency,
-        name: "VeoLMS",
+        name: productName,
         description: `Quiz Access - ${quizTitle || "Assessment"}`,
         order_id: order.gateway.gatewayOrderId,
         prefill: {

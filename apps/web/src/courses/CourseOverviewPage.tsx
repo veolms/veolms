@@ -50,6 +50,7 @@ import type { CourseSection } from "../learning/courseContent";
 import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
 import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../routing/navigation";
+import { productName } from "../routing/routeDescriptors";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
 import { useEnrolledCourses } from "../services/enrollments";
@@ -774,7 +775,7 @@ function CourseHeroSection({
         key: order.gateway.keyId,
         amount: order.gateway.amount,
         currency: order.gateway.currency,
-        name: "VeoLMS",
+        name: productName,
         description:
           (voluntaryContributionAmount ?? 0) > baseNumericPrice ||
           (isFree && (voluntaryContributionAmount ?? 0) > 0)
@@ -843,7 +844,9 @@ function CourseHeroSection({
     }
   };
 
-  const showApplyCoupon = !isCreatorNormal && !isFree;
+  // An enrolled student has nothing left to buy; offering a coupon next to
+  // "Continue Learning" suggested there was still something to pay for.
+  const showApplyCoupon = !isCreatorNormal && !isFree && !isEnrolled;
   const isCustomUnderPrice =
     !isFree &&
     selectedPreset === "custom" &&
@@ -1526,10 +1529,10 @@ function CourseHeroSection({
                 className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-black/65 backdrop-blur-[10px] border border-white/18 text-white text-[0.78rem] font-semibold px-3.25 py-1.5 rounded-full cursor-pointer z-2 transition-[background-color,border-color,transform] duration-160 ease-out hover:bg-black/85 hover:border-white/40 hover:-translate-y-px"
                 onClick={handlePreviewClick}
                 disabled={isReadOnlyPreview}
-                aria-label="Watch trailer"
+                aria-label="Preview course"
               >
                 <PlayCircle size={15} weight="bold" />
-                <span>Watch trailer</span>
+                <span>Preview course</span>
               </button>
             </>
           )}

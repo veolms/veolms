@@ -10,6 +10,7 @@ import { SocialLoginActions } from "./SocialLoginActions";
 import { MfaStepUp } from "./MfaStepUp";
 import {
   AUTH_CARD_HEADING_ID,
+  RESEND_COOLDOWN_SECONDS,
   authFlowReducer,
   initialAuthFlowState,
 } from "./authFlow";
@@ -29,6 +30,41 @@ function resolvePayload(identifier: AuthIdentifier) {
   return identifier.method === "email"
     ? { email: identifier.email }
     : { phoneNo: identifier.phoneNo };
+}
+
+// Where this tab last had a code sent, and when. Closing the login pop-up
+// unmounts the view and loses the code step, but the code already in the
+// inbox is still good, so this is kept outside the component.
+let lastCodeSent: { destination: string; at: number } | null = null;
+
+const ALREADY_SENT_NOTICE = "We sent you a code a moment ago — enter it below.";
+
+function resolveDestination(identifier: AuthIdentifier) {
+  return identifier.method === "email" ? identifier.email : identifier.phoneNo;
+}
+
+function rememberCodeSent(identifier: AuthIdentifier) {
+  lastCodeSent = {
+    destination: resolveDestination(identifier),
+    at: Date.now(),
+  };
+}
+
+// Once a code has been used it is no longer one the visitor can still enter.
+function forgetCodeSent() {
+  lastCodeSent = null;
+}
+
+// True when the server refuses a send because it is too soon after one this
+// tab made to the same destination. The server answers its other request
+// limits with the same code, so the earlier send has to be known here.
+function isRefusedAsAlreadySent(identifier: AuthIdentifier, error: unknown) {
+  return (
+    (error as { code?: string } | null)?.code === "RATE_LIMIT_EXCEEDED" &&
+    lastCodeSent !== null &&
+    lastCodeSent.destination === resolveDestination(identifier) &&
+    Date.now() - lastCodeSent.at < RESEND_COOLDOWN_SECONDS * 1000
+  );
 }
 
 type OtpStepState = Extract<
@@ -61,6 +97,7 @@ export function LoginView({
   const [flow, dispatch] = useReducer(authFlowReducer, initialAuthFlowState);
   const [identifierError, setIdentifierError] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpNotice, setOtpNotice] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [primaryVerifiedIdentifier, setPrimaryVerifiedIdentifier] =
     useState<AuthIdentifier | null>(null);
@@ -128,12 +165,24 @@ export function LoginView({
   const handleSendCode = async (identifier: AuthIdentifier) => {
     if (sendOtpMutation.isPending) return;
     setIdentifierError(null);
+    setOtpNotice(null);
     dispatch({ type: "SUBMIT_IDENTIFIER", identifier });
 
     try {
       await sendOtpMutation.mutateAsync(resolvePayload(identifier));
+      rememberCodeSent(identifier);
       dispatch({ type: "OTP_SENT" });
     } catch (err: unknown) {
+      // The visitor asked for a code, closed the pop-up and came back within
+      // the minute. Refusing to send another used to leave them on this step
+      // with "wait 60 seconds" and no way to enter the code they already
+      // have, so go to the code step as if it had just been sent.
+      if (isRefusedAsAlreadySent(identifier, err)) {
+        setOtpNotice(ALREADY_SENT_NOTICE);
+        dispatch({ type: "OTP_SENT" });
+        return;
+      }
+
       const errorObj = err as { message?: string };
       const message =
         errorObj?.message || "Something went wrong. Please try again.";
@@ -150,6 +199,8 @@ export function LoginView({
 
     try {
       await sendOtpMutation.mutateAsync(resolvePayload(identifier));
+      rememberCodeSent(identifier);
+      setOtpNotice(null);
       dispatch({ type: "OTP_SENT" });
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
@@ -177,6 +228,7 @@ export function LoginView({
         ...resolvePayload(identifier),
         code,
       });
+      forgetCodeSent();
 
       if (response.mfaRequired) {
         const allowPasskey = Boolean(response.passkeyEnabled);
@@ -265,6 +317,7 @@ export function LoginView({
       };
 
       const response = await registerMutation.mutateAsync(payload);
+      forgetCodeSent();
       authStore.setUser(response.user);
 
       if (
@@ -359,6 +412,7 @@ export function LoginView({
           errorMessage={otpError}
           failure={otpStep.status === "otp" ? otpStep.failure : null}
           identifier={otpStep.identifier}
+          notice={otpNotice}
           onCodeChange={(code) => {
             setOtpError(null);
             dispatch({ type: "CHANGE_OTP_CODE", code });
@@ -414,6 +468,7 @@ export function LoginView({
             errorMessage={otpError}
             failure={null}
             identifier={snapshot.identifier}
+            notice={otpNotice}
             onCodeChange={() => undefined}
             onIdentifierChange={() => undefined}
             onResend={() => undefined}

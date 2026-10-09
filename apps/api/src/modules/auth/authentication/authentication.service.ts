@@ -48,6 +48,46 @@ const AVATAR_VALIDATION_RANGE = "bytes=0-31";
 const USER_AVATAR_RETENTION_LIMIT = 2;
 const DICEBEAR_ORIGIN = new URL(DICEBEAR_BASE_URL).origin;
 
+/**
+ * First path segments the web app and its hosting serve themselves. A profile
+ * lives at /<username> and these addresses win over it, so a profile with one
+ * of these names could never be opened and its menu link led to another page.
+ * Keep in step with the web's routes (packages/web-core/src/routes).
+ */
+const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
+  "home",
+  "dashboard",
+  "courses",
+  "wishlist",
+  "students",
+  "reviews",
+  "quizzes",
+  "discussions",
+  "analytics",
+  "orders",
+  "messages",
+  "purchase-history",
+  "notifications",
+  "settings",
+  "coupons",
+  "home-page",
+  "logout",
+  "login",
+  "register",
+  "mfa-setup",
+  "auth",
+  "explore-courses",
+  "learn",
+  "cdn",
+  "v1",
+  "static",
+  "api",
+]);
+
+function isReservedUsername(username: string): boolean {
+  return RESERVED_USERNAMES.has(username.trim().toLowerCase());
+}
+
 async function readObjectPrefix(
   body: AsyncIterable<Uint8Array>,
   maxBytes: number,
@@ -291,6 +331,21 @@ export function createAuthService({
           404,
           "USER_NOT_FOUND",
           "User account was not found.",
+        );
+      }
+
+      // Only a change to a reserved name is refused. Someone who already has
+      // one sends it back with every profile save and must still be able to
+      // save their other fields.
+      if (
+        username &&
+        username !== currentUser.username.toLowerCase() &&
+        isReservedUsername(username)
+      ) {
+        throw new AppError(
+          400,
+          "USERNAME_TAKEN",
+          "That username isn't available.",
         );
       }
 
@@ -801,6 +856,14 @@ export function createAuthService({
       );
     }
 
+    if (isReservedUsername(input.username)) {
+      throw new AppError(
+        400,
+        "USERNAME_TAKEN",
+        "That username isn't available.",
+      );
+    }
+
     if (await usernameExists(input.username.toLowerCase())) {
       throw new AppError(400, "USERNAME_TAKEN", "Username is already taken.");
     }
@@ -867,11 +930,17 @@ export function createAuthService({
     return { user: { ...user, roles: session.roles }, session };
   }
 
-  /** Appends a numeric suffix until the username is free. */
+  /**
+   * Appends a numeric suffix until the username is free. A reserved name
+   * (an email that starts "settings@", say) is treated as taken.
+   */
   async function generateUniqueUsername(base: string): Promise<string> {
     const normalised = base.toLowerCase().replace(/[^a-z0-9_]/g, "_") || "user";
 
-    if (!(await userRepository.usernameExists(database, normalised))) {
+    if (
+      !isReservedUsername(normalised) &&
+      !(await userRepository.usernameExists(database, normalised))
+    ) {
       return normalised;
     }
 

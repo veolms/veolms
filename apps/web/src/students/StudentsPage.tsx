@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -39,11 +40,32 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
   >("recent");
   const [isCourseFilterOpen, setIsCourseFilterOpen] = useState(false);
 
+  // A course card's "Manage Students" link opens this page with ?course=<id>,
+  // which used to be ignored. It is read once and becomes the course filter
+  // only if it is one of the filter's own options.
+  const [searchParams] = useSearchParams();
+  const [requestedCourseId, setRequestedCourseId] = useState(
+    () => searchParams.get("course") || null,
+  );
+
   // Load academy courses for the course filter dropdown
   const { data: coursesData } = useCourseOptions({
-    enabled: isCourseFilterOpen,
+    enabled: isCourseFilterOpen || requestedCourseId !== null,
   });
   const courseRecords = coursesData?.courses;
+
+  useEffect(() => {
+    if (!requestedCourseId || !courseRecords) return;
+    setRequestedCourseId(null);
+    if (courseRecords.some((course) => course.id === requestedCourseId)) {
+      setCourseFilter(requestedCourseId);
+    }
+  }, [requestedCourseId, courseRecords]);
+
+  const changeCourseFilter = (course: string) => {
+    setRequestedCourseId(null);
+    setCourseFilter(course);
+  };
   const availableCourses = useMemo(() => {
     if (!courseRecords) return [];
     return courseRecords.map(({ id, title }) => ({ id, title }));
@@ -129,6 +151,7 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
   const resetFilters = () => {
     setSearchQuery("");
     searchControls.setValueImmediately("");
+    setRequestedCourseId(null);
     setCourseFilter("all");
     setStatusFilter("all");
     setSortBy("recent");
@@ -246,7 +269,7 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           courseFilter={courseFilter}
-          onCourseFilterChange={setCourseFilter}
+          onCourseFilterChange={changeCourseFilter}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
           sortBy={sortBy}

@@ -187,7 +187,7 @@ export function CourseCard({
       ? `Play ${course.title}`
       : course.enrolled
         ? `${progress > 0 && progress < 100 ? "Resume" : progress >= 100 ? "Review" : "Start"} ${course.title}`
-        : `Play free preview for ${course.title}`;
+        : `Preview ${course.title}`;
   const thumbnailActionTooltip = isPublic
     ? isPublicEnrollmentAction
       ? "Enroll Now"
@@ -196,7 +196,7 @@ export function CourseCard({
       ? "Play Course"
       : course.enrolled
         ? "Continue Learning"
-        : "Play Free Preview";
+        : "Preview Course";
 
   const lifecycleAction = () => {
     if (course.lifecycleStatus === "published") {

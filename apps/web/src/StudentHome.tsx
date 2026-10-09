@@ -428,8 +428,9 @@ export function StudentHome({
     isLoading: learningSummaryLoading,
     isError: learningSummaryError,
   } = useLearningSummary();
-  const firstName =
-    (studentName?.trim() || "Ashi Singh").split(/\s+/)[0] || "Ashi";
+  // A learner with no display name is greeted without one; the sample name
+  // that used to stand in here would have greeted them as somebody else.
+  const firstName = studentName?.trim().split(/\s+/)[0] || "";
   const timeGreeting = useHomeTimeGreeting();
 
   const {
@@ -592,7 +593,8 @@ export function StudentHome({
       <header className="home-greeting-row">
         <div>
           <h1>
-            {timeGreeting}, {firstName}{" "}
+            {timeGreeting}
+            {firstName ? `, ${firstName}` : ""}{" "}
             <span className="home-wave" aria-hidden="true">
               👋
             </span>

@@ -25,6 +25,8 @@ export interface OtpFormProps {
   status: "idle" | "verifying";
   failure: OtpFailureReason | null;
   errorMessage?: string | null;
+  /** Replaces the line under the heading, e.g. when the code was sent earlier. */
+  notice?: string | null;
   sendCount: number;
   onSubmit: (code: string) => void;
   onResend: () => void;
@@ -63,6 +65,7 @@ export function OtpForm({
   failure,
   errorMessage,
   identifier,
+  notice,
   onCodeChange,
   onIdentifierChange,
   onResend,
@@ -123,7 +126,9 @@ export function OtpForm({
       <h1 className="auth-card__heading" id={AUTH_CARD_HEADING_ID}>
         Verify your OTP
       </h1>
-      <p className="auth-card__subheading">{SUBHEADINGS[identifier.method]}</p>
+      <p className="auth-card__subheading">
+        {notice || SUBHEADINGS[identifier.method]}
+      </p>
 
       <div className="auth-otp-form__destination">
         <p className="auth-otp-form__destination-label">Code sent to</p>
