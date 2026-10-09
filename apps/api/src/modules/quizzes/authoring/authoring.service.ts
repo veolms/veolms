@@ -24,6 +24,17 @@ function iso(value: Date | null | undefined) {
   return value ? value.toISOString() : null;
 }
 
+/**
+ * The options a question is stored with. A short answer is a free response:
+ * the accepted answers an older editor still sends for it are dropped, not
+ * refused, so that editor keeps working until it is updated.
+ */
+function questionOptions(
+  payload: Pick<CreateQuizQuestionRequest, "questionType" | "options">,
+) {
+  return payload.questionType === "short_answer" ? [] : payload.options;
+}
+
 function validateQuestionPayload(payload: CreateQuizQuestionRequest) {
   if (payload.questionType === "true_false" && payload.options.length !== 2)
     throw new AppError(
@@ -31,20 +42,9 @@ function validateQuestionPayload(payload: CreateQuizQuestionRequest) {
       "INVALID_TRUE_FALSE_OPTIONS",
       "True/False questions require exactly two options.",
     );
-  if (payload.questionType === "short_answer") {
-    if (payload.options.length === 0)
-      throw new AppError(
-        400,
-        "SHORT_ANSWER_NEEDS_OPTION",
-        "Short answer questions require at least one accepted answer.",
-      );
-    if (payload.options.some((option) => !option.isCorrect))
-      throw new AppError(
-        400,
-        "SHORT_ANSWER_OPTIONS_MUST_BE_CORRECT",
-        "All accepted answers for short answer questions must be marked correct.",
-      );
-  } else {
+  // A short answer is a free response and has no key, so it has no options
+  // to check. Any that are sent are not stored (see questionOptions).
+  if (payload.questionType !== "short_answer") {
     const correct = payload.options.filter((option) => option.isCorrect);
     if (correct.length === 0)
       throw new AppError(
@@ -141,7 +141,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
       deleted_at: null,
     }));
     const optionRows = payload.questions.flatMap((question, questionIndex) =>
-      question.options.map((option, position) => ({
+      questionOptions(question).map((option, position) => ({
         id: option.id ?? crypto.randomUUID(),
         question_id: questionRows[questionIndex]!.id,
         option_text: option.text,
@@ -441,7 +441,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
       });
       await repo.insertOptions(
         trx,
-        payload.options.map((option, position) => ({
+        questionOptions(payload).map((option, position) => ({
           id: option.id ?? crypto.randomUUID(),
           question_id: questionId,
           option_text: option.text,
@@ -494,14 +494,16 @@ export function createAuthoringService(options: QuizServiceOptions) {
         position: next.position,
         explanation: next.explanation,
       });
-      if (payload.options) {
+      // Options are rewritten when new ones are sent, and removed when the
+      // question is, or has just become, a short answer.
+      if (payload.options || next.questionType === "short_answer") {
         const currentOptionIds = new Set(
           currentOptions.map((option) => option.id),
         );
         await repo.deleteOptions(trx, editable.question.id);
         await repo.insertOptions(
           trx,
-          next.options.map((option, position) => ({
+          questionOptions(next).map((option, position) => ({
             id:
               option.id && currentOptionIds.has(option.id)
                 ? option.id

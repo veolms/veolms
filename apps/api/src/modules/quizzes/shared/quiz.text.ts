@@ -33,9 +33,6 @@ const LONE_SURROGATES = /\p{Cs}/gu;
 const DISPLAY_SPOOFING_CHARACTERS =
   /[\u200B\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/g;
 
-/** Every invisible formatting character, joiners included. */
-const FORMAT_CHARACTERS = /\p{Cf}/gu;
-
 /** A typed answer as it is stored. */
 export function cleanQuizTextAnswer(value: string): string {
   return value
@@ -45,18 +42,4 @@ export function cleanQuizTextAnswer(value: string): string {
     .replace(DISPLAY_SPOOFING_CHARACTERS, "")
     .normalize("NFC")
     .trim();
-}
-
-/**
- * The form two answers are compared in: what the learner typed and what the
- * author accepts. Letter case, runs of spaces and invisible characters do
- * not decide whether an answer is right, so a pasted answer carrying a
- * zero-width space, or "é" typed as two code points, still matches.
- */
-export function comparableQuizText(value: string): string {
-  return cleanQuizTextAnswer(value)
-    .replace(FORMAT_CHARACTERS, "")
-    .replace(/\s+/gu, " ")
-    .trim()
-    .toLowerCase();
 }
