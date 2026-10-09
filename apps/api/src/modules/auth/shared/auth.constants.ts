@@ -63,6 +63,7 @@ export const BACKUP_CODE_COUNT = 10;
 /** Backup codes are 8 digits, distinguishing them from 6-digit TOTP codes. */
 export const BACKUP_CODE_MIN = 10_000_000;
 export const BACKUP_CODE_MAX = 99_999_999;
+export const BACKUP_CODE_LENGTH = 8;
 
 export const WEBAUTHN_CHALLENGE_TTL_MS = 5 * MINUTE_MS;
 

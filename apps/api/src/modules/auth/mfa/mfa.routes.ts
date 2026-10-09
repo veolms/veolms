@@ -1,8 +1,10 @@
 import {
   authMessageResponseSchema,
+  backupCodesResponseSchema,
   passkeyAuthenticationOptionsResponseSchema,
   passkeyLoginVerifyRequestSchema,
   passkeyRegisterVerifyRequestSchema,
+  passkeyRegisterVerifyResponseSchema,
   passkeyRegistrationOptionsResponseSchema,
   totpEnableRequestSchema,
   totpEnableResponseSchema,
@@ -64,6 +66,36 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
       preHandler: context.authenticated,
     },
     controller.enableTotp,
+  );
+
+  app.post(
+    "/auth/backup-codes",
+    {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 minute",
+        },
+      },
+      schema: {
+        operationId: "regenerateBackupCodes",
+        tags: ["Auth"],
+        summary: "Regenerate Backup Codes",
+        description:
+          "Replaces the account's single-use backup codes and returns the new set once. The previous codes stop working.",
+        response: {
+          200: jsonResponse(
+            "New backup recovery codes.",
+            backupCodesResponseSchema,
+          ),
+          400: errorResponse("No MFA factor is enrolled."),
+          401: errorResponse("Unauthorized."),
+          403: errorResponse("Step-up MFA required."),
+        },
+      },
+      preHandler: context.mfaVerified,
+    },
+    controller.regenerateBackupCodes,
   );
 
   app.delete(
@@ -177,12 +209,12 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
         tags: ["Auth"],
         summary: "Verify Passkey Registration Response",
         description:
-          "Verifies the browser WebAuthn response signature and saves credential to user keys.",
+          "Verifies the browser WebAuthn response signature and saves credential to user keys. Returns backup recovery codes when the account has none.",
         body: passkeyRegisterVerifyRequestSchema,
         response: {
           200: jsonResponse(
             "Passkey registered successfully.",
-            authMessageResponseSchema,
+            passkeyRegisterVerifyResponseSchema,
           ),
           400: errorResponse(
             "Verification challenge expired or validation failed.",

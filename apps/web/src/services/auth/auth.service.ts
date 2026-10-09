@@ -4,6 +4,7 @@ import type {
   AvatarUploadPresignRequest,
   AvatarUploadPresignResponse,
   AuthMessageResponse,
+  BackupCodesResponse,
   CurrentUserResponse,
   EmailVerificationSendRequest,
   EmailVerificationVerifyRequest,
@@ -18,6 +19,7 @@ import type {
   PhoneVerificationSendRequest,
   PhoneVerificationVerifyRequest,
   PasskeyAuthenticationOptionsResponse,
+  PasskeyRegisterVerifyResponse,
   PasskeyRegistrationOptionsResponse,
   ProfileUpdateRequest,
   PublicProfileResponse,
@@ -220,11 +222,15 @@ export const authService = {
 
   verifyPasskeyRegister: (payload: {
     response: unknown;
-  }): Promise<AuthMessageResponse> => {
-    return api.post<AuthMessageResponse>(
+  }): Promise<PasskeyRegisterVerifyResponse> => {
+    return api.post<PasskeyRegisterVerifyResponse>(
       "/auth/passkey/register/verify",
       payload,
     );
+  },
+
+  regenerateBackupCodes: (): Promise<BackupCodesResponse> => {
+    return api.post<BackupCodesResponse>("/auth/backup-codes");
   },
 
   getPasskeyLoginOptions:

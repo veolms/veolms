@@ -37,6 +37,7 @@ const PASSKEY_ACTION = "Continue with passkey";
 const USE_AUTHENTICATOR_ACTION = "Use authenticator app instead";
 const USE_BACKUP_CODE_ACTION = "Use a backup code instead";
 const USE_PASSKEY_ACTION = "Use passkey instead";
+const NO_PASSKEY_HERE_ACTION = "Passkey not on this device? Use a backup code";
 const SIGN_OUT_ACTION = "Sign out";
 
 const METHOD_TABS: readonly (readonly [TwoFactorMethod, string, IconName])[] = [
@@ -106,12 +107,26 @@ export function TwoFactorForm({
     onSubmit(clean);
   };
 
+  // A backup code stands in for whichever factor is out of reach, so an
+  // account with only a passkey reaches the code form too. Without this, a
+  // passkey kept on another device left no way past this step.
+  const showCodeForm = method === "authenticator" || useBackupCode;
+
+  const switchToBackupCode = () => {
+    setInvalidReason(null);
+    onCodeChange("");
+    setUseBackupCode(true);
+    if (allowAuthenticator) {
+      onMethodChange("authenticator");
+    }
+  };
+
   const subheadingText = hasBothMethods
     ? "Choose a method to verify your identity"
-    : method === "passkey"
-      ? "Verify your identity with your passkey"
-      : useBackupCode
-        ? "Enter one of your 8-digit backup codes"
+    : useBackupCode
+      ? "Enter one of your 8-digit backup codes"
+      : method === "passkey"
+        ? "Verify your identity with your passkey"
         : "Enter the code from your authenticator app";
 
   return (
@@ -163,7 +178,7 @@ export function TwoFactorForm({
           </div>
         ) : null}
 
-        {method === "passkey" ? (
+        {!showCodeForm ? (
           <div className="auth-two-factor__passkey">
             <div className="auth-two-factor__panel">
               <div className="auth-two-factor__panel-body">
@@ -187,8 +202,8 @@ export function TwoFactorForm({
                       Sign in with your passkey
                     </p>
                     <p className="auth-two-factor__body">
-                      Your passkey is kept on this device or in your password
-                      manager, so there is no code to type.
+                      Your passkey is kept on the device or password manager
+                      where you created it, so there is no code to type.
                     </p>
                   </div>
                 </div>
@@ -223,6 +238,15 @@ export function TwoFactorForm({
                 {USE_AUTHENTICATOR_ACTION}
               </button>
             ) : null}
+
+            <button
+              className="auth-two-factor__alternate"
+              disabled={verifying}
+              onClick={switchToBackupCode}
+              type="button"
+            >
+              {NO_PASSKEY_HERE_ACTION}
+            </button>
           </div>
         ) : (
           <form className="auth-form" noValidate onSubmit={submit}>
@@ -267,10 +291,16 @@ export function TwoFactorForm({
               )}
 
               {useBackupCode ? (
-                <p className="auth-form__helper">
-                  Enter one of your 8-digit backup codes. Each code can only be
-                  used once.
-                </p>
+                <>
+                  <p className="auth-form__helper">
+                    Enter one of the 8-digit backup codes you saved when you set
+                    up two-factor sign-in. Each code can only be used once.
+                  </p>
+                  <p className="auth-form__helper">
+                    Lost your codes as well? Ask your academy&apos;s support
+                    team to reset two-factor sign-in for your account.
+                  </p>
+                </>
               ) : (
                 <>
                   <p className="auth-form__helper">
@@ -304,21 +334,23 @@ export function TwoFactorForm({
               <Icon aria-hidden emphasis="bold" name="arrowRight" size={18} />
             </button>
 
-            <button
-              className="auth-two-factor__alternate"
-              onClick={() => {
-                setInvalidReason(null);
-                onCodeChange("");
-                setUseBackupCode(!useBackupCode);
-              }}
-              type="button"
-            >
-              {useBackupCode
-                ? USE_AUTHENTICATOR_ACTION
-                : USE_BACKUP_CODE_ACTION}
-            </button>
+            {allowAuthenticator ? (
+              <button
+                className="auth-two-factor__alternate"
+                onClick={() => {
+                  setInvalidReason(null);
+                  onCodeChange("");
+                  setUseBackupCode(!useBackupCode);
+                }}
+                type="button"
+              >
+                {useBackupCode
+                  ? USE_AUTHENTICATOR_ACTION
+                  : USE_BACKUP_CODE_ACTION}
+              </button>
+            ) : null}
 
-            {hasBothMethods ? (
+            {allowPasskey ? (
               <button
                 className="auth-two-factor__alternate"
                 onClick={() => chooseMethod("passkey")}

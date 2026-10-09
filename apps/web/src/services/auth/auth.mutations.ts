@@ -6,10 +6,12 @@ import {
 import { useCallback, useRef } from "react";
 import type {
   AuthMessageResponse,
+  BackupCodesResponse,
   CurrentUserResponse,
   EmailVerificationSendRequest,
   EmailVerificationVerifyRequest,
   PasskeyAuthenticationOptionsResponse,
+  PasskeyRegisterVerifyResponse,
   PasskeyRegistrationOptionsResponse,
   GoogleOneTapLoginRequest,
   LoginRequest,
@@ -342,15 +344,35 @@ export function usePasskeyRegisterOptions() {
   });
 }
 
-export function usePasskeyRegisterVerify() {
+/**
+ * `refreshSession: false` leaves the current user as it was. The sign-in
+ * enrolment step needs that: the moment the account is seen to have its
+ * factor, the route guard moves on from the step, and the backup codes this
+ * call returned would never be shown. That caller refreshes once the codes
+ * have been saved.
+ */
+export function usePasskeyRegisterVerify({
+  refreshSession = true,
+}: { refreshSession?: boolean } = {}) {
   const queryClient = useQueryClient();
 
-  return useMutation<AuthMessageResponse, ApiError, { response: unknown }>({
+  return useMutation<
+    PasskeyRegisterVerifyResponse,
+    ApiError,
+    { response: unknown }
+  >({
     mutationFn: (payload) => authService.verifyPasskeyRegister(payload),
     onSuccess: () => {
+      if (!refreshSession) return;
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
       queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
     },
+  });
+}
+
+export function useRegenerateBackupCodes() {
+  return useMutation<BackupCodesResponse, ApiError, void>({
+    mutationFn: () => authService.regenerateBackupCodes(),
   });
 }
 

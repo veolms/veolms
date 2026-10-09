@@ -69,7 +69,7 @@ function BackupCodesScreen({ codes, onContinue }: BackupCodesScreenProps) {
       </h1>
       <p className="auth-card__subheading">
         Store these codes somewhere safe. Each code can be used once if you ever
-        lose access to your authenticator app.
+        lose access to your passkey or authenticator app.
       </p>
 
       <div className="auth-card__form-slot">
@@ -136,9 +136,19 @@ export function AdminMfaSetup({
   const setupTotpMutation = useSetupTotp();
   const enableTotpMutation = useEnableTotp();
   const passkeyOptionsMutation = usePasskeyRegisterOptions();
-  const passkeyVerifyMutation = usePasskeyRegisterVerify();
+  // The session is refreshed by this step itself, once any backup codes have
+  // been saved (see usePasskeyRegisterVerify).
+  const passkeyVerifyMutation = usePasskeyRegisterVerify({
+    refreshSession: false,
+  });
 
   const passkeySupported = isPasskeySupported();
+
+  const handleBackupCodesContinue = async () => {
+    await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+    await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
+    onDone();
+  };
 
   const handleSetupPasskey = async () => {
     onClearError();
@@ -151,16 +161,18 @@ export function AdminMfaSetup({
       const credential = await startPasskeyRegistration(serverOptions);
       if (passkeyAttempt.current !== attempt) return;
 
-      await passkeyVerifyMutation.mutateAsync(credential);
-      if (passkeyAttempt.current !== attempt) return;
+      const result = await passkeyVerifyMutation.mutateAsync(credential);
 
-      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      if (passkeyAttempt.current !== attempt) return;
+      // From here the passkey is on the account, whatever was pressed since.
+      // Backup codes come back when the account had none; they are shown
+      // once, so the step waits on that screen and finishes from there.
+      if (result.backupCodes?.length) {
+        setBackupCodes(result.backupCodes);
+        setScreen("backupCodes");
+        return;
+      }
 
-      await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
-      if (passkeyAttempt.current !== attempt) return;
-
-      onDone();
+      await handleBackupCodesContinue();
     } catch (err: unknown) {
       if (passkeyAttempt.current !== attempt) return;
 
@@ -224,12 +236,6 @@ export function AdminMfaSetup({
     if (!enableTotpMutation.isPending) {
       void submitTotpCode(totpCode);
     }
-  };
-
-  const handleBackupCodesContinue = async () => {
-    await queryClient.invalidateQueries({ queryKey: authKeys.me() });
-    await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
-    onDone();
   };
 
   if (screen === "backupCodes") {
