@@ -19,6 +19,12 @@ export const HOME_PAGE_DISCUSSIONS_PER_PAGE = 6;
 export const HOME_PAGE_MAX_PINNED_DISCUSSIONS = 5;
 export const HOME_PAGE_MAX_HIDDEN_DISCUSSIONS = 200;
 
+/** The lesson that plays on the laptop in the hero picture. */
+export const HOME_PAGE_HERO_LESSON = {
+  courseSlug: "fundamentals-of-backend-and-nodejs",
+  lessonNumber: 1,
+} as const;
+
 export interface HomePageHero {
   headline: string;
   /** The second headline line, shown in the accent colour. May be empty. */
