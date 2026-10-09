@@ -88,6 +88,7 @@ import {
   getLearningMiniPlayerSnapshot,
   openLearningMiniPlayerSession,
   subscribeToLearningMiniPlayer,
+  syncStoredLearningMiniPlayerLesson,
 } from "../learning/player/learningMiniPlayerStore";
 import type { NavigateTo, NavigationOptions } from "../routing/navigation";
 import { AcademyRouteGuard } from "../routing/RouteGuards";
@@ -1061,6 +1062,24 @@ export default function AcademyLayout() {
     },
     [navigateTo],
   );
+
+  // The in-page mini player changes lessons in place. The stored session is
+  // kept on the lesson now playing, so a reload brings that lesson back
+  // rather than the one that was minimized.
+  useEffect(() => {
+    if (playerPresentation !== "mini" || !persistentPlayer) return;
+    const selectedLesson = persistentPlayer.selectedLesson;
+    if (selectedLesson === undefined) return;
+    syncStoredLearningMiniPlayerLesson({
+      mediaKey: persistentPlayer.mediaKey,
+      selectedLesson,
+      lessonTitle: persistentPlayer.playerProps.lessonTitle,
+      lessonIndex: persistentPlayer.playerProps.lessonIndex,
+      totalLessons: persistentPlayer.playerProps.totalLessons,
+      lessonPath: persistentPlayer.lessonPath,
+      manifestUrl: persistentPlayer.playerProps.playbackBootstrap?.manifestUrl,
+    });
+  }, [persistentPlayer, playerPresentation]);
 
   const closeLearningMiniPlayer = useCallback(() => {
     if (
