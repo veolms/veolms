@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import {
   createContext,
@@ -15,8 +16,9 @@ import {
 import type { MfaGateUser } from "../auth/mfaGate";
 import { AppLoadingScreen } from "../bootstrap/AppLoadingScreen";
 import { useCapabilities } from "../services/authorization";
-import { useCurrentUser } from "../services/auth";
+import { cancelPendingLogin, useCurrentUser } from "../services/auth";
 import { useAuthStore } from "../store/auth.store";
+import { isPendingMfaLoginAbandoned } from "../store/pendingMfaLogin";
 import {
   APP_HOME_PATH,
   buildMfaChallengePath,
@@ -91,6 +93,7 @@ export function useAcademyRouteGuardState(): AcademyRouteGuardState {
 export function AcademyRouteGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { access, user, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
   const authenticationRequired = requiresAcademyAuth(path);
@@ -134,6 +137,13 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (access.needsMfaChallenge && path !== "/logout") {
+      // A visitor who turned away from the two-factor step is not sent back
+      // to it: the sign-in is called off, and this page is then a signed-out
+      // visitor's (the branch above takes over once the session is gone).
+      if (isPendingMfaLoginAbandoned(user)) {
+        void cancelPendingLogin(queryClient);
+        return;
+      }
       navigate(
         buildMfaChallengePath(`${location.pathname}${location.search}`),
         { replace: true },
@@ -154,6 +164,8 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     navigate,
     path,
     pending,
+    queryClient,
+    user,
   ]);
 
   const routeContentBlocked =
@@ -182,8 +194,9 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
 export function AuthRouteGuard() {
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const { access, pending } = useSessionAccess();
+  const { access, user, pending } = useSessionAccess();
   const path = normalizeAppPath(location.pathname);
 
   useIsomorphicLayoutEffect(() => {
@@ -193,7 +206,11 @@ export function AuthRouteGuard() {
 
     if (path === "/mfa-setup") {
       if (!access.isAuthenticated) {
-        navigate(buildLoginDialogPath(), { replace: true });
+        // Signed out on the two-factor step: the session ran out, or the
+        // sign-in was just called off with Back.
+        navigate(buildLoginDialogPath(searchParams.get("returnTo")), {
+          replace: true,
+        });
         return;
       }
 
@@ -204,6 +221,15 @@ export function AuthRouteGuard() {
     }
 
     if (access.needsMfaChallenge) {
+      // Here by turning away from the two-factor step: the sign-in is
+      // called off, and the visitor gets the login pop-up to start again.
+      if (isPendingMfaLoginAbandoned(user)) {
+        void cancelPendingLogin(queryClient);
+        navigate(buildLoginDialogPath(searchParams.get("returnTo")), {
+          replace: true,
+        });
+        return;
+      }
       if (path !== "/login") {
         navigate(
           buildMfaChallengePath(`${location.pathname}${location.search}`),
@@ -228,7 +254,9 @@ export function AuthRouteGuard() {
     navigate,
     path,
     pending,
+    queryClient,
     searchParams,
+    user,
   ]);
 
   if (pending) {

@@ -53,7 +53,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
   // Logging in happens in a pop-up over a page. A visitor who opens /login
   // is sent to the page they were heading for (or the home page) with the
-  // pop-up open. Someone half-way through two-factor stays on this screen.
+  // pop-up open. A session still waiting on two-factor is left to the route
+  // guard, which either keeps it on this screen or calls the sign-in off.
   if (!user && path === LOGIN_PATH) {
     return redirect(buildLoginDialogPath(url.searchParams.get("returnTo")));
   }

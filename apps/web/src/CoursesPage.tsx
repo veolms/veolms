@@ -4359,7 +4359,7 @@ export function CoursesPage({
       return;
     }
     void import("./home/AuthenticatedHomeBoundary");
-    void import("./StudentHome");
+    void import("./home/learner/LearnerHome");
   }, [isAuthenticated, page, sessionPresentAtBoot, workspaceRoleHint]);
   useEffect(() => {
     // Same rule the catalogue uses: a remembered session may ask before the
@@ -4494,8 +4494,8 @@ export function CoursesPage({
             <AuthenticatedHomeBoundary
               onOpenCourse={onOpenCourse}
               onNavigatePage={onNavigatePage}
-              setNotice={setNotice}
-              studentName={shellProfileKnownName}
+              learnerName={activeUser?.displayName?.trim() ?? ""}
+              courseCardActions={guestHomeCourseCardActions}
               notEnrolledContent={
                 <GuestHome
                   onNavigatePage={onNavigatePage}

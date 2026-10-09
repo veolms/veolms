@@ -9,6 +9,13 @@
 export const guestHomeGutter =
   "px-[clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)]";
 
+/**
+ * Pulls a box that sits inside the page's gutters out over them, so that it
+ * runs from one edge of the page to the other.
+ */
+export const guestHomeGutterBleed =
+  "-mx-[clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)]";
+
 export const guestHomeBlockStart =
   "pt-[clamp(var(--application-page-block-start,22px),2.8cqw,2.5rem)]";
 

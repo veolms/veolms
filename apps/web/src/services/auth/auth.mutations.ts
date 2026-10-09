@@ -29,6 +29,10 @@ import type {
 import type { ApiError } from "../../lib/api-error";
 import { autosyncManager } from "../../lib/autosync/manager";
 import { authStore } from "../../store/auth.store";
+import {
+  endPendingMfaLogin,
+  notePendingMfaLogin,
+} from "../../store/pendingMfaLogin";
 import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { authKeys } from "./auth.keys";
 import { updatePublicProfileCacheFromUser } from "./auth.queries";
@@ -83,11 +87,61 @@ function persistAuthenticatedSession(
       predicate: (query) => query.queryKey[0] !== authKeys.all[0],
     });
   }
+  notePendingMfaLogin(data.mfaRequired);
   authStore.setUser(data.user);
   resetRegisteredInteractionState();
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   queryClient.removeQueries({ queryKey: authKeys.avatars() });
   queryClient.setQueryData(authKeys.me(), currentUser);
+}
+
+/** What the tab forgets when its session ends. */
+function clearSignedOutState(queryClient: QueryClient) {
+  authStore.clearAuth();
+  resetRegisteredInteractionState();
+  clearCoursePlayerSessions();
+  queryClient.setQueryData(authKeys.me(), null);
+  queryClient.removeQueries({ queryKey: authKeys.me() });
+  queryClient.removeQueries({ queryKey: authKeys.avatars() });
+  queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
+  queryClient.invalidateQueries({ queryKey: authKeys.me() });
+}
+
+let pendingLoginCancellation: Promise<void> | null = null;
+
+/**
+ * Calls off a sign-in that stopped at its second step: the session it
+ * created is ended on the server and forgotten here, as if the sign-in had
+ * never been started.
+ *
+ * The tab forgets the session at once, so whatever is on screen is a
+ * signed-out page from this moment and no guard sends it back to the step.
+ * The current user is set to "nobody" rather than dropped until the server
+ * has answered: dropped, it would be asked for again, and the session is
+ * still there to be found until the sign-out lands.
+ *
+ * Safe to call again while it is running: every caller gets the same run.
+ */
+export function cancelPendingLogin(queryClient: QueryClient): Promise<void> {
+  pendingLoginCancellation ??= (async () => {
+    authStore.clearAuth();
+    queryClient.setQueryData(authKeys.me(), null);
+    try {
+      await authService.logout();
+    } catch {
+      // Unreachable or already ended. The tab stays signed out either way;
+      // a session that did survive is met, and ended, on the next visit.
+    } finally {
+      // Only now is the sign-in forgotten as one that was walked away from.
+      // Forgotten sooner, a guard that looks again before it has heard that
+      // the session is gone would take this for a session it has to send to
+      // the step.
+      endPendingMfaLogin();
+      clearSignedOutState(queryClient);
+      pendingLoginCancellation = null;
+    }
+  })();
+  return pendingLoginCancellation;
 }
 
 export function useSendOtp() {
@@ -345,16 +399,7 @@ export function useLogout() {
 
   return useMutation<AuthMessageResponse, ApiError, void>({
     mutationFn: () => authService.logout(),
-    onSettled: () => {
-      authStore.clearAuth();
-      resetRegisteredInteractionState();
-      clearCoursePlayerSessions();
-      queryClient.setQueryData(authKeys.me(), null);
-      queryClient.removeQueries({ queryKey: authKeys.me() });
-      queryClient.removeQueries({ queryKey: authKeys.avatars() });
-      queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
-      queryClient.invalidateQueries({ queryKey: authKeys.me() });
-    },
+    onSettled: () => clearSignedOutState(queryClient),
   });
 }
 

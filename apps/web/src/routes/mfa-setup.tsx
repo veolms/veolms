@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import "../auth/mfa-setup.css";
 import { useNavigate, useSearchParams } from "react-router";
@@ -11,9 +12,15 @@ import {
   resolveMfaBackPath,
   sanitizeReturnTo,
 } from "../routing/routeAccess";
-import { useCurrentUser } from "../services/auth";
+import { cancelPendingLogin, useCurrentUser } from "../services/auth";
+import {
+  endPendingMfaLogin,
+  notePendingMfaStepShown,
+} from "../store/pendingMfaLogin";
+
 export default function MfaSetupRoute() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const { data: user, isLoading } = useCurrentUser();
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +42,21 @@ export default function MfaSetupRoute() {
 
   const view = initialView ?? (isLoading ? null : resolveMfaSetupView(user));
   const backPath = resolveMfaBackPath(searchParams.get("returnTo"));
+
+  // From here on, turning away from this step calls the sign-in off: any
+  // other page that meets the waiting session ends it (see
+  // `isPendingMfaLoginAbandoned`).
+  const stepShown = view === "verify" || view === "enroll";
+  useEffect(
+    () => (stepShown ? notePendingMfaStepShown() : undefined),
+    [stepShown],
+  );
+
+  const finish = () => {
+    endPendingMfaLogin();
+    const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+    navigate(returnTo ?? APP_HOME_PATH, { replace: true });
+  };
 
   if (isLoading || view === null || view === "login" || view === "done") {
     return (
@@ -58,19 +80,18 @@ export default function MfaSetupRoute() {
         <MfaStepUp
           allowAuthenticator={Boolean(user?.totpEnabled)}
           allowPasskey={Boolean(user?.passkeyEnabled)}
-          onBack={() => navigate(backPath, { replace: true })}
-          onSignOut={() => navigate("/logout", { replace: true })}
-          onDone={() => {
-            const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
-            navigate(returnTo ?? APP_HOME_PATH, { replace: true });
+          // Back is "not now": the half-made session goes, and the
+          // visitor is back at the login pop-up, signed out.
+          onBack={() => {
+            void cancelPendingLogin(queryClient);
+            navigate(backPath, { replace: true });
           }}
+          onSignOut={() => navigate("/logout", { replace: true })}
+          onDone={finish}
         />
       ) : (
         <MfaEnrollmentSetup
-          onDone={() => {
-            const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
-            navigate(returnTo ?? APP_HOME_PATH, { replace: true });
-          }}
+          onDone={finish}
           onError={setError}
           onClearError={() => setError(null)}
         />

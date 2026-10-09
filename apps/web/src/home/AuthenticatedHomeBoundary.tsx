@@ -1,34 +1,28 @@
-import type { EnrolledCoursesResponse } from "@veolms/contracts";
 import type { LearningCourse } from "../StudentPages";
 import { lazy, Suspense, type ReactNode } from "react";
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
+import type { NavigateTo } from "../routing/navigation";
 import { useEnrolledCourses } from "../services/enrollments";
-import { useCourses } from "../services/courses";
-import { useRecentLearningUpdates } from "../services/recent-updates";
-import type { StudentHomeEnrollmentState } from "../StudentHome";
-import "../styles/features/home.css";
+import type { GuestHomeCourseCardActions } from "./guest/GuestHomeCourseSection";
 
-const StudentHome = lazy(() =>
-  import("../StudentHome").then((module) => ({
-    default: module.StudentHome,
-  })),
-);
-const StudentHomeZeroProgress = lazy(() =>
-  import("../StudentHomeZeroProgress").then((module) => ({
-    default: module.StudentHomeZeroProgress,
+const LearnerHome = lazy(() =>
+  import("./learner/LearnerHome").then((module) => ({
+    default: module.LearnerHome,
   })),
 );
 
 interface AuthenticatedHomeBoundaryProps {
   onOpenCourse: (course: LearningCourse) => void;
-  onNavigatePage: (page: string) => void;
-  setNotice?: (message: string) => void;
-  studentName?: string;
+  onNavigatePage: NavigateTo;
+  /** The learner's display name; it may be empty. */
+  learnerName: string;
+  /** What the home's course cards need from the page shell. */
+  courseCardActions: GuestHomeCourseCardActions;
   /**
-   * Rendered while enrollments load and while the lazy dashboard chunk
+   * Rendered while enrollments load and while the lazy learner home chunk
    * resolves, instead of the spinner states. The shell passes the seeded
    * guest home here so a signed-in load swaps content exactly once
-   * (guest home -> dashboard) rather than flashing spinners in between,
+   * (guest home -> learner home) rather than flashing spinners in between,
    * which scored large layout shifts in Lighthouse.
    */
   pendingContent?: ReactNode;
@@ -69,7 +63,11 @@ function HomeState({
 
 function HomeLoadingState() {
   return (
-    <div className="home-boundary-loading" role="status" aria-busy="true">
+    <div
+      className="flex min-h-[clamp(18rem,40vh,28rem)] items-center justify-center gap-2.5 px-4 py-6 text-center text-[0.88rem] font-[550] text-(--muted)"
+      role="status"
+      aria-busy="true"
+    >
       <LoadingSpinnerIcon size={22} />
       <span>Preparing your Home…</span>
     </div>
@@ -101,60 +99,11 @@ function HomeEnrollmentErrorState({
   );
 }
 
-function AuthenticatedZeroProgressHome({
-  enrolledData,
-  onNavigatePage,
-  setNotice,
-  studentName,
-}: {
-  enrolledData: EnrolledCoursesResponse;
-  onNavigatePage: (page: string) => void;
-  setNotice?: (message: string) => void;
-  studentName?: string;
-}) {
-  const { data: publishedCoursesData, isLoading: publishedCoursesLoading } =
-    useCourses();
-  const {
-    data: recentUpdatesResponse,
-    isLoading: recentUpdatesLoading,
-    isError: recentUpdatesError,
-    isFetching: recentUpdatesFetching,
-    refetch: refetchRecentUpdates,
-  } = useRecentLearningUpdates();
-
-  return (
-    <Suspense
-      fallback={
-        <section className="home-resume-card home-resume-card--state">
-          <div className="home-resume-state" role="status" aria-busy="true">
-            <strong>Preparing your learning Home…</strong>
-          </div>
-        </section>
-      }
-    >
-      <StudentHomeZeroProgress
-        studentName={studentName}
-        enrolledCourses={enrolledData.courses}
-        publishedCourses={publishedCoursesData?.courses ?? []}
-        publishedCoursesLoading={publishedCoursesLoading}
-        recentUpdateCourses={recentUpdatesResponse?.courses ?? []}
-        hasRecentUpdatesData={recentUpdatesResponse !== undefined}
-        recentUpdatesLoading={recentUpdatesLoading}
-        recentUpdatesError={recentUpdatesError}
-        recentUpdatesFetching={recentUpdatesFetching}
-        refetchRecentUpdates={() => refetchRecentUpdates()}
-        onNavigatePage={onNavigatePage}
-        setNotice={setNotice}
-      />
-    </Suspense>
-  );
-}
-
 export function AuthenticatedHomeBoundary({
   onOpenCourse,
   onNavigatePage,
-  setNotice,
-  studentName,
+  learnerName,
+  courseCardActions,
   pendingContent,
   notEnrolledContent,
 }: AuthenticatedHomeBoundaryProps) {
@@ -187,37 +136,14 @@ export function AuthenticatedHomeBoundary({
     return <>{notEnrolledContent}</>;
   }
 
-  const hasMeaningfulLearningProgress = enrollmentData.courses.some(
-    (course) => (course.progress ?? 0) > 0,
-  );
-
-  if (!hasMeaningfulLearningProgress) {
-    return (
-      <AuthenticatedZeroProgressHome
-        enrolledData={enrollmentData}
-        onNavigatePage={onNavigatePage}
-        setNotice={setNotice}
-        studentName={studentName}
-      />
-    );
-  }
-
-  const enrollment: StudentHomeEnrollmentState = {
-    data: enrollmentData,
-    isLoading: enrollmentQuery.isLoading,
-    isError: enrollmentQuery.isError,
-    isFetching: enrollmentQuery.isFetching,
-    refetch: () => enrollmentQuery.refetch(),
-  };
-
   return (
     <Suspense fallback={pendingContent ?? <HomeLoadingState />}>
-      <StudentHome
+      <LearnerHome
+        enrolledCourses={enrollmentData.courses}
+        learnerName={learnerName}
+        courseCardActions={courseCardActions}
         onOpenCourse={onOpenCourse}
         onNavigatePage={onNavigatePage}
-        setNotice={setNotice}
-        studentName={studentName}
-        enrollment={enrollment}
       />
     </Suspense>
   );

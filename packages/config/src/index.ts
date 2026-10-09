@@ -41,6 +41,18 @@ const cdnUrlSchema = z
   }, "CDN URL must be an absolute HTTP(S) URL or a root-relative path such as /cdn")
   .transform((value) => value.replace(/\/+$/u, "") || "/");
 
+/**
+ * Seconds before another one-time code can be sent to the same email address
+ * or mobile number. One setting on purpose: the API enforces it and the login
+ * form counts it down, and the two must not disagree.
+ */
+const otpResendCooldownSecondsSchema = z.coerce
+  .number()
+  .int()
+  .min(1)
+  .max(3600)
+  .default(60);
+
 const folderListSchema = (defaultValue: string) =>
   z
     .string()
@@ -150,6 +162,9 @@ const serverConfigSchema = z.object({
   TOTP_STEP_SECONDS: z.coerce.number().int().min(1).default(30),
   TOTP_BACKWARD_STEPS: z.coerce.number().int().min(0).default(1),
   TOTP_FORWARD_STEPS: z.coerce.number().int().min(0).default(0),
+
+  // One-time passcodes
+  OTP_RESEND_COOLDOWN_SECONDS: otpResendCooldownSecondsSchema,
 
   /**
    * Enables the `mock_<email>` OAuth short-circuit, which skips both the
@@ -315,6 +330,7 @@ const webConfigSchema = z.object({
   VITE_CDN_URL: cdnUrlSchema.default("/cdn"),
   CDN_URL: cdnUrlSchema.default("/cdn"),
   STATIC_BUILD_API_URL: z.url().default("http://localhost:4000/v1"),
+  OTP_RESEND_COOLDOWN_SECONDS: otpResendCooldownSecondsSchema,
 });
 
 const INSECURE_DEFAULTS: Record<string, string> = {

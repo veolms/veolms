@@ -85,7 +85,14 @@ export const learningSummaryResponseSchema = z.strictObject({
   todaySeconds: z.number().int().nonnegative(),
   /** 0-100, capped; 0 when no goal is configured. */
   todayPct: z.number().int().min(0).max(100),
+  /** Seconds still needed to hit today's goal; 0 when done or no goal. */
+  remainingSeconds: z.number().int().nonnegative(),
+  goalCompletedToday: z.boolean(),
+  weekSeconds: z.number().int().nonnegative(),
+  /** dailyGoal x 7, in seconds; 0 when no goal is configured. */
+  weekTargetSeconds: z.number().int().nonnegative(),
   currentStreakDays: z.number().int().nonnegative(),
+  bestStreakDays: z.number().int().nonnegative(),
 });
 export type LearningSummaryResponse = z.infer<
   typeof learningSummaryResponseSchema

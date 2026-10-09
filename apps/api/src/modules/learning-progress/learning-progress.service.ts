@@ -763,7 +763,13 @@ export function createLearningProgressService({
       dailyGoalMinutes,
       todaySeconds: aggregates.todaySeconds,
       todayPct,
+      remainingSeconds: Math.max(0, goalSeconds - aggregates.todaySeconds),
+      goalCompletedToday:
+        goalSeconds > 0 && aggregates.todaySeconds >= goalSeconds,
+      weekSeconds: aggregates.weekSeconds,
+      weekTargetSeconds: goalSeconds * 7,
       currentStreakDays: aggregates.currentStreakDays,
+      bestStreakDays: aggregates.bestStreakDays,
     };
   }
 

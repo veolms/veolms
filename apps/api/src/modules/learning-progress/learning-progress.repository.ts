@@ -507,11 +507,11 @@ export async function listSupportedTimeZones(
 }
 
 /**
- * Today's total and the current streak in ONE round trip, in the user's
- * local calendar (PRD §9). Streak days are days with >= 60 seconds or >= 1
- * completion; the current streak counts back from today or yesterday (today
- * is not over yet). Gaps-and-islands over the user's own rows — bounded by
- * days of history, PK-indexed.
+ * Today's and the last seven days' totals, and the current and best streak,
+ * in ONE round trip, in the user's local calendar (PRD §9). Streak days are
+ * days with >= 60 seconds or >= 1 completion; the current streak counts
+ * back from today or yesterday (today is not over yet). Gaps-and-islands
+ * over the user's own rows — bounded by days of history, PK-indexed.
  */
 export async function getLearningSummaryAggregates(
   database: LearningProgressExecutor,
@@ -523,11 +523,15 @@ export async function getLearningSummaryAggregates(
   },
 ): Promise<{
   todaySeconds: number;
+  weekSeconds: number;
   currentStreakDays: number;
+  bestStreakDays: number;
 }> {
   const result = await sql<{
     today_seconds: number;
+    week_seconds: number;
     current_streak: number;
+    best_streak: number;
   }>`
     with local_today as (
       -- Same day the accrual credits to, so today's ring shows it.
@@ -561,15 +565,24 @@ export async function getLearningSummaryAggregates(
         where user_id = ${input.userId}::uuid and activity_date = today
       ), 0)::int as today_seconds,
       coalesce((
+        select sum(seconds) from learning_daily_activity, local_today
+        where user_id = ${input.userId}::uuid
+          and activity_date >= today - 6
+          and activity_date <= today
+      ), 0)::int as week_seconds,
+      coalesce((
         select len from streaks, local_today
         where end_date >= today - 1
         order by end_date desc limit 1
-      ), 0)::int as current_streak
+      ), 0)::int as current_streak,
+      coalesce((select max(len) from streaks), 0)::int as best_streak
   `.execute(database);
 
   const row = result.rows[0];
   return {
     todaySeconds: Number(row?.today_seconds ?? 0),
+    weekSeconds: Number(row?.week_seconds ?? 0),
     currentStreakDays: Number(row?.current_streak ?? 0),
+    bestStreakDays: Number(row?.best_streak ?? 0),
   };
 }

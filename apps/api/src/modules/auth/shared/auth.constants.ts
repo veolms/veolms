@@ -17,8 +17,8 @@ export const OTP_TTL_MS = OTP_TTL_MINUTES * MINUTE_MS;
 /** Wrong guesses before the outstanding code is burned. */
 export const OTP_MAX_ATTEMPTS = 3;
 
-/** Minimum gap between sends for one identifier and purpose. */
-export const OTP_RESEND_WINDOW_MS = 60 * 1000;
+// The minimum gap between sends for one identifier and purpose is not a
+// constant: it is OTP_RESEND_COOLDOWN_SECONDS in the environment.
 
 /**
  * Daily sends one requester may trigger for one identifier and purpose, so
