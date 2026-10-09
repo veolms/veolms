@@ -171,7 +171,8 @@ export function QuizResultView({
                           <dt className="shrink-0 font-semibold text-(--muted)">
                             Your answer
                           </dt>
-                          <dd className="min-w-0 wrap-break-word text-(--text-secondary)">
+                          {/* A written answer keeps its line breaks. */}
+                          <dd className="min-w-0 wrap-break-word whitespace-pre-wrap text-(--text-secondary)">
                             {given}
                           </dd>
                         </div>

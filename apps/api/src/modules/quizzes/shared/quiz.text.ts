@@ -1,5 +1,6 @@
 /**
- * A typed quiz answer is free text: any language, any symbols, code.
+ * A typed quiz answer is free text: any language, any symbols, code, over
+ * as many lines as it takes.
  *
  * It is never refused for what it says. A course on HTML or SQL has answers
  * that read like an attack, and a filter that turned those away would turn
@@ -11,14 +12,21 @@
  * mislead a layer that handles it.
  */
 
-/** Tabs and line breaks. A short answer is a single line. */
-const LINE_WHITESPACE = /[\t\n\v\f\r\u0085\u2028\u2029]/g;
+/**
+ * Every way a line can end, so an answer written on Windows, pasted from a
+ * document or typed on a phone is stored with one kind of line break.
+ */
+const LINE_BREAKS = /\r\n|[\r\u0085\u2028\u2029]/g;
 
 /**
- * NUL and the other control characters. PostgreSQL refuses NUL in `text` and
- * `jsonb`: one in an answer failed the save of every answer sent with it.
+ * NUL and the other control characters, except the tab and the line break a
+ * written answer is made of. PostgreSQL refuses NUL in `text` and `jsonb`:
+ * one in an answer failed the save of every answer sent with it.
  */
-const CONTROL_CHARACTERS = /\p{Cc}/gu;
+const CONTROL_CHARACTERS = /[^\P{Cc}\t\n]/gu;
+
+/** A run of blank lines longer than this is padding, not writing. */
+const EXCESS_BLANK_LINES = /\n{4,}/g;
 
 /** Half of a surrogate pair: not a character, and refused by `jsonb` too. */
 const LONE_SURROGATES = /\p{Cs}/gu;
@@ -36,10 +44,11 @@ const DISPLAY_SPOOFING_CHARACTERS =
 /** A typed answer as it is stored. */
 export function cleanQuizTextAnswer(value: string): string {
   return value
-    .replace(LINE_WHITESPACE, " ")
+    .replace(LINE_BREAKS, "\n")
     .replace(CONTROL_CHARACTERS, "")
     .replace(LONE_SURROGATES, "")
     .replace(DISPLAY_SPOOFING_CHARACTERS, "")
     .normalize("NFC")
+    .replace(EXCESS_BLANK_LINES, "\n\n\n")
     .trim();
 }
