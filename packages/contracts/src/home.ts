@@ -154,9 +154,9 @@ export interface GuestHomePageResponse {
   hero: HomePageHero;
   /**
    * The thumbnail of the course whose lesson plays on the hero's laptop
-   * (`HOME_PAGE_HERO_LESSON`), whether or not a row shows that course. Null
-   * when the course has none or is not published; left out by an API that
-   * predates it.
+   * (`HOME_PAGE_HERO_LESSON`), in a size that suits the laptop's screen,
+   * whether or not a row shows that course. Null when the course has none
+   * or is not published; left out by an API that predates it.
    */
   heroLessonPosterUrl?: string | null;
   highlights: HomePageHighlights;

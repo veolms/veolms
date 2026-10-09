@@ -36,6 +36,21 @@ const COURSE_OPTION_LIMIT = 200;
  * settings clears it, so an admin sees their own change at once.
  */
 const GUEST_PAGE_CACHE_MS = 30_000;
+/**
+ * The hero's laptop screen is a small part of the picture: about 460 device
+ * pixels of thumbnail on a phone, 910 on a high-density laptop, 790 on a
+ * 2560px monitor. The full-size thumbnail is three times the download for
+ * detail the screen cannot show.
+ */
+const HERO_POSTER_MIN_WIDTH = 960;
+
+/** The smallest thumbnail that still fills the hero's laptop screen sharply. */
+function heroPosterUrl(course: CourseSummary): string | null {
+  const fitting = [...(course.thumbnailSrcSet ?? [])]
+    .sort((left, right) => left.width - right.width)
+    .find((variant) => variant.width >= HERO_POSTER_MIN_WIDTH);
+  return fitting?.url ?? course.thumbnailUrl ?? null;
+}
 
 interface StoredSettings {
   settings: HomePageSettings;
@@ -150,7 +165,7 @@ export function createHomePageService({
   ): Promise<string | null> {
     const { courseSlug } = HOME_PAGE_HERO_LESSON;
     const shown = shownCourses.find((course) => course.slug === courseSlug);
-    if (shown) return shown.thumbnailUrl ?? null;
+    if (shown) return heroPosterUrl(shown);
 
     const course = await courseService.getPublishedCourseBySlug(courseSlug);
     if (!course) return null;
@@ -159,7 +174,7 @@ export function createHomePageService({
       limit: 1,
       order: "popular",
     });
-    return summary?.thumbnailUrl ?? null;
+    return summary ? heroPosterUrl(summary) : null;
   }
 
   function resolveDiscussions(
