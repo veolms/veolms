@@ -16,10 +16,7 @@ import type { EnrollmentService } from "../commerce/enrollments/enrollment.servi
 import type { StudentsService } from "../students/students.service.ts";
 import type { CourseService } from "../courses/course/course.service.ts";
 import type { LearningProgressService } from "../learning-progress/learning-progress.service.ts";
-import type {
-  AnalyticsActor,
-  AnalyticsDashboardScope,
-} from "./analytics.types.ts";
+import type { AnalyticsActor } from "./analytics.types.ts";
 import { isAdmin } from "./analytics.types.ts";
 
 export interface AnalyticsServiceOptions {
@@ -34,9 +31,6 @@ export interface AnalyticsServiceOptions {
 interface ScopedCourse {
   id: string;
   title: string;
-  status: string;
-  createdAt: string;
-  publishedAt: string | null;
 }
 
 type DashboardCourse = Pick<
@@ -96,7 +90,7 @@ function kpi(value: number, previousValue: number): AnalyticsKpi {
   } else {
     changePercent = ((value - previousValue) / Math.abs(previousValue)) * 100;
   }
-  return { value, previousValue, changePercent };
+  return { value, changePercent };
 }
 
 /** Longest span one request may cover; the dashboard's widest is a year. */
@@ -149,46 +143,16 @@ function resolveInclusiveEnd(exclusiveEnd: Date) {
   return new Date(exclusiveEnd.getTime() - 1);
 }
 
-function createEnrollmentActivityBucketWindow(from: Date) {
+/** Inclusive start of each UTC 8-hour bucket in the activity window. */
+function createEnrollmentActivityBucketStarts(from: Date) {
   return Array.from(
     { length: ENROLLMENT_ACTIVITY_BUCKET_COUNT },
-    (_, index) => {
-      const start = new Date(
+    (_, index) =>
+      new Date(
         from.getTime() +
           index * ENROLLMENT_ACTIVITY_BUCKET_HOURS * 60 * 60 * 1000,
-      );
-      const end = new Date(
-        start.getTime() + ENROLLMENT_ACTIVITY_BUCKET_HOURS * 60 * 60 * 1000,
-      );
-      return { start, end };
-    },
-  );
-}
-
-function emptyLearningActivity(
-  window: EnrollmentActivityWindow,
-): DashboardLearningActivity {
-  return {
-    averageCourseProgress: { value: 0 },
-    courseCompletionRate: { value: 0 },
-    newEnrollments: { value: 0 },
-    enrollmentActivity: {
-      currentTotal: 0,
-      previousTotal: 0,
-      changePercent: 0,
-      from: window.from.toISOString(),
-      to: window.to.toISOString(),
-      bucketHours: ENROLLMENT_ACTIVITY_BUCKET_HOURS,
-      timeZone: "UTC",
-      buckets: createEnrollmentActivityBucketWindow(window.from).map(
-        ({ start, end }) => ({
-          start: start.toISOString(),
-          end: end.toISOString(),
-          value: 0,
-        }),
       ),
-    },
-  };
+  );
 }
 
 function normalizeRevenueTrend(
@@ -239,26 +203,15 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     isPlatformWide: boolean;
   }> {
     if (courseId) {
-      if (!isAdmin(actor)) {
-        await courseService.getCourseAndVerifyOwner(courseId, actor.id);
-      }
-      const course = await courseService.findCourseById(courseId);
+      const course = isAdmin(actor)
+        ? await courseService.findCourseById(courseId)
+        : await courseService.getCourseAndVerifyOwner(courseId, actor.id);
       if (!course) {
         return { courseIds: [], courses: [], isPlatformWide: false };
       }
       return {
         courseIds: [courseId],
-        courses: [
-          {
-            id: course.id,
-            title: course.title,
-            status: course.status,
-            createdAt: course.created_at.toISOString(),
-            publishedAt: course.published_at
-              ? course.published_at.toISOString()
-              : null,
-          },
-        ],
+        courses: [{ id: course.id, title: course.title }],
         isPlatformWide: false,
       };
     }
@@ -276,9 +229,6 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         courses: mine.courses.map((course) => ({
           id: course.id,
           title: course.title,
-          status: course.status,
-          createdAt: course.createdAt,
-          publishedAt: course.publishedAt,
         })),
         isPlatformWide: true,
       };
@@ -290,9 +240,6 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       courses: mine.courses.map((course) => ({
         id: course.id,
         title: course.title,
-        status: course.status,
-        createdAt: course.createdAt,
-        publishedAt: course.publishedAt,
       })),
       isPlatformWide: false,
     };
@@ -313,18 +260,6 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
         thumbnailSrcSet: course.thumbnailSrcSet,
         status: course.status,
       }));
-  }
-
-  async function resolveDashboardAnalyticsCourseIds(
-    actor: AnalyticsActor,
-  ): Promise<string[]> {
-    const scoped = await courseService.listMyCourseScope(actor.id, actor.roles);
-
-    // Preserve the existing course-scoped analytics eligibility rule while
-    // using the collaborative course population for instructors.
-    return scoped.courses
-      .filter((course) => course.status === "published")
-      .map((course) => course.id);
   }
 
   async function buildYourCourses(
@@ -428,7 +363,7 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const { from, to, prevFrom, prevTo } = resolveDateRange(query);
 
     if (!isPlatformWide && courseIds.length === 0) {
-      return buildEmptyResponse(query);
+      return buildEmptyResponse();
     }
 
     const courseIdFilter: string | string[] | undefined = isPlatformWide
@@ -550,11 +485,6 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     );
 
     return {
-      scope: {
-        type: isPlatformWide ? "platform" : "course",
-        courseId: query.courseId ?? null,
-        courseIds,
-      },
       currency,
       overview: {
         netRevenue: kpi(netRevenueCurrent, netRevenuePrev),
@@ -583,20 +513,17 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
 
   async function buildRevenueOverview(
     scope: OrderScope,
-    courseIdFilter: string | string[] | undefined,
     range: DashboardRange,
   ) {
     const { from, to, prevFrom, prevTo, days } =
       resolveDashboardRevenueRange(range);
     const current = await orderService.getRawStatsForCourses(scope, {
-      courseId: courseIdFilter,
       from,
       toExclusive: to,
     });
 
     const [previous, currentFunnel, previousFunnel, trend] = await Promise.all([
       orderService.getRawStatsForCourses(scope, {
-        courseId: courseIdFilter,
         from: prevFrom,
         toExclusive: prevTo,
         currency: current.currency,
@@ -604,15 +531,12 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       orderService.getOrderStatusFunnel(scope, {
         from,
         toExclusive: to,
-        courseId: courseIdFilter,
       }),
       orderService.getOrderStatusFunnel(scope, {
         from: prevFrom,
         toExclusive: prevTo,
-        courseId: courseIdFilter,
       }),
       orderService.getRevenueTrend(scope, {
-        courseId: courseIdFilter,
         from,
         toExclusive: to,
         currency: current.currency,
@@ -623,7 +547,6 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const previousNetRevenue = previous.grossPaid - previous.refundedAmount;
 
     return {
-      range,
       currency: current.currency,
       trend: normalizeRevenueTrend(trend, from, days),
       grossSales: kpi(current.grossPaid, previous.grossPaid),
@@ -634,26 +557,20 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
   }
 
   async function buildLearningActivity(
-    courseIdFilter: string | string[] | undefined,
     window: EnrollmentActivityWindow,
   ): Promise<DashboardLearningActivity> {
     const [progress, currentEnrollments, previousEnrollments, activityRows] =
       await Promise.all([
-        learningProgressService.getAverageProgressAndCompletionRate({
-          courseId: courseIdFilter,
-        }),
+        learningProgressService.getAverageProgressAndCompletionRate(),
         enrollmentService.getEnrollmentStats({
-          courseId: courseIdFilter,
           from: window.from,
           to: resolveInclusiveEnd(window.to),
         }),
         enrollmentService.getEnrollmentStats({
-          courseId: courseIdFilter,
           from: window.previousFrom,
           to: resolveInclusiveEnd(window.previousTo),
         }),
         enrollmentService.getEnrollmentActivityBuckets({
-          courseId: courseIdFilter,
           from: window.from,
           to: window.to,
         }),
@@ -662,10 +579,9 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const activityByStart = new Map(
       activityRows.map((row) => [row.start.toISOString(), row.value]),
     );
-    const buckets = createEnrollmentActivityBucketWindow(window.from).map(
-      ({ start, end }) => ({
+    const buckets = createEnrollmentActivityBucketStarts(window.from).map(
+      (start) => ({
         start: start.toISOString(),
-        end: end.toISOString(),
         value: activityByStart.get(start.toISOString()) ?? 0,
       }),
     );
@@ -675,67 +591,28 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       courseCompletionRate: { value: progress.completionRate },
       newEnrollments: { value: currentEnrollments.totalEnrollments },
       enrollmentActivity: {
-        currentTotal: currentEnrollments.totalEnrollments,
-        previousTotal: previousEnrollments.totalEnrollments,
         changePercent: kpi(
           currentEnrollments.totalEnrollments,
           previousEnrollments.totalEnrollments,
         ).changePercent,
-        from: window.from.toISOString(),
-        to: window.to.toISOString(),
-        bucketHours: ENROLLMENT_ACTIVITY_BUCKET_HOURS,
-        timeZone: "UTC",
         buckets,
       },
     };
   }
 
+  /**
+   * The dashboard is academy-wide: its route requires the platform-scoped
+   * analytics.revenue.read permission. Only "Your Courses" follows the
+   * caller's own course-management visibility.
+   */
   async function buildDashboard(
     actor: AnalyticsActor,
-    dashboardScope: AnalyticsDashboardScope,
     range: DashboardRange = "30d",
   ): Promise<DashboardSummaryResponse> {
     const dashboardNow = new Date();
     const enrollmentActivityWindow =
       resolveEnrollmentActivityWindow(dashboardNow);
     const dashboardCourses = await resolveDashboardCourses(actor);
-    const { courseIds, isPlatformWide } =
-      dashboardScope === "platform"
-        ? { courseIds: [], isPlatformWide: true }
-        : {
-            courseIds: await resolveDashboardAnalyticsCourseIds(actor),
-            isPlatformWide: false,
-          };
-    if (!isPlatformWide && courseIds.length === 0) {
-      return {
-        revenue: {
-          value: 0,
-          previousValue: 0,
-          changePercent: 0,
-          currency: "INR",
-        },
-        students: { total: 0, newThisMonth: 0 },
-        activeLearners: kpi(0, 0),
-        watchHours: kpi(0, 0),
-        revenueOverview: {
-          range,
-          currency: "INR",
-          trend: [],
-          grossSales: kpi(0, 0),
-          netRevenue: kpi(0, 0),
-          orders: kpi(0, 0),
-          refunds: kpi(0, 0),
-        },
-        learningActivity: emptyLearningActivity(enrollmentActivityWindow),
-        yourCourses: await buildYourCourses(dashboardCourses),
-      };
-    }
-
-    const courseIdFilter: string | string[] | undefined = isPlatformWide
-      ? undefined
-      : courseIds.length === 1
-        ? courseIds[0]
-        : courseIds;
     const scope = await orderService.getAcademyScope();
     const {
       now,
@@ -750,12 +627,11 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     const [currentRevenue, revenueOverview, learningActivity, yourCourses] =
       await Promise.all([
         orderService.getRawStatsForCourses(scope, {
-          courseId: courseIdFilter,
           from: currentMonthFrom,
           to: now,
         }),
-        buildRevenueOverview(scope, courseIdFilter, range),
-        buildLearningActivity(courseIdFilter, enrollmentActivityWindow),
+        buildRevenueOverview(scope, range),
+        buildLearningActivity(enrollmentActivityWindow),
         buildYourCourses(dashboardCourses),
       ]);
 
@@ -770,33 +646,27 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       // Pin the previous period to the current period's currency so a
       // multi-currency academy never compares different currencies.
       orderService.getRawStatsForCourses(scope, {
-        courseId: courseIdFilter,
         from: previousMonthFrom,
         to: previousMonthTo,
         currency: currentRevenue.currency,
       }),
       studentsService.getStudentPopulationCounts({
-        courseId: courseIdFilter,
         createdFrom: currentMonthFrom,
         createdTo: now,
       }),
       studentsService.getActiveLearnerCount({
-        courseId: courseIdFilter,
         from: activeCurrentFrom,
         to: now,
       }),
       studentsService.getActiveLearnerCount({
-        courseId: courseIdFilter,
         from: activePreviousFrom,
         to: activePreviousTo,
       }),
       learningProgressService.getEstimatedWatchHours({
-        courseId: courseIdFilter,
         from: currentMonthFrom,
         to: now,
       }),
       learningProgressService.getEstimatedWatchHours({
-        courseId: courseIdFilter,
         from: previousMonthFrom,
         to: previousMonthTo,
       }),
@@ -819,16 +689,9 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
     };
   }
 
-  function buildEmptyResponse(
-    query: AnalyticsFilterQuery,
-  ): AnalyticsOverviewResponse {
+  function buildEmptyResponse(): AnalyticsOverviewResponse {
     const emptyKpi = kpi(0, 0);
     return {
-      scope: {
-        type: "course",
-        courseId: query.courseId ?? null,
-        courseIds: [],
-      },
       currency: "INR",
       overview: {
         netRevenue: emptyKpi,
@@ -913,14 +776,9 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
       cachedResponse(overviewKey(actor, query), () =>
         buildOverview(actor, query),
       ),
-    dashboard: (
-      actor: AnalyticsActor,
-      dashboardScope: AnalyticsDashboardScope,
-      range: DashboardRange = "30d",
-    ) =>
-      cachedResponse(
-        ["dashboard", actorKey(actor), dashboardScope, range].join("|"),
-        () => buildDashboard(actor, dashboardScope, range),
+    dashboard: (actor: AnalyticsActor, range: DashboardRange = "30d") =>
+      cachedResponse(["dashboard", actorKey(actor), range].join("|"), () =>
+        buildDashboard(actor, range),
       ),
   };
 }

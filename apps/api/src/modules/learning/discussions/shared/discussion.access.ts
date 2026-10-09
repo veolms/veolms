@@ -72,23 +72,26 @@ export interface DiscussionAccess {
     courseId: string,
   ): Promise<void>;
   assertNotesEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
-  assertCommentsEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
-  assertQaEnabled(db: DatabaseExecutor, courseId: string): Promise<void>;
   assertThreadKindEnabled(
     db: DatabaseExecutor,
     courseId: string,
     kind: string,
-  ): Promise<void>;
-  assertCanAccessThreadCourse(
-    db: DatabaseExecutor,
-    actor: DiscussionActor,
-    courseId: string,
   ): Promise<void>;
   assertCanAccessThread(
     db: DatabaseExecutor,
     actor: DiscussionActor,
     thread: ThreadAccessTarget,
   ): Promise<void>;
+  /**
+   * The thread-level half of `assertCanAccessThread`, for a caller that has
+   * already established the actor's access to the thread's course and knows
+   * whether the actor moderates it. Reads nothing.
+   */
+  assertThreadVisibleToMember(
+    actor: DiscussionActor,
+    thread: ThreadAccessTarget,
+    canModerate: boolean,
+  ): void;
   assertCanAccessNote(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -156,18 +159,25 @@ export function createDiscussionAccess(): DiscussionAccess {
     courseId: string,
   ): Promise<boolean> {
     if (isAdmin(actor)) return true;
-    if (await isCourseCreator(db, actor.userId, courseId)) return true;
 
+    // One read answers both "is the actor the creator" and "is the course
+    // open". The creator keeps access to a deleted course; nobody else does.
     const course = await db
       .selectFrom("courses as c")
       .leftJoin("course_access_rules as ar", "ar.course_id", "c.id")
       .leftJoin("course_pricing as p", "p.course_id", "c.id")
-      .select((eb) => ["c.id", "c.status", isOpenCourseAccess(eb).as("isOpen")])
+      .select((eb) => [
+        "c.creator_id",
+        "c.status",
+        "c.deleted_at",
+        isOpenCourseAccess(eb).as("isOpen"),
+      ])
       .where("c.id", "=", courseId)
-      .where("c.deleted_at", "is", null)
       .executeTakeFirst();
 
     if (!course) return false;
+    if (course.creator_id === actor.userId) return true;
+    if (course.deleted_at !== null) return false;
 
     if (course.status === "published" && course.isOpen) {
       return true;
@@ -215,20 +225,6 @@ export function createDiscussionAccess(): DiscussionAccess {
       }
     },
 
-    async assertCommentsEnabled(db, courseId) {
-      const settings = await findSettingsByCourseId(db, courseId);
-      if (settings && settings.allow_comments === false) {
-        throw DiscussionErrors.commentsDisabled();
-      }
-    },
-
-    async assertQaEnabled(db, courseId) {
-      const settings = await findSettingsByCourseId(db, courseId);
-      if (settings && settings.allow_qa === false) {
-        throw DiscussionErrors.qaDisabled();
-      }
-    },
-
     async assertThreadKindEnabled(db, courseId, kind) {
       const normalized = kind === "qna" ? "question" : kind;
       if (normalized === "question") {
@@ -249,9 +245,14 @@ export function createDiscussionAccess(): DiscussionAccess {
       }
     },
 
-    async assertCanAccessThreadCourse(db, actor, courseId) {
-      const allowed = await canAccessCourse(db, actor, courseId);
-      if (!allowed) {
+    assertThreadVisibleToMember(actor, thread, canModerate) {
+      if (thread.visibility === "private" && thread.userId !== actor.userId) {
+        throw DiscussionErrors.notFound("Discussion thread");
+      }
+      if (
+        (thread.status === "hidden" || thread.status === "deleted") &&
+        !canModerate
+      ) {
         throw DiscussionErrors.notFound("Discussion thread");
       }
     },
@@ -312,7 +313,7 @@ export function createDiscussionAccess(): DiscussionAccess {
     async assertNotSuspended(db, userId, courseId, kind) {
       const activeSuspension = await db
         .selectFrom("learning_suspensions")
-        .selectAll()
+        .select(["reason", "scope"])
         .where("user_id", "=", userId)
         .where("is_active", "=", true)
         .where("scope", "in", scopesForKind(kind))
@@ -389,14 +390,13 @@ export function createDiscussionAccess(): DiscussionAccess {
     async assertCanModerateCourse(db, actor, courseId) {
       const course = await db
         .selectFrom("courses")
-        .select("id")
+        .select("creator_id")
         .where("id", "=", courseId)
         .executeTakeFirst();
       if (!course) {
         throw httpError(404, "COURSE_NOT_FOUND", "Course not found");
       }
-      const allowed = await canModerateCourse(db, actor, courseId);
-      if (!allowed) {
+      if (!isAdmin(actor) && course.creator_id !== actor.userId) {
         throw httpError(
           403,
           "FORBIDDEN",

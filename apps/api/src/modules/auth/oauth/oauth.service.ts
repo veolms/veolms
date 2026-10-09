@@ -7,7 +7,7 @@ import type {
 import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { OAUTH_STATE_COOKIE } from "../shared/auth.constants.ts";
-import type { SessionUser } from "../shared/auth.types.ts";
+import type { AuthLogger, SessionUser } from "../shared/auth.types.ts";
 import { generatePkce, generateRandomToken } from "../shared/auth.utils.ts";
 import {
   fetchOauthProfile,
@@ -51,7 +51,6 @@ export function createOauthService({
   function getPublicConfig() {
     return {
       googleClientId: config.GOOGLE_CLIENT_ID || "",
-      githubClientId: config.GITHUB_CLIENT_ID || "",
     };
   }
 
@@ -103,6 +102,7 @@ export function createOauthService({
     request: OauthCallbackRequest,
     cookieValue: string | undefined,
     onStateValidated?: () => void,
+    logger?: AuthLogger,
   ): Promise<OauthProfile> {
     const oauthCode = request.code || request.token;
 
@@ -133,6 +133,7 @@ export function createOauthService({
       codeVerifier,
       credentials,
       allowMockCodes: ALLOW_MOCK_OAUTH,
+      logger,
     });
 
     return profile;
@@ -216,8 +217,7 @@ export function createOauthService({
     }
 
     const session = await sessionService.establishSession(user, request);
-    const roles = await authService.getUserRoles(user.id);
-    return { user: { ...user, roles }, session };
+    return { user: { ...user, roles: session.roles }, session };
   }
 
   async function register(
@@ -287,8 +287,7 @@ export function createOauthService({
     }
 
     const session = await sessionService.establishSession(user, requestMeta);
-    const roles = await authService.getUserRoles(user.id);
-    return { statusCode, user: { ...user, roles }, session };
+    return { statusCode, user: { ...user, roles: session.roles }, session };
   }
 
   return {

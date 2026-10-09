@@ -6,11 +6,7 @@ import type {
   CreateLearningThreadRequest,
   CreateReportRequest,
   LockThreadRequest,
-  ModerateReplyRequest,
-  ModerateThreadRequest,
-  SuspendUserRequest,
   ToggleLikeRequest,
-  UnsuspendUserRequest,
   UpdateLearningNoteRequest,
   UpdateLearningReplyRequest,
   UpdateLearningThreadRequest,
@@ -585,48 +581,5 @@ export function useDeleteNote(courseId?: string, lessonId?: string) {
 export function useCreateReport() {
   return useMutation<any, ApiError, CreateReportRequest>({
     mutationFn: (payload) => learningInteractionsService.createReport(payload),
-  });
-}
-
-export function useModerateThread(threadId: string) {
-  const queryClient = useQueryClient();
-  return useMutation<any, ApiError, ModerateThreadRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.moderatePlatformThread(threadId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.all,
-      });
-    },
-  });
-}
-
-export function useModerateReply(replyId: string, threadId: string) {
-  const queryClient = useQueryClient();
-  return useMutation<any, ApiError, ModerateReplyRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.moderatePlatformReply(replyId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: learningInteractionKeys.threadRepliesRoot(threadId),
-      });
-    },
-  });
-}
-
-export function useSuspendUser() {
-  return useMutation<any, ApiError, SuspendUserRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.suspendPlatformUser(payload.userId, payload),
-  });
-}
-
-export function useUnsuspendUser() {
-  return useMutation<any, ApiError, UnsuspendUserRequest>({
-    mutationFn: (payload) =>
-      learningInteractionsService.unsuspendPlatformUser(
-        payload.userId,
-        payload,
-      ),
   });
 }

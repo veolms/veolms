@@ -818,28 +818,15 @@ export function LearningWorkspace({
         (a) => a.lessonId === currentLessonUuid,
       );
       if (foundCourse) {
+        // Only what the attempt panel is given; this list carries no
+        // attempt state, so the panel starts without an active attempt.
         return {
           id: foundCourse.id,
-          quizId: foundCourse.quizId,
-          quizVersionId: foundCourse.quizVersionId,
           courseId: foundCourse.courseId,
-          lessonId: foundCourse.lessonId,
           quizTitle: foundCourse.quizTitle,
-          lessonTitle: currentLesson[1],
-          courseTitle: courseOverview?.course.title ?? "Course",
-          required: foundCourse.required,
-          passPercentage: foundCourse.passPercentage,
           maxAttempts: foundCourse.maxAttempts,
-          timeLimitSeconds: foundCourse.timeLimitSeconds,
-          shuffleQuestions: foundCourse.shuffleQuestions,
-          shuffleOptions: foundCourse.shuffleOptions,
-          feedbackMode: foundCourse.feedbackMode,
-          availableFrom: foundCourse.availableFrom,
-          availableUntil: foundCourse.availableUntil,
           activeAttemptId: null,
           attemptCount: 0,
-          latestAttemptStatus: null,
-          latestScore: null,
           bestScore: null,
           latestPassed: null,
         };
@@ -857,8 +844,6 @@ export function LearningWorkspace({
     quizAssignments,
     courseQuizAssignments.data,
     quizAssignment,
-    currentLesson,
-    courseOverview?.course.title,
   ]);
 
   const isDedicatedQuizLesson = currentLesson[5] === "quiz";
@@ -962,6 +947,27 @@ export function LearningWorkspace({
     setPlaybackBootstrapAttempt((attempt) => attempt + 1);
   }, []);
 
+  // There is no lesson to show: the course did not load (a wrong address,
+  // or a course that has been unpublished), or it has no lessons. The page
+  // used to carry on as if a lesson were there, with an empty title, a video
+  // that could only be retried in vain and discussions that never finished
+  // checking access. A discussion link reports a course that fails to load
+  // in its own way.
+  const courseUnavailable: "not-found" | "no-lessons" | null =
+    !isApiRoute || isDiscussionDeepLink
+      ? null
+      : isCourseOverviewError && !isCourseOverviewFetching && !courseOverview
+        ? "not-found"
+        : courseOverview && firstCurriculumLessonId === undefined
+          ? "no-lessons"
+          : null;
+  const retryCourseOverview = useCallback(() => {
+    // The video was asked for while the course was failing, so it is asked
+    // for again along with the course.
+    retryPlaybackBootstrap();
+    void refetchCourseOverview();
+  }, [refetchCourseOverview, retryPlaybackBootstrap]);
+
   useEffect(() => {
     setPlaybackBootstrapError(null);
     if (!courseSlug) {
@@ -1033,8 +1039,32 @@ export function LearningWorkspace({
   const playbackAccessError = useMemo<
     LessonVideoPlayerProps["playbackAccessError"]
   >(() => {
-    if (!playbackBootstrapError) return null;
+    if (courseUnavailable === "no-lessons") {
+      return {
+        kind: "retry",
+        title: "No lessons yet",
+        message: "This course doesn't have any lessons to watch yet.",
+        actionLabel: "Try again",
+        link: { label: "Browse courses", href: "/courses" },
+      };
+    }
+    const courseNotFound: LessonVideoPlayerProps["playbackAccessError"] =
+      courseUnavailable === "not-found"
+        ? {
+            kind: "retry",
+            title: "Course not found",
+            message:
+              "It may have been unpublished, or the address may be wrong.",
+            actionLabel: "Try again",
+            onAction: retryCourseOverview,
+            link: { label: "Browse courses", href: "/courses" },
+          }
+        : null;
 
+    if (!playbackBootstrapError) return courseNotFound;
+
+    // Asked to log in, a visitor is still asked to: a course that is not
+    // public may load once they have.
     if (
       playbackBootstrapError.status === 401 ||
       playbackBootstrapError.code === "UNAUTHORIZED" ||
@@ -1048,12 +1078,38 @@ export function LearningWorkspace({
       };
     }
 
+    if (courseNotFound) return courseNotFound;
+
     if (playbackBootstrapError.status === 403) {
       return {
         kind: "access",
         message: "Get access to this course to watch this lesson.",
         actionLabel: "Get access",
         onAction: onOpenCourseOverview,
+      };
+    }
+
+    // A video that is still being processed, and a lesson with no video,
+    // used to get the same "couldn't prepare" message as a real failure. The
+    // first is worth trying again later; the second can never play, so it
+    // offers no retry.
+    if (playbackBootstrapError.code === "MEDIA_NOT_READY") {
+      return {
+        kind: "retry",
+        title: "Video not ready yet",
+        message:
+          "This video is still being prepared. Please check back in a few minutes.",
+        actionLabel: "Try again",
+        onAction: retryPlaybackBootstrap,
+      };
+    }
+
+    if (playbackBootstrapError.code === "MEDIA_NOT_FOUND") {
+      return {
+        kind: "retry",
+        title: "No video",
+        message: "This lesson has no video.",
+        actionLabel: "Try again",
       };
     }
 
@@ -1064,9 +1120,11 @@ export function LearningWorkspace({
       onAction: retryPlaybackBootstrap,
     };
   }, [
+    courseUnavailable,
     onOpenCourseOverview,
     onOpenLogin,
     playbackBootstrapError,
+    retryCourseOverview,
     retryPlaybackBootstrap,
   ]);
   const playbackBootstrapPending = Boolean(
@@ -1221,6 +1279,16 @@ export function LearningWorkspace({
       lessonIdsByNumber,
       enabled: Boolean(courseOverview?.course.slug),
     });
+  // Handed to the persistent player so progress is still recorded while it
+  // plays as the mini player, after this page has unmounted.
+  const progressCourseKey = courseOverview?.course.slug;
+  const detachedProgressTarget = useMemo(
+    () =>
+      userId && progressCourseKey
+        ? { userId, courseKey: progressCourseKey, lessonIdsByNumber }
+        : undefined,
+    [lessonIdsByNumber, progressCourseKey, userId],
+  );
   const lessonProgress = useMemo(() => {
     if (Object.keys(localLessonProgress).length === 0) {
       return persistedLessonProgress;
@@ -1234,6 +1302,18 @@ export function LearningWorkspace({
     }
     return merged;
   }, [localLessonProgress, persistedLessonProgress]);
+  // Every lesson is finished, by the rule that gives a lesson its check mark
+  // in the list. The end screen says the course is complete only then.
+  const courseComplete = useMemo(
+    () =>
+      lessonSequence.every(
+        (lessonNumber) =>
+          curriculumLessonsById.get(lessonNumber)?.[3] === "done" ||
+          (lessonProgress[lessonNumber] ?? 0) >=
+            LESSON_PROGRESS_COMPLETE_THRESHOLD,
+      ),
+    [curriculumLessonsById, lessonProgress, lessonSequence],
+  );
   const currentLessonIndex = lessonSequence.indexOf(selectedLesson);
   const previousLessonId =
     currentLessonIndex > 0 ? lessonSequence[currentLessonIndex - 1] : undefined;
@@ -2733,6 +2813,7 @@ export function LearningWorkspace({
       canGoNext: nextLessonId !== undefined,
       canGoPrevious: previousLessonId !== undefined,
       nextLessonInfo,
+      courseComplete,
       courseLessonsOpen: playerCourseLessonsOpen,
       courseLessonsDrawerOpen: lessonDrawer,
       courseLessonsPanel: fullscreenCoursePanel,
@@ -2774,6 +2855,7 @@ export function LearningWorkspace({
       autoPlayOnLessonChange,
       autoplayEnabled,
       chaptersPanelHost,
+      courseComplete,
       courseContentDrawerViewport,
       coursePersistenceKey,
       courseSlug,
@@ -2848,11 +2930,13 @@ export function LearningWorkspace({
       curriculumLessonsById,
       lessonProgress,
       isLessonAvailable,
+      progressTarget: detachedProgressTarget,
     });
   }, [
     courseSlug,
     curriculumLessonsById,
     curriculumSections,
+    detachedProgressTarget,
     isLessonAvailable,
     lessonPlayerProps,
     lessonProgress,
@@ -2982,6 +3066,9 @@ export function LearningWorkspace({
                     quizTitle={currentQuizAssignment.quizTitle}
                     activeAttemptId={currentQuizAssignment.activeAttemptId}
                     maxAttempts={currentQuizAssignment.maxAttempts}
+                    attemptCount={currentQuizAssignment.attemptCount}
+                    bestScore={currentQuizAssignment.bestScore}
+                    latestPassed={currentQuizAssignment.latestPassed}
                     onBackToVideo={resumeLessonVideoPlayback}
                     onPassed={() => updateSelectedLessonProgress(100)}
                     lessonBadge={`Lesson ${selectedLesson} Quiz`}
@@ -3125,9 +3212,11 @@ export function LearningWorkspace({
                     }
               }
             >
-              {!phoneLessonDrawerViewport &&
+              {!courseUnavailable &&
+                !phoneLessonDrawerViewport &&
                 lessonHeader(false, isLearningBootstrapLoading)}
-              {isLearningDeepLinkReady || isLearningBootstrapLoading ? (
+              {courseUnavailable ? null : isLearningDeepLinkReady ||
+                isLearningBootstrapLoading ? (
                 <Discussion
                   key={discussionPersistenceKey}
                   persistenceKey={discussionPersistenceKey}

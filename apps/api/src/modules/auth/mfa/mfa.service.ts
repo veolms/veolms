@@ -24,6 +24,7 @@ import {
 } from "../shared/auth.constants.ts";
 import * as mfaRepository from "./mfa.repository.ts";
 import * as sessionRepository from "../session/session.repository.ts";
+import { evictCachedUserSessions } from "../shared/session-auth-cache.ts";
 import {
   decryptSecret,
   encryptSecret,
@@ -31,6 +32,7 @@ import {
   hashToken,
   verifyTotp,
 } from "../shared/auth.utils.ts";
+import type { AuthLogger } from "../shared/auth.types.ts";
 import type { SessionService } from "../session/session.service.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 
@@ -100,6 +102,10 @@ export function createMfaService({
     }
 
     await mfaRepository.deleteTotpCredential(database, user.id);
+    // The cached auth context still says the factor is enrolled. Without
+    // this, the settings page's next read of the account showed the removed
+    // authenticator as active until the cache entry expired.
+    evictCachedUserSessions(user.id);
     return { message: "Authenticator app removed successfully." };
   }
 
@@ -126,6 +132,8 @@ export function createMfaService({
     }
 
     await mfaRepository.deleteAllUserPasskeys(database, user.id);
+    // See disableTotp: drop the cached "passkey enrolled" state.
+    evictCachedUserSessions(user.id);
     return { message: "Passkeys removed successfully." };
   }
 
@@ -314,10 +322,12 @@ export function createMfaService({
     userId,
     sessionId,
     response,
+    logger,
   }: {
     userId: string;
     sessionId: string;
     response: PasskeyRegisterVerifyRequest["response"];
+    logger?: AuthLogger;
   }): Promise<{ message: string }> {
     const record = await mfaRepository.findActiveChallenge(
       database,
@@ -351,12 +361,16 @@ export function createMfaService({
         requireUserVerification: true,
       });
     } catch (cause) {
+      // The library's reason stays in the log; the client gets a fixed
+      // message.
+      logger?.warn(
+        { err: cause, userId },
+        "WebAuthn registration verification failed",
+      );
       throw new AppError(
         400,
         "REGISTRATION_VERIFICATION_FAILED",
-        `WebAuthn verification failed: ${
-          cause instanceof Error ? cause.message : String(cause)
-        }`,
+        "Passkey verification failed.",
       );
     }
 
@@ -425,10 +439,12 @@ export function createMfaService({
     userId,
     sessionId,
     response,
+    logger,
   }: {
     userId: string;
     sessionId: string;
     response: PasskeyLoginVerifyRequest["response"];
+    logger?: AuthLogger;
   }): Promise<{ message: string }> {
     const record = await mfaRepository.findActiveChallenge(
       database,
@@ -481,12 +497,11 @@ export function createMfaService({
         requireUserVerification: true,
       });
     } catch (cause) {
+      logger?.warn({ err: cause, userId }, "WebAuthn assertion failed");
       throw new AppError(
         401,
         "ASSERTION_FAILED",
-        `WebAuthn assertion failed: ${
-          cause instanceof Error ? cause.message : String(cause)
-        }`,
+        "Passkey verification failed.",
       );
     }
 

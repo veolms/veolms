@@ -119,7 +119,7 @@ export function createPaymentReconciliationService({
       }
 
       // 1. Record successful payment attempt
-      const existingAttempts = await paymentRepo.listPaymentAttempts(
+      const attemptCount = await paymentRepo.countPaymentAttempts(
         trx,
         paymentId,
       );
@@ -127,7 +127,7 @@ export function createPaymentReconciliationService({
         id: crypto.randomUUID(),
         payment_id: paymentId,
         gateway_payment_id: gatewayPaymentId,
-        attempt_number: existingAttempts.length + 1,
+        attempt_number: attemptCount + 1,
         status: "captured",
       });
 

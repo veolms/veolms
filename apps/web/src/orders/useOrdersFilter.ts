@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type {
-  Order,
+  AdminOrder,
   OrderStatus,
   OrderStatsResponse,
   OrderSortOrder,
@@ -9,7 +9,7 @@ import {
   DEFAULT_DEBOUNCE_DELAY_MS,
   useDebounceValue,
 } from "../hooks/useDebounce";
-import { useOrders, useOrderStats } from "../services/orders";
+import { useAdminOrders, useOrderStats } from "../services/orders";
 
 export type DateRangePreset =
   | "all_time"
@@ -107,11 +107,18 @@ function resolveDateRange(
 
 export interface UseOrdersFilterReturn {
   // Query data
-  orders: readonly Order[];
+  orders: readonly AdminOrder[];
   stats: OrderStatsResponse | undefined;
   isLoadingStats: boolean;
   isLoading: boolean;
   isError: boolean;
+  /**
+   * Set when the list request failed and there are no rows to show:
+   * "forbidden" when the server refused it (no billing permission),
+   * "failed" for anything else. A failed refresh of rows already on screen
+   * leaves this null.
+   */
+  loadError: "forbidden" | "failed" | null;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   fetchNextPage: () => void;
@@ -140,7 +147,7 @@ export interface UseOrdersFilterReturn {
 
   // Detail Drawer
   selectedOrderId: string | null;
-  selectedOrder: Order | null;
+  selectedOrder: AdminOrder | null;
   setSelectedOrderId: (id: string | null) => void;
   hasPrevOrder: boolean;
   hasNextOrder: boolean;
@@ -148,8 +155,8 @@ export interface UseOrdersFilterReturn {
   selectNextOrder: () => void;
 
   // Actions / Modals
-  refundTargetOrder: Order | null;
-  setRefundTargetOrder: (order: Order | null) => void;
+  refundTargetOrder: AdminOrder | null;
+  setRefundTargetOrder: (order: AdminOrder | null) => void;
 
   // Reset
   isFiltered: boolean;
@@ -216,7 +223,6 @@ export function useOrdersFilter(options?: {
   // API query params
   const queryParams = useMemo(() => {
     return {
-      view: "admin" as const,
       search: debouncedSearch || undefined,
       courseId: courseFilter,
       couponId: couponFilter,
@@ -240,11 +246,15 @@ export function useOrdersFilter(options?: {
     data,
     isLoading,
     isError,
+    error,
     hasNextPage = false,
     isFetchingNextPage,
     fetchNextPage,
     refetch,
-  } = useOrders(queryParams, { enabled });
+  } = useAdminOrders(queryParams, { enabled });
+
+  const loadError =
+    isError && !data ? (error?.status === 403 ? "forbidden" : "failed") : null;
 
   // Stats query
   const statsParams = useMemo(() => {
@@ -323,7 +333,7 @@ export function useOrdersFilter(options?: {
   }, [hasNextOrder, orders, selectedOrderIndex]);
 
   // Modal targets
-  const [refundTargetOrder, setRefundTargetOrder] = useState<Order | null>(
+  const [refundTargetOrder, setRefundTargetOrder] = useState<AdminOrder | null>(
     null,
   );
 
@@ -353,6 +363,7 @@ export function useOrdersFilter(options?: {
     isLoadingStats,
     isLoading,
     isError,
+    loadError,
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,

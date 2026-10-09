@@ -5,9 +5,9 @@ import {
   createLinkPreviewRequestSchema,
   initiateAttachmentUploadRequestSchema,
   initiateAttachmentUploadResponseSchema,
-  learningAttachmentSchema,
   learningUploadResponseSchema,
   linkPreviewResponseSchema,
+  uploadedAttachmentSchema,
 } from "@veolms/contracts";
 import { errorResponse } from "../../../../lib/errors.ts";
 import { jsonResponse } from "../../../../lib/responses.ts";
@@ -71,7 +71,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ attachmentId: z.uuid() }),
         consumes: ["multipart/form-data"],
         response: {
-          200: jsonResponse("File uploaded", learningAttachmentSchema),
+          200: jsonResponse("File uploaded", uploadedAttachmentSchema),
           400: errorResponse("File is required"),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Attachment slot not found"),
@@ -92,7 +92,7 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
         summary: "Complete attachment upload verification",
         body: completeAttachmentUploadRequestSchema,
         response: {
-          200: jsonResponse("Attachment completed", learningAttachmentSchema),
+          200: jsonResponse("Attachment completed", uploadedAttachmentSchema),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Attachment not found"),
         },

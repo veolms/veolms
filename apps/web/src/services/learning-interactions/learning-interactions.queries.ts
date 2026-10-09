@@ -9,16 +9,12 @@ import type {
   ListLearningNotesQuery,
   ListLearningRepliesQuery,
   ListLearningThreadsQuery,
-  ListReportsQuery,
   DiscussionsWorkspaceResponse,
   LearningThreadsListResponse,
   LessonDiscussionsListResponse,
   LessonDiscussionCountsResponse,
   ListLessonDiscussionsQuery,
   PublicPopularDiscussionsResponse,
-  ReportsListResponse,
-  UserAutocompleteQuery,
-  UserAutocompleteResponse,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { learningInteractionKeys } from "./learning-interactions.keys";
@@ -499,7 +495,6 @@ export function mergeThreadsWithCreationRecords(
   const threads: LearningThreadEntity[] = response.threads.map((thread) =>
     toLearningThreadEntity(thread),
   );
-  let addedLocalThreads = 0;
 
   for (const record of records) {
     const localThread =
@@ -533,17 +528,12 @@ export function mergeThreadsWithCreationRecords(
       }
     } else {
       threads.push(localThread);
-      addedLocalThreads += 1;
     }
   }
 
   return {
     ...response,
     threads: threads.map(projectThreadLocalState),
-    totalCount:
-      response.totalCount === undefined
-        ? response.totalCount
-        : response.totalCount + addedLocalThreads,
   };
 }
 
@@ -973,32 +963,4 @@ export function useUserNotes(
         }
       : result.data,
   };
-}
-
-export function useUserAutocomplete(
-  query: UserAutocompleteQuery,
-  options?: { enabled?: boolean },
-) {
-  const searchTerm = query.query ?? query.q ?? "";
-  return useQuery<UserAutocompleteResponse, ApiError>({
-    queryKey: learningInteractionKeys.autocompleteUsers(
-      query.courseId,
-      searchTerm,
-    ),
-    queryFn: () => learningInteractionsService.autocompleteUsers(query),
-    enabled:
-      options?.enabled ?? Boolean(query.courseId && searchTerm.length >= 1),
-    staleTime: 60 * 1000,
-  });
-}
-
-export function useModerationReports(
-  query?: ListReportsQuery,
-  options?: { enabled?: boolean },
-) {
-  return useQuery<ReportsListResponse, ApiError>({
-    queryKey: learningInteractionKeys.moderationReports(query),
-    queryFn: () => learningInteractionsService.listReports(query),
-    enabled: options?.enabled ?? true,
-  });
 }

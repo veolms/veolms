@@ -1,49 +1,39 @@
 import { z } from "zod";
 import {
-  interactionStatusSchema,
-  learningAuthorSchema,
+  discussionAuthorSchema,
   learningThreadAttachmentSummarySchema,
 } from "./threads.ts";
-
-export const learningRepliedToSummarySchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid(),
-  username: z.string(),
-  displayName: z.string(),
-  textSnippet: z.string().optional(),
-});
-export type LearningRepliedToSummary = z.infer<
-  typeof learningRepliedToSummarySchema
->;
 
 export const learningReplySchema = z.object({
   id: z.uuid(),
   threadId: z.uuid(),
-  parentReplyId: z.uuid().nullable().optional(),
-  replyToReplyId: z.uuid().nullable().optional(),
-  replyToUserId: z.uuid().nullable().optional(),
-  repliedTo: learningRepliedToSummarySchema.nullable().optional(),
-  userId: z.uuid(),
-  author: learningAuthorSchema,
+  author: discussionAuthorSchema,
   content: z.string().min(1).max(20000),
   plainText: z.string().max(20000),
-  timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   isAccepted: z.boolean().default(false),
-  status: interactionStatusSchema,
   likesCount: z.number().int().nonnegative().default(0),
   attachments: z.array(learningThreadAttachmentSummarySchema).optional(),
   isLiked: z.boolean().optional(),
   isOwn: z.boolean().optional(),
   createdAt: z.string(),
-  updatedAt: z.string(),
 });
 export type LearningReply = z.infer<typeof learningReplySchema>;
+
+/** What an edit returns: the fields an edit can change, and nothing else. */
+export const learningReplyEditResponseSchema = z.object({
+  id: z.uuid(),
+  content: z.string().min(1).max(20000),
+  plainText: z.string().max(20000),
+  updatedAt: z.string(),
+});
+export type LearningReplyEditResponse = z.infer<
+  typeof learningReplyEditResponseSchema
+>;
 
 export const createLearningReplyRequestSchema = z.object({
   content: z.string().min(1).max(20000),
   parentReplyId: z.uuid().nullable().optional(),
   replyToReplyId: z.uuid().nullable().optional(),
-  replyToUserId: z.uuid().nullable().optional(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   attachmentIds: z.array(z.uuid()).optional(),
 });
@@ -82,9 +72,6 @@ export const acceptReplyRequestSchema = z.object({
 export type AcceptReplyRequest = z.infer<typeof acceptReplyRequestSchema>;
 
 export const acceptReplyResponseSchema = z.object({
-  replyId: z.uuid(),
-  threadId: z.uuid(),
-  isAccepted: z.boolean(),
   acceptedAnswerId: z.uuid().nullable(),
 });
 export type AcceptReplyResponse = z.infer<typeof acceptReplyResponseSchema>;

@@ -1,6 +1,6 @@
 import { memo, useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import type { Order } from "@veolms/contracts";
+import type { AdminOrder } from "@veolms/contracts";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
@@ -12,7 +12,7 @@ import {
   minorUnitsPerMajor,
   toMajorUnits,
 } from "@veolms/contracts/commerce/money";
-import { formatCurrency } from "./orderHelpers";
+import { formatCurrency, getCurrencySymbol } from "./orderHelpers";
 
 // 3D design system surface tokens: 0 borders, pure tactile depth via theme-adaptive shadows & highlights
 const MODAL_FRAME_CLASS =
@@ -25,7 +25,7 @@ const SECONDARY_ACTION_CLASS =
   "inline-flex h-9.5 items-center justify-center rounded-[10px] border-none bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--text)_13%,var(--surface))] active:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] px-5 text-[0.82rem] font-semibold text-(--text) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_10%,transparent))] transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap";
 
 export interface OrderRefundModalProps {
-  order: Order | null;
+  order: AdminOrder | null;
   onClose: () => void;
   setNotice?: (message: string) => void;
 }
@@ -53,10 +53,19 @@ export const OrderRefundModal = memo(function OrderRefundModal({
     [openOrderId],
   );
 
-  // Lock body scroll and listen for ESC key
+  // Lock body scroll and listen for ESC key, only while the dialog is open.
+  // This component stays mounted while closed, and locking then left the
+  // Orders page unable to scroll wherever the window is the scroller.
   useEffect(() => {
+    if (!openOrderId) return;
+
+    // When the refund is started from the details drawer, the drawer already
+    // holds the lock and re-applies it on every render. Writing "hidden" back
+    // from here after the drawer released it made the drawer save "hidden" as
+    // the page's own value, and scrolling stayed locked after both closed.
     const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const lockedHere = originalOverflow !== "hidden";
+    if (lockedHere) document.body.style.overflow = "hidden";
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -64,15 +73,17 @@ export const OrderRefundModal = memo(function OrderRefundModal({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = originalOverflow;
+      if (lockedHere) document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, openOrderId]);
 
   if (!order) return null;
 
   // order.totalAmount is minor units; the input is typed in major units.
   const totalPaid = toMajorUnits(order.totalAmount, order.currency);
+  // The field was labelled ₹ whatever currency the order was paid in.
+  const currencySymbol = getCurrencySymbol(order.currency);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,11 +245,11 @@ export const OrderRefundModal = memo(function OrderRefundModal({
                   htmlFor="refund-amount"
                   className="block text-[0.78rem] font-semibold text-(--text-secondary) mb-1.5"
                 >
-                  Refund Amount (₹)
+                  Refund Amount ({currencySymbol})
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[0.84rem] font-semibold text-(--muted)">
-                    ₹
+                    {currencySymbol}
                   </span>
                   <input
                     id="refund-amount"
@@ -249,7 +260,10 @@ export const OrderRefundModal = memo(function OrderRefundModal({
                     placeholder={`Max ${formatCurrency(order.totalAmount, order.currency)}`}
                     value={partialAmountInr}
                     onChange={(e) => setPartialAmountInr(e.target.value)}
-                    className="w-full rounded-[12px] border-none bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] pl-8 pr-3.5 py-2.5 text-[0.82rem] sm:text-[0.85rem] text-(--text) outline-none placeholder:text-(--muted) shadow-[inset_0_2px_4px_color-mix(in_srgb,black_20%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] focus:shadow-[inset_0_0_0_1.5px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all"
+                    className={`w-full rounded-[12px] border-none bg-[color-mix(in_srgb,var(--canvas)_75%,var(--surface))] ${
+                      // Room for a symbol longer than one character (A$, CHF).
+                      currencySymbol.length > 1 ? "pl-14" : "pl-8"
+                    } pr-3.5 py-2.5 text-[0.82rem] sm:text-[0.85rem] text-(--text) outline-none placeholder:text-(--muted) shadow-[inset_0_2px_4px_color-mix(in_srgb,black_20%,transparent),inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)] focus:shadow-[inset_0_0_0_1.5px_var(--accent),0_0_0_3px_color-mix(in_srgb,var(--accent)_20%,transparent)] transition-all`}
                     required
                   />
                 </div>

@@ -45,16 +45,10 @@ function isUuid(value: string): boolean {
   return UUID_PATTERN.test(value);
 }
 
-interface OrderedLesson {
-  id: string;
-}
-
 export interface ResumeCurriculumLesson {
   id: string;
-  sectionId: string;
   title: string;
   sectionTitle: string;
-  contentType: "video" | "document" | "quiz";
 }
 
 export type ResumeProgressRow = {
@@ -73,11 +67,16 @@ interface ResumeCurriculumLessonRecord {
   id: string;
   section_id: string;
   title: string;
-  content_type: "video" | "document" | "quiz";
   position: number;
   is_published: boolean;
 }
 
+/**
+ * The lessons a viewer can open, in the order the player numbers them:
+ * section position, then lesson position. Both the progress snapshot and
+ * the resume context number lessons from this one list, so a lesson number
+ * means the same lesson everywhere.
+ */
 function orderAvailableLessons(
   sections: readonly ResumeCurriculumSection[],
   lessons: readonly ResumeCurriculumLessonRecord[],
@@ -98,10 +97,8 @@ function orderAvailableLessons(
     })
     .map((lesson) => ({
       id: lesson.id,
-      sectionId: lesson.section_id,
       title: lesson.title,
       sectionTitle: sectionById.get(lesson.section_id)!.title,
-      contentType: lesson.content_type,
     }));
 }
 
@@ -148,9 +145,7 @@ export function resolveResumeContext(
     lessonId: lesson.id,
     lessonNumber: index + 1,
     title: lesson.title,
-    sectionId: lesson.sectionId,
     sectionTitle: lesson.sectionTitle,
-    contentType: lesson.contentType,
     progressPercent: progressByLessonId.get(lesson.id) ?? 0,
   });
 
@@ -162,8 +157,6 @@ export function resolveResumeContext(
       (lesson) => (progressByLessonId.get(lesson.id) ?? 0) >= 100,
     ).length,
     resumeLesson: null,
-    previousLesson: null,
-    nextLesson: null,
     upcomingLessons: [],
   });
 
@@ -215,14 +208,6 @@ export function resolveResumeContext(
       (lesson) => (progressByLessonId.get(lesson.id) ?? 0) >= 100,
     ).length,
     resumeLesson: toResponseLesson(lessons[resumeIndex]!, resumeIndex),
-    previousLesson:
-      resumeIndex > 0
-        ? toResponseLesson(lessons[resumeIndex - 1]!, resumeIndex - 1)
-        : null,
-    nextLesson:
-      resumeIndex < lessons.length - 1
-        ? toResponseLesson(lessons[resumeIndex + 1]!, resumeIndex + 1)
-        : null,
     upcomingLessons,
   };
 }
@@ -346,34 +331,6 @@ export function createLearningProgressService({
   async function listAvailableLessons(
     courseId: string,
     canManageCourse: boolean,
-  ): Promise<OrderedLesson[]> {
-    const [sections, lessons] = await Promise.all([
-      curriculumService.findSectionsByCourseId(courseId),
-      curriculumService.findLessonsByCourseId(courseId),
-    ]);
-    const sectionPosition = new Map(
-      sections.map((section) => [section.id, section.position]),
-    );
-    return lessons
-      .filter((lesson) => canManageCourse || lesson.is_published)
-      .sort((left, right) => {
-        const sectionDelta =
-          (sectionPosition.get(left.section_id) ?? 0) -
-          (sectionPosition.get(right.section_id) ?? 0);
-        if (sectionDelta !== 0) return sectionDelta;
-        const lessonDelta = left.position - right.position;
-        return lessonDelta !== 0
-          ? lessonDelta
-          : left.id.localeCompare(right.id);
-      })
-      .map((lesson) => ({
-        id: lesson.id,
-      }));
-  }
-
-  async function listAvailableResumeLessons(
-    courseId: string,
-    canManageCourse: boolean,
   ): Promise<ResumeCurriculumLesson[]> {
     const [sections, lessons] = await Promise.all([
       curriculumService.findSectionsByCourseId(courseId),
@@ -382,64 +339,28 @@ export function createLearningProgressService({
     return orderAvailableLessons(sections, lessons, canManageCourse);
   }
 
-  async function getCourseSnapshot(
-    user: UserContext,
-    course: Awaited<ReturnType<typeof findCourse>>,
-  ): Promise<LearningProgressResponse> {
-    if (!course) {
-      throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
-    }
-
-    const [lessons, rows] = await Promise.all([
-      listAvailableLessons(
-        course.id,
-        course.creator_id === user.id || user.roles.includes(ADMIN_ROLE),
-      ),
-      learningProgressRepository.listUserCourseProgress(
-        database,
-        user.id,
-        course.id,
-      ),
-    ]);
-    return presentSnapshot(course.id, course.slug, lessons, rows);
-  }
-
+  /** The lessons the learner has started, numbered as the player numbers them. */
   function presentSnapshot(
-    courseId: string,
-    courseSlug: string,
-    lessons: OrderedLesson[],
+    lessons: readonly ResumeCurriculumLesson[],
     rows: learningProgressRepository.LearningProgressRow[],
   ): LearningProgressResponse {
     const progressByLessonId = new Map(
       rows.map((row) => [row.lesson_id, row.progress_percent]),
     );
-    const progressTotal = lessons.reduce(
-      (total, lesson) => total + (progressByLessonId.get(lesson.id) ?? 0),
-      0,
-    );
-    const progressLessons = lessons.flatMap((lesson, index) => {
-      const progressPercent = progressByLessonId.get(lesson.id) ?? 0;
-      return progressPercent > 0
-        ? [
-            {
-              lessonId: lesson.id,
-              lessonNumber: index + 1,
-              progressPercent,
-            },
-          ]
-        : [];
-    });
 
     return {
-      courseId,
-      courseSlug,
-      totalLessons: lessons.length,
-      completedLessons: lessons.filter(
-        (lesson) => (progressByLessonId.get(lesson.id) ?? 0) >= 100,
-      ).length,
-      progressPercent:
-        lessons.length > 0 ? Math.round(progressTotal / lessons.length) : 0,
-      lessons: progressLessons,
+      lessons: lessons.flatMap((lesson, index) => {
+        const progressPercent = progressByLessonId.get(lesson.id) ?? 0;
+        return progressPercent > 0
+          ? [
+              {
+                lessonId: lesson.id,
+                lessonNumber: index + 1,
+                progressPercent,
+              },
+            ]
+          : [];
+      }),
     };
   }
 
@@ -448,7 +369,17 @@ export function createLearningProgressService({
     courseKey: string,
   ): Promise<LearningProgressResponse> {
     const course = await requireCourse(user, courseKey);
-    return await getCourseSnapshot(user, course);
+    const canManageCourse =
+      course.creator_id === user.id || user.roles.includes(ADMIN_ROLE);
+    const [lessons, rows] = await Promise.all([
+      listAvailableLessons(course.id, canManageCourse),
+      learningProgressRepository.listUserCourseProgress(
+        database,
+        user.id,
+        course.id,
+      ),
+    ]);
+    return presentSnapshot(lessons, rows);
   }
 
   async function getResumeContext(
@@ -459,7 +390,7 @@ export function createLearningProgressService({
     const canManageCourse =
       course.creator_id === user.id || user.roles.includes(ADMIN_ROLE);
     const [lessons, rows] = await Promise.all([
-      listAvailableResumeLessons(course.id, canManageCourse),
+      listAvailableLessons(course.id, canManageCourse),
       learningProgressRepository.listUserCourseProgress(
         database,
         user.id,
@@ -738,7 +669,6 @@ export function createLearningProgressService({
   ): LearningGoalSettingsResponse {
     if (!row) {
       return {
-        configured: false,
         hasSavedSettings: false,
         settings: {
           dailyGoalMinutes: null,
@@ -750,7 +680,6 @@ export function createLearningProgressService({
       };
     }
     return {
-      configured: row.daily_goal_minutes !== null,
       hasSavedSettings: true,
       settings: {
         dailyGoalMinutes: row.daily_goal_minutes,
@@ -841,7 +770,6 @@ export function createLearningProgressService({
       weekTargetSeconds: goalSeconds * 7,
       currentStreakDays: aggregates.currentStreakDays,
       bestStreakDays: aggregates.bestStreakDays,
-      lastActivityDate: aggregates.lastActivityDate,
     };
   }
 

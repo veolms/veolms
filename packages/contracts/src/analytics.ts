@@ -14,11 +14,10 @@ export const analyticsFilterQuerySchema = z.object({
 });
 export type AnalyticsFilterQuery = z.infer<typeof analyticsFilterQuerySchema>;
 
-/** A KPI value alongside the immediately-preceding equal-length period, so
- * the UI can show a "+12.4% vs last period" style trend badge. */
+/** A KPI value and its change against the immediately-preceding equal-length
+ * period, so the UI can show a "+12.4% vs last period" style trend badge. */
 export const analyticsKpiSchema = z.strictObject({
   value: z.number(),
-  previousValue: z.number(),
   changePercent: z.number().nullable(),
 });
 export type AnalyticsKpi = z.infer<typeof analyticsKpiSchema>;
@@ -34,6 +33,7 @@ export const coursePerformanceRowSchema = z.strictObject({
 });
 export type CoursePerformanceRow = z.infer<typeof coursePerformanceRowSchema>;
 
+/** No longer part of the overview response; kept for external importers. */
 export const analyticsScopeSchema = z.strictObject({
   type: z.enum(["platform", "course"]),
   courseId: z.string().uuid().nullable(),
@@ -53,7 +53,6 @@ const learningFunnelSchema = z.strictObject({
 });
 
 export const analyticsOverviewResponseSchema = z.strictObject({
-  scope: analyticsScopeSchema,
   currency: z.string().length(3),
 
   overview: z.strictObject({

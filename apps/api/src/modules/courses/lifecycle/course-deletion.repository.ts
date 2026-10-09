@@ -69,10 +69,8 @@ export async function listDeletedCourses(
       "courses.status",
       "courses.creator_id",
       "courses.deleted_at",
+      // Not shown; the list is paged by it.
       "course_deletion_jobs.scheduled_for as purge_at",
-      "course_deletion_jobs.status as purge_state",
-      "course_deletion_jobs.attempt_count as purge_attempts",
-      "course_deletion_jobs.last_error as last_purge_error",
     ])
     .where("courses.deleted_at", "is not", null);
 

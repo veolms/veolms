@@ -1,5 +1,6 @@
 import type {
   Coupon,
+  CouponListItem,
   CouponListResponse,
   CreateCouponRequest,
   ListCouponsQuery,
@@ -33,7 +34,6 @@ export interface CouponService {
     query?: ListCouponsQuery,
   ): Promise<CouponListResponse>;
   getCouponById(actor: CouponActor, id: string): Promise<Coupon>;
-  getCouponByCode(code: string): Promise<Coupon>;
   createCoupon(
     actor: CouponActor,
     request: CreateCouponRequest,
@@ -173,7 +173,6 @@ export function createCouponService({
 
   function mapToCoupon(
     row: NonNullable<Awaited<ReturnType<typeof couponRepo.findCouponById>>>,
-    usage?: { redemptionCount: number; totalDiscountGiven: number },
   ): Coupon {
     return {
       id: row.id,
@@ -189,19 +188,26 @@ export function createCouponService({
       perUserLimit: row.per_user_limit,
       isActive: row.is_active,
       restrictedCourseIds: row.restricted_course_ids,
-      restrictedBundleIds: row.restricted_bundle_ids,
-      redemptionCount: usage?.redemptionCount ?? 0,
-      totalDiscountGiven: discountGivenToMinor(usage?.totalDiscountGiven ?? 0),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
     };
   }
 
-  async function attachUsage(
-    row: NonNullable<Awaited<ReturnType<typeof couponRepo.findCouponById>>>,
-  ): Promise<Coupon> {
-    const usage = await couponRepo.getCouponRedemptionStats(database, row.id);
-    return mapToCoupon(row, usage);
+  function mapToCouponListItem(
+    row: Awaited<ReturnType<typeof couponRepo.listCoupons>>[number],
+    redemptionCount: number,
+  ): CouponListItem {
+    return {
+      id: row.id,
+      code: row.code,
+      description: row.description,
+      discountType: row.discount_type,
+      discountValue: row.discount_value,
+      startsAt: row.starts_at,
+      expiresAt: row.expires_at,
+      globalUsageLimit: row.global_usage_limit,
+      isActive: row.is_active,
+      redemptionCount,
+      createdAt: row.created_at,
+    };
   }
 
   async function listCoupons(
@@ -212,6 +218,8 @@ export function createCouponService({
     const cursor = query?.cursor ? decodeCouponCursor(query.cursor) : undefined;
     const createdBy = isAdmin(actor) ? undefined : actor.id;
 
+    // The summary describes the whole library, so only the first page
+    // carries it; later pages would recompute the same numbers.
     const [rows, summary] = await Promise.all([
       couponRepo.listCoupons(database, {
         courseId: query?.courseId,
@@ -219,32 +227,27 @@ export function createCouponService({
         cursor,
         limit,
       }),
-      couponRepo.getCouponOverallSummary(database, {
-        courseId: query?.courseId,
-        createdBy,
-      }),
+      cursor
+        ? undefined
+        : couponRepo.getCouponOverallSummary(database, {
+            courseId: query?.courseId,
+            createdBy,
+          }),
     ]);
 
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
 
-    const couponIds = pageRows.map((r) => r.id);
-    const stats = await couponRepo.listCouponRedemptionStats(
+    const counts = await couponRepo.listCouponRedemptionCounts(
       database,
-      couponIds,
+      pageRows.map((row) => row.id),
     );
-    const usageById = new Map(
-      stats.map((row) => [
-        row.coupon_id,
-        {
-          redemptionCount: Number(row.redemption_count ?? 0),
-          totalDiscountGiven: Number(row.total_discount_given ?? 0),
-        },
-      ]),
+    const redemptionCountById = new Map(
+      counts.map((row) => [row.coupon_id, Number(row.redemption_count ?? 0)]),
     );
 
     const items = pageRows.map((row) =>
-      mapToCoupon(row, usageById.get(row.id)),
+      mapToCouponListItem(row, redemptionCountById.get(row.id) ?? 0),
     );
     const lastRow = pageRows.at(-1);
 
@@ -257,11 +260,16 @@ export function createCouponService({
               id: lastRow.id,
             })
           : null,
-      totalCount: summary.totalCount,
-      summary: {
-        ...summary,
-        totalDiscountGiven: discountGivenToMinor(summary.totalDiscountGiven),
-      },
+      ...(summary
+        ? {
+            summary: {
+              ...summary,
+              totalDiscountGiven: discountGivenToMinor(
+                summary.totalDiscountGiven,
+              ),
+            },
+          }
+        : {}),
     };
   }
 
@@ -272,19 +280,7 @@ export function createCouponService({
     const coupon = await couponRepo.findCouponById(database, id);
     if (!coupon) throw couponNotFound(id);
     assertCanManageCoupon(actor, coupon);
-    return attachUsage(coupon);
-  }
-
-  async function getCouponByCode(code: string): Promise<Coupon> {
-    const coupon = await couponRepo.findCouponByCode(database, code);
-    if (!coupon) {
-      throw new AppError(
-        404,
-        "COUPON_NOT_FOUND",
-        `Coupon "${code}" was not found.`,
-      );
-    }
-    return attachUsage(coupon);
+    return mapToCoupon(coupon);
   }
 
   async function createCoupon(
@@ -406,7 +402,7 @@ export function createCouponService({
       );
     }
 
-    return attachUsage(updated);
+    return mapToCoupon(updated);
   }
 
   async function deleteCoupon(id: string): Promise<void> {
@@ -437,7 +433,6 @@ export function createCouponService({
   return {
     listCoupons,
     getCouponById,
-    getCouponByCode,
     createCoupon,
     updateCoupon,
     deleteCoupon,

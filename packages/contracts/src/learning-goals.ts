@@ -61,8 +61,6 @@ export type UpdateLearningGoalSettingsRequest = z.infer<
 >;
 
 export const learningGoalSettingsResponseSchema = z.strictObject({
-  /** False until the learner saves a goal for the first time. */
-  configured: z.boolean(),
   /**
    * False when nothing is stored for the learner yet and `settings` are
    * defaults — the time zone in particular is then a placeholder, not a
@@ -76,7 +74,7 @@ export type LearningGoalSettingsResponse = z.infer<
 >;
 
 /**
- * Everything the home goal/streak widget needs in one call.
+ * What the home goal/streak widget shows, in one call.
  * Streak rule (PRD §9): a learning day is a local-timezone calendar day
  * with >= 60 credited seconds OR >= 1 lesson/quiz completion. The streak
  * is independent of the goal, so goal changes never rewrite history.
@@ -95,8 +93,6 @@ export const learningSummaryResponseSchema = z.strictObject({
   weekTargetSeconds: z.number().int().nonnegative(),
   currentStreakDays: z.number().int().nonnegative(),
   bestStreakDays: z.number().int().nonnegative(),
-  /** Local calendar date (YYYY-MM-DD) of the latest learning day, if any. */
-  lastActivityDate: z.string().nullable(),
 });
 export type LearningSummaryResponse = z.infer<
   typeof learningSummaryResponseSchema
@@ -108,7 +104,7 @@ z.globalRegistry.add(learningGoalSettingsSchema, {
 });
 z.globalRegistry.add(learningGoalSettingsResponseSchema, {
   id: "LearningGoalSettingsResponse",
-  description: "Learning goal settings with a configured flag.",
+  description: "Learning goal settings and whether any have been saved.",
 });
 z.globalRegistry.add(learningSummaryResponseSchema, {
   id: "LearningSummaryResponse",

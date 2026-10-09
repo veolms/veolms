@@ -8,9 +8,9 @@ import type {
   AttachmentKind,
   InitiateAttachmentUploadRequest,
   InitiateAttachmentUploadResponse,
-  LearningAttachment,
   LearningUploadResponse,
   LinkPreviewResponse,
+  UploadedAttachment,
 } from "@veolms/contracts";
 import { AppError, httpError } from "../../../../lib/errors.ts";
 import {
@@ -28,7 +28,10 @@ import {
 } from "../shared/discussion.access.ts";
 import { getAttachmentDimensionFields } from "../shared/discussion-attachment-metadata.ts";
 import { fetchSafeHtml, extractLinkMetadata } from "./attachments.preview.ts";
-import type { AttachmentsRepository } from "./attachments.repository.ts";
+import type {
+  AttachmentRecord,
+  AttachmentsRepository,
+} from "./attachments.repository.ts";
 import type { DiscussionAttachmentUploadContext } from "./attachment-upload-context.ts";
 import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
 
@@ -99,13 +102,13 @@ export interface AttachmentsService {
     attachmentId: string,
     userId: string,
     file: IncomingAttachmentFile,
-  ): Promise<LearningAttachment>;
+  ): Promise<UploadedAttachment>;
 
   completeUpload(
     db: DatabaseExecutor,
     attachmentId: string,
     userId: string,
-  ): Promise<LearningAttachment>;
+  ): Promise<UploadedAttachment>;
 
   processUpload(
     db: DatabaseExecutor,
@@ -141,6 +144,23 @@ export function createAttachmentsService(
   storage: S3StorageService,
 ): AttachmentsService {
   const discussionAccess = createDiscussionAccess();
+
+  // The uploader's view of a stored attachment. The delivery URL is signed
+  // per response; the storage key, owner and link target are not returned.
+  function presentUploadedAttachment(
+    attachment: AttachmentRecord,
+  ): UploadedAttachment {
+    return {
+      id: attachment.id,
+      kind: attachment.kind,
+      fileName: attachment.fileName,
+      fileUrl: getCdnDeliveryUrl(storage, attachment.storageKey).url,
+      mimeType: attachment.mimeType,
+      fileSize: attachment.fileSize,
+      width: attachment.width,
+      height: attachment.height,
+    };
+  }
 
   async function assertUploadAuthorized(
     db: DatabaseExecutor,
@@ -323,14 +343,7 @@ export function createAttachmentsService(
         },
       });
 
-      return {
-        attachmentId: id,
-        uploadUrl,
-        storageKey,
-        fileName: input.fileName,
-        kind,
-        maxSize: DISCUSSION_CONSTANTS.MAX_ATTACHMENT_SIZE_BYTES,
-      };
+      return { attachmentId: id, uploadUrl };
     },
 
     async uploadFile(db, attachmentId, userId, file) {
@@ -359,6 +372,17 @@ export function createAttachmentsService(
           403,
           "FORBIDDEN",
           "You are not the owner of this attachment upload slot",
+        );
+      }
+
+      // A slot takes one file, before it is attached to anything. Without
+      // this the owner could swap the file behind a post that is already
+      // published, or bring back an attachment that was removed with it.
+      if (existing.status !== "uploading" || existing.targetId !== null) {
+        throw httpError(
+          400,
+          "UPLOAD_SLOT_CLOSED",
+          "This attachment can no longer receive a file.",
         );
       }
 
@@ -432,10 +456,7 @@ export function createAttachmentsService(
           "Failed to finalize attachment upload",
         );
       }
-      return {
-        ...updated,
-        fileUrl: getCdnDeliveryUrl(storage, updated.storageKey).url,
-      };
+      return presentUploadedAttachment(updated);
     },
 
     async completeUpload(db, attachmentId, userId) {
@@ -464,10 +485,7 @@ export function createAttachmentsService(
       }
 
       if (existing.status === "ready") {
-        return {
-          ...existing,
-          fileUrl: getCdnDeliveryUrl(storage, existing.storageKey).url,
-        };
+        return presentUploadedAttachment(existing);
       }
 
       const uploadedObject = await storage.headObject(existing.storageKey);
@@ -507,9 +525,7 @@ export function createAttachmentsService(
         .set({
           status: "ready",
           file_url:
-            storage.getCdnObjectUrl(existing.storageKey) ||
-            existing.fileUrl ||
-            existing.storageKey,
+            storage.getCdnObjectUrl(existing.storageKey) || existing.storageKey,
           metadata: JSON.stringify({
             ...(existing.metadata || {}),
             completedAt: new Date().toISOString(),
@@ -529,10 +545,7 @@ export function createAttachmentsService(
           "Failed to finalize attachment upload",
         );
       }
-      return {
-        ...completed,
-        fileUrl: getCdnDeliveryUrl(storage, completed.storageKey).url,
-      };
+      return presentUploadedAttachment(completed);
     },
 
     async processUpload(db, actor, context, file) {
@@ -599,7 +612,6 @@ export function createAttachmentsService(
       return {
         id,
         url: fileUrl,
-        storageKey,
         fileName: file.filename,
         kind,
         mediaType,

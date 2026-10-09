@@ -1,9 +1,7 @@
 import type {
   Database,
   DatabaseExecutor,
-  LearningAuditLogTable,
   LearningReportTable,
-  LearningSuspensionTable,
 } from "@veolms/database";
 import type {
   EngagementTargetType,
@@ -13,7 +11,7 @@ import type {
   ReportStatus,
   SuspensionScope,
 } from "@veolms/contracts";
-import type { Selectable, SelectQueryBuilder } from "kysely";
+import type { SelectQueryBuilder } from "kysely";
 import { sql } from "kysely";
 import {
   authorRoleSql,
@@ -21,17 +19,13 @@ import {
   type DiscussionListCursor,
 } from "../shared/discussion.utils.ts";
 
-export type LearningReportRow = Selectable<LearningReportTable>;
-export type LearningSuspensionRow = Selectable<LearningSuspensionTable>;
-export type LearningAuditLogRow = Selectable<LearningAuditLogTable>;
-
 // Kysely represents a `"learning_reports as rep"` aliased query with the
 // alias added as its own entry on the DB generic, not the bare table name.
 type ReportsAliasedDB = Database & { rep: LearningReportTable };
 
-export interface ReportRowWithReporter {
+/** A report without the person who filed it: what a course moderator reads. */
+export interface ReportRow {
   id: string;
-  reporterId: string;
   targetType: EngagementTargetType;
   targetId: string;
   courseId: string | null;
@@ -42,26 +36,29 @@ export interface ReportRowWithReporter {
   actionTaken: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** The platform (administrator) read, which also identifies the reporter. */
+export interface ReportRowWithReporter extends ReportRow {
+  reporterId: string;
   reporterName: string | null;
   reporterUsername: string | null;
-  reporterEmail: string | null;
   authorRole: string | null;
 }
 
 export interface AuditLogRowWithActor {
   id: string;
-  academyId: string;
   courseId: string | null;
   actorUserId: string | null;
   action: string;
   targetType: string;
   targetId: string;
   details: unknown | null;
-  ipAddress: string | null;
+  /** Read only when the caller asked for it (platform scope). */
+  ipAddress?: string | null;
   createdAt: Date;
   actorName: string | null;
   actorUsername: string | null;
-  actorEmail: string | null;
   authorRole: string | null;
 }
 
@@ -84,9 +81,14 @@ export interface ModerationRepository {
     reporterId: string,
     targetType: EngagementTargetType,
     targetId: string,
-  ): Promise<LearningReportRow | null>;
+  ): Promise<{ id: string } | null>;
 
   listReports(
+    db: DatabaseExecutor,
+    options: ListReportsQuery & { pageCursor?: DiscussionListCursor },
+  ): Promise<ReportRow[]>;
+
+  listReportsWithReporter(
     db: DatabaseExecutor,
     options: ListReportsQuery & { pageCursor?: DiscussionListCursor },
   ): Promise<ReportRowWithReporter[]>;
@@ -124,11 +126,11 @@ export interface ModerationRepository {
     courseId?: string | null,
   ): Promise<number>;
 
-  getActiveSuspension(
+  /** The user a suspension would apply to, with their highest role. */
+  findSuspensionTarget(
     db: DatabaseExecutor,
     userId: string,
-    courseId?: string | null,
-  ): Promise<LearningSuspensionRow | null>;
+  ): Promise<{ id: string; authorRole: string | null } | null>;
 
   createAuditLog(
     db: DatabaseExecutor,
@@ -148,7 +150,10 @@ export interface ModerationRepository {
   listAuditLogs(
     db: DatabaseExecutor,
     academyId: string,
-    options: ListAuditLogsQuery & { pageCursor?: DiscussionListCursor },
+    options: ListAuditLogsQuery & {
+      pageCursor?: DiscussionListCursor;
+      includeIpAddress?: boolean;
+    },
   ): Promise<AuditLogRowWithActor[]>;
 }
 
@@ -172,6 +177,37 @@ function applyReportFilters<O>(
   return q;
 }
 
+const reportSelect = [
+  "rep.id as id",
+  "rep.target_type as targetType",
+  "rep.target_id as targetId",
+  "rep.course_id as courseId",
+  "rep.reason as reason",
+  "rep.details as details",
+  "rep.status as status",
+  "rep.reviewed_by_user_id as reviewedByUserId",
+  "rep.action_taken as actionTaken",
+  "rep.created_at as createdAt",
+  "rep.updated_at as updatedAt",
+] as const;
+
+function reportsPage(
+  db: DatabaseExecutor,
+  options: ListReportsQuery & { pageCursor?: DiscussionListCursor },
+) {
+  let filtered = db.selectFrom("learning_reports as rep");
+  filtered = applyReportFilters(filtered, options);
+  if (options.pageCursor) {
+    filtered = filtered.where(
+      createdAtIdDescSql("rep", options.pageCursor, "learning_reports"),
+    );
+  }
+  return filtered
+    .orderBy("rep.created_at", "desc")
+    .orderBy("rep.id", "desc")
+    .limit(options.limit + 1);
+}
+
 export function createModerationRepository(): ModerationRepository {
   return {
     async createReport(db, report) {
@@ -193,7 +229,7 @@ export function createModerationRepository(): ModerationRepository {
     async findPendingReport(db, reporterId, targetType, targetId) {
       const row = await db
         .selectFrom("learning_reports")
-        .selectAll()
+        .select("id")
         .where("reporter_id", "=", reporterId)
         .where("target_type", "=", targetType)
         .where("target_id", "=", targetId)
@@ -204,37 +240,23 @@ export function createModerationRepository(): ModerationRepository {
     },
 
     async listReports(db, options) {
-      let filtered = db.selectFrom("learning_reports as rep");
-      filtered = applyReportFilters(filtered, options);
-      if (options.pageCursor) {
-        filtered = filtered.where(
-          createdAtIdDescSql("rep", options.pageCursor, "learning_reports"),
-        );
-      }
+      const rows = await reportsPage(db, options)
+        .select([...reportSelect])
+        .execute();
 
-      const rows = await filtered
+      return rows as ReportRow[];
+    },
+
+    async listReportsWithReporter(db, options) {
+      const rows = await reportsPage(db, options)
         .innerJoin("users as u", "u.id", "rep.reporter_id")
         .select([
-          "rep.id as id",
+          ...reportSelect,
           "rep.reporter_id as reporterId",
-          "rep.target_type as targetType",
-          "rep.target_id as targetId",
-          "rep.course_id as courseId",
-          "rep.reason as reason",
-          "rep.details as details",
-          "rep.status as status",
-          "rep.reviewed_by_user_id as reviewedByUserId",
-          "rep.action_taken as actionTaken",
-          "rep.created_at as createdAt",
-          "rep.updated_at as updatedAt",
           "u.display_name as reporterName",
           "u.username as reporterUsername",
-          "u.email as reporterEmail",
           authorRoleSql("rep.reporter_id"),
         ])
-        .orderBy("rep.created_at", "desc")
-        .orderBy("rep.id", "desc")
-        .limit(options.limit + 1)
         .execute();
 
       return rows as ReportRowWithReporter[];
@@ -305,29 +327,13 @@ export function createModerationRepository(): ModerationRepository {
       return Number(result.numUpdatedRows ?? 0);
     },
 
-    async getActiveSuspension(db, userId, courseId) {
-      let query = db
-        .selectFrom("learning_suspensions")
-        .selectAll()
-        .where("user_id", "=", userId)
-        .where("is_active", "=", true)
-        .where((eb) =>
-          eb.or([
-            eb("expires_at", "is", null),
-            eb("expires_at", ">", new Date()),
-          ]),
-        );
+    async findSuspensionTarget(db, userId) {
+      const row = await db
+        .selectFrom("users")
+        .select(["users.id as id", authorRoleSql("users.id")])
+        .where("users.id", "=", userId)
+        .executeTakeFirst();
 
-      query = courseId
-        ? query.where((eb) =>
-            eb.or([
-              eb("course_id", "is", null),
-              eb("course_id", "=", courseId),
-            ]),
-          )
-        : query.where("course_id", "is", null);
-
-      const row = await query.executeTakeFirst();
       return row ?? null;
     },
 
@@ -354,20 +360,20 @@ export function createModerationRepository(): ModerationRepository {
         .leftJoin("users as u", "u.id", "a.actor_user_id")
         .select([
           "a.id as id",
-          "a.academy_id as academyId",
           "a.course_id as courseId",
           "a.actor_user_id as actorUserId",
           "a.action as action",
           "a.target_type as targetType",
           "a.target_id as targetId",
           "a.details as details",
-          "a.ip_address as ipAddress",
           "a.created_at as createdAt",
           "u.display_name as actorName",
           "u.username as actorUsername",
-          "u.email as actorEmail",
           authorRoleSql("a.actor_user_id"),
         ])
+        .$if(Boolean(options.includeIpAddress), (qb) =>
+          qb.select("a.ip_address as ipAddress"),
+        )
         .where("a.academy_id", "=", academyId);
 
       if (options.courseId) {

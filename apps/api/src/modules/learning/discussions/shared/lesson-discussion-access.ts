@@ -12,6 +12,8 @@ import type { DiscussionActor } from "./discussion.access.ts";
 export interface LessonDiscussionReadAccess {
   /** Whether the caller may see authenticated-only discussion state such as notes. */
   canReadPrivateState: boolean;
+  /** Whether the caller is an administrator or the course's creator. */
+  canModerate: boolean;
 }
 
 export interface PublicLessonDiscussionSqlAliases {
@@ -114,12 +116,12 @@ export function createLessonDiscussionAccess(options?: {
       const isCourseOwner = Boolean(
         actor && lesson.courseCreatorId === actor.userId,
       );
-      const hasActiveAccess = Boolean(
-        actor && (await access.hasActiveAccess(db, actor.userId, courseId)),
-      );
+      if (isAdmin || isCourseOwner) {
+        return { canReadPrivateState: true, canModerate: true };
+      }
 
-      if (isAdmin || isCourseOwner || hasActiveAccess) {
-        return { canReadPrivateState: true };
+      if (actor && (await access.hasActiveAccess(db, actor.userId, courseId))) {
+        return { canReadPrivateState: true, canModerate: false };
       }
 
       // Keep lesson-level discussion reads aligned with playback: published
@@ -132,7 +134,7 @@ export function createLessonDiscussionAccess(options?: {
           pricingType: lesson.pricingType,
         })
       ) {
-        return { canReadPrivateState: false };
+        return { canReadPrivateState: false, canModerate: false };
       }
 
       if (!actor) throw DiscussionErrors.unauthorized();

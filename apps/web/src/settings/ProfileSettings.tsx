@@ -162,7 +162,12 @@ const profilesMatch = (left: EditableProfile, right: EditableProfile) =>
 const buildProfileUpdatePayload = (
   draft: EditableProfile,
   saved: EditableProfile,
-): { payload: ProfileUpdateRequest | null; hasInvalidFields: boolean } => {
+): {
+  payload: ProfileUpdateRequest | null;
+  hasInvalidFields: boolean;
+  /** The only thing holding the save back is a number waiting to be verified. */
+  awaitingMobileVerification: boolean;
+} => {
   const payload: ProfileUpdateRequest = {};
   let hasInvalidFields = false;
   const displayName = draft.displayName.trim();
@@ -221,11 +226,14 @@ const buildProfileUpdatePayload = (
   const mobileNumberChanged =
     normalizedMobileNumber(draft.mobileNumber) !==
     normalizedMobileNumber(saved.mobileNumber);
-  if (mobileNumberChanged && !draft.mobileVerified) hasInvalidFields = true;
+  const mobileUnverified = mobileNumberChanged && !draft.mobileVerified;
+  const awaitingMobileVerification = mobileUnverified && !hasInvalidFields;
+  if (mobileUnverified) hasInvalidFields = true;
 
   return {
     payload: Object.keys(payload).length ? payload : null,
     hasInvalidFields,
+    awaitingMobileVerification,
   };
 };
 
@@ -458,15 +466,18 @@ export function ProfileSettings({
       draft: EditableProfile,
       { previousValue }: { previousValue: EditableProfile },
     ) => {
-      const { payload, hasInvalidFields } = buildProfileUpdatePayload(
-        draft,
-        previousValue,
-      );
+      const { payload, hasInvalidFields, awaitingMobileVerification } =
+        buildProfileUpdatePayload(draft, previousValue);
+      // The reason is shown under the form, so it says what to do next. A
+      // number that has been typed but not verified is the usual one, and
+      // it is a step to finish rather than a mistake.
       return {
         valid: Boolean(payload) && !hasInvalidFields,
-        message: hasInvalidFields
-          ? "Complete the required profile fields before syncing it."
-          : undefined,
+        message: awaitingMobileVerification
+          ? "Verify your mobile number to save your changes."
+          : hasInvalidFields
+            ? "Enter a display name and a valid username to save your changes."
+            : "No changes to save.",
       };
     },
     [],
@@ -523,6 +534,7 @@ export function ProfileSettings({
     update,
     mergeFromServer,
     status: autosaveStatus,
+    error: autosaveError,
   } = useAutosync<
     EditableProfile,
     Awaited<ReturnType<typeof authService.updateProfile>>
@@ -605,6 +617,10 @@ export function ProfileSettings({
   const isMobileVerified = Boolean(draftProfile.mobileVerified);
   const mobileCountry: CountryOption =
     findCountry(mobileCountryId) ?? getDefaultCountry();
+  const formattedMobileNumber = formatNationalPhoneNumber(
+    draftProfile.mobileNumber ?? "",
+    mobileCountry,
+  );
 
   const revokeAvatarCropSource = useCallback(() => {
     const source = avatarCropSourceRef.current;
@@ -1031,6 +1047,36 @@ export function ProfileSettings({
       setEmailError(message);
     }
   };
+
+  // The code is sent as soon as its sixth digit is entered. Each complete
+  // code is sent once: after a wrong one the boxes stay filled, and it is
+  // not sent again until it is changed.
+  const activeVerificationCode =
+    verificationChannel === "email"
+      ? emailVerificationCode
+      : verificationChannel === "mobile"
+        ? verificationCode
+        : "";
+  const autoSubmittedCodeRef = useRef("");
+  const submitVerificationCodeRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    submitVerificationCodeRef.current = () => {
+      if (verificationChannel === "email") {
+        if (!verifyEmailMutation.isPending) void verifyEmailAddress();
+      } else if (verificationChannel === "mobile") {
+        if (!verifyPhoneNumberMutation.isPending) void verifyMobileNumber();
+      }
+    };
+  });
+  useEffect(() => {
+    if (!/^\d{6}$/.test(activeVerificationCode)) {
+      autoSubmittedCodeRef.current = "";
+      return;
+    }
+    if (autoSubmittedCodeRef.current === activeVerificationCode) return;
+    autoSubmittedCodeRef.current = activeVerificationCode;
+    submitVerificationCodeRef.current();
+  }, [activeVerificationCode]);
 
   const handlePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (photoUploading || avatarUploadActiveRef.current) return;
@@ -1490,7 +1536,9 @@ export function ProfileSettings({
                     className="block w-full"
                   >
                     <div className="settings-profile__phone-control">
-                      <span className="settings-profile__input-shell settings-profile__input-shell--status settings-profile__input-shell--phone">
+                      <span
+                        className={`settings-profile__input-shell settings-profile__input-shell--status settings-profile__input-shell--phone${isMobileVerified ? " settings-profile__input-shell--phone-verified" : ""}`}
+                      >
                         <CountryCodeSelect
                           disabled={!canEdit || isMobileVerified}
                           onCountryChange={updateMobileCountry}
@@ -1502,12 +1550,16 @@ export function ProfileSettings({
                           name="mobileNumber"
                           type="tel"
                           inputMode="numeric"
-                          value={formatNationalPhoneNumber(
-                            draftProfile.mobileNumber ?? "",
-                            mobileCountry,
-                          )}
+                          value={formattedMobileNumber}
                           autoComplete="tel-national"
                           readOnly={isMobileVerified}
+                          style={
+                            isMobileVerified
+                              ? {
+                                  width: `${formattedMobileNumber.length + 1}ch`,
+                                }
+                              : undefined
+                          }
                           disabled={!canEdit}
                           placeholder={
                             isMobileVerified ? undefined : "98765 43210"
@@ -1771,7 +1823,7 @@ export function ProfileSettings({
                   Sign in to edit your profile.
                 </p>
               ) : (
-                <AutosaveStatus status={autosaveStatus} />
+                <AutosaveStatus status={autosaveStatus} error={autosaveError} />
               )}
             </div>
           </div>

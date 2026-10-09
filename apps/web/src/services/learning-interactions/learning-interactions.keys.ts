@@ -91,22 +91,6 @@ export const learningInteractionKeys = {
     [...learningInteractionKeys.notesRoot(), "infinite", filters] as const,
   noteDetails: (noteId: string) =>
     [...learningInteractionKeys.all, "note", noteId] as const,
-  autocompleteUsers: (courseId: string, query?: string) =>
-    [
-      ...learningInteractionKeys.all,
-      "autocomplete-users",
-      courseId,
-      query ?? "",
-    ] as const,
-  moderationReports: (filters?: Record<string, unknown>) =>
-    [...learningInteractionKeys.all, "moderation", "reports", filters] as const,
-  auditLogs: (filters?: Record<string, unknown>) =>
-    [
-      ...learningInteractionKeys.all,
-      "moderation",
-      "audit-logs",
-      filters,
-    ] as const,
   linkPreview: (url: string) =>
     [...learningInteractionKeys.all, "link-preview", url] as const,
 };

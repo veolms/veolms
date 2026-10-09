@@ -151,24 +151,6 @@ export const LAMBDA_ACTIONS = ["tick", "claim", "monitor", "queue"] as const;
 export type LambdaAction = (typeof LAMBDA_ACTIONS)[number];
 export const lambdaActionSchema = z.enum(LAMBDA_ACTIONS);
 
-export const mediaAssetSchema = z.object({
-  id: z.uuid(),
-  ownerId: z.uuid(),
-  type: mediaAssetTypeSchema,
-  storageProvider: z.string(),
-  storageKey: z.string(),
-  originalFilename: z.string(),
-  mimeType: z.string(),
-  sizeBytes: z.coerce.number().int().nonnegative(),
-  width: z.number().int().positive().nullable().optional(),
-  height: z.number().int().positive().nullable().optional(),
-  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
-  durationSeconds: z.number().int().positive().nullable().optional(),
-  status: mediaAssetStatusSchema,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
 export const presignMediaRequestSchema = z
   .object({
     filename: z.string().min(1),
@@ -187,17 +169,17 @@ export const presignMediaResponseSchema = z.object({
   mediaAssetId: z.uuid(),
 });
 
-export const mediaUploadCompleteResponseSchema = z.object({
+export const mediaUploadCompleteResponseSchema = z.strictObject({
   status: mediaAssetStatusSchema,
-  deliveryUrl: z.string().min(1).optional(),
-  deliveryUrlExpiresAt: z.number().int().positive().optional(),
-  thumbnailUrl: z.string().min(1).optional(),
 });
 
-export const mediaDeliveryResponseSchema = z.object({
+/**
+ * Where a client can fetch a media asset it may see. `expiresAt` (epoch
+ * seconds) is present when the URL carries a short-lived access token.
+ */
+export const mediaDeliveryResponseSchema = z.strictObject({
   url: z.string().min(1),
   expiresAt: z.number().int().positive().optional(),
-  thumbnailUrl: z.string().min(1).optional(),
 });
 
 export const mediaImageVariantManifestSchema = z.object({
@@ -215,6 +197,15 @@ export const videoJobProgressResponseSchema = z.object({
   status: videoJobStatusSchema,
   progressPercent: z.number().int().min(0).max(100),
   error: z.string().nullable().optional(),
+});
+
+/** Whether a transcode was (re)queued. Internal job ids stay server-side. */
+export const videoTranscodeRetryResponseSchema = z.strictObject({
+  queued: z.boolean(),
+});
+
+export const videoTranscodeCancelResponseSchema = z.strictObject({
+  cancelled: z.literal(true),
 });
 
 export const videoMetadataSchema = z.looseObject({
@@ -285,17 +276,14 @@ export const lambdaResponseSchema = z.object({
 
 export type MediaAssetType = z.infer<typeof mediaAssetTypeSchema>;
 export type MediaAssetStatus = z.infer<typeof mediaAssetStatusSchema>;
-export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 export type PresignMediaRequest = z.infer<typeof presignMediaRequestSchema>;
 /**
  * Where a learner can download one lesson resource. The URL is short-lived
  * and answers with an attachment disposition, so following it saves the file
- * as `fileName` rather than opening it.
+ * under its own name rather than opening it.
  */
-export const lessonResourceDownloadResponseSchema = z.object({
+export const lessonResourceDownloadResponseSchema = z.strictObject({
   url: z.string().min(1),
-  fileName: z.string().min(1),
-  expiresAt: z.number().int().positive(),
 });
 
 export type PresignMediaResponse = z.infer<typeof presignMediaResponseSchema>;
@@ -312,12 +300,17 @@ export type MediaImageVariantManifest = z.infer<
 export type VideoJobProgressResponse = z.infer<
   typeof videoJobProgressResponseSchema
 >;
+export type VideoTranscodeRetryResponse = z.infer<
+  typeof videoTranscodeRetryResponseSchema
+>;
+export type VideoTranscodeCancelResponse = z.infer<
+  typeof videoTranscodeCancelResponseSchema
+>;
 export type VideoMetadata = z.infer<typeof videoMetadataSchema>;
 export type VideoJobEvent = z.infer<typeof videoJobEventSchema>;
 export type LambdaResponse = z.infer<typeof lambdaResponseSchema>;
 
 // Register schemas for OpenAPI documentation
-z.globalRegistry.add(mediaAssetSchema, { id: "MediaAsset" });
 z.globalRegistry.add(presignMediaResponseSchema, {
   id: "PresignMediaResponse",
 });

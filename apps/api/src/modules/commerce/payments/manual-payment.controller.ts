@@ -47,13 +47,13 @@ export function createManualPaymentController({
       orderId,
       request.body,
     );
-    reply.status(201).send(result);
+    await reply.status(201).send(result);
   }
 
   async function listMyPayments(request: FastifyRequest, reply: FastifyReply) {
     const userId = request.user!.id;
     const items = await service.listUserManualPayments(userId);
-    reply.status(200).send(items);
+    await reply.status(200).send(items);
   }
 
   async function listAllPayments(
@@ -62,7 +62,7 @@ export function createManualPaymentController({
   ) {
     const { status } = request.query;
     const items = await service.listAllManualPayments(status);
-    reply.status(200).send(items);
+    await reply.status(200).send(items);
   }
 
   async function verifyPayment(
@@ -79,7 +79,7 @@ export function createManualPaymentController({
       requestId,
       request.body,
     );
-    reply.status(200).send(result);
+    await reply.status(200).send(result);
   }
 
   return {

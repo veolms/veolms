@@ -4,7 +4,7 @@ import type {
   Category,
   CourseEditorDataResponse,
   CourseOverviewResponse,
-  CourseStaticPageRefreshStatus,
+  CourseStaticPageRefreshStatusResponse,
   CourseListResponse,
   CourseOptionsResponse,
   CourseSummary,
@@ -24,7 +24,7 @@ export function useCourses(options?: {
 }) {
   return useQuery<{ courses: CourseSummary[] }, ApiError>({
     queryKey: courseKeys.lists(),
-    queryFn: () => coursesService.list(),
+    queryFn: () => coursesService.listAll(),
     enabled: options?.enabled ?? true,
     initialData: options?.initialData,
     staleTime: options?.initialData ? Infinity : 5 * 60 * 1000,
@@ -55,7 +55,12 @@ export function useCourseOverview(
     queryFn: () => coursesService.getOverview(idOrSlug!),
     enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
     initialData: options?.initialData,
-    staleTime: options?.initialData ? Infinity : 60 * 1000,
+    // Seeded data is the course as it was when the page was prerendered.
+    // Dating it at zero has it checked against the API once after load, so
+    // a price, curriculum or publish change since that build shows up —
+    // the same rule the guest home page follows.
+    initialDataUpdatedAt: options?.initialData ? 0 : undefined,
+    staleTime: 60 * 1000,
     retry: false,
   });
 }
@@ -93,7 +98,7 @@ export function useCourseEditor(courseId: string | null) {
 }
 
 export function useCourseStaticPageRefreshStatus(courseId: string | null) {
-  return useQuery<CourseStaticPageRefreshStatus, ApiError>({
+  return useQuery<CourseStaticPageRefreshStatusResponse, ApiError>({
     queryKey: courseId
       ? courseKeys.staticPageRefresh(courseId)
       : [...courseKeys.all, "static-page-refresh", null],
@@ -156,11 +161,11 @@ export function useInfiniteCourses(options: {
           pageParams: [undefined],
         }
       : undefined,
-    staleTime: canUseInitialData
-      ? options.initialDataNeedsRefresh
-        ? 0
-        : Infinity
-      : 5 * 60 * 1000,
+    // The prerendered first page is checked against the API once after load
+    // (see useCourseOverview): treated as fresh forever, a course published,
+    // repriced or unpublished since the last build never showed.
+    initialDataUpdatedAt: canUseInitialData ? 0 : undefined,
+    staleTime: 5 * 60 * 1000,
     retry: false,
   });
 }
@@ -208,7 +213,10 @@ export function useCategories(options?: { enabled?: boolean }) {
   return useQuery<Category[], ApiError>({
     queryKey: courseKeys.categories(),
     queryFn: () => coursesService.listCategories(),
-    enabled: options?.enabled ?? false,
+    // On by default like every other query here: the default used to be
+    // off, and the course editor (the only caller) never turned it on, so
+    // its category list stayed empty.
+    enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
   });
 }

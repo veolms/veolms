@@ -4,6 +4,7 @@ import type {
   ManualPaymentStatus,
 } from "@veolms/database";
 import type {
+  LearnerManualPaymentRequest,
   ManualPaymentRequest,
   SubmitManualPaymentRequest,
   VerifyManualPaymentRequest,
@@ -14,6 +15,10 @@ import { toMinorUnits } from "../shared/currency.ts";
 import * as orderRepo from "../orders/order.repository.ts";
 import * as paymentRepo from "./payment.repository.ts";
 import * as manualPaymentRepo from "./manual-payment.repository.ts";
+import {
+  toLearnerManualPayment,
+  toManualPaymentContract,
+} from "./payment.mapper.ts";
 import { createCourseAccessService } from "../shared/course-access.service.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 
@@ -22,8 +27,10 @@ export interface ManualPaymentService {
     userId: string,
     orderId: string,
     request: SubmitManualPaymentRequest,
-  ): Promise<ManualPaymentRequest>;
-  listUserManualPayments(userId: string): Promise<ManualPaymentRequest[]>;
+  ): Promise<LearnerManualPaymentRequest>;
+  listUserManualPayments(
+    userId: string,
+  ): Promise<LearnerManualPaymentRequest[]>;
   listAllManualPayments(
     status?: ManualPaymentStatus,
   ): Promise<ManualPaymentRequest[]>;
@@ -46,7 +53,7 @@ export function createManualPaymentService({
     userId: string,
     orderId: string,
     request: SubmitManualPaymentRequest,
-  ): Promise<ManualPaymentRequest> {
+  ): Promise<LearnerManualPaymentRequest> {
     const order = await orderRepo.findOrderById(database, orderId);
     if (!order || order.user_id !== userId) {
       throw CommerceErrors.ORDER_NOT_FOUND(orderId);
@@ -85,43 +92,17 @@ export function createManualPaymentService({
       updated_at: now,
     });
 
-    return {
-      id: row.id,
-      orderId: row.order_id,
-      userId: row.user_id,
-      paymentMethod: row.payment_method,
-      transactionReference: row.transaction_reference,
-      proofMediaId: row.proof_media_id,
-      status: row.status as ManualPaymentRequest["status"],
-      adminNotes: row.admin_notes,
-      verifiedBy: row.verified_by,
-      verifiedAt: row.verified_at,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    return toLearnerManualPayment(row);
   }
 
   async function listUserManualPayments(
     userId: string,
-  ): Promise<ManualPaymentRequest[]> {
+  ): Promise<LearnerManualPaymentRequest[]> {
     const rows = await manualPaymentRepo.listManualPaymentRequestsByUser(
       database,
       userId,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      orderId: r.order_id,
-      userId: r.user_id,
-      paymentMethod: r.payment_method,
-      transactionReference: r.transaction_reference,
-      proofMediaId: r.proof_media_id,
-      status: r.status as ManualPaymentRequest["status"],
-      adminNotes: r.admin_notes,
-      verifiedBy: r.verified_by,
-      verifiedAt: r.verified_at,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }));
+    return rows.map(toLearnerManualPayment);
   }
 
   async function listAllManualPayments(
@@ -131,20 +112,7 @@ export function createManualPaymentService({
       database,
       status,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      orderId: r.order_id,
-      userId: r.user_id,
-      paymentMethod: r.payment_method,
-      transactionReference: r.transaction_reference,
-      proofMediaId: r.proof_media_id,
-      status: r.status as ManualPaymentRequest["status"],
-      adminNotes: r.admin_notes,
-      verifiedBy: r.verified_by,
-      verifiedAt: r.verified_at,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }));
+    return rows.map(toManualPaymentContract);
   }
 
   async function verifyManualPayment(
@@ -290,20 +258,7 @@ export function createManualPaymentService({
       requestId,
     );
 
-    return {
-      id: updated!.id,
-      orderId: updated!.order_id,
-      userId: updated!.user_id,
-      paymentMethod: updated!.payment_method,
-      transactionReference: updated!.transaction_reference,
-      proofMediaId: updated!.proof_media_id,
-      status: updated!.status as ManualPaymentRequest["status"],
-      adminNotes: updated!.admin_notes,
-      verifiedBy: updated!.verified_by,
-      verifiedAt: updated!.verified_at,
-      createdAt: updated!.created_at,
-      updatedAt: updated!.updated_at,
-    };
+    return toManualPaymentContract(updated!);
   }
 
   return {

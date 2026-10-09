@@ -3,7 +3,6 @@ import type {
   EnrolledCourse,
 } from "@veolms/contracts";
 import type { Executor } from "../shared/repository.types.ts";
-import { sql } from "kysely";
 import { toEnrolledCourseContract } from "./enrollment.mapper.ts";
 import * as enrollmentRepo from "./enrollment.repository.ts";
 import * as orderRepo from "../orders/order.repository.ts";
@@ -36,7 +35,7 @@ export interface EnrollmentService {
   ): Promise<AcademyEnrollmentListItem[]>;
   getEnrollmentStats(
     filters: enrollmentRepo.EnrollmentAnalyticsFilters,
-  ): Promise<{ totalEnrollments: number; activeEnrollments: number }>;
+  ): Promise<{ totalEnrollments: number }>;
   getEnrollmentActivityBuckets(
     filters: enrollmentRepo.EnrollmentAnalyticsFilters,
   ): Promise<Array<{ start: Date; value: number }>>;
@@ -83,13 +82,11 @@ export function createEnrollmentService({
     return rows.map((row) => ({
       enrollmentId: row.enrollment_id,
       student: {
-        id: row.student_id,
         username: row.student_username,
         displayName: row.student_display_name,
         avatarUrl: avatarUrls.get(row.student_id) ?? null,
       },
       course: {
-        id: row.course_id,
         title: row.course_title,
       },
       averageProgressPercent:
@@ -104,116 +101,10 @@ export function createEnrollmentService({
     userId: string,
     userRoles?: readonly string[],
   ): Promise<EnrolledCourse[]> {
-    // Join enrollments with courses to get course details in a single query.
-    // Excludes revoked, expired (past access_expires_at), and suspended
-    // enrollments — only "active" with valid access windows are returned.
-    const rows = await database
-      .selectFrom("enrollments as e")
-      .innerJoin("courses as c", "c.id", "e.course_id")
-      .select([
-        "e.id as enrollment_id",
-        "c.id as course_id",
-        "c.creator_id as course_creator_id",
-        "c.slug as course_slug",
-        "c.title as course_title",
-        "c.short_description as course_description",
-        "c.thumbnail_media_id as course_thumbnail_media_id",
-        "e.created_at as enrolled_at",
-        "e.status as enrollment_status",
-        "e.source as enrollment_source",
-        "e.access_expires_at",
-      ])
-      // Aggregate durable learner progress for the published lessons in this
-      // course. The old learning_space_sessions table was removed when
-      // progress moved to learning_progress.
-      .select((eb) =>
-        eb
-          .selectFrom("course_lessons as progress_lesson")
-          .leftJoin("learning_progress as lp", (join) =>
-            join
-              .onRef("lp.lesson_id", "=", "progress_lesson.id")
-              .onRef("lp.course_id", "=", "progress_lesson.course_id")
-              .on("lp.user_id", "=", userId),
-          )
-          .select(
-            sql<number>`coalesce(avg(coalesce(lp.progress_percent, 0)), 0)`.as(
-              "progress_percent",
-            ),
-          )
-          .whereRef("progress_lesson.course_id", "=", "c.id")
-          .where("progress_lesson.is_published", "=", true)
-          .where("progress_lesson.deleted_at", "is", null)
-          .as("progress_percent"),
-      )
-      .select((eb) =>
-        eb
-          .selectFrom("learning_progress as lp")
-          .innerJoin(
-            "course_lessons as progress_lesson",
-            "progress_lesson.id",
-            "lp.lesson_id",
-          )
-          .select((sub) => sub.fn.max("lp.updated_at").as("last_accessed_at"))
-          .whereRef("lp.course_id", "=", "c.id")
-          .where("lp.user_id", "=", userId)
-          .where("progress_lesson.is_published", "=", true)
-          .where("progress_lesson.deleted_at", "is", null)
-          .as("last_accessed_at"),
-      )
-      // Subquery counts for sections
-      .select((eb) =>
-        eb
-          .selectFrom("course_sections as cs")
-          .select((sub) => sub.fn.count("cs.id").as("cnt"))
-          .whereRef("cs.course_id", "=", "c.id")
-          .where("cs.deleted_at", "is", null)
-          .as("total_sections"),
-      )
-      // Subquery counts for lessons
-      .select((eb) =>
-        eb
-          .selectFrom("course_lessons as cl")
-          .select((sub) => sub.fn.count("cl.id").as("cnt"))
-          .whereRef("cl.course_id", "=", "c.id")
-          .where("cl.is_published", "=", true)
-          .where("cl.deleted_at", "is", null)
-          .as("total_lessons"),
-      )
-      // Subquery sum for total duration
-      .select((eb) =>
-        eb
-          .selectFrom("course_lessons as cl2")
-          .leftJoin(
-            "media_assets as lesson_media",
-            "lesson_media.id",
-            "cl2.content_media_id",
-          )
-          .select((sub) =>
-            sub.fn
-              .coalesce(
-                sub.fn.sum("lesson_media.duration_seconds"),
-                sql<number>`0`,
-              )
-              .as("dur"),
-          )
-          .whereRef("cl2.course_id", "=", "c.id")
-          .where("cl2.is_published", "=", true)
-          .where("cl2.deleted_at", "is", null)
-          .as("total_duration_seconds"),
-      )
-      .where("e.user_id", "=", userId)
-      .where("e.status", "=", "active")
-      .where((eb) =>
-        eb.or([
-          eb("e.access_expires_at", "is", null),
-          eb("e.access_expires_at", ">", new Date()),
-        ]),
-      )
-      // Only include published courses (hide draft/archived from student view)
-      .where("c.status", "=", "published")
-      .where("c.deleted_at", "is", null)
-      .orderBy("e.created_at", "desc")
-      .execute();
+    const rows = await enrollmentRepo.listEnrolledCoursesForUser(
+      database,
+      userId,
+    );
 
     const resolvedThumbnails = await Promise.all(
       rows.map((row) =>
@@ -227,20 +118,15 @@ export function createEnrollmentService({
 
     return rows.map((row, index) =>
       toEnrolledCourseContract({
-        enrollment_id: row.enrollment_id,
         course_id: row.course_id,
         course_slug: row.course_slug,
         course_title: row.course_title,
-        course_description: row.course_description ?? null,
         course_thumbnail_url: resolvedThumbnails[index]?.thumbnailUrl ?? null,
         course_thumbnail_media_id: row.course_thumbnail_media_id,
         total_sections: Number(row.total_sections) || 0,
         total_lessons: Number(row.total_lessons) || 0,
         total_duration_seconds: Number(row.total_duration_seconds) || 0,
         enrolled_at: row.enrolled_at,
-        enrollment_status: row.enrollment_status,
-        enrollment_source: row.enrollment_source,
-        access_expires_at: row.access_expires_at,
         progress_percent: row.progress_percent,
         last_accessed_at: row.last_accessed_at,
       }),

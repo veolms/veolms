@@ -11,7 +11,6 @@ import {
 
 export function adaptLearningReplyToCommentReply(
   reply: LearningReply | LearningReplyEntity,
-  currentUserId?: string,
 ): CommentReply {
   const contentDraft = createDiscussionDraft(reply.content);
   if (reply.plainText) {
@@ -31,8 +30,7 @@ export function adaptLearningReplyToCommentReply(
     likes: reply.likesCount ?? 0,
     liked: Boolean(reply.isLiked),
     role: reply.author.role === "Instructor" ? "Instructor" : undefined,
-    isOwn:
-      reply.isOwn ?? (currentUserId ? reply.userId === currentUserId : false),
+    isOwn: Boolean(reply.isOwn),
     isAccepted: Boolean(reply.isAccepted),
     attachments: reply.attachments || [],
   };

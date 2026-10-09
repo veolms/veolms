@@ -26,7 +26,7 @@ export function useDiscussionWorkspaceCardActions({
   const isNote = card.itemType === "note" || card.kind === "note";
   const isReply = card.itemType === "reply";
   const sourceId = isReply ? card.parentThreadId : card.id;
-  const canUseSourceActions = Boolean(sourceId) && card.itemType !== "report";
+  const canUseSourceActions = Boolean(sourceId);
   const canFollow = canUseSourceActions && !isNote;
   const bookmarkLabel = card.isBookmarked ? "Remove bookmark" : "Bookmark";
   const followLabel = card.isFollowing ? "Unfollow" : "Follow";

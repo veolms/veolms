@@ -86,6 +86,7 @@ export default function MfaSetupRoute() {
             void cancelPendingLogin(queryClient);
             navigate(backPath, { replace: true });
           }}
+          onSignOut={() => navigate("/logout", { replace: true })}
           onDone={finish}
         />
       ) : (

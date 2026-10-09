@@ -1,8 +1,10 @@
 import { z } from "zod";
 import {
   refundSchema,
+  refundResultSchema,
   createRefundRequestSchema,
   refundRequestSchema,
+  learnerRefundRequestSchema,
   createStudentRefundRequestSchema,
   reviewRefundRequestSchema,
 } from "@veolms/contracts";
@@ -44,7 +46,10 @@ const refundRoutes: RoutePlugin = async (app, options) => {
           "Initiates a refund via the payment gateway and records refund state.",
         body: createRefundRequestSchema,
         response: {
-          200: jsonResponse("Refund initiated successfully", refundSchema),
+          200: jsonResponse(
+            "Refund initiated successfully",
+            refundResultSchema,
+          ),
           400: errorResponse("Refund not allowed"),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
@@ -109,7 +114,10 @@ const refundRoutes: RoutePlugin = async (app, options) => {
         params: z.object({ orderId: z.uuid() }),
         body: createStudentRefundRequestSchema,
         response: {
-          201: jsonResponse("Refund request submitted", refundRequestSchema),
+          201: jsonResponse(
+            "Refund request submitted",
+            learnerRefundRequestSchema,
+          ),
           400: errorResponse("Order not refundable"),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Order not found"),
@@ -132,7 +140,7 @@ const refundRoutes: RoutePlugin = async (app, options) => {
         response: {
           200: jsonResponse(
             "List of student refund requests",
-            z.array(refundRequestSchema),
+            z.array(learnerRefundRequestSchema),
           ),
           401: errorResponse("Unauthorized"),
         },

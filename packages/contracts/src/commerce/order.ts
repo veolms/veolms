@@ -149,14 +149,28 @@ export const couponSchema = z.strictObject({
   perUserLimit: z.number().int().positive().default(1),
   isActive: z.boolean().default(true),
   restrictedCourseIds: z.array(z.uuid()).nullable().optional(),
-  restrictedBundleIds: z.array(z.uuid()).nullable().optional(),
-  redemptionCount: z.number().int().nonnegative().default(0),
-  /** Discounts actually given, in minor units (unlike discountValue, a list amount). */
-  totalDiscountGiven: z.number().int().nonnegative().default(0),
-  createdAt: z.string().or(z.date()),
-  updatedAt: z.string().or(z.date()),
 });
 export type Coupon = z.infer<typeof couponSchema>;
+
+/**
+ * Lean representation used by the paginated coupon list. The full
+ * configuration (limits per user, course restrictions, order minimums) is
+ * only served by the single-coupon endpoints.
+ */
+export const couponListItemSchema = z.strictObject({
+  id: z.uuid(),
+  code: z.string().min(1).max(50).toUpperCase(),
+  description: z.string().nullable().optional(),
+  discountType: couponDiscountTypeSchema,
+  discountValue: z.number().int().positive(),
+  startsAt: z.string().or(z.date()),
+  expiresAt: z.string().or(z.date()),
+  globalUsageLimit: z.number().int().positive().nullable().optional(),
+  isActive: z.boolean().default(true),
+  redemptionCount: z.number().int().nonnegative().default(0),
+  createdAt: z.string().or(z.date()),
+});
+export type CouponListItem = z.infer<typeof couponListItemSchema>;
 
 export const listCouponsQuerySchema = z.object({
   courseId: z.uuid().optional(),
@@ -178,9 +192,9 @@ export const couponSummarySchema = z.object({
 export type CouponSummary = z.infer<typeof couponSummarySchema>;
 
 export const couponListResponseSchema = z.object({
-  items: z.array(couponSchema),
+  items: z.array(couponListItemSchema),
   nextCursor: z.string().nullable(),
-  totalCount: z.number().int().nonnegative().optional(),
+  /** Sent with the first page only (no cursor). */
   summary: couponSummarySchema.optional(),
 });
 export type CouponListResponse = z.infer<typeof couponListResponseSchema>;
@@ -491,8 +505,87 @@ export const purchaseSchema = z.strictObject({
   admin: orderAdminDetailsSchema.optional(),
 });
 export type Purchase = z.infer<typeof purchaseSchema>;
+// `purchaseSchema` / `orderSchema` (and the item, student and admin-details
+// schemas above) are no longer returned by any route: order responses use the
+// audience-specific schemas below. They stay exported for external importers.
 export const orderSchema = purchaseSchema;
 export type Order = Purchase;
+
+/** What a list row shows of a purchased item. */
+export const orderItemSummarySchema = z.strictObject({
+  titleSnapshot: z.string(),
+  courseId: z.uuid().nullable(),
+});
+export type OrderItemSummary = z.infer<typeof orderItemSummarySchema>;
+
+/**
+ * A learner's own order, as purchase history renders it. Amounts are in minor
+ * units. Nothing about the seller's side of the sale (earnings, coupon and
+ * gateway identifiers) belongs here.
+ */
+export const learnerOrderSchema = z.strictObject({
+  id: z.uuid(),
+  orderNumber: z.string(),
+  status: orderStatusSchema,
+  currency: z.string().length(3),
+  subtotalAmount: z.number().int().nonnegative(),
+  taxAmount: z.number().int().nonnegative(),
+  totalAmount: z.number().int().nonnegative(),
+  paymentSummary: orderPaymentSummarySchema.nullable(),
+  items: z.array(orderItemSummarySchema),
+  createdAt: z.string().or(z.date()),
+});
+export type LearnerOrder = z.infer<typeof learnerOrderSchema>;
+
+/**
+ * An order as the academy's orders screen renders it (`view=admin`, requires
+ * `billing.read`). Amounts are in minor units.
+ */
+export const adminOrderSchema = z.strictObject({
+  id: z.uuid(),
+  orderNumber: z.string(),
+  status: orderStatusSchema,
+  currency: z.string().length(3),
+  subtotalAmount: z.number().int().nonnegative(),
+  discountAmount: z.number().int().nonnegative(),
+  taxAmount: z.number().int().nonnegative(),
+  totalAmount: z.number().int().nonnegative(),
+  /** Creator earnings after platform/PG commission (paise). Null when unknown. */
+  afterCommissionAmount: z.number().int().nonnegative().nullable(),
+  items: z.array(orderItemSummarySchema),
+  paidAt: z.string().or(z.date()).nullable(),
+  createdAt: z.string().or(z.date()),
+  admin: z.strictObject({
+    student: z.strictObject({
+      name: z.string(),
+      displayName: z.string(),
+      email: z.string().nullable(),
+      username: z.string(),
+      avatarUrl: z.string().nullable(),
+    }),
+    coupon: z.strictObject({ code: z.string() }).nullable(),
+    payment: z
+      .strictObject({
+        gatewayProvider: z.string(),
+        gatewayPaymentId: z.string().nullable(),
+        paymentMethod: z
+          .strictObject({
+            method: z.string(),
+            vpa: z.string().nullable(),
+          })
+          .nullable(),
+      })
+      .nullable(),
+  }),
+});
+export type AdminOrder = z.infer<typeof adminOrderSchema>;
+
+/** `GET /orders/:orderId` — admin shape with `view=admin`, learner shape otherwise. */
+export const orderResponseSchema = z.union([
+  adminOrderSchema,
+  learnerOrderSchema,
+]);
+export type OrderResponse = z.infer<typeof orderResponseSchema>;
 
 export const checkoutPreviewRequestSchema = z.strictObject({
   items: z.array(cartItemInputSchema).min(1),
@@ -502,9 +595,24 @@ export type CheckoutPreviewRequest = z.infer<
   typeof checkoutPreviewRequestSchema
 >;
 
+/**
+ * What the checkout UI needs from a preview, in major units. The full
+ * `PricingCalculation` (per-item breakdown, coupon id) stays server-side.
+ */
 export const checkoutPreviewResponseSchema = z.strictObject({
-  pricing: pricingCalculationSchema,
-  couponValidation: couponValidationResultSchema.optional(),
+  pricing: z.strictObject({
+    discountAmount: z.number().int().nonnegative(),
+    totalAmount: z.number().int().nonnegative(),
+    currency: z.string().length(3),
+  }),
+  couponValidation: z
+    .strictObject({
+      valid: z.boolean(),
+      discountType: couponDiscountTypeSchema.optional(),
+      discountValue: z.number().int().optional(),
+      message: z.string().optional(),
+    })
+    .optional(),
 });
 export type CheckoutPreviewResponse = z.infer<
   typeof checkoutPreviewResponseSchema
@@ -574,10 +682,27 @@ export type OrdersListQueryOutput = z.output<typeof ordersListQuerySchema>;
 // receive; `OrdersListQueryInput` is what a client may send.
 export type OrdersListQuery = OrdersListQueryOutput;
 
-export const ordersListResponseSchema = z.strictObject({
-  orders: z.array(orderSchema),
+export const learnerOrdersListResponseSchema = z.strictObject({
+  orders: z.array(learnerOrderSchema),
   nextCursor: z.string().nullable(),
 });
+export type LearnerOrdersListResponse = z.infer<
+  typeof learnerOrdersListResponseSchema
+>;
+
+export const adminOrdersListResponseSchema = z.strictObject({
+  orders: z.array(adminOrderSchema),
+  nextCursor: z.string().nullable(),
+});
+export type AdminOrdersListResponse = z.infer<
+  typeof adminOrdersListResponseSchema
+>;
+
+/** `GET /orders` — admin page with `view=admin`, learner page otherwise. */
+export const ordersListResponseSchema = z.union([
+  adminOrdersListResponseSchema,
+  learnerOrdersListResponseSchema,
+]);
 export type OrdersListResponse = z.infer<typeof ordersListResponseSchema>;
 
 export const orderStatsQuerySchema = z.object({
@@ -588,7 +713,7 @@ export const orderStatsQuerySchema = z.object({
   status: orderStatusSchema.optional(),
   // ISO 4217 code. Amounts in different currencies can't be summed, so the
   // figures always describe one currency; omit to get the one with the most
-  // orders and read `currencies` in the response for the others.
+  // orders (the response's `currency` says which one that was).
   currency: z.string().length(3).optional(),
 });
 export type OrderStatsQuery = z.infer<typeof orderStatsQuerySchema>;
@@ -604,9 +729,6 @@ export const orderStatsResponseSchema = z.strictObject({
   uniqueBuyers: z.number().int().nonnegative(),
   refundedAmount: z.number().int().nonnegative(),
   currency: z.string().length(3).default("INR"),
-  // Every currency present among the matching orders, so a caller can offer a
-  // switch and re-query with `currency`.
-  currencies: z.array(z.string().length(3)),
 });
 export type OrderStatsResponse = z.infer<typeof orderStatsResponseSchema>;
 

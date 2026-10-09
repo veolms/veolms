@@ -74,7 +74,7 @@ export function createRepliesController({
         attachmentIds: body.attachmentIds,
       });
 
-      reply.status(201).send(created);
+      await reply.status(201).send(created);
     },
 
     async listReplies(request, reply) {
@@ -88,7 +88,7 @@ export function createRepliesController({
         query,
         user ? discussionActor(user) : null,
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
 
     async updateReply(request, reply) {
@@ -102,7 +102,7 @@ export function createRepliesController({
         discussionActor(user),
         body,
       );
-      reply.status(200).send(updated);
+      await reply.status(200).send(updated);
     },
 
     async deleteReply(request, reply) {
@@ -110,7 +110,7 @@ export function createRepliesController({
       const { replyId } = request.params;
 
       await service.deleteReply(database, replyId, discussionActor(user));
-      reply.status(200).send({ message: "Reply deleted successfully." });
+      await reply.status(200).send({ message: "Reply deleted successfully." });
     },
 
     async acceptReply(request, reply) {
@@ -125,7 +125,7 @@ export function createRepliesController({
         accepted,
         discussionActor(user),
       );
-      reply.status(200).send(result);
+      await reply.status(200).send(result);
     },
   };
 }

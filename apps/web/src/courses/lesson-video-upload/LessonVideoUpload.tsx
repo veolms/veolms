@@ -460,12 +460,41 @@ export const LessonVideoUpload = forwardRef<
     trackProgress,
   ]);
 
+  // An uploaded video that is processing (or processed) but not yet attached.
+  // Read by the unmount cleanup below, which cannot see current state.
+  const unattachedCandidateRef = useRef<string | null>(null);
+  useEffect(() => {
+    unattachedCandidateRef.current =
+      candidateMediaId && (phase === "transcoding" || phase === "ready")
+        ? candidateMediaId
+        : null;
+  }, [candidateMediaId, phase]);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       requestIdRef.current += 1;
       uploadAbortControllerRef.current?.abort();
+
+      // The lesson's first video is attached when this component sees
+      // processing finish. If the editor closes before that — another step,
+      // another lesson, another page — nothing was left to attach it and the
+      // uploaded video was orphaned. Attach it now instead: processing
+      // carries on server-side, and a lesson cannot be published with a
+      // video that is not ready. A replacement is left alone, so the video
+      // students are watching stays in place until its successor is ready.
+      const unattached = unattachedCandidateRef.current;
+      if (
+        unattached &&
+        replacementForMediaIdRef.current === null &&
+        committedMediaIdRef.current !== unattached &&
+        committingMediaIdRef.current !== unattached
+      ) {
+        void Promise.resolve(onMediaAttachedRef.current(unattached)).catch(
+          () => undefined,
+        );
+      }
     };
   }, []);
 

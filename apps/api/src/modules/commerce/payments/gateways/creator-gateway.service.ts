@@ -23,6 +23,15 @@ export interface CreatorGatewayService {
   resolveGatewayForCreator(creatorId?: string | null): Promise<PaymentGateway>;
 }
 
+/**
+ * A key id as it is shown back to the person who saved it: enough to tell
+ * which key is connected (`rzp_live****1a2B`), not the key itself.
+ */
+function maskKeyId(keyId: string): string {
+  if (keyId.length <= 12) return "****";
+  return `${keyId.slice(0, 8)}****${keyId.slice(-4)}`;
+}
+
 export function createCreatorGatewayService({
   database,
   config,
@@ -54,9 +63,8 @@ export function createCreatorGatewayService({
 
     return {
       id: row.id,
-      creatorId: row.creator_id,
       provider: row.provider as PaymentProvider,
-      keyId: request.keyId,
+      keyId: maskKeyId(request.keyId),
       hasWebhookSecret: !!row.encrypted_webhook_secret,
       isActive: row.is_active,
       createdAt: row.created_at,
@@ -75,18 +83,17 @@ export function createCreatorGatewayService({
     );
     if (!row) return null;
 
-    let decryptedKeyId = "******";
+    let maskedKeyId = "****";
     try {
-      decryptedKeyId = decryptSecret(row.encrypted_key_id);
+      maskedKeyId = maskKeyId(decryptSecret(row.encrypted_key_id));
     } catch {
       // safe fallback if key derivation changes
     }
 
     return {
       id: row.id,
-      creatorId: row.creator_id,
       provider: row.provider as PaymentProvider,
-      keyId: decryptedKeyId,
+      keyId: maskedKeyId,
       hasWebhookSecret: !!row.encrypted_webhook_secret,
       isActive: row.is_active,
       createdAt: row.created_at,

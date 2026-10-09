@@ -260,23 +260,6 @@ export function useSelectAvatar() {
   });
 }
 
-export function useDeleteUploadedAvatars() {
-  const queryClient = useQueryClient();
-
-  return useMutation<UserProfileResponse, ApiError, void>({
-    mutationFn: () => authService.deleteUploadedAvatars(),
-    onSuccess: (profile) => {
-      const previousUsername = queryClient.getQueryData<CurrentUserResponse>(
-        authKeys.me(),
-      )?.username;
-      authStore.setUser(profile);
-      queryClient.setQueryData(authKeys.me(), profile);
-      updatePublicProfileCacheFromUser(queryClient, profile, previousUsername);
-      queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
-    },
-  });
-}
-
 export function useOauthUrl() {
   return useMutation<OauthUrlResponse, ApiError, OauthUrlRequest>({
     mutationFn: (payload) => authService.getOauthUrl(payload),

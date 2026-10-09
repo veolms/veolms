@@ -38,17 +38,6 @@ export function useRecentEnrollments(options?: {
   });
 }
 
-export function useEnrollFreeCourse() {
-  const queryClient = useQueryClient();
-  return useMutation<unknown, ApiError, string>({
-    mutationFn: (courseId: string) =>
-      enrollmentsService.enrollFreeCourse(courseId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: enrollmentKeys.courses() });
-    },
-  });
-}
-
 /** Leaves a free course. Everything that depends on what the learner owns is refreshed. */
 export function useUnenrollFromCourse() {
   const queryClient = useQueryClient();

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  courseSchema,
+  courseStatusResponseSchema,
   courseValidationResponseSchema,
   courseEditorDataResponseSchema,
 } from "@veolms/contracts";
@@ -52,7 +52,10 @@ const lifecycleRoutes: RoutePlugin = async (app, options) => {
         summary: "Publish course draft to learners",
         params: z.object({ id: z.uuid() }),
         response: {
-          200: jsonResponse("Course published successfully", courseSchema),
+          200: jsonResponse(
+            "Course published successfully",
+            courseStatusResponseSchema,
+          ),
           400: errorResponse("Unresolved validation issues block publishing"),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
@@ -73,7 +76,7 @@ const lifecycleRoutes: RoutePlugin = async (app, options) => {
         summary: "Unpublish a course and return it to draft state",
         params: z.object({ id: z.uuid() }),
         response: {
-          200: jsonResponse("Course unpublished", courseSchema),
+          200: jsonResponse("Course unpublished", courseStatusResponseSchema),
           403: errorResponse("Forbidden - not permitted"),
           404: errorResponse("Course not found"),
           409: errorResponse("Optimistic lock conflict"),

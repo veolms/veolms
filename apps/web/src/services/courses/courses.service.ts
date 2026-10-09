@@ -1,12 +1,14 @@
 import { api } from "../../lib/api-client";
 import type {
   Category,
-  Course,
   CourseAccessRule,
+  CourseBasicsResponse,
+  CourseCreatedResponse,
   CourseDeleteResponse,
   CourseEditorDataResponse,
   CourseOverviewResponse,
-  CourseStaticPageRefreshStatus,
+  CourseStaticPageRefreshStatusResponse,
+  CourseStatusResponse,
   CourseListResponse,
   CourseListQuery,
   CourseOptionsResponse,
@@ -41,6 +43,11 @@ import type {
   UpdateCourseSettingsRequest,
 } from "@veolms/contracts";
 
+/** The most courses the API returns in one catalogue request. */
+const COURSE_LIST_PAGE_SIZE = 60;
+/** Far more pages than any catalogue has; only guards against a cursor that never ends. */
+const MAX_COURSE_LIST_PAGES = 50;
+
 export const coursesService = {
   list: (params?: CourseListQuery): Promise<CourseListResponse> => {
     return api.get<CourseListResponse>("/courses", {
@@ -49,6 +56,29 @@ export const coursesService = {
       // indefinitely. The local API responds in well under a second.
       timeout: 5_000,
     });
+  },
+
+  /**
+   * The whole published catalogue. One request returns at most 60 courses
+   * and a cursor for the rest. Screens that filter the catalogue in the
+   * browser used to read that first page only, so in an academy with more
+   * than 60 courses the newer ones never appeared in them.
+   */
+  listAll: async (): Promise<{ courses: CourseSummary[] }> => {
+    const courses: CourseSummary[] = [];
+    const followedCursors = new Set<string>();
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_COURSE_LIST_PAGES; page += 1) {
+      const response = await coursesService.list({
+        limit: COURSE_LIST_PAGE_SIZE,
+        ...(cursor ? { cursor } : {}),
+      });
+      courses.push(...response.courses);
+      cursor = response.nextCursor;
+      if (!cursor || followedCursors.has(cursor)) break;
+      followedCursors.add(cursor);
+    }
+    return { courses };
   },
 
   listOptions: (): Promise<CourseOptionsResponse> =>
@@ -66,15 +96,15 @@ export const coursesService = {
 
   getStaticPageRefreshStatus: (
     courseId: string,
-  ): Promise<CourseStaticPageRefreshStatus> =>
-    api.get<CourseStaticPageRefreshStatus>(
+  ): Promise<CourseStaticPageRefreshStatusResponse> =>
+    api.get<CourseStaticPageRefreshStatusResponse>(
       `/courses/${courseId}/static-page-refresh`,
     ),
 
   retryStaticPageRefresh: (
     courseId: string,
-  ): Promise<CourseStaticPageRefreshStatus> =>
-    api.post<CourseStaticPageRefreshStatus>(
+  ): Promise<CourseStaticPageRefreshStatusResponse> =>
+    api.post<CourseStaticPageRefreshStatusResponse>(
       `/courses/${courseId}/static-page-refresh/retry`,
     ),
 
@@ -104,23 +134,25 @@ export const coursesService = {
     return api.get<CourseValidationResponse>(`/courses/${courseId}/validation`);
   },
 
-  publishCourse: (courseId: string): Promise<Course> => {
-    return api.post<Course>(`/courses/${courseId}/publish`);
+  publishCourse: (courseId: string): Promise<CourseStatusResponse> => {
+    return api.post<CourseStatusResponse>(`/courses/${courseId}/publish`);
   },
 
-  unpublishCourse: (courseId: string): Promise<Course> => {
-    return api.post<Course>(`/courses/${courseId}/unpublish`);
+  unpublishCourse: (courseId: string): Promise<CourseStatusResponse> => {
+    return api.post<CourseStatusResponse>(`/courses/${courseId}/unpublish`);
   },
 
-  createCourse: (payload: CreateCourseRequest): Promise<Course> => {
-    return api.post<Course>("/courses", payload);
+  createCourse: (
+    payload: CreateCourseRequest,
+  ): Promise<CourseCreatedResponse> => {
+    return api.post<CourseCreatedResponse>("/courses", payload);
   },
 
   updateCourseBasics: (
     id: string,
     payload: UpdateCourseBasicsRequest,
-  ): Promise<Course> => {
-    return api.patch<Course>(`/courses/${id}/basics`, payload);
+  ): Promise<CourseBasicsResponse> => {
+    return api.patch<CourseBasicsResponse>(`/courses/${id}/basics`, payload);
   },
 
   deleteCourse: (id: string): Promise<CourseDeleteResponse> => {
@@ -142,18 +174,11 @@ export const coursesService = {
   createSection: (
     courseId: string,
     payload: CreateCourseSectionRequest,
-  ): Promise<{
-    id: string;
-    courseId: string;
-    title: string;
-    position: number;
-  }> => {
-    return api.post<{
-      id: string;
-      courseId: string;
-      title: string;
-      position: number;
-    }>(`/courses/${courseId}/sections`, payload);
+  ): Promise<{ id: string; title: string }> => {
+    return api.post<{ id: string; title: string }>(
+      `/courses/${courseId}/sections`,
+      payload,
+    );
   },
 
   updateSection: (
@@ -190,8 +215,8 @@ export const coursesService = {
     courseId: string,
     sectionId: string,
     payload: CreateCourseLessonRequest,
-  ): Promise<{ id: string; position: number }> => {
-    return api.post<{ id: string; position: number }>(
+  ): Promise<{ id: string }> => {
+    return api.post<{ id: string }>(
       `/courses/${courseId}/sections/${sectionId}/lessons`,
       payload,
     );
@@ -201,16 +226,11 @@ export const coursesService = {
     courseId: string,
     lessonId: string,
     payload: UpdateCourseLessonRequest,
-  ): Promise<{
-    success: boolean;
-    videoJobId?: string;
-    processingStatus?: string;
-  }> => {
-    return api.patch<{
-      success: boolean;
-      videoJobId?: string;
-      processingStatus?: string;
-    }>(`/courses/${courseId}/lessons/${lessonId}`, payload);
+  ): Promise<{ success: boolean }> => {
+    return api.patch<{ success: boolean }>(
+      `/courses/${courseId}/lessons/${lessonId}`,
+      payload,
+    );
   },
 
   deleteLesson: (

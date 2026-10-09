@@ -14,11 +14,11 @@ import {
   quizPricingPreviewResponseSchema,
   quizResultSchema,
   quizSchema,
+  quizSummarySchema,
   studentQuizReportSchema,
   type AssignQuizRequest,
   type BulkQuizAnswersRequest,
   type CreateQuizQuestionRequest,
-  type CreateQuizRequest,
   type CreateQuizWithQuestionsRequest,
   type SetQuizCoursePricingRequest,
   type UpdateQuizAssignmentRequest,
@@ -27,14 +27,13 @@ import {
 } from "@veolms/contracts";
 
 export const quizzesService = {
+  /** The quiz library: one summary row per quiz, no questions. */
   listMine: async () =>
-    quizSchema.array().parse(await api.get<unknown>("/quizzes/mine")),
+    quizSummarySchema.array().parse(await api.get<unknown>("/quizzes/mine")),
   get: async (id: string) =>
     quizSchema.parse(
       await api.get<unknown>(`/quizzes/${encodeURIComponent(id)}`),
     ),
-  create: async (payload: CreateQuizRequest) =>
-    quizSchema.parse(await api.post<unknown>("/quizzes", payload)),
   createWithQuestions: async (payload: CreateQuizWithQuestionsRequest) =>
     quizSchema.parse(await api.post<unknown>("/quizzes/complete", payload)),
   update: async (id: string, payload: UpdateQuizRequest) =>

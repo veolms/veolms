@@ -8,7 +8,7 @@ import { useDeactivateAccount, useSignOut } from "../services/auth";
 import "../styles/features/workspace.css";
 import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import { LogoutConfirmModal } from "../shell/LogoutConfirmModal";
-import { autosyncManager } from "../lib/autosync";
+import { AutosyncSyncError, autosyncManager } from "../lib/autosync";
 import type { ProfileRole } from "./profileTypes";
 import { getRoleDisplayName } from "../shell/workspaceRole";
 
@@ -19,6 +19,20 @@ export interface AccountSettingsProps {
   onNavigatePage?: (page: string) => void;
 }
 
+// Signing out and deactivating from this tab wait for unsaved changes to reach
+// the server. When they could not, the dialog stayed open with no word on why.
+const getUnsyncedChangesMessage = (error: unknown) => {
+  if (error instanceof AutosyncSyncError) {
+    if (error.status === "offline") {
+      return "You're offline. Reconnect, then try again.";
+    }
+    if (error.key.entity === "profile") {
+      return "Your profile has changes that couldn't be saved. Fix or discard them in Profile, then try again.";
+    }
+  }
+  return "Some of your changes haven't been saved yet. Go back and finish saving them, then try again.";
+};
+
 export function AccountSettings({
   role,
   isAuthenticated,
@@ -27,6 +41,9 @@ export function AccountSettings({
 }: AccountSettingsProps) {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
+  const [unsyncedChangesMessage, setUnsyncedChangesMessage] = useState<
+    string | null
+  >(null);
   const { isPending: isSigningOut, signOut } = useSignOut();
   const deactivateMutation = useDeactivateAccount();
 
@@ -37,8 +54,14 @@ export function AccountSettings({
   }, [isAuthenticated]);
 
   const deactivateAccount = async () => {
+    setUnsyncedChangesMessage(null);
     try {
       await autosyncManager.requireSynced();
+    } catch (error) {
+      setUnsyncedChangesMessage(getUnsyncedChangesMessage(error));
+      return;
+    }
+    try {
       await deactivateMutation.mutateAsync();
       setDeactivateConfirmOpen(false);
       window.location.href = "/";
@@ -48,13 +71,24 @@ export function AccountSettings({
   };
 
   const signOutAfterSync = async () => {
+    setUnsyncedChangesMessage(null);
     try {
       await autosyncManager.requireSynced();
       await signOut();
-    } catch {
+    } catch (error) {
       // Keep the dialog open when a draft is offline, blocked, or failed.
+      setUnsyncedChangesMessage(getUnsyncedChangesMessage(error));
     }
   };
+
+  const unsyncedChangesAlert = unsyncedChangesMessage ? (
+    <span
+      className="mt-3 block rounded-lg bg-[color-mix(in_srgb,var(--danger)_8%,var(--surface-strong))] px-3 py-2 text-xs font-semibold text-(--danger)"
+      role="alert"
+    >
+      {unsyncedChangesMessage}
+    </span>
+  ) : null;
 
   return (
     <div className="settings-detail" aria-label="Account settings">
@@ -120,8 +154,7 @@ export function AccountSettings({
           <div>
             <strong>Export your data</strong>
             <small id="account-export-availability">
-              Export is not connected yet. No request will be sent until the
-              server export service is available.
+              Data export isn&apos;t available yet.
             </small>
           </div>
           <button
@@ -160,6 +193,7 @@ export function AccountSettings({
               className="settings-action settings-action--danger"
               onClick={() => {
                 deactivateMutation.reset();
+                setUnsyncedChangesMessage(null);
                 setDeactivateConfirmOpen(true);
               }}
               disabled={deactivateMutation.isPending}
@@ -189,7 +223,10 @@ export function AccountSettings({
             <button
               type="button"
               className="settings-action"
-              onClick={() => setLogoutConfirmOpen(true)}
+              onClick={() => {
+                setUnsyncedChangesMessage(null);
+                setLogoutConfirmOpen(true);
+              }}
             >
               <SignOut size={16} /> Sign out
             </button>
@@ -202,6 +239,7 @@ export function AccountSettings({
         isPending={isSigningOut}
         onClose={() => setLogoutConfirmOpen(false)}
         onConfirm={() => void signOutAfterSync()}
+        notice={unsyncedChangesAlert}
       />
 
       <ConfirmActionModal
@@ -219,6 +257,7 @@ export function AccountSettings({
               this account. Your stored account record will be retained as
               required for platform records.
             </span>
+            {unsyncedChangesAlert}
             {deactivateMutation.error && (
               <span
                 className="mt-3 block rounded-lg bg-[color-mix(in_srgb,var(--danger)_8%,var(--surface-strong))] px-3 py-2 text-xs font-semibold text-(--danger)"

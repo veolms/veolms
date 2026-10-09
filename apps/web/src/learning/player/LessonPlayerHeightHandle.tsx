@@ -47,7 +47,10 @@ function readStoredHeight(): number | null {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === null) return null;
     const height = Number(stored);
-    return Number.isFinite(height) && height >= 0 ? height : null;
+    // A video put away (height 0) stays away only while this page is open.
+    // Restored on a later visit, it left every lesson of every course with
+    // no video and nothing in sight to bring it back.
+    return Number.isFinite(height) && height > 0 ? height : null;
   } catch {
     return null;
   }

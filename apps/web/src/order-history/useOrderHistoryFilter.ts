@@ -5,7 +5,7 @@ import {
   useDebounceValue,
 } from "../hooks/useDebounce";
 import type { OrderHistoryItem } from "./orderHistoryData";
-import { useOrders } from "../services/orders";
+import { useMyOrders } from "../services/orders";
 import { adaptOrderToOrderHistoryItem } from "../orders/orderAdapter";
 
 export interface UseOrderHistoryFilterReturn {
@@ -42,7 +42,8 @@ function getDateBounds(range: string): { from?: Date; to?: Date } {
   const now = new Date();
   if (range === "all") return {};
 
-  if (range === "2024" || range === "2025") {
+  // Any four-digit year the filter bar offers, not a fixed pair of years.
+  if (/^\d{4}$/.test(range)) {
     return {
       from: new Date(Number(range), 0, 1),
       to: new Date(Number(range), 11, 31, 23, 59, 59, 999),
@@ -81,7 +82,6 @@ export function useOrderHistoryFilter(
   );
   const queryParams = useMemo(
     () => ({
-      view: "student" as const,
       limit: 30,
       sortOrder,
       ...dateBounds,
@@ -96,7 +96,7 @@ export function useOrderHistoryFilter(
     isFetchingNextPage,
     fetchNextPage,
     refetch,
-  } = useOrders(queryParams);
+  } = useMyOrders(queryParams);
 
   const ordersList = useMemo(
     () =>

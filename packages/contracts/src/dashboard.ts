@@ -11,13 +11,11 @@ export type DashboardQuery = z.infer<typeof dashboardQuerySchema>;
 
 export const dashboardKpiSchema = z.strictObject({
   value: z.number(),
-  previousValue: z.number(),
   changePercent: z.number().nullable(),
 });
 export type DashboardKpi = z.infer<typeof dashboardKpiSchema>;
 
 export const dashboardRevenueOverviewSchema = z.strictObject({
-  range: dashboardRangeSchema,
   currency: z.string().length(3),
   trend: z.array(
     z.strictObject({
@@ -39,9 +37,9 @@ const dashboardLearningActivityMetricSchema = z.strictObject({
   value: z.number().nonnegative(),
 });
 
+/** One UTC 8-hour window; `start` is its inclusive lower bound. */
 const dashboardEnrollmentActivityBucketSchema = z.strictObject({
   start: z.iso.datetime(),
-  end: z.iso.datetime(),
   value: z.number().int().nonnegative(),
 });
 
@@ -50,13 +48,8 @@ export const dashboardLearningActivitySchema = z.strictObject({
   courseCompletionRate: dashboardLearningActivityMetricSchema,
   newEnrollments: dashboardLearningActivityMetricSchema,
   enrollmentActivity: z.strictObject({
-    currentTotal: z.number().int().nonnegative(),
-    previousTotal: z.number().int().nonnegative(),
+    /** Last seven days against the seven before them. */
     changePercent: z.number().nullable(),
-    from: z.iso.datetime(),
-    to: z.iso.datetime(),
-    bucketHours: z.literal(8),
-    timeZone: z.literal("UTC"),
     buckets: z.array(dashboardEnrollmentActivityBucketSchema).length(21),
   }),
 });
@@ -77,10 +70,9 @@ export const dashboardYourCourseSchema = z.strictObject({
 export type DashboardYourCourse = z.infer<typeof dashboardYourCourseSchema>;
 
 export const dashboardSummaryResponseSchema = z.strictObject({
-  /** value and previousValue are in minor units (paise). */
+  /** value is in minor units (paise). */
   revenue: z.strictObject({
     value: z.number(),
-    previousValue: z.number(),
     changePercent: z.number().nullable(),
     currency: z.string().length(3),
   }),

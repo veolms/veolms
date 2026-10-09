@@ -22,6 +22,11 @@ import {
   clearLearningPlayerMinimizeCornerRadius,
   clearLearningPlayerWindowMinimizeMotion,
 } from "./learningPlayerMotion";
+import {
+  recordDetachedLearningProgress,
+  useDetachedLessonProgress,
+  type DetachedProgressTarget,
+} from "../detachedLearningProgress";
 import { LearningExpandPlaceholderSheet } from "./LearningExpandPlaceholderSheet";
 import {
   expandLearningPlayerFromRect,
@@ -103,6 +108,11 @@ export interface PersistentLearningPlayerRegistration {
   curriculumLessonsById?: ReadonlyMap<number, Lesson>;
   lessonProgress?: Readonly<Record<number, number>>;
   isLessonAvailable?: (lessonNumber: number) => boolean;
+  /**
+   * Where watched progress is recorded once the lesson page has unmounted
+   * and the player lives on as the mini player.
+   */
+  progressTarget?: DetachedProgressTarget;
 }
 
 export type RegisterPersistentLearningPlayer = (
@@ -517,21 +527,68 @@ export function PersistentLearningPlayerHost({
     [onSelectMiniPlayerLesson],
   );
 
+  // With no anchor the lesson page has unmounted: the progress callbacks it
+  // handed over are bound to that page (and to the lesson it was showing) and
+  // record nothing. Progress then goes straight to the learner's store.
+  const detachedProgressTarget =
+    player.anchor === null ? player.progressTarget : undefined;
+  const detachedLessonNumber = player.selectedLesson;
+  const recordDetachedProgress = useCallback(
+    (progress: number) => {
+      if (!detachedProgressTarget || detachedLessonNumber === undefined) return;
+      recordDetachedLearningProgress(
+        detachedProgressTarget,
+        detachedLessonNumber,
+        progress,
+      );
+    },
+    [detachedLessonNumber, detachedProgressTarget],
+  );
+  const recordsDetachedProgress = Boolean(
+    detachedProgressTarget && detachedLessonNumber !== undefined,
+  );
+  // The progress handed over with the player is a snapshot from the moment
+  // the lesson page closed. While detached, the lesson list shows what has
+  // been recorded since as well, so its rings move as the video plays.
+  const liveDetachedProgress = useDetachedLessonProgress(
+    detachedProgressTarget,
+  );
+  const registeredLessonProgress = player.lessonProgress;
+  const miniLessonProgress = useMemo(() => {
+    if (!detachedProgressTarget) return registeredLessonProgress;
+    const merged: Record<number, number> = { ...registeredLessonProgress };
+    for (const [lessonNumber, progress] of Object.entries(
+      liveDetachedProgress,
+    )) {
+      const key = Number(lessonNumber);
+      merged[key] = Math.max(merged[key] ?? 0, progress);
+    }
+    return merged;
+  }, [detachedProgressTarget, liveDetachedProgress, registeredLessonProgress]);
+
   const lessonVideoPlayerProps = useMemo(() => {
     const retryPlayback = mini ? onRetryMiniPlayerPlayback : undefined;
+    const registeredPlayerProps = recordsDetachedProgress
+      ? {
+          ...player.playerProps,
+          onProgressChange: recordDetachedProgress,
+          onLessonEnded: undefined,
+        }
+      : player.playerProps;
     const basePlayerProps =
-      retryPlayback && player.playerProps.playbackAccessError?.kind === "retry"
+      retryPlayback &&
+      registeredPlayerProps.playbackAccessError?.kind === "retry"
         ? {
-            ...player.playerProps,
+            ...registeredPlayerProps,
             playbackAccessError: {
-              ...player.playerProps.playbackAccessError,
+              ...registeredPlayerProps.playbackAccessError,
               onAction: retryPlayback,
             },
             onRetryPlayback: retryPlayback,
           }
         : retryPlayback
-          ? { ...player.playerProps, onRetryPlayback: retryPlayback }
-          : player.playerProps;
+          ? { ...registeredPlayerProps, onRetryPlayback: retryPlayback }
+          : registeredPlayerProps;
 
     if (!mini || !onSelectMiniPlayerLesson) {
       return basePlayerProps;
@@ -558,6 +615,8 @@ export function PersistentLearningPlayerHost({
     onSelectMiniPlayerLesson,
     onRetryMiniPlayerPlayback,
     player.playerProps,
+    recordDetachedProgress,
+    recordsDetachedProgress,
   ]);
 
   const curriculumSelectLesson =
@@ -669,7 +728,7 @@ export function PersistentLearningPlayerHost({
             sections={miniCurriculumSections}
             lessonsById={player.curriculumLessonsById ?? EMPTY_LESSONS_BY_ID}
             selectedLesson={miniSelectedLesson}
-            lessonProgress={player.lessonProgress}
+            lessonProgress={miniLessonProgress}
             onSelectLesson={curriculumSelectLesson}
             courseTitle={player.playerProps.courseTitle ?? ""}
             persistenceKey={player.courseRouteKey}

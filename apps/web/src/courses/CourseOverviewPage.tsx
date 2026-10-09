@@ -50,12 +50,14 @@ import type { CourseSection } from "../learning/courseContent";
 import { VirtualizedLessonList } from "./curriculum/VirtualizedLessonList";
 import { getCoursePlayerPath } from "../learning/coursePlayerNavigation";
 import type { NavigateTo } from "../routing/navigation";
+import { productName } from "../routing/routeDescriptors";
 import { useAuthStore } from "../store/auth.store";
 import { useCourseOverview } from "../services/courses";
 import { useEnrolledCourses } from "../services/enrollments";
 import { getApiError } from "../lib/api-error";
 import {
   useCheckoutPreview,
+  useAwaitPaidOrder,
   useCreateCheckoutOrder,
   useVerifyPayment,
 } from "../services/payments";
@@ -546,10 +548,14 @@ function CourseHeroSection({
     null,
   );
   const verify = useVerifyPayment();
+  const awaitPaidOrder = useAwaitPaidOrder();
+  const paymentConfirmationRef = useRef<AbortController | null>(null);
+  useEffect(() => () => paymentConfirmationRef.current?.abort(), []);
   const isEnrolled = Boolean(user && course.enrolled);
 
   const [isPaymentBusy, setIsPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
 
   const [selectedPreset, setSelectedPreset] =
     useState<ContributionPresetId>("0");
@@ -682,10 +688,41 @@ function CourseHeroSection({
     setCouponCodeInput("");
   };
 
+  const confirmPaidOrder = async (orderId: string) => {
+    paymentConfirmationRef.current?.abort();
+    const confirmation = new AbortController();
+    paymentConfirmationRef.current = confirmation;
+
+    setPaymentError(null);
+    setPaymentNotice(
+      "Payment received. We are confirming your access — this can take a few minutes. Please do not pay again.",
+    );
+    setIsPaymentBusy(true);
+
+    const paid = await awaitPaidOrder(orderId, confirmation.signal);
+    if (confirmation.signal.aborted) return;
+    paymentConfirmationRef.current = null;
+
+    setPaymentNotice(null);
+    setIsPaymentBusy(false);
+    if (paid) {
+      onNavigatePage?.(
+        `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
+      );
+      return;
+    }
+    setPaymentError(
+      "Your payment was received, but confirming it is taking longer than usual. Your course will unlock automatically — check Purchase History in a few minutes. Please do not pay again.",
+    );
+  };
+
   const handlePayNow = async (voluntaryContributionAmount?: number) => {
     if (isReadOnlyPreview) return;
     if (!user) {
-      setPaymentError("Please log in before enrolling.");
+      // Opens the login pop-up over this course page, so the visitor is back
+      // on the price card as soon as they are signed in.
+      if (onNavigatePage) onNavigatePage("/login");
+      else setPaymentError("Please log in before enrolling.");
       return;
     }
 
@@ -721,6 +758,14 @@ function CourseHeroSection({
         return;
       }
 
+      // The same purchase was already paid — an earlier attempt whose
+      // confirmation did not reach this page. Opening the gateway again would
+      // invite a second payment for an order that is complete.
+      if (order.order.status === "paid") {
+        await confirmPaidOrder(order.order.id);
+        return;
+      }
+
       await loadRazorpay();
       if (!window.Razorpay) {
         throw new Error("Payment checkout is unavailable.");
@@ -730,7 +775,7 @@ function CourseHeroSection({
         key: order.gateway.keyId,
         amount: order.gateway.amount,
         currency: order.gateway.currency,
-        name: "VeoLMS",
+        name: productName,
         description:
           (voluntaryContributionAmount ?? 0) > baseNumericPrice ||
           (isFree && (voluntaryContributionAmount ?? 0) > 0)
@@ -757,17 +802,20 @@ function CourseHeroSection({
             onNavigatePage?.(
               `/learn/${encodeURIComponent(getCourseRouteKey(course))}`,
             );
-          } catch (error) {
-            setPaymentError(
-              error instanceof Error
-                ? error.message
-                : "Payment verification failed. Please retry.",
-            );
-            setIsPaymentBusy(false);
+          } catch {
+            // The gateway has taken the payment; only our confirmation call
+            // failed. The server still fulfils the order from the gateway
+            // webhook or its recovery cycle, so wait for that rather than
+            // telling the learner to pay again.
+            await confirmPaidOrder(order.order.id);
           }
         },
         modal: {
           ondismiss: () => {
+            // A payment that went through is being confirmed; the gateway
+            // closing its own window afterwards is not a cancellation.
+            const confirmation = paymentConfirmationRef.current;
+            if (confirmation && !confirmation.signal.aborted) return;
             setPaymentError("Payment cancelled. You can retry.");
             setIsPaymentBusy(false);
           },
@@ -796,7 +844,9 @@ function CourseHeroSection({
     }
   };
 
-  const showApplyCoupon = !isCreatorNormal && !isFree;
+  // An enrolled student has nothing left to buy; offering a coupon next to
+  // "Continue Learning" suggested there was still something to pay for.
+  const showApplyCoupon = !isCreatorNormal && !isFree && !isEnrolled;
   const isCustomUnderPrice =
     !isFree &&
     selectedPreset === "custom" &&
@@ -1395,6 +1445,16 @@ function CourseHeroSection({
               </button>
             </div>
 
+            {/* Payment received, access still being confirmed */}
+            {paymentNotice && (
+              <div
+                role="status"
+                className="w-full rounded-lg bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] p-2.5 text-xs text-(--text) font-medium"
+              >
+                {paymentNotice}
+              </div>
+            )}
+
             {/* Payment Error Banner */}
             {paymentError && (
               <div className="flex items-center justify-between gap-2 w-full rounded-lg bg-rose-500/12 border border-rose-500/30 p-2.5 text-xs text-rose-500 font-medium">
@@ -1469,10 +1529,10 @@ function CourseHeroSection({
                 className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 bg-black/65 backdrop-blur-[10px] border border-white/18 text-white text-[0.78rem] font-semibold px-3.25 py-1.5 rounded-full cursor-pointer z-2 transition-[background-color,border-color,transform] duration-160 ease-out hover:bg-black/85 hover:border-white/40 hover:-translate-y-px"
                 onClick={handlePreviewClick}
                 disabled={isReadOnlyPreview}
-                aria-label="Watch trailer"
+                aria-label="Preview course"
               >
                 <PlayCircle size={15} weight="bold" />
-                <span>Watch trailer</span>
+                <span>Preview course</span>
               </button>
             </>
           )}
@@ -2050,11 +2110,9 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     error: overviewError,
     refetch: refetchOverview,
   } = useCourseOverview(courseSlug, {
-    enabled:
-      !seededOverview &&
-      !props.previewData &&
-      !props.customCourse &&
-      Boolean(courseSlug),
+    // A seeded (prerendered) overview is still fetched once: it is shown at
+    // once and then corrected if the course changed since the build.
+    enabled: !props.previewData && !props.customCourse && Boolean(courseSlug),
     initialData: seededOverview,
   });
 

@@ -3,18 +3,9 @@ import type { PaymentGateway } from "@veolms/contracts";
 import type { Json } from "@veolms/database";
 import type { Executor } from "../shared/repository.types.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
+import { isUniqueViolation } from "../shared/db-errors.ts";
 import * as webhookRepo from "./webhook.repository.ts";
 import type { PaymentEventQueue } from "./payment-event.queue.ts";
-
-/** Postgres unique_violation (23505), as raised by the pg driver via node-postgres. */
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: unknown }).code === "23505"
-  );
-}
 
 export interface WebhookService {
   processGatewayWebhook(

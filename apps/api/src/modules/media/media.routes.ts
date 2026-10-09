@@ -9,6 +9,8 @@ import {
   videoJobProgressResponseSchema,
   videoPlaybackBootstrapSchema,
   videoPlaybackTokenSchema,
+  videoTranscodeCancelResponseSchema,
+  videoTranscodeRetryResponseSchema,
 } from "@veolms/contracts";
 
 import { errorResponse } from "../../lib/errors.ts";
@@ -224,7 +226,20 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     "/media/:mediaId/transcode/retry",
     {
       preHandler: requireMediaAuthor,
-      schema: { params: z.object({ mediaId: z.uuid() }) },
+      schema: {
+        operationId: "retryVideoTranscode",
+        tags: ["Media"],
+        summary: "Queue a failed video for transcoding again",
+        params: z.object({ mediaId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Transcoding retry accepted",
+            videoTranscodeRetryResponseSchema,
+          ),
+          404: errorResponse("Video not found"),
+          409: errorResponse("Video is not in a retryable state"),
+        },
+      },
     },
     controller.retryVideoJob,
   );
@@ -233,7 +248,20 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
     "/media/:mediaId/transcode/cancel",
     {
       preHandler: requireMediaAuthor,
-      schema: { params: z.object({ mediaId: z.uuid() }) },
+      schema: {
+        operationId: "cancelVideoTranscode",
+        tags: ["Media"],
+        summary: "Cancel a video that is being transcoded",
+        params: z.object({ mediaId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Transcoding cancelled",
+            videoTranscodeCancelResponseSchema,
+          ),
+          404: errorResponse("Video not found"),
+          409: errorResponse("Video is not being transcoded"),
+        },
+      },
     },
     controller.cancelVideoJob,
   );
@@ -303,7 +331,10 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           width: z.coerce.number().int().positive(),
         }),
       },
-      preHandler: [authMiddleware.authenticate],
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
     },
     controller.getImageVariantStream,
   );
@@ -314,7 +345,7 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "getMediaAssetStream",
         tags: ["Media"],
-        summary: "Stream media file content by media ID",
+        summary: "Resolve the delivery URL of a media asset",
         params: z.object({ mediaId: z.string().uuid() }),
         response: {
           200: jsonResponse(
@@ -325,7 +356,10 @@ const mediaRoutes: RoutePlugin = async (app, options) => {
           503: errorResponse("CDN delivery is not configured"),
         },
       },
-      preHandler: [authMiddleware.authenticate],
+      preHandler: [
+        authMiddleware.authenticate,
+        authMiddleware.requireMfaVerifiedIfAuthenticated,
+      ],
     },
     controller.getMediaDelivery,
   );

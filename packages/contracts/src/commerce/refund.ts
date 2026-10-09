@@ -19,6 +19,15 @@ export const refundSchema = z.strictObject({
 });
 export type Refund = z.infer<typeof refundSchema>;
 
+/** What issuing a refund answers with; the full record is `GET /refunds/:id`. */
+export const refundResultSchema = z.strictObject({
+  id: z.uuid(),
+  amount: z.number().int().positive(),
+  currency: z.string().length(3),
+  status: refundStatusSchema,
+});
+export type RefundResult = z.infer<typeof refundResultSchema>;
+
 export const createRefundRequestSchema = z.strictObject({
   orderId: z.uuid(),
   orderItemId: z.uuid().optional(),
@@ -49,6 +58,18 @@ export const refundRequestSchema = z.strictObject({
   updatedAt: z.string().or(z.date()),
 });
 export type RefundRequest = z.infer<typeof refundRequestSchema>;
+
+/** A refund request as the learner who filed it sees it: no internal notes. */
+export const learnerRefundRequestSchema = z.strictObject({
+  id: z.uuid(),
+  orderId: z.uuid(),
+  reason: z.string(),
+  status: refundRequestStatusSchema,
+  resolvedAt: z.string().or(z.date()).nullable(),
+  createdAt: z.string().or(z.date()),
+  updatedAt: z.string().or(z.date()),
+});
+export type LearnerRefundRequest = z.infer<typeof learnerRefundRequestSchema>;
 
 export const createStudentRefundRequestSchema = z.strictObject({
   reason: z.string().min(5).max(1000),

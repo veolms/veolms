@@ -1,6 +1,6 @@
 import { memo, useEffect } from "react";
 import { createPortal } from "react-dom";
-import type { Order } from "@veolms/contracts";
+import type { AdminOrder } from "@veolms/contracts";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
@@ -26,13 +26,13 @@ import {
 import { StudentAvatar } from "./StudentAvatar";
 
 export interface OrderDetailsDrawerProps {
-  order: Order | null;
+  order: AdminOrder | null;
   onClose: () => void;
   hasPrev: boolean;
   hasNext: boolean;
   onPrev: () => void;
   onNext: () => void;
-  onRequestRefund: (order: Order) => void;
+  onRequestRefund: (order: AdminOrder) => void;
   onNavigatePage?: NavigateTo;
   setNotice?: (message: string) => void;
 }
@@ -215,6 +215,7 @@ export const OrderDetailsDrawer = memo(function OrderDetailsDrawer({
                 <StudentAvatar
                   name={studentName}
                   username={student?.username}
+                  avatarUrl={student?.avatarUrl}
                   size="lg"
                 />
                 <div className="min-w-0">
@@ -327,7 +328,7 @@ export const OrderDetailsDrawer = memo(function OrderDetailsDrawer({
               </div>
 
               <div className="flex items-center justify-between text-(--muted)">
-                <span>GST (18%)</span>
+                <span>Tax</span>
                 <span className="font-semibold text-(--text)">
                   {formatCurrency(taxPaise, order.currency)}
                 </span>

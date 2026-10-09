@@ -121,6 +121,8 @@ export function LessonMediaWorkspace({
           )
           .join(", ")
       : undefined;
+  // Without variants (still processing, or the manifest could not be read)
+  // the asset's own delivery URL is the only image there is to show.
   const imagePreviewSrc = previewFile
     ? (previewUrl ?? undefined)
     : mediaInfoId
@@ -130,9 +132,9 @@ export function LessonMediaWorkspace({
               mediaInfoId,
               imageVariantManifest.variants.at(-1)!.width,
             )
-          : mediaService.getMediaAssetUrl(mediaInfoId)
+          : mediaInfo?.url
         : imageVariantManifestQuery.isError
-          ? mediaInfo?.url || mediaService.getMediaAssetUrl(mediaInfoId)
+          ? mediaInfo?.url
           : undefined
       : mediaInfo?.url || "/api/placeholder/1280/720";
 

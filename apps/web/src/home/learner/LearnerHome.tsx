@@ -2,6 +2,7 @@ import type { EnrolledCourse } from "@veolms/contracts";
 import { useMemo, useState } from "react";
 import { courseSurfaceElevation } from "../../components/cardElevation";
 import type { NavigateTo } from "../../routing/navigation";
+import { getCoursePlayerPath } from "../../learning/coursePlayerNavigation";
 import { useCourses } from "../../services/courses";
 import { useLearningSummary } from "../../services/learning-goals";
 import { useLearningProgressResumeContext } from "../../services/learning-progress";
@@ -104,6 +105,16 @@ export function LearnerHome({
 
   const openCourse = (course: EnrolledCourse) =>
     onOpenCourse(adaptEnrolledCourseToLearningCourse(course));
+  // The hero's card names the lesson to carry on with, so that is the one
+  // it opens. Opening the course without naming a lesson lands on whichever
+  // one this browser last remembered, or the first on a new device. A
+  // finished course has no lesson to carry on with and is opened as a whole.
+  const heroLesson =
+    plan.intent === "review" ? null : resumeContext?.resumeLesson;
+  const heroLessonPath =
+    resumeContext && heroLesson
+      ? getCoursePlayerPath(resumeContext.courseSlug, heroLesson.lessonNumber)
+      : null;
   const nothingStarted = plan.intent === "start";
 
   return (
@@ -115,8 +126,12 @@ export function LearnerHome({
         intent={plan.intent}
         course={heroCourse}
         resume={{ context: resumeContext, isLoading: resumeQuery.isLoading }}
-        courseHref={getCoursePlayerHref(heroCourse)}
-        onOpenCourse={() => openCourse(heroCourse)}
+        courseHref={heroLessonPath ?? getCoursePlayerHref(heroCourse)}
+        onOpenCourse={() =>
+          heroLessonPath
+            ? onNavigatePage(heroLessonPath)
+            : openCourse(heroCourse)
+        }
         laptopScreen={
           <LearnerGoalScreen
             summary={summaryQuery.data}

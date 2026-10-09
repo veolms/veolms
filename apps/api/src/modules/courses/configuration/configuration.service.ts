@@ -10,6 +10,11 @@ import { httpError } from "../../../lib/errors.ts";
 import { hasDiscountBadgeColumn } from "../shared/discount-badge-column.ts";
 import * as configRepo from "./configuration.repository.ts";
 import { getCourseAndVerifyOwner as verifyCourseOwner } from "../shared/courses.utils.ts";
+import {
+  presentAccessRule,
+  presentPricing,
+  presentSettings,
+} from "../shared/courses.presenters.ts";
 
 export interface ConfigurationServiceOptions {
   database: Kysely<Database>;
@@ -52,13 +57,12 @@ export function createConfigurationService({
       updated_at: now,
     });
 
-    return {
+    return presentAccessRule({
       id,
-      courseId,
-      accessType: updates.accessType,
-      durationType,
-      durationDays,
-    };
+      access_type: updates.accessType,
+      duration_type: durationType,
+      duration_days: durationDays,
+    });
   }
 
   async function upsertCoursePricing(
@@ -104,15 +108,14 @@ export function createConfigurationService({
       updated_at: now,
     });
 
-    return {
+    return presentPricing({
       id,
-      courseId,
-      pricingType,
+      pricing_type: pricingType,
       price,
       currency,
-      salePrice,
-      showDiscountBadge,
-    };
+      sale_price: salePrice,
+      show_discount_badge: showDiscountBadge,
+    });
   }
 
   async function upsertCourseSettings(
@@ -178,18 +181,17 @@ export function createConfigurationService({
       updated_at: now,
     });
 
-    return {
+    return presentSettings({
       id,
-      courseId,
-      allowQa,
-      allowComments,
-      allowDownloads,
-      allowNotes,
-      certificateEnabled,
-      showInstructorName,
+      allow_qa: allowQa,
+      allow_comments: allowComments,
+      allow_downloads: allowDownloads,
+      allow_notes: allowNotes,
+      certificate_enabled: certificateEnabled,
+      show_instructor_name: showInstructorName,
       language,
-      estimatedDuration,
-    };
+      estimated_duration: estimatedDuration,
+    });
   }
 
   async function findAccessRuleByCourseId(courseId: string) {
@@ -209,11 +211,8 @@ export function createConfigurationService({
     upsertCoursePricing,
     upsertCourseSettings,
     findAccessRuleByCourseId,
-    getAccessRuleByCourseId: findAccessRuleByCourseId,
     findPricingByCourseId,
-    getPricingByCourseId: findPricingByCourseId,
     findSettingsByCourseId,
-    getSettingsByCourseId: findSettingsByCourseId,
   };
 }
 

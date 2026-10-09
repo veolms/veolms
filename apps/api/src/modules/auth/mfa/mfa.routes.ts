@@ -220,8 +220,8 @@ const mfaRoutes: RoutePlugin = async (app, options) => {
   app.post(
     "/auth/passkey/login/verify",
     {
-      // Unauthenticated verification endpoint — cap per-IP like the other
-      // login verifiers.
+      // Step-up verification for a session that has only passed its first
+      // factor — cap per-IP like the other login verifiers.
       config: {
         rateLimit: {
           max: 10,

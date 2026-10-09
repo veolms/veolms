@@ -25,8 +25,4 @@ export const couponsService = {
   updateCoupon: (id: string, payload: UpdateCouponRequest): Promise<Coupon> => {
     return api.patch<Coupon>(`/coupons/${id}`, payload);
   },
-
-  deleteCoupon: (id: string): Promise<{ message: string }> => {
-    return api.delete<{ message: string }>(`/coupons/${id}`);
-  },
 };

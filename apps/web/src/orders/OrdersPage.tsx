@@ -167,11 +167,15 @@ export function OrdersPage({
         onResetFilters={filterState.resetFilters}
       />
 
-      {/* 4 KPI Summary Cards */}
-      <OrderSummaryCards
-        stats={filterState.stats}
-        isLoading={filterState.isLoadingStats}
-      />
+      {/* 4 KPI Summary Cards. Left out when the orders list was refused or
+          failed and no stats arrived either (they need the same permission):
+          a row of zeros read as "no sales" rather than "not loaded". */}
+      {!(filterState.loadError && !filterState.stats) && (
+        <OrderSummaryCards
+          stats={filterState.stats}
+          isLoading={filterState.isLoadingStats}
+        />
+      )}
 
       {/* Virtualized Orders Table */}
       <OrdersTable
@@ -189,6 +193,8 @@ export function OrdersPage({
         setNotice={setNotice}
         isFiltered={filterState.isFiltered}
         onResetFilters={filterState.resetFilters}
+        loadError={filterState.loadError}
+        onRetry={filterState.refetch}
       />
 
       {/* Slide-over Order Details Drawer */}
@@ -204,8 +210,11 @@ export function OrdersPage({
         setNotice={setNotice}
       />
 
-      {/* Refund Modal */}
+      {/* Refund Modal. Keyed per opening so the refund type, amount, reason
+          and "preserve access" tick of one order never carry over to the
+          next one. */}
       <OrderRefundModal
+        key={filterState.refundTargetOrder?.id ?? "closed"}
         order={filterState.refundTargetOrder}
         onClose={() => filterState.setRefundTargetOrder(null)}
         setNotice={setNotice}

@@ -21,13 +21,13 @@ export function createCreatorGatewayController({
   ) {
     const creatorId = request.user!.id;
     const config = await service.saveCreatorConfig(creatorId, request.body);
-    reply.status(200).send(config);
+    await reply.status(200).send(config);
   }
 
   async function getConfig(request: FastifyRequest, reply: FastifyReply) {
     const creatorId = request.user!.id;
     const config = await service.getCreatorConfig(creatorId);
-    reply.status(200).send(config);
+    await reply.status(200).send(config);
   }
 
   return {

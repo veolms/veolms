@@ -82,11 +82,16 @@ export function createPricingService({
     ) {
       throw CommerceErrors.QUIZ_NOT_FOUND(params.quizAssignmentId);
     }
-    // Unpublished courses are only visible to their creator and admins.
+    // An unpublished course, or a quiz on a lesson that is not released yet,
+    // is only visible to the course creator and admins.
     const isPrivileged =
       Boolean(params.isAdmin) ||
       (Boolean(params.userId) && offering.course_creator_id === params.userId);
-    if (offering.course_status !== "published" && !isPrivileged) {
+    if (
+      (offering.course_status !== "published" ||
+        !offering.lesson_is_published) &&
+      !isPrivileged
+    ) {
       throw CommerceErrors.QUIZ_NOT_FOUND(params.quizAssignmentId);
     }
     const charge = resolveQuizCharge(quizPricingRepo.toPricingRow(offering));
@@ -212,11 +217,11 @@ export function createPricingService({
       if (item.itemType === "course") {
         const courseId = item.courseId!;
         const course = coursesById.get(courseId);
-        if (!course) {
+        // An unpublished course answers exactly like a missing one: this runs
+        // for anonymous callers too, and naming the course would disclose a
+        // draft's title to anyone holding its id.
+        if (!course || course.status !== "published") {
           throw CommerceErrors.COURSE_NOT_FOUND(courseId);
-        }
-        if (course.status !== "published") {
-          throw CommerceErrors.COURSE_NOT_AVAILABLE(course.title);
         }
         if (enrolledCourseIds.has(courseId)) {
           throw CommerceErrors.COURSE_ALREADY_OWNED(course.title);
@@ -264,11 +269,8 @@ export function createPricingService({
       } else if (item.itemType === "bundle") {
         const bundleId = item.bundleId!;
         const bundle = bundlesById.get(bundleId);
-        if (!bundle) {
+        if (!bundle || bundle.status !== "published") {
           throw CommerceErrors.BUNDLE_NOT_FOUND(bundleId);
-        }
-        if (bundle.status !== "published") {
-          throw CommerceErrors.BUNDLE_NOT_AVAILABLE(bundle.title);
         }
 
         const bundleCourses = bundleCoursesByBundleId.get(bundleId) ?? [];
@@ -309,13 +311,10 @@ export function createPricingService({
       } else if (item.itemType === "quiz") {
         const quizPricingId = item.quizPricingId!;
         const offering = quizzesByPricingId.get(quizPricingId);
-        if (!offering) {
+        if (!offering || offering.course_status !== "published") {
           throw CommerceErrors.QUIZ_NOT_FOUND(quizPricingId);
         }
         const passTitle = `Quiz pass: ${offering.course_title}`;
-        if (offering.course_status !== "published") {
-          throw CommerceErrors.QUIZ_NOT_AVAILABLE(passTitle);
-        }
         const charge = resolveQuizCharge(offering);
         if (!charge.isPaid) {
           throw CommerceErrors.QUIZ_NOT_PURCHASABLE(passTitle);

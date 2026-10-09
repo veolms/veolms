@@ -1132,11 +1132,11 @@ function DiscussionInner({
     if (!directThreadData || !isCommentOrQaThread(directThreadData))
       return null;
     return withSourceAwareIdentity(
-      adaptLearningThreadToComment(directThreadData, currentUser?.id),
+      adaptLearningThreadToComment(directThreadData),
       "thread",
       directThreadData.id,
     );
-  }, [currentUser?.id, directThreadData]);
+  }, [directThreadData]);
 
   const backendThreads = useMemo<Comment[]>(() => {
     if (
@@ -1163,7 +1163,7 @@ function DiscussionInner({
         );
       })
       .map((thread) => {
-        const adapted = adaptLearningThreadToComment(thread, currentUser?.id);
+        const adapted = adaptLearningThreadToComment(thread);
         const serverId = getServerEntityId(thread);
         return serverId
           ? withSourceAwareIdentity(adapted, "thread", serverId)
@@ -1229,6 +1229,56 @@ function DiscussionInner({
     },
     [],
   );
+
+  const draftRef = useRef(draft);
+  const isMountedRef = useRef(false);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // The editor reads its text only when it mounts, so a draft put back after
+  // a failed post is shown by giving the new-entry editor a fresh identity.
+  const [draftRestoreToken, setDraftRestoreToken] = useState(0);
+
+  // A failed post used to leave only a toast: the composer had already been
+  // emptied, so the text was gone. Put the submitted snapshot back, but only
+  // into a composer that is still empty, so it never replaces newer input.
+  const restoreSubmittedDraft = (
+    submittedDraft: DiscussionDraft,
+    submittedAttachments: readonly LocalComposerAttachment[],
+  ) => {
+    if (
+      !isMountedRef.current ||
+      hasDiscussionDraftContent(draftRef.current) ||
+      composerAttachmentsRef.current.length > 0
+    ) {
+      return;
+    }
+
+    // The failed creation already released these previews, so a restored
+    // image or video needs a new one.
+    const restoredAttachments = submittedAttachments.map((attachment) =>
+      attachment.localPreviewUrl
+        ? {
+            ...attachment,
+            localPreviewUrl: URL.createObjectURL(attachment.file),
+          }
+        : attachment,
+    );
+    draftRef.current = submittedDraft;
+    composerAttachmentsRef.current = restoredAttachments;
+    setDraft(submittedDraft);
+    setComposerAttachments(restoredAttachments);
+    setDraftRestoreToken((current) => current + 1);
+  };
 
   const sanitizeStoredEntries = (items: Comment[]): Comment[] =>
     items.filter((entry) => entry.entryKind !== "note");
@@ -1928,6 +1978,8 @@ function DiscussionInner({
           : {}),
       } as const;
 
+      const submittedDraft = activeDraft;
+
       try {
         const request = createNoteMutation.mutateAsync(notePayload);
         setDraft(createEmptyDiscussionDraft());
@@ -1937,6 +1989,7 @@ function DiscussionInner({
         await request;
         return true;
       } catch (error) {
+        restoreSubmittedDraft(submittedDraft, localAttachments);
         setCreationToast({
           message: "Couldn't save your note. Please try again.",
           type: "error",
@@ -2028,6 +2081,7 @@ function DiscussionInner({
       // Capture and clear the submitted snapshot before dispatch. The
       // coordinator retains the immutable payload for reconciliation and
       // future recovery; a failure must never restore over newer input.
+      const submittedDraft = activeDraft;
       setDraft(createEmptyDiscussionDraft());
       setComposerAttachments([]);
 
@@ -2038,6 +2092,7 @@ function DiscussionInner({
         setNotice("");
         return true;
       } catch (error) {
+        restoreSubmittedDraft(submittedDraft, localAttachments);
         setCreationToast({
           message:
             activeEntryKind === "question"
@@ -2478,14 +2533,6 @@ function DiscussionInner({
         }
         try {
           await learningInteractionsService.toggleNoteBookmark(threadIdStr);
-          if (queryClient) {
-            void queryClient.invalidateQueries({
-              queryKey: ["learning-notes"],
-            });
-            void queryClient.invalidateQueries({
-              queryKey: ["learning-course-notes-overview"],
-            });
-          }
           return bookmarked;
         } catch (err: any) {
           if (queryClient) {
@@ -2650,6 +2697,7 @@ function DiscussionInner({
         isLessonDescriptionLoading={isLessonDescriptionLoading}
         mobileLessonHeader={mobileLessonHeader}
         draft={activeDraft}
+        draftRestoreToken={draftRestoreToken}
         entryKind={activeEntryKind}
         visibility={activeVisibility}
         editingEntryId={editingEntry?.id ?? null}
@@ -2924,6 +2972,8 @@ interface ThreadSurfaceProps {
   isLessonDescriptionLoading?: boolean;
   mobileLessonHeader?: React.ReactNode;
   draft: DiscussionDraft;
+  /** Changes when a failed post's draft is put back into the composer. */
+  draftRestoreToken?: number;
   entryKind: DiscussionEntryKind;
   visibility: DiscussionVisibility;
   editingEntryId: string | number | null;
@@ -3542,6 +3592,7 @@ function ThreadSurface({
   isLessonDescriptionLoading = false,
   mobileLessonHeader,
   draft,
+  draftRestoreToken = 0,
   entryKind,
   visibility,
   editingEntryId,
@@ -3776,6 +3827,11 @@ function ThreadSurface({
     return () =>
       document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
   }, [closeComposer, composerMode]);
+
+  const newEntryDocumentId =
+    draftRestoreToken === 0
+      ? "discussion-new"
+      : `discussion-new-restored-${draftRestoreToken}`;
 
   const submitAndCollapse = async (onLocallyAccepted?: () => void) => {
     if (!canSubmitDraft) return false;
@@ -4316,7 +4372,7 @@ function ThreadSurface({
               avatar={authorAvatar}
               documentId={
                 editingEntryId === null
-                  ? "discussion-new"
+                  ? newEntryDocumentId
                   : `discussion-edit-${editingEntryId}`
               }
               entryKind={entryKind}
@@ -4483,7 +4539,7 @@ function ThreadSurface({
               avatar={authorAvatar}
               documentId={
                 editingEntryId === null
-                  ? "discussion-new"
+                  ? newEntryDocumentId
                   : `discussion-edit-${editingEntryId}`
               }
               entryKind={entryKind}

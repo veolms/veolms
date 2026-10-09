@@ -1384,10 +1384,12 @@ export function CoursesPage({
     () => new Set(),
   );
 
-  const shellProfileDisplayName =
+  // The home greeting takes the name without the placeholder: given "Your
+  // name" it greeted a learner who has no display name as "Good morning, Your".
+  const shellProfileKnownName =
     activeUser?.displayName?.trim() ||
-    (!authUserFetched ? authIdentityHint?.displayName : undefined) ||
-    "Your name";
+    (!authUserFetched ? authIdentityHint?.displayName : undefined);
+  const shellProfileDisplayName = shellProfileKnownName || "Your name";
   const shellProfileSubtitle = useMemo(
     () =>
       getShellProfileSubtitle(
@@ -2849,8 +2851,11 @@ export function CoursesPage({
       wishlisted,
       role: effectiveRole,
       statusFilter,
+      // See visibleCourses below: the student "All" list arrives already
+      // searched, so the count must not narrow it a second time.
       search:
-        !needsCompleteCourseList && pagedCourseQuery.isPlaceholderData
+        !needsCompleteCourseList &&
+        (effectiveRole === "student" || pagedCourseQuery.isPlaceholderData)
           ? ""
           : debouncedSearch,
     });
@@ -2894,8 +2899,13 @@ export function CoursesPage({
         role: effectiveRole,
         enrollmentFilter,
         statusFilter,
+        // The student "All" list is searched by the server, which also
+        // matches the full description. Filtering it again here on title
+        // and short description hid a course found only by its long
+        // description. Lists the server does not search keep this filter.
         search:
-          !needsCompleteCourseList && pagedCourseQuery.isPlaceholderData
+          !needsCompleteCourseList &&
+          (effectiveRole === "student" || pagedCourseQuery.isPlaceholderData)
             ? ""
             : debouncedSearch,
         sort,

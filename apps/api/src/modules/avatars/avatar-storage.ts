@@ -103,6 +103,17 @@ export function isStoredAvatarUrl(value: string | null | undefined): boolean {
   return Boolean(value && AVATAR_STORED_URL_PATTERN.test(value));
 }
 
+/**
+ * The URL a client is given for a stored avatar. A Google account photo is
+ * served from its stored original rather than the 160px variant.
+ */
+export function displayAvatarUrl<T extends string | null>(avatarUrl: T): T {
+  if (avatarUrl && avatarUrl.endsWith("--google/160.webp")) {
+    return avatarUrl.replace("/160.webp", "/original.jpg") as T;
+  }
+  return avatarUrl;
+}
+
 /** Builds the responsive source set for the canonical 160px CDN URL. */
 export function avatarSrcSetFromUrl(
   value: string | null | undefined,
@@ -308,16 +319,6 @@ export async function storeAvatarFromUrl(
   } catch {
     return null;
   }
-}
-
-/** Deletes the user's stored original and any CDN-generated variants. */
-export async function removeAvatar(
-  storage: S3StorageService,
-  userId: string,
-): Promise<void> {
-  await removeAvatarPrefix(storage, avatarStoragePrefix(userId)).catch(
-    () => undefined,
-  );
 }
 
 /** Deletes one explicitly-owned avatar namespace. */

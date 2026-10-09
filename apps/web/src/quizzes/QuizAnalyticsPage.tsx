@@ -1223,6 +1223,8 @@ function LearnerQuizDashboard({
   const [filter, setFilter] = useState<LearnerFilter>("all");
   const available = assignments.data?.assignments ?? [];
   const attempts = history.data ?? [];
+  const assignmentsFailed = assignments.isError && !assignments.data;
+  const historyFailed = history.isError && !history.data;
   const completed = attempts.filter((item) => item.status === "graded");
   const passed = completed.filter((item) => item.passed).length;
   const average = completed.length
@@ -1344,7 +1346,21 @@ function LearnerQuizDashboard({
               />
             ))
           )}
-          {!assignments.isLoading && filtered.length === 0 ? (
+          {assignmentsFailed ? (
+            // A failed request used to read as "No quizzes assigned yet".
+            <div className="sm:col-span-2 xl:col-span-3">
+              <EmptyState
+                icon={<ChartBar size={22} />}
+                title="Quizzes could not be loaded"
+                message="Please check your connection and try again."
+                action={
+                  <Button onClick={() => void assignments.refetch()}>
+                    Try again
+                  </Button>
+                }
+              />
+            </div>
+          ) : !assignments.isLoading && filtered.length === 0 ? (
             <div className="sm:col-span-2 xl:col-span-3">
               <EmptyState
                 icon={<ChartBar size={22} />}
@@ -1396,7 +1412,20 @@ function LearnerQuizDashboard({
               </span>
             </div>
           ))}
-          {attempts.length === 0 ? (
+          {historyFailed ? (
+            // A failed request used to read as an empty history.
+            <EmptyState
+              compact
+              icon={<Clock size={22} />}
+              title="Your history could not be loaded"
+              message="Please check your connection and try again."
+              action={
+                <Button onClick={() => void history.refetch()}>
+                  Try again
+                </Button>
+              }
+            />
+          ) : attempts.length === 0 ? (
             <EmptyState
               compact
               icon={<Clock size={22} />}
@@ -1518,10 +1547,7 @@ function QuizLibraryRow({
   onEdit: () => void;
   expanded?: boolean;
 }) {
-  const latest = quiz.versions.at(-1);
-  const published = quiz.versions.filter(
-    (version) => version.publishedAt,
-  ).length;
+  const published = quiz.publishedVersionCount;
   return (
     <div
       className={`flex flex-col gap-3 sm:gap-4 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-4 ${expanded ? "hover:bg-(--hover)" : ""}`}
@@ -1536,9 +1562,8 @@ function QuizLibraryRow({
             {quiz.title}
           </p>
           <p className="mt-0.5 sm:mt-1 text-[0.72rem] sm:text-xs text-(--muted)">
-            {latest?.questions.length ?? 0} questions · {published} published
-            version{published === 1 ? "" : "s"} · Updated{" "}
-            {formatDate(quiz.updatedAt)}
+            {quiz.questionCount} questions · {published} published version
+            {published === 1 ? "" : "s"} · Updated {formatDate(quiz.updatedAt)}
           </p>
         </div>
       </div>

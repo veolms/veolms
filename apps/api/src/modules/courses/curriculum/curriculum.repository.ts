@@ -1,5 +1,5 @@
 import { type Kysely } from "kysely";
-import type { Database } from "@veolms/database";
+import type { Database, DatabaseExecutor } from "@veolms/database";
 
 // --- Sections ---
 
@@ -219,6 +219,38 @@ export async function findLessonsByCourseId(
     .execute();
 }
 
+/**
+ * A course's live lessons in the order learners meet them (section position,
+ * then lesson position, then id as a stable tie-break), with just what a
+ * lesson list shows. Lessons of deleted sections are left out.
+ */
+export async function listOrderedLessonsByCourseId(
+  database: DatabaseExecutor,
+  courseId: string,
+) {
+  return await database
+    .selectFrom("course_lessons")
+    .innerJoin(
+      "course_sections",
+      "course_sections.id",
+      "course_lessons.section_id",
+    )
+    .select([
+      "course_lessons.id",
+      "course_lessons.title",
+      "course_lessons.content_type",
+      "course_lessons.is_published",
+      "course_sections.title as section_title",
+    ])
+    .where("course_lessons.course_id", "=", courseId)
+    .where("course_lessons.deleted_at", "is", null)
+    .where("course_sections.deleted_at", "is", null)
+    .orderBy("course_sections.position", "asc")
+    .orderBy("course_lessons.position", "asc")
+    .orderBy("course_lessons.id", "asc")
+    .execute();
+}
+
 export async function findLessonsBySection(
   database: Kysely<Database>,
   sectionId: string,
@@ -358,18 +390,31 @@ export async function findResourceByLessonId(
     .executeTakeFirst();
 }
 
-export async function listResourcesForLessons(
+/**
+ * Every live resource of a course's live lessons, in display order. Reading
+ * by course lets a caller fetch resources alongside the lessons instead of
+ * waiting for the lesson ids first.
+ */
+export async function listResourcesByCourseId(
   database: Kysely<Database>,
-  lessonIds: string[],
+  courseId: string,
 ) {
-  if (lessonIds.length === 0) {
-    return [];
-  }
   return await database
     .selectFrom("lesson_resources")
-    .selectAll()
-    .where("lesson_id", "in", lessonIds)
-    .where("deleted_at", "is", null)
-    .orderBy("position", "asc")
+    .innerJoin(
+      "course_lessons",
+      "course_lessons.id",
+      "lesson_resources.lesson_id",
+    )
+    .select([
+      "lesson_resources.id",
+      "lesson_resources.lesson_id",
+      "lesson_resources.media_asset_id",
+      "lesson_resources.title",
+    ])
+    .where("course_lessons.course_id", "=", courseId)
+    .where("course_lessons.deleted_at", "is", null)
+    .where("lesson_resources.deleted_at", "is", null)
+    .orderBy("lesson_resources.position", "asc")
     .execute();
 }

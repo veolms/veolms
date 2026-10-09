@@ -156,6 +156,36 @@ export function isPublicAcademyPath(pathname: string): boolean {
   );
 }
 
+const LOGIN_PROMPT_PATH_ROOTS = [
+  "/dashboard",
+  "/wishlist",
+  "/students",
+  "/quizzes",
+  "/discussions",
+  "/analytics",
+  "/orders",
+  "/purchase-history",
+  "/notifications",
+  "/coupons",
+  "/home-page",
+] as const;
+
+/**
+ * Signed-in pages a signed-out visitor is asked to log in for — with the page
+ * kept as the place to return to — instead of being sent to the home page.
+ * These are the addresses emails, notifications and bookmarks point at. An
+ * address the app does not know still goes home.
+ */
+export function shouldPromptLoginFor(pathname: string): boolean {
+  const path = normalizeAppPath(pathname);
+  return (
+    isCourseEditorPath(path) ||
+    LOGIN_PROMPT_PATH_ROOTS.some(
+      (root) => path === root || path.startsWith(`${root}/`),
+    )
+  );
+}
+
 export function isGuestLandingPath(pathname: string): boolean {
   return GUEST_LANDING_PATHS.has(normalizeAppPath(pathname));
 }

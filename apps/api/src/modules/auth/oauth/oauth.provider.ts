@@ -2,6 +2,7 @@ import { OAuth2Client } from "google-auth-library";
 import { z } from "zod";
 
 import { AppError } from "../../../lib/errors.ts";
+import type { AuthLogger } from "../shared/auth.types.ts";
 
 /**
  * Upper bound for any single provider HTTP call. These run synchronously in
@@ -36,6 +37,8 @@ export interface FetchOauthProfileInput {
   credentials: OauthProviderCredentials;
   /** Enables the `mock_` short-circuit used by local development. */
   allowMockCodes: boolean;
+  /** Records provider error text that is not returned to the client. */
+  logger?: AuthLogger | undefined;
 }
 
 function oauthFailure(message: string): AppError {
@@ -203,9 +206,17 @@ async function fetchGithubProfile(
   );
 
   if (tokenData.error) {
-    throw oauthFailure(
-      `GitHub OAuth error: ${tokenData.error_description || tokenData.error}`,
+    // The provider's own wording stays in the log; the client gets a fixed
+    // message.
+    input.logger?.warn(
+      {
+        provider: "github",
+        providerError: tokenData.error,
+        providerErrorDescription: tokenData.error_description,
+      },
+      "GitHub OAuth token exchange was rejected",
     );
+    throw oauthFailure("GitHub token exchange failed");
   }
 
   const accessToken = tokenData.access_token;

@@ -34,22 +34,28 @@ export const bulkQuizAnswersRequestSchema = z.strictObject({
   answers: z.array(quizAnswerInputSchema).max(500),
 });
 
+/**
+ * What a learner sees of a question while attempting it. Questions and
+ * options arrive in the order to show them (shuffled when the assignment
+ * says so); the authored position is deliberately not sent.
+ */
 export const quizOptionSchema = z.strictObject({
   id: uuid,
   text: z.string().min(1),
-  position: z.number().int().nonnegative(),
 });
 export const learnerQuizQuestionSchema = z.strictObject({
   id: uuid,
   questionType: quizQuestionTypeSchema,
   prompt: z.string().min(1),
   points: nonNegativeNumber,
-  position: z.number().int().nonnegative(),
   options: z.array(quizOptionSchema),
 });
 export const quizPricingTypeSchema = z.enum(["free", "paid"]);
-export type QuizPricingType = z.infer<typeof quizPricingTypeSchema>;
 
+/**
+ * Delivery rules of a quiz attached to a lesson. Pricing is not part of it:
+ * the quiz price belongs to the course (`quizCoursePricingSchema`).
+ */
 export const quizAssignmentSchema = z.strictObject({
   id: uuid,
   quizId: uuid,
@@ -65,16 +71,6 @@ export const quizAssignmentSchema = z.strictObject({
   feedbackMode: quizFeedbackModeSchema,
   availableFrom: z.string().nullable(),
   availableUntil: z.string().nullable(),
-  /**
-   * Pricing is read-only here: it is joined from the course's quiz pricing
-   * row and shared by every quiz attached to the course. Edit it through
-   * `setQuizCoursePricingRequestSchema`.
-   */
-  quizPricingId: uuid.nullable(),
-  pricingType: quizPricingTypeSchema.default("free"),
-  price: z.number().int().nonnegative().default(0),
-  currency: z.string().length(3).default("INR"),
-  salePrice: z.number().int().nonnegative().nullable().optional(),
 });
 export const instructorQuizAssignmentSchema = quizAssignmentSchema.extend({
   quizTitle: z.string().min(1),
@@ -82,41 +78,56 @@ export const instructorQuizAssignmentSchema = quizAssignmentSchema.extend({
 export const courseQuizAssignmentsResponseSchema = z.array(
   instructorQuizAssignmentSchema,
 );
+
+/** One row of the author's quiz library. */
+export const quizSummarySchema = z.strictObject({
+  id: uuid,
+  title: z.string().min(1).max(255),
+  status: quizStatusSchema,
+  updatedAt: z.string(),
+  /** Questions in the newest version. */
+  questionCount: z.number().int().nonnegative(),
+  publishedVersionCount: z.number().int().nonnegative(),
+});
+export const quizAuthoringQuestionSchema = z.strictObject({
+  id: uuid,
+  questionType: quizQuestionTypeSchema,
+  prompt: z.string().min(1),
+  points: nonNegativeNumber,
+  explanation: z.string().nullable(),
+  options: z.array(
+    z.strictObject({
+      id: uuid,
+      text: z.string().min(1),
+      isCorrect: z.boolean(),
+    }),
+  ),
+});
+/** A quiz as its author edits it. */
 export const quizSchema = z.strictObject({
   id: uuid,
   title: z.string().min(1).max(255),
   description: z.string().nullable(),
-  status: quizStatusSchema,
-  createdAt: z.string(),
-  updatedAt: z.string(),
   versions: z.array(
     z.strictObject({
       id: uuid,
       versionNumber: z.number().int().positive(),
-      instructions: z.string().nullable(),
       publishedAt: z.string().nullable(),
-      questions: z.array(
-        z.strictObject({
-          id: uuid,
-          questionType: quizQuestionTypeSchema,
-          prompt: z.string().min(1),
-          points: nonNegativeNumber,
-          position: z.number().int().nonnegative(),
-          explanation: z.string().nullable(),
-          options: z.array(
-            z.strictObject({
-              id: uuid,
-              text: z.string().min(1),
-              isCorrect: z.boolean(),
-              weight: z.number(),
-              position: z.number().int().nonnegative(),
-            }),
-          ),
-        }),
-      ),
     }),
   ),
-  assignments: z.array(quizAssignmentSchema).optional(),
+  /**
+   * The version edits apply to: the draft when there is one, otherwise the
+   * newest version. It is the only version sent with its questions.
+   */
+  editableVersion: z
+    .strictObject({
+      id: uuid,
+      instructions: z.string().nullable(),
+      publishedAt: z.string().nullable(),
+      questions: z.array(quizAuthoringQuestionSchema),
+    })
+    .nullable(),
+  assignments: z.array(quizAssignmentSchema),
 });
 export const createQuizRequestSchema = z.strictObject({
   title: z.string().trim().min(1).max(255),
@@ -213,40 +224,30 @@ export const setQuizCoursePricingRequestSchema = z
     }
   });
 
-/** `id` is null while the course has no pricing row (its quizzes are free). */
+/**
+ * The course's quiz pass price, in the course's own currency. A course with
+ * no price set reads as free.
+ */
 export const quizCoursePricingSchema = z.strictObject({
-  id: uuid.nullable(),
-  courseId: uuid,
   pricingType: quizPricingTypeSchema,
   price: z.number().int().nonnegative(),
-  currency: z.string().length(3),
   salePrice: z.number().int().positive().nullable(),
 });
 
 export const quizPricingPreviewResponseSchema = z.strictObject({
-  quizAssignmentId: uuid,
-  quizId: uuid,
+  /** Null while the course has no quiz pricing row, i.e. its quizzes are free. */
   quizPricingId: uuid.nullable(),
-  quizTitle: z.string(),
-  courseId: uuid,
-  lessonId: uuid,
   pricingType: quizPricingTypeSchema,
   catalogPrice: z.number().int().nonnegative(),
   salePrice: z.number().int().nonnegative().nullable(),
-  effectivePrice: z.number().int().nonnegative(),
   currency: z.string().length(3),
+  /** True when the caller may attempt without buying. */
   isEnrolled: z.boolean(),
 });
-export type QuizPricingPreviewResponse = z.infer<
-  typeof quizPricingPreviewResponseSchema
->;
 export const learnerQuizAttemptSchema = z.strictObject({
   id: uuid,
-  assignmentId: uuid,
-  quizVersionId: uuid,
   attemptNumber: z.number().int().positive(),
   status: quizAttemptStatusSchema,
-  startedAt: z.string(),
   /** Time limit or due date, whichever ends the attempt first. */
   expiresAt: z.string().nullable(),
   /** Server clock when this was sent; count down against it, not the device. */
@@ -262,22 +263,18 @@ export const learnerQuizAttemptSchema = z.strictObject({
 });
 export const quizResultSchema = z.strictObject({
   attemptId: uuid,
-  assignmentId: uuid,
-  quizVersionId: uuid,
   attemptNumber: z.number().int().positive(),
   score: nonNegativeNumber,
   maxScore: nonNegativeNumber,
   percentage: z.number().min(0).max(100),
   passed: z.boolean(),
   status: quizAttemptStatusSchema,
-  submittedAt: z.string(),
   feedbackMode: quizFeedbackModeSchema,
   answers: z
     .array(
       z.strictObject({
         questionId: uuid,
         prompt: z.string().min(1),
-        selectedOptionIds: z.array(uuid),
         selectedOptionTexts: z.array(z.string()),
         correctOptionTexts: z.array(z.string()),
         textResponse: z.string().nullable().optional(),
@@ -290,7 +287,6 @@ export const quizResultSchema = z.strictObject({
 });
 export const quizHistoryEntrySchema = z.strictObject({
   id: uuid,
-  assignmentId: uuid,
   attemptNumber: z.number().int().positive(),
   status: quizAttemptStatusSchema,
   score: nonNegativeNumber,
@@ -300,25 +296,29 @@ export const quizHistoryEntrySchema = z.strictObject({
 export const quizHistoryResponseSchema = z.array(quizHistoryEntrySchema);
 export const quizAnswerSyncResponseSchema = z.strictObject({
   saved: z.literal(true),
-  answerCount: z.number().int().nonnegative(),
 });
 export const quizDeleteResponseSchema = z.strictObject({
   success: z.literal(true),
 });
+/** A quiz the learner can take, with where they stand on it. */
+export const myQuizAssignmentSchema = z.strictObject({
+  id: uuid,
+  courseId: uuid,
+  lessonId: uuid,
+  quizTitle: z.string(),
+  lessonTitle: z.string(),
+  courseTitle: z.string(),
+  maxAttempts: z.number().int().positive(),
+  availableFrom: z.string().nullable(),
+  availableUntil: z.string().nullable(),
+  activeAttemptId: uuid.nullable(),
+  attemptCount: z.number().int().nonnegative(),
+  latestAttemptStatus: quizAttemptStatusSchema.nullable(),
+  bestScore: z.number().nonnegative().nullable(),
+  latestPassed: z.boolean().nullable(),
+});
 export const myQuizAssignmentsResponseSchema = z.strictObject({
-  assignments: z.array(
-    quizAssignmentSchema.extend({
-      quizTitle: z.string(),
-      lessonTitle: z.string(),
-      activeAttemptId: uuid.nullable(),
-      courseTitle: z.string(),
-      attemptCount: z.number().int().nonnegative(),
-      latestAttemptStatus: quizAttemptStatusSchema.nullable(),
-      latestScore: z.number().nonnegative().nullable(),
-      bestScore: z.number().nonnegative().nullable(),
-      latestPassed: z.boolean().nullable(),
-    }),
-  ),
+  assignments: z.array(myQuizAssignmentSchema),
 });
 export const quizAnalyticsSchema = z.strictObject({
   assignedStudents: z.number().int().nonnegative(),
@@ -335,7 +335,6 @@ export const quizAnalyticsSchema = z.strictObject({
       studentName: z.string(),
       attemptCount: z.number().int().nonnegative(),
       latestScore: z.number().nullable(),
-      bestScore: z.number().nullable(),
       status: z.enum(["passed", "failed", "in_progress", "not_attempted"]),
       lastAttempt: z.string().nullable(),
     }),
@@ -360,17 +359,14 @@ export const courseQuizAnalyticsSchema = z.strictObject({
   ),
 });
 export const studentQuizReportSchema = z.strictObject({
-  studentId: uuid,
   completedQuizzes: z.number().int().nonnegative(),
   passed: z.number().int().nonnegative(),
-  pending: z.number().int().nonnegative(),
   averageScore: z.number().nonnegative(),
   bestScore: z.number().nonnegative(),
   quizzes: z.array(
     z.strictObject({
       assignmentId: uuid,
       quizTitle: z.string(),
-      courseId: uuid,
       attempts: z.number().int().nonnegative(),
       bestScore: z.number().nullable(),
       latestScore: z.number().nullable(),
@@ -401,14 +397,12 @@ export type AssignQuizRequest = z.infer<typeof assignQuizRequestSchema>;
 export type SetQuizCoursePricingRequest = z.infer<
   typeof setQuizCoursePricingRequestSchema
 >;
-export type QuizCoursePricing = z.infer<typeof quizCoursePricingSchema>;
 export type UpdateQuizAssignmentRequest = z.infer<
   typeof updateQuizAssignmentRequestSchema
 >;
 export type LearnerQuizAttempt = z.infer<typeof learnerQuizAttemptSchema>;
 export type QuizResult = z.infer<typeof quizResultSchema>;
-export type QuizHistoryEntry = z.infer<typeof quizHistoryEntrySchema>;
 export type QuizAssignment = z.infer<typeof quizAssignmentSchema>;
-export type MyQuizAssignment = z.infer<
-  typeof myQuizAssignmentsResponseSchema
->["assignments"][number];
+export type MyQuizAssignment = z.infer<typeof myQuizAssignmentSchema>;
+export type QuizSummary = z.infer<typeof quizSummarySchema>;
+export type Quiz = z.infer<typeof quizSchema>;

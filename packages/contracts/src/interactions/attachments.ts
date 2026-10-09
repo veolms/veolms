@@ -47,24 +47,22 @@ export const attachmentStatusSchema = z.enum([
 ]);
 export type AttachmentStatus = z.infer<typeof attachmentStatusSchema>;
 
-export const learningAttachmentSchema = z.object({
+/**
+ * What the uploader gets back once a file is stored: enough to render the
+ * attachment and to link it to a thread, reply or note by id. Storage keys,
+ * ownership and link targets stay server-side.
+ */
+export const uploadedAttachmentSchema = z.object({
   id: z.uuid(),
-  ownerId: z.uuid(),
-  targetType: attachmentTargetTypeSchema.nullable().optional(),
-  targetId: z.uuid().nullable().optional(),
   kind: attachmentKindSchema,
-  storageKey: z.string().min(1),
   fileName: z.string().min(1),
   fileUrl: z.string().min(1),
   mimeType: z.string().min(1),
   fileSize: z.number().int().nonnegative(),
-  status: attachmentStatusSchema,
   width: optionalAttachmentDimensionSchema,
   height: optionalAttachmentDimensionSchema,
-  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
-  createdAt: z.string(),
 });
-export type LearningAttachment = z.infer<typeof learningAttachmentSchema>;
+export type UploadedAttachment = z.infer<typeof uploadedAttachmentSchema>;
 
 export const initiateAttachmentUploadRequestSchema = z
   .object({
@@ -96,10 +94,6 @@ export type InitiateAttachmentUploadRequest = z.infer<
 export const initiateAttachmentUploadResponseSchema = z.object({
   attachmentId: z.uuid(),
   uploadUrl: z.url(),
-  storageKey: z.string().min(1),
-  fileName: z.string().min(1),
-  kind: attachmentKindSchema,
-  maxSize: z.number().int().positive(),
 });
 export type InitiateAttachmentUploadResponse = z.infer<
   typeof initiateAttachmentUploadResponseSchema
@@ -115,7 +109,6 @@ export type CompleteAttachmentUploadRequest = z.infer<
 export const learningUploadResponseSchema = z.object({
   id: z.uuid(),
   url: z.string().min(1),
-  storageKey: z.string().min(1),
   fileName: z.string().min(1),
   kind: attachmentKindSchema,
   mediaType: z.enum(["image", "video", "code", "document"]),

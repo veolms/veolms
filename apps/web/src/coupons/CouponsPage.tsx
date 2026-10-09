@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { Coupon } from "@veolms/contracts";
+import type { CouponListItem } from "@veolms/contracts";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { Button } from "../components/Button";
@@ -79,11 +79,11 @@ export function CouponsPage({ onNavigatePage, setNotice }: CouponsPageProps) {
     onNavigatePage?.("/coupons/create");
   };
 
-  const handleOpenEdit = (coupon: Coupon) => {
+  const handleOpenEdit = (coupon: CouponListItem) => {
     onNavigatePage?.(`/coupons/${coupon.id}`);
   };
 
-  const handleToggleStatus = async (coupon: Coupon) => {
+  const handleToggleStatus = async (coupon: CouponListItem) => {
     try {
       await updateMutation.mutateAsync({
         id: coupon.id,

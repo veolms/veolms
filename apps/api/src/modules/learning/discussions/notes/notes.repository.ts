@@ -23,13 +23,7 @@ export interface NoteRow {
   authorUsername?: string | null;
   authorAvatarUrl?: string | null;
   courseId: string;
-  courseTitle?: string;
-  sectionId: string | null;
-  sectionTitle: string | null;
-  sectionPosition: number | null;
   lessonId: string;
-  lessonTitle: string;
-  lessonPosition: number;
   timestampSeconds: number | null;
   title: string | null;
   content: string;
@@ -39,6 +33,21 @@ export interface NoteRow {
   likesCount: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/**
+ * The few columns an access decision needs. Likes, bookmarks, reports,
+ * moderation and attachment downloads only ask "may this caller open the
+ * note", which does not need its content or its author's profile.
+ */
+export interface NoteAccessRow {
+  id: string;
+  userId: string;
+  courseId: string;
+  lessonId: string;
+  visibility: DiscussionVisibility;
+  /** A moderator made the note private; it cannot be shared again. */
+  heldPrivate: boolean;
 }
 
 export interface CourseSectionRow {
@@ -71,13 +80,7 @@ const noteSelect = [
   "u.username as authorUsername",
   "u.avatar_data_url as authorAvatarUrl",
   "n.course_id as courseId",
-  "c.title as courseTitle",
-  "s.id as sectionId",
-  "s.title as sectionTitle",
-  "s.position as sectionPosition",
   "n.lesson_id as lessonId",
-  "l.title as lessonTitle",
-  "l.position as lessonPosition",
   "n.timestamp_seconds as timestampSeconds",
   "n.title",
   "n.content",
@@ -109,10 +112,32 @@ export interface NotesRepository {
 
   findNoteById(db: DatabaseExecutor, noteId: string): Promise<NoteRow | null>;
 
+  /** Reads only what an ownership or course-access check needs. */
+  findNoteAccessTarget(
+    db: DatabaseExecutor,
+    noteId: string,
+  ): Promise<NoteAccessRow | null>;
+
   listNotes(
     db: DatabaseExecutor,
     userId: string,
     options: NoteFilterOptions,
+  ): Promise<NoteRow[]>;
+
+  /**
+   * The given notes of one lesson that `userId` may see (their own, plus
+   * public ones unless `mine`). No paging and no particular order: the
+   * caller already knows which ids it wants and in what order.
+   */
+  listNotesByIds(
+    db: DatabaseExecutor,
+    userId: string,
+    options: {
+      courseId: string;
+      lessonId: string;
+      ids: readonly string[];
+      mine?: boolean;
+    },
   ): Promise<NoteRow[]>;
 
   countNotes(
@@ -148,9 +173,6 @@ export interface NotesRepository {
 
   /** Moderation: make the note private and stop it being shared again. */
   holdPrivate(db: DatabaseExecutor, noteId: string): Promise<void>;
-
-  /** Whether a moderator has made this note private. */
-  isHeldPrivate(db: DatabaseExecutor, noteId: string): Promise<boolean>;
 }
 
 function applyNoteFilters<O>(
@@ -248,14 +270,36 @@ export function createNotesRepository(): NotesRepository {
       const row = await db
         .selectFrom("learning_notes as n")
         .innerJoin("users as u", "u.id", "n.user_id")
-        .innerJoin("courses as c", "c.id", "n.course_id")
-        .innerJoin("course_lessons as l", "l.id", "n.lesson_id")
-        .leftJoin("course_sections as s", "s.id", "l.section_id")
         .select([...noteSelect])
         .where("n.id", "=", noteId)
         .executeTakeFirst();
 
       return (row as NoteRow | undefined) ?? null;
+    },
+
+    async findNoteAccessTarget(db, noteId) {
+      const row = await db
+        .selectFrom("learning_notes")
+        .select([
+          "id",
+          "user_id as userId",
+          "course_id as courseId",
+          "lesson_id as lessonId",
+          "visibility",
+          "moderated_private_at as moderatedPrivateAt",
+        ])
+        .where("id", "=", noteId)
+        .executeTakeFirst();
+
+      if (!row) return null;
+      return {
+        id: row.id,
+        userId: row.userId,
+        courseId: row.courseId,
+        lessonId: row.lessonId,
+        visibility: row.visibility,
+        heldPrivate: Boolean(row.moderatedPrivateAt),
+      };
     },
 
     async listNotes(db, userId, options) {
@@ -269,13 +313,33 @@ export function createNotesRepository(): NotesRepository {
 
       const rows = await filtered
         .innerJoin("users as u", "u.id", "n.user_id")
-        .innerJoin("courses as c", "c.id", "n.course_id")
-        .innerJoin("course_lessons as l", "l.id", "n.lesson_id")
-        .leftJoin("course_sections as s", "s.id", "l.section_id")
         .select([...noteSelect])
         .orderBy("n.created_at", "desc")
         .orderBy("n.id", "desc")
         .limit(options.limit + 1)
+        .execute();
+
+      return rows as NoteRow[];
+    },
+
+    async listNotesByIds(db, userId, options) {
+      if (options.ids.length === 0) return [];
+
+      const filtered = applyNoteFilters(
+        db.selectFrom("learning_notes as n"),
+        userId,
+        {
+          courseId: options.courseId,
+          lessonId: options.lessonId,
+          ids: options.ids,
+          limit: options.ids.length,
+          ...(options.mine ? { mine: true } : {}),
+        },
+      );
+
+      const rows = await filtered
+        .innerJoin("users as u", "u.id", "n.user_id")
+        .select([...noteSelect])
         .execute();
 
       return rows as NoteRow[];
@@ -321,31 +385,7 @@ export function createNotesRepository(): NotesRepository {
         db
           .selectFrom("learning_notes as n")
           .innerJoin("users as u", "u.id", "n.user_id")
-          .innerJoin("course_lessons as l", "l.id", "n.lesson_id")
-          .leftJoin("course_sections as s", "s.id", "l.section_id")
-          .select([
-            "n.id",
-            "n.user_id as userId",
-            "u.display_name as authorName",
-            "u.username as authorUsername",
-            "u.avatar_data_url as authorAvatarUrl",
-            "n.course_id as courseId",
-            "s.id as sectionId",
-            "s.title as sectionTitle",
-            "s.position as sectionPosition",
-            "n.lesson_id as lessonId",
-            "l.title as lessonTitle",
-            "l.position as lessonPosition",
-            "n.timestamp_seconds as timestampSeconds",
-            "n.title",
-            "n.content",
-            "n.plain_text as plainText",
-            "n.visibility as visibility",
-            "n.tags",
-            "n.likes_count as likesCount",
-            "n.created_at as createdAt",
-            "n.updated_at as updatedAt",
-          ])
+          .select([...noteSelect])
           .where("n.course_id", "=", courseId)
           .where("n.user_id", "=", userId)
           .orderBy("n.timestamp_seconds", "asc")
@@ -403,15 +443,6 @@ export function createNotesRepository(): NotesRepository {
         })
         .where("id", "=", noteId)
         .execute();
-    },
-
-    async isHeldPrivate(db, noteId) {
-      const row = await db
-        .selectFrom("learning_notes")
-        .select("moderated_private_at")
-        .where("id", "=", noteId)
-        .executeTakeFirst();
-      return Boolean(row?.moderated_private_at);
     },
 
     async deleteNote(db, noteId) {

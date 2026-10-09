@@ -1,4 +1,4 @@
-export { AutosaveStatus } from "./AutosaveStatus";
+export { AutosaveStatus, isAutosaveUnsaved } from "./AutosaveStatus";
 export { autosyncManager, getAutosyncOnlineState } from "./manager";
 export {
   getAutosyncDraftKey,

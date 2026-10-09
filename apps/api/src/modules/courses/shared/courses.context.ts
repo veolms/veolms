@@ -29,8 +29,6 @@ export interface CoursesContext {
   requireCourseAuthor: AuthMiddleware["authenticate"][];
   /** Administrator-only access. */
   requireAdmin: AuthMiddleware["authenticate"][];
-  /** General authenticated access for any logged-in role. */
-  requireAuthenticated: AuthMiddleware["authenticate"][];
 }
 
 export function createCoursesContext({
@@ -40,12 +38,6 @@ export function createCoursesContext({
   const middleware = createAuthMiddleware(sessionService);
   const authorizationService = createAuthorizationService(database);
   const authGuard = createAuthorizationGuard(authorizationService);
-
-  const requireAuthenticated = [
-    middleware.authenticate,
-    middleware.requireAuthenticated,
-    middleware.requireMfaVerified,
-  ];
 
   const requireCourseAuthor = [
     middleware.authenticate,
@@ -78,6 +70,5 @@ export function createCoursesContext({
     authorize,
     requireCourseAuthor,
     requireAdmin,
-    requireAuthenticated,
   };
 }

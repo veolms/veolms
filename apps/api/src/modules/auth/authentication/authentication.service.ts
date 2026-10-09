@@ -6,7 +6,11 @@ import type {
   AvatarUploadPresignRequest,
   ProfileUpdateRequest,
 } from "@veolms/contracts";
-import { buildDicebearSvgUrl, DEFAULT_AVATAR_STYLE } from "@veolms/contracts";
+import {
+  buildDicebearSvgUrl,
+  DEFAULT_AVATAR_STYLE,
+  DICEBEAR_BASE_URL,
+} from "@veolms/contracts";
 import type { S3StorageService } from "@veolms/storage";
 import { sql, type Kysely } from "kysely";
 
@@ -31,17 +35,58 @@ import {
   avatarStoragePrefix,
   avatarSrcSetFromUrl,
   detectImageContentType,
+  displayAvatarUrl,
   isStoredAvatarUrl,
   removeAvatarVariants,
   removeOtherAvatarOriginals,
   removeAvatarPrefix,
-  storeAvatarBuffer,
   storeAvatarFromUrl,
 } from "../../avatars/index.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
 
 const AVATAR_VALIDATION_RANGE = "bytes=0-31";
 const USER_AVATAR_RETENTION_LIMIT = 2;
+const DICEBEAR_ORIGIN = new URL(DICEBEAR_BASE_URL).origin;
+
+/**
+ * First path segments the web app and its hosting serve themselves. A profile
+ * lives at /<username> and these addresses win over it, so a profile with one
+ * of these names could never be opened and its menu link led to another page.
+ * Keep in step with the web's routes (packages/web-core/src/routes).
+ */
+const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
+  "home",
+  "dashboard",
+  "courses",
+  "wishlist",
+  "students",
+  "reviews",
+  "quizzes",
+  "discussions",
+  "analytics",
+  "orders",
+  "messages",
+  "purchase-history",
+  "notifications",
+  "settings",
+  "coupons",
+  "home-page",
+  "logout",
+  "login",
+  "register",
+  "mfa-setup",
+  "auth",
+  "explore-courses",
+  "learn",
+  "cdn",
+  "v1",
+  "static",
+  "api",
+]);
+
+function isReservedUsername(username: string): boolean {
+  return RESERVED_USERNAMES.has(username.trim().toLowerCase());
+}
 
 async function readObjectPrefix(
   body: AsyncIterable<Uint8Array>,
@@ -149,17 +194,6 @@ export function createAuthService({
     return user;
   }
 
-  function findUserByIdentifier(
-    identifier: string,
-    identifierType: IdentifierType,
-  ) {
-    return userRepository.findUserByIdentifier(
-      database,
-      identifier,
-      identifierType,
-    );
-  }
-
   function findUserByIdentifierIncludingDeleted(
     identifier: string,
     identifierType: IdentifierType,
@@ -173,14 +207,6 @@ export function createAuthService({
 
   function findVerifiedUserByEmail(email: string) {
     return userRepository.findVerifiedUserByEmail(database, email);
-  }
-
-  function findUserByOauthAccount(provider: string, providerUserId: string) {
-    return oauthRepository.findUserByOauthAccount(
-      database,
-      provider,
-      providerUserId,
-    );
   }
 
   function findUserByOauthAccountIncludingDeleted(
@@ -261,6 +287,33 @@ export function createAuthService({
     });
   }
 
+  /**
+   * A profile update may only point the avatar at an address this app
+   * produces: a DiceBear avatar, or one of the caller's own stored photos.
+   * Anything else would be handed to other people's browsers as an image
+   * address of the caller's choosing.
+   */
+  function isAcceptedAvatarUrl(userId: string, avatarUrl: string): boolean {
+    try {
+      const url = new URL(avatarUrl);
+      if (url.protocol === "https:" && url.origin === DICEBEAR_ORIGIN) {
+        return true;
+      }
+    } catch {
+      return false;
+    }
+
+    const ownAvatarsUrl = storage?.getPublicObjectUrl(
+      avatarStoragePrefix(userId),
+    );
+    return Boolean(
+      ownAvatarsUrl &&
+      isStoredAvatarUrl(avatarUrl) &&
+      (avatarUrl.startsWith(`${ownAvatarsUrl}/`) ||
+        avatarUrl.startsWith(`${ownAvatarsUrl}--`)),
+    );
+  }
+
   async function updateProfile(userId: string, input: ProfileUpdateRequest) {
     const username = input.username?.trim().toLowerCase();
     const effectiveInput = input;
@@ -278,6 +331,35 @@ export function createAuthService({
           404,
           "USER_NOT_FOUND",
           "User account was not found.",
+        );
+      }
+
+      // Only a change to a reserved name is refused. Someone who already has
+      // one sends it back with every profile save and must still be able to
+      // save their other fields.
+      if (
+        username &&
+        username !== currentUser.username.toLowerCase() &&
+        isReservedUsername(username)
+      ) {
+        throw new AppError(
+          400,
+          "USERNAME_TAKEN",
+          "That username isn't available.",
+        );
+      }
+
+      // Re-sending the avatar already on the account is always accepted, so
+      // an older stored value never blocks an unrelated profile save.
+      if (
+        typeof effectiveInput.avatarDataUrl === "string" &&
+        effectiveInput.avatarDataUrl !== currentUser.avatar_data_url &&
+        !isAcceptedAvatarUrl(userId, effectiveInput.avatarDataUrl)
+      ) {
+        throw new AppError(
+          400,
+          "INVALID_AVATAR_URL",
+          "Choose a generated avatar or upload a photo.",
         );
       }
 
@@ -460,12 +542,15 @@ export function createAuthService({
       );
     }
 
-    const currentUser = await userRepository.findUserById(database, userId);
+    const currentUser = await userRepository.findUserContactById(
+      database,
+      userId,
+    );
     if (!currentUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
 
-    const existingUser = await userRepository.findUserByIdentifier(
+    const existingUser = await userRepository.findUserIdByIdentifier(
       database,
       normalizedPhoneNo,
       "phone",
@@ -496,7 +581,10 @@ export function createAuthService({
     userId: string,
     requesterIp?: string | null,
   ): Promise<void> {
-    const currentUser = await userRepository.findUserById(database, userId);
+    const currentUser = await userRepository.findUserContactById(
+      database,
+      userId,
+    );
     if (!currentUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
@@ -523,7 +611,10 @@ export function createAuthService({
   }
 
   async function verifyEmail(userId: string, code: string): Promise<void> {
-    const currentUser = await userRepository.findUserById(database, userId);
+    const currentUser = await userRepository.findUserContactById(
+      database,
+      userId,
+    );
     if (!currentUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
@@ -563,7 +654,7 @@ export function createAuthService({
     userId: string,
     phoneNo: string,
     code: string,
-  ) {
+  ): Promise<void> {
     const normalizedPhoneNo = normalizePhoneIdentifier(phoneNo);
     if (normalizedPhoneNo.length < 8) {
       throw new AppError(
@@ -573,12 +664,15 @@ export function createAuthService({
       );
     }
 
-    const currentUser = await userRepository.findUserById(database, userId);
+    const currentUser = await userRepository.findUserContactById(
+      database,
+      userId,
+    );
     if (!currentUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
 
-    const existingUser = await userRepository.findUserByIdentifier(
+    const existingUser = await userRepository.findUserIdByIdentifier(
       database,
       normalizedPhoneNo,
       "phone",
@@ -615,9 +709,6 @@ export function createAuthService({
     if (!updatedUser) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
-
-    const roles = await getUserRoles(userId);
-    return { ...updatedUser, roles };
   }
 
   async function deactivateAccount(userId: string): Promise<void> {
@@ -738,11 +829,20 @@ export function createAuthService({
     const hasBothChannels = Boolean(input.email && input.phoneNo);
     const existingUsers = hasBothChannels
       ? await Promise.all([
-          findUserByIdentifierIncludingDeleted(input.email!, "email"),
-          findUserByIdentifierIncludingDeleted(input.phoneNo!, "phone"),
+          userRepository.findUserStatusByIdentifier(
+            database,
+            input.email!,
+            "email",
+          ),
+          userRepository.findUserStatusByIdentifier(
+            database,
+            input.phoneNo!,
+            "phone",
+          ),
         ])
       : [
-          await findUserByIdentifierIncludingDeleted(
+          await userRepository.findUserStatusByIdentifier(
+            database,
             input.identifier,
             input.identifierType,
           ),
@@ -753,6 +853,14 @@ export function createAuthService({
         400,
         "USER_EXISTS",
         "An account with this email or phone number already exists.",
+      );
+    }
+
+    if (isReservedUsername(input.username)) {
+      throw new AppError(
+        400,
+        "USERNAME_TAKEN",
+        "That username isn't available.",
       );
     }
 
@@ -818,16 +926,21 @@ export function createAuthService({
     });
     const user = await requireUser(userId);
     const session = await sessionService.establishSession(user, input.request);
-    const roles = await getUserRoles(user.id);
 
-    return { user: { ...user, roles }, session };
+    return { user: { ...user, roles: session.roles }, session };
   }
 
-  /** Appends a numeric suffix until the username is free. */
+  /**
+   * Appends a numeric suffix until the username is free. A reserved name
+   * (an email that starts "settings@", say) is treated as taken.
+   */
   async function generateUniqueUsername(base: string): Promise<string> {
     const normalised = base.toLowerCase().replace(/[^a-z0-9_]/g, "_") || "user";
 
-    if (!(await userRepository.usernameExists(database, normalised))) {
+    if (
+      !isReservedUsername(normalised) &&
+      !(await userRepository.usernameExists(database, normalised))
+    ) {
       return normalised;
     }
 
@@ -1207,7 +1320,7 @@ export function createAuthService({
   }
 
   async function listAvatars(userId: string) {
-    const user = await userRepository.findUserById(database, userId);
+    const user = await userRepository.findUserAvatarUrlById(database, userId);
     if (!user) {
       throw new AppError(404, "USER_NOT_FOUND", "User account was not found.");
     }
@@ -1224,20 +1337,15 @@ export function createAuthService({
     ];
 
     return effectiveAvatars.map((avatar) => {
-      let avatarDataUrl = avatar.avatar_data_url;
-      if (avatarDataUrl.endsWith("--google/160.webp")) {
-        avatarDataUrl = avatarDataUrl.replace("/160.webp", "/original.jpg");
-      }
+      const avatarDataUrl = displayAvatarUrl(avatar.avatar_data_url);
       return {
         id: avatar.id,
         avatarDataUrl,
         avatarSrcSet: avatarSrcSetFromUrl(avatarDataUrl),
         source: avatar.source,
-        createdAt: avatar.created_at.toISOString(),
         isCurrent:
           avatar.avatar_data_url === user.avatar_data_url ||
           avatarDataUrl === user.avatar_data_url,
-        canDelete: avatar.source === "upload",
       };
     });
   }
@@ -1345,10 +1453,8 @@ export function createAuthService({
     listUserDisplayNamesByIds,
     listNotificationRecipientsByIds,
     getPublicProfile,
-    findUserByIdentifier,
     findUserByIdentifierIncludingDeleted,
     findVerifiedUserByEmail,
-    findUserByOauthAccount,
     findUserByOauthAccountIncludingDeleted,
     oauthAccountExists,
     linkOauthAccount,

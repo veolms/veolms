@@ -33,6 +33,7 @@ import {
   hasCourseAuthorRole,
   hasDashboardAnalyticsPermission,
   shouldBlockAcademyRender,
+  shouldPromptLoginFor,
 } from "./routeAccess";
 
 const useIsomorphicLayoutEffect =
@@ -127,10 +128,9 @@ export function AcademyRouteGuard({ children }: { children: ReactNode }) {
     if (!access.isAuthenticated) {
       if (requiresAcademyAuth(path) && !isGuestLandingPath(path)) {
         const returnPath = `${location.pathname}${location.search}`;
-        const destination =
-          path === "/discussions" || path.startsWith("/discussions/")
-            ? buildLoginDialogPath(returnPath)
-            : APP_HOME_PATH;
+        const destination = shouldPromptLoginFor(path)
+          ? buildLoginDialogPath(returnPath)
+          : APP_HOME_PATH;
         navigate(destination, { replace: true });
       }
       return;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Coupon } from "@veolms/contracts";
+import type { CouponListItem } from "@veolms/contracts";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
@@ -19,13 +19,13 @@ import {
 } from "./couponHelpers";
 
 export interface CouponsTableProps {
-  coupons: Coupon[];
+  coupons: CouponListItem[];
   isLoading: boolean;
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   fetchNextPage?: () => void;
-  onEditCoupon: (coupon: Coupon) => void;
-  onToggleStatus: (coupon: Coupon) => void;
+  onEditCoupon: (coupon: CouponListItem) => void;
+  onToggleStatus: (coupon: CouponListItem) => void;
   onCreateNew: () => void;
   setNotice?: (message: string) => void;
 }
@@ -68,7 +68,7 @@ export function CouponsTable({
     };
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const handleCopyCode = async (coupon: Coupon) => {
+  const handleCopyCode = async (coupon: CouponListItem) => {
     await navigator.clipboard.writeText(coupon.code);
     setCopiedId(coupon.id);
     setNotice?.(`Copied ${coupon.code}.`);
