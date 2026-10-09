@@ -2,6 +2,7 @@ import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/ChartBar";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
+import { CompassIcon as Compass } from "@phosphor-icons/react/Compass";
 import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { PlusCircleIcon as PlusCircle } from "@phosphor-icons/react/PlusCircle";
@@ -106,11 +107,48 @@ export interface PlaceholderPageProps {
   userRoles?: readonly string[] | null;
 }
 
+const NOT_FOUND_SECTION = "Not Found";
+
+function NotFoundPage() {
+  return (
+    <div
+      className="courses-placeholder-page"
+      aria-labelledby="placeholder-page-title"
+    >
+      <header className="courses-placeholder-heading">
+        <div>
+          <h1 id="placeholder-page-title">Page not found</h1>
+          <p>This page does not exist or is no longer available.</p>
+        </div>
+        <span className="courses-placeholder-heading-icon" aria-hidden="true">
+          <Compass size={26} weight="duotone" />
+        </span>
+      </header>
+
+      <section
+        className="courses-placeholder-empty"
+        aria-label="Page not found"
+      >
+        <span className="courses-placeholder-empty-icon" aria-hidden="true">
+          <Compass size={34} weight="duotone" />
+        </span>
+        <h2>We couldn&apos;t find that page</h2>
+        <p>
+          The address may be mistyped, or the page may have moved. Go back to{" "}
+          <a href="/">Home</a> or <a href="/courses">browse courses</a>.
+        </p>
+      </section>
+    </div>
+  );
+}
+
 export function PlaceholderPage({
   section = "This page",
   role,
   userRoles,
 }: PlaceholderPageProps) {
+  if (section === NOT_FOUND_SECTION) return <NotFoundPage />;
+
   const content = placeholderContent[section] || {
     title: section,
     description: "This workspace is ready for the next VeoLMS feature.",
