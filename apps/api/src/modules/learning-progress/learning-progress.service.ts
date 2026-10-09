@@ -470,14 +470,18 @@ export function createLearningProgressService({
         updated_at: now,
       }));
 
-    if (rowsToUpsert.length === 0) {
+    // Watch time the page measured while the video was actually playing.
+    // Undefined from an older page, which is credited from progress instead.
+    const watchedSeconds = input.watchedSeconds;
+
+    if (rowsToUpsert.length === 0 && !(watchedSeconds && watchedSeconds >= 1)) {
       return { synced: true };
     }
 
-    // Daily-activity accrual (approved PRD §8): one atomic statement
-    // upserts progress and credits delta% x lesson duration to the
-    // learner's current local day. Replays produce zero deltas, so
-    // retries/sendBeacon duplicates never double-credit. Activity accrues
+    // Daily-activity accrual: one atomic statement upserts progress and
+    // credits the learner's current local day with the seconds of video
+    // they played (see the repository). Dragging the timeline forward moves
+    // progress but plays nothing, so it earns nothing. Activity accrues
     // even before a goal is configured, so a later goal setting finds an
     // intact history/streak.
     await seedTimeZoneFromDevice(user.id, input.timeZone);
@@ -489,6 +493,7 @@ export function createLearningProgressService({
         database,
         user.id,
         rowsToUpsert,
+        watchedSeconds,
       );
 
     if (accrual) {

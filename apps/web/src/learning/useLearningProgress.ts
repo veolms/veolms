@@ -20,6 +20,11 @@ import {
   writeLearningProgress,
   type LocalLearningProgressState,
 } from "./learningProgressStorage";
+import {
+  peekWatchedSeconds,
+  restoreWatchedSeconds,
+  takeWatchedSeconds,
+} from "./learningWatchTime";
 
 const MAX_BATCH_ITEMS = 100;
 
@@ -141,13 +146,22 @@ export function useLearningProgress({
       const pendingItems = getPendingLearningProgress(
         localStateRef.current,
       ).slice(0, MAX_BATCH_ITEMS);
-      if (pendingItems.length === 0) return;
+      // A batch goes out for progress, for watch time, or for both: a
+      // lesson replayed after it is complete moves no progress, but the
+      // time spent playing it still counts towards the daily goal.
+      if (pendingItems.length === 0 && peekWatchedSeconds(courseKey) < 1) {
+        return;
+      }
 
+      // The seconds of video played since the last report. Taken from the
+      // tally here and handed back below if the request fails.
+      const watchedSeconds = takeWatchedSeconds(courseKey);
       const payload = {
         items: pendingItems.map(({ lessonId, progressPercent }) => ({
           lessonId,
           progressPercent,
         })),
+        watchedSeconds,
         // Sets the learner's zone if they have never chosen one, so their
         // learning days are local days rather than UTC ones.
         timeZone: getDeviceTimeZone(),
@@ -186,6 +200,7 @@ export function useLearningProgress({
         retryDelayRef.current = 0;
         retryAtRef.current = 0;
       } catch {
+        restoreWatchedSeconds(courseKey, watchedSeconds);
         // Keep the outbox dirty. The next interval/online event retries the
         // same compact idempotent batch without losing learner progress.
         retryDelayRef.current = Math.min(

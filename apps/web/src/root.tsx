@@ -10,6 +10,7 @@ import {
 } from "react-router";
 import type { Route } from "./+types/root";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
+import { useTruncatedTextTitles } from "./shell/useTruncatedTextTitles";
 import { appBaseStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
 import procodrrLogoMark from "./assets/procodrr-logo-mark.svg";
@@ -222,6 +223,11 @@ export function Layout({ children }: LayoutProps) {
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <meta name="theme-color" content="#151718" />
+        {/* Lets the app be installed and opened with no browser bars, with
+            the status bar kept and the back button left to navigate. */}
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <link rel="apple-touch-icon" href="/static/app-icon-192.png" />
         {videoPlaybackCdnOrigin ? (
           <link
             rel="preconnect"
@@ -416,6 +422,8 @@ export function ErrorBoundary() {
 }
 
 export default function Root() {
+  // Whatever the app cuts off with an ellipsis shows in full on hover.
+  useTruncatedTextTitles();
   return (
     <QueryProvider>
       <HydrationMarker />

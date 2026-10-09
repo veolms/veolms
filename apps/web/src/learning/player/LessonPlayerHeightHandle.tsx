@@ -42,37 +42,59 @@ export const LESSON_PLAYER_TINY_HEIGHT = 100;
 /** The custom property the player slot reads its height limit from. */
 export const LESSON_PLAYER_MAX_HEIGHT_PROPERTY = "--learning-player-max-height";
 
+/**
+ * The height the video was last dragged to, kept only while the page stays
+ * open: it carries from one lesson to the next, but a reload (or a new
+ * visit) starts with the video at its full height again. (It used to be
+ * kept on the device, and a video made small one day was still small, for
+ * every lesson of every course, on every visit after.)
+ */
+let rememberedHeight: number | null = null;
+
 function readStoredHeight(): number | null {
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === null) return null;
-    const height = Number(stored);
-    // A video put away (height 0) stays away only while this page is open.
-    // Restored on a later visit, it left every lesson of every course with
-    // no video and nothing in sight to bring it back.
-    return Number.isFinite(height) && height > 0 ? height : null;
-  } catch {
-    return null;
-  }
+  // A video put away (height 0) stays away only for the lesson it was put
+  // away in: carried to the next, it left that lesson with no video and
+  // nothing in sight to bring it back.
+  return rememberedHeight !== null && rememberedHeight > 0
+    ? rememberedHeight
+    : null;
 }
 
 function storeHeight(height: number | null) {
+  rememberedHeight = height === null ? null : Math.round(height);
   try {
-    if (height === null) window.localStorage.removeItem(STORAGE_KEY);
-    else window.localStorage.setItem(STORAGE_KEY, String(Math.round(height)));
+    // What earlier versions left on the device is cleared away.
+    window.localStorage.removeItem(STORAGE_KEY);
   } catch {
-    // The height still applies for this visit.
+    // Nothing was kept there, then.
   }
+}
+
+const HEIGHT_RESET_EVENT = "veolms:learning-player-height-reset";
+
+/**
+ * Gives the lesson video its full height back, whatever the viewer had
+ * dragged it to. Called as a minimized video is opened into its page again:
+ * the mini player grows into a video of full height (as the page's loading
+ * placeholder is), not into the shortened one that was left behind.
+ */
+export function resetLessonPlayerHeight() {
+  storeHeight(null);
+  // A lesson page that is still mounted hears of it too.
+  window.dispatchEvent(new Event(HEIGHT_RESET_EVENT));
 }
 
 /**
  * The height the viewer has given the lesson video area, or `null` for its
- * natural 16:9 height. Remembered on this device.
+ * natural 16:9 height. Remembered until the page is reloaded.
  */
 export function useLessonPlayerHeight() {
-  const [height, setHeight] = useState<number | null>(() =>
-    typeof window === "undefined" ? null : readStoredHeight(),
-  );
+  const [height, setHeight] = useState<number | null>(readStoredHeight);
+  useEffect(() => {
+    const reset = () => setHeight(null);
+    window.addEventListener(HEIGHT_RESET_EVENT, reset);
+    return () => window.removeEventListener(HEIGHT_RESET_EVENT, reset);
+  }, []);
   const changeHeight = useCallback((next: number | null) => {
     setHeight(next);
     storeHeight(next);
@@ -465,9 +487,47 @@ export function useLessonTitleHeightSwipe(
   };
 }
 
-/** Touches that begin on these are left alone by the pull-down. */
+/**
+ * Touches that begin on these are left alone by the pull-down. (The lesson
+ * title resizes the video itself, see useLessonTitleHeightSwipe.)
+ */
 const PULL_DOWN_IGNORED_TARGETS =
-  "#learning-course-content-trigger, input, textarea, [contenteditable=true], [data-discussion-atomic-editor], [role=dialog]";
+  "#learning-course-content-trigger, .learning-workspace__lesson-heading, input, textarea, [contenteditable=true], [data-discussion-atomic-editor], [role=dialog]";
+
+/**
+ * A wheel or trackpad pulls the video out only with a scroll that begins
+ * while the page is already resting at its top, never with the one that
+ * brought it there, however fast or long that one was. The page counts as
+ * resting once neither the wheel nor the page has moved for this long...
+ */
+const WHEEL_NEW_SCROLL_PAUSE_MS = 300;
+/**
+ * ...or, on a trackpad whose last swipe is still gliding to a stop, once
+ * that glide has died down to steps this small and the movement then grows
+ * again: to at least this many pixels, and this many times the step before.
+ * (A mouse wheel never takes steps that small, so a fast spin, whose steps
+ * also grow as the notches run together, is not taken for a new scroll.)
+ */
+const WHEEL_GLIDE_TAIL_MAX_STEP = 8;
+const WHEEL_NEW_SCROLL_MIN_STEP = 10;
+const WHEEL_NEW_SCROLL_GROWTH = 2;
+/**
+ * The video comes out by this share of the distance scrolled, and glides to
+ * each new height over this long, so that the notches of a mouse wheel draw
+ * it out gently instead of in jumps of a hundred pixels.
+ */
+const WHEEL_PULL_RATIO = 0.5;
+const WHEEL_PULL_GLIDE_MS = 200;
+/**
+ * A scroll that begins at the top is watched for this long before it pulls:
+ * the browser may already have moved the page by the time the wheel is
+ * heard of here, so "at the top" can be where this very scroll just
+ * arrived. If the page reports having scrolled, it was that, not a pull.
+ */
+const WHEEL_PULL_CONFIRM_MS = 60;
+/** A wheel pull is over once the wheel has been still for this long. */
+const WHEEL_PULL_IDLE_MS = 180;
+const WHEEL_LINE_HEIGHT = 16;
 
 interface HiddenVideoPull {
   active: boolean;
@@ -494,11 +554,15 @@ function isScrolledToTop(target: Element) {
 }
 
 /**
- * On a phone, a video that has been made shorter, or put away altogether,
- * is pulled back from the page under it: once the description and comments
- * are scrolled to their top, dragging down anywhere in them draws the video
- * out as far as the finger goes, and a flick down brings it out completely. (The same pull would otherwise be
- * the browser's own overscroll, which is why it is claimed here.)
+ * A video that has been made shorter, or put away altogether, is pulled
+ * back from the page under it, on any size of screen: once the description
+ * and comments are scrolled to their top, dragging down anywhere in them
+ * draws the video out as far as the finger goes, and a flick down brings it
+ * out completely. (The same pull would otherwise be the browser's own
+ * overscroll, which is why it is claimed here.) A mouse wheel or trackpad
+ * does the same, the second time: a scroll that runs into the top stops
+ * there, and scrolling up again from the top draws the video out by as much
+ * as is scrolled.
  */
 export function useLessonHiddenVideoPullDown(
   height: number | null,
@@ -523,7 +587,6 @@ export function useLessonHiddenVideoPullDown(
       const touch = event.touches[0];
       const target = event.target;
       if (
-        window.innerWidth > 640 ||
         event.touches.length !== 1 ||
         !touch ||
         !(target instanceof Element) ||
@@ -597,11 +660,172 @@ export function useLessonHiddenVideoPullDown(
       );
     };
 
+    let lastWheelTime = Number.NEGATIVE_INFINITY;
+    let lastWheelStep = 0;
+    /** A scroll that began at the top and has not yet proved to be a pull. */
+    let wheelCandidate: {
+      confirmTimer: number;
+      distance: number;
+      target: Element;
+    } | null = null;
+    /** When the page under the lesson last scrolled. */
+    let lastPageScrollTime = Number.NEGATIVE_INFINITY;
+    let wheelPull: {
+      endTimer: number;
+      /** Where the video is gliding to, in pixels. */
+      height: number;
+      fullHeight: number;
+      slot: HTMLElement;
+    } | null = null;
+
+    const endWheelPull = () => {
+      if (!wheelPull) return;
+      const ended = wheelPull;
+      wheelPull = null;
+      window.clearTimeout(ended.endTimer);
+      markResizing(ended.slot, false);
+      const settled = settleHeight(
+        resolveHeight(ended.height, ended.fullHeight),
+      );
+      applyHeight(ended.slot, settled);
+      // A video let go nearly shut glides shut; the glide is then done with.
+      window.setTimeout(
+        () => ended.slot.style.removeProperty("transition"),
+        settled === 0 ? WHEEL_PULL_GLIDE_MS : 0,
+      );
+      onChangeRef.current(settled);
+    };
+
+    const pullByWheel = (distance: number) => {
+      if (!wheelPull) return;
+      wheelPull.height = Math.min(
+        wheelPull.fullHeight,
+        Math.max(0, wheelPull.height + distance * WHEEL_PULL_RATIO),
+      );
+      applyHeight(wheelPull.slot, wheelPull.height);
+      window.clearTimeout(wheelPull.endTimer);
+      wheelPull.endTimer = window.setTimeout(
+        endWheelPull,
+        // Long enough for the glide to the last height to finish.
+        Math.max(WHEEL_PULL_IDLE_MS, WHEEL_PULL_GLIDE_MS + 20),
+      );
+    };
+    const dropWheelCandidate = () => {
+      if (!wheelCandidate) return;
+      window.clearTimeout(wheelCandidate.confirmTimer);
+      wheelCandidate = null;
+    };
+
+    const confirmWheelCandidate = () => {
+      const candidate = wheelCandidate;
+      wheelCandidate = null;
+      const slot = document.querySelector<HTMLElement>(
+        "[data-learning-player-anchor]",
+      );
+      if (!candidate || !slot || !isScrolledToTop(candidate.target)) return;
+      const bounds = slot.getBoundingClientRect();
+      markResizing(slot, true);
+      slot.style.transition = `max-height ${WHEEL_PULL_GLIDE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+      wheelPull = {
+        endTimer: 0,
+        fullHeight: (bounds.width * 9) / 16,
+        height: bounds.height,
+        slot,
+      };
+      pullByWheel(candidate.distance);
+    };
+
+    const handleWheel = (event: WheelEvent) => {
+      const distance =
+        -event.deltaY *
+        (event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? WHEEL_LINE_HEIGHT
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? window.innerHeight
+            : 1);
+      const step = Math.abs(distance);
+      const pageAtRest =
+        event.timeStamp - lastPageScrollTime > WHEEL_NEW_SCROLL_PAUSE_MS;
+      const beginsNewScroll =
+        pageAtRest &&
+        (event.timeStamp - lastWheelTime > WHEEL_NEW_SCROLL_PAUSE_MS ||
+          (lastWheelStep <= WHEEL_GLIDE_TAIL_MAX_STEP &&
+            step >= WHEEL_NEW_SCROLL_MIN_STEP &&
+            step > lastWheelStep * WHEEL_NEW_SCROLL_GROWTH));
+      lastWheelTime = event.timeStamp;
+      lastWheelStep = step;
+      const pullsDown = distance > 0 && !event.ctrlKey && !pull;
+
+      if (wheelPull) {
+        // Scrolling the other way is a scroll of the page again.
+        if (pullsDown) pullByWheel(distance);
+        else endWheelPull();
+        return;
+      }
+      if (wheelCandidate) {
+        if (pullsDown) wheelCandidate.distance += distance;
+        else dropWheelCandidate();
+        return;
+      }
+      const target = event.target;
+      if (
+        !beginsNewScroll ||
+        !pullsDown ||
+        Math.abs(event.deltaX) > Math.abs(event.deltaY) ||
+        !(target instanceof Element) ||
+        !target.closest("[data-learning-lesson-content]") ||
+        target.closest("[role=dialog]") ||
+        !isScrolledToTop(target)
+      ) {
+        return;
+      }
+      wheelCandidate = {
+        confirmTimer: window.setTimeout(
+          confirmWheelCandidate,
+          WHEEL_PULL_CONFIRM_MS,
+        ),
+        distance,
+        target,
+      };
+    };
+
+    /** The page moved under a scroll that seemed to begin at the top. */
+    const handleScroll = (event: Event) => {
+      const scrolled = event.target;
+      if (
+        scrolled === document ||
+        (scrolled instanceof Element &&
+          scrolled.querySelector("[data-learning-lesson-content]"))
+      ) {
+        lastPageScrollTime = event.timeStamp;
+      }
+      if (!wheelCandidate) return;
+      if (
+        scrolled === document ||
+        (scrolled instanceof Node && scrolled.contains(wheelCandidate.target))
+      ) {
+        dropWheelCandidate();
+      }
+    };
+
+    document.addEventListener("scroll", handleScroll, {
+      capture: true,
+      passive: true,
+    });
+    document.addEventListener("wheel", handleWheel, { passive: true });
     document.addEventListener("touchstart", handleStart, { passive: true });
     document.addEventListener("touchmove", handleMove, { passive: false });
     document.addEventListener("touchend", handleEnd);
     document.addEventListener("touchcancel", handleEnd);
     return () => {
+      dropWheelCandidate();
+      if (wheelPull) {
+        window.clearTimeout(wheelPull.endTimer);
+        wheelPull.slot.style.removeProperty("transition");
+        markResizing(wheelPull.slot, false);
+      }
+      document.removeEventListener("scroll", handleScroll, { capture: true });
+      document.removeEventListener("wheel", handleWheel);
       document.removeEventListener("touchstart", handleStart);
       document.removeEventListener("touchmove", handleMove);
       document.removeEventListener("touchend", handleEnd);

@@ -30,8 +30,13 @@ import {
 } from "../videoPlaybackBootstrap";
 import {
   recordDetachedLearningProgress,
+  syncDetachedWatchTime,
   useDetachedLessonProgress,
 } from "../detachedLearningProgress";
+import {
+  addWatchedSeconds,
+  createWatchTimeTracker,
+} from "../learningWatchTime";
 import { createLearningLessonVideoSource } from "./lessonVideoSource";
 import { CenteredLoadingSpinner } from "../../components/LoadingSpinner";
 import { useAuthStore } from "../../store/auth.store";
@@ -382,8 +387,30 @@ export function LearningMiniPlayer({
     void player.waitForPresentedFrame().then(finishPreparation);
   }, [finishPreparation, preparing, session]);
 
+  const watchTimeCourseKeyRef = useRef(progressCourseKey);
+  useEffect(() => {
+    watchTimeCourseKeyRef.current = progressCourseKey;
+  }, [progressCourseKey]);
+  const [trackWatchTime] = useState(() =>
+    createWatchTimeTracker((seconds) => {
+      const courseKey = watchTimeCourseKeyRef.current;
+      if (courseKey) addWatchedSeconds(courseKey, seconds);
+    }),
+  );
+  // Sent on a timer as well as with progress: a lesson replayed after it
+  // is complete moves no progress to carry it.
+  useEffect(() => {
+    if (!progressTarget) return undefined;
+    const interval = window.setInterval(
+      () => syncDetachedWatchTime(progressTarget),
+      15_000,
+    );
+    return () => window.clearInterval(interval);
+  }, [progressTarget]);
+
   const handleEvent = useCallback(
     (event: VideoPlayerEvent) => {
+      trackWatchTime(event);
       if (event.type === "timeupdate") {
         currentTimeRef.current = event.detail.currentTime;
         // Saved as the lesson plays, not only on pause: a reload or a
@@ -415,7 +442,13 @@ export function LearningMiniPlayer({
         recordProgress(100);
       }
     },
-    [completePreparation, persistCurrentTime, recordProgress, session.mediaKey],
+    [
+      completePreparation,
+      persistCurrentTime,
+      recordProgress,
+      session.mediaKey,
+      trackWatchTime,
+    ],
   );
 
   const handleReady = useCallback(() => {

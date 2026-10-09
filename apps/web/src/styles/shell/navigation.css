@@ -24,6 +24,21 @@
   height: 0;
 }
 
+/* When the menu is taller than its list, two items' worth of blank room
+   (two 57px items and the 8px between them) follows the last one, so it can
+   be scrolled well clear of the profile button. A list that fits has none,
+   or the room alone would make it scroll. */
+.courses-nav__end-space {
+  display: none;
+  flex: none;
+  height: 122px;
+  pointer-events: none;
+}
+
+.courses-nav.has-overflow > .courses-nav__end-space {
+  display: block;
+}
+
 .courses-nav.has-scroll-top {
   -webkit-mask-image: linear-gradient(
     180deg,
@@ -78,8 +93,36 @@
 }
 
 .courses-nav button:hover {
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  background: var(
+    --sidebar-menu-hover-background,
+    color-mix(in srgb, var(--surface) 72%, transparent)
+  );
   box-shadow: none;
+}
+
+/* The lesson video projects its ambient glow under the whole sidebar. The
+   selected item is solid and sits on top of it, but idle and hovered items
+   are see-through, so the glow tinted them as if it lay over them. While the
+   glow shows, their fills are mixed into the shell colour instead of into
+   nothing: the same shade as before, now covering the glow. The floating
+   sidebar is left alone (its items lie on glass, not on the shell), and so
+   are narrow screens, where the projection is not drawn (see player.css). */
+@media (min-width: 821px) {
+  .courses-app:not(.courses-app--hidden):has(
+      > .ambient-canvas--shell.ambient-canvas--visible
+    )
+    .courses-nav {
+    --sidebar-menu-idle-background: color-mix(
+      in srgb,
+      var(--surface) 35%,
+      var(--app-shell, var(--canvas))
+    );
+    --sidebar-menu-hover-background: color-mix(
+      in srgb,
+      var(--surface) 72%,
+      var(--app-shell, var(--canvas))
+    );
+  }
 }
 
 .courses-nav button.is-active {
@@ -1379,6 +1422,11 @@
   --sidebar-glow-opacity: 0;
 }
 
+/* Drawn only beside the pinned or floating sidebar (see below). */
+.courses-sidebar__bokeh {
+  display: none;
+}
+
 @media (min-width: 641px) {
   .courses-app {
     isolation: isolate;
@@ -1434,27 +1482,51 @@
     isolation: isolate;
   }
 
-  .courses-sidebar::before {
+  /* The shapes are two boxes, one inside the other. The inner one draws the
+     shapes and cuts them out with a mask; the outer one blurs and fades the
+     result. On a single box the blur ran first and the mask then cut it
+     back to a crisp outline, so the blur setting never softened an edge. */
+  .courses-sidebar > .courses-sidebar__bokeh {
     position: absolute;
     inset: 0;
     z-index: -1;
+    display: block;
+    /* The setting is linear up to its default (25%) and steeper above it:
+       a plain multiple left the shapes barely visible at 100%, all the more
+       once they are blurred. The colours below are three times as strong as
+       they used to be and this factor a third (0.24 for 0.72), so the
+       default looks as it did while the top of the range has room to grow. */
+    opacity: min(
+      1,
+      calc(
+        var(--sidebar-glow-opacity) * var(--sidebar-glow-intensity) * 0.24 *
+          (1 + 10.8 * max(0, var(--sidebar-glow-intensity) - 0.25))
+      )
+    );
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  .courses-sidebar__bokeh > span {
+    position: absolute;
+    inset: 0;
     background:
       radial-gradient(
         circle var(--sidebar-bokeh-top-size) at 42px 17%,
-        color-mix(in srgb, var(--sidebar-glow-primary) 12%, transparent) 0 32%,
-        color-mix(in srgb, var(--sidebar-glow-primary) 5%, transparent) 58%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 36%, transparent) 0 32%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 15%, transparent) 58%,
         transparent 76%
       ),
       radial-gradient(
         circle var(--sidebar-bokeh-center-size) at 178px 50%,
-        color-mix(in srgb, var(--sidebar-glow-primary) 10%, transparent) 0 31%,
-        color-mix(in srgb, var(--sidebar-glow-secondary) 6%, transparent) 57%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 30%, transparent) 0 31%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 18%, transparent) 57%,
         transparent 76%
       ),
       radial-gradient(
         circle var(--sidebar-bokeh-bottom-size) at 58px 83%,
-        color-mix(in srgb, var(--sidebar-glow-secondary) 12%, transparent) 0 32%,
-        color-mix(in srgb, var(--sidebar-glow-secondary) 5%, transparent) 58%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 36%, transparent) 0 32%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 15%, transparent) 58%,
         transparent 76%
       );
     -webkit-mask-image:
@@ -1487,12 +1559,6 @@
       var(--sidebar-bokeh-top-size) var(--sidebar-bokeh-top-size),
       var(--sidebar-bokeh-center-size) var(--sidebar-bokeh-center-size),
       var(--sidebar-bokeh-bottom-size) var(--sidebar-bokeh-bottom-size);
-    content: "";
-    opacity: calc(
-      var(--sidebar-glow-opacity) * var(--sidebar-glow-intensity) * 0.72
-    );
-    pointer-events: none;
-    transition: opacity 180ms ease;
   }
 
   /* Keep the adjustable glass layer above the bokeh and below the real
@@ -1511,7 +1577,9 @@
   /* A full-height backdrop-filter surface exposes its rectangular compositor
      boundary beside the main frame in Chromium at fractional display scales.
      Blur the generated bokeh itself so the pinned sidebar has no raster edge. */
-  .courses-app:not(.courses-app--hidden) .courses-sidebar::before {
+  .courses-app:not(.courses-app--hidden)
+    .courses-sidebar
+    > .courses-sidebar__bokeh {
     filter: blur(var(--sidebar-backdrop-blur));
   }
 
@@ -1529,7 +1597,7 @@
   /* Floating navigation uses two distinct glass layers. The sidebar itself
      is the permanent 6px underlay; bokeh paints above it, and ::after applies
      only the additional user-controlled blur. */
-  .courses-app--hidden .courses-sidebar::before {
+  .courses-app--hidden .courses-sidebar > .courses-sidebar__bokeh {
     z-index: 0;
   }
 
@@ -1540,7 +1608,8 @@
 
   :root[data-sidebar-backdrop-blur="off"]
     .courses-app:not(.courses-app--hidden)
-    .courses-sidebar::before {
+    .courses-sidebar
+    > .courses-sidebar__bokeh {
     filter: none;
   }
 

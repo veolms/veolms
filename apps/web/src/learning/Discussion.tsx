@@ -4576,7 +4576,8 @@ interface CompactComposerProps {
   onOpen: () => void;
 }
 
-const COMPACT_COMPOSER_SURFACE = `${DESCRIPTION_SURFACE_BASE} rounded-md transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_96%,var(--hover))]`;
+// Rounded like the description card it sits under.
+const COMPACT_COMPOSER_SURFACE = `${DESCRIPTION_SURFACE_BASE} rounded-xl transition-[background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface)_96%,var(--hover))]`;
 
 const MOBILE_COMPOSER_SURFACE_BASE =
   "border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-transparent backdrop-blur-xl px-3 pt-2 pb-[max(8px,var(--app-safe-area-bottom))]";
@@ -4692,9 +4693,9 @@ function CompactComposer({
           onOpen();
         }
       }}
-      className={`flex w-full cursor-pointer items-center gap-2 p-1.5 text-left ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? " pointer-events-none opacity-60" : ""}`}
+      className={`flex w-full cursor-pointer items-center gap-2 p-2 text-left ${COMPACT_COMPOSER_SURFACE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)${disabled ? " pointer-events-none opacity-60" : ""}`}
     >
-      <DiscussionAvatar src={avatar} className="pointer-events-none size-9" />
+      <DiscussionAvatar src={avatar} className="pointer-events-none size-10" />
       <span className="learning-discussion__composer-prompt min-w-0 flex-1 truncate px-2 py-1.5 text-(--muted)">
         {preview || (attachmentCount > 0 ? attachmentPreview : promptText)}
       </span>

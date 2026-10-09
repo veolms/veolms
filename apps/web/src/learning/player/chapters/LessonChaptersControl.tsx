@@ -7,11 +7,14 @@ import { LessonChapterRows } from "./LessonChapterRows";
 /** Desktop trigger for the sliding chapters panel. */
 export function LessonChaptersToggleButton({
   className,
+  compact = false,
   onToggle,
   open,
   panelId,
 }: {
   className?: string;
+  /** Icon only, for a row with no room for the word and its arrow. */
+  compact?: boolean;
   onToggle: () => void;
   open: boolean;
   panelId: string;
@@ -26,16 +29,23 @@ export function LessonChaptersToggleButton({
       aria-controls={panelId}
       data-player-control=""
       data-player-control-hit-area="chapters"
+      data-compact={compact ? "true" : undefined}
+      title={compact ? "Chapters" : undefined}
       className={cn(
         "relative inline-flex items-center justify-center font-semibold leading-none tracking-[0.01em]",
         className,
+        compact && "w-9.5 px-0",
       )}
       onClick={onToggle}
     >
       <span className="relative z-10 inline-flex items-center gap-2 leading-none">
         <ChaptersIcon size={17} active={open} />
-        <span>Chapters</span>
-        <CaretRight size={14} aria-hidden="true" />
+        {compact ? null : (
+          <>
+            <span>Chapters</span>
+            <CaretRight size={14} aria-hidden="true" />
+          </>
+        )}
       </span>
     </button>
   );

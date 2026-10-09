@@ -9,6 +9,11 @@ import {
   recordLearningProgress,
   writeLearningProgress,
 } from "./learningProgressStorage";
+import {
+  peekWatchedSeconds,
+  restoreWatchedSeconds,
+  takeWatchedSeconds,
+} from "./learningWatchTime";
 
 /**
  * Progress recording for a lesson that is playing with no lesson page mounted
@@ -60,16 +65,20 @@ async function syncDetachedLearningProgress(
   const pendingItems = getPendingLearningProgress(
     readLearningProgress(userId, courseKey),
   ).slice(0, MAX_BATCH_ITEMS);
-  if (pendingItems.length === 0) return;
+  if (pendingItems.length === 0 && peekWatchedSeconds(courseKey) < 1) return;
 
   syncingCourses.add(identity);
   lastSyncAtByCourse.set(identity, Date.now());
+  // The seconds of video played since the last report: what the learner's
+  // daily goal is credited from. Handed back if the request fails.
+  const watchedSeconds = takeWatchedSeconds(courseKey);
   try {
     const response = await learningProgressService.sync(courseKey, {
       items: pendingItems.map(({ lessonId, progressPercent }) => ({
         lessonId,
         progressPercent,
       })),
+      watchedSeconds,
       timeZone: getDeviceTimeZone(),
     });
     if (response.synced) {
@@ -85,9 +94,19 @@ async function syncDetachedLearningProgress(
   } catch {
     // The items stay pending in storage; the next update or the lesson page
     // sends the same batch again.
+    restoreWatchedSeconds(courseKey, watchedSeconds);
   } finally {
     syncingCourses.delete(identity);
   }
+}
+
+/**
+ * Sends the watch time tallied for a course when no progress has moved to
+ * carry it (the usual interval between requests still applies).
+ */
+export function syncDetachedWatchTime(target: DetachedProgressTarget): void {
+  if (peekWatchedSeconds(target.courseKey) < 1) return;
+  void syncDetachedLearningProgress(target, false);
 }
 
 export function recordDetachedLearningProgress(

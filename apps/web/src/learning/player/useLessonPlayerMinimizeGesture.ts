@@ -19,12 +19,14 @@ import {
   getLearningMinimizeGeometry,
   getLearningMotionSurfaceElement,
   getLearningPersistentPlayerElement,
+  LEARNING_MINI_PLAYER_MARGIN,
+  getLearningPlayerViewportBounds,
   isUnifiedDesktopPlayerMinimize,
+  setLearningMiniPlayerPreferredLeft,
   syncUnifiedDesktopChildExitMotion,
 } from "./learningPlayerMotion";
 import { readMiniPlayerWidthPreference } from "./lessonPlayerPersistence";
 
-const PHONE_VIEWPORT_QUERY = "(max-width: 640px)";
 const ACTIVATION_DISTANCE = 8;
 const DIRECTION_RATIO = 1.15;
 const COMMIT_PROGRESS = 0.5;
@@ -54,6 +56,9 @@ interface ActiveGesture extends GestureGeometry {
   lastY: number;
   motionTarget: HTMLElement;
   pointerId: number;
+  /** The video's left edge and the mini player's width, for following. */
+  startLeft: number;
+  miniWidth: number;
   startX: number;
   startY: number;
   velocityY: number;
@@ -225,6 +230,8 @@ export function useLessonPlayerMinimizeGesture({
           durationMs,
           exitX: geometry.targetX * progress,
           exitY: nextState.offsetY,
+          progress,
+          scale,
         });
       }
       onStateChangeRef.current?.(nextState);
@@ -335,12 +342,15 @@ export function useLessonPlayerMinimizeGesture({
   const settleBack = useCallback(() => {
     const current = pendingStateRef.current ?? currentStateRef.current;
     if (current.phase === "idle") return;
+    setLearningMiniPlayerPreferredLeft(null);
     settleTo({ offsetY: 0, phase: "settling-back", progress: 0 }, () =>
       applyState(IDLE_STATE),
     );
   }, [applyState, settleTo]);
 
   const animateMinimize = useCallback(() => {
+    // Minimized from a button or the keyboard, it goes to its usual corner.
+    setLearningMiniPlayerPreferredLeft(null);
     if (!enabled) {
       commitRef.current();
       return;
@@ -446,8 +456,9 @@ export function useLessonPlayerMinimizeGesture({
       if (
         event.defaultPrevented ||
         !enabled ||
+        // A finger or pen at any width: a tablet swipes the video down
+        // into the mini player just as a phone does. A mouse never does.
         event.pointerType === "mouse" ||
-        !window.matchMedia(PHONE_VIEWPORT_QUERY).matches ||
         fullscreen() ||
         isExcludedTarget(event.target)
       ) {
@@ -484,8 +495,13 @@ export function useLessonPlayerMinimizeGesture({
       const timestamp = event.timeStamp || performance.now();
       motionElementRef.current = nextMotionTarget;
       geometryRef.current = nextGeometry;
+      const startBounds = nextMotionTarget.getBoundingClientRect();
+      // A swipe says where the mini player goes; nothing is asked for yet.
+      setLearningMiniPlayerPreferredLeft(null);
       gestureRef.current = {
         ...nextGeometry,
+        startLeft: startBounds.left,
+        miniWidth: startBounds.width * nextGeometry.targetScale,
         active: false,
         captureTarget: event.currentTarget,
         lastTimestamp: timestamp,
@@ -549,6 +565,29 @@ export function useLessonPlayerMinimizeGesture({
           : gesture.velocityY * 0.35 + instantaneousVelocity * 0.65;
       gesture.lastY = event.clientY;
       gesture.lastTimestamp = timestamp;
+
+      // The mini player forms under the finger, not always in the right
+      // hand corner: its place along the bottom follows the finger from
+      // side to side, as far as the edges of the screen allow, and that is
+      // where it is when the video is let go.
+      const viewport = getLearningPlayerViewportBounds();
+      const miniLeft = clamp(
+        event.clientX - gesture.miniWidth / 2,
+        viewport.left + LEARNING_MINI_PLAYER_MARGIN,
+        Math.max(
+          viewport.left + LEARNING_MINI_PLAYER_MARGIN,
+          viewport.left +
+            viewport.width -
+            LEARNING_MINI_PLAYER_MARGIN -
+            gesture.miniWidth,
+        ),
+      );
+      gesture.targetX = miniLeft - gesture.startLeft;
+      geometryRef.current = {
+        ...geometryRef.current,
+        targetX: gesture.targetX,
+      };
+      setLearningMiniPlayerPreferredLeft(miniLeft);
 
       const offsetY = clamp(deltaY, 0, gesture.targetY);
       scheduleState({

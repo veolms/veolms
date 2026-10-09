@@ -185,7 +185,7 @@ export function LessonDescription({
             <div className="flex h-[1lh] items-center">
               <span className="h-3.5 w-full rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
             </div>
-            <div className="flex h-[1lh] items-center">
+            <div className="mt-1.5 flex h-[1lh] items-center">
               <span className="h-3.5 w-3/5 rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
             </div>
           </div>
@@ -203,13 +203,15 @@ export function LessonDescription({
             data-lesson-description-preview
             className={`${DESCRIPTION_PREVIEW_TYPOGRAPHY} text-(--text-secondary)`}
           >
+            {/* The lines are spaced as the expanded description spaces its
+                paragraphs (my-1.5), so opening it does not move them. */}
             {visiblePreviewLines.map((line, index) =>
               index < visiblePreviewLines.length - 1 ? (
-                <p key={index} className="m-0 truncate">
+                <p key={index} className="m-0 truncate not-first:mt-1.5">
                   {line}
                 </p>
               ) : (
-                <p key={index} className="m-0 flex min-w-0">
+                <p key={index} className="m-0 flex min-w-0 not-first:mt-1.5">
                   <span className="min-w-0 truncate">
                     {hasHiddenPreviewLines ? `${line}…` : line}
                   </span>

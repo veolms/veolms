@@ -87,6 +87,8 @@ export type {
 } from "./react/PlayerMetadataBridge";
 
 export { PlayButton } from "./controls/PlayButton";
+export { PlayerGestureSurface } from "./controls/PlayerGestureSurface";
+export type { PlayerGestureSurfaceProps } from "./controls/PlayerGestureSurface";
 export { SeekButton } from "./controls/SeekButton";
 export { MuteButton } from "./controls/MuteButton";
 export { VolumeControl } from "./controls/VolumeControl";

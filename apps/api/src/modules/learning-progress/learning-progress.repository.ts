@@ -289,15 +289,54 @@ export async function upsertProgressAndAccrueActivity(
     created_at: Date;
     updated_at: Date;
   }>,
+  /**
+   * Seconds of video the page reports as actually played (media time) since
+   * its last report. When given, this is what the day is credited with, and
+   * progress earns nothing by itself: skipping ahead on the timeline raises
+   * progress without a second being watched. When undefined the page is an
+   * older one that does not measure it, and the day is credited from the
+   * progress gained, as before. Either way the allowance below caps it.
+   */
+  watchedSeconds?: number,
 ): Promise<DailyActivityAccrual | null> {
-  if (values.length === 0) return null;
+  const reportsWatchTime = watchedSeconds !== undefined;
+  if (values.length === 0 && !(reportsWatchTime && watchedSeconds >= 1)) {
+    return null;
+  }
 
-  const rows = sql.join(
-    values.map(
-      (v) =>
-        sql`(${v.id}::uuid, ${v.user_id}::uuid, ${v.course_id}::uuid, ${v.lesson_id}::uuid, ${v.progress_percent}::int, ${v.created_at}::timestamptz, ${v.updated_at}::timestamptz)`,
-    ),
-  );
+  // A batch may carry watch time alone (a lesson replayed after it is
+  // complete moves no progress): then there is nothing to upsert.
+  const upserted =
+    values.length > 0
+      ? sql`
+      insert into learning_progress
+        (id, user_id, course_id, lesson_id, progress_percent, created_at, updated_at)
+      values ${sql.join(
+        values.map(
+          (v) =>
+            sql`(${v.id}::uuid, ${v.user_id}::uuid, ${v.course_id}::uuid, ${v.lesson_id}::uuid, ${v.progress_percent}::int, ${v.created_at}::timestamptz, ${v.updated_at}::timestamptz)`,
+        ),
+      )}
+      on conflict (user_id, course_id, lesson_id) do update set
+        progress_percent = GREATEST(learning_progress.progress_percent, EXCLUDED.progress_percent),
+        updated_at = EXCLUDED.updated_at
+      returning
+        new.lesson_id as lesson_id,
+        old.progress_percent as previous_percent,
+        new.progress_percent as current_percent`
+      : sql`
+      select
+        null::uuid as lesson_id,
+        null::int as previous_percent,
+        null::int as current_percent
+      where false`;
+  // What the batch claims to have earned, before the allowance caps it.
+  const claimedSeconds = reportsWatchTime
+    ? sql`${watchedSeconds}::numeric`
+    : sql`coalesce(sum(
+            greatest(0, u.current_percent - coalesce(u.previous_percent, 0)) / 100.0
+              * coalesce(ma.duration_seconds, 0)
+          ), 0)`;
 
   const result = await sql<DailyActivityAccrual>`
     with previous as (
@@ -317,32 +356,19 @@ export async function upsertProgressAndAccrueActivity(
       end as seconds
       from previous
     ),
-    upserted as (
-      insert into learning_progress
-        (id, user_id, course_id, lesson_id, progress_percent, created_at, updated_at)
-      values ${rows}
-      on conflict (user_id, course_id, lesson_id) do update set
-        progress_percent = GREATEST(learning_progress.progress_percent, EXCLUDED.progress_percent),
-        updated_at = EXCLUDED.updated_at
-      returning
-        new.lesson_id as lesson_id,
-        old.progress_percent as previous_percent,
-        new.progress_percent as current_percent
+    upserted as (${upserted}
     ),
     credit as (
       select
         least(
-          coalesce(sum(
-            greatest(0, u.current_percent - coalesce(u.previous_percent, 0)) / 100.0
-              * coalesce(ma.duration_seconds, 0)
-          ), 0),
+          ${claimedSeconds},
           (select seconds from allowance)
         ) as earned_seconds,
         count(*) filter (
           where u.current_percent >= 100 and coalesce(u.previous_percent, 0) < 100
         ) as completions
       from upserted u
-      join course_lessons cl on cl.id = u.lesson_id
+      left join course_lessons cl on cl.id = u.lesson_id
       left join media_assets ma on ma.id = cl.content_media_id
     ),
     accrued as (
