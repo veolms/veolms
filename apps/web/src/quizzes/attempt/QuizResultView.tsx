@@ -2,6 +2,7 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { XCircleIcon as XCircle } from "@phosphor-icons/react/XCircle";
 import type { QuizResult } from "@veolms/contracts";
 import { Button } from "../../components/Button";
+import { QuizFormattedText } from "./QuizFormattedText";
 import { QuizScoreRing } from "./QuizScoreRing";
 import {
   QUIZ_EYEBROW,
@@ -152,10 +153,16 @@ export function QuizResultView({
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
-                        <p className="min-w-0 text-[0.9375rem] leading-snug font-semibold wrap-break-word text-(--text)">
-                          <span className="text-(--muted)">{index + 1}.</span>{" "}
-                          {answer.prompt}
-                        </p>
+                        <div className="flex min-w-0 gap-1.5 text-[0.9375rem] leading-snug font-semibold text-(--text)">
+                          <span className="shrink-0 text-(--muted)">
+                            {index + 1}.
+                          </span>
+                          <QuizFormattedText
+                            text={answer.prompt}
+                            label={`Question ${index + 1}`}
+                            className="min-w-0 text-[0.9375rem]! leading-snug! text-(--text)! [&_strong]:font-extrabold"
+                          />
+                        </div>
                         <p
                           className={`shrink-0 text-xs font-bold tabular-nums ${quizToneText(answerTone)}`}
                         >
@@ -192,11 +199,15 @@ export function QuizResultView({
                         ) : null}
                       </dl>
                       {answer.explanation ? (
-                        <p
-                          className={`mt-2.5 border-l-2 pl-3 text-[0.8125rem] leading-relaxed text-(--text-secondary) ${QUIZ_HAIRLINE}`}
+                        <div
+                          className={`mt-2.5 border-l-2 pl-3 ${QUIZ_HAIRLINE}`}
                         >
-                          {answer.explanation}
-                        </p>
+                          <QuizFormattedText
+                            text={answer.explanation}
+                            label="Explanation"
+                            className="text-[0.8125rem]! leading-relaxed! font-normal"
+                          />
+                        </div>
                       ) : null}
                     </div>
                   </li>

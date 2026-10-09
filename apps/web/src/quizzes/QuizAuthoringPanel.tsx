@@ -54,6 +54,7 @@ import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { ThemedDateTimePicker } from "../ThemedDateTimePicker";
 import { SettingsToggle } from "../settings/SettingsControls";
 import { QuizRichTextField } from "./QuizRichTextField";
+import { markdownToPlainText } from "../learning/discussion-editor/types";
 import { selectQuizAssignment } from "./quizAssignmentSelection";
 import { AutosaveStatus } from "../lib/autosync";
 import { ConfirmActionModal } from "../shell/ConfirmActionModal";
@@ -1760,7 +1761,11 @@ export function QuizAuthoringPanel({
                 const correctCount = question.options.filter(
                   (option) => option.isCorrect,
                 ).length;
-                const promptSummary = stripHtml(question.prompt);
+                // One line of plain text: the formatting marks of the
+                // question ("**", backticks) are not part of its summary.
+                const promptSummary = markdownToPlainText(
+                  stripHtml(question.prompt),
+                );
 
                 return (
                   <div

@@ -41,12 +41,25 @@ import {
   answeredQuestionCount,
   formatQuizRemainingTime,
   hasAnsweredEveryQuestion,
+  hasRefusedAnswer,
   isQuestionAnswered,
   serverClockOffsetMs,
   toBulkQuizAnswers,
   type QuizAttemptDraft,
 } from "./quizDraft";
 import { QuizEnrollmentCard } from "./QuizEnrollmentCard";
+
+/**
+ * An error as a learner should read it. A request the server could not
+ * accept comes back described in terms of its fields and schema; that is for
+ * a developer, and what the learner can do with it is try again.
+ */
+function learnerQuizError(error: unknown) {
+  const apiError = getApiError(error);
+  return apiError.code === "REQUEST_VALIDATION_FAILED"
+    ? "We could not accept that. Please check your answers and try again."
+    : apiError.message;
+}
 
 /** The lesson page shows this while the quiz assignment itself is loading. */
 export { QuizStageMessage };
@@ -197,8 +210,15 @@ export function QuizAttemptPanel({
     enabled: Boolean(attempt),
     // Partial drafts are saved too. Saving only a complete draft meant a
     // student who ran out of time one question short had nothing recorded.
-    validate: () =>
-      attempt ? true : { valid: false, message: "Quiz is still loading." },
+    validate: (draft) => {
+      if (!attempt) return { valid: false, message: "Quiz is still loading." };
+      // Held back here, where the learner is shown why (see
+      // QuizWrittenAnswer), instead of sent to be refused by the server.
+      if (hasRefusedAnswer(attempt, draft)) {
+        return { valid: false, message: "An answer needs changing." };
+      }
+      return true;
+    },
     sync: (draft) =>
       quizzesService
         .saveAnswers(attempt!.id, toBulkQuizAnswers(draft))
@@ -444,7 +464,7 @@ export function QuizAttemptPanel({
           </Button>
         }
       >
-        {openingError.message}
+        {learnerQuizError(openingError)}
       </QuizStageMessage>
     );
   }
@@ -656,7 +676,7 @@ export function QuizAttemptPanel({
                 <WarningCircle size={17} weight="bold" aria-hidden="true" />
               }
             >
-              {submit.error.message}
+              {learnerQuizError(submit.error)}
             </QuizNotice>
           ) : null}
           <QuizAttemptFooter

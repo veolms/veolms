@@ -3,6 +3,10 @@ import type {
   BulkQuizAnswersRequest,
   QuizResponseValue,
 } from "@veolms/contracts";
+import {
+  hasUnsafeQuizAnswerContent,
+  UNSAFE_QUIZ_ANSWER_MESSAGE,
+} from "@veolms/contracts";
 import { AppError } from "../../../lib/errors.ts";
 import * as repo from "../shared/quiz.repository.ts";
 import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
@@ -441,6 +445,14 @@ export function createAttemptService(options: QuizServiceOptions) {
           "INVALID_TEXT_RESPONSE",
           "Short answer response must be a text string.",
         );
+      // Checked as it will be stored. The page refuses this before it is
+      // sent; this is for whatever does not go through the page.
+      if (
+        hasUnsafeQuizAnswerContent(
+          cleanQuizTextAnswer(response.textResponse ?? ""),
+        )
+      )
+        throw new AppError(400, "UNSAFE_ANSWER", UNSAFE_QUIZ_ANSWER_MESSAGE);
       return;
     }
     const ids = response.selectedOptionIds ?? [];

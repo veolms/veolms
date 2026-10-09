@@ -1,5 +1,9 @@
 import type { DragEvent } from "react";
-import { QUIZ_TEXT_RESPONSE_MAX_LENGTH } from "@veolms/contracts";
+import {
+  hasUnsafeQuizAnswerContent,
+  QUIZ_TEXT_RESPONSE_MAX_LENGTH,
+  UNSAFE_QUIZ_ANSWER_MESSAGE,
+} from "@veolms/contracts";
 
 interface QuizWrittenAnswerProps {
   questionId: string;
@@ -45,6 +49,11 @@ export function QuizWrittenAnswer({
 
   const helpId = `question-help-${questionId}`;
   const nearLimit = value.length >= NEAR_LIMIT;
+  // Said here, next to the answer and in plain words, as it is typed. The
+  // server makes the same check and would refuse the save with the same
+  // sentence; the learner should not have to find that out from a failed
+  // save.
+  const refused = hasUnsafeQuizAnswerContent(value);
 
   return (
     <div className="mt-5 sm:mt-6">
@@ -52,6 +61,7 @@ export function QuizWrittenAnswer({
         id={`question-input-${questionId}`}
         aria-labelledby={labelledBy}
         aria-describedby={helpId}
+        aria-invalid={refused || undefined}
         disabled={disabled}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -63,13 +73,18 @@ export function QuizWrittenAnswer({
         // answer made the save of every answer fail.
         maxLength={QUIZ_TEXT_RESPONSE_MAX_LENGTH}
         autoComplete="off"
-        className="block max-h-[70dvh] min-h-40 w-full resize-y field-sizing-content rounded-[14px] bg-(--card-surface-raised,var(--surface-strong)) px-4 py-3.5 text-base leading-relaxed text-(--text) ring-1 ring-[color-mix(in_srgb,var(--text)_12%,transparent)] transition-shadow outline-none ring-inset placeholder:text-(--muted) focus:ring-2 focus:ring-(--accent) disabled:cursor-not-allowed disabled:resize-none disabled:opacity-60 sm:min-h-44"
+        className="block max-h-[70dvh] min-h-40 w-full resize-y field-sizing-content rounded-[14px] bg-(--card-surface-raised,var(--surface-strong)) px-4 py-3.5 text-base leading-relaxed text-(--text) ring-1 ring-[color-mix(in_srgb,var(--text)_12%,transparent)] transition-shadow outline-none ring-inset placeholder:text-(--muted) focus:ring-2 focus:ring-(--accent) disabled:cursor-not-allowed disabled:resize-none disabled:opacity-60 aria-invalid:ring-2 aria-invalid:ring-(--quiz-negative) sm:min-h-44"
       />
-      <div className="mt-2 flex items-start justify-between gap-4 text-xs leading-relaxed text-(--muted)">
-        <p id={helpId}>
-          Write your answer in your own words. Letters, numbers, symbols and
-          code are all fine.
+      {refused ? (
+        <p
+          role="alert"
+          className="mt-2 rounded-xl bg-[color-mix(in_srgb,var(--quiz-negative)_13%,transparent)] px-3.5 py-2.5 text-[0.8125rem] leading-relaxed font-medium text-(--quiz-negative)"
+        >
+          {UNSAFE_QUIZ_ANSWER_MESSAGE}
         </p>
+      ) : null}
+      <div className="mt-2 flex items-start justify-between gap-4 text-xs leading-relaxed text-(--muted)">
+        <p id={helpId}>Write your answer in your own words, as plain text.</p>
         <p
           aria-label={`${value.length} of ${QUIZ_TEXT_RESPONSE_MAX_LENGTH} characters used`}
           className={`shrink-0 tabular-nums ${nearLimit ? "font-semibold text-(--quiz-caution)" : ""}`}
