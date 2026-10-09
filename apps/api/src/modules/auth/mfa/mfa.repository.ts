@@ -62,11 +62,31 @@ export async function deleteTotpCredential(
     .deleteFrom("user_totp_credentials")
     .where("user_id", "=", userId)
     .execute();
+}
 
+export async function deleteBackupCodes(
+  database: Executor,
+  userId: string,
+): Promise<void> {
   await database
     .deleteFrom("mfa_backup_codes")
     .where("user_id", "=", userId)
     .execute();
+}
+
+export async function hasUnusedBackupCode(
+  database: Executor,
+  userId: string,
+): Promise<boolean> {
+  const row = await database
+    .selectFrom("mfa_backup_codes")
+    .select("id")
+    .where("user_id", "=", userId)
+    .where("used_at", "is", null)
+    .limit(1)
+    .executeTakeFirst();
+
+  return Boolean(row);
 }
 
 export async function advanceTotpStep(

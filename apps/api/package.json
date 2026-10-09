@@ -12,6 +12,7 @@
     "notifications:process": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts",
     "notifications:watch": "node --env-file-if-exists=../../.env src/jobs/notification-worker.ts --watch",
     "user:cli": "node --env-file-if-exists=../../.env src/cli/user.ts",
+    "user:mfa-reset": "node --env-file-if-exists=../../.env src/cli/mfa-reset.ts",
     "import:youtube": "node --env-file-if-exists=../../.env src/cli/import-youtube.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"

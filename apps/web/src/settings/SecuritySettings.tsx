@@ -42,6 +42,7 @@ import {
   usePasskeyRegisterOptions,
   usePasskeyRegisterVerify,
   useDeletePasskeys,
+  useRegenerateBackupCodes,
   useSessions,
   useRevokeSession,
   useRevokeAllOtherSessions,
@@ -118,7 +119,7 @@ function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
 
         <p className="auth-mfa-setup__modal-body">
           Store these codes somewhere safe. Each can be used once if you lose
-          access to your authenticator app.
+          access to your passkey or authenticator app.
         </p>
 
         <ul className="auth-mfa-setup__backup-codes" aria-label="Backup codes">
@@ -432,6 +433,8 @@ export function SecuritySettings({
   const [passkeySuccess, setPasskeySuccess] = useState(false);
   const [totpSuccess, setTotpSuccess] = useState(false);
   const [totpError, setTotpError] = useState<string | null>(null);
+  const [backupCodesError, setBackupCodesError] = useState<string | null>(null);
+  const regenerateBackupCodes = useRegenerateBackupCodes();
 
   const totpEnabled = currentUser?.totpEnabled ?? false;
   const passkeyEnabled = currentUser?.passkeyEnabled ?? false;
@@ -455,8 +458,12 @@ export function SecuritySettings({
     try {
       const serverOptions = await passkeyOptionsMutation.mutateAsync();
       const credential = await startPasskeyRegistration(serverOptions);
-      await passkeyVerifyMutation.mutateAsync(credential);
+      const result = await passkeyVerifyMutation.mutateAsync(credential);
       setPasskeySuccess(true);
+      // Returned when the account had no backup code left to fall back on.
+      if (result.backupCodes?.length) {
+        setBackupCodes(result.backupCodes);
+      }
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
       setPasskeyError(
@@ -496,6 +503,21 @@ export function SecuritySettings({
     }
   };
 
+  const handleRegenerateBackupCodes = async () => {
+    if (!isAuthenticated || regenerateBackupCodes.isPending) return;
+    setBackupCodesError(null);
+    try {
+      const result = await regenerateBackupCodes.mutateAsync();
+      setBackupCodes(result.backupCodes);
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setBackupCodesError(
+        errorObj?.message ||
+          "Could not create new backup codes. Please try again.",
+      );
+    }
+  };
+
   const handleTotpSuccess = (codes: string[]) => {
     setShowTotpModal(false);
     setTotpSuccess(true);
@@ -524,6 +546,7 @@ export function SecuritySettings({
     if (isAuthenticated) return;
     setShowTotpModal(false);
     setBackupCodes(null);
+    setBackupCodesError(null);
     setPasskeyError(null);
     setPasskeySuccess(false);
     setTotpSuccess(false);
@@ -830,6 +853,53 @@ export function SecuritySettings({
                 {totpError && (
                   <p className="auth-form__error px-3.5 py-1" role="alert">
                     {totpError}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {(passkeyEnabled || totpEnabled) && (
+            <section
+              className="settings-section"
+              aria-labelledby="backup-codes-heading"
+            >
+              <header className="settings-section__heading">
+                <LockKey size={20} weight="duotone" />
+                <div>
+                  <h3 id="backup-codes-heading">Backup codes</h3>
+                  <p>
+                    Single-use codes for signing in when your passkey or
+                    authenticator app is not at hand.
+                  </p>
+                </div>
+              </header>
+
+              <div className="settings-row-list">
+                <SettingRow
+                  className={SECURITY_ROW_CLASS}
+                  icon={LockKey}
+                  label="Account recovery"
+                  note="Creating a new set replaces the codes you saved before."
+                >
+                  <button
+                    aria-busy={regenerateBackupCodes.isPending}
+                    className="settings-action settings-action--quiet"
+                    disabled={
+                      !isAuthenticated || regenerateBackupCodes.isPending
+                    }
+                    onClick={handleRegenerateBackupCodes}
+                    type="button"
+                  >
+                    {regenerateBackupCodes.isPending
+                      ? "Creating…"
+                      : "Create new codes"}
+                  </button>
+                </SettingRow>
+
+                {backupCodesError && (
+                  <p className="auth-form__error px-3.5 py-1" role="alert">
+                    {backupCodesError}
                   </p>
                 )}
               </div>

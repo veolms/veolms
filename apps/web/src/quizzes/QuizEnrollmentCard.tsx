@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
-import { Exam } from "@phosphor-icons/react/Exam";
 import { Lock } from "@phosphor-icons/react/Lock";
 import { Tag } from "@phosphor-icons/react/Tag";
 import { Button } from "../components/Button";
-import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import { productName } from "../routing/routeDescriptors";
 import { useCurrentUser } from "../services/auth";
 import {
@@ -17,6 +15,18 @@ import {
 } from "../services/payments/payment.mutations";
 import { quizKeys } from "../services/quizzes/quizzes.keys";
 import { useQuizPricingPreview } from "../services/quizzes/quizzes.queries";
+import {
+  QUIZ_EYEBROW,
+  QUIZ_HAIRLINE,
+  QUIZ_PRIMARY_ACTION,
+  QUIZ_RAISED_SURFACE,
+  QUIZ_SECONDARY_ACTION,
+  QuizNotice,
+  QuizStage,
+  QuizStageBar,
+  QuizStageBody,
+} from "./attempt/QuizStage";
+import { QuizStageMessage } from "./attempt/QuizStageMessage";
 
 async function loadRazorpay(): Promise<void> {
   if (typeof window === "undefined") return;
@@ -94,46 +104,39 @@ export function QuizEnrollmentCard({
 
   if (pricingPreviewQuery.isLoading) {
     return (
-      <section
-        className="mx-auto max-w-2xl rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-5 sm:p-8 text-(--text)"
-        style={{ boxShadow: "var(--card-shadow)" }}
-      >
-        <CenteredLoadingSpinner
-          label="Loading quiz access details"
-          className="min-h-40"
-          size={24}
-        />
-      </section>
+      <QuizStageMessage
+        lessonBadge={lessonBadge}
+        onBackToVideo={onBackToVideo}
+        role="status"
+        label="Loading quiz access details"
+        visual={
+          <span className="text-(--muted)">
+            <LoadingSpinnerIcon size={26} />
+          </span>
+        }
+      />
     );
   }
 
   if (pricingPreviewQuery.isError || !preview) {
     return (
-      <section
-        className="mx-auto max-w-2xl rounded-[16px] sm:rounded-[24px] border border-red-500/20 bg-(--card-surface,var(--surface)) p-5 sm:p-8 text-(--text)"
-        style={{ boxShadow: "var(--card-shadow)" }}
-      >
-        {onBackToVideo ? (
-          <button
-            type="button"
-            onClick={onBackToVideo}
-            className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
+      <QuizStageMessage
+        lessonBadge={lessonBadge}
+        onBackToVideo={onBackToVideo}
+        role="alert"
+        title="Unable to check quiz access"
+        actions={
+          <Button
+            motion="static"
+            onClick={() => void pricingPreviewQuery.refetch()}
+            className={QUIZ_SECONDARY_ACTION}
           >
-            <ArrowLeft size={13} weight="bold" />
-            <span>Back to video</span>
-          </button>
-        ) : null}
-        <p className="text-sm text-red-400">
-          Unable to check quiz access.{" "}
-          {pricingPreviewQuery.error?.message ?? "Please try again."}
-        </p>
-        <Button
-          onClick={() => void pricingPreviewQuery.refetch()}
-          className="mt-4 h-9 px-4 text-xs font-semibold"
-        >
-          Try again
-        </Button>
-      </section>
+            Try again
+          </Button>
+        }
+      >
+        {pricingPreviewQuery.error?.message ?? "Please try again."}
+      </QuizStageMessage>
     );
   }
 
@@ -247,134 +250,103 @@ export function QuizEnrollmentCard({
     }
   };
 
+  const onSale = salePrice !== null && salePrice < catalogPrice;
+
   return (
-    <section
-      data-quiz-surface=""
-      className="mx-auto max-w-2xl rounded-[16px] sm:rounded-[24px] border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-(--card-surface,var(--surface)) p-4 sm:p-8 text-(--text)"
-      style={{ boxShadow: "var(--card-shadow)" }}
-    >
-      {onBackToVideo || lessonBadge ? (
-        <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-          {onBackToVideo ? (
-            <button
-              type="button"
-              onClick={onBackToVideo}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_70%,var(--surface))] px-2.5 py-1 text-xs font-medium text-(--muted) hover:text-(--text) hover:border-(--accent) transition-all cursor-pointer active:scale-95 shadow-(--card-compact-shadow)"
-            >
-              <ArrowLeft size={13} weight="bold" />
-              <span>Back to video</span>
-            </button>
-          ) : (
-            <span />
-          )}
-          {lessonBadge ? (
-            <div className="flex items-center gap-1.5 text-xs font-medium text-(--muted)">
-              <Exam size={14} className="text-(--accent)" weight="bold" />
-              <span>{lessonBadge}</span>
-            </div>
-          ) : null}
+    <QuizStage label="Quiz access">
+      <QuizStageBar onBackToVideo={onBackToVideo} context={lessonBadge} />
+      <QuizStageBody width="narrow" className="pt-4 pb-6 sm:pt-7 sm:pb-9">
+        <div className="flex items-start gap-3.5">
+          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent-ink,var(--accent))">
+            {isFree ? (
+              <CheckCircle size={22} weight="duotone" aria-hidden="true" />
+            ) : (
+              <Lock size={22} weight="duotone" aria-hidden="true" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className={QUIZ_EYEBROW}>
+              {isFree ? "Quiz access" : "Paid assessment"}
+            </p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight wrap-break-word text-(--text) sm:text-[1.75rem]">
+              {quizTitle || "Lesson assessment"}
+            </h1>
+          </div>
         </div>
-      ) : null}
 
-      <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-(--accent)/10 text-(--accent)">
-          {isFree ? (
-            <CheckCircle size={18} weight="bold" />
-          ) : (
-            <Lock size={18} weight="bold" />
-          )}
-        </div>
-        <div>
-          <p className="text-[0.65rem] sm:text-[0.7rem] font-bold uppercase tracking-[0.14em] text-(--accent)">
-            {isFree ? "Quiz Access" : "Paid Assessment"}
-          </p>
-          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-(--text)">
-            {quizTitle || "Lesson Assessment"}
-          </h1>
-        </div>
-      </div>
+        <p className="mt-3 text-sm leading-relaxed text-(--text-secondary)">
+          {pricingType === "free"
+            ? "This quiz is included with your course enrollment. Start whenever you are ready."
+            : "This is a premium assessment that tests and certifies your grasp of what this lesson covers."}
+        </p>
 
-      <p className="text-xs sm:text-sm text-(--muted) mt-1 leading-relaxed">
-        {pricingType === "free"
-          ? "This quiz is included with your course enrollment. Click below to start your attempt."
-          : "This is a premium assessment designed to test and certify your mastery of the concepts covered in this lesson."}
-      </p>
-
-      {pricingType === "paid" ? (
-        <div className="mt-5 space-y-4">
-          {/* Pricing Breakdown Card */}
-          <div className="rounded-xl border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) p-3.5 sm:p-4.5 space-y-2.5">
-            <div className="flex items-center justify-between text-xs sm:text-sm text-(--muted)">
-              <span>Catalog Price</span>
-              <span
+        {pricingType === "paid" ? (
+          <dl
+            className={`mt-5 grid gap-2.5 rounded-[14px] p-4 text-sm ${QUIZ_RAISED_SURFACE}`}
+          >
+            <div className="flex items-center justify-between gap-3 text-(--text-secondary)">
+              <dt>Catalog price</dt>
+              <dd
                 className={
-                  salePrice !== null && salePrice < catalogPrice
+                  onSale
                     ? "line-through opacity-70"
-                    : "font-medium text-(--text)"
+                    : "font-semibold text-(--text)"
                 }
               >
                 {formatPrice(catalogPrice, currency)}
-              </span>
+              </dd>
             </div>
 
-            {salePrice !== null && salePrice < catalogPrice ? (
-              <div className="flex items-center justify-between text-xs sm:text-sm text-emerald-400">
-                <span className="flex items-center gap-1">
-                  <Tag size={13} weight="bold" />
-                  <span>Special Sale Price</span>
-                </span>
-                <span className="font-semibold">
+            {onSale ? (
+              <div className="flex items-center justify-between gap-3 text-(--quiz-positive)">
+                <dt className="flex items-center gap-1.5">
+                  <Tag size={14} weight="bold" aria-hidden="true" />
+                  <span>Sale price</span>
+                </dt>
+                <dd className="font-semibold">
                   {formatPrice(salePrice, currency)}
-                </span>
+                </dd>
               </div>
             ) : null}
 
-            <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-2.5 flex items-center justify-between">
-              <span className="text-xs sm:text-sm font-bold text-(--text)">
-                Total Payable
-              </span>
-              <span className="text-base sm:text-xl font-bold text-(--text)">
+            <div
+              className={`flex items-center justify-between gap-3 border-t pt-2.5 ${QUIZ_HAIRLINE}`}
+            >
+              <dt className="font-bold text-(--text)">Total payable</dt>
+              <dd className="text-xl font-bold text-(--text) tabular-nums">
                 {formatPrice(activePrice, currency)}
-              </span>
+              </dd>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {errorMessage ? (
-        <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs sm:text-sm text-red-400">
-          {errorMessage}
-        </div>
-      ) : null}
-
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <Button
-          onClick={handleEnrollment}
-          disabled={isProcessing}
-          className="h-10 px-5 font-semibold text-xs sm:text-sm"
-        >
-          {isProcessing ? (
-            <>
-              <CircleNotch size={15} className="animate-spin mr-2" />
-              <span>Processing...</span>
-            </>
-          ) : isFree ? (
-            "Start Quiz"
-          ) : (
-            `Pay ${formatPrice(activePrice, currency)} & Unlock Quiz`
-          )}
-        </Button>
-
-        {onBackToVideo ? (
-          <Button
-            motion="static"
-            className="h-10 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-(--card-surface-raised,var(--surface-strong)) px-4 text-xs sm:text-sm text-(--text) shadow-none hover:bg-(--hover)"
-            onClick={onBackToVideo}
-          >
-            Back to video
-          </Button>
+          </dl>
         ) : null}
-      </div>
-    </section>
+
+        {errorMessage ? (
+          <div className="mt-4">
+            <QuizNotice tone="negative" role="alert">
+              {errorMessage}
+            </QuizNotice>
+          </div>
+        ) : null}
+
+        <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
+          <Button
+            onClick={handleEnrollment}
+            disabled={isProcessing}
+            className={QUIZ_PRIMARY_ACTION}
+          >
+            {isProcessing ? (
+              <>
+                <CircleNotch size={16} className="animate-spin" />
+                <span>Processing…</span>
+              </>
+            ) : isFree ? (
+              "Start quiz"
+            ) : (
+              `Pay ${formatPrice(activePrice, currency)} & unlock quiz`
+            )}
+          </Button>
+        </div>
+      </QuizStageBody>
+    </QuizStage>
   );
 }

@@ -1,3 +1,5 @@
+import { comparableQuizText } from "./quiz.text.ts";
+
 export interface QuizGradeQuestion {
   questionType?: string;
   points: number;
@@ -16,11 +18,11 @@ export function gradeQuizQuestion({
   acceptedOptionTexts = [],
 }: QuizGradeQuestion) {
   if (questionType === "short_answer") {
-    const trimmedInput = (textResponse ?? "").trim().toLowerCase();
+    const typed = comparableQuizText(textResponse ?? "");
     const isCorrect =
-      trimmedInput.length > 0 &&
+      typed.length > 0 &&
       acceptedOptionTexts.some(
-        (accepted) => accepted.trim().toLowerCase() === trimmedInput,
+        (accepted) => comparableQuizText(accepted) === typed,
       );
     return { isCorrect, pointsAwarded: isCorrect ? points : 0 };
   }

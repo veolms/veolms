@@ -156,6 +156,20 @@ export const totpEnableResponseSchema = z.object({
   backupCodes: z.array(z.string().max(8)),
 });
 
+/** A fresh set of single-use backup codes; shown to the user exactly once. */
+export const backupCodesResponseSchema = z.object({
+  backupCodes: z.array(z.string().max(8)),
+});
+
+/**
+ * `backupCodes` is present only when this passkey left the account without
+ * any unused backup code — in practice, when it is the first factor.
+ */
+export const passkeyRegisterVerifyResponseSchema =
+  authMessageResponseSchema.extend({
+    backupCodes: z.array(z.string().max(8)).optional(),
+  });
+
 export type PasskeyAuthenticatorTransport =
   "ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb";
 
@@ -271,5 +285,9 @@ export type PasskeyRegisterVerifyRequest = z.input<
 export type PasskeyLoginVerifyRequest = z.input<
   typeof passkeyLoginVerifyRequestSchema
 >;
+export type PasskeyRegisterVerifyResponse = z.output<
+  typeof passkeyRegisterVerifyResponseSchema
+>;
+export type BackupCodesResponse = z.output<typeof backupCodesResponseSchema>;
 export type TotpVerifyRequest = z.input<typeof totpVerifyRequestSchema>;
 export type TotpEnableRequest = z.input<typeof totpEnableRequestSchema>;
