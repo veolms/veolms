@@ -9,6 +9,7 @@ import * as pricingRepo from "../shared/quiz-pricing.repository.ts";
 import { resolveQuizCharge } from "../../commerce/pricing/quiz-pricing.amount.ts";
 import type { AssignmentRow } from "../shared/quiz.presenters.ts";
 import { isAdmin, type QuizServiceOptions } from "../shared/quiz.types.ts";
+import { cleanQuizTextAnswer } from "../shared/quiz.text.ts";
 import {
   ANSWER_SAVE_GRACE_MS,
   attemptDeadline,
@@ -395,6 +396,24 @@ export function createAttemptService(options: QuizServiceOptions) {
     return { attempt, assignment };
   }
 
+  /**
+   * An answer as it is stored: only the part its question type uses, and a
+   * typed answer cleaned of what is not text (see quiz.text.ts). Option ids
+   * sent with a short answer, or text sent with a choice, were stored as
+   * they came.
+   */
+  function storedResponse(
+    question: { question_type: string },
+    response: QuizResponseValue,
+  ): QuizResponseValue {
+    return question.question_type === "short_answer"
+      ? {
+          selectedOptionIds: [],
+          textResponse: cleanQuizTextAnswer(response.textResponse ?? ""),
+        }
+      : { selectedOptionIds: response.selectedOptionIds ?? [] };
+  }
+
   function validateResponse(
     question: { question_type: string },
     response: QuizResponseValue,
@@ -521,7 +540,10 @@ export function createAttemptService(options: QuizServiceOptions) {
           id: crypto.randomUUID(),
           attempt_id: attemptId,
           question_id: answer.questionId,
-          response_value: answer.responseValue,
+          response_value: storedResponse(
+            questions.find((question) => question.id === answer.questionId)!,
+            answer.responseValue,
+          ),
           is_correct: null,
           points_awarded: null,
           time_spent_seconds: answer.timeSpentSeconds ?? null,

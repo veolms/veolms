@@ -21,9 +21,12 @@ export const quizFeedbackModeSchema = z.enum([
 const uuid = z.uuid();
 const nonNegativeNumber = z.number().finite().nonnegative();
 
+/** The longest answer a learner can type into a short-answer question. */
+export const QUIZ_TEXT_RESPONSE_MAX_LENGTH = 2000;
+
 export const quizResponseValueSchema = z.strictObject({
   selectedOptionIds: z.array(uuid).max(100).default([]),
-  textResponse: z.string().max(2000).optional(),
+  textResponse: z.string().max(QUIZ_TEXT_RESPONSE_MAX_LENGTH).optional(),
 });
 export const quizAnswerInputSchema = z.strictObject({
   questionId: uuid,
@@ -257,7 +260,7 @@ export const learnerQuizAttemptSchema = z.strictObject({
     z.string(),
     z.object({
       selectedOptionIds: z.array(uuid).default([]),
-      textResponse: z.string().max(2000).optional(),
+      textResponse: z.string().max(QUIZ_TEXT_RESPONSE_MAX_LENGTH).optional(),
     }),
   ),
 });
