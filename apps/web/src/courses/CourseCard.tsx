@@ -50,11 +50,11 @@ const courseCardFacts: Record<
 > = {
   sections: (course) => ({
     Icon: BookOpen,
-    text: `${course.sections} Sections`,
+    text: `${course.sections} ${course.sections === 1 ? "Section" : "Sections"}`,
   }),
   lectures: (course) => ({
     Icon: MonitorPlay,
-    text: `${course.lectures} Lectures`,
+    text: `${course.lectures} ${course.lectures === 1 ? "Lecture" : "Lectures"}`,
   }),
   duration: (course) => ({ Icon: Clock, text: course.duration }),
 };

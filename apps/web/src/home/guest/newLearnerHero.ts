@@ -11,7 +11,7 @@ export function getNewLearnerHero(hero: HomePageHero): HomePageHero {
     headline: "Start Your",
     highlightedHeadline: "Learning Journey.",
     description:
-      "You haven't enrolled in a course yet. Pick one, learn it in depth, and build foundations that last.",
+      "Find a course that matches your interests and build your understanding one lesson at a time.",
   };
 }
 
