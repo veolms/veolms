@@ -2,10 +2,11 @@ import { useEffect } from "react";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { useMyQuizAssignments } from "../services/quizzes";
 import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import type { NavigateTo } from "../routing/navigation";
 
 interface Props {
   assignmentId?: string;
-  onNavigatePage?: (destination: string) => void;
+  onNavigatePage?: NavigateTo;
 }
 
 export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
@@ -16,8 +17,11 @@ export function QuizDirectAttemptPage({ assignmentId, onNavigatePage }: Props) {
 
   useEffect(() => {
     if (assignment && onNavigatePage) {
+      // This page only forwards to the lesson, so it gives up its place in
+      // the history. Left there, Back returned to it and it forwarded again.
       onNavigatePage(
         `/learn/${encodeURIComponent(assignment.courseId)}?lessonId=${encodeURIComponent(assignment.lessonId)}&view=quiz`,
+        { replace: true },
       );
     }
   }, [assignment, onNavigatePage]);

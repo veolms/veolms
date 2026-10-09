@@ -1083,6 +1083,30 @@ export function LearningWorkspace({
       };
     }
 
+    // A video that is still being processed, and a lesson with no video,
+    // used to get the same "couldn't prepare" message as a real failure. The
+    // first is worth trying again later; the second can never play, so it
+    // offers no retry.
+    if (playbackBootstrapError.code === "MEDIA_NOT_READY") {
+      return {
+        kind: "retry",
+        title: "Video not ready yet",
+        message:
+          "This video is still being prepared. Please check back in a few minutes.",
+        actionLabel: "Try again",
+        onAction: retryPlaybackBootstrap,
+      };
+    }
+
+    if (playbackBootstrapError.code === "MEDIA_NOT_FOUND") {
+      return {
+        kind: "retry",
+        title: "No video",
+        message: "This lesson has no video.",
+        actionLabel: "Try again",
+      };
+    }
+
     return {
       kind: "retry",
       message: "We couldn't prepare this video.",
@@ -1272,6 +1296,18 @@ export function LearningWorkspace({
     }
     return merged;
   }, [localLessonProgress, persistedLessonProgress]);
+  // Every lesson is finished, by the rule that gives a lesson its check mark
+  // in the list. The end screen says the course is complete only then.
+  const courseComplete = useMemo(
+    () =>
+      lessonSequence.every(
+        (lessonNumber) =>
+          curriculumLessonsById.get(lessonNumber)?.[3] === "done" ||
+          (lessonProgress[lessonNumber] ?? 0) >=
+            LESSON_PROGRESS_COMPLETE_THRESHOLD,
+      ),
+    [curriculumLessonsById, lessonProgress, lessonSequence],
+  );
   const currentLessonIndex = lessonSequence.indexOf(selectedLesson);
   const previousLessonId =
     currentLessonIndex > 0 ? lessonSequence[currentLessonIndex - 1] : undefined;
@@ -2766,6 +2802,7 @@ export function LearningWorkspace({
       canGoNext: nextLessonId !== undefined,
       canGoPrevious: previousLessonId !== undefined,
       nextLessonInfo,
+      courseComplete,
       courseLessonsOpen: playerCourseLessonsOpen,
       courseLessonsDrawerOpen: lessonDrawer,
       courseLessonsPanel: fullscreenCoursePanel,
@@ -2807,6 +2844,7 @@ export function LearningWorkspace({
       autoPlayOnLessonChange,
       autoplayEnabled,
       chaptersPanelHost,
+      courseComplete,
       courseContentDrawerViewport,
       coursePersistenceKey,
       courseSlug,

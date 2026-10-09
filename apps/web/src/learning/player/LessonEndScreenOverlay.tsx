@@ -18,6 +18,8 @@ export interface NextLessonInfo {
 export interface LessonEndScreenOverlayProps {
   nextLesson?: NextLessonInfo;
   autoplayEnabled?: boolean;
+  /** False while lessons other than the one that just ended are unfinished. */
+  courseComplete?: boolean;
   onGoNext: () => void;
   onRestart: () => void;
   onCancelAutoplay: () => void;
@@ -28,6 +30,7 @@ export interface LessonEndScreenOverlayProps {
 export function LessonEndScreenOverlay({
   nextLesson,
   autoplayEnabled = true,
+  courseComplete = true,
   onGoNext,
   onRestart,
   onCancelAutoplay,
@@ -247,11 +250,17 @@ export function LessonEndScreenOverlay({
               <div className="mb-4 flex size-15 sm:size-16 items-center justify-center rounded-[16px] border-none bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_24%,var(--surface))_0%,color-mix(in_srgb,var(--accent)_12%,var(--canvas))_100%)] text-(--accent) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_12%,transparent))]">
                 <CheckCircle size={34} weight="duotone" />
               </div>
+              {/* The last lesson ending used to announce the course as
+                  completed even with earlier lessons skipped. */}
               <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
-                Course Completed!
+                {courseComplete
+                  ? "Course Completed!"
+                  : "You've reached the last lesson"}
               </h3>
               <p className="mt-2 text-sm sm:text-base text-(--text-secondary) max-w-sm leading-relaxed">
-                You've watched all available lectures in this course.
+                {courseComplete
+                  ? "You've watched all available lectures in this course."
+                  : "Some lessons in this course are still unfinished."}
               </p>
             </div>
 

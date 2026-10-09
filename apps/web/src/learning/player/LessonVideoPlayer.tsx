@@ -108,6 +108,12 @@ export interface LessonVideoPlayerProps {
   showAutoplayControl?: boolean;
   /** Shows the learner-facing completion overlay when playback ends. */
   showCompletionOverlay?: boolean;
+  /**
+   * False while other lessons are unfinished, so ending the last lesson does
+   * not say the whole course is complete. Left out, the course counts as
+   * complete.
+   */
+  courseComplete?: boolean;
   circularSettingsControl?: boolean;
   showLessonNavigation?: boolean;
   playbackSuspended?: boolean;
@@ -181,6 +187,7 @@ export function LessonVideoPlayer({
   autoplayEnabled = true,
   showAutoplayControl = true,
   showCompletionOverlay = true,
+  courseComplete = true,
   circularSettingsControl = false,
   showLessonNavigation = true,
   playbackSuspended = false,
@@ -1135,6 +1142,7 @@ export function LessonVideoPlayer({
                     : undefined
                 }
                 autoplayEnabled={autoplayEnabled && !autoplayCancelled}
+                courseComplete={courseComplete}
                 onGoNext={handleGoNextFromEndScreen}
                 onRestart={handleRestart}
                 onCancelAutoplay={() => setAutoplayCancelled(true)}

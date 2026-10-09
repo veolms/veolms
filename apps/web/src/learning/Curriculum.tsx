@@ -699,6 +699,15 @@ export function Curriculum({
                         <span className="sr-only">
                           {completedLessons} of {lessonCount} lessons completed
                         </span>
+                        {/* The count was only read out, never shown; it is
+                            shown here the way the mini player's list shows
+                            it. */}
+                        <span
+                          className="learning-curriculum__section-progress"
+                          aria-hidden="true"
+                        >
+                          {sectionProgress}
+                        </span>
                         <span
                           className={`learning-curriculum__section-arrow text-(--muted)${isOpen ? " is-open" : ""}`}
                           aria-hidden="true"
