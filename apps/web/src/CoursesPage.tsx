@@ -757,8 +757,10 @@ const SIDEBAR_PROFILE_BUTTON_CLASS =
 // padding centres the icon in the collapsed square, which also keeps it on
 // the same vertical line in the expanded row.
 // Idle items carry a faint fill, about half as strong as the hover fill.
+// It is see-through unless the stylesheet supplies a solid one (it does
+// while the lesson video glows under the sidebar; see navigation.css).
 const SIDEBAR_NAV_ITEM_SQUIRCLE_CLASS =
-  "[:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:rounded-[50%]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[corner-shape:squircle] h-[57px]! min-h-[57px]! pl-4! [&_svg]:size-[26px]! [&_svg]:basis-[26px]! text-base! [:root:not([data-sidebar-state=collapsed])_.courses-app:not(.courses-app--collapsed)_&]:rounded-xl! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:rounded-xl! [&:not(.is-active):not(:hover)]:bg-[color-mix(in_srgb,var(--surface)_35%,transparent)]! [.courses-app--resizing_&]:overflow-hidden!";
+  "[:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:rounded-[50%]! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@max-[60px]:[corner-shape:squircle] h-[57px]! min-h-[57px]! pl-4! [&_svg]:size-[26px]! [&_svg]:basis-[26px]! text-base! [:root:not([data-sidebar-state=collapsed])_.courses-app:not(.courses-app--collapsed)_&]:rounded-xl! [:is(.courses-app--collapsed,[data-sidebar-state=collapsed]_.courses-app)_&]:@min-[60.01px]:rounded-xl! [&:not(.is-active):not(:hover)]:bg-[var(--sidebar-menu-idle-background,color-mix(in_srgb,var(--surface)_35%,transparent))]! [.courses-app--resizing_&]:overflow-hidden!";
 
 /** At this sidebar width or narrower, a drag stacks the dock vertically. */
 const SIDEBAR_DOCK_VERTICAL_MAX_WIDTH = 180;
@@ -1119,6 +1121,7 @@ export function CoursesPage({
   const [navigationScrollFade, setNavigationScrollFade] = useState({
     top: false,
     bottom: false,
+    overflow: false,
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // The sheet (and the drawer stack it lazy-loads) mounts on the first open
@@ -2681,13 +2684,26 @@ export function CoursesPage({
     const maxScrollTop = Math.max(0, nav.scrollHeight - nav.clientHeight);
     const hasOverflow = maxScrollTop > 2;
     const hasScrolled = hasOverflow && nav.scrollTop > 2;
+    // Whether the menu items alone are taller than the list. The blank room
+    // kept below them (and the gap before it) is left out of the sum, or the
+    // room would be the very thing that keeps itself shown.
+    const endSpace = nav.querySelector<HTMLElement>("[data-nav-end-space]");
+    const endSpaceHeight = endSpace?.offsetHeight ?? 0;
+    const endSpaceExtent =
+      endSpaceHeight > 0
+        ? endSpaceHeight +
+          (Number.parseFloat(getComputedStyle(nav).rowGap) || 0)
+        : 0;
     const next = {
       top: hasScrolled,
       bottom: hasScrolled && nav.scrollTop < maxScrollTop - 2,
+      overflow: maxScrollTop - endSpaceExtent > 2,
     };
 
     setNavigationScrollFade((current) =>
-      current.top === next.top && current.bottom === next.bottom
+      current.top === next.top &&
+      current.bottom === next.bottom &&
+      current.overflow === next.overflow
         ? current
         : next,
     );
@@ -2697,9 +2713,19 @@ export function CoursesPage({
     const frame = window.requestAnimationFrame(updateNavigationScrollFade);
     const handleResize = () => updateNavigationScrollFade();
     window.addEventListener("resize", handleResize);
+    // The list also changes height without the window doing so (the dock
+    // below it turning vertical, the profile menu), which decides whether
+    // its items still fit.
+    const nav = navigationRef.current;
+    const observer =
+      nav && typeof ResizeObserver === "function"
+        ? new ResizeObserver(handleResize)
+        : null;
+    if (nav) observer?.observe(nav);
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", handleResize);
+      observer?.disconnect();
     };
   }, [compactNavigation, effectiveRole, navigation, sidebarMode]);
 
@@ -3831,6 +3857,11 @@ export function CoursesPage({
       }
       return;
     }
+    // A swipe may begin on a menu item. Once it has become a drag, the
+    // sidebar swallows the click that could follow the finger lifting.
+    // (Only swipes arrive here not yet active: a press on the resize line
+    // itself starts its drag at once.)
+    sidebarOverlaySwipeConsumedRef.current = true;
     setSidebarResizePreviewWidth(resize.previewWidth);
     setSidebarResizing(true);
     try {
@@ -3841,11 +3872,16 @@ export function CoursesPage({
   };
 
   const startSidebarScreenSwipe = (event: SidebarScreenSwipeStartEvent) => {
-    const startsInOpenOverlay =
-      sidebarPresentedAsOverlay &&
-      edgeSidebarOpen &&
+    const startsOnSidebar =
       event.target instanceof Element &&
       Boolean(event.target.closest(".courses-sidebar"));
+    const startsInOpenOverlay =
+      sidebarPresentedAsOverlay && edgeSidebarOpen && startsOnSidebar;
+    // A sideways swipe that begins on the pinned sidebar is a drag of its
+    // resize line, wherever on the sidebar the finger is: any width between
+    // the rail and the maximum, settling as that line settles.
+    const dragsResizeLine =
+      startsOnSidebar && !sidebarPresentedAsOverlay && !compactNavigation;
     if (
       !canStartSidebarTouchGesture({
         compactNavigation,
@@ -3870,7 +3906,11 @@ export function CoursesPage({
       clientY: event.clientY,
       handle: event.handle,
       pointerId: event.pointerId,
-      source: startsInOpenOverlay ? "overlay" : "screen",
+      source: startsInOpenOverlay
+        ? "overlay"
+        : dragsResizeLine
+          ? "rail"
+          : "screen",
       timeStamp: event.timeStamp,
     });
   };
@@ -3984,8 +4024,11 @@ export function CoursesPage({
         resize.modeAtStart === "collapsed" && deltaX < 0;
       const closesExpandedSidebar = !resize.collapsedAtStart && deltaX < 0;
       const movesOverlay = resize.source === "overlay";
+      // The resize line goes either way from any width.
+      const dragsResizeLine = resize.source === "rail";
       if (
         !movesOverlay &&
+        !dragsResizeLine &&
         !opensCollapsedSidebar &&
         !hidesCollapsedSidebar &&
         !closesExpandedSidebar
@@ -4056,6 +4099,12 @@ export function CoursesPage({
     }
 
     if (!resize.active) return;
+
+    if (resize.source === "screen" || resize.source === "rail") {
+      window.setTimeout(() => {
+        sidebarOverlaySwipeConsumedRef.current = false;
+      }, 0);
+    }
 
     if (resize.screenOverlayAtStart) {
       const revealDistance = resize.lastX - resize.startX;
@@ -4916,6 +4965,11 @@ export function CoursesPage({
             }}
             {...emptyAreaDoubleTapHandlers}
           >
+            {/* The background shapes: the inner box draws them, the outer
+                one blurs and fades them (see navigation.css). */}
+            <span className="courses-sidebar__bokeh" aria-hidden="true">
+              <span />
+            </span>
             {((!compactNavigation && !sidebarPresentedAsOverlay) ||
               (sidebarPresentedAsOverlay && edgeSidebarOpen)) && (
               <div
@@ -5025,8 +5079,15 @@ export function CoursesPage({
                 // its own edge: the room has to be inside it, or the first
                 // item's shadow is cut off at the top.
                 "courses-nav @container gap-2! px-[9.5px]! pt-[11px]! [.courses-app--collapsed_&]:pt-[22px]!",
+                // The list scrolls, and a browser decides how a finger may pan
+                // from the scroll area itself, not from the sidebar around
+                // it. Without this it claims sideways swipes on the menu
+                // (and sends none to the page), so the swipe that resizes
+                // the sidebar never began here on a real touch screen.
+                "touch-pan-y touch-pinch-zoom",
                 navigationScrollFade.top ? "has-scroll-top" : "",
                 navigationScrollFade.bottom ? "has-scroll-bottom" : "",
+                navigationScrollFade.overflow ? "has-overflow" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -5062,7 +5123,6 @@ export function CoursesPage({
                           ? `${navigationIndex + 1} ${primaryShortcutModifier}+Comma`
                           : String(navigationIndex + 1)
                       }
-                      data-sidebar-swipe-ignore
                       onClick={() => selectNavigation(label, item)}
                       onContextMenu={(event) => {
                         if (navigationUsesCompactInteraction)
@@ -5093,6 +5153,14 @@ export function CoursesPage({
                   </Fragment>
                 );
               })}
+              {/* Blank room the height of two menu items, shown only when
+                  the list scrolls, so the last items can be brought up
+                  clear of the profile button (see navigation.css). */}
+              <div
+                className="courses-nav__end-space"
+                data-nav-end-space=""
+                aria-hidden="true"
+              />
               {sidebarResizing &&
               sidebarPreferences.showResizeDimensions === true ? (
                 <SidebarResizeReadout
@@ -5458,7 +5526,9 @@ export function CoursesPage({
                       key={item}
                       data-dock-item={item}
                       type="button"
-                      className={`sidebar-appearance__fullscreen${isFullscreen ? " is-active" : ""}`}
+                      // Not shown when the app runs installed: it fills the screen as
+                      // it is, and fullscreen would hide the status bar.
+                      className={`sidebar-appearance__fullscreen [@media(display-mode:standalone)]:hidden!${isFullscreen ? " is-active" : ""}`}
                       aria-label={fullscreenActionLabel}
                       title={fullscreenActionLabel}
                       aria-pressed={isFullscreen}
@@ -5575,11 +5645,14 @@ export function CoursesPage({
             // the control stretches up over it while it is dragged.
             className="z-45!"
             // The lesson page says where it goes (it depends on how much of
-            // the video is showing); see LearningWorkspace.
+            // the video is showing); see LearningWorkspace. Every other page
+            // puts it about where the lesson page has it with the video at
+            // full height: between the description and the comments, some
+            // 200px up from the bottom, and lower on a short window.
             bottomClearance={
               renderMain
                 ? "var(--learning-elastic-scroller-clearance, 268px)"
-                : 96
+                : "clamp(96px, 28dvh, 200px)"
             }
             minScrollScreens={renderMain ? 1 : 2}
           />
@@ -6135,7 +6208,9 @@ export function CoursesPage({
                         key={item}
                         data-dock-item={item}
                         type="button"
-                        className={`sidebar-appearance__fullscreen${isFullscreen ? " is-active" : ""}`}
+                        // Not shown when the app runs installed: it fills the screen as
+                        // it is, and fullscreen would hide the status bar.
+                        className={`sidebar-appearance__fullscreen [@media(display-mode:standalone)]:hidden!${isFullscreen ? " is-active" : ""}`}
                         aria-label={fullscreenActionLabel}
                         title={fullscreenActionLabel}
                         aria-pressed={isFullscreen}

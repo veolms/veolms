@@ -334,6 +334,8 @@ interface CurriculumScreenSwipe {
   closedAtStart: boolean;
   expandedWidthAtStart: number;
   target: "curriculum" | "lesson-drawer";
+  /** The touch began on the course content panel itself. */
+  startedOnPanel: boolean;
   handle: HTMLDivElement;
 }
 
@@ -685,16 +687,36 @@ export function LearningWorkspace({
     ((event: CurriculumScreenSwipeStartEvent) => void) | null
   >(null);
 
+  // True only while this page is announcing a claim of its own. The claim
+  // is heard by everything that listens for one, this page included, and
+  // the listener below used to cancel the very swipe that had just claimed
+  // the pointer: the course content moved once, froze, and stayed in its
+  // resizing state for good. Only somebody else's claim cancels the swipe.
+  const claimingOwnPointerGestureRef = useRef(false);
+  const claimCurriculumPointerGesture = (pointerId: number) => {
+    claimingOwnPointerGestureRef.current = true;
+    try {
+      claimPointerGesture({ owner: "curriculum", pointerId });
+    } finally {
+      claimingOwnPointerGestureRef.current = false;
+    }
+  };
   useEffect(
     () =>
       subscribeToPointerGestureClaims(({ owner, pointerId }) => {
         if (owner !== "curriculum") return;
+        if (claimingOwnPointerGestureRef.current) return;
         if (curriculumScreenSwipeRef.current?.pointerId === pointerId) {
           curriculumScreenSwipeRef.current = null;
         }
       }),
     [],
   );
+  // Lets the screen swipe hand a touch over to the resize rail's own drag
+  // (defined further down).
+  const beginCurriculumResizeRef = useRef<
+    ((pointerId: number, clientX: number, handle: HTMLElement) => void) | null
+  >(null);
   const curriculumScreenSwipeMoveRef = useRef<
     ((event: PointerEvent) => void) | null
   >(null);
@@ -2056,6 +2078,10 @@ export function LearningWorkspace({
         target === "lesson-drawer" ? !lessonDrawer : curriculumCollapsed,
       expandedWidthAtStart: curriculumWidth,
       target,
+      startedOnPanel:
+        target === "curriculum" &&
+        event.target instanceof Element &&
+        Boolean(event.target.closest(".learning-curriculum")),
       handle: event.handle,
     };
   };
@@ -2083,6 +2109,30 @@ export function LearningWorkspace({
       )
         return;
 
+      // A sideways swipe that begins on the open panel is a drag of its
+      // resize rail, wherever on the panel the finger is: it widens and
+      // narrows the panel with the finger, and closes it when let go
+      // narrow enough. The rail's own drag takes the touch from here.
+      if (swipe.startedOnPanel && !swipe.closedAtStart) {
+        curriculumScreenSwipeRef.current = null;
+        claimCurriculumPointerGesture(swipe.pointerId);
+        try {
+          swipe.handle.setPointerCapture?.(swipe.pointerId);
+        } catch {
+          // Window-level listeners keep the drag going without capture.
+        }
+        // A tap that follows the drag ending is not a tap on a lesson.
+        curriculumScreenSwipeConsumedUntilRef.current =
+          performance.now() + 60_000;
+        beginCurriculumResizeRef.current?.(
+          swipe.pointerId,
+          event.clientX,
+          swipe.handle,
+        );
+        event.preventDefault();
+        return;
+      }
+
       const opensClosedCurriculum = swipe.closedAtStart && deltaX < 0;
       const closesOpenCurriculum = !swipe.closedAtStart && deltaX > 0;
       if (!opensClosedCurriculum && !closesOpenCurriculum) {
@@ -2091,10 +2141,7 @@ export function LearningWorkspace({
       }
 
       swipe.active = true;
-      claimPointerGesture({
-        owner: "curriculum",
-        pointerId: swipe.pointerId,
-      });
+      claimCurriculumPointerGesture(swipe.pointerId);
       if (swipe.target === "curriculum") {
         setCurriculumResizePreviewWidth(
           swipe.closedAtStart ? CURRICULUM_COLLAPSED_WIDTH : curriculumWidth,
@@ -2450,6 +2497,10 @@ export function LearningWorkspace({
     [curriculumCollapsed, curriculumWidth, isCourseContentDrawerLayout],
   );
 
+  useLayoutEffect(() => {
+    beginCurriculumResizeRef.current = beginCurriculumResize;
+  }, [beginCurriculumResize]);
+
   const startCurriculumResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (isCourseContentDrawerLayout()) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -2527,6 +2578,11 @@ export function LearningWorkspace({
       setCurriculumResizing(false);
       setCurriculumResizePreviewWidth(null);
       resize.handle?.releasePointerCapture?.(resize.pointerId);
+      // A drag handed over from a swipe on the panel swallows taps while it
+      // lasts; from here they are swallowed only for a moment longer.
+      if (curriculumScreenSwipeConsumedUntilRef.current > performance.now()) {
+        curriculumScreenSwipeConsumedUntilRef.current = performance.now() + 450;
+      }
 
       if (cancelled) {
         setCurriculumCollapsed(resize.collapsedAtStart);
@@ -2960,7 +3016,7 @@ export function LearningWorkspace({
         id="learning-course-content-trigger"
         ref={lessonTriggerRef}
         type="button"
-        className={`learning-workspace__lesson-heading ${appliedPlayerHeight === null ? "max-[640px]:touch-pan-up" : "max-[640px]:touch-none"}`}
+        className={`learning-workspace__lesson-heading ${appliedPlayerHeight === null ? "touch-pan-up" : "touch-none"}`}
         {...(stickyPlayer ? titleSwipeHandlers : undefined)}
         style={
           contained

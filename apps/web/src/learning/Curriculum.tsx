@@ -233,10 +233,21 @@ export function Curriculum({
     const curriculum = element?.closest<HTMLElement>(".learning-curriculum");
     if (!element || !curriculum) return;
 
-    const itemTop =
+    // A lesson stops as far below the top edge as lessons are from one
+    // another (the list gap), instead of touching it. A section heading
+    // still goes flush to the top.
+    const lessonList = element.closest<HTMLElement>(".flex.flex-col");
+    const topMargin =
+      element === currentSectionRef.current || !lessonList
+        ? 0
+        : Number.parseFloat(getComputedStyle(lessonList).rowGap) || 0;
+    const itemTop = Math.max(
+      0,
       element.getBoundingClientRect().top -
-      curriculum.getBoundingClientRect().top +
-      curriculum.scrollTop;
+        curriculum.getBoundingClientRect().top +
+        curriculum.scrollTop -
+        topMargin,
+    );
 
     if (typeof curriculum.scrollTo === "function") {
       curriculum.scrollTo({
@@ -439,7 +450,10 @@ export function Curriculum({
       <aside
         ref={setCurriculumScrollport}
         id={scrollportId}
-        className={`learning-curriculum ${hideHero ? "learning-curriculum--compact" : ""}`}
+        // It scrolls, so how a finger may pan is decided here: up and down
+        // only. Sideways swipes then reach the page, which resizes the panel
+        // with them (a browser would otherwise claim them itself).
+        className={`learning-curriculum touch-pan-y touch-pinch-zoom ${hideHero ? "learning-curriculum--compact" : ""}`}
         aria-label="Course curriculum"
       >
         <ElasticScroller
@@ -680,7 +694,7 @@ export function Curriculum({
                     ) : (
                       <>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[0.67rem] font-bold tracking-[0.1em] uppercase text-(--muted)">
+                          <span className="block truncate text-xs font-bold tracking-[0.1em] uppercase text-(--muted)">
                             Section {section.id} · {lessonCount}{" "}
                             {lessonCount === 1 ? "lesson" : "lessons"}
                             {sectionDuration ? (

@@ -234,19 +234,28 @@ export function CourseCard({
 
         <button
           type="button"
-          className="group/media absolute inset-0 z-10 flex items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-(--accent)"
+          // On a device with no hover the button itself lets a touch through
+          // and only the round play button inside it takes one: a tap
+          // elsewhere on the thumbnail must not start the video (it reaches
+          // whatever the card does underneath instead).
+          className="group/media absolute inset-0 z-10 flex items-center justify-center [@media(hover:none)]:pointer-events-none focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-(--accent)"
           aria-label={thumbnailActionLabel}
           title={thumbnailActionTooltip}
           onClick={openThumbnail}
           disabled={isDeleting}
         >
-          <span className="absolute inset-0 bg-slate-950/50 opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100" />
+          {/* A device with no hover (a phone, a tablet without a mouse) can
+              never bring the play button up, so there the shade and the
+              button are always showing: the shade lighter, since it never
+              lifts, and the button a size larger. */}
+          <span className="absolute inset-0 bg-slate-950/50 opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-visible/media:opacity-100 [@media(hover:none)]:bg-slate-950/30 [@media(hover:none)]:opacity-100" />
           {/* The blur is only on while the button shows, and fades with it. A
               backdrop filter gets a compositor layer even at zero opacity,
               and that layer pushes the rest of the card into another one
               above it; on every card of a page those layers made a sidebar
-              drag drop parts of the cards on tablets. */}
-          <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full bg-black/70 text-white opacity-0 shadow-[0_10px_28px_rgba(0,0,0,0.5)] transition-[opacity,transform,backdrop-filter] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-hover/media:backdrop-blur-[2px] group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100 group-focus-visible/media:backdrop-blur-[2px]">
+              drag drop parts of the cards on tablets. For the same reason the
+              always-on button of a device with no hover has no blur at all. */}
+          <span className="relative flex min-h-16 min-w-16 scale-90 items-center justify-center rounded-full bg-black/70 text-white opacity-0 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:min-h-18 [@media(hover:none)]:min-w-18 [@media(hover:none)]:scale-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:[&>svg]:size-9 shadow-[0_10px_28px_rgba(0,0,0,0.5)] transition-[opacity,transform,backdrop-filter] duration-200 group-hover/media:scale-100 group-hover/media:opacity-100 group-hover/media:backdrop-blur-[2px] group-focus-visible/media:scale-100 group-focus-visible/media:opacity-100 group-focus-visible/media:backdrop-blur-[2px]">
             <Play size={30} weight="fill" />
           </span>
         </button>

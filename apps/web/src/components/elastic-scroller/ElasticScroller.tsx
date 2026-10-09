@@ -4,6 +4,7 @@ import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { cn } from "../../lib/utils";
 import { ElasticScrollerGlyph } from "./ElasticScrollerIcon";
 import { useElasticScroller } from "./useElasticScroller";
+import { useElasticScrollerPlacement } from "./useElasticScrollerPlacement";
 import { useElasticScrollerPreferences } from "./useElasticScrollerPreferences";
 import {
   ElasticScrollerSocket,
@@ -59,6 +60,14 @@ export const ElasticScroller = forwardRef<
     unlockSide: preferences.unlockSide,
     disabled,
   });
+  // Held still and then dragged, the control is moved instead of scrolling.
+  const placement = useElasticScrollerPlacement({
+    control,
+    placementKey: ariaControls ?? scrollAreaLabel,
+    scrollportRef,
+  });
+  // Held or being moved, it stays in view even when it would have hidden.
+  const visible = control.visible || placement.held || placement.moving;
   const hasDepth = preferences.appearance === "3d";
   const label = scrollAreaLabel.trim() || "content";
   const actionLabel = label.toLowerCase();
@@ -103,7 +112,7 @@ export const ElasticScroller = forwardRef<
     <div
       className={cn(
         "elastic-scroller pointer-events-none sticky top-[calc(100%-var(--elastic-scroller-bottom-clearance))] z-30 flex h-0 flex-none justify-center",
-        control.visible
+        visible
           ? "visible translate-y-0 opacity-100"
           : control.direction === "down"
             ? "invisible translate-y-1.5 opacity-0"
@@ -117,7 +126,8 @@ export const ElasticScroller = forwardRef<
       data-locked={control.isLocked ? "" : undefined}
       data-lock-feedback={control.lockFeedback ?? undefined}
       data-endpoint-feedback={endpointFeedback ?? undefined}
-      data-visible={control.visible ? "" : undefined}
+      data-visible={visible ? "" : undefined}
+      data-moving={placement.moving ? "" : undefined}
       data-base-ui-swipe-ignore
       data-learning-swipe-ignore
       data-sidebar-swipe-ignore
@@ -126,23 +136,94 @@ export const ElasticScroller = forwardRef<
         {
           "--elastic-scroller-spring": spring,
           "--elastic-scroller-bottom-clearance": normalizedBottomClearance,
-          transition: control.visible
-            ? "visibility 0s linear 0s, opacity 280ms ease, transform 280ms cubic-bezier(0.16, 1, 0.3, 1)"
-            : "visibility 0s linear 280ms, opacity 280ms ease, transform 280ms cubic-bezier(0.16, 1, 0.3, 1)",
+          // Where the learner has put it, from where it normally sits. (The
+          // classes above move it with `translate`, a property of its own.)
+          transform:
+            placement.offset.x || placement.offset.y
+              ? `translate(${placement.offset.x}px, ${placement.offset.y}px)`
+              : undefined,
+          transition: placement.moving
+            ? "none"
+            : visible
+              ? // Shown: it fades in and rises the few pixels into place.
+                "visibility 0s linear 0s, opacity 220ms ease-out, translate 220ms cubic-bezier(0.16, 1, 0.3, 1), transform 280ms cubic-bezier(0.16, 1, 0.3, 1)"
+              : // Hidden: a slower fade, sinking those few pixels as it
+                // goes. (The sinking is a `translate`, which was not among
+                // what is animated: it jumped, and the fade looked rough.)
+                "visibility 0s linear 450ms, opacity 450ms ease-in-out, translate 450ms ease-in-out, transform 280ms cubic-bezier(0.16, 1, 0.3, 1)",
         } as ElasticScrollerStyle
       }
-      aria-hidden={!control.visible}
+      aria-hidden={!visible}
     >
+      {/* While the control is being moved, the places it snaps to are
+          drawn: a thin line down the middle of the page and one across at
+          its usual height, each from edge to edge of the scrolling area,
+          over a faint veil that sets them off from the page. The line it
+          is snapped to at the moment is drawn strongly. This row moves
+          with the control, so the guides are shifted back by as much to
+          stay where they are; they cover exactly the part of the scrolling
+          area that is in view, and so add nothing to what it can scroll. */}
+      {placement.moveArea ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute top-5 left-1/2 z-0 overflow-hidden bg-[color-mix(in_srgb,var(--canvas)_30%,transparent)] transition-opacity duration-200 ease-out motion-reduce:transition-none starting:opacity-0"
+          style={{
+            width: placement.moveArea.width,
+            height: placement.moveArea.height,
+            borderRadius: placement.moveArea.radius,
+            transform: `translate(${placement.moveArea.left - placement.offset.x}px, ${placement.moveArea.top - placement.offset.y}px)`,
+          }}
+        >
+          <span
+            className={cn(
+              "absolute inset-y-0 w-px -translate-x-1/2 transition-[background-color,width] duration-150",
+              placement.snappedX
+                ? "w-0.5 bg-(--accent)"
+                : "bg-[color-mix(in_srgb,var(--accent)_46%,transparent)]",
+            )}
+            style={{ left: -placement.moveArea.left }}
+          />
+          <span
+            className={cn(
+              "absolute inset-x-0 h-px -translate-y-1/2 transition-[background-color,height] duration-150",
+              placement.snappedY
+                ? "h-0.5 bg-(--accent)"
+                : "bg-[color-mix(in_srgb,var(--accent)_46%,transparent)]",
+            )}
+            style={{ top: -placement.moveArea.top }}
+          />
+        </span>
+      ) : null}
+      {/* While the control is being moved by a finger, a wide ring stands
+          around it with clear space between: under a thumb the control
+          itself is covered, and the ring shows where it is. (Moved with a
+          mouse it is in plain view, and has no such ring.) It is centred on
+          the button, 20px down from the top of this zero-height row. */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute top-5 left-1/2 z-0 size-30 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] shadow-[0_0_24px_color-mix(in_srgb,var(--accent-shadow,var(--accent))_30%,transparent)] transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+          placement.movingUnderFinger
+            ? "scale-100 opacity-100"
+            : "scale-50 opacity-0",
+        )}
+      />
       <ElasticScrollerSocket
         appearance={preferences.appearance}
-        className="elastic-scroller__progress-puck pointer-events-none absolute -top-1 left-1/2 z-2 transition-[translate] duration-160 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
+        className={cn(
+          "elastic-scroller__progress-puck pointer-events-none absolute -top-1 left-1/2 z-2 transition-[translate] duration-160 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+        )}
         style={{
-          transform: `translate(-50%, ${-control.dragOffset}px)`,
+          // The ring grows with the button while the control is being
+          // moved. Its growth is part of this transform, after the shift
+          // that centres it: as a `scale` of its own it would scale that
+          // shift too, and slide the ring out from behind the button.
+          transform: `translate(-50%, ${-control.dragOffset}px) scale(${placement.moving ? 1.5 : 1})`,
           translate: `0 ${puckFeedbackOffset}px`,
           transition:
             control.mode === "drag"
-              ? "translate 160ms cubic-bezier(0.16, 1, 0.3, 1)"
-              : "transform 520ms var(--elastic-scroller-spring), translate 160ms cubic-bezier(0.16, 1, 0.3, 1)",
+              ? "translate 160ms cubic-bezier(0.16, 1, 0.3, 1), scale 180ms cubic-bezier(0.16, 1, 0.3, 1)"
+              : "transform 520ms var(--elastic-scroller-spring), translate 160ms cubic-bezier(0.16, 1, 0.3, 1), scale 180ms cubic-bezier(0.16, 1, 0.3, 1)",
         }}
         progressRingRef={control.progressRingRef}
         showStatusDot={!control.lockFeedback}
@@ -183,7 +264,13 @@ export const ElasticScroller = forwardRef<
         type="button"
         data-fixed-radius
         className={cn(
-          "elastic-scroller__button pointer-events-auto relative z-10 isolate inline-flex size-10 flex-none touch-none cursor-pointer items-center justify-center rounded-full border p-0 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) motion-reduce:transition-none",
+          // The button is drawn 40px across, inside a 48px ring. What can be
+          // pressed is wider than what is drawn: an unseen circle (its
+          // ::before) reaches 12px past the button all round, over the ring
+          // and a little beyond, so it is easy to land a finger on, to hold
+          // and to drag.
+          "before:absolute before:-inset-3 before:rounded-full before:content-['']",
+          "elastic-scroller__button pointer-events-auto relative z-10 isolate inline-flex size-10 flex-none touch-none [-webkit-touch-callout:none] cursor-pointer items-center justify-center rounded-full border p-0 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) motion-reduce:transition-none",
           elasticScrollerButtonSurface(preferences.appearance),
           hasDepth
             ? "text-(--text) hover:bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong)_82%,white),color-mix(in_srgb,var(--surface-strong)_66%,var(--accent)))] hover:text-(--accent-contrast,#fff)"
@@ -192,6 +279,12 @@ export const ElasticScroller = forwardRef<
             (hasDepth
               ? "bg-[linear-gradient(145deg,color-mix(in_srgb,var(--surface-strong,var(--surface))_72%,white)_0%,color-mix(in_srgb,var(--surface-strong,var(--surface))_56%,var(--accent))_54%,color-mix(in_srgb,var(--accent)_38%,var(--canvas))_100%)] text-(--accent-contrast,#fff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_34%,transparent),inset_0_-2px_3px_color-mix(in_srgb,var(--canvas)_42%,transparent),0_3px_0_color-mix(in_srgb,var(--canvas)_62%,var(--accent)),0_10px_24px_color-mix(in_srgb,black_48%,transparent),0_18px_34px_color-mix(in_srgb,var(--accent-shadow)_38%,transparent)]"
               : "bg-[color-mix(in_srgb,var(--surface-strong,var(--surface))_68%,var(--accent)_32%)] text-(--accent-contrast,#fff) shadow-[inset_0_1px_0_color-mix(in_srgb,white_18%,transparent),0_8px_24px_color-mix(in_srgb,var(--accent-shadow)_28%,transparent)]"),
+          // Being moved: it and its ring grow, so that it shows around the
+          // thumb that is holding it, and it is outlined in the accent while
+          // it is in line with the middle of the page or its usual height.
+          placement.moving && "scale-150 cursor-grabbing",
+          (placement.snappedX || placement.snappedY) &&
+            "outline-2 outline-offset-2 outline-(--accent)",
           buttonClassName,
         )}
         data-direction={control.direction}
@@ -211,8 +304,8 @@ export const ElasticScroller = forwardRef<
           translate: `0 ${buttonFeedbackOffset}px`,
           transition:
             control.mode === "drag"
-              ? "color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, translate 160ms cubic-bezier(0.16, 1, 0.3, 1)"
-              : "color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 520ms var(--elastic-scroller-spring), translate 160ms cubic-bezier(0.16, 1, 0.3, 1)",
+              ? "color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, translate 160ms cubic-bezier(0.16, 1, 0.3, 1), scale 180ms cubic-bezier(0.16, 1, 0.3, 1)"
+              : "color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 520ms var(--elastic-scroller-spring), translate 160ms cubic-bezier(0.16, 1, 0.3, 1), scale 180ms cubic-bezier(0.16, 1, 0.3, 1)",
         }}
         aria-controls={ariaControls}
         aria-label={
@@ -246,15 +339,17 @@ export const ElasticScroller = forwardRef<
               : control.mode === "edge"
                 ? "Stop scrolling"
                 : control.direction === "down"
-                  ? "Drag up or down — farther scrolls faster. Click to scroll to bottom"
-                  : "Drag up or down — farther scrolls faster. Click to scroll to top"
+                  ? "Drag up or down — farther scrolls faster. Click to scroll to bottom. Hold, then drag, to move"
+                  : "Drag up or down — farther scrolls faster. Click to scroll to top. Hold, then drag, to move"
         }
-        tabIndex={control.visible ? 0 : -1}
+        tabIndex={visible ? 0 : -1}
         onClick={control.handleClick}
-        onPointerDown={control.handlePointerDown}
-        onPointerMove={control.handlePointerMove}
-        onPointerUp={control.handlePointerFinish}
-        onPointerCancel={control.handlePointerCancel}
+        onPointerDown={placement.handlePointerDown}
+        onPointerMove={placement.handlePointerMove}
+        onPointerUp={placement.handlePointerFinish}
+        onPointerCancel={placement.handlePointerCancel}
+        onLostPointerCapture={placement.handleLostPointerCapture}
+        onContextMenu={placement.handleContextMenu}
       >
         <ElasticScrollerGlyph
           icon={preferences.icon}

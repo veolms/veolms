@@ -165,18 +165,29 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
           {number}. {title}
         </span>
         <span
-          className={`mt-1 flex items-center gap-1.5 text-[0.75rem] font-medium tabular-nums text-(--muted) ${
+          className={`mt-1.5 flex items-center gap-1.5 text-[0.8125rem] font-medium tabular-nums text-(--muted) ${
             hasActions ? "min-h-8" : "min-h-5"
           }`}
         >
           {!isAvailable ? (
             <LockSimple size={13} weight="fill" aria-hidden="true" />
           ) : isActive && !showLock ? (
-            // Nothing is playing on a locked lesson, so no equalizer.
-            <NowPlayingGlyph />
+            // Nothing is playing on a locked lesson, so no equalizer. A
+            // lesson already finished keeps its tick beside the bars.
+            <>
+              <NowPlayingGlyph />
+              {completed ? (
+                <CheckCircle
+                  size={17}
+                  weight="fill"
+                  className="text-(--success)"
+                  aria-hidden="true"
+                />
+              ) : null}
+            </>
           ) : completed ? (
             <CheckCircle
-              size={15}
+              size={17}
               weight="fill"
               className="text-(--success)"
               aria-hidden="true"
@@ -184,7 +195,15 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
           ) : null}
           <span>{lengthLabel}</span>
           {isAvailable && inProgress ? (
-            <span>· {Math.round(watched)}%</span>
+            <>
+              {/* A drawn dot: the middle-dot character sits below the
+                  centre of these digits. */}
+              <span
+                className="size-[3px] shrink-0 rounded-full bg-current"
+                aria-hidden="true"
+              />
+              <span>{Math.round(watched)}% complete</span>
+            </>
           ) : null}
           <span className="sr-only">
             {!isAvailable

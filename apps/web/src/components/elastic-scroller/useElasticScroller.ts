@@ -784,6 +784,31 @@ export function useElasticScroller({
     [cancelDragScroll, clearPointerGesture, syncDirectionAtEdge],
   );
 
+  /**
+   * Ends the scroll drag a press began without the pointer being lifted,
+   * for a press that turns out to be something else (holding the control
+   * to move it). The pointer stays captured, and the click that follows
+   * its release does nothing.
+   */
+  const abandonPointerGesture = useCallback(() => {
+    if (dragPointerIdRef.current === null) return;
+    clearPointerGesture();
+    preserveDirectionRef.current = false;
+    cancelDragScroll();
+    syncDirectionAtEdge(directionRef.current);
+    pointerDownStoppedEdgeRef.current = false;
+    suppressClickRef.current = true;
+  }, [cancelDragScroll, clearPointerGesture, syncDirectionAtEdge]);
+
+  /**
+   * Shows the control and starts its idle wait afresh, for when something
+   * that kept it in view (being held, being moved) has just ended.
+   */
+  const stayVisible = useCallback(() => {
+    setVisible(true);
+    scheduleHide();
+  }, [scheduleHide]);
+
   const scrollToStart = useCallback(() => {
     const scrollport = scrollportRef.current;
     if (!scrollport) return;
@@ -823,6 +848,8 @@ export function useElasticScroller({
     handlePointerMove,
     handlePointerFinish,
     handlePointerCancel,
+    abandonPointerGesture,
+    stayVisible,
     stop: cancelAutomatedScroll,
     scrollToStart,
   };

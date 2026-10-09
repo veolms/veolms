@@ -15,6 +15,7 @@ import {
   clampLearningPlayerValue as clamp,
   clearLearningPlayerMinimizeMotionStyles,
   getDefaultLearningMiniPlayerLayout,
+  setLearningMiniPlayerPreferredLeft,
   getLearningMiniPlayerBottomEdge as getSettledBottomEdge,
   getLearningMiniPlayerHeight,
   getLearningMiniPlayerPointerResizeLayout,
@@ -38,7 +39,19 @@ const DOCK_FLICK_VELOCITY = 0.5;
 const DISMISS_DISTANCE = 56;
 const DISMISS_VELOCITY = 0.45;
 const DISMISS_DURATION = 200;
-const SETTLE_DURATION = 240;
+type MiniPlayerDismissDirection = "down" | "left" | "right" | "up";
+/** How long it takes to come to rest once let go: an unhurried glide. */
+const SETTLE_DURATION = 560;
+/**
+ * On a wide screen a flick carries it on by this many milliseconds of the
+ * speed it was let go at: a gentle one a short way, a hard one all the way
+ * to the edge of the screen, where it stops.
+ */
+const GLIDE_MS = 420;
+/** Held still for longer than this before letting go, it does not glide. */
+const GLIDE_PAUSE_MS = 90;
+/** Let go slower than this (pixels a millisecond), it does not glide. */
+const GLIDE_MIN_VELOCITY = 0.12;
 
 interface PointerSample {
   id: number;
@@ -151,9 +164,31 @@ const getFlickDirectedCornerLayout = (
   velocityY: number,
   viewport = getViewportBounds(),
   isExpanded = false,
+  /**
+   * How it comes to rest. On a phone it always ends in a corner: the one
+   * it was flicked towards, or else the nearest. On a wide screen it glides
+   * on from where it was let go, in the direction and as far as the flick
+   * carries it (see GLIDE_MS), slowing to a stop wherever that is, and no
+   * further than the edge of the screen. Let go without a flick, it stays
+   * put.
+   */
+  unflickedAxis: "nearest-corner" | "where-dropped" = "nearest-corner",
 ): MiniPlayerLayout => {
-  const nearestCorner = getNearestCornerLayout(layout, viewport, isExpanded);
   const peakVelocity = Math.max(Math.abs(velocityX), Math.abs(velocityY));
+  if (unflickedAxis === "where-dropped") {
+    return clampLayout(
+      peakVelocity < GLIDE_MIN_VELOCITY
+        ? layout
+        : {
+            ...layout,
+            left: layout.left + velocityX * GLIDE_MS,
+            top: layout.top + velocityY * GLIDE_MS,
+          },
+      viewport,
+      isExpanded,
+    );
+  }
+  const nearestCorner = getNearestCornerLayout(layout, viewport, isExpanded);
   if (peakVelocity < DOCK_FLICK_VELOCITY) return nearestCorner;
 
   const isDesktop = isDesktopLearningMinimizeViewport();
@@ -261,6 +296,7 @@ export function useLearningMiniPlayerGestures(
   const [layout, setLayout] = useState<MiniPlayerLayout | null>(null);
   const [mode, setMode] = useState<MiniPlayerGestureMode>("idle");
   const [dismissDistance, setDismissDistance] = useState(0);
+  const [dismissShift, setDismissShift] = useState(0);
   const layoutRef = useRef<MiniPlayerLayout | null>(null);
   const modeRef = useRef<MiniPlayerGestureMode>("idle");
   const pointersRef = useRef(new Map<number, PointerSample>());
@@ -429,11 +465,14 @@ export function useLearningMiniPlayerGestures(
       return;
     }
 
+    // The place a minimizing swipe asked for was for that mini player.
+    setLearningMiniPlayerPreferredLeft(null);
     layoutRef.current = null;
     setLayout(null);
     modeRef.current = "idle";
     setMode("idle");
     setDismissDistance(0);
+    setDismissShift(0);
     pointersRef.current.clear();
     singleGestureRef.current = null;
     pinchGestureRef.current = null;
@@ -599,15 +638,44 @@ export function useLearningMiniPlayerGestures(
     }, 0);
   }, []);
 
-  const dismiss = useCallback(() => {
-    const currentLayout = measureLayout();
-    const viewport = getViewportBounds();
-    setDismissDistance(
-      viewport.top + viewport.height - currentLayout.top + MINI_PLAYER_MARGIN,
-    );
-    updateMode("dismissing");
-    dismissTimerRef.current = window.setTimeout(onDismiss, DISMISS_DURATION);
-  }, [measureLayout, onDismiss, updateMode]);
+  const dismiss = useCallback(
+    (direction: MiniPlayerDismissDirection = "down") => {
+      const currentLayout = measureLayout();
+      const viewport = getViewportBounds();
+      const height =
+        containerRef.current?.getBoundingClientRect().height ??
+        currentLayout.width;
+      // Far enough that the whole of it has left the screen on that side.
+      setDismissDistance(
+        direction === "down"
+          ? viewport.top +
+              viewport.height -
+              currentLayout.top +
+              MINI_PLAYER_MARGIN
+          : direction === "up"
+            ? -(currentLayout.top - viewport.top + height + MINI_PLAYER_MARGIN)
+            : 0,
+      );
+      setDismissShift(
+        direction === "right"
+          ? viewport.left +
+              viewport.width -
+              currentLayout.left +
+              MINI_PLAYER_MARGIN
+          : direction === "left"
+            ? -(
+                currentLayout.left -
+                viewport.left +
+                currentLayout.width +
+                MINI_PLAYER_MARGIN
+              )
+            : 0,
+      );
+      updateMode("dismissing");
+      dismissTimerRef.current = window.setTimeout(onDismiss, DISMISS_DURATION);
+    },
+    [containerRef, measureLayout, onDismiss, updateMode],
+  );
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
@@ -836,6 +904,15 @@ export function useLearningMiniPlayerGestures(
           single.velocityY,
           averageVelocityY,
         );
+        // What carries it on after it is let go on a wide screen: the speed
+        // it was moving at in its last moments, and nothing at all if the
+        // pointer had come to rest before it was lifted. (The figures above
+        // fall back on the average over the whole drag, which would send a
+        // slow, deliberate move gliding on past where it was put.)
+        const stoppedBeforeRelease =
+          sample.time - single.last.time > GLIDE_PAUSE_MS;
+        const glideVelocityX = stoppedBeforeRelease ? 0 : single.velocityX;
+        const glideVelocityY = stoppedBeforeRelease ? 0 : single.velocityY;
         const nextLayout = {
           left: single.initialLayout.left + deltaX,
           playlistHeight: getPlaylistHeight(single.initialLayout),
@@ -845,22 +922,40 @@ export function useLearningMiniPlayerGestures(
         const directPointer =
           event.pointerType === "touch" || event.pointerType === "pen";
         const isDesktop = isDesktopLearningMinimizeViewport();
-        settleCandidateRef.current =
-          cancelled || isDesktop || !directPointer
-            ? nextLayout
-            : getFlickDirectedCornerLayout(
+        // Where it comes to rest. On a wide screen a flick carries it on a
+        // distance that depends on how hard it was (see
+        // getFlickDirectedCornerLayout), and anything slower leaves it where
+        // it was dropped. On a phone a finger always lands it in a corner.
+        settleCandidateRef.current = cancelled
+          ? nextLayout
+          : isDesktop
+            ? getFlickDirectedCornerLayout(
                 nextLayout,
                 deltaX,
                 deltaY,
-                velocityX,
-                velocityY,
-              );
+                glideVelocityX,
+                glideVelocityY,
+                undefined,
+                isExpanded,
+                "where-dropped",
+              )
+            : directPointer
+              ? getFlickDirectedCornerLayout(
+                  nextLayout,
+                  deltaX,
+                  deltaY,
+                  velocityX,
+                  velocityY,
+                )
+              : nextLayout;
         showLiveLayout(nextLayout);
 
+        // It closes one way only: swiped downwards while it is already
+        // resting at the bottom. Flicked or dragged towards any other edge,
+        // or downwards from higher up, it just moves.
         const downwardSwipe =
           !cancelled &&
-          !isDesktop &&
-          directPointer &&
+          (isDesktop || directPointer) &&
           Math.abs(deltaX) <= deltaY * 1.25 + 32 &&
           (deltaY >= DISMISS_DISTANCE ||
             (deltaY >= DRAG_START_DISTANCE &&
@@ -872,10 +967,15 @@ export function useLearningMiniPlayerGestures(
             singleGestureRef.current = null;
             pinchGestureRef.current = null;
             settleCandidateRef.current = null;
+            // The click that follows a mouse release must not reach a control.
+            scheduleClickRelease();
             dismiss();
             return;
           }
-          settleCandidateRef.current = getDownmostLayout(nextLayout);
+          // A phone drops it to the bottom first; the next swipe closes it.
+          if (!isDesktop) {
+            settleCandidateRef.current = getDownmostLayout(nextLayout);
+          }
         }
       }
 
@@ -934,6 +1034,7 @@ export function useLearningMiniPlayerGestures(
     },
     [
       dismiss,
+      isExpanded,
       scheduleClickRelease,
       settleLayout,
       showLiveLayout,
@@ -975,14 +1076,13 @@ export function useLearningMiniPlayerGestures(
         ["--learning-mini-player-playlist-height" as string]: `${getPlaylistHeight(visibleLayout)}px`,
         ...(mode === "settling"
           ? {
-              transition:
-                "left 240ms cubic-bezier(0.16, 1, 0.3, 1), top 240ms cubic-bezier(0.16, 1, 0.3, 1), width 240ms cubic-bezier(0.16, 1, 0.3, 1)",
+              transition: `left ${SETTLE_DURATION}ms cubic-bezier(0.16, 1, 0.3, 1), top ${SETTLE_DURATION}ms cubic-bezier(0.16, 1, 0.3, 1), width ${SETTLE_DURATION}ms cubic-bezier(0.16, 1, 0.3, 1)`,
             }
           : undefined),
         ...(mode === "dismissing"
           ? {
               opacity: 0,
-              transform: `translate3d(0, ${dismissDistance}px, 0)`,
+              transform: `translate3d(${dismissShift}px, ${dismissDistance}px, 0)`,
             }
           : undefined),
       }

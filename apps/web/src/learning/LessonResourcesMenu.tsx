@@ -33,6 +33,16 @@ interface LessonResourcesMenuProps {
 const HEADER_ACTION_CLASS =
   "inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-(--text-secondary) transition-colors duration-150 hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) disabled:cursor-default disabled:opacity-60";
 
+/**
+ * The chip is blue, and so is the active lesson card in the palettes whose
+ * accent is blue (Ocean, Midnight, Brainwave): there the two barely differ.
+ * In those palettes the chip is amber instead, which stands clear of a blue
+ * card in both themes.
+ */
+// Written out in full: Tailwind only generates classes it can read whole.
+const RESOURCES_CHIP_ON_BLUE_PALETTE_CLASS =
+  "[:is([data-palette=ocean],[data-palette=midnight],[data-palette=brainwave])_&]:bg-[color-mix(in_srgb,#f0a030_30%,var(--canvas))] [:is([data-palette=ocean],[data-palette=midnight],[data-palette=brainwave])_&]:text-[#f7bd5c] [:is([data-palette=ocean],[data-palette=midnight],[data-palette=brainwave])_&]:hover:bg-[color-mix(in_srgb,#f0a030_44%,var(--canvas))] [:is([data-palette=ocean],[data-palette=midnight],[data-palette=brainwave])_&]:data-popup-open:bg-[color-mix(in_srgb,#f0a030_48%,var(--canvas))] [[data-theme=light]:is([data-palette=ocean],[data-palette=midnight],[data-palette=brainwave])_&]:text-amber-800";
+
 export function LessonResourcesMenu({
   courseKey,
   lessonNumber,
@@ -65,7 +75,7 @@ export function LessonResourcesMenu({
   return (
     <Popover>
       <PopoverTrigger
-        className={`${LESSON_CARD_ACTION_CLASS} gap-1 bg-[color-mix(in_srgb,#2590f2_28%,var(--canvas))] px-2 text-[#4fa6f6] hover:bg-[color-mix(in_srgb,#2590f2_42%,var(--canvas))] data-popup-open:bg-[color-mix(in_srgb,#2590f2_46%,var(--canvas))] [[data-theme=light]_&]:text-blue-700`}
+        className={`${LESSON_CARD_ACTION_CLASS} gap-1 bg-[color-mix(in_srgb,#2590f2_28%,var(--canvas))] px-2 text-[#4fa6f6] hover:bg-[color-mix(in_srgb,#2590f2_42%,var(--canvas))] data-popup-open:bg-[color-mix(in_srgb,#2590f2_46%,var(--canvas))] [[data-theme=light]_&]:text-blue-700 ${RESOURCES_CHIP_ON_BLUE_PALETTE_CLASS}`}
         aria-label={`Resources for lecture ${lessonNumber}: ${lessonTitle} (${items.length})`}
         title="Resources"
       >

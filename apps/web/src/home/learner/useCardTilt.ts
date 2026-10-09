@@ -8,18 +8,20 @@ const FOLLOW_MS = 130;
 /** Closer to its target than this, a value is put on it and left there. */
 const SETTLED = 0.0005;
 /**
- * How far a finger has to travel, more across than down, before the card
- * starts to follow it. Less than that is a tap, or the start of a scroll.
+ * How far a pressed pointer has to travel before the card starts to follow
+ * it. Less than that is a tap or a click. A finger also has to travel more
+ * across than down: down or up first is the start of a scroll.
  */
-const TOUCH_DRAG_START = 8;
+const DRAG_START = 8;
 
 const PROPERTIES = ["--tilt-x", "--tilt-y", "--tilt-lift"] as const;
 /** On the card's place for as long as the card is away from rest. */
 const TILTING_ATTRIBUTE = "data-tilting";
 
 /**
- * Follows a pointer over a card so the card can lean towards it: a mouse
- * that is over the card, or a finger that is dragged across it.
+ * Follows a pointer that is dragged over a card so the card can lean
+ * towards it: a finger, a pen, or a mouse with its button held. Merely
+ * moving a mouse over the card does nothing.
  *
  * It is given the card's place, a box around the card that does not move,
  * not the card: a leaning card's outline shifts under a pointer near its
@@ -42,9 +44,14 @@ const TILTING_ATTRIBUTE = "data-tilting";
  * moves down or up first scrolls the page, as it would anywhere else, and
  * one that barely moves is a tap. For the sideways drag to reach this at
  * all, the place has to keep it from the browser (`touch-action: pan-y`).
- * The card then follows the finger wherever it goes until it is lifted,
- * and the tap that would open the card's link at the end of a drag is
- * swallowed.
+ * A mouse or pen leans it once dragged in any direction. The card then
+ * follows the pointer wherever it goes until it is released, and the click
+ * that would open the card's link at the end of a drag is swallowed.
+ *
+ * A drag would otherwise select the card's words, or pick its link up to
+ * be dropped somewhere: both are stopped for a press that may lean the
+ * card. With Alt held the press is left alone instead, so Alt and a drag
+ * still select the words.
  *
  * A card takes part only while its place's styles set `--tilt-on: 1`, and
  * with motion reduced the card does not move.
@@ -60,8 +67,8 @@ export function useCardTilt(ref: RefObject<HTMLElement | null>) {
     let following = false;
     let frame = 0;
     let lastTime = 0;
-    /** A finger that is down on the card and may yet be dragged across it. */
-    let touch: { pointerId: number; x: number; y: number } | null = null;
+    /** A pointer that is down on the card and may yet be dragged across it. */
+    let press: { pointerId: number; x: number; y: number } | null = null;
     /** The press that is ending was a drag, so its click is not a tap. */
     let dragged = false;
 
@@ -120,44 +127,59 @@ export function useCardTilt(ref: RefObject<HTMLElement | null>) {
     /** Lets the card go back to lying flat. */
     const release = () => {
       following = false;
-      touch = null;
+      press = null;
       if (!frame && current.every((value) => value === 0)) return;
       target.fill(0);
       ease();
     };
 
-    const onEnter = (event: PointerEvent) => {
-      if (event.pointerType !== "touch") following = canTilt();
-    };
     const onDown = (event: PointerEvent) => {
       dragged = false;
-      if (event.pointerType !== "touch" || !event.isPrimary) return;
-      touch = canTilt()
-        ? { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
-        : null;
+      press = null;
+      if (!event.isPrimary) return;
+      if (event.pointerType !== "touch") {
+        // Only the main button, and not with Alt: that drag selects text.
+        if (event.button !== 0 || event.altKey) return;
+      }
+      if (!canTilt()) return;
+      press = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+      };
     };
     const onMove = (event: PointerEvent) => {
-      if (event.pointerType === "touch") {
-        if (!touch || touch.pointerId !== event.pointerId) return;
-        if (!following) {
-          const across = Math.abs(event.clientX - touch.x);
-          const down = Math.abs(event.clientY - touch.y);
-          if (Math.max(across, down) < TOUCH_DRAG_START) return;
-          if (down >= across) {
-            // The page is being scrolled.
-            touch = null;
-            return;
-          }
-          following = true;
-          dragged = true;
+      if (!press || press.pointerId !== event.pointerId) return;
+      if (!following) {
+        const across = Math.abs(event.clientX - press.x);
+        const down = Math.abs(event.clientY - press.y);
+        if (Math.max(across, down) < DRAG_START) return;
+        if (event.pointerType === "touch" && down >= across) {
+          // The page is being scrolled.
+          press = null;
+          return;
         }
-      } else if (!following) {
-        return;
+        following = true;
+        dragged = true;
+        if (event.pointerType !== "touch") {
+          // Followed to wherever the pointer goes, off the card included,
+          // until the button is let go.
+          try {
+            place.setPointerCapture(event.pointerId);
+          } catch {
+            // Without capture the card lies back when the pointer leaves.
+          }
+        }
       }
       follow(event);
     };
     const onUp = (event: PointerEvent) => {
-      if (event.pointerType === "touch") release();
+      if (press && press.pointerId !== event.pointerId) return;
+      release();
+    };
+    /** A press that may lean the card selects nothing and drags no link. */
+    const onSelectOrDragStart = (event: Event) => {
+      if (press) event.preventDefault();
     };
     const onClick = (event: MouseEvent) => {
       if (!dragged) return;
@@ -166,22 +188,24 @@ export function useCardTilt(ref: RefObject<HTMLElement | null>) {
       event.stopPropagation();
     };
 
-    place.addEventListener("pointerenter", onEnter);
     place.addEventListener("pointerdown", onDown);
     place.addEventListener("pointermove", onMove);
     place.addEventListener("pointerup", onUp);
     place.addEventListener("pointerleave", release);
     place.addEventListener("pointercancel", release);
     place.addEventListener("click", onClick, true);
+    place.addEventListener("selectstart", onSelectOrDragStart);
+    place.addEventListener("dragstart", onSelectOrDragStart);
     return () => {
       cancelAnimationFrame(frame);
-      place.removeEventListener("pointerenter", onEnter);
       place.removeEventListener("pointerdown", onDown);
       place.removeEventListener("pointermove", onMove);
       place.removeEventListener("pointerup", onUp);
       place.removeEventListener("pointerleave", release);
       place.removeEventListener("pointercancel", release);
       place.removeEventListener("click", onClick, true);
+      place.removeEventListener("selectstart", onSelectOrDragStart);
+      place.removeEventListener("dragstart", onSelectOrDragStart);
       PROPERTIES.forEach((property) => place.style.removeProperty(property));
       place.removeAttribute(TILTING_ATTRIBUTE);
     };

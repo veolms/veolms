@@ -10,7 +10,17 @@ export const learningProgressItemSchema = z.strictObject({
 });
 
 export const learningProgressBatchRequestSchema = z.strictObject({
-  items: z.array(learningProgressItemSchema).min(1).max(100),
+  /** May be empty when the batch only reports watch time. */
+  items: z.array(learningProgressItemSchema).max(100),
+  /**
+   * Seconds of video actually played since the page last reported, in media
+   * time: a minute of video played at 2x is 60, and time skipped over with
+   * the timeline is not counted at all. This is what the learner's daily
+   * goal is credited from. A page that sends it (0 included) earns nothing
+   * from progress alone; a page that omits it is an older one, still
+   * credited the old way from how far its progress moved.
+   */
+  watchedSeconds: z.number().min(0).max(86_400).optional(),
   /**
    * The device's IANA time zone. Used only to set the learner's zone when
    * they have never saved one, so their learning days follow their own

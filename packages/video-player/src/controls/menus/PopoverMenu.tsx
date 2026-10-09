@@ -33,6 +33,12 @@ export interface PopoverMenuProps {
   children: ReactNode | ((context: PopoverMenuRenderContext) => ReactNode);
   menuLabel?: string;
   mobilePresentation?: PopoverMenuMobilePresentation;
+  /**
+   * Uses the sheet outside the phone layout too (only with
+   * `mobilePresentation="sheet"`): for a player too short to hold the
+   * popover.
+   */
+  forceSheet?: boolean;
   /** Optional fullscreen-local host for a mobile sheet. Defaults to document.body. */
   mobileSheetPortalTarget?: HTMLElement | null;
   /** Classes applied only when the mobile sheet presentation is active. */
@@ -153,6 +159,7 @@ export function PopoverMenu({
   closeOnItemSelect = true,
   defaultOpen = false,
   disabled = false,
+  forceSheet = false,
   label,
   menuLabel,
   mobilePresentation = "popover",
@@ -191,7 +198,8 @@ export function PopoverMenu({
   );
   const isControlled = controlledOpen !== undefined;
   const isOpen = controlledOpen ?? internalOpen;
-  const isMobileSheet = mobilePresentation === "sheet" && mobileInteraction;
+  const isMobileSheet =
+    mobilePresentation === "sheet" && (mobileInteraction || forceSheet);
   const isContainedMobileSheet =
     isMobileSheet && Boolean(mobileSheetPortalTarget);
 

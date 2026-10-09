@@ -38,9 +38,22 @@ interface PointerPressGesture {
 }
 
 export interface PlayerGestureSurfaceProps {
+  className?: string;
+  /**
+   * When a double tap on one side seeks instead of toggling fullscreen.
+   * "responsive" (the default): in the phone layout, and for any double tap
+   * made with a finger or pen, so a tablet behaves like a phone while a
+   * mouse double click still means fullscreen. "always": for a mouse too.
+   */
+  doubleTapSeek?: "always" | "responsive";
   emptyTapBehavior?: "responsive" | "toggle-controls" | "toggle-playback";
+  /** Replaces what a single tap does; told which kind of pointer made it. */
+  onEmptyTap?: (pointerType: string) => void;
   seekIntervalSeconds?: number;
 }
+
+const isDirectPointer = (pointerType: string) =>
+  pointerType === "touch" || pointerType === "pen";
 
 function shouldToggleControls(
   emptyTapBehavior: PlayerGestureSurfaceProps["emptyTapBehavior"],
@@ -53,7 +66,10 @@ function shouldToggleControls(
 }
 
 export function PlayerGestureSurface({
+  className,
+  doubleTapSeek = "responsive",
   emptyTapBehavior = "toggle-playback",
+  onEmptyTap,
   seekIntervalSeconds = 10,
 }: PlayerGestureSurfaceProps) {
   const controller = usePlayerController();
@@ -281,6 +297,10 @@ export function PlayerGestureSurface({
       singleTapTimerRef.current = setTimeout(() => {
         singleTapTimerRef.current = null;
         lastTapRef.current = null;
+        if (onEmptyTap) {
+          onEmptyTap(pointerType);
+          return;
+        }
         if (shouldToggleControls(emptyTapBehavior, mobileInteraction)) {
           const shouldShowControls = !controlsVisibleBeforePressRef.current;
           if (!shouldShowControls) controller.setSettingsView("closed");
@@ -290,7 +310,7 @@ export function PlayerGestureSurface({
         void controller.togglePlayback().catch(() => undefined);
       }, DOUBLE_TAP_WINDOW_MS);
     },
-    [controller, emptyTapBehavior, mobileInteraction],
+    [controller, emptyTapBehavior, mobileInteraction, onEmptyTap],
   );
 
   const captureControlsVisibility = () => {
@@ -322,7 +342,12 @@ export function PlayerGestureSurface({
       return;
     }
 
-    if (mobileSeekSequenceRef.current !== null && mobileInteraction) {
+    const seeksOnDoubleTap =
+      doubleTapSeek === "always" ||
+      mobileInteraction ||
+      isDirectPointer(pointerType);
+
+    if (mobileSeekSequenceRef.current !== null && seeksOnDoubleTap) {
       clearSingleTapTimer();
       lastTapRef.current = null;
       applyMobileSeek(direction);
@@ -334,7 +359,7 @@ export function PlayerGestureSurface({
       lastTap !== null &&
       lastTap.pointerType === pointerType &&
       timestamp - lastTap.timestamp <= DOUBLE_TAP_WINDOW_MS;
-    const desktopDoubleTap = isDoubleTapWindow && !mobileInteraction;
+    const desktopDoubleTap = isDoubleTapWindow && !seeksOnDoubleTap;
     const mobileSeekDoubleTap =
       isDoubleTapWindow &&
       !desktopDoubleTap &&
@@ -356,7 +381,10 @@ export function PlayerGestureSurface({
 
     if (lastTap !== null) {
       clearSingleTapTimer();
-      if (!shouldToggleControls(emptyTapBehavior, mobileInteraction)) {
+      if (
+        !onEmptyTap &&
+        !shouldToggleControls(emptyTapBehavior, mobileInteraction)
+      ) {
         void controller.togglePlayback().catch(() => undefined);
       }
     }
@@ -509,14 +537,25 @@ export function PlayerGestureSurface({
       className={classNames(
         "absolute inset-0 z-0 cursor-inherit !rounded-none border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white",
         mobileInteraction ? "touch-none" : "touch-pan-y",
+        className,
       )}
       aria-label={surfaceLabel}
       onPointerDownCapture={captureControlsVisibility}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={(event) => {
+      onPointerCancel={() => {
         cancelCompetingGestures();
+      }}
+      // Something else took the pointer over mid-press (a drag of the mini
+      // player does): the press is over, and must not end as a tap or leave
+      // its long-press timer to fire later.
+      onLostPointerCapture={(event) => {
+        const gesture = pointerPressRef.current;
+        if (!gesture || gesture.pointerId !== event.pointerId) return;
+        pointerPressRef.current = null;
+        if (touchGestureRef.current) touchGestureRef.current.moved = true;
+        if (!endPausedScrub()) endBoost();
       }}
       onPointerLeave={(event) => {
         if (event.pointerType === "mouse") return;

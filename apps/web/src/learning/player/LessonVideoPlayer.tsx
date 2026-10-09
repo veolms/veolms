@@ -70,6 +70,10 @@ import {
 } from "./useLessonPlayerMinimizeGesture";
 import { useLearningPlayerMinimizeShortcut } from "./useLearningPlayerMinimizeShortcut";
 import { cn } from "../../lib/utils";
+import {
+  addWatchedSeconds,
+  createWatchTimeTracker,
+} from "../learningWatchTime";
 
 const RESUME_PERSIST_INTERVAL_MS = 5_000;
 // A lesson left this close to its end counts as finished when it is reopened.
@@ -150,6 +154,12 @@ export interface LessonVideoPlayerProps {
   onMiniRestore?: () => void;
   onMobileLandscapeFullscreenChange?: (active: boolean) => void;
   onProgressChange?: (progress: number) => void;
+  /**
+   * The course this lesson belongs to, as the progress API knows it. With
+   * it, the seconds of video actually played are tallied towards the
+   * learner's daily goal (see learningWatchTime.ts).
+   */
+  watchTimeCourseKey?: string;
   /** Registers a lifecycle-scoped bridge for inline Learning Space timestamps. */
   onSeekToTimestampReady?: (
     seekToTimestamp: (seconds: number) => void,
@@ -211,6 +221,7 @@ export function LessonVideoPlayer({
   media,
   totalLessons,
   onProgressChange,
+  watchTimeCourseKey,
   onAutoplayEnabledChange = () => undefined,
   onCourseLessonsToggle,
   onGoNext = () => undefined,
@@ -455,8 +466,20 @@ export function LessonVideoPlayer({
     finishMiniPlayerRestoreAfterPresentedFrame();
   }, [finishMiniPlayerRestoreAfterPresentedFrame, mediaKey]);
 
+  const watchTimeCourseKeyRef = useRef(watchTimeCourseKey);
+  useEffect(() => {
+    watchTimeCourseKeyRef.current = watchTimeCourseKey;
+  }, [watchTimeCourseKey]);
+  const [trackWatchTime] = useState(() =>
+    createWatchTimeTracker((seconds) => {
+      const courseKey = watchTimeCourseKeyRef.current;
+      if (courseKey) addWatchedSeconds(courseKey, seconds);
+    }),
+  );
+
   const handleEvent = useCallback(
     (event: VideoPlayerEvent) => {
+      trackWatchTime(event);
       if (playbackSuspended) {
         if (
           event.type === "playing" ||
@@ -634,6 +657,7 @@ export function LessonVideoPlayer({
       mediaKey,
       onLessonEnded,
       onProgressChange,
+      trackWatchTime,
       persistResumePosition,
       playbackSuspended,
       showCompletionOverlay,
@@ -1049,8 +1073,12 @@ export function LessonVideoPlayer({
         muted: restoreAutoplayRef.current !== null ? true : muted,
       }}
       className={cn(
+        // Wide touch screens keep the vertical swipe for the minimize
+        // gesture, as phones do; only a mouse-first device hands vertical
+        // panning back to the page. The tap surface inside allows vertical
+        // panning by itself at these widths, so it is told the same.
         presentation === "full" &&
-          "touch-pan-x touch-pinch-zoom min-[641px]:touch-pan-y",
+          "touch-pan-x touch-pinch-zoom min-[641px]:[@media(pointer:fine)]:touch-pan-y [@media(pointer:coarse)]:[&_[data-player-zoom-surface]]:touch-none!",
         presentation === "mini"
           ? "!rounded-none"
           : fullscreenCoursePanelActive

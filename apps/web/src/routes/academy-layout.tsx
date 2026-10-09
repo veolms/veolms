@@ -43,6 +43,7 @@ import type {
   RegisterPersistentLearningPlayer,
 } from "../learning/player/PersistentLearningPlayerHost";
 import type { LessonPlayerMinimizeGestureState } from "../learning/player/useLessonPlayerMinimizeGesture";
+import { resetLessonPlayerHeight } from "../learning/player/LessonPlayerHeightHandle";
 import {
   easeLearningPlayerMotionProgress,
   getLearningBackgroundMotionState,
@@ -244,7 +245,33 @@ function getFallbackNavigationPath(
   return items[0]?.[2]?.routeLink ?? "/";
 }
 
+/**
+ * The application frame is one element, and the moment a minimize begins it
+ * takes the shape of the page that is coming (one wide frame) in place of the
+ * lesson's (a frame for the lesson and one for the course content). So that
+ * the new frame does not simply appear, its surface is faded in step with the
+ * page shown behind the video: told here how far that page has been
+ * revealed, and over how long to get there (see learning-split-layout.css).
+ */
+const setLearningFrameReveal = (
+  stage: HTMLElement,
+  reveal: string,
+  duration: string,
+) => {
+  const frame = stage.closest<HTMLElement>(".courses-main-frame");
+  if (!frame) return;
+  frame.dataset.learningFrameReveal = "";
+  frame.style.setProperty("--learning-frame-reveal", reveal);
+  frame.style.setProperty("--learning-frame-reveal-duration", duration);
+};
+
 const clearLearningPlayerMotionProperties = (element: HTMLElement) => {
+  const frame = element.closest<HTMLElement>(".courses-main-frame");
+  if (frame) {
+    delete frame.dataset.learningFrameReveal;
+    frame.style.removeProperty("--learning-frame-reveal");
+    frame.style.removeProperty("--learning-frame-reveal-duration");
+  }
   element.style.removeProperty("--learning-background-reveal");
   element.style.removeProperty("--learning-background-reveal-duration");
   element.style.removeProperty("--learning-player-content-motion-duration");
@@ -323,6 +350,11 @@ const getLearningCourseRouteKey = (path: string) => {
     return parts[1];
   }
 };
+
+/** The page behind a swiped-down video starts to show at this progress. */
+const SWIPE_BACKGROUND_REVEAL_START_PROGRESS = 0.1;
+/** ...and is fully showing by this one. */
+const SWIPE_BACKGROUND_REVEAL_END_PROGRESS = 0.45;
 
 export default function AcademyLayout() {
   const matches = useMatches();
@@ -1322,6 +1354,11 @@ export default function AcademyLayout() {
       viewportHeight: number,
       phase: LessonPlayerMinimizeGestureState["phase"] | "restoring",
       forceMount = false,
+      /**
+       * How far a swipe has taken the video towards the mini player, 0 to
+       * 1, while a finger is dragging it on a wide screen.
+       */
+      dragProgress?: number,
     ) => {
       const viewportTop = window.visualViewport?.offsetTop ?? 0;
       const playerBottom =
@@ -1345,7 +1382,29 @@ export default function AcademyLayout() {
       );
       learningMotionOffsetYRef.current = offsetY;
       learningMotionViewportHeightRef.current = viewportHeight;
-      if (forceMount || motion.shouldMount) mountLearningBackground();
+      // On a wide screen the video is short of the full height of the window,
+      // so judging by where its bottom edge is brought the page behind in
+      // at once, at half strength, the moment a swipe began. A swipe there
+      // goes by its own progress instead: the page behind is prepared from
+      // the start, so it is ready, but stays out of sight for the first
+      // tenth of the swipe and then fades in. Swiped back up, it fades out
+      // the same way and is gone before the video is home.
+      const swipedOnWideScreen =
+        dragProgress !== undefined && isDesktopLearningMinimizeViewport();
+      if (forceMount || motion.shouldMount || swipedOnWideScreen) {
+        mountLearningBackground();
+      }
+      const backgroundReveal = swipedOnWideScreen
+        ? Math.min(
+            1,
+            Math.max(
+              0,
+              (dragProgress - SWIPE_BACKGROUND_REVEAL_START_PROGRESS) /
+                (SWIPE_BACKGROUND_REVEAL_END_PROGRESS -
+                  SWIPE_BACKGROUND_REVEAL_START_PROGRESS),
+            ),
+          )
+        : motion.revealProgress;
 
       const motionStage = learningMotionStageRef.current;
       if (!motionStage) return;
@@ -1355,8 +1414,9 @@ export default function AcademyLayout() {
       );
       motionStage.style.setProperty(
         "--learning-background-reveal",
-        String(motion.revealProgress),
+        String(backgroundReveal),
       );
+      setLearningFrameReveal(motionStage, String(backgroundReveal), "0ms");
       motionStage.style.setProperty(
         "--learning-player-content-motion-duration",
         "0ms",
@@ -1418,6 +1478,11 @@ export default function AcademyLayout() {
           motionStage.style.setProperty(
             "--learning-background-reveal",
             toOffsetY > fromOffsetY ? "1" : "0",
+          );
+          setLearningFrameReveal(
+            motionStage,
+            toOffsetY > fromOffsetY ? "1" : "0",
+            `${LEARNING_PLAYER_MOTION_DURATION_MS}ms`,
           );
           motionStage.dataset.learningPlayerMotion = phase;
         }
@@ -1560,7 +1625,13 @@ export default function AcademyLayout() {
           learningMotionFadeStartViewportProgressRef.current = null;
         }
         cancelLearningSurfaceMotion();
-        applyLearningSurfaceMotion(state.offsetY, viewportHeight, state.phase);
+        applyLearningSurfaceMotion(
+          state.offsetY,
+          viewportHeight,
+          state.phase,
+          false,
+          state.progress,
+        );
         return;
       }
       animateLearningSurfaceMotion(
@@ -1629,6 +1700,9 @@ export default function AcademyLayout() {
       lessonPath: activePlayer?.lessonPath ?? learningMiniPlayer?.lessonPath,
     });
     if (!lessonPath) return;
+    // The video opens at its full height, not at one it had been dragged
+    // down to before it was minimized.
+    resetLessonPlayerHeight();
     // A route unmount queues the outgoing registration cleanup. Mark this
     // restore before navigating so that stale cleanup cannot turn the player
     // back into a mini player after the first touch already restored it.

@@ -78,14 +78,14 @@ export function MiniPlayerInfoBar({
     >
       <div className="flex-1 min-w-0 pr-2 text-left">
         <p
-          className="truncate text-[13px] font-semibold text-white leading-tight"
+          className="truncate text-sm font-semibold text-white leading-tight"
           title={lessonTitle}
         >
           {lessonTitle}
         </p>
         {subtitle ? (
           <p
-            className="truncate text-xs leading-tight mt-0.5"
+            className="truncate text-[13px] leading-tight mt-0.5"
             title={subtitle}
             data-learning-mini-player-info-subtitle=""
           >

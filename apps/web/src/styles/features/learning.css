@@ -100,11 +100,27 @@ html[data-app-hydrated="false"] .learning-workspace__main {
 }
 
 @media (min-width: 641px) {
+  /* While the video is minimized, the lesson beside and under it shrinks
+     along with it as one sheet and fades (see
+     syncUnifiedDesktopChildExitMotion). The panes that normally clip those
+     parts let them through, or each would be cut off at its own pane's edge
+     as the sheet draws in towards the video. */
   [data-learning-motion-surface][data-learning-player-motion-phase]
     .learning-workspace__curriculum-clip,
   [data-learning-motion-surface][data-learning-player-motion-phase]
     .learning-workspace__lesson-content-clip {
-    overflow: hidden;
+    overflow: visible;
+  }
+
+  /* While the video is being minimized the lesson page gives up its own
+     background, so the page that is coming shows behind it. The lesson
+     (title, description, comments) slides away over that page, and without
+     a background of its own its words were left floating on whatever lay
+     behind from the first moment of a slow swipe. It carries the page
+     colour with it instead, and leaves as one solid sheet. */
+  [data-learning-motion-surface][data-learning-player-motion-phase]
+    .learning-workspace__lesson-content {
+    background: var(--canvas);
   }
 }
 

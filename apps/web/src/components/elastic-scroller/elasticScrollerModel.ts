@@ -1,7 +1,7 @@
 export type ScrollDirection = "up" | "down";
 export type ElasticScrollMode = "idle" | "edge" | "drag" | "locked";
 
-export const ELASTIC_SCROLL_CONTROL_IDLE_DELAY_MS = 2400;
+export const ELASTIC_SCROLL_CONTROL_IDLE_DELAY_MS = 1000;
 export const ELASTIC_SCROLL_CONTROL_LONG_PRESS_DELAY_MS = 360;
 export const ELASTIC_SCROLL_CONTROL_DRAG_DEAD_ZONE = 4;
 export const ELASTIC_SCROLL_CONTROL_DRAG_MAX_DISTANCE = 192;

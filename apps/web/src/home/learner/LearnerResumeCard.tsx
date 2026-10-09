@@ -258,8 +258,8 @@ function ResumeLesson({
 
   return (
     <>
-      {/* One line, or two where the card's words have the width for it. */}
-      <p className="mt-1 truncate text-[clamp(0.875rem,6.2cqw,1rem)] font-medium text-[color-mix(in_srgb,var(--accent)_48%,white)] @[15rem]/resume:line-clamp-2 @[15rem]/resume:whitespace-normal">
+      {/* Always one line, cut off with an ellipsis. */}
+      <p className="mt-1 truncate text-[clamp(0.875rem,6.2cqw,1rem)] font-medium text-[color-mix(in_srgb,var(--accent)_48%,white)]">
         {lesson.title}
       </p>
       <p
@@ -322,12 +322,17 @@ export function LearnerResumeCard({
           onNavigatePage={onOpen}
           tabIndex={-1}
           aria-hidden="true"
+          // The titles above are each cut to one line and let the pointer
+          // through to this link, so the link says them in full on hover.
+          title={[course.courseTitle, resume.context?.resumeLesson?.title]
+            .filter(Boolean)
+            .join(" — ")}
           className="absolute inset-0 rounded-[inherit]"
         />
 
         <div className="pointer-events-none z-10 flex w-(--words-w) min-w-0 shrink-0 flex-col items-start justify-center py-4 pr-4 pl-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.45)] [[data-tilting]_&]:[transform:translate3d(calc(var(--tilt-x,0)*6px),calc(var(--tilt-y,0)*5px),0)] [@media(hover:hover)_and_(pointer:fine)]:will-change-transform @7xl/home:pr-5">
           <div className="@container/resume w-full min-w-0">
-            <h2 className="line-clamp-2 text-[clamp(1.125rem,8.5cqw,1.375rem)] leading-snug font-bold tracking-[-0.015em] text-pretty">
+            <h2 className="line-clamp-2 text-[clamp(1.125rem,8.5cqw,1.375rem)] leading-snug font-bold tracking-[-0.015em]">
               {course.courseTitle}
             </h2>
             <ResumeLesson course={course} intent={intent} resume={resume} />

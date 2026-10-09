@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import {
   PlayButton,
+  PlayerGestureSurface,
   PlayerIconButton,
   Timeline,
   TimeDisplay,
@@ -18,6 +20,19 @@ import {
 } from "./learningPlayerShortcuts";
 import { AppIcon } from "../../icons/AppIcon";
 import { cn } from "../../lib/utils";
+import { readLearningPreferences } from "../../settings/settingsPreferences";
+
+/**
+ * The disc behind each mini player control: faint at rest, so the icon has
+ * something to sit on over a bright picture, and clearer under the pointer.
+ * The important flags are for the two that are player icon buttons, which
+ * come with a surface of their own.
+ */
+const MINI_CONTROL_CIRCLE_CLASS =
+  "!bg-black/35 hover:!bg-black/60 focus-visible:!bg-black/60";
+
+/** How long tapped-open controls stay up while the lesson plays. */
+const TAPPED_CONTROLS_VISIBLE_MS = 3000;
 
 export interface MiniPlayerControlsProps {
   lessonTitle: string;
@@ -60,14 +75,14 @@ export function MiniPlayerRestoreControl({
         title=""
         aria-keyshortcuts={LEARNING_PLAYER_MINIMIZE_SHORTCUT}
         data-learning-mini-player-restore=""
-        className="!size-9 !rounded-none !bg-transparent hover:!bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+        className={`!size-9 !rounded-full text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)] ${MINI_CONTROL_CIRCLE_CLASS}`}
         icon={<AppIcon name="miniPlayerExpand" className="size-5" />}
         onClick={(event) => {
           event.stopPropagation();
           onRestore();
         }}
       />
-      <div className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 hidden group-hover/expand:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
+      <div className="pointer-events-none absolute top-1/2 left-full z-50 ml-1.5 hidden -translate-y-1/2 group-hover/expand:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
         <span>Expand</span>
         <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">
           I
@@ -94,6 +109,22 @@ export function MiniPlayerControls({
   const CloseIcon = theme.icons.close;
   const ready = usePlayerState(({ media }) => media.lifecycle === "ready");
   const paused = usePlayerState(({ media }) => media.paused || media.ended);
+  // A finger has no hover, so on a touch screen a tap on the picture brings
+  // the controls up and another puts them away, as in the phone player.
+  // While the lesson plays they leave by themselves.
+  const [tappedOpen, setTappedOpen] = useState(false);
+  const [seekIntervalSeconds] = useState(
+    () => readLearningPreferences().seekIntervalSeconds,
+  );
+
+  useEffect(() => {
+    if (!tappedOpen || paused) return undefined;
+    const timer = window.setTimeout(
+      () => setTappedOpen(false),
+      TAPPED_CONTROLS_VISIBLE_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [paused, tappedOpen]);
 
   return (
     <div
@@ -140,27 +171,38 @@ export function MiniPlayerControls({
         </div>
       </div>
 
-      {/* Desktop Controls (> 640px) — hidden until the mini player is hovered */}
+      {/* The picture itself, on wide screens: the same gestures as the phone
+          player. A double tap or double click on the left or right half
+          seeks by the interval chosen in settings, and holding it plays at
+          2x. A single press never plays or pauses (only the play button
+          does): from a finger or pen it shows or hides the controls, and
+          from a mouse it does nothing, since hover already shows them. */}
+      <PlayerGestureSurface
+        className="hidden cursor-default min-[641px]:block"
+        doubleTapSeek="always"
+        seekIntervalSeconds={seekIntervalSeconds}
+        onEmptyTap={(pointerType) => {
+          if (pointerType === "mouse") return;
+          setTappedOpen((open) => !open);
+        }}
+      />
+
+      {/* Desktop Controls (> 640px): shown on hover, on keyboard focus, or
+          after a tap. Hidden ones are not merely transparent, or a tap
+          could land on a button nobody can see. */}
       <div
         className={cn(
-          "absolute inset-0 hidden min-[641px]:block",
-          "pointer-events-none opacity-0 transition-opacity duration-200",
-          "group-hover/mini-player:pointer-events-auto group-hover/mini-player:opacity-100",
-          "group-focus-within/mini-player:pointer-events-auto group-focus-within/mini-player:opacity-100",
+          "pointer-events-none absolute inset-0 hidden min-[641px]:block",
+          "invisible opacity-0 transition-[opacity,visibility] duration-200",
+          "group-hover/mini-player:visible group-hover/mini-player:opacity-100",
+          "group-has-[:focus-visible]/mini-player:visible group-has-[:focus-visible]/mini-player:opacity-100",
+          "data-[tapped-open=true]:visible data-[tapped-open=true]:opacity-100",
         )}
         data-learning-mini-player-controls-overlay=""
+        data-tapped-open={tappedOpen ? "true" : "false"}
       >
         {/* Subtle dark backdrop for readability of controls over bright scenes */}
         <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/75 via-black/25 to-black/60" />
-
-        {/* Empty video backdrop click to toggle playback */}
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-hidden="true"
-          className="absolute inset-0 cursor-pointer focus:outline-none"
-          onClick={() => void controller.togglePlayback()}
-        />
 
         {/* Center Controls: Previous, Play/Pause, Next */}
         <div
@@ -176,9 +218,9 @@ export function MiniPlayerControls({
               onGoPrevious?.();
             }}
             className={cn(
-              "pointer-events-auto flex size-10 items-center justify-center rounded-full text-white transition-colors",
+              `pointer-events-auto flex size-10 items-center justify-center rounded-full text-white transition-colors ${MINI_CONTROL_CIRCLE_CLASS}`,
               canGoPrevious
-                ? "cursor-pointer hover:bg-white/15"
+                ? "cursor-pointer"
                 : "opacity-35 cursor-not-allowed",
             )}
           >
@@ -192,7 +234,7 @@ export function MiniPlayerControls({
               event.stopPropagation();
               void controller.togglePlayback();
             }}
-            className="pointer-events-auto flex size-14 items-center justify-center rounded-full text-white cursor-pointer transition-colors hover:bg-white/15 drop-shadow-md"
+            className={`pointer-events-auto flex size-14 cursor-pointer items-center justify-center rounded-full text-white drop-shadow-md transition-colors ${MINI_CONTROL_CIRCLE_CLASS}`}
           >
             {paused ? (
               <Play size={38} weight="fill" className="-translate-x-px" />
@@ -210,10 +252,8 @@ export function MiniPlayerControls({
               onGoNext?.();
             }}
             className={cn(
-              "pointer-events-auto flex size-10 items-center justify-center rounded-full text-white transition-colors",
-              canGoNext
-                ? "cursor-pointer hover:bg-white/15"
-                : "opacity-35 cursor-not-allowed",
+              `pointer-events-auto flex size-10 items-center justify-center rounded-full text-white transition-colors ${MINI_CONTROL_CIRCLE_CLASS}`,
+              canGoNext ? "cursor-pointer" : "opacity-35 cursor-not-allowed",
             )}
           >
             <SkipForward size={24} weight="fill" />
@@ -231,14 +271,14 @@ export function MiniPlayerControls({
             <PlayerIconButton
               label="Close"
               title=""
-              className="!size-9 !rounded-none !bg-transparent hover:!bg-transparent text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+              className={`!size-9 !rounded-full text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)] ${MINI_CONTROL_CIRCLE_CLASS}`}
               icon={<CloseIcon size={20} />}
               onClick={(event) => {
                 event.stopPropagation();
                 onClose();
               }}
             />
-            <div className="pointer-events-none absolute right-0 top-full z-50 mt-1.5 hidden group-hover/close:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
+            <div className="pointer-events-none absolute top-1/2 right-full z-50 mr-1.5 hidden -translate-y-1/2 group-hover/close:flex items-center gap-1.5 px-2 py-1 rounded bg-black/90 text-xs text-white shadow-lg whitespace-nowrap font-medium">
               <span>Close</span>
               <kbd className="px-1 py-0.2 rounded bg-white/20 text-[10px] font-semibold">
                 Esc
@@ -264,7 +304,11 @@ export function MiniPlayerControls({
         </div>
       </div>
 
-      {/* Desktop Timeline */}
+      {/* Desktop Timeline. Always drawn, but it only takes a press or a
+          drag while the other controls are showing (hovered with a mouse,
+          tapped open, or focused from the keyboard). Otherwise a touch on
+          the bottom edge of the picture would seek by accident; it goes
+          through to the picture and brings the controls up instead. */}
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 z-30 hidden min-[641px]:block"
         data-learning-mini-player-gesture-ignore=""
@@ -273,7 +317,7 @@ export function MiniPlayerControls({
         <Timeline
           ariaLabel="Mini player timeline"
           showPreview={true}
-          className="pointer-events-none [&_[role=slider]]:pointer-events-auto [&_[data-timeline-buffered-range]]:rounded-none [&_[data-timeline-progress]]:rounded-none [&_[data-timeline-track]]:bottom-0 [&_[data-timeline-track]]:top-auto [&_[data-timeline-track]]:h-0.5 [&_[data-timeline-track]]:translate-y-0 [&_[data-timeline-track]]:rounded-none [&_[data-timeline-thumb]]:!hidden"
+          className="pointer-events-none group-hover/mini-player:[&_[role=slider]]:pointer-events-auto group-has-[:focus-visible]/mini-player:[&_[role=slider]]:pointer-events-auto group-has-[[data-tapped-open=true]]/mini-player:[&_[role=slider]]:pointer-events-auto [&_[data-timeline-buffered-range]]:rounded-none [&_[data-timeline-progress]]:rounded-none [&_[data-timeline-track]]:bottom-0 [&_[data-timeline-track]]:top-auto [&_[data-timeline-track]]:h-0.5 [&_[data-timeline-track]]:translate-y-0 [&_[data-timeline-track]]:rounded-none [&_[data-timeline-thumb]]:!hidden"
         />
       </div>
     </div>
