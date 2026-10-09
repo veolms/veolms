@@ -711,6 +711,39 @@ export async function findAttemptForUpdate(
     .executeTakeFirst();
 }
 
+/**
+ * Removes the attempts on an assignment that are still open on a version the
+ * assignment no longer uses, and says how many there were.
+ *
+ * An attempt keeps the questions it was started with. When the assignment
+ * moves to a newer version, a learner who has not handed their attempt in
+ * would otherwise finish, and be graded on, the questions the author has
+ * just replaced. Their open attempt goes (its saved answers with it, by
+ * cascade), and the next time they open the quiz they start on the current
+ * version without having used up an attempt.
+ *
+ * Attempts that are handed in, graded or expired are never touched, and
+ * neither is one whose own time has already run out: that one is closed and
+ * graded as it stands.
+ */
+export async function deleteOpenAttemptsOnOtherVersions(
+  database: DatabaseExecutor,
+  assignmentId: string,
+  currentVersionId: string,
+  now: Date,
+) {
+  const result = await database
+    .deleteFrom("quiz_attempts")
+    .where("assignment_id", "=", assignmentId)
+    .where("status", "=", "in_progress")
+    .where("quiz_version_id", "<>", currentVersionId)
+    .where((eb) =>
+      eb.or([eb("expires_at", "is", null), eb("expires_at", ">", now)]),
+    )
+    .executeTakeFirst();
+  return Number(result.numDeletedRows);
+}
+
 export async function findActiveAttempt(
   database: DatabaseExecutor,
   assignmentId: string,

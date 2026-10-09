@@ -349,6 +349,12 @@ export function QuizAuthoringPanel({
   >(null);
   const questionDebounceRef = useRef<number | null>(null);
   const pendingSaveAfterCreateRef = useRef(false);
+  // "Publish changes" in two steps, so that what is published is what is on
+  // screen: first the question being edited is saved, then the quiz is
+  // published. Null when no publish is under way.
+  const [publishStep, setPublishStep] = useState<"save" | "publish" | null>(
+    null,
+  );
   // Why a save or publish was held back before it reached the server: the
   // number of the unfinished question and what it still needs.
   const [unfinishedQuestion, setUnfinishedQuestion] = useState<{
@@ -1208,6 +1214,65 @@ export function QuizAuthoringPanel({
     );
   };
 
+  /**
+   * True when the question open in the editor is unfinished, having told the
+   * author so. An unfinished question is not saved, so publishing now would
+   * publish the quiz without the change the author is in the middle of.
+   */
+  const heldByUnfinishedQuestion = () => {
+    const editingAt = (version?.questions ?? []).findIndex(
+      (question) => question.id === editingQuestionId,
+    );
+    const problem =
+      editingAt >= 0
+        ? quizQuestionProblem({ questionType, prompt, options })
+        : null;
+    setUnfinishedQuestion(problem ? { number: editingAt + 1, problem } : null);
+    return Boolean(problem);
+  };
+
+  /** Points the lesson at a published version of this quiz. */
+  const moveLessonToVersion = (versionId: string) => {
+    if (!assignment) return;
+    setAssignmentVersionId(versionId);
+    setAssignmentSaveStatus("saving");
+    updateAssignment.mutate(
+      {
+        id: assignment.id,
+        payload: { ...assignmentPayload(), quizVersionId: versionId },
+      },
+      {
+        onSuccess: () => setAssignmentSaveStatus("saved"),
+        onError: () => setAssignmentSaveStatus("failed"),
+      },
+    );
+  };
+
+  /**
+   * Makes the edits to an assigned quiz reach its learners: publishes the
+   * draft the edits were saved into, then points the lesson at it. Editing a
+   * published quiz never changes what learners are taking; until this runs
+   * they keep getting the version that was published before.
+   */
+  const publishChangesNow = () => {
+    if (!quizId) return;
+    publish.mutate(quizId, {
+      onSuccess: (publishedQuiz) => {
+        const published = publishedQuiz.versions
+          .filter((item) => item.publishedAt)
+          .at(-1);
+        if (published) moveLessonToVersion(published.id);
+      },
+    });
+  };
+
+  const publishChanges = () => {
+    if (!quizId || publish.isPending || updateAssignment.isPending) return;
+    if (heldByUnfinishedQuestion()) return;
+    // Carried on by the effect below.
+    setPublishStep("save");
+  };
+
   const publishAndAssign = () => {
     if (!quizId) {
       if (create.isPending || !draftQuestions.length) return;
@@ -1222,23 +1287,7 @@ export function QuizAuthoringPanel({
       return;
     }
     if (!version) return;
-    // An unfinished question is not saved, so publishing now would publish
-    // the quiz without the change the author is in the middle of.
-    const editingAt = version.questions.findIndex(
-      (question) => question.id === editingQuestionId,
-    );
-    const editingProblemNow =
-      editingAt >= 0
-        ? quizQuestionProblem({ questionType, prompt, options })
-        : null;
-    if (editingProblemNow) {
-      setUnfinishedQuestion({
-        number: editingAt + 1,
-        problem: editingProblemNow,
-      });
-      return;
-    }
-    setUnfinishedQuestion(null);
+    if (heldByUnfinishedQuestion()) return;
     if (
       version.publishedAt &&
       quiz.data &&
@@ -1255,6 +1304,26 @@ export function QuizAuthoringPanel({
       );
     }
   };
+
+  useEffect(() => {
+    // Each step waits for a question save that is still on its way.
+    if (publishStep === null || updateQuestion.isPending) return;
+    if (publishStep === "save") {
+      // Edits are saved on a short delay, and a save is skipped while an
+      // earlier one is in flight. Sent now, with nothing in flight, the
+      // question is stored exactly as it stands.
+      flushQuestionSave();
+      setPublishStep("publish");
+      return;
+    }
+    setPublishStep(null);
+    // The edit did not go through: publishing would leave it out.
+    if (updateQuestion.error) return;
+    publishChangesNow();
+    // Driven by the step and by the save settling; the functions it calls
+    // are not reasons to run again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publishStep, updateQuestion.isPending]);
 
   const courseOptions: readonly ThemedSelectOption<string>[] = useMemo(() => {
     const courses = myCourses.data?.courses ?? [];
@@ -1388,6 +1457,28 @@ export function QuizAuthoringPanel({
   const canPersistBrowserDraft = Boolean(
     quizTitle.trim() || lessonTitle?.trim(),
   );
+  // Where an assigned quiz stands against what its learners are getting.
+  const latestPublishedVersion = (quiz.data?.versions ?? [])
+    .filter((item) => item.publishedAt)
+    .at(-1);
+  const assignedToThisLesson = Boolean(
+    assignment && assignment.quizId === quizId,
+  );
+  // Edits to a published quiz are saved into a draft. Learners do not get
+  // them until that draft is published and the lesson pointed at it.
+  const hasUnpublishedChanges =
+    assignedToThisLesson && Boolean(version && !version.publishedAt);
+  // Published, but the lesson is still on an earlier version.
+  const lessonOnOlderVersion =
+    assignedToThisLesson &&
+    !hasUnpublishedChanges &&
+    Boolean(
+      latestPublishedVersion &&
+      assignment?.quizVersionId !== latestPublishedVersion.id,
+    );
+  const publishingChanges =
+    publishStep !== null || publish.isPending || updateAssignment.isPending;
+
   // The question open in the editor, as it stands right now.
   const editingProblem = editingQuestionId
     ? quizQuestionProblem({ questionType, prompt, options })
@@ -1653,7 +1744,11 @@ export function QuizAuthoringPanel({
                   total points
                 </span>
                 <span className="rounded-full bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-2.5 py-0.5 sm:py-1 text-[0.7rem] sm:text-[0.72rem] font-semibold text-(--text-secondary)">
-                  {version?.publishedAt ? "Published version" : "Draft version"}
+                  {hasUnpublishedChanges
+                    ? "Unpublished changes"
+                    : version?.publishedAt
+                      ? "Published version"
+                      : "Draft version"}
                 </span>
               </div>
             </div>
@@ -2249,16 +2344,36 @@ export function QuizAuthoringPanel({
               <div className="space-y-3 sm:space-y-4">
                 {assignment ? (
                   assignment.quizId === quizId ? (
-                    <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs font-medium text-emerald-500">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <CheckCircle
-                          size={15}
-                          weight="bold"
-                          className="shrink-0"
-                        />
-                        <span className="truncate">
-                          This quiz is currently assigned to this lesson.
-                          Delivery rules are active and auto-saving.
+                    <div
+                      className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+                        hasUnpublishedChanges || lessonOnOlderVersion
+                          ? `border-[color-mix(in_srgb,#f59e0b_30%,transparent)] bg-[color-mix(in_srgb,#f59e0b_10%,transparent)] ${CAUTION_TEXT}`
+                          : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2 min-w-0">
+                        {hasUnpublishedChanges || lessonOnOlderVersion ? (
+                          <WarningCircle
+                            size={15}
+                            weight="bold"
+                            className="mt-px shrink-0"
+                          />
+                        ) : (
+                          <CheckCircle
+                            size={15}
+                            weight="bold"
+                            className="mt-px shrink-0"
+                          />
+                        )}
+                        {/* Said plainly, because it was not: the banner
+                            used to read "active and auto-saving" while
+                            learners went on getting the old questions. */}
+                        <span>
+                          {hasUnpublishedChanges
+                            ? "Your changes are saved, but learners still get the version published before. Publish changes to give them this one."
+                            : lessonOnOlderVersion
+                              ? "A newer version of this quiz is published, but this lesson is still on an older one."
+                              : "This quiz is assigned to this lesson, and learners get its latest published version."}
                         </span>
                       </div>
                       <button
@@ -2518,7 +2633,39 @@ export function QuizAuthoringPanel({
                       {create.isPending ? "Saving quiz..." : "Save draft"}
                     </Button>
                   ) : null}
-                  {assignment && assignment.quizId === quizId ? (
+                  {hasUnpublishedChanges || lessonOnOlderVersion ? (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                      <Button
+                        onClick={
+                          hasUnpublishedChanges
+                            ? publishChanges
+                            : () =>
+                                latestPublishedVersion &&
+                                moveLessonToVersion(latestPublishedVersion.id)
+                        }
+                        disabled={
+                          publishingChanges || !editableQuestions.length
+                        }
+                        className="h-9.5 sm:h-10 px-4 sm:px-5 font-semibold text-xs sm:text-sm"
+                      >
+                        {publishingChanges ? (
+                          <>
+                            <CircleNotch size={15} className="animate-spin" />
+                            Publishing...
+                          </>
+                        ) : hasUnpublishedChanges ? (
+                          "Publish changes"
+                        ) : (
+                          "Use latest version"
+                        )}
+                      </Button>
+                      <p className="max-w-md text-[0.72rem] leading-relaxed text-(--muted)">
+                        Learners who have not handed the quiz in restart on the
+                        new questions. Attempts already handed in keep their
+                        marks.
+                      </p>
+                    </div>
+                  ) : assignment && assignment.quizId === quizId ? (
                     <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-3.5 py-2 text-xs sm:text-sm font-semibold text-emerald-500">
                       <CheckCircle size={16} weight="bold" />
                       <span>Assigned to lesson</span>
