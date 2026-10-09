@@ -15573,7 +15573,7 @@ export function CourseCreatePage({
       <ConfirmDeleteModal
         isOpen={isUnpublishModalOpen}
         title="Unpublish Course"
-        message="Are you sure you want to unpublish this course? It will return to Draft state and will no longer be visible to new students in the catalogue. Existing course content, curriculum, and settings will remain fully preserved."
+        message="Are you sure you want to unpublish this course? It will return to Draft state and be hidden from the catalogue. Enrolled students will also lose access to it until you publish it again. Course content, curriculum, and settings are kept."
         confirmLabel="Unpublish"
         cancelLabel="Keep Published"
         onConfirm={handleConfirmUnpublishCourse}
