@@ -602,6 +602,10 @@
 
 .settings-profile__field {
   display: grid;
+  /* One column that may be narrower than its content. Left to size itself,
+     it grew to fit a verified mobile number (country, number, lock and
+     tag) and pushed the field out past the edge of the form. */
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 6px;
   min-width: 0;
@@ -904,6 +908,17 @@
   display: inline-flex;
   flex: 0 0 auto;
   color: var(--muted);
+}
+
+/* A verified number cannot be edited, so its box is only as wide as the
+   number: the lock sits right after it instead of across an empty stretch,
+   and the Verified tag keeps to the end of the field. */
+.settings-profile__input-shell--phone-verified input {
+  flex: 0 1 auto;
+}
+
+.settings-profile__input-shell--phone-verified > .settings-profile__tag {
+  margin-left: auto;
 }
 
 .settings-profile__verify-action,
