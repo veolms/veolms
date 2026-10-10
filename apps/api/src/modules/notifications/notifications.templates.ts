@@ -160,7 +160,7 @@ export function renderNotificationTemplate(
     case "auth.account_deactivated":
       inApp = {
         title: "Account deactivated",
-        body: "Your VeoLMS account has been deactivated and all active sessions were signed out. If you did not request this change, contact support immediately.",
+        body: `Your ${config.RP_NAME} account has been deactivated and all active sessions were signed out. If you did not request this change, contact support immediately.`,
       };
       break;
     case "user.mentioned":

@@ -732,10 +732,14 @@ export function createAuthService({
 
       await sessionService.revokeAllSessions(userId, transaction);
 
+      // Keyed on this deactivation, not on the account. Keyed on the
+      // account alone, the notice went out the first time only: an account
+      // that had been deactivated and brought back was deactivated again
+      // with no email, because the event counted as already sent.
       await outbox.publish(transaction, {
         type: "auth.account_deactivated",
         version: 1,
-        dedupeKey: `auth.account_deactivated:${userId}`,
+        dedupeKey: `auth.account_deactivated:${userId}:${user.updated_at.toISOString()}`,
         occurredAt: new Date(),
         payload: { recipientUserId: userId },
       });

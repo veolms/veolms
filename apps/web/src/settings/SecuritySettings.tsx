@@ -9,6 +9,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import "../styles/features/workspace.css";
+// The authenticator and backup-code dialogs on this page are styled by this
+// sheet. It was only ever imported by the sign-in screens, so on a settings
+// page opened directly the dialog had no styles: it was added to the end of
+// the document, unpositioned, and "Set up" appeared to do nothing.
+import "../auth/mfa-setup.css";
 import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
 import { FingerprintIcon as Fingerprint } from "@phosphor-icons/react/Fingerprint";
 import { LaptopIcon as Laptop } from "@phosphor-icons/react/Laptop";
@@ -364,7 +369,7 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
 
             {codeError ? (
               <p
-                className="auth-form__error"
+                className={`${SETTINGS_ERROR_TEXT}`}
                 id="totp-setup-error"
                 role="alert"
                 style={{ textAlign: "center" }}
@@ -399,6 +404,13 @@ function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
     </SettingsModalOverlay>
   );
 }
+
+/**
+ * Error text on this page. It used a class from the sign-in stylesheet,
+ * which this page does not load.
+ */
+const SETTINGS_ERROR_TEXT =
+  "m-0 text-[0.72rem] leading-[1.4] text-(--danger,#f27991)";
 
 const SECURITY_ROW_CLASS =
   "max-[480px]:[grid-template-columns:2rem_minmax(0,1fr)] max-[480px]:[&_.settings-row__control]:col-start-2 max-[480px]:[&_.settings-row__control]:justify-stretch max-[480px]:[&_.settings-action]:w-full";
@@ -658,7 +670,7 @@ export function SecuritySettings({
           ) : null}
 
           {passkeyError ? (
-            <p className="auth-form__error px-3.5 py-1" role="alert">
+            <p className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`} role="alert">
               {passkeyError}
             </p>
           ) : null}
@@ -766,7 +778,10 @@ export function SecuritySettings({
                 )}
 
                 {passkeyError && (
-                  <p className="auth-form__error px-3.5 py-1" role="alert">
+                  <p
+                    className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`}
+                    role="alert"
+                  >
                     {passkeyError}
                   </p>
                 )}
@@ -851,7 +866,10 @@ export function SecuritySettings({
                 )}
 
                 {totpError && (
-                  <p className="auth-form__error px-3.5 py-1" role="alert">
+                  <p
+                    className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`}
+                    role="alert"
+                  >
                     {totpError}
                   </p>
                 )}
@@ -898,7 +916,10 @@ export function SecuritySettings({
                 </SettingRow>
 
                 {backupCodesError && (
-                  <p className="auth-form__error px-3.5 py-1" role="alert">
+                  <p
+                    className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`}
+                    role="alert"
+                  >
                     {backupCodesError}
                   </p>
                 )}
@@ -932,7 +953,7 @@ export function SecuritySettings({
         )}
 
         {isAuthenticated && sessionQuery.isError && (
-          <p className="auth-form__error" role="alert">
+          <p className={`${SETTINGS_ERROR_TEXT}`} role="alert">
             Could not load sessions. Please refresh.
           </p>
         )}

@@ -4,7 +4,11 @@ import { CreditCardIcon as CreditCard } from "@phosphor-icons/react/CreditCard";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
-import { useDeactivateAccount, useSignOut } from "../services/auth";
+import {
+  useCurrentUser,
+  useDeactivateAccount,
+  useSignOut,
+} from "../services/auth";
 import "../styles/features/workspace.css";
 import { ConfirmActionModal } from "../shell/ConfirmActionModal";
 import { LogoutConfirmModal } from "../shell/LogoutConfirmModal";
@@ -33,6 +37,9 @@ const getUnsyncedChangesMessage = (error: unknown) => {
   return "Some of your changes haven't been saved yet. Go back and finish saving them, then try again.";
 };
 
+/** Typed to confirm a deactivation, which cannot be undone from the app. */
+const DEACTIVATE_PHRASE = "DEACTIVATE";
+
 export function AccountSettings({
   role,
   isAuthenticated,
@@ -46,6 +53,13 @@ export function AccountSettings({
   >(null);
   const { isPending: isSigningOut, signOut } = useSignOut();
   const deactivateMutation = useDeactivateAccount();
+  const { data: currentUser } = useCurrentUser();
+  const [deactivatePhrase, setDeactivatePhrase] = useState("");
+  const deactivatePhraseMatches =
+    deactivatePhrase.trim().toUpperCase() === DEACTIVATE_PHRASE;
+  // The notice goes by email, so it is only promised to an account that
+  // has an address to send it to.
+  const hasEmail = Boolean(currentUser?.email);
 
   useEffect(() => {
     if (isAuthenticated) return;
@@ -54,6 +68,7 @@ export function AccountSettings({
   }, [isAuthenticated]);
 
   const deactivateAccount = async () => {
+    if (!deactivatePhraseMatches) return;
     setUnsyncedChangesMessage(null);
     try {
       await autosyncManager.requireSynced();
@@ -184,8 +199,9 @@ export function AccountSettings({
             <div>
               <strong>Deactivate your account</strong>
               <small>
-                You will be signed out of every device and will not be able to
-                sign in again. We will send a confirmation email.
+                This takes effect straight away: you are signed out of every
+                device and cannot sign in again.
+                {hasEmail ? " We email you a notice once it is done." : ""}
               </small>
             </div>
             <button
@@ -194,6 +210,7 @@ export function AccountSettings({
               onClick={() => {
                 deactivateMutation.reset();
                 setUnsyncedChangesMessage(null);
+                setDeactivatePhrase("");
                 setDeactivateConfirmOpen(true);
               }}
               disabled={deactivateMutation.isPending}
@@ -246,6 +263,7 @@ export function AccountSettings({
         id="deactivate-account-modal"
         isOpen={isAuthenticated && deactivateConfirmOpen}
         isPending={deactivateMutation.isPending}
+        confirmDisabled={!deactivatePhraseMatches}
         onClose={() => setDeactivateConfirmOpen(false)}
         onConfirm={() => void deactivateAccount()}
         icon={Trash}
@@ -254,9 +272,32 @@ export function AccountSettings({
           <>
             <span>
               This signs you out everywhere and permanently disables access to
-              this account. Your stored account record will be retained as
+              this account. It happens as soon as you confirm, and you cannot
+              undo it yourself. Your stored account record will be retained as
               required for platform records.
             </span>
+            {/* A permanent action used to take one click on a button. The
+                word has to be typed, so it cannot be confirmed by a stray
+                click or a held Enter. */}
+            <label className="mt-4 block text-xs font-semibold text-(--text)">
+              Type {DEACTIVATE_PHRASE} to confirm
+              <input
+                type="text"
+                value={deactivatePhrase}
+                onChange={(event) => setDeactivatePhrase(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && deactivatePhraseMatches) {
+                    void deactivateAccount();
+                  }
+                }}
+                disabled={deactivateMutation.isPending}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                placeholder={DEACTIVATE_PHRASE}
+                className="mt-1.5 block h-10 w-full rounded-lg bg-(--surface-strong) px-3 text-sm! font-semibold! tracking-wide text-(--text) ring-1 ring-[color-mix(in_srgb,var(--text)_14%,transparent)] outline-none ring-inset placeholder:font-normal placeholder:text-(--muted) focus:ring-2 focus:ring-(--danger)"
+              />
+            </label>
             {unsyncedChangesAlert}
             {deactivateMutation.error && (
               <span

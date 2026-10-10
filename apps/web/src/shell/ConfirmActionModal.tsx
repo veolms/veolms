@@ -17,6 +17,12 @@ export interface ConfirmActionModalProps {
   id: string;
   isOpen: boolean;
   isPending?: boolean;
+  /**
+   * Holds the confirming button back until the caller is satisfied, for an
+   * action that asks for more than a click (a phrase typed in the
+   * description, say).
+   */
+  confirmDisabled?: boolean;
   onClose: () => void;
   onConfirm: () => void;
   icon: ModalIcon;
@@ -46,6 +52,7 @@ export function ConfirmActionModal({
   id,
   isOpen,
   isPending = false,
+  confirmDisabled = false,
   onClose,
   onConfirm,
   icon: Icon,
@@ -150,7 +157,7 @@ export function ConfirmActionModal({
       motion="static"
       className={`${ACTION_BUTTON_CLASS}${cancelEmphasized ? ` ${QUIET_ACTION_BUTTON_CLASS}` : ""}`}
       onClick={onConfirm}
-      disabled={isPending}
+      disabled={isPending || confirmDisabled}
       aria-busy={isPending}
     >
       {isPending && <CircleNotch size={15} className="animate-spin" />}
