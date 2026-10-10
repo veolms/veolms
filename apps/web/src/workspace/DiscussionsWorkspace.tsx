@@ -2728,13 +2728,20 @@ export function DiscussionsWorkspace({
               data-swipe-tab-id={id}
               data-fixed-radius
               tabIndex={activeTab === id ? 0 : -1}
-              className={`rounded-none! ${activeTab === id ? "is-active" : ""}`}
+              // Built like a Settings tab: the same corners, icon size and
+              // press feedback (see SettingsPage and discussions.css).
+              className={`group rounded-t-lg! rounded-b-none! ${activeTab === id ? "is-active" : ""}`}
               onClick={() => navigateTab(id)}
               onKeyDown={handleRovingTabKeyDown}
               onFocus={scrollKeyboardFocusedTabIntoView}
             >
-              <Icon size={19} weight={activeTab === id ? "fill" : "regular"} />
-              <span>{label}</span>
+              <span className="inline-flex origin-bottom items-center gap-2 transition-transform duration-150 ease-out group-active:scale-[0.985] motion-reduce:duration-[0.01ms]">
+                <Icon
+                  size={17}
+                  weight={activeTab === id ? "fill" : "regular"}
+                />
+                <span>{label}</span>
+              </span>
             </button>
           ))}
           <span className="page-tabs__indicator" aria-hidden="true" />

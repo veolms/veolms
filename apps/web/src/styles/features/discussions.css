@@ -116,42 +116,59 @@
   top: var(--page-tabs-sticky-top, 0px);
   z-index: 26;
   display: flex;
+  flex-wrap: nowrap;
   min-width: 0;
-  gap: 8px;
+  gap: 4px 8px;
   margin: 23px calc(-1 * var(--application-page-inline-gutter, 0px)) 0;
-  padding: 6px var(--application-page-inline-gutter, 0px) 0;
+  padding: 0 var(--application-page-inline-gutter, 0px);
   overflow-x: auto;
-  border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--surface-strong) 72%, transparent);
   background: color-mix(in srgb, var(--main-surface) 95%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
 
+.discussion-hub__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* The same tab as the Settings page, value for value (.settings-tabs button
+   in settings/foundation.css): height, spacing, type, and a hover that
+   brightens the label without drawing a block behind it. The two had drifted
+   apart: these were taller, wider, heavier, and filled in on hover. A change
+   to one belongs in the other. */
 .discussion-hub__tabs button {
   position: relative;
   display: inline-flex;
-  min-height: 51px;
+  min-height: 46px;
   flex: 0 0 auto;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   border: 0;
   border-bottom: 2px solid transparent;
-  border-radius: 9px 9px 0 0;
-  padding: 0 15px;
+  border-radius: 8px 8px 0 0;
+  padding: 0 14px;
   color: var(--muted);
   background: transparent;
   font: inherit;
-  font-size: 0.87rem;
-  font-weight: 650;
-  transition:
-    color 150ms ease,
-    background-color 150ms ease,
-    border-color 150ms ease;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: none;
 }
 
 .discussion-hub__tabs button:hover {
   color: var(--text);
-  background: color-mix(in srgb, var(--surface) 46%, transparent);
+  background: transparent;
+}
+
+@media (max-width: 640px) {
+  .discussion-hub__tabs button {
+    min-height: 43px;
+  }
 }
 .discussion-hub__tabs button.is-active {
   border-bottom-color: var(--page-tab-active-indicator);
@@ -945,11 +962,6 @@
     margin-left: -12px;
     padding-right: 12px;
     padding-left: 12px;
-  }
-  .discussion-hub__tabs button {
-    min-height: 47px;
-    padding: 0 12px;
-    font-size: 0.81rem;
   }
   .discussion-hub__filters {
     grid-template-columns: 1fr 1fr;
