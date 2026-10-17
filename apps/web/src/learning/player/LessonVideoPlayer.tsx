@@ -515,7 +515,6 @@ export function LessonVideoPlayer({
       readLearningPreferences().resumeFromLastPosition;
     return createLearningLessonVideoSource({
       media: playbackMedia,
-      lessonTitle,
       mediaKey,
       startTime: resumeFromLastPosition ? readResumePosition(mediaKey) : 0,
       protectedPlayback: playbackBootstrap
@@ -530,7 +529,6 @@ export function LessonVideoPlayer({
           : undefined,
     });
   }, [
-    lessonTitle,
     mediaKey,
     playbackBootstrap,
     playbackMedia,

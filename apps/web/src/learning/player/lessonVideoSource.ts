@@ -37,7 +37,6 @@ export function isStreamingUrl(src: string): boolean {
 
 export function createLearningLessonVideoSource(options: {
   media: CourseVideo;
-  lessonTitle: string;
   mediaKey: string;
   startTime: number;
   protectedPlayback?: boolean;
@@ -70,7 +69,7 @@ export function createLearningLessonVideoSource(options: {
     startTime: options.startTime,
     metadata: {
       duration: options.media.duration,
-      title: options.lessonTitle,
+      // Editable lesson titles belong to the UI, not the media load request.
     },
     streaming: streaming ? { ...LEARNING_HLS_STREAMING } : undefined,
     inlinedManifest: streaming ? options.inlinedMasterManifest : undefined,

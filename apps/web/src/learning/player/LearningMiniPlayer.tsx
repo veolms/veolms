@@ -580,7 +580,6 @@ export function LearningMiniPlayer({
         duration:
           playbackBootstrap.duration ?? session.source.metadata?.duration ?? 0,
       },
-      lessonTitle: session.lessonTitle,
       mediaKey: sessionMediaKey,
       startTime,
       protectedPlayback: playbackBootstrap.source === "paid-bootstrap-api",
@@ -599,7 +598,6 @@ export function LearningMiniPlayer({
     playbackBootstrap,
     playbackCourseSlug,
     playbackLessonNumber,
-    session.lessonTitle,
     session.source,
     sessionMediaKey,
     startTime,

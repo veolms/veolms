@@ -29,7 +29,6 @@ export async function loadHeroLaptopVideo(
           duration: playback.duration ?? 0,
           src: resolveVideoPlaybackCdnUrl(playback.manifestUrl),
         },
-        lessonTitle: title,
         mediaKey: playback.mediaKey,
         startTime: 0,
         protectedPlayback: true,
