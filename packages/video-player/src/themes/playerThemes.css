@@ -199,51 +199,10 @@
   border-radius: calc(var(--video-player-menu-radius, 14px) - 5px);
 }
 
-[data-player-theme="aurora"] [data-player-control-cluster] {
-  column-gap: 0.125rem;
-}
-
-[data-player-theme="aurora"] [data-player-control-cluster="player-actions"] {
-  padding-inline: 0.25rem;
-}
-
-[data-player-theme="aurora"] [data-timeline-progress],
-[data-player-theme="aurora"] [data-timeline-thumb] {
-  box-shadow:
-    0 0 0 1px rgb(255 255 255 / 0.3),
-    0 2px 8px rgb(103 232 249 / 0.4);
-}
-
-[data-player-theme="minimal"] [data-player-control-cluster] {
-  backdrop-filter: none;
-}
-
-[data-player-theme="minimal"] [data-autoplay-knob] {
-  background: #0f172a !important;
-  color: #f8fafc !important;
-}
-
-[data-player-theme="minimal"]
-  [data-player-control-cluster="lesson-navigation"] {
-  column-gap: 0.125rem;
-}
-
-[data-player-theme="minimal"] [data-timeline-progress],
-[data-player-theme="minimal"] [data-timeline-thumb] {
-  box-shadow:
-    0 0 0 1px rgb(15 23 42 / 0.55),
-    0 2px 5px rgb(0 0 0 / 0.28);
-}
-
 @media (max-width: 40rem) {
   [data-video-player-root] [data-player-control-cluster="player-actions"] {
     border-color: transparent;
     background: transparent !important;
     box-shadow: none !important;
-  }
-
-  [data-player-theme="minimal"] [data-player-control-cluster="player-actions"] {
-    border-color: var(--video-player-control-border) !important;
-    background: var(--video-player-control-surface) !important;
   }
 }

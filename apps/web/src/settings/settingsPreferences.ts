@@ -1,6 +1,6 @@
 import {
-  isBuiltInPlayerThemeId,
-  type BuiltInPlayerThemeId,
+  DEFAULT_PLAYER_THEME_ID,
+  isPlayerThemeId,
 } from "@veolms/video-player/theme-ids";
 
 export const SIDEBAR_MAX_WIDTH_MIN = 200;
@@ -334,7 +334,11 @@ export interface SidebarPreferences {
 
 export interface LearningPreferences {
   videoQuality: string;
-  videoPlayerTheme: BuiltInPlayerThemeId;
+  /**
+   * A built-in theme id or one a plugin registers; an id nobody provides
+   * plays in the default theme (see `resolvePlayerTheme`).
+   */
+  videoPlayerTheme: string;
   playbackSpeed: string;
   seekIntervalSeconds: number;
   resumeFromLastPosition: boolean;
@@ -372,13 +376,17 @@ export const normalizeLearningSeekInterval = (value: unknown): number => {
   );
 };
 
-export const normalizeVideoPlayerTheme = (
-  value: unknown,
-): BuiltInPlayerThemeId => (isBuiltInPlayerThemeId(value) ? value : "youtube");
+/** Themes that were taken out; a stored choice of one goes back to the default. */
+const RETIRED_PLAYER_THEME_IDS = new Set(["aurora", "minimal"]);
+
+export const normalizeVideoPlayerTheme = (value: unknown): string =>
+  isPlayerThemeId(value) && !RETIRED_PLAYER_THEME_IDS.has(value)
+    ? value
+    : DEFAULT_PLAYER_THEME_ID;
 
 export const LEARNING_PREFERENCE_DEFAULTS: LearningPreferences = {
   videoQuality: "auto",
-  videoPlayerTheme: "youtube",
+  videoPlayerTheme: DEFAULT_PLAYER_THEME_ID,
   playbackSpeed: "1",
   seekIntervalSeconds: LEARNING_SEEK_INTERVAL_DEFAULT,
   resumeFromLastPosition: true,

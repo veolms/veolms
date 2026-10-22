@@ -125,7 +125,7 @@ export function SettingsMenu({
           size={22}
           className={`origin-center transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none ${mobileInteraction ? "size-5" : ""}`}
           style={{
-            transform: `rotate(${theme.motion.settingsClosedRotation + (settingsOpen ? SETTINGS_OPEN_TURN_DEGREES : 0)}deg)`,
+            transform: `rotate(${theme.motion.settingsClosedRotation + (settingsOpen ? (theme.motion.settingsOpenTurn ?? SETTINGS_OPEN_TURN_DEGREES) : 0)}deg)`,
           }}
           active={settingsOpen}
         />

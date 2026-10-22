@@ -1,0 +1,448 @@
+/*
+ * The theme kit: how a theme's optional tokens (font, play button, scrim,
+ * timeline and thumb shape, glass, …; see `PlayerThemeTokens`) restyle the
+ * player. It applies to every theme except YouTube, which keeps the
+ * markup's own styles exactly as they were. Themes registered by plugins
+ * get it too, so most of a new theme is its tokens; what tokens cannot say
+ * goes in a few rules scoped to its id (Cone, Frost and Mono below).
+ *
+ * The player's parts carry Tailwind classes, many with `!important`, so the
+ * kit's rules are `!important` as well and win on specificity.
+ */
+
+/* ---- Type ---- */
+
+[data-player-theme]:not([data-player-theme="youtube"]) {
+  font-family: var(--video-player-font, inherit);
+}
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is([aria-label$="elapsed of" i], [aria-label*=" elapsed of "]),
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-player-control-cluster="time"]
+  button {
+  font-family: var(
+    --video-player-numeric-font,
+    var(--video-player-font, inherit)
+  );
+  font-variant-numeric: tabular-nums;
+}
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is(
+    [data-player-control-hit-area="course-lessons"],
+    [data-player-control-hit-area="chapters"] button,
+    [aria-controls][aria-label="Chapters"],
+    [aria-label="Chapters"]
+  ) {
+  text-transform: var(--video-player-label-transform, none);
+  letter-spacing: var(--video-player-label-letter-spacing, normal);
+}
+
+/* ---- Control surfaces: shape, outline, glass ---- */
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-player-control-cluster] {
+  border-color: transparent !important;
+}
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  [class*="bg-(--video-player-control-surface)"]:not(
+    [class*="before:bg-(--video-player-control-surface)"]
+  ),
+[data-player-theme]:not([data-player-theme="youtube"])
+  [class*="before:bg-(--video-player-control-surface)"]::before {
+  border-radius: var(--video-player-control-radius, 999px) !important;
+  box-shadow:
+    inset 0 0 0 1px var(--video-player-control-border, transparent),
+    var(--video-player-control-shadow, none) !important;
+  backdrop-filter: var(--video-player-control-backdrop, none);
+  -webkit-backdrop-filter: var(--video-player-control-backdrop, none);
+}
+
+/* The layers that hold the controls say `text-white`; a light theme's
+   controls take their own text colour. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is([data-player-control], [data-player-control-hit-area]):not(
+    [aria-label="Minimize"]
+  ) {
+  color: var(--video-player-control-text, #fff) !important;
+}
+
+/* Buttons inside a surface follow its corners, a little tighter. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is([data-player-control], [data-player-control-hit-area]),
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is([data-player-control], [data-player-control-hit-area])::before {
+  border-radius: max(
+    0px,
+    calc(var(--video-player-control-radius, 999px) - 3px)
+  ) !important;
+}
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-player-control-hit-area]
+  .rounded-full:not([data-autoplay-track], [data-autoplay-knob]) {
+  border-radius: var(--video-player-control-radius, 999px) !important;
+}
+
+/* The minimize chevron, on its own over the picture. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  [aria-label="Minimize"][data-player-control] {
+  border-radius: var(--video-player-control-radius, 999px) !important;
+}
+
+/* ---- Play button: bottom row and the big one in the middle ---- */
+
+/* Doubled attribute: beats the generic surface rule above. */
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is(
+    [data-player-control-cluster="playback"],
+    [data-player-control-cluster="mobile-play"]
+  )[data-player-control-cluster][class] {
+  background: var(
+    --video-player-play-surface,
+    var(--video-player-control-surface)
+  ) !important;
+  color: var(
+    --video-player-play-text,
+    var(--video-player-control-text)
+  ) !important;
+  border-radius: var(
+    --video-player-play-radius,
+    var(--video-player-control-radius, 999px)
+  ) !important;
+  box-shadow:
+    inset 0 0 0 1px var(--video-player-control-border, transparent),
+    var(--video-player-control-shadow, none) !important;
+}
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is(
+    [data-player-control-cluster="playback"],
+    [data-player-control-cluster="mobile-play"]
+  ) {
+  outline: var(--video-player-play-border, 0 none);
+  outline-offset: -1px;
+}
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is(
+    [data-player-control-cluster="playback"],
+    [data-player-control-cluster="mobile-play"]
+  )
+  [data-player-control] {
+  color: inherit !important;
+  border-radius: max(
+    0px,
+    calc(
+      var(
+          --video-player-play-radius,
+          var(--video-player-control-radius, 999px)
+        ) -
+        3px
+    )
+  ) !important;
+}
+
+/* ---- Scrims behind the desktop controls ---- */
+
+@media (min-width: 40.0625rem) {
+  [data-player-theme]:not(
+      [data-player-theme="youtube"]
+    )[data-player-mobile-interaction="false"]
+    [data-player-control-frame]::before,
+  [data-player-theme]:not(
+      [data-player-theme="youtube"]
+    )[data-player-mobile-interaction="false"]
+    [data-player-control-frame]::after {
+    position: absolute;
+    inset-inline: 0;
+    pointer-events: none;
+    content: "";
+  }
+
+  [data-player-theme]:not(
+      [data-player-theme="youtube"]
+    )[data-player-mobile-interaction="false"]
+    [data-player-control-frame]::before {
+    inset-inline: var(--video-player-deck-inset, 0);
+    bottom: var(--video-player-deck-inset, 0);
+    height: var(--video-player-deck-height, min(11rem, 60%));
+    border-radius: var(--video-player-deck-radius, 0);
+    background: var(--video-player-bottom-scrim, none);
+    box-shadow: var(--video-player-deck-shadow, none);
+    backdrop-filter: var(--video-player-deck-backdrop, none);
+    -webkit-backdrop-filter: var(--video-player-deck-backdrop, none);
+  }
+
+  [data-player-theme]:not(
+      [data-player-theme="youtube"]
+    )[data-player-mobile-interaction="false"]
+    [data-player-control-frame]::after {
+    top: 0;
+    height: min(6rem, 35%);
+    background: var(--video-player-top-scrim, none);
+  }
+}
+
+/* Pills on a deck take the deck's own surface (desktop only: phones have
+   no deck, and their pills sit straight on the picture). */
+@media (min-width: 40.0625rem) and (pointer: fine) {
+  [data-player-theme]:not([data-player-theme="youtube"])
+    :is(
+      [data-player-desktop-start-controls],
+      [data-player-desktop-end-controls]
+    )
+    [class*="bg-(--video-player-control-surface)"]:not(
+      [class*="before:bg-(--video-player-control-surface)"],
+      [data-player-control-cluster="playback"]
+    ),
+  [data-player-theme]:not([data-player-theme="youtube"])
+    :is(
+      [data-player-desktop-start-controls],
+      [data-player-desktop-end-controls]
+    )
+    [class*="before:bg-(--video-player-control-surface)"]::before {
+    background-color: var(
+      --video-player-deck-control-surface,
+      var(--video-player-control-surface)
+    ) !important;
+  }
+
+  [data-player-theme]:not([data-player-theme="youtube"])
+    :is(
+      [data-player-desktop-start-controls],
+      [data-player-desktop-end-controls]
+    )
+    [class*="hover:before:bg-(--video-player-control-surface-hover)"]:is(
+      :hover,
+      :focus-visible
+    )::before {
+    background-color: var(--video-player-control-surface-hover) !important;
+  }
+}
+
+/* ---- Timeline ---- */
+
+[data-player-theme]:not([data-player-theme="youtube"]) [data-timeline-track],
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is([data-timeline-progress], [data-timeline-buffered-range]) {
+  border-radius: var(--video-player-timeline-radius, 999px) !important;
+}
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  [data-timeline-progress] {
+  background: var(
+    --video-player-timeline-progress,
+    var(--video-player-accent, #ff7a1a)
+  ) !important;
+}
+
+/* Heights only where the timeline is drawn the desktop way: phones keep
+   their own hairline and drag geometry. */
+@media (min-width: 40.0625rem) and (pointer: fine) {
+  [data-player-theme]:not([data-player-theme="youtube"]) [data-timeline-track] {
+    height: var(--video-player-timeline-height, 4px) !important;
+  }
+
+  [data-player-theme]:not([data-player-theme="youtube"])
+    :is(
+      .group\/timeline:hover,
+      .group\/timeline:focus-within,
+      .group\/timeline[data-scrubbing="true"]
+    )
+    [data-timeline-track] {
+    height: calc(var(--video-player-timeline-height, 4px) + 2px) !important;
+  }
+
+  [data-player-theme]:not([data-player-theme="youtube"])
+    [data-timeline-track][data-hovered="true"] {
+    height: calc(var(--video-player-timeline-height, 4px) + 5px) !important;
+  }
+}
+
+[data-player-theme]:not([data-player-theme="youtube"]) [data-timeline-thumb] {
+  width: var(--video-player-thumb-width, 0.75rem) !important;
+  height: var(--video-player-thumb-height, 0.75rem) !important;
+  border: var(--video-player-thumb-border, 0 none);
+  border-radius: var(--video-player-thumb-radius, 999px) !important;
+  background: var(
+    --video-player-thumb-color,
+    var(--video-player-timeline-progress, var(--video-player-accent, #ff7a1a))
+  ) !important;
+  box-shadow: var(
+    --video-player-thumb-shadow,
+    0 2px 6px rgb(0 0 0 / 0.4)
+  ) !important;
+  box-sizing: border-box;
+}
+
+/* ---- Autoplay switch: the accent when on ---- */
+
+:root[data-player-autoplay="on"]
+  [data-player-theme]:not([data-player-theme="youtube"])
+  [data-autoplay-track] {
+  background: var(--video-player-accent) !important;
+}
+
+:root[data-player-autoplay="on"]
+  [data-player-theme]:not([data-player-theme="youtube"])
+  [data-autoplay-knob] {
+  background: var(--video-player-accent-contrast) !important;
+  color: var(--video-player-accent) !important;
+}
+
+[data-player-theme]:not([data-player-theme="youtube"])
+  :is([data-autoplay-track], [data-autoplay-knob]) {
+  border-radius: min(
+    var(--video-player-control-radius, 999px),
+    999px
+  ) !important;
+}
+
+/* ---- Menus ---- */
+
+[data-player-theme]:not(
+    [data-player-theme="youtube"]
+  )[data-video-player-menu-panel] {
+  box-shadow:
+    inset 0 0 0 1px var(--video-player-menu-border, transparent),
+    var(--video-player-menu-shadow, none) !important;
+  backdrop-filter: var(--video-player-menu-backdrop, none);
+  -webkit-backdrop-filter: var(--video-player-menu-backdrop, none);
+}
+
+[data-player-theme]:not(
+    [data-player-theme="youtube"]
+  )[data-video-player-menu-panel]
+  [role^="menuitem"]:is([aria-checked="true"], :hover, :focus-visible) {
+  background: var(
+    --video-player-menu-row-active,
+    rgb(255 255 255 / 0.08)
+  ) !important;
+}
+
+/* ================================================================
+ * Cone: a solid deck, orange keys, values called out in the accent.
+ * ================================================================ */
+
+[data-player-theme="cone"] [data-player-control-cluster="mobile-play"] {
+  border-radius: 1rem !important;
+}
+
+[data-player-theme="cone"][data-video-player-menu-panel]
+  [role^="menuitem"]
+  > span:first-child {
+  box-sizing: content-box;
+  padding: 0.3125rem;
+  border-radius: 0.5rem;
+  background: rgb(255 122 26 / 0.12);
+  color: var(--video-player-accent) !important;
+}
+
+[data-player-theme="cone"][data-video-player-menu-panel]
+  [role^="menuitem"]
+  .tabular-nums {
+  color: var(--video-player-accent) !important;
+  font-weight: 700;
+}
+
+[data-player-theme="cone"] [data-player-control-hit-area="course-lessons"],
+[data-player-theme="cone"] [data-player-control-cluster="time"] button {
+  font-weight: 700;
+}
+
+/* ================================================================
+ * Frost: glass everywhere, a white play disc, a glowing line for a thumb.
+ * ================================================================ */
+
+[data-player-theme="frost"] [data-player-control-cluster="mobile-play"] {
+  background: rgb(255 255 255 / 0.16) !important;
+  color: #fff !important;
+  backdrop-filter: blur(18px) saturate(1.6);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.32),
+    0 12px 32px rgb(4 12 24 / 0.35) !important;
+}
+
+[data-player-theme="frost"] [data-timeline-thumb] {
+  scale: 1 !important;
+}
+
+[data-player-theme="frost"]
+  :is(.group\/timeline:hover, .group\/timeline[data-scrubbing="true"])
+  [data-timeline-thumb] {
+  scale: 1.15 1.25 !important;
+}
+
+/* ================================================================
+ * Mono: no boxes, hairlines, uppercase labels, a big time.
+ * ================================================================ */
+
+[data-player-theme="mono"]
+  [class*="bg-(--video-player-control-surface)"]:not(
+    [class*="before:bg-(--video-player-control-surface)"]
+  ),
+[data-player-theme="mono"]
+  [class*="before:bg-(--video-player-control-surface)"]::before {
+  box-shadow: none !important;
+}
+
+[data-player-theme="mono"]
+  :is(
+    [data-player-control-hit-area="course-lessons"],
+    [data-player-control-hit-area="chapters"] button,
+    [aria-label="Chapters"]
+  ) {
+  font-family: var(--video-player-numeric-font);
+  font-size: 0.75rem !important;
+  font-weight: 600;
+}
+
+@media (min-width: 40.0625rem) {
+  [data-player-theme="mono"] [data-player-control-cluster="time"] button {
+    font-size: 1.0625rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+}
+
+[data-player-theme="mono"] [data-player-control-cluster="mobile-play"] {
+  outline: 1.5px solid rgb(255 255 255 / 0.9);
+  outline-offset: -1.5px;
+}
+
+[data-player-theme="mono"][data-video-player-menu-panel] {
+  font-family: var(--video-player-numeric-font);
+}
+
+[data-player-theme="mono"][data-video-player-menu-panel]
+  [role^="menuitem"]:not(:last-child) {
+  box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.1);
+}
+
+[data-player-theme="mono"][data-video-player-menu-panel]
+  [role^="menuitem"]
+  .font-medium {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ================================================================
+ * No theme puts a background behind the timeline and the controls.
+ * ================================================================ */
+
+/* A faint shadow keeps the timeline visible over a bright picture. */
+[data-player-theme]:not([data-player-theme="youtube"]) [data-timeline-track] {
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+}
+
+/* Mono's icons and labels sit straight on the picture. */
+[data-player-theme="mono"]
+  :is([data-player-control], [data-player-control-hit-area])
+  :is(svg, span) {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
+}

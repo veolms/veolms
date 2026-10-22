@@ -201,11 +201,18 @@ export { formatMediaTime } from "./accessibility/formatMediaTime";
 export {
   BUILT_IN_PLAYER_THEMES,
   BUILT_IN_PLAYER_THEME_IDS,
+  DEFAULT_PLAYER_THEME_ID,
   PLAYER_THEME_OPTIONS,
   createPlayerTheme,
+  createThemedIcon,
+  findPlayerTheme,
   getPlayerThemeStyle,
+  getPlayerThemes,
   isBuiltInPlayerThemeId,
+  isPlayerThemeId,
+  registerPlayerTheme,
   resolvePlayerTheme,
+  subscribePlayerThemes,
 } from "./themes/playerThemes";
 export type {
   BuiltInPlayerThemeId,
@@ -222,5 +229,6 @@ export type {
 export {
   PlayerThemeProvider,
   usePlayerTheme,
+  usePlayerThemes,
 } from "./themes/PlayerThemeContext";
 export type { PlayerThemeProviderProps } from "./themes/PlayerThemeContext";
