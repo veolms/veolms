@@ -39,6 +39,15 @@ import {
 } from "../quizzes/index.ts";
 import * as learningProgressRepository from "./learning-progress.repository.ts";
 
+/**
+ * Known legacy-to-canonical aliases where Intl.resolvedOptions().timeZone
+ * retains the legacy name (e.g. Asia/Calcutta in ICU/V8) rather than the
+ * modern identifier recognized by PostgreSQL (Asia/Kolkata).
+ */
+const TIME_ZONE_ALIASES: Record<string, string> = {
+  "Asia/Calcutta": "Asia/Kolkata",
+};
+
 /** Streak lengths that earn a one-time milestone notification. */
 const LEARNING_STREAK_MILESTONES = [7, 30, 100, 365] as const;
 /** Days after a milestone on which a missed announcement is still made. */
@@ -728,12 +737,13 @@ export function createLearningProgressService({
   async function resolveSupportedTimeZone(
     timeZone: string,
   ): Promise<string | null> {
-    const candidates = [timeZone];
+    const alias = TIME_ZONE_ALIASES[timeZone];
+    const candidates = alias ? [alias, timeZone] : [timeZone];
     try {
       const canonical = new Intl.DateTimeFormat("en-US", {
         timeZone,
       }).resolvedOptions().timeZone;
-      if (canonical !== timeZone) candidates.push(canonical);
+      if (!candidates.includes(canonical)) candidates.push(canonical);
     } catch {
       return null;
     }
