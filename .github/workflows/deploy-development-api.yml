@@ -65,6 +65,9 @@ jobs:
       - name: Type-check API
         run: pnpm --filter @veolms/api typecheck
 
+      - name: Test API
+        run: pnpm --filter @veolms/api test
+
       - name: Configure SSH
         shell: bash
         env:
