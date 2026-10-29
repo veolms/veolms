@@ -33,6 +33,10 @@
     "db:seed": "pnpm --filter @veolms/database seed",
     "db:reset": "pnpm --filter @veolms/database reset",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
+    "test:api": "pnpm --filter @veolms/api test",
+    "test:flows": "pnpm --filter @veolms/api test:flows",
+    "test:browser": "pnpm --filter @veolms/web test:browser",
+    "test:all": "pnpm test:api && pnpm test:flows && pnpm test:browser",
     "migration:create": "pnpm --filter @veolms/database migration:create",
     "prepare": "husky"
   },
