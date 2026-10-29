@@ -14,11 +14,38 @@ This repository is a monorepo containing the following packages and applications
 2. For frontend architecture, state management, API integrations, visual design, and component reuse, strictly adhere to `apps/web/AGENTS.md`.
 3. For backend architecture, layered service pattern, and database repositories, strictly adhere to `apps/api/AGENTS.md`.
 
-## Frontend test policy
+## Tests that guard features
 
-For work under `apps/web`, do not create, restore, or update unit-test or E2E-test cases.
-Do not add unit-test runners, setup files, or test-only dependencies. E2E tests have been
-decommissioned; validate changes with the relevant typecheck, lint, and build checks.
+Three sets of tests protect what learners and staff rely on. Run all of them with
+`pnpm test:all` before pushing to `dev`.
+
+| Set            | Where                       | Command             | Needs                          |
+| -------------- | --------------------------- | ------------------- | ------------------------------ |
+| API unit tests | `apps/api/src/**/*.test.ts` | `pnpm test:api`     | nothing                        |
+| API flow tests | `apps/api/test/flows/`      | `pnpm test:flows`   | Docker Postgres                |
+| Browser tests  | `apps/web/tests/journeys/`  | `pnpm test:browser` | Docker Postgres, Google Chrome |
+
+The flow and browser tests cover: signing in, who can open which lesson (the lesson
+lock), buying and joining courses, video playback, learning progress, and the staff
+area. Each folder's README lists what each file covers.
+
+Rules for agents:
+
+- **Ask every time a covered feature changes.** When a change touches a feature these
+  tests cover, ask the user before finishing: "This changes <feature>. Should I also
+  update <test file>?" Ask each time; do not decide alone, and do not skip the
+  question because the tests still pass.
+- **Never bend a test to make it pass.** Do not change, skip (`.skip`, `.fixme`) or
+  delete a test to get a green run. When one fails, find out whether the app or the
+  test is wrong, tell the user which and why, and ask before changing the test.
+- **A bug fix brings its test.** When fixing a bug in a covered feature, offer to add
+  the test that would have caught it: written first, failing without the fix.
+- **No frontend unit tests.** Under `apps/web`, do not add unit tests, unit-test
+  runners or their setup files.
+- **Browser tests are journeys, not looks.** Add browser tests only for what a person
+  does and gets (sign in, open, pay, watch, save). Never for layout, styling, colours,
+  preferences or screenshots: those break on every design change and catch no bugs.
+  Find elements by role, label or visible text, never by CSS class.
 
 ## Branch Protection Rule
 
