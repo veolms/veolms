@@ -20,6 +20,7 @@ import { useSettingsTabShortcuts } from "../settings/useSettingsTabShortcuts";
 import { PlatformAppearanceTab } from "./PlatformAppearanceTab";
 import { PlatformInvoiceTab } from "./PlatformInvoiceTab";
 import { PlatformSecurityTab } from "./PlatformSecurityTab";
+import { StaticSiteRebuildSection } from "./StaticSiteRebuildSection";
 import {
   PLATFORM_TAB_DEFINITIONS,
   PLATFORM_TAB_PERMISSIONS,
