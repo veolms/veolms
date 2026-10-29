@@ -17,6 +17,7 @@ import {
   LEARNING_SEEK_INTERVAL_MAX,
   LEARNING_SEEK_INTERVAL_MIN,
   LEARNING_SEEK_INTERVAL_PRESETS,
+  markCurriculumStickOpenSection,
   normalizeLearningSeekInterval,
   readLearningPreferences,
 } from "./settingsPreferences";
@@ -115,6 +116,7 @@ export function LearningSettings({
       preferences.showLessonPageScrollbar ? "visible" : "hidden";
     document.documentElement.dataset.curriculumScrollbar =
       preferences.showCurriculumScrollbar ? "visible" : "hidden";
+    markCurriculumStickOpenSection(preferences.stickOpenSection);
   }, [preferences, storageReady]);
 
   return (

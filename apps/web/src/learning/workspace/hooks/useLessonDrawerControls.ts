@@ -230,17 +230,24 @@ export function useLessonDrawerControls({
 
   const toggleLessonDrawerFromPlayer = useCallback(
     (presentation: "drawer" | "side") => {
+      // In full screen with the lessons beside the video (a phone turned
+      // sideways, or a computer at any width: a zoomed-in laptop is as
+      // narrow as a tablet), they open inside full screen, beside the
+      // video. The page's drawer and side panel are outside it, out of
+      // sight.
+      if (mobileLandscapeFullscreenRef.current) {
+        setLessonDrawer(false);
+        setLessonDrawerForcedFloating(false);
+        if (!fullscreenLessonPanelOpen) {
+          setFullscreenCurriculumFocusRequest((request) => request + 1);
+        }
+        setFullscreenLessonPanelOpen(!fullscreenLessonPanelOpen);
+        return;
+      }
+
       if (presentation === "side") {
         setLessonDrawer(false);
         setLessonDrawerForcedFloating(false);
-
-        if (mobileLandscapeFullscreenRef.current) {
-          if (!fullscreenLessonPanelOpen) {
-            setFullscreenCurriculumFocusRequest((request) => request + 1);
-          }
-          setFullscreenLessonPanelOpen(!fullscreenLessonPanelOpen);
-          return;
-        }
 
         if (isCourseContentDrawerLayout()) {
           if (lessonDrawer) closeLessonDrawer();

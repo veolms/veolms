@@ -1,5 +1,4 @@
 import {
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -21,7 +20,6 @@ import {
   LEARNING_LESSON_NUMBER_META_NAME,
 } from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
-import { LearningWorkspaceFallback } from "../learning/LearningWorkspaceFallback";
 // Imported with the route, not lazily: a lesson page is built with the
 // workspace drawn, and the route's code is loaded before the page hydrates,
 // so the built page is hydrated as it is and its stylesheets are linked in
@@ -409,40 +407,45 @@ export default function LearningRoute() {
     ],
   );
 
+  // No Suspense boundary here: nothing in the workspace suspends (its lazy
+  // parts have their own), and a boundary is hydrated in a pass of its own
+  // after the rest of the page. The effects of that first pass had already
+  // put this tab's copies of the learner's answers in place (their access,
+  // see services/accountSessionCopies.ts), so the workspace then rendered
+  // locks the built page did not have, and React threw the whole lesson
+  // page away and drew it again: the list back at its top, the bar loose.
   return (
-    <Suspense fallback={<LearningWorkspaceFallback />}>
-      <LearningWorkspace
-        key={courseSlug}
-        courseSlug={courseSlug}
-        userId={activeUser?.id}
-        lessonId={lessonId}
-        initialLessonView={isQuizViewRequested ? "quiz" : "video"}
-        mobileBottomNavigation={mobileBottomNavigation}
-        mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-        onSelectLesson={selectLesson}
-        onOpenCourseOverview={openCourseOverview}
-        onOpenEditor={navigateTo}
-        onUnlockCourse={unlockCourse}
-        onOpenLogin={openLogin}
-        onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
-        onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
-        persistentPlayerCourseRouteKey={courseSlug}
-        persistentPlayerLessonPath={`${location.pathname}${location.search}`}
-        persistentPlayerReturnPath={playerReturnPath}
-        courseNavigationActionLabel={
-          hasDiscussionReturnPath ? "Back to Discussions" : undefined
-        }
-        persistentPlayerMounted={persistentPlayerMounted}
-        registerPersistentPlayer={registerPersistentPlayer}
-        onMinimizePlayer={minimizePlayer}
-        deepLinkLessonUuid={deepLinkLessonUuid}
-        isDiscussionDeepLink={hasDiscussionDeepLink}
-        deepLinkRouteSettled={isDeepLinkRouteSettled}
-        noteDeepLinkId={noteDeepLinkId}
-        quizAssignment={quizAssignment ?? null}
-        quizAssignments={myQuizAssignments?.assignments ?? null}
-        quizAssignmentLoading={myQuizAssignmentsLoading}
-      />
-    </Suspense>
+    <LearningWorkspace
+      key={courseSlug}
+      courseSlug={courseSlug}
+      userId={activeUser?.id}
+      lessonId={lessonId}
+      initialLessonView={isQuizViewRequested ? "quiz" : "video"}
+      mobileBottomNavigation={mobileBottomNavigation}
+      mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+      onSelectLesson={selectLesson}
+      onOpenCourseOverview={openCourseOverview}
+      onOpenEditor={navigateTo}
+      onUnlockCourse={unlockCourse}
+      onOpenLogin={openLogin}
+      onMinimizeGestureChange={onLearningPlayerMinimizeGestureChange}
+      onMiniPlayerRestoreReady={onMiniPlayerRestoreReady}
+      persistentPlayerCourseRouteKey={courseSlug}
+      persistentPlayerLessonPath={`${location.pathname}${location.search}`}
+      persistentPlayerReturnPath={playerReturnPath}
+      courseNavigationActionLabel={
+        hasDiscussionReturnPath ? "Back to Discussions" : undefined
+      }
+      persistentPlayerMounted={persistentPlayerMounted}
+      registerPersistentPlayer={registerPersistentPlayer}
+      onMinimizePlayer={minimizePlayer}
+      deepLinkLessonUuid={deepLinkLessonUuid}
+      isDiscussionDeepLink={hasDiscussionDeepLink}
+      deepLinkRouteSettled={isDeepLinkRouteSettled}
+      noteDeepLinkId={noteDeepLinkId}
+      quizAssignment={quizAssignment ?? null}
+      quizAssignments={myQuizAssignments?.assignments ?? null}
+      quizAssignmentLoading={myQuizAssignmentsLoading}
+    />
   );
 }

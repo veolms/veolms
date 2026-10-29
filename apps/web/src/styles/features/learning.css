@@ -695,28 +695,6 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     transform: translateX(300%) scaleX(1.8);
   }
 }
-/* The sheet's grab thumb, which lies over the seam, is jolted sideways by
-   the same collision (LearningWorkspace, the lessons sheet's swipe handle):
-   a short shake that dies away, left and right only. */
-@keyframes curriculum-seam-thumb-shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  15% {
-    transform: translateX(-3px);
-  }
-  35% {
-    transform: translateX(2.5px);
-  }
-  55% {
-    transform: translateX(-1.5px);
-  }
-  75% {
-    transform: translateX(0.75px);
-  }
-}
-
 /* The mini player's playlist: plain sections with dense single-line
    headings. The full panel's sections are blocks styled in Curriculum.tsx. */
 .learning-curriculum--compact .learning-curriculum__section {
