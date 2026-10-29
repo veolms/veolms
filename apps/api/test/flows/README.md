@@ -5,13 +5,14 @@ buy a course, watch its lessons, save progress, and what only staff may do.
 Each test signs people up, makes courses and calls the API exactly as the web
 app does; nothing is mocked inside the API.
 
-| File                                | What it covers                                                        |
-| ----------------------------------- | --------------------------------------------------------------------- |
-| `01-sign-in.flow.test.ts`           | Emailed codes, wrong/used/expired codes, sign-out, the device limit   |
-| `02-course-access.flow.test.ts`     | Which lessons play for whom: previews, free, paid, grants, archived   |
-| `03-buying-a-course.flow.test.ts`   | Checkout, payment confirmation, webhooks, forged or repeated payments |
-| `04-learning-progress.flow.test.ts` | Completion, course progress, resume on another device                 |
-| `05-staff-only.flow.test.ts`        | The admin area refuses learners and visitors                          |
+| File                                  | What it covers                                                        |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| `01-sign-in.flow.test.ts`             | Emailed codes, wrong/used/expired codes, sign-out, the device limit   |
+| `02-course-access.flow.test.ts`       | Which lessons play for whom: previews, free, paid, grants, archived   |
+| `03-buying-a-course.flow.test.ts`     | Checkout, payment confirmation, webhooks, forged or repeated payments |
+| `04-learning-progress.flow.test.ts`   | Completion, course progress, resume on another device                 |
+| `05-staff-only.flow.test.ts`          | The admin area refuses learners and visitors                          |
+| `06-coupons-and-refunds.flow.test.ts` | What coupons take off, refused coupons, refunds and what they revoke  |
 
 ## Running them
 
@@ -42,6 +43,7 @@ Only what lies outside the API:
 - **Email**: captured, so a test reads the sign-in code the learner would get.
 - **Payment gateway**: a fake Razorpay (`setup/fake-payment-gateway.ts`). Its
   signatures are real HMACs, so forged ones are refused as Razorpay's would be.
+  Its refunds settle at once, and it refuses more than is left of a payment.
 - **Video storage**: lessons are written with videos already transcoded
   (`setup/flow-courses.ts`). The API builds the video's CDN link and token
   without fetching anything, and storage points at an address that answers

@@ -1,8 +1,11 @@
 import crypto from "node:crypto";
 
 import type {
+  CreateGatewayRefundInput,
   GatewayOrderStatus,
   GatewayPaymentDetails,
+  GatewayRefundDetails,
+  GatewayRefundOutput,
   NormalizedPaymentEvent,
   PaymentGateway,
   PaymentGateways,
@@ -27,6 +30,7 @@ export class FakePaymentGateway implements PaymentGateway {
   readonly #secret = crypto.randomBytes(16).toString("hex");
   readonly #orders = new Map<string, FakeOrder>();
   readonly #payments = new Map<string, GatewayPaymentDetails>();
+  readonly #refunds = new Map<string, GatewayRefundDetails>();
   #next = 0;
   // Gateway ids are unique for good, as real ones are, not only within a run.
   readonly #run = crypto.randomBytes(4).toString("hex");
@@ -150,12 +154,53 @@ export class FakePaymentGateway implements PaymentGateway {
     return { ...payment };
   }
 
-  async refundPayment(): Promise<never> {
-    throw new Error("Refunds are not part of the flow tests");
+  /**
+   * Refunds settle at once, as Razorpay's usually do. The gateway refuses
+   * more than is left of the payment, as Razorpay's does.
+   */
+  async refundPayment(
+    input: CreateGatewayRefundInput,
+  ): Promise<GatewayRefundOutput> {
+    const payment = this.#payments.get(input.gatewayPaymentId);
+    if (!payment || !payment.captured) {
+      throw new Error(`No captured payment ${input.gatewayPaymentId}`);
+    }
+    const refunded = this.refundsOf(input.gatewayPaymentId).reduce(
+      (sum, refund) => sum + refund.amount,
+      0,
+    );
+    if (input.amount > payment.amount - refunded) {
+      throw new Error(
+        `Refund of ${input.amount} exceeds what is left of ${input.gatewayPaymentId}`,
+      );
+    }
+    const refund: GatewayRefundDetails = {
+      gatewayRefundId: `rfnd_flow_${this.#run}_${++this.#next}`,
+      gatewayPaymentId: input.gatewayPaymentId,
+      amount: input.amount,
+      currency: input.currency,
+      status: "processed",
+    };
+    this.#refunds.set(refund.gatewayRefundId, refund);
+    return {
+      gatewayRefundId: refund.gatewayRefundId,
+      amount: refund.amount,
+      currency: refund.currency,
+      status: refund.status,
+    };
   }
 
-  async fetchRefund(): Promise<never> {
-    throw new Error("Refunds are not part of the flow tests");
+  async fetchRefund(gatewayRefundId: string): Promise<GatewayRefundDetails> {
+    const refund = this.#refunds.get(gatewayRefundId);
+    if (!refund) throw new Error(`No fake gateway refund ${gatewayRefundId}`);
+    return { ...refund };
+  }
+
+  /** The refunds the API made of a payment, oldest first. */
+  refundsOf(gatewayPaymentId: string): GatewayRefundDetails[] {
+    return [...this.#refunds.values()].filter(
+      (refund) => refund.gatewayPaymentId === gatewayPaymentId,
+    );
   }
 
   /** A webhook delivery is "signed" when it carries this run's secret. */
