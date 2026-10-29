@@ -102,14 +102,23 @@ export function registerBackgroundJobs(
 
   // "Import from YouTube": off unless an operator turns it on, because it
   // downloads and packages video on this host.
-  const stopYoutubeImportWorker = config.YOUTUBE_IMPORT_ENABLED
-    ? startYoutubeImportWorker({
-        database,
-        services,
-        tools: getYoutubeImportTools(services.config, app.log),
-        logger: app.log,
-      })
-    : null;
+  let stopYoutubeImportWorker: (() => Promise<void>) | null = null;
+  if (config.YOUTUBE_IMPORT_ENABLED) {
+    const youtubeImportTools = getYoutubeImportTools(services.config, app.log);
+    // yt-dlp is found and updated now, not while the first video is checked.
+    void youtubeImportTools.getYtDlp().catch((error: unknown) => {
+      app.log.warn(
+        { err: error, feature: "youtube-import" },
+        "yt-dlp is not ready yet",
+      );
+    });
+    stopYoutubeImportWorker = startYoutubeImportWorker({
+      database,
+      services,
+      tools: youtubeImportTools,
+      logger: app.log,
+    });
+  }
 
   app.addHook("onClose", async () => {
     await paymentEventQueue.stop?.();
