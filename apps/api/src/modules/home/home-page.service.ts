@@ -2,16 +2,20 @@ import {
   DEFAULT_HOME_PAGE_SETTINGS,
   HOME_PAGE_COURSES_PER_SECTION,
   HOME_PAGE_DISCUSSION_COUNT,
+  HOME_PAGE_MAX_HIDDEN_DISCUSSIONS,
+  HOME_PAGE_MAX_PINNED_DISCUSSIONS,
   homePageSettingsSchema,
   type CourseSummary,
   type GuestHomePageResponse,
   type HeroVideoPlayback,
   type HomePageCourseSection,
+  type HomePageDiscussionListResponse,
   type HomePageLessonVideoOptionsResponse,
   type HomePageOptionsResponse,
   type HomePageSettings,
   type HomePageSettingsResponse,
   type PublicPopularDiscussion,
+  type UpdateHomePageDiscussionRequest,
   type VideoPlaybackToken,
 } from "@veolms/contracts";
 import { cacheTags, createCache } from "@veolms/api-core";
@@ -74,6 +78,13 @@ export interface HomePageService {
     updatedBy: string | null,
   ): Promise<HomePageSettingsResponse>;
   getOptions(): Promise<HomePageOptionsResponse>;
+  getDiscussionList(): Promise<HomePageDiscussionListResponse>;
+  /** One change to the home page's comments, saved straight away. */
+  updateDiscussion(
+    threadId: string,
+    action: UpdateHomePageDiscussionRequest["action"],
+    updatedBy: string | null,
+  ): Promise<HomePageDiscussionListResponse>;
   getGuestPage(): Promise<GuestHomePageResponse>;
   /** The lessons of a course an admin can pick as the hero video. */
   getLessonVideoOptions(
@@ -94,6 +105,35 @@ export function createHomePageService({
   threadsService: Pick<ThreadsService, "listPublicPopularDiscussions">;
   heroVideoService: HomeHeroVideoService;
 }): HomePageService {
+  function toDiscussionList(
+    settings: HomePageSettings,
+  ): HomePageDiscussionListResponse {
+    return {
+      pinnedThreadIds: settings.discussions.pinnedThreadIds,
+      hiddenThreadIds: settings.discussions.hiddenThreadIds,
+    };
+  }
+
+  async function writeSettings(
+    settings: HomePageSettings,
+    updatedBy: string | null,
+  ) {
+    let row: Awaited<ReturnType<typeof saveHomePageSettings>>;
+    try {
+      row = await saveHomePageSettings(database, { settings, updatedBy });
+    } catch (error) {
+      if (!isMissingHomePageSettingsTable(error)) throw error;
+      throw httpError(
+        503,
+        "HOME_PAGE_SETTINGS_UNAVAILABLE",
+        "Home page settings cannot be saved until the database migration that creates them has been run.",
+      );
+    }
+    // Other processes are cleared by the site change this save is.
+    guestPages.delete(GUEST_PAGE_KEY);
+    return row;
+  }
+
   async function readSettings(): Promise<StoredSettings> {
     let row: Awaited<ReturnType<typeof findHomePageSettings>>;
     try {
@@ -290,20 +330,72 @@ export function createHomePageService({
 
     async updateSettings(settings, updatedBy) {
       await heroVideoService.assertSelectable(settings.heroVideo);
-      let row: Awaited<ReturnType<typeof saveHomePageSettings>>;
-      try {
-        row = await saveHomePageSettings(database, { settings, updatedBy });
-      } catch (error) {
-        if (!isMissingHomePageSettingsTable(error)) throw error;
-        throw httpError(
-          503,
-          "HOME_PAGE_SETTINGS_UNAVAILABLE",
-          "Home page settings cannot be saved until the database migration that creates them has been run.",
-        );
-      }
-      // Other processes are cleared by the site change this save is.
-      guestPages.delete(GUEST_PAGE_KEY);
+      const row = await writeSettings(settings, updatedBy);
       return toResponse({ settings, updatedAt: row.updatedAt });
+    },
+
+    async getDiscussionList() {
+      return toDiscussionList((await readSettings()).settings);
+    },
+
+    async updateDiscussion(threadId, action, updatedBy) {
+      const { settings } = await readSettings();
+      const section = settings.discussions;
+      const without = (ids: readonly string[]) =>
+        ids.filter((id) => id !== threadId);
+      let pinnedThreadIds = section.pinnedThreadIds;
+      let hiddenThreadIds = section.hiddenThreadIds;
+
+      if (action === "add") {
+        if (!pinnedThreadIds.includes(threadId)) {
+          if (pinnedThreadIds.length >= HOME_PAGE_MAX_PINNED_DISCUSSIONS) {
+            throw httpError(
+              409,
+              "HOME_PAGE_DISCUSSIONS_FULL",
+              `The home page lists at most ${HOME_PAGE_MAX_PINNED_DISCUSSIONS} comments. Remove one first.`,
+            );
+          }
+          // The home page reads only public comments on published lessons.
+          const { discussions } =
+            await threadsService.listPublicPopularDiscussions(database, {
+              threadIds: [threadId],
+            });
+          if (discussions.length === 0) {
+            throw httpError(
+              409,
+              "DISCUSSION_NOT_PUBLIC",
+              "Only a public comment or question on a published lesson can be shown on the home page.",
+            );
+          }
+          // Newly added comments come first, where visitors see them.
+          pinnedThreadIds = [threadId, ...pinnedThreadIds];
+        }
+        hiddenThreadIds = without(hiddenThreadIds);
+      } else if (action === "remove") {
+        pinnedThreadIds = without(pinnedThreadIds);
+        hiddenThreadIds = without(hiddenThreadIds);
+      } else if (action === "hide") {
+        if (
+          !hiddenThreadIds.includes(threadId) &&
+          hiddenThreadIds.length >= HOME_PAGE_MAX_HIDDEN_DISCUSSIONS
+        ) {
+          throw httpError(
+            409,
+            "HOME_PAGE_HIDDEN_DISCUSSIONS_FULL",
+            `At most ${HOME_PAGE_MAX_HIDDEN_DISCUSSIONS} comments can be hidden.`,
+          );
+        }
+        hiddenThreadIds = [...without(hiddenThreadIds), threadId];
+      } else {
+        hiddenThreadIds = without(hiddenThreadIds);
+      }
+
+      const next: HomePageSettings = {
+        ...settings,
+        discussions: { ...section, pinnedThreadIds, hiddenThreadIds },
+      };
+      await writeSettings(next, updatedBy);
+      return toDiscussionList(next);
     },
 
     async getOptions() {
@@ -313,18 +405,30 @@ export function createHomePageService({
           limit: COURSE_OPTION_LIMIT,
           order: "popular",
         }),
-        readPinnedDiscussions(settings.discussions),
+        // The hidden ones are read too, so the editor can show them again.
+        readPinnedDiscussions({
+          ...settings.discussions,
+          pinnedThreadIds: [
+            ...new Set([
+              ...settings.discussions.pinnedThreadIds,
+              ...settings.discussions.hiddenThreadIds,
+            ]),
+          ],
+        }),
         threadsService.listPublicPopularDiscussions(
           database,
           HOME_DISCUSSION_QUERY,
         ),
       ]);
-      // The editor lists the pinned discussions too, in their order, so each
-      // can be unpinned even when it is not among the most active.
+      // The editor lists the listed and hidden discussions too, the listed
+      // ones in their order, whether or not they are among the most active.
       const pinnedById = new Map(pinned.map((item) => [item.id, item]));
-      const pinnedInOrder = settings.discussions.pinnedThreadIds.flatMap(
-        (id) => pinnedById.get(id) ?? [],
-      );
+      const pinnedInOrder = [
+        ...new Set([
+          ...settings.discussions.pinnedThreadIds,
+          ...settings.discussions.hiddenThreadIds,
+        ]),
+      ].flatMap((id) => pinnedById.get(id) ?? []);
       return {
         courses: courses.map((course) => ({
           id: course.id,

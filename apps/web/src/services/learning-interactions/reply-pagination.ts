@@ -30,7 +30,12 @@ function getReplyStableId(reply: LearningReplyCacheItem): string {
   return getServerEntityId(reply) ?? getClientEntityId(reply);
 }
 
-function compareNewestFirst(
+/**
+ * Replies read as the conversation happened: an accepted answer first, then
+ * the oldest reply first and the newest last, with one still being posted
+ * at the very end, where it was written.
+ */
+function compareOldestFirst(
   left: LearningReplyCacheItem,
   right: LearningReplyCacheItem,
 ): number {
@@ -43,19 +48,19 @@ function compareNewestFirst(
   const leftIsLocal = isPendingLocalReply(left);
   const rightIsLocal = isPendingLocalReply(right);
   if (leftIsLocal !== rightIsLocal) {
-    return leftIsLocal ? -1 : 1;
+    return leftIsLocal ? 1 : -1;
   }
 
   if (leftIsLocal && rightIsLocal) {
-    const sequenceDifference = getReplySequence(right) - getReplySequence(left);
+    const sequenceDifference = getReplySequence(left) - getReplySequence(right);
     if (sequenceDifference !== 0) return sequenceDifference;
   } else {
     const createdAtDifference =
-      getReplyCreatedAt(right) - getReplyCreatedAt(left);
+      getReplyCreatedAt(left) - getReplyCreatedAt(right);
     if (createdAtDifference !== 0) return createdAtDifference;
   }
 
-  return getReplyStableId(right).localeCompare(getReplyStableId(left));
+  return getReplyStableId(left).localeCompare(getReplyStableId(right));
 }
 
 export function flattenReplyPages(
@@ -94,7 +99,7 @@ export function flattenReplyPages(
     }
   }
 
-  return [...dedupedReplies].sort(compareNewestFirst);
+  return [...dedupedReplies].sort(compareOldestFirst);
 }
 
 export function getReplyTotalCount(

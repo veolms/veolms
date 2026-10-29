@@ -231,10 +231,12 @@ function FramePreviewCard({
             app's side menu (its dark `--surface-depth-shadow`): a lit top
             and left edge and a darker bottom edge drawn over the picture
             (the ::after layer, edges only: the picture itself stays
-            clean), and soft layered shadows beneath. */}
+            clean), and soft layered shadows beneath. Isolated, so the
+            loading sweep over a picture not downloaded yet (z-1) stays
+            under the time pill that overlaps the frame's bottom edge. */}
         <div
           data-video-player-preview-frame=""
-          className="relative overflow-hidden rounded-2xl bg-black shadow-[0_2px_6px_rgb(0_0_0/0.45),0_14px_32px_rgb(0_0_0/0.5),0_28px_56px_rgb(0_0_0/0.28)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_1px_0_rgb(255_255_255/0.28),inset_1px_0_0_rgb(255_255_255/0.1),inset_-1px_0_0_rgb(255_255_255/0.05),inset_0_-1px_0_rgb(0_0_0/0.35),inset_0_0_0_1px_rgb(255_255_255/0.07)] after:content-['']"
+          className="relative isolate overflow-hidden rounded-2xl bg-black shadow-[0_2px_6px_rgb(0_0_0/0.45),0_14px_32px_rgb(0_0_0/0.5),0_28px_56px_rgb(0_0_0/0.28)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_1px_0_rgb(255_255_255/0.28),inset_1px_0_0_rgb(255_255_255/0.1),inset_-1px_0_0_rgb(255_255_255/0.05),inset_0_-1px_0_rgb(0_0_0/0.35),inset_0_0_0_1px_rgb(255_255_255/0.07)] after:content-['']"
         >
           <StoryboardImage frame={frame} onDrawn={() => setDrawn(true)} />
         </div>

@@ -48,6 +48,14 @@ export interface CreateVeoLMSApiOptions<
    */
   services?: TServices | ((app: FastifyInstance) => TServices);
   /**
+   * Adds hooks that must apply to every route, before any route is
+   * registered: core's are loaded with `loadCoreAppHooks()`. An app that
+   * composes the factory itself and leaves this out runs core's routes
+   * without them (the cloud API once did, and a student at the device limit
+   * was never given the cookie that lets them choose a device to sign out).
+   */
+  registerHooks?: (app: FastifyInstance) => void;
+  /**
    * Absolute path to the `modules/` directory containing route plugins.
    * Pass `fileURLToPath(new URL("./modules", import.meta.url))` from the
    * calling app's `app.ts`. Optional if the app only registers plugins.

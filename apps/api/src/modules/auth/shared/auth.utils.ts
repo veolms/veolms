@@ -237,3 +237,19 @@ export function verifyTotp(
   }
   return null;
 }
+
+/**
+ * Whether a sign-in by phone must be refused because the number was never
+ * confirmed. Whoever holds an unconfirmed number receives its codes, so it
+ * proves nothing while the account has an email to sign in with instead,
+ * confirmed or not (a student added by staff has neither confirmed yet). An
+ * account with no email keeps its number: it was opened with it.
+ */
+export function refusesUnconfirmedPhoneSignIn(
+  identifierType: "email" | "phone",
+  user: { email: string | null; phone_verified_at: Date | null },
+): boolean {
+  return (
+    identifierType === "phone" && !user.phone_verified_at && Boolean(user.email)
+  );
+}
