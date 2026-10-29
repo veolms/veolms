@@ -18,7 +18,11 @@ const SOURCES: readonly [Source, string, string][] = [
     `Lesson ${HOME_PAGE_HERO_LESSON.lessonNumber} of /courses/${HOME_PAGE_HERO_LESSON.courseSlug}.`,
   ],
   ["lesson", "A course lesson", "Open a course and pick one of its videos."],
-  ["upload", "Upload a video", "A video of its own, just for the home page."],
+  [
+    "upload",
+    "Upload a video",
+    "A video of its own, uploaded or from YouTube, just for the home page.",
+  ],
 ];
 
 /** The lesson chosen now, by name, under the choices. */
@@ -117,7 +121,7 @@ export function HeroVideoEditor({
         <p className="text-sm text-(--muted)" role="status">
           {mode === "lesson"
             ? "Pick a lesson below to play it on the laptop."
-            : "Upload a video below to play it on the laptop."}
+            : "Upload or import a video below to play it on the laptop."}
         </p>
       ) : null}
 

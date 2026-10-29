@@ -7,6 +7,7 @@ import type { Database, MediaAssetStatus } from "@veolms/database";
 import type {
   LessonResourceDownloadResponse,
   MediaImageVariantManifest,
+  MediaSourceResponse,
   MultipartUploadPartUrlsRequest,
   MultipartUploadPartUrlsResponse,
   MultipartUploadStartResponse,
@@ -1340,6 +1341,38 @@ export function createMediaService({
   }
 
   /**
+   * Where a video came from (the YouTube video it was imported from), for
+   * whoever may manage it: its owner, or staff who manage every course.
+   */
+  async function getMediaSource(
+    mediaId: string,
+    ownerId: string,
+    userRoles?: readonly string[],
+  ): Promise<MediaSourceResponse> {
+    const isAdmin = await reachesAllMedia(ownerId, userRoles, "manage");
+    const media = await mediaRepo.findMediaAssetById(
+      database,
+      mediaId,
+      isAdmin ? undefined : ownerId,
+    );
+    if (!media) {
+      throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
+    }
+    const source = await mediaRepo.findMediaSource(database, mediaId);
+    return {
+      source: source
+        ? {
+            provider: source.provider,
+            externalId: source.external_id,
+            url: source.source_url,
+            title: source.title,
+            channel: source.channel,
+          }
+        : null,
+    };
+  }
+
+  /**
    * Fetches transcoding progress for a video asset.
    */
   async function getVideoJobProgress(
@@ -2498,6 +2531,7 @@ export function createMediaService({
     getMediaAsset,
     getMediaAssets,
     getImageVariantManifest,
+    getMediaSource,
     getVideoJobProgress,
     getPlaybackBootstrap,
     getPlaybackToken,
