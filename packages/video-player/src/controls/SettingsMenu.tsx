@@ -14,6 +14,34 @@ import { PlaybackRateSlider } from "./PlaybackRateSlider";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
 
 const SETTINGS_OPEN_TURN_DEGREES = 30;
+/** From this height up a quality is marked HD, as YouTube marks it. */
+const HD_MIN_HEIGHT = 1080;
+
+const isHdQuality = (quality: VideoQuality | undefined) => {
+  if (!quality) return false;
+  const height =
+    quality.height ?? Number(/(\d+)p/u.exec(quality.label)?.[1] ?? 0);
+  return height >= HD_MIN_HEIGHT;
+};
+
+/** The raised "HD" after a quality's name, in the theme's colour. */
+function HdMark() {
+  return (
+    <sup className="ml-0.5 text-[0.5625rem] font-bold leading-none text-(--video-player-accent)">
+      HD
+    </sup>
+  );
+}
+
+/** A quality's name, marked HD when it is. */
+function QualityName({ quality }: { quality: VideoQuality }) {
+  return (
+    <>
+      {quality.label}
+      {isHdQuality(quality) ? <HdMark /> : null}
+    </>
+  );
+}
 
 export interface SettingsMenuProps {
   includePictureInPicture?: boolean;
@@ -79,13 +107,24 @@ export function SettingsMenu({
     (item) => item.id === media.selectedQualityId,
   );
 
-  const autoQualityLabel = activeQuality?.label
-    ? `Auto (${activeQuality.label})`
-    : "Auto";
-
-  const qualityLabel = media.autoQuality
-    ? autoQualityLabel
-    : (selectedQuality?.label ?? activeQuality?.label ?? "Auto");
+  const autoQualityLabel = activeQuality?.label ? (
+    <>
+      Auto (<QualityName quality={activeQuality} />)
+    </>
+  ) : (
+    "Auto"
+  );
+  const shownQuality = selectedQuality ?? activeQuality;
+  const qualityLabel = media.autoQuality ? (
+    autoQualityLabel
+  ) : shownQuality ? (
+    <QualityName quality={shownQuality} />
+  ) : (
+    "Auto"
+  );
+  // The picture now playing is HD, picked or chosen by Auto: the gear says
+  // so, as YouTube's does.
+  const playingHd = isHdQuality(activeQuality);
   const audioLabel =
     media.audioTracks.find((item) => item.id === media.selectedAudioTrackId)
       ?.label ??
@@ -123,16 +162,26 @@ export function SettingsMenu({
       open={settingsOpen}
       onOpenChange={(open) => openView(open ? "main" : "closed")}
       trigger={
-        <SettingsIcon
-          data-settings-icon={theme.id === "youtube" ? "gear-six" : theme.id}
-          data-settings-icon-state={settingsOpen ? "open" : "closed"}
-          size={22}
-          className={`origin-center transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none ${mobileInteraction ? "size-5" : ""}`}
-          style={{
-            transform: `rotate(${theme.motion.settingsClosedRotation + (settingsOpen ? SETTINGS_OPEN_TURN_DEGREES : 0)}deg)`,
-          }}
-          active={settingsOpen}
-        />
+        <span className="relative inline-grid place-items-center">
+          <SettingsIcon
+            data-settings-icon={theme.id === "youtube" ? "gear-six" : theme.id}
+            data-settings-icon-state={settingsOpen ? "open" : "closed"}
+            size={22}
+            className={`origin-center transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none ${mobileInteraction ? "size-5" : ""}`}
+            style={{
+              transform: `rotate(${theme.motion.settingsClosedRotation + (settingsOpen ? SETTINGS_OPEN_TURN_DEGREES : 0)}deg)`,
+            }}
+            active={settingsOpen}
+          />
+          {playingHd ? (
+            <span
+              className="pointer-events-none absolute -top-0.5 -right-1 rounded-[2px] bg-(--video-player-accent) px-[2px] text-[7px] font-bold leading-[9px] text-(--video-player-accent-contrast)"
+              aria-hidden="true"
+            >
+              HD
+            </span>
+          ) : null}
+        </span>
       }
     >
       {() => (
@@ -259,7 +308,7 @@ export function SettingsMenu({
                 .map((quality) => (
                   <PlayerMenuItem
                     key={quality.id}
-                    label={quality.label}
+                    label={<QualityName quality={quality} />}
                     selected={
                       !media.autoQuality &&
                       (quality.id === media.selectedQualityId ||

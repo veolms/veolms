@@ -26,7 +26,8 @@ type ReturnLocationStorage = Pick<
   "getItem" | "setItem" | "removeItem"
 >;
 
-const LEARNING_RETURN_LOCATION_STORAGE_KEY = "veolms-learning-return-location";
+export const LEARNING_RETURN_LOCATION_STORAGE_KEY =
+  "veolms-learning-return-location";
 const INTERNAL_URL_ORIGIN = "https://procodrr.local";
 const DEFAULT_LEARNING_RETURN_LOCATION: LearningReturnLocation = {
   path: "/courses",

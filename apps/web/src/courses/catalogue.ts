@@ -97,6 +97,16 @@ export interface Course {
 }
 
 /**
+ * Free for anyone to start: a linked-only course (`includedWith`) costs
+ * nothing too, but comes only with the course it is part of.
+ */
+export function isOpenlyFree(
+  course: Pick<Course, "pricing" | "includedWith">,
+): boolean {
+  return Boolean(course.pricing?.free) && !course.includedWith?.length;
+}
+
+/**
  * Learner-facing links should use the readable public slug. The ID fallback
  * keeps local/demo courses and older records working.
  */
@@ -235,7 +245,7 @@ export function getCourseQuickFilterCounts(
       all: pool.length,
       enrolled,
       "not-enrolled": pool.length - enrolled,
-      free: pool.filter((course) => course.pricing?.free).length,
+      free: pool.filter(isOpenlyFree).length,
       published: 0,
       draft: 0,
       bin: 0,
@@ -297,7 +307,7 @@ export function getVisibleCourses(
     if (
       role === "student" &&
       enrollmentFilter === "free" &&
-      !course.pricing?.free
+      !isOpenlyFree(course)
     )
       return false;
     if (

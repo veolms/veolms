@@ -34,6 +34,7 @@ import {
 } from "./lessonPositionOutbox";
 import { getApiError } from "../lib/api-client";
 import { markCourseResumeStale } from "./courseResumeCache";
+import { useHydrated } from "../courses/viewerCourseState";
 import {
   adoptServerLearningProgress,
   snapshotAnswersSyncedProgress,
@@ -62,8 +63,18 @@ export function useLearningProgress({
   const syncEnabled = Boolean(enabled && courseKey && userId);
   const storageIdentity =
     userId && courseKey ? `${userId}\u0000${courseKey}` : null;
-  const [localState, setLocalState] = useState<LocalLearningProgressState>(() =>
-    readLearningProgress(userId, courseKey),
+  // Read at once on a page opened inside the app, but not while a built
+  // page is being hydrated: that page was built with no progress, and a
+  // learner's kept progress in the first render ("42% complete" on a lesson
+  // card) made it differ, so React threw the whole lesson page away and
+  // drew it again (the list back at its top, the bar loose). The effect
+  // below reads it right after.
+  const hydrated = useHydrated();
+  const [localState, setLocalState] = useState<LocalLearningProgressState>(
+    () =>
+      hydrated
+        ? readLearningProgress(userId, courseKey)
+        : EMPTY_LEARNING_PROGRESS_STATE,
   );
   const localStateRef = useRef(localState);
   const lessonIdsByNumberRef = useRef(lessonIdsByNumber);
