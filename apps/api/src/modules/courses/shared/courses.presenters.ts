@@ -224,6 +224,7 @@ export function presentPricing(
   > & {
     // Absent until the migration that adds the column has run.
     show_discount_badge?: boolean | null;
+    linked_only?: boolean | null;
   },
 ): CoursePricing {
   return {
@@ -233,6 +234,7 @@ export function presentPricing(
     currency: pricing.currency,
     salePrice: pricing.sale_price,
     showDiscountBadge: pricing.show_discount_badge === true,
+    linkedOnly: pricing.linked_only === true,
   };
 }
 

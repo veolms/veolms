@@ -69,21 +69,31 @@ export const dashboardYourCourseSchema = z.strictObject({
 });
 export type DashboardYourCourse = z.infer<typeof dashboardYourCourseSchema>;
 
+/**
+ * Every signed-in account gets a dashboard. The academy-wide numbers are
+ * null without analytics for every course (analytics.overview.read or the
+ * revenue key), and the money is null without analytics.revenue.read.
+ * "Your courses" is always the caller's own.
+ */
 export const dashboardSummaryResponseSchema = z.strictObject({
   /** value is in minor units (paise). */
-  revenue: z.strictObject({
-    value: z.number(),
-    changePercent: z.number().nullable(),
-    currency: z.string().length(3),
-  }),
-  students: z.strictObject({
-    total: z.number().int().nonnegative(),
-    newThisMonth: z.number().int().nonnegative(),
-  }),
-  activeLearners: dashboardKpiSchema,
-  watchHours: dashboardKpiSchema,
-  revenueOverview: dashboardRevenueOverviewSchema,
-  learningActivity: dashboardLearningActivitySchema,
+  revenue: z
+    .strictObject({
+      value: z.number(),
+      changePercent: z.number().nullable(),
+      currency: z.string().length(3),
+    })
+    .nullable(),
+  students: z
+    .strictObject({
+      total: z.number().int().nonnegative(),
+      newThisMonth: z.number().int().nonnegative(),
+    })
+    .nullable(),
+  activeLearners: dashboardKpiSchema.nullable(),
+  watchHours: dashboardKpiSchema.nullable(),
+  revenueOverview: dashboardRevenueOverviewSchema.nullable(),
+  learningActivity: dashboardLearningActivitySchema.nullable(),
   yourCourses: z.array(dashboardYourCourseSchema),
 });
 

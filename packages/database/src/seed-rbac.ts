@@ -159,6 +159,7 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "discussion.read",
     "discussion.moderate",
     "analytics.course.read",
+    "analytics.overview.read",
     "certificate.issue",
   ],
   content_editor: [
@@ -228,6 +229,7 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "discussion.read",
     "discussion.moderate",
     "analytics.course.read",
+    "analytics.overview.read",
     "certificate.issue",
     // Scoped to their own courses by the services.
     "student.read",
@@ -254,7 +256,14 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
   ],
   analytics_viewer: [
     "analytics.course.read",
+    "analytics.overview.read",
     "analytics.revenue.read",
+    "analytics.learning.read",
+    "analytics.learners.read",
+    "analytics.conversion.read",
+    "analytics.delivery.read",
+    "analytics.storage.read",
+    "analytics.video_quality.read",
     "course.read",
   ],
   // Every read-only key but money: no revenue analytics, no orders. Kept
@@ -269,6 +278,7 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "enrollment.read",
     "discussion.read",
     "analytics.course.read",
+    "analytics.overview.read",
     "coupon.read",
     "platform.settings.read",
     "team.read",

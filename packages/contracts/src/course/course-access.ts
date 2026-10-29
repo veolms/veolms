@@ -77,6 +77,41 @@ export const courseAccessResumeSchema = z.strictObject({
   resumeLesson: learningProgressResumeLessonSchema.nullable(),
 });
 
+/**
+ * The order that enrolled the learner, as the course page names it. Money
+ * is in minor units (paise), like every order response.
+ */
+export const courseAccessEnrollmentOrderSchema = z.strictObject({
+  id: z.uuid(),
+  orderNumber: z.string().min(1),
+  totalAmount: z.number().int().nonnegative(),
+  currency: z.string().min(1),
+  /** The gateway's word for how it was paid ("upi", "card"); null when unknown. */
+  paymentMethod: z.string().nullable(),
+  /** Whether an invoice was issued: only a paid order has one. */
+  hasInvoice: z.boolean(),
+});
+
+/**
+ * How fast the learner gets through the course: lessons completed a week
+ * over their recent weeks of study, and when they would finish at that
+ * rate. Null until there is enough activity to say.
+ */
+export const courseAccessPaceSchema = z.strictObject({
+  lessonsPerWeek: z.number().nonnegative(),
+  /** Null when no lessons are left, or none were finished lately. */
+  projectedFinishAt: z.string().nullable(),
+});
+
+/** The learner's enrolment, for the "Your enrollment" panel. */
+export const courseAccessEnrollmentSchema = z.strictObject({
+  /** When the order was paid; when access began for a grant without one. */
+  enrolledAt: z.string(),
+  /** Null for a free or staff grant, which has no order to show. */
+  order: courseAccessEnrollmentOrderSchema.nullable(),
+  pace: courseAccessPaceSchema.nullable(),
+});
+
 /** `GET /courses/:idOrSlug/access`: one course, for its pages. */
 export const courseAccessResponseSchema = courseAccessSummarySchema.extend({
   /**
@@ -98,6 +133,11 @@ export const courseAccessResponseSchema = courseAccessSummarySchema.extend({
    * built before the field existed.
    */
   accessExpiresAt: z.string().nullable().optional(),
+  /**
+   * The signed-in learner's enrolment; null for a viewer who is not
+   * enrolled. Absent from a response built before the field existed.
+   */
+  enrollment: courseAccessEnrollmentSchema.nullable().optional(),
   /**
    * The version of the course's public curriculum now. A page built from an
    * older copy (`version` of `GET /courses/:idOrSlug/curriculum`) knows the
@@ -131,6 +171,13 @@ export type CourseAccessListResponse = z.infer<
   typeof courseAccessListResponseSchema
 >;
 export type CourseAccessResume = z.infer<typeof courseAccessResumeSchema>;
+export type CourseAccessEnrollmentOrder = z.infer<
+  typeof courseAccessEnrollmentOrderSchema
+>;
+export type CourseAccessPace = z.infer<typeof courseAccessPaceSchema>;
+export type CourseAccessEnrollment = z.infer<
+  typeof courseAccessEnrollmentSchema
+>;
 export type CourseAccessResponse = z.infer<typeof courseAccessResponseSchema>;
 export type CoursePublicCurriculum = z.infer<
   typeof coursePublicCurriculumSchema

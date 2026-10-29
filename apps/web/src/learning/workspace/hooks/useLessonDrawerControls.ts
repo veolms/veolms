@@ -249,6 +249,9 @@ export function useLessonDrawerControls({
         }
 
         setFullscreenLessonPanelOpen(false);
+        if (curriculumCollapsed) {
+          setCurriculumFocusRequest((request) => request + 1);
+        }
         setCurriculumCollapsed((collapsed) => !collapsed);
         return;
       }
@@ -259,12 +262,14 @@ export function useLessonDrawerControls({
     },
     [
       closeLessonDrawer,
+      curriculumCollapsed,
       fullscreenLessonPanelOpen,
       isCourseContentDrawerLayout,
       lessonDrawer,
       openLessonDrawer,
       openLessonDrawerAtTop,
       setCurriculumCollapsed,
+      setCurriculumFocusRequest,
       setFullscreenCurriculumFocusRequest,
       setFullscreenLessonPanelOpen,
       setLessonDrawer,

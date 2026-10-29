@@ -1,3 +1,20 @@
+import { cataloguePermissions } from "@veolms/contracts";
+
+const offered = new Set<string>(cataloguePermissions);
+
+/** How many permissions the role editor offers. */
+export const OFFERED_PERMISSION_COUNT = offered.size;
+
+/**
+ * How many of these the role editor offers: a role may also hold keys kept
+ * for features not built yet, which the editor does not show.
+ */
+export function countOfferedPermissions(keys: Iterable<string>): number {
+  let count = 0;
+  for (const key of keys) if (offered.has(key)) count += 1;
+  return count;
+}
+
 /** Built-in roles are stored as keys ("course_manager"); show them as words. */
 export function roleLabel(name: string): string {
   if (!/^[a-z0-9_]+$/.test(name)) return name;

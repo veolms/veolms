@@ -30,6 +30,7 @@ import { readLearningPreferences } from "../../settings/settingsPreferences";
 import { LessonAmbientProjection } from "./LessonAmbientProjection";
 import { LessonTroubleIllustration } from "./LessonTroubleIllustration";
 import { useMiniPlayerSwipeVolume } from "./useMiniPlayerSwipeVolume";
+import type { SubscribeOutsideFraction } from "./useLearningMiniPlayerGestures";
 import {
   OctopusIllustration,
   type OctopusKind,
@@ -109,7 +110,25 @@ const FINISHED_LESSON_RESUME_TAIL_SECONDS = 3;
 // From here on the next lesson is preloaded, whatever the video's length: a
 // percentage would start hours early in a long lesson.
 const NEAR_LESSON_END_SECONDS = 60;
+// ...and only once this lesson is downloaded to its end, within this much.
+// Preloaded while its last segments were still on their way, the next
+// lesson took the link from them on a slow connection: they came late or
+// failed, and the video stopped in its last seconds.
+const LESSON_END_BUFFERED_TOLERANCE_SECONDS = 0.5;
 const LESSON_PLAYER_CONTROLS_IDLE_DELAY_MS = 1_000;
+
+/** Whether what is buffered reaches from `currentTime` to the end. */
+function bufferedToEnd(
+  buffered: readonly { start: number; end: number }[],
+  currentTime: number,
+  duration: number,
+): boolean {
+  return buffered.some(
+    (range) =>
+      range.start <= currentTime + 0.1 &&
+      range.end >= duration - LESSON_END_BUFFERED_TOLERANCE_SECONDS,
+  );
+}
 // On a touch screen the controls stay as long as YouTube's do: a second was
 // gone before the finger that showed them reached a button.
 const LESSON_PLAYER_CONTROLS_TOUCH_IDLE_DELAY_MS = 3_000;
@@ -177,6 +196,13 @@ export interface LessonVideoPlayerProps {
   onCourseLessonsToggle?: (presentation: "drawer" | "side") => void;
   onGoNext?: () => void;
   onGoPrevious?: () => void;
+  /**
+   * Set when the lesson has a quiz: it opens the quiz. The screen at the end
+   * of the video then offers the quiz (Attempt Quiz, Skip Quiz) instead of
+   * counting down to the next lesson, and the player's Next shows that
+   * screen first.
+   */
+  onAttemptQuiz?: () => void;
   onLessonEnded?: () => void;
   onMinimize?: (request: LearningMiniPlayerRequest) => void;
   onMinimizeGestureStart?: () => void;
@@ -196,10 +222,11 @@ export interface LessonVideoPlayerProps {
    */
   fadeOutAudio?: boolean;
   /**
-   * How much of the mini player is dragged out of the window, 0 to 1: a
-   * playing video's sound drops by as much (see useMiniPlayerSwipeVolume).
+   * Tells how much of the mini player is dragged out of the window, 0 to 1,
+   * as it moves: a playing video's sound drops by as much (see
+   * useMiniPlayerSwipeVolume).
    */
-  swipeOutsideFraction?: number;
+  subscribeSwipeOutsideFraction?: SubscribeOutsideFraction;
   onMobileLandscapeFullscreenChange?: (active: boolean) => void;
   onProgressChange?: (progress: number) => void;
   /**
@@ -424,8 +451,9 @@ export function LessonVideoPlayer({
   watchTimeCourseKey,
   onAutoplayEnabledChange = () => undefined,
   onCourseLessonsToggle,
-  onGoNext = () => undefined,
+  onGoNext: goToNextLesson = () => undefined,
   onGoPrevious = () => undefined,
+  onAttemptQuiz,
   onLessonEnded,
   onMinimize,
   onMinimizeGestureStart,
@@ -436,7 +464,7 @@ export function LessonVideoPlayer({
   onMiniClose,
   onMiniRestore,
   fadeOutAudio = false,
-  swipeOutsideFraction = 0,
+  subscribeSwipeOutsideFraction,
   onMobileLandscapeFullscreenChange,
   onTheaterToggle,
   onSeekToTimestampReady,
@@ -470,7 +498,7 @@ export function LessonVideoPlayer({
   // lowered volumes are not the learner's, and are never saved.
   const swipeHeldVolumeRef = useMiniPlayerSwipeVolume(
     playerRef,
-    swipeOutsideFraction,
+    subscribeSwipeOutsideFraction,
     fadeOutAudio,
   );
   // Volumes taken from another tab (a `storage` event) in the last moments.
@@ -488,6 +516,26 @@ export function LessonVideoPlayer({
     useState(false);
   const [showEndScreen, setShowEndScreen] = useState(false);
   const [autoplayCancelled, setAutoplayCancelled] = useState(false);
+  // The lesson's quiz is offered at its end, in the full player only: the
+  // quiz opens on the lesson page, which the mini window is away from.
+  const lessonQuizOffered =
+    presentation === "full" && showCompletionOverlay && Boolean(onAttemptQuiz);
+  // The end screen was opened by the player's Next, before the video ended,
+  // to offer the quiz: the rules that close it once the video is no longer
+  // at its end do not apply to it (pausing for it reports the time).
+  const quizOfferedBeforeEndRef = useRef(false);
+  // Next, from the player's buttons and Shift+N, offers the lesson's quiz
+  // first: the end screen with Attempt Quiz and Skip Quiz.
+  const onGoNext = useCallback(() => {
+    if (lessonQuizOffered && !showEndScreen) {
+      quizOfferedBeforeEndRef.current = true;
+      playerRef.current?.pause();
+      setAutoplayCancelled(false);
+      setShowEndScreen(true);
+      return;
+    }
+    goToNextLesson();
+  }, [goToNextLesson, lessonQuizOffered, showEndScreen]);
   const playerTheme = useLearningPlayerTheme();
   const mediaKey = resumePersistenceKey ?? media.fileName;
   const activeMediaKeyRef = useRef(mediaKey);
@@ -561,6 +609,9 @@ export function LessonVideoPlayer({
     return thumbnails;
   }, [playbackBootstrap?.chapters]);
 
+  // How many times a lesson being left was stopped (see the layout effect
+  // that stops it); part of every source after it.
+  const [playerStops, setPlayerStops] = useState(0);
   const source = useMemo<VideoSource>(() => {
     const resumeFromLastPosition =
       readLearningPreferences().resumeFromLastPosition;
@@ -569,7 +620,7 @@ export function LessonVideoPlayer({
     const handedOver =
       openedFromMiniPlayer.restore !== null &&
       openedFromMiniPlayer.mediaKey === mediaKey;
-    return createLearningLessonVideoSource({
+    const lessonSource = createLearningLessonVideoSource({
       media: playbackMedia,
       mediaKey,
       startTime: !resumeFromLastPosition
@@ -589,11 +640,18 @@ export function LessonVideoPlayer({
           ? refreshPlaybackToken
           : undefined,
     });
+    return playerStops === 0
+      ? lessonSource
+      : {
+          ...lessonSource,
+          metadata: { ...lessonSource.metadata, playerStops },
+        };
   }, [
     mediaKey,
     openedFromMiniPlayer,
     playbackBootstrap,
     playbackMedia,
+    playerStops,
     protectedPlayback,
     refreshPlaybackToken,
   ]);
@@ -639,6 +697,7 @@ export function LessonVideoPlayer({
   holdingPlaybackRef.current = holdingPreviousLesson;
 
   useEffect(() => {
+    quizOfferedBeforeEndRef.current = false;
     setShowEndScreen(false);
     setAutoplayCancelled(false);
   }, [mediaKey]);
@@ -669,6 +728,31 @@ export function LessonVideoPlayer({
     writeResumePosition(activeMediaKeyRef.current, position);
     lastPersistedAtRef.current = now;
   }, []);
+
+  // The moment another lesson is asked for, the one playing is stopped
+  // outright: paused, its source taken off and its streaming player
+  // destroyed (`VideoPlayerHandle.stop`). Holding it paused was not enough:
+  // a play or a load's autoplay arriving while the new lesson's bootstrap
+  // was on its way started it again, and it played on, its sound under the
+  // loader, until the new lesson was in. A layout effect, so it is stopped
+  // before the player is handed the new lesson's source (a passive effect).
+  const stoppedForMediaKeyRef = useRef(mediaKey);
+  useLayoutEffect(() => {
+    if (stoppedForMediaKeyRef.current === mediaKey) return;
+    stoppedForMediaKeyRef.current = mediaKey;
+    if (activeMediaKeyRef.current === mediaKey) return;
+    // Where the lesson being left was is kept before it is unloaded.
+    persistResumePosition(true);
+    latestPositionRef.current = 0;
+    const player = playerRef.current;
+    if (!player) return;
+    void player.stop().catch(() => undefined);
+    // A source the player was given before the stop is not loaded again on
+    // its own (an equal source is no reason to reload), so a lesson opened
+    // again straight after leaving it would stay empty. Each stop makes the
+    // next source a new one.
+    setPlayerStops((stops) => stops + 1);
+  }, [mediaKey, persistResumePosition]);
 
   const finishMiniPlayerRestore = useCallback(() => {
     if (restoreAutoplayRef.current === null) return;
@@ -888,16 +972,29 @@ export function LessonVideoPlayer({
           }
           if (
             event.detail.duration - event.detail.currentTime <=
-            NEAR_LESSON_END_SECONDS
+              NEAR_LESSON_END_SECONDS &&
+            bufferedToEnd(
+              playerRef.current?.getSnapshot().media.buffered ?? [],
+              event.detail.currentTime,
+              event.detail.duration,
+            )
           ) {
             onNearLessonEnd?.();
           }
           if (
             showEndScreen &&
+            !quizOfferedBeforeEndRef.current &&
             event.detail.currentTime < event.detail.duration - 1
           ) {
             setShowEndScreen(false);
           }
+        }
+      } else if (event.type === "play") {
+        // Played from under the quiz the player's Next offered: the learner
+        // went back to the video.
+        if (quizOfferedBeforeEndRef.current) {
+          quizOfferedBeforeEndRef.current = false;
+          setShowEndScreen(false);
         }
       } else if (event.type === "playing") {
         tryFinishPlayingMiniPlayerRestore();
@@ -906,7 +1003,12 @@ export function LessonVideoPlayer({
         const snapshot = playerRef.current?.getSnapshot();
         const duration = snapshot?.media.duration ?? 0;
         const currentTime = snapshot?.media.currentTime ?? 0;
-        if (showEndScreen && duration > 0 && currentTime < duration - 1) {
+        if (
+          showEndScreen &&
+          !quizOfferedBeforeEndRef.current &&
+          duration > 0 &&
+          currentTime < duration - 1
+        ) {
           setShowEndScreen(false);
         }
         // Where a drag of the timeline ended (its own steps report nothing,
@@ -936,6 +1038,7 @@ export function LessonVideoPlayer({
           });
           onProgressChange?.(100);
           onLessonEnded?.();
+          quizOfferedBeforeEndRef.current = false;
           if (showCompletionOverlay) setShowEndScreen(true);
           setAutoplayCancelled(false);
         }
@@ -1029,21 +1132,33 @@ export function LessonVideoPlayer({
     void player.play().catch(() => undefined);
   }, []);
 
-  const dismissEndScreen = useCallback(() => setShowEndScreen(false), []);
+  const dismissEndScreen = useCallback(() => {
+    quizOfferedBeforeEndRef.current = false;
+    setShowEndScreen(false);
+  }, []);
 
   // Cancelling the countdown closes the end screen altogether: the video is
   // left as it is, paused where it ended, with its controls. The next ending
   // counts down again.
   const cancelEndScreenAutoplay = useCallback(() => {
+    quizOfferedBeforeEndRef.current = false;
     setAutoplayCancelled(true);
     setShowEndScreen(false);
   }, []);
 
   const handleGoNextFromEndScreen = useCallback(() => {
+    quizOfferedBeforeEndRef.current = false;
     setShowEndScreen(false);
     setAutoplayCancelled(false);
-    onGoNext();
-  }, [onGoNext]);
+    goToNextLesson();
+  }, [goToNextLesson]);
+
+  const handleAttemptQuizFromEndScreen = useCallback(() => {
+    quizOfferedBeforeEndRef.current = false;
+    setShowEndScreen(false);
+    setAutoplayCancelled(false);
+    onAttemptQuiz?.();
+  }, [onAttemptQuiz]);
 
   const minimizePlayer = useCallback(() => {
     if (!onMinimize) return;
@@ -1720,10 +1835,11 @@ export function LessonVideoPlayer({
   // above anything inside the player. The timeline and the bottom row stay
   // up over it, and its words and buttons sit above them (`controlsInset`),
   // so the learner can scrub back or press play from it; the top row stands
-  // down for its close button. Dragging the timeline closes it.
+  // down for its close button. Dragging the timeline closes it. The mini
+  // window keeps it, small, with its countdown standing still.
   const endScreenVisible =
-    presentation === "full" &&
-    !minimizeGesture.controlsSuppressed &&
+    (presentation === "mini" ||
+      (presentation === "full" && !minimizeGesture.controlsSuppressed)) &&
     showCompletionOverlay &&
     showEndScreen;
   const chromeSuppressed = minimizeGesture.controlsSuppressed;
@@ -1867,11 +1983,25 @@ export function LessonVideoPlayer({
         presentation === "mini"
           ? `${MINI_PLAYER_VIDEO_CORNERS_CLASS} !shadow-none`
           : fullscreenCoursePanelActive
-            ? "border-0 !h-auto !max-h-full !w-(--learning-fullscreen-video-width) !max-w-none !translate-x-(--learning-fullscreen-video-offset-x) !shrink-0 !rounded-none !shadow-none [[data-fullscreen-lessons-beside=wide]_&]:!h-full [[data-fullscreen-lessons-beside=wide]_&]:!aspect-auto"
+            ? cn(
+                "border-0 !h-auto !max-h-full !w-(--learning-fullscreen-video-width) !max-w-none !translate-x-(--learning-fullscreen-video-offset-x) !shrink-0 !rounded-none !shadow-none [[data-fullscreen-lessons-beside=wide]_&]:!h-full [[data-fullscreen-lessons-beside=wide]_&]:!aspect-auto",
+                // Full screen with the lessons beside it, the video's pane
+                // is taller than the picture: with ambient mode on, the
+                // bands above and below it show the glow behind (the
+                // full-screen projection, LessonAmbientProjection), not
+                // black. The zoom layers the video lies in (PlayerZoomMedia)
+                // are black of their own, so they go see-through too.
+                ambientEnabled &&
+                  "!bg-transparent [&_[data-player-zoom-viewport]]:!bg-transparent [&_[data-player-zoom-media-plane]]:!bg-transparent",
+              )
             : "border-0 !rounded-none"
       }
       mediaClassName={
-        presentation === "mini" ? MINI_PLAYER_VIDEO_CORNERS_CLASS : undefined
+        presentation === "mini"
+          ? MINI_PLAYER_VIDEO_CORNERS_CLASS
+          : fullscreenCoursePanelActive && ambientEnabled
+            ? "!bg-transparent"
+            : undefined
       }
       centralControl={
         presentation === "mini" ? (
@@ -1900,6 +2030,7 @@ export function LessonVideoPlayer({
             onClose={onMiniClose ?? (() => undefined)}
             onRestore={onMiniRestore ?? (() => undefined)}
             source={playerSource}
+            endScreenOpen={endScreenVisible}
           />
         ) : (
           <LessonPlayerControls
@@ -1955,26 +2086,32 @@ export function LessonVideoPlayer({
               <VideoLoadingSpinner />
             </div>
           ) : presentation === "full" && !minimizeGesture.controlsSuppressed ? (
-            <>
-              <LessonAmbientProjection enabled={ambientEnabled} />
-              {endScreenVisible ? (
-                <LessonEndScreenOverlay
-                  nextLesson={
-                    canGoNext
-                      ? (nextLessonInfo ?? { id: 0, title: "Next lesson" })
-                      : undefined
-                  }
-                  autoplayEnabled={autoplayEnabled && !autoplayCancelled}
-                  courseComplete={courseComplete}
-                  onGoNext={handleGoNextFromEndScreen}
-                  onRestart={handleRestart}
-                  onCancelAutoplay={cancelEndScreenAutoplay}
-                  onClose={dismissEndScreen}
-                  controlsInset
-                />
-              ) : null}
-            </>
+            <LessonAmbientProjection enabled={ambientEnabled} />
           ) : undefined}
+          {/* In the same place for both presentations, so minimizing keeps
+              the countdown where it was instead of starting it again. */}
+          {!holdingPreviousLesson && endScreenVisible ? (
+            <LessonEndScreenOverlay
+              nextLesson={
+                canGoNext
+                  ? (nextLessonInfo ?? { id: 0, title: "Next lesson" })
+                  : undefined
+              }
+              autoplayEnabled={autoplayEnabled && !autoplayCancelled}
+              courseComplete={courseComplete}
+              onGoNext={handleGoNextFromEndScreen}
+              onRestart={handleRestart}
+              onCancelAutoplay={cancelEndScreenAutoplay}
+              quiz={
+                lessonQuizOffered
+                  ? { onAttempt: handleAttemptQuizFromEndScreen }
+                  : undefined
+              }
+              onClose={dismissEndScreen}
+              controlsInset={presentation === "full"}
+              minimized={presentation === "mini"}
+            />
+          ) : null}
         </>
       }
       playbackFeedback={

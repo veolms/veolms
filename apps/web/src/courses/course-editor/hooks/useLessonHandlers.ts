@@ -128,7 +128,17 @@ export interface UseLessonHandlersArgs {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       },
       ApiError
     >
@@ -233,7 +243,17 @@ export interface UseLessonHandlersArgs {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       },
       ApiError
     >

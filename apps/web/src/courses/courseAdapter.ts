@@ -19,6 +19,18 @@ export function formatDuration(seconds: number): string {
   return `${minutes}m`;
 }
 
+/** A course's length where it has no video yet. */
+export const COURSE_NOT_RECORDED = "Not recorded yet";
+
+/**
+ * A course's length, as cards and its page show it: "Not recorded yet"
+ * for a course with no video length yet ("0h 0m" read as broken). Lengths
+ * of anything else (time watched, a lesson) keep `formatDuration`.
+ */
+export function formatCourseDuration(seconds: number): string {
+  return seconds > 0 ? formatDuration(seconds) : COURSE_NOT_RECORDED;
+}
+
 export function resolveCourseDurationSeconds(
   durationSeconds?: number | null,
   estimatedDurationMinutes?: number | null,
@@ -131,7 +143,7 @@ export function adaptCourseSummaryToCatalogueCourse(
     lectures: summary.totalLessons,
     progress: courseProgress,
     enrolled: isEnrolled,
-    duration: formatDuration(summary.totalDurationSeconds),
+    duration: formatCourseDuration(summary.totalDurationSeconds),
     students: 0,
     thumbnail: summary.thumbnailUrl || "",
     thumbnailSrcSet: summary.thumbnailSrcSet,
@@ -140,6 +152,7 @@ export function adaptCourseSummaryToCatalogueCourse(
     certificateAvailable: summary.certificateEnabled,
     isApi: true,
     canSelfEnroll: summary.canSelfEnroll,
+    includedWith: summary.includedWith,
   };
 }
 
@@ -202,7 +215,7 @@ export function adaptApiCourseToCatalogueCourse(
     lectures: apiCourse.totalLessons,
     progress: courseProgress,
     enrolled: isEnrolled,
-    duration: formatDuration(apiCourse.totalDurationSeconds),
+    duration: formatCourseDuration(apiCourse.totalDurationSeconds),
     students: 0,
     thumbnail,
     thumbnailSrcSet:

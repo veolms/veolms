@@ -2,7 +2,7 @@ import type { TeamRole } from "@veolms/contracts";
 import { useState } from "react";
 import { CheckboxIndicator } from "../components/Checkbox";
 import { useTeamRoles } from "../services/team";
-import { roleLabel } from "./teamFormat";
+import { countOfferedPermissions, roleLabel } from "./teamFormat";
 import { chipClassName, rowDividerClassName } from "./TeamBits";
 import { useTeamAccess } from "./useTeamAccess";
 
@@ -111,7 +111,7 @@ export function RolePicker({
                   </span>
                 </span>
                 <span className={`${chipClassName} shrink-0 tabular-nums`}>
-                  {role.permissions.length}
+                  {countOfferedPermissions(role.permissions)}
                 </span>
               </label>
             </li>

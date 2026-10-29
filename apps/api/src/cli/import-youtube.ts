@@ -22,6 +22,7 @@ import {
 } from "../modules/auth/shared/auth.constants.ts";
 import { slugify } from "../modules/courses/shared/courses.utils.ts";
 import * as courseRepo from "../modules/courses/course/course.repository.ts";
+import { seedDefaultIncludes } from "../modules/courses/includes/includes.service.ts";
 import * as configRepo from "../modules/courses/configuration/configuration.repository.ts";
 import * as mediaRepo from "../modules/media/media.repository.ts";
 import {
@@ -1896,6 +1897,7 @@ ${bold("Examples:")}
         created_at: now,
         updated_at: now,
       });
+      await seedDefaultIncludes(database, courseId);
 
       // If requested published, update status and published_at
       if (cliArgs.status === "published") {

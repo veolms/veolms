@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "../services/auth";
 import { useCapabilities } from "../services/authorization";
+import { useThreadStaffActions } from "../learning/useThreadStaffActions";
 import {
   desiredStateCoordinator,
   learningInteractionKeys,
@@ -47,6 +48,21 @@ export function useDiscussionWorkspaceCardActions({
   const moderatesEveryCourse = useCapabilities({
     enabled: Boolean(currentUser),
   }).canOnCourse("discussion.moderate", null);
+  const staff = useThreadStaffActions({
+    thread: {
+      id:
+        isNote || isReply || card.id.startsWith("client-")
+          ? undefined
+          : card.id,
+      courseId: card.courseId,
+      lessonId: card.lessonId,
+      isPublic: card.visibility === "public",
+      pinnedAt: card.workspaceItem.pinnedAt,
+      creatorHeart: card.workspaceItem.creatorHeart,
+    },
+    canModerate: moderatesEveryCourse,
+    onNotice: setNotice,
+  });
   const canDelete =
     Boolean(card.id) &&
     !card.id.startsWith("client-") &&
@@ -320,6 +336,7 @@ export function useDiscussionWorkspaceCardActions({
   };
 
   return {
+    staff,
     bookmark,
     bookmarkLabel,
     canBookmark: canUseSourceActions,

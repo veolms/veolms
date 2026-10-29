@@ -29,6 +29,11 @@ export interface CourseCardOfferInput {
    * course that did not come from the list, keep their button.
    */
   canSelfEnroll: boolean | undefined;
+  /**
+   * A linked-only course that comes with another course: it is enrolled in
+   * by enrolling in that course, so the card offers "Enroll Now" for it.
+   */
+  comesWithAnotherCourse?: boolean;
 }
 
 /** Whether the card may offer enrolment at all. */
@@ -36,8 +41,9 @@ export function courseCardOffersEnrollment({
   isPublic,
   publicAction,
   canSelfEnroll,
+  comesWithAnotherCourse = false,
 }: CourseCardOfferInput): boolean {
-  if (canSelfEnroll === false) return false;
+  if (canSelfEnroll === false && !comesWithAnotherCourse) return false;
   return !isPublic || publicAction === "enroll";
 }
 

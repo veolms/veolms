@@ -110,10 +110,17 @@ export function EditRolesPanel({
         ) : null}
       </PanelBody>
       <PanelFooter>
-        <Button variant="quiet" motion="static" onClick={onClose}>
+        <Button
+          elevation="flat"
+          motion="static"
+          variant="quiet"
+          onClick={onClose}
+        >
           Cancel
         </Button>
         <Button
+          elevation="flat"
+          motion="static"
           variant={removes ? "danger" : "primary"}
           disabled={pending || blocked}
           onClick={() => void save()}

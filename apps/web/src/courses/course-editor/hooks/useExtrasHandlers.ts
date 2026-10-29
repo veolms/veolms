@@ -5,17 +5,24 @@ import {
   type RefObject,
 } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
-import type {
-  CourseIncludeItem,
-  UpdateCourseSettingsRequest,
-  CreateCourseIncludeRequest,
-  UpdateCourseIncludeRequest,
-  ReorderCourseIncludesRequest,
+import {
+  COURSE_INCLUDE_DETAIL_MAX,
+  COURSE_INCLUDE_TEXT_MAX,
+  MAX_COURSE_INCLUDES,
+  type CourseIncludeIcon,
+  type CourseIncludeItem,
+  type CourseIncludePreset,
+  type UpdateCourseSettingsRequest,
+  type CreateCourseIncludeRequest,
+  type UpdateCourseIncludeRequest,
+  type ReorderCourseIncludesRequest,
 } from "@veolms/contracts";
+import { pickIncludeColor } from "../../includes/courseIncludeIcons";
 import { type ExtrasFormState, normalizeExtrasState } from "../extrasState";
 import { setCustomDragImage, inclusionGhostHtml } from "../dragGhosts";
 import type { ExtrasState } from "../editorLocalTypes";
 import type { ApiError } from "../../../lib/api-error";
+import type { IncludeDraftItem } from "../editorLocalTypes";
 
 export interface UseExtrasHandlersArgs {
   currentCourseId: string | null;
@@ -38,13 +45,13 @@ export interface UseExtrasHandlersArgs {
     unknown
   >;
   createIncludeMutation: UseMutationResult<
-    { id: string; text: string; position: number },
+    CourseIncludeItem,
     ApiError,
     { courseId: string; payload: CreateCourseIncludeRequest },
     unknown
   >;
   updateIncludeMutation: UseMutationResult<
-    { id: string; text: string; position: number },
+    CourseIncludeItem,
     ApiError,
     {
       courseId: string;
@@ -68,23 +75,13 @@ export interface UseExtrasHandlersArgs {
   isExtrasSaving: boolean;
   setToastMessage: Dispatch<SetStateAction<string | null>>;
   setServerExtras: Dispatch<SetStateAction<ExtrasFormState>>;
-  serverIncludes: { id: string; text: string; position: number }[];
-  setServerIncludes: Dispatch<
-    SetStateAction<{ id: string; text: string; position: number }[]>
-  >;
-  setManualIncludesDraft: Dispatch<
-    SetStateAction<{ id: string; text: string; isPendingCreation?: boolean }[]>
-  >;
-  manualIncludesDraftRef: RefObject<
-    { id: string; text: string; isPendingCreation?: boolean }[]
-  >;
+  serverIncludes: CourseIncludeItem[];
+  setServerIncludes: Dispatch<SetStateAction<CourseIncludeItem[]>>;
+  setManualIncludesDraft: Dispatch<SetStateAction<IncludeDraftItem[]>>;
+  manualIncludesDraftRef: RefObject<IncludeDraftItem[]>;
   dragInitialIncludesStateRef: RefObject<{
     includeIds: string[];
-    previousIncludes: Array<{
-      id: string;
-      text: string;
-      isPendingCreation?: boolean;
-    }>;
+    previousIncludes: Array<IncludeDraftItem>;
   } | null>;
   deletingIncludeIdsRef: RefObject<Set<string>>;
   setDeletingIncludeIds: Dispatch<SetStateAction<Set<string>>>;
@@ -104,8 +101,15 @@ export interface UseExtrasHandlersResult {
   setDragEnabledInclusionId: Dispatch<SetStateAction<string | null>>;
   focusedInclusionId: string | null;
   setFocusedInclusionId: Dispatch<SetStateAction<string | null>>;
-  handleAddManualInclusion: (customText?: string) => Promise<void>;
+  handleAddManualInclusion: (
+    preset?: Partial<Omit<CourseIncludePreset, "color">>,
+  ) => Promise<void>;
   handleUpdateManualInclusionText: (id: string, text: string) => void;
+  handleUpdateManualInclusionDetail: (id: string, detail: string) => void;
+  handleSetInclusionStyle: (
+    id: string,
+    style: { icon?: CourseIncludeIcon; color?: string },
+  ) => Promise<void>;
   handleManualInclusionBlur: (id: string) => Promise<void>;
   handleDeleteManualInclusion: (id: string) => Promise<void>;
   handleInclusionDragStart: (
@@ -160,24 +164,30 @@ export function useExtrasHandlers({
     null,
   );
 
-  const handleAddManualInclusion = async (customText?: string) => {
-    if (manualIncludesDraftRef.current.length >= 6) return;
+  // A line from a preset (a suggestion) or a blank one to fill in. Its
+  // colour is one no other line uses.
+  const handleAddManualInclusion = async (
+    preset?: Partial<Omit<CourseIncludePreset, "color">>,
+  ) => {
+    if (manualIncludesDraftRef.current.length >= MAX_COURSE_INCLUDES) return;
     const defaultText =
-      customText?.trim().slice(0, 25) ||
-      `Benefit ${manualIncludesDraftRef.current.length + 1}`.slice(0, 25);
+      preset?.text?.trim().slice(0, COURSE_INCLUDE_TEXT_MAX) ||
+      "Something learners get";
+    const line = {
+      text: defaultText,
+      detail: preset?.detail ?? null,
+      icon: preset?.icon ?? "check-circle",
+      color: pickIncludeColor(
+        manualIncludesDraftRef.current.map((item) => item.color),
+      ),
+      kind: preset?.kind ?? "custom",
+    } as const;
     const tempId = `temp-inc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
     // 1. Immediately append temporary pending inclusion
     setManualIncludesDraft((prev) => {
-      if (prev.length >= 6) return prev;
-      return [
-        ...prev,
-        {
-          id: tempId,
-          text: defaultText,
-          isPendingCreation: true,
-        },
-      ];
+      if (prev.length >= MAX_COURSE_INCLUDES) return prev;
+      return [...prev, { id: tempId, ...line, isPendingCreation: true }];
     });
     setFocusedInclusionId(tempId);
 
@@ -195,18 +205,14 @@ export function useExtrasHandlers({
     try {
       const created = await createIncludeMutation.mutateAsync({
         courseId: targetCourseId,
-        payload: { text: defaultText },
+        payload: line,
       });
 
       // 4. On success: replace tempId with real server UUID and clear isPendingCreation
       setManualIncludesDraft((prev) =>
         prev.map((item) =>
           item.id === tempId
-            ? {
-                id: created.id,
-                text: item.text,
-                isPendingCreation: false,
-              }
+            ? { ...item, id: created.id, isPendingCreation: false }
             : item,
         ),
       );
@@ -233,12 +239,61 @@ export function useExtrasHandlers({
   const handleUpdateManualInclusionText = (id: string, text: string) => {
     clearExtrasControlStatus(id);
     clearExtrasControlStatus("inclusions");
-    const truncated = text.slice(0, 25);
+    const truncated = text.slice(0, COURSE_INCLUDE_TEXT_MAX);
     setManualIncludesDraft((prev) =>
       prev.map((item) =>
         item.id === id ? { ...item, text: truncated } : item,
       ),
     );
+  };
+
+  const handleUpdateManualInclusionDetail = (id: string, detail: string) => {
+    clearExtrasControlStatus(id);
+    clearExtrasControlStatus("inclusions");
+    const truncated = detail.slice(0, COURSE_INCLUDE_DETAIL_MAX);
+    setManualIncludesDraft((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, detail: truncated } : item,
+      ),
+    );
+  };
+
+  // An icon or a colour is one click: saved at once.
+  const handleSetInclusionStyle = async (
+    id: string,
+    style: { icon?: CourseIncludeIcon; color?: string },
+  ) => {
+    const before = manualIncludesDraftRef.current.find((i) => i.id === id);
+    if (!before) return;
+    setManualIncludesDraft((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...style } : item)),
+    );
+    if (!currentCourseId || before.isPendingCreation) return;
+    clearExtrasControlStatus(id);
+    try {
+      const updated = await updateIncludeMutation.mutateAsync({
+        courseId: currentCourseId,
+        includeId: id,
+        payload: style,
+      });
+      setServerIncludes((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, ...updated } : s)),
+      );
+      markExtrasControlSaved(id);
+      markExtrasControlSaved("inclusions");
+    } catch (err: unknown) {
+      markExtrasControlFailed(id);
+      setManualIncludesDraft((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? { ...item, icon: before.icon, color: before.color }
+            : item,
+        ),
+      );
+      setToastMessage(
+        (err as { message?: string })?.message || "Failed to update the line.",
+      );
+    }
   };
 
   const handleManualInclusionBlur = async (id: string) => {
@@ -269,6 +324,7 @@ export function useExtrasHandlers({
     }
 
     const trimmed = currentItem.text.trim();
+    const trimmedDetail = (currentItem.detail ?? "").trim();
 
     // Empty text handling: revert to server-confirmed value because backend schema requires min(1)
     if (!trimmed) {
@@ -280,21 +336,21 @@ export function useExtrasHandlers({
       return;
     }
 
-    // Clean blur: if trimmed matches server baseline, nothing to persist
-    if (trimmed === serverItem.text.trim()) {
-      if (trimmed !== currentItem.text) {
-        setManualIncludesDraft((prev) =>
-          prev.map((item) =>
-            item.id === id ? { ...item, text: trimmed } : item,
-          ),
-        );
-      }
+    // Clean blur: if both match the server baseline, nothing to persist
+    if (
+      trimmed === serverItem.text.trim() &&
+      trimmedDetail === (serverItem.detail ?? "").trim()
+    ) {
       return;
     }
 
     // Normalize draft to trimmed before persisting
     setManualIncludesDraft((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, text: trimmed } : item)),
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, text: trimmed, detail: trimmedDetail || null }
+          : item,
+      ),
     );
 
     savingIncludeIdsRef.current.add(id);
@@ -304,11 +360,13 @@ export function useExtrasHandlers({
       const updated = await updateIncludeMutation.mutateAsync({
         courseId: currentCourseId,
         includeId: id,
-        payload: { text: trimmed },
+        payload: { text: trimmed, detail: trimmedDetail || null },
       });
 
       // Update serverIncludes baseline so saveExtrasStep does not duplicate it
-      setServerIncludes((prev) => prev.map((s) => (s.id === id ? updated : s)));
+      setServerIncludes((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, ...updated } : s)),
+      );
       markExtrasControlSaved(id);
       markExtrasControlSaved("inclusions");
     } catch (err: unknown) {
@@ -317,7 +375,9 @@ export function useExtrasHandlers({
       // Revert on failure to the last confirmed server value
       setManualIncludesDraft((prev) =>
         prev.map((item) =>
-          item.id === id ? { ...item, text: serverItem.text } : item,
+          item.id === id
+            ? { ...item, text: serverItem.text, detail: serverItem.detail }
+            : item,
         ),
       );
       const errorMsg =
@@ -556,6 +616,8 @@ export function useExtrasHandlers({
     setFocusedInclusionId,
     handleAddManualInclusion,
     handleUpdateManualInclusionText,
+    handleUpdateManualInclusionDetail,
+    handleSetInclusionStyle,
     handleManualInclusionBlur,
     handleDeleteManualInclusion,
     handleInclusionDragStart,

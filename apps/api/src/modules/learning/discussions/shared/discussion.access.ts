@@ -124,6 +124,16 @@ export interface DiscussionAccess {
     db: DatabaseExecutor,
     actor: DiscussionActor,
   ): Promise<readonly string[] | "all">;
+  /**
+   * Courses whose discussions the actor reads as staff (everyone's threads,
+   * read-only): every course with discussion.read or discussion.moderate
+   * held for every course, otherwise the courses the actor created.
+   * Moderating is still `canModerateCourse`'s.
+   */
+  listStaffReadableCourseIds(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+  ): Promise<readonly string[] | "all">;
   canModerateCourse(
     db: DatabaseExecutor,
     actor: DiscussionActor,
@@ -361,6 +371,20 @@ export function createDiscussionAccess(): DiscussionAccess {
 
     async listModeratableCourseIds(db, actor) {
       if (await moderatesEveryCourse(db, actor)) return "all";
+      const rows = await discussionRepo.listActiveCreatedCourseIds(
+        db,
+        actor.userId,
+      );
+      return rows.map((row) => row.id);
+    },
+
+    async listStaffReadableCourseIds(db, actor) {
+      if (
+        (await readsEveryCourse(db, actor)) ||
+        (await moderatesEveryCourse(db, actor))
+      ) {
+        return "all";
+      }
       const rows = await discussionRepo.listActiveCreatedCourseIds(
         db,
         actor.userId,

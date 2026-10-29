@@ -75,6 +75,11 @@ import { resolveAliasedBasicsUpdate } from "./basics-aliased-field.ts";
 import { resolveBasicsCategoryUpdate } from "./basics-category.ts";
 import { resolveDetailsLevelUpdate } from "./details-level.ts";
 import {
+  createLinksService,
+  type LinksService,
+} from "../links/links.service.ts";
+import { seedDefaultIncludes } from "../includes/includes.service.ts";
+import {
   isLessonListedInOverview,
   resolveOverviewVisibility,
   type OverviewViewer,
@@ -414,6 +419,7 @@ export interface CourseServiceOptions {
   includesService?: IncludesService;
   mediaService?: MediaService;
   deletionService?: CourseDeletionService;
+  linksService?: LinksService;
   /** See `COURSE_OVERVIEW_LESSON_DESCRIPTIONS`. */
   overviewLessonDescriptions?: boolean;
 }
@@ -427,6 +433,7 @@ export function createCourseService({
   configurationService = createConfigurationService({ database }),
   includesService = createIncludesService({ database }),
   mediaService = createMediaService({ database, services }),
+  linksService = createLinksService({ database }),
   deletionService = createCourseDeletionService({
     database,
     storage: services.storage,
@@ -470,7 +477,44 @@ export function createCourseService({
       pricing,
       certificateEnabled: Boolean(row.certificate_enabled ?? false),
       canSelfEnroll: courseOffersSelfEnrollment(row, pricing),
+      // A linked-only course is shown as free with the courses that give
+      // it; few courses are, so they are looked up one by one.
+      ...(row.linked_only === true
+        ? { includedWith: await linksService.listCoursesIncluding(row.id) }
+        : {}),
     } satisfies CourseSummary;
+  }
+
+  /**
+   * The published courses linked to a course, in link order, as the
+   * catalogue's summaries.
+   */
+  async function listIncludedCourseSummaries(courseId: string) {
+    const ids = await linksService.listPublishedLinkedCourseIds(courseId);
+    if (ids.length === 0) return [];
+    const rows = await courseRepo.listHomeDiscoveryCourses(database, {
+      limit: ids.length,
+      order: "recent",
+      courseIds: ids,
+    });
+    const summaries = await Promise.all(rows.map(toPublicCourseSummary));
+    const order = new Map(ids.map((id, index) => [id, index]));
+    return summaries
+      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+      .map((summary) => ({
+        id: summary.id,
+        slug: summary.slug,
+        title: summary.title,
+        thumbnailUrl: summary.thumbnailUrl,
+        thumbnailSrcSet: summary.thumbnailSrcSet,
+        worth:
+          !summary.includedWith && summary.pricing.pricingType === "paid"
+            ? {
+                amount: summary.pricing.salePrice ?? summary.pricing.price,
+                currency: summary.pricing.currency,
+              }
+            : null,
+      }));
   }
 
   /**
@@ -847,6 +891,8 @@ export function createCourseService({
       created_at: now,
       updated_at: now,
     });
+    // Every course starts with the standard "This course includes" lines.
+    await seedDefaultIncludes(database, courseId);
 
     return {
       id: courseId,
@@ -1393,6 +1439,14 @@ export function createCourseService({
       settings,
       includes,
     } = content;
+    // A linked-only course is had through the courses that link it: its
+    // page sends a visitor to them instead of offering enrolment.
+    const includedWith =
+      pricing?.linked_only === true
+        ? await linksService.listCoursesIncluding(courseId)
+        : undefined;
+    // The courses that come free with this one, as cards would show them.
+    const includedCourses = await listIncludedCourseSummaries(courseId);
 
     // Learners get published lessons only, and only the sections that still
     // have one: an unpublished section's title is not theirs to see. Lesson
@@ -1529,7 +1583,16 @@ export function createCourseService({
             estimatedDuration: settings.estimated_duration,
           }
         : null,
-      includes: includes.map(({ text, position }) => ({ text, position })),
+      includes: includes.map(
+        ({ text, position, detail, icon, color, kind }) => ({
+          text,
+          position,
+          detail,
+          icon,
+          color,
+          kind,
+        }),
+      ),
       // Asked of the rule checkout applies before it prices the course, so
       // the page offers enrolment exactly when checkout would allow it.
       // Whether the course is free is read as checkout reads it too: a
@@ -1539,6 +1602,8 @@ export function createCourseService({
         pricing_type: resolveCoursePricing(pricing).pricingType,
         access_type: accessRule?.access_type,
       }),
+      ...(includedWith ? { includedWith } : {}),
+      ...(includedCourses.length > 0 ? { includedCourses } : {}),
       accessValidity: accessRule
         ? {
             durationType: accessRule.duration_type,

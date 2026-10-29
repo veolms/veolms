@@ -4,7 +4,6 @@ import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import {
   permissionCatalogue,
-  permissions as allPermissions,
   TEAM_ROLE_DESCRIPTION_MAX_LENGTH,
   TEAM_ROLE_NAME_MAX_LENGTH,
   type Permission,
@@ -22,7 +21,12 @@ import {
 } from "../../services/team";
 import { ConfirmActionModal } from "../../shell/ConfirmActionModal";
 import type { ToastMessage } from "../../ToastNotification";
-import { initials, roleLabel } from "../teamFormat";
+import {
+  countOfferedPermissions,
+  initials,
+  OFFERED_PERMISSION_COUNT,
+  roleLabel,
+} from "../teamFormat";
 import { chipClassName, inputClassName, SearchField } from "../TeamBits";
 import { useTeamAccess } from "../useTeamAccess";
 import { PermissionGroup } from "./PermissionGroup";
@@ -32,7 +36,7 @@ import { fuzzyMatches } from "../../lib/fuzzySearch";
 export type RoleEditorTarget =
   { mode: "create"; from?: TeamRole } | { mode: "edit"; role: TeamRole };
 
-const TOTAL = allPermissions.length;
+const TOTAL = OFFERED_PERMISSION_COUNT;
 const line = "border-(--border)";
 
 /** Roles a new one can start from: the built-in team roles but admin. */
@@ -224,7 +228,7 @@ export function RoleEditorPanel({
                 <div className="mt-3 flex flex-wrap items-center gap-5">
                   <span className="text-xs text-(--muted)">
                     <strong className="text-sm text-(--text)">
-                      {selected.size}
+                      {countOfferedPermissions(selected)}
                     </strong>{" "}
                     / {TOTAL} permissions
                   </span>
@@ -394,8 +398,10 @@ export function RoleEditorPanel({
           </span>
         ) : canDelete ? (
           <Button
-            variant="danger"
+            elevation="flat"
             motion="static"
+            variant="danger"
+
             onClick={() => setConfirmingDelete(true)}
           >
             <Trash size={15} weight="bold" />
@@ -403,18 +409,29 @@ export function RoleEditorPanel({
           </Button>
         ) : (
           <span className="text-xs text-(--muted)">
-            <strong className="text-(--text)">{selected.size}</strong> of{" "}
-            {TOTAL} permissions
+            <strong className="text-(--text)">
+              {countOfferedPermissions(selected)}
+            </strong>{" "}
+            of {TOTAL} permissions
           </span>
         )}
         <div className="flex shrink-0 gap-2">
           {readOnly ? (
             <>
-              <Button variant="quiet" motion="static" onClick={onClose}>
+              <Button
+                elevation="flat"
+                motion="static"
+                variant="quiet"
+                onClick={onClose}
+              >
                 Close
               </Button>
               {canDuplicate && existing ? (
-                <Button onClick={() => onDuplicate(existing)}>
+                <Button
+                  elevation="flat"
+                  motion="static"
+                  onClick={() => onDuplicate(existing)}
+                >
                   <Copy size={15} weight="bold" />
                   Duplicate &amp; edit
                 </Button>
@@ -422,10 +439,17 @@ export function RoleEditorPanel({
             </>
           ) : (
             <>
-              <Button variant="quiet" motion="static" onClick={onClose}>
+              <Button
+                elevation="flat"
+                motion="static"
+                variant="quiet"
+                onClick={onClose}
+              >
                 Cancel
               </Button>
               <Button
+                elevation="flat"
+                motion="static"
                 disabled={
                   pending || name.trim().length === 0 || selected.size === 0
                 }

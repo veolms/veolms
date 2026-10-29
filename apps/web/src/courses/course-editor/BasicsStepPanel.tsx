@@ -202,7 +202,17 @@ export interface BasicsStepPanelProps {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       }
     | undefined;
   handleTrailerMediaAttached: (mediaAssetId: string) => Promise<boolean>;
@@ -306,7 +316,17 @@ export interface BasicsStepPanelProps {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       },
       ApiError
     >

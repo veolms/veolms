@@ -1,3 +1,4 @@
+import { cacheTags, invalidateCache } from "@veolms/api-core";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
 import type { LinkedCourseItem } from "@veolms/contracts";
@@ -76,6 +77,9 @@ export function createLinksService({ database }: LinksServiceOptions) {
       );
       await syncLinkedCourseAccess(trx, userIds);
     });
+    // The linked course's overview and card name the courses that include
+    // it.
+    invalidateCache([cacheTags.course(linkedCourseId), cacheTags.catalog]);
 
     return listLinkedCourses(courseId, actor);
   }
@@ -107,11 +111,37 @@ export function createLinksService({ database }: LinksServiceOptions) {
       );
       await syncLinkedCourseAccess(trx, userIds);
     });
+    invalidateCache([cacheTags.course(linkedCourseId), cacheTags.catalog]);
 
     return listLinkedCourses(courseId, actor);
   }
 
-  return { listLinkedCourses, addLinkedCourse, removeLinkedCourse };
+  /**
+   * The published courses that give this one to whoever holds them, for
+   * its overview. Public: the same for every viewer.
+   */
+  async function listCoursesIncluding(courseId: string) {
+    return await linksRepo.listPublishedCoursesLinking(database, courseId);
+  }
+
+  /**
+   * The published courses linked to this one, in link order: what a buyer
+   * of it gets free, for its overview. Public: the same for every viewer.
+   */
+  async function listPublishedLinkedCourseIds(courseId: string) {
+    const rows = await linksRepo.listLinkedCourses(database, courseId);
+    return rows
+      .filter((row) => row.status === "published")
+      .map((row) => row.id);
+  }
+
+  return {
+    listLinkedCourses,
+    listPublishedLinkedCourseIds,
+    addLinkedCourse,
+    removeLinkedCourse,
+    listCoursesIncluding,
+  };
 }
 
 export type LinksService = ReturnType<typeof createLinksService>;

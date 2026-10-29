@@ -8,6 +8,11 @@ export interface PricingFormState {
   currency: string;
   /** Show the discount as a badge on the course's cards. Off by default. */
   showDiscountBadge: boolean;
+  /**
+   * Had only through another course's link: no price, not sold, not listed.
+   * The price fields are kept out of the save while it is on.
+   */
+  linkedOnly: boolean;
 }
 
 export type PricingState = PricingFormState;
@@ -18,6 +23,7 @@ export const initialPricingState: PricingFormState = {
   originalPrice: "",
   currency: "INR",
   showDiscountBadge: false,
+  linkedOnly: false,
 };
 
 /**
@@ -37,6 +43,7 @@ export const normalizePricingState = (
     originalPrice: raw?.originalPrice ? String(raw.originalPrice).trim() : "",
     currency: raw?.currency ? String(raw.currency).trim() : "INR",
     showDiscountBadge: raw?.showDiscountBadge === true,
+    linkedOnly: raw?.linkedOnly === true,
   };
 };
 
@@ -55,6 +62,9 @@ export const isPricingEqual = (
   const normB = normalizePricingState(b);
 
   if (normA.currency !== normB.currency) return false;
+  if (normA.linkedOnly !== normB.linkedOnly) return false;
+  // A linked-only course has no price to compare.
+  if (normA.linkedOnly) return true;
 
   return (
     normA.sellingPrice === normB.sellingPrice &&
@@ -149,6 +159,9 @@ export function validatePricing(pricing: PricingState): {
   isValid: boolean;
   error: string | null;
 } {
+  // A linked-only course has no price.
+  if (pricing.linkedOnly) return { isValid: true, error: null };
+
   const rawSell = pricing.sellingPrice.replace(/,/g, "").trim();
   const sellNum = parseFloat(rawSell);
 
@@ -187,6 +200,17 @@ export function validatePricing(pricing: PricingState): {
  * zero makes the course free.
  */
 export function buildPricingPayload(state: PricingFormState) {
+  if (state.linkedOnly) {
+    return {
+      pricingType: "free" as const,
+      price: 0,
+      salePrice: 0,
+      currency: state.currency || "INR",
+      showDiscountBadge: false,
+      linkedOnly: true,
+    };
+  }
+
   const rawSell = state.sellingPrice.replace(/,/g, "").trim();
   const rawOrig = state.originalPrice.replace(/,/g, "").trim();
   const sellNum = Math.round(parseFloat(rawSell));
@@ -202,6 +226,7 @@ export function buildPricingPayload(state: PricingFormState) {
     currency: state.currency || "INR",
     // A badge needs a discount to announce.
     showDiscountBadge: price > salePrice && state.showDiscountBadge,
+    linkedOnly: false,
   };
 }
 
@@ -215,7 +240,16 @@ export function pricingFormFromServer(pricing: {
   salePrice?: number | null;
   currency?: string | null;
   showDiscountBadge?: boolean | null;
+  linkedOnly?: boolean | null;
 }): PricingFormState {
+  // A linked-only course's stored zeros are not a price: the fields start
+  // empty, so turning it off asks for one before anything is saved.
+  if (pricing.linkedOnly === true) {
+    return normalizePricingState({
+      currency: pricing.currency || "INR",
+      linkedOnly: true,
+    });
+  }
   const salePrice = pricing.salePrice ?? pricing.price;
   return normalizePricingState({
     sellingPrice: String(salePrice),

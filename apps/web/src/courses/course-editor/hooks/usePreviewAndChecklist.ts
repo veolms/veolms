@@ -10,6 +10,7 @@ import type { AccessRulesFormState } from "../accessRulesState";
 import { type PricingFormState, getCurrencySymbol } from "../pricingState";
 import { buildLocalPreviewData } from "../localPreview";
 import type { ExtrasState } from "../editorLocalTypes";
+import type { IncludeDraftItem } from "../editorLocalTypes";
 
 export interface UsePreviewAndChecklistArgs {
   courseTitle: string;
@@ -123,7 +124,17 @@ export interface UsePreviewAndChecklistArgs {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       }
     | undefined;
   previewData:
@@ -225,7 +236,17 @@ export interface UsePreviewAndChecklistArgs {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       }
     | undefined;
   isValidating: boolean;
@@ -253,11 +274,7 @@ export interface UsePreviewAndChecklistArgs {
       "basics" | "curriculum" | "pricing" | "extras" | "accessRules" | null
     >
   >;
-  manualIncludesDraft: {
-    id: string;
-    text: string;
-    isPendingCreation?: boolean;
-  }[];
+  manualIncludesDraft: IncludeDraftItem[];
   extras: ExtrasState;
   totalSections: number;
   totalLessons: number;
@@ -363,7 +380,17 @@ export interface UsePreviewAndChecklistResult {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       }
     | undefined;
   getChecklistState: (area: CourseValidationArea) => ChecklistState;
@@ -534,8 +561,9 @@ export function usePreviewAndChecklist({
     {
       area: "pricing",
       label: "Pricing",
-      summary:
-        pricing.pricingType === "free"
+      summary: pricing.linkedOnly
+        ? "Linked course only"
+        : pricing.pricingType === "free"
           ? "Free"
           : `${currencySymbol}${pricing.sellingPrice}`,
     },

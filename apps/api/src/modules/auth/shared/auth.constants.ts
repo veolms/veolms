@@ -11,7 +11,7 @@ const DAY_MS = 24 * HOUR_MS;
 // --- One-time passcodes -----------------------------------------------------
 
 /** Wrong guesses before the outstanding code is burned. */
-export const OTP_MAX_ATTEMPTS = 3;
+export const OTP_MAX_ATTEMPTS = 5;
 
 // How long a code stays valid and the minimum gap between sends for one
 // identifier and purpose are not constants: they are OTP_TTL_MINUTES and

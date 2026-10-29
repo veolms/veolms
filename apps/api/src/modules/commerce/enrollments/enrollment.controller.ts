@@ -35,7 +35,11 @@ export function createEnrollmentController({
   ): Promise<UnenrollCourseResponse> {
     const { courseId } = request.params;
     await service.unenrollFromCourse(
-      { id: request.user!.id, roles: request.user!.roles },
+      {
+        id: request.user!.id,
+        roles: request.user!.roles,
+        email: request.user!.email,
+      },
       courseId,
     );
     return { courseId };

@@ -1,5 +1,6 @@
 import "./learning-feature.css";
 import "./learning-split-layout.css";
+import { useMemo } from "react";
 import type { MyQuizAssignment } from "@veolms/contracts";
 import { FloatingScrollbar } from "../shell/FloatingScrollbar";
 import type {
@@ -556,6 +557,7 @@ export function LearningWorkspace({
     setCurriculumWidth,
     curriculumCollapsed,
     setCurriculumCollapsed,
+    setCurriculumFocusRequest,
     curriculumResizing,
     setCurriculumResizing,
     setCurriculumResizePreviewWidth,
@@ -620,6 +622,15 @@ export function LearningWorkspace({
     closeFullscreenLessonPanel,
     curriculumToggleGesture,
   });
+  // The end of a lesson with a quiz offers it (see `onAttemptQuiz`).
+  const selectedLessonHasQuiz = hasLessonQuiz(selectedLesson);
+  const openSelectedLessonQuiz = useMemo(
+    () =>
+      selectedLessonHasQuiz
+        ? () => handleOpenLessonQuiz(selectedLesson)
+        : undefined,
+    [handleOpenLessonQuiz, selectedLesson, selectedLessonHasQuiz],
+  );
   const { seekCurrentLessonToTimestamp, lessonPlayerProps } =
     useLessonPlayerProps({
       courseSlug,
@@ -664,6 +675,7 @@ export function LearningWorkspace({
       goToNextLesson,
       updateSelectedLessonProgress,
       handleLessonEnded,
+      openSelectedLessonQuiz,
       toggleTheaterMode,
       toggleLessonDrawerFromPlayer,
       handleMobileLandscapeFullscreenChange,
@@ -788,6 +800,7 @@ export function LearningWorkspace({
             discussionPersistenceKey={discussionPersistenceKey}
             courseSlug={courseSlug}
             courseId={courseId}
+            courseCreatorId={courseOverview?.course?.creatorId}
             backendLessonId={backendLessonId}
             noteDeepLinkId={noteDeepLinkId}
             mobileBottomNavigation={mobileBottomNavigation}

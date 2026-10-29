@@ -103,7 +103,33 @@ export const permissions = [
 
   // Appended last: the seed derives permission ids from list position.
   "lesson.video.import_youtube",
+
+  // Analytics by tab: Overview, and one per tab the advanced analytics
+  // plugin adds. Only the names live here; the tabs are the plugin's.
+  "analytics.overview.read",
+  "analytics.learning.read",
+  "analytics.learners.read",
+  "analytics.conversion.read",
+  "analytics.delivery.read",
+  "analytics.storage.read",
+  "analytics.video_quality.read",
+
+  // Adding a student by name and email.
+  "student.create",
 ] as const;
+
+/** Every key that opens a section of the Analytics page. */
+export const analyticsPermissions = [
+  "analytics.overview.read",
+  "analytics.revenue.read",
+  "analytics.course.read",
+  "analytics.learning.read",
+  "analytics.learners.read",
+  "analytics.conversion.read",
+  "analytics.delivery.read",
+  "analytics.storage.read",
+  "analytics.video_quality.read",
+] as const satisfies readonly (typeof permissions)[number][];
 
 export type Permission = (typeof permissions)[number];
 

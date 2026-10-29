@@ -87,7 +87,6 @@ import {
 } from "./discussion-editor/types";
 import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
 import { ThreadReplyComposer } from "./ThreadReplyComposer";
-import { useCapabilities } from "../services/authorization/authorization.queries";
 import type { LessonParticipationState } from "./Discussion";
 import { TimeAgo } from "../components/TimeAgo";
 import { cheerLike } from "../components/likeFeedback";
@@ -116,7 +115,8 @@ interface DiscussionThreadPanelProps {
   entries: Comment[];
   isBackendMode?: boolean;
   currentUserId?: string;
-  userRole?: string;
+  /** May lock any thread and accept any answer (see Discussion). */
+  canModerate?: boolean;
   currentUser?: {
     name: string;
     avatar: string;
@@ -180,7 +180,7 @@ export function DiscussionThreadPanel({
   entries: latestEntries,
   isBackendMode = false,
   currentUserId,
-  userRole,
+  canModerate,
   currentUser,
   canParticipate = true,
   participationState = "granted",
@@ -637,7 +637,7 @@ export function DiscussionThreadPanel({
             onComposerFocusHandled={handleComposerFocusHandled}
             isBackendMode={isBackendMode}
             currentUserId={currentUserId}
-            userRole={userRole}
+            canModerate={canModerate}
             currentUser={currentUser}
             canParticipate={canParticipate}
             participationState={participationState}
@@ -783,7 +783,8 @@ interface ThreadSlideProps {
   active: boolean;
   isBackendMode?: boolean;
   currentUserId?: string;
-  userRole?: string;
+  /** May lock any thread and accept any answer (see Discussion). */
+  canModerate?: boolean;
   currentUser?: {
     name: string;
     avatar: string;
@@ -846,7 +847,7 @@ function ThreadSlide({
   active,
   isBackendMode = false,
   currentUserId,
-  userRole,
+  canModerate,
   currentUser,
   canParticipate = true,
   participationState = "granted",
@@ -877,15 +878,9 @@ function ThreadSlide({
 }: ThreadSlideProps) {
   const isQuestion =
     entry.entryKind === "question" || Boolean(entry.isQuestion);
-  const { canOnCourse } = useCapabilities();
-  // See CommentCard: every-course moderators, or the course's instructor.
-  const isModerator =
-    canOnCourse("discussion.moderate", null) ||
-    userRole === "Instructor" ||
-    userRole === "Admin";
-  const canLock = canParticipate && Boolean(entry.isOwn || isModerator);
+  const canLock = canParticipate && Boolean(entry.isOwn || canModerate);
   const canAcceptAnswer =
-    canParticipate && isQuestion && Boolean(entry.isOwn || isModerator);
+    canParticipate && isQuestion && Boolean(entry.isOwn || canModerate);
 
   const clientId = getClientEntityId(entry);
   const serverId = getServerEntityId(entry);

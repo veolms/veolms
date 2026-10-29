@@ -28,6 +28,7 @@ import * as userRepository from "../authentication/authentication.repository.ts"
 import {
   generateRandomToken,
   hashToken,
+  isTestLoginAccount,
   toUserProfileFields,
 } from "../shared/auth.utils.ts";
 import {
@@ -266,10 +267,13 @@ export function createSessionService({ database }: SessionServiceOptions) {
     };
 
     // A new device for a student counts against the academy's limit; staff
-    // are never limited, and a browser already signed in (above) is no new
-    // device.
+    // and the shared test accounts (TEST_LOGIN_ACCOUNTS), which several
+    // testers sign in to at once, are never limited, and a browser already
+    // signed in (above) is no new device.
     const limit =
-      options?.skipDeviceLimit || isStaffAccount(roles)
+      options?.skipDeviceLimit ||
+      isStaffAccount(roles) ||
+      isTestLoginAccount(user.email)
         ? null
         : await platformSettings.maxDevicesPerStudent();
     if (limit === null) {

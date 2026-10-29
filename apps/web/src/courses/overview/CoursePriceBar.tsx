@@ -1,4 +1,5 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, MouseEvent, ReactNode } from "react";
+import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { Ticket } from "@phosphor-icons/react/Ticket";
@@ -28,6 +29,11 @@ export interface CoursePriceBarProps {
     struckThrough?: string;
     badge?: string;
     /**
+     * A few words after the label, in small type: "with <course> course"
+     * for a linked-only course, whose label is "Free".
+     */
+    note?: ReactNode;
+    /**
      * The saving in `badge` is a coupon's (the course has no sale of its
      * own): it carries the same ticket a coupon's second badge does.
      */
@@ -53,6 +59,13 @@ export interface CoursePriceBarProps {
     icon: ReactNode;
     disabled: boolean;
     onClick?: () => void;
+    /**
+     * Makes the action a link to another page, drawn as one: a quieter
+     * outlined box with `eyebrow` over `label` and an arrow, not the filled
+     * button that acts on this page. `onClick` then runs for a plain
+     * click only, so a new tab still opens the address.
+     */
+    link?: { href: string; eyebrow: string };
   };
   /** Shown in place of the coupon and the button when enrolment is closed. */
   closedMessage?: string;
@@ -61,6 +74,11 @@ export interface CoursePriceBarProps {
   onDismissError: () => void;
   /** "This course includes", under the button (`getCoursePurchasePerks`). */
   perks: readonly CoursePurchasePerk[];
+  /**
+   * The courses that come free with this one, first under "This course
+   * includes" (see `IncludedCoursesList`).
+   */
+  includedCourses?: ReactNode;
   /** A small line right under the button: how the payment is made. */
   checkoutNote?: string;
   /** The green box at the foot of the card, for a course that is paid for. */
@@ -223,6 +241,11 @@ export function CoursePriceDisplay({
       >
         {price.label}
       </span>
+      {price.note && (
+        <span className="min-w-0 text-[0.95rem] leading-snug font-semibold text-(--text-secondary)">
+          {price.note}
+        </span>
+      )}
       {price.struckThrough && (
         <span
           className={`text-[1.1rem] leading-none font-medium whitespace-nowrap text-(--muted) line-through ${
@@ -316,6 +339,7 @@ export function CoursePriceBar({
   error,
   onDismissError,
   perks,
+  includedCourses,
   checkoutNote,
   guarantee,
   children,
@@ -382,23 +406,32 @@ export function CoursePriceBar({
                   takes the whole bar. */}
               {/* It stays put under the pointer: it darkens, its glow
                   grows and its icon fills in. */}
-              <Button
-                motion="static"
-                className={`${priceBarActionClasses} @md/price:min-w-50 @md/price:flex-[9999_1_12.5rem] ${
-                  receipt
-                    ? receiptButtonClasses
-                    : coupon
-                      ? buttonBesideCouponClasses
-                      : price
-                        ? buttonAloneClasses
-                        : ""
-                }`}
-                disabled={action.disabled}
-                onClick={action.onClick}
-              >
-                {action.icon}
-                <span className="truncate">{action.label}</span>
-              </Button>
+              {action.link ? (
+                <PriceBarLinkAction
+                  href={action.link.href}
+                  eyebrow={action.link.eyebrow}
+                  label={action.label}
+                  onClick={action.onClick}
+                />
+              ) : (
+                <Button
+                  motion="static"
+                  className={`${priceBarActionClasses} @md/price:min-w-50 @md/price:flex-[9999_1_12.5rem] ${
+                    receipt
+                      ? receiptButtonClasses
+                      : coupon
+                        ? buttonBesideCouponClasses
+                        : price
+                          ? buttonAloneClasses
+                          : ""
+                  }`}
+                  disabled={action.disabled}
+                  onClick={action.onClick}
+                >
+                  {action.icon}
+                  <span className="truncate">{action.label}</span>
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -465,41 +498,44 @@ export function CoursePriceBar({
             One column in the narrow card (a phone, or the column beside the
             curriculum), two where the bar is wide. The money-back promise
             closes it, in green. */}
-        {perks.length > 0 || guarantee ? (
+        {perks.length > 0 || includedCourses || guarantee ? (
           <div className="mt-1 flex flex-col gap-4 border-t border-[color-mix(in_srgb,var(--text)_10%,transparent)] pt-5">
-            {perks.length > 0 ? (
+            {perks.length > 0 || includedCourses ? (
               <>
                 <h3 className="m-0 text-[1.05rem] leading-tight font-bold text-(--text)">
                   This course includes
                 </h3>
+                {includedCourses}
                 <ul className="m-0 grid list-none gap-x-6 gap-y-4 p-0 @2xl/price:grid-cols-2">
-                  {perks.map(({ title, detail, icon: PerkIcon, tone }) => (
-                    <li
-                      key={title}
-                      className="flex min-w-0 items-start gap-3.5"
-                    >
-                      <span
-                        className="grid size-11 shrink-0 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--perk-tone)_15%,transparent)] text-(--perk-tone)"
-                        style={{ "--perk-tone": tone } as CSSProperties}
+                  {perks.map(
+                    ({ title, detail, icon: PerkIcon, iconWeight, tone }) => (
+                      <li
+                        key={title}
+                        className="flex min-w-0 items-start gap-3.5"
                       >
-                        <PerkIcon
-                          size={24}
-                          weight="duotone"
-                          aria-hidden="true"
-                        />
-                      </span>
-                      <span className="flex min-w-0 flex-col gap-0.5 pt-0.5">
-                        <span className="text-[0.95rem] leading-snug font-semibold text-(--text)">
-                          {title}
+                        <span
+                          className="grid size-11 shrink-0 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--perk-tone)_15%,transparent)] text-(--perk-tone)"
+                          style={{ "--perk-tone": tone } as CSSProperties}
+                        >
+                          <PerkIcon
+                            size={24}
+                            weight={iconWeight ?? "duotone"}
+                            aria-hidden="true"
+                          />
                         </span>
-                        {detail ? (
-                          <span className="text-[0.84rem] leading-snug text-(--muted)">
-                            {detail}
+                        <span className="flex min-w-0 flex-col gap-0.5 pt-0.5">
+                          <span className="text-[0.95rem] leading-snug font-semibold text-(--text)">
+                            {title}
                           </span>
-                        ) : null}
-                      </span>
-                    </li>
-                  ))}
+                          {detail ? (
+                            <span className="text-[0.84rem] leading-snug text-(--muted)">
+                              {detail}
+                            </span>
+                          ) : null}
+                        </span>
+                      </li>
+                    ),
+                  )}
                 </ul>
               </>
             ) : null}
@@ -525,5 +561,56 @@ export function CoursePriceBar({
         ) : null}
       </div>
     </section>
+  );
+}
+
+/**
+ * The bar's action when it leads to another page (a linked-only course
+ * sends its visitor to the course it comes with): a link, outlined rather
+ * than filled, with a small line over the course's name and an arrow, so
+ * it reads as going somewhere and not as buying here.
+ */
+function PriceBarLinkAction({
+  href,
+  eyebrow,
+  label,
+  onClick,
+}: {
+  href: string;
+  eyebrow: string;
+  label: string;
+  onClick?: () => void;
+}) {
+  const open = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (
+      !onClick ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    event.preventDefault();
+    onClick();
+  };
+  return (
+    <a
+      href={href}
+      onClick={open}
+      className="group/link flex min-h-14 w-full min-w-0 items-center justify-between gap-4 rounded-[0.6875rem] border border-[color-mix(in_srgb,var(--accent)_45%,transparent)] bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] py-2.5 pr-2.5 pl-4.5 text-left no-underline transition-colors duration-150 hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_13%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+    >
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-[0.78rem] leading-tight font-medium text-(--muted)">
+          {eyebrow}
+        </span>
+        <span className="text-[1rem] leading-snug font-bold text-(--text)">
+          {label}
+        </span>
+      </span>
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-(--accent) text-(--on-accent)">
+        <ArrowRight size={17} weight="bold" aria-hidden="true" />
+      </span>
+    </a>
   );
 }

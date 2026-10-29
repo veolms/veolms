@@ -1,4 +1,5 @@
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
@@ -302,16 +303,19 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
             </span>
           ) : null}
           {showQuiz ? (
-            <button
-              type="button"
-              className={`${LESSON_CARD_ACTION_CLASS} bg-[color-mix(in_srgb,#a050d0_30%,var(--canvas))] text-[#c183ea] hover:bg-[color-mix(in_srgb,#a050d0_44%,var(--canvas))] aria-pressed:bg-[#8e3db4] aria-pressed:text-white [[data-theme=light]_&]:text-purple-700 [[data-theme=light]_&]:aria-pressed:text-white`}
-              aria-label={`Open quiz for lecture ${displayNumber}: ${title}`}
-              aria-pressed={quizActive}
-              title={quizActive ? "Quiz is open" : "Open quiz"}
-              onClick={() => onOpenQuiz?.(number)}
-            >
-              <Exam size={17} weight="fill" aria-hidden="true" />
-            </button>
+            // See `revealOnHover`; kept in sight while its quiz is open.
+            <span className={revealOnHover(isActive || quizActive)}>
+              <button
+                type="button"
+                className={`${LESSON_CARD_ACTION_CLASS} bg-[color-mix(in_srgb,#a050d0_30%,var(--canvas))] text-[#c183ea] hover:bg-[color-mix(in_srgb,#a050d0_44%,var(--canvas))] aria-pressed:bg-[#8e3db4] aria-pressed:text-white [[data-theme=light]_&]:text-purple-700 [[data-theme=light]_&]:aria-pressed:text-white`}
+                aria-label={`Open quiz for lecture ${displayNumber}: ${title}`}
+                aria-pressed={quizActive}
+                title={quizActive ? "Quiz is open" : "Open quiz"}
+                onClick={() => onOpenQuiz?.(number)}
+              >
+                <Brain size={18} weight="fill" aria-hidden="true" />
+              </button>
+            </span>
           ) : null}
           {showResources && resources && resourceCourseKey ? (
             // See `revealOnHover`.

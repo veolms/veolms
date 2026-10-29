@@ -285,7 +285,14 @@ export function createCouponService({
   ): Promise<Coupon> {
     const coupon = await couponRepo.findCouponById(database, id);
     if (!coupon) throw couponNotFound(id);
-    await assertCanManageCoupon(actor, coupon);
+    // Reading takes coupon.read, as the list does: a team role that views
+    // every coupon opens each one without also holding coupon.manage.
+    if (
+      !(await coversEveryCoupon(actor, "coupon.read")) &&
+      coupon.created_by !== actor.id
+    ) {
+      throw couponNotFound(id);
+    }
     return mapToCoupon(coupon);
   }
 

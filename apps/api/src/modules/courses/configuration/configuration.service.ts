@@ -65,6 +65,11 @@ export function createConfigurationService({
 
     const now = new Date();
 
+    // A linked-only course stays restricted (see upsertCoursePricing).
+    const pricing = await configRepo.findPricingByCourseId(database, courseId);
+    const accessType =
+      pricing?.linked_only === true ? "restricted" : updates.accessType;
+
     const durationType = updates.durationType;
     const durationDays =
       updates.durationType === "fixed_duration"
@@ -74,7 +79,7 @@ export function createConfigurationService({
     const id = await configRepo.upsertAccessRule(database, {
       id: crypto.randomUUID(),
       course_id: courseId,
-      access_type: updates.accessType,
+      access_type: accessType,
       duration_type: durationType,
       duration_days: durationDays,
       created_at: now,
@@ -83,7 +88,7 @@ export function createConfigurationService({
 
     return presentAccessRule({
       id,
-      access_type: updates.accessType,
+      access_type: accessType,
       duration_type: durationType,
       duration_days: durationDays,
     });
@@ -104,13 +109,20 @@ export function createConfigurationService({
 
     const now = new Date();
 
+    const existing = await configRepo.findPricingByCourseId(database, courseId);
+    const wasLinkedOnly = existing?.linked_only === true;
+    // A linked-only course is had only through another course's link: it
+    // has no price, whatever was sent. A client that does not send the flag
+    // keeps what is stored.
+    const linkedOnly = updates.linkedOnly ?? wasLinkedOnly;
+
     // A course has both prices: what is paid, and the marked price it is
     // struck through from (the same when there is no discount). Selling it
     // for zero is what makes it free, so the pricing type is derived here
     // and whatever the client sent for it is ignored.
-    const price = updates.price;
+    const price = linkedOnly ? 0 : updates.price;
     const currency = updates.currency ?? "INR";
-    const salePrice = updates.salePrice;
+    const salePrice = linkedOnly ? 0 : updates.salePrice;
     const pricingType: "free" | "paid" = salePrice === 0 ? "free" : "paid";
 
     // A badge needs a discount to announce.
@@ -125,16 +137,40 @@ export function createConfigurationService({
       );
     }
 
-    const id = await configRepo.upsertPricing(database, {
-      id: crypto.randomUUID(),
-      course_id: courseId,
-      pricing_type: pricingType,
-      price,
-      currency,
-      sale_price: salePrice,
-      ...(canStoreBadge ? { show_discount_badge: showDiscountBadge } : {}),
-      created_at: now,
-      updated_at: now,
+    const id = await database.transaction().execute(async (trx) => {
+      const pricingId = await configRepo.upsertPricing(trx, {
+        id: crypto.randomUUID(),
+        course_id: courseId,
+        pricing_type: pricingType,
+        price,
+        currency,
+        sale_price: salePrice,
+        ...(canStoreBadge ? { show_discount_badge: showDiscountBadge } : {}),
+        linked_only: linkedOnly,
+        created_at: now,
+        updated_at: now,
+      });
+
+      // Restricted is what keeps a course with no price from being taken
+      // by anyone: checkout refuses it and nobody can enrol themselves, so
+      // only grants (a link's among them) let a learner in. Turning
+      // linked-only off opens the course to everyone again.
+      if (linkedOnly || wasLinkedOnly) {
+        const rule = await configRepo.findAccessRuleByCourseId(trx, courseId);
+        const accessType = linkedOnly ? "restricted" : "everyone";
+        if (rule?.access_type !== accessType) {
+          await configRepo.upsertAccessRule(trx, {
+            id: crypto.randomUUID(),
+            course_id: courseId,
+            access_type: accessType,
+            duration_type: rule?.duration_type ?? "lifetime",
+            duration_days: rule?.duration_days ?? null,
+            created_at: now,
+            updated_at: now,
+          });
+        }
+      }
+      return pricingId;
     });
 
     return presentPricing({
@@ -144,6 +180,7 @@ export function createConfigurationService({
       currency,
       sale_price: salePrice,
       show_discount_badge: showDiscountBadge,
+      linked_only: linkedOnly,
     });
   }
 

@@ -100,6 +100,11 @@ export interface CoursePricingTable {
   sale_price: number;
   /** Show the discount as a badge on the course's cards. */
   show_discount_badge: Generated<boolean>;
+  /**
+   * Had only through another course's link: free, restricted, and left out
+   * of the catalogue (see 20261029120000).
+   */
+  linked_only: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -123,7 +128,13 @@ export interface CourseIncludeTable {
   id: string;
   course_id: string;
   text: string;
+  /** A quieter line under `text` (see 20261029130000). */
+  detail: string | null;
   icon: string | null;
+  /** The icon's colour, `#rrggbb`; its square is a tint of the same. */
+  color: string | null;
+  /** 'video': the words are written from the curriculum when shown. */
+  kind: Generated<"custom" | "video">;
   position: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;

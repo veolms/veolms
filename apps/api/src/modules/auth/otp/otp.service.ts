@@ -508,6 +508,47 @@ export function createOtpService({
       "Verification code is invalid, expired, or revoked due to excessive attempts.",
     );
 
+  /**
+   * The hash of a shared test account's fixed code (TEST_LOGIN_ACCOUNTS), or
+   * null for an ordinary address. Several testers use that one code, so one
+   * tester signing in or mistyping must not spend it for the others: a code
+   * stored with this hash is neither consumed nor charged wrong guesses. An
+   * account that was refused the fixed code (resolveTestLoginCode) holds an
+   * emailed one-time code instead, whose hash differs, and is unaffected.
+   */
+  function sharedTestCodeHash(
+    identifier: string,
+    identifierType: IdentifierType,
+  ): string | null {
+    if (identifierType !== "email") return null;
+    const fixedCode = config.TEST_LOGIN_ACCOUNTS.get(identifier);
+    return fixedCode ? hashToken(fixedCode) : null;
+  }
+
+  /**
+   * Charges a wrong guess to the outstanding code, which is retired after
+   * OTP_MAX_ATTEMPTS. A shared test account's fixed code is not charged.
+   */
+  async function recordWrongGuess(
+    identifier: string,
+    identifierType: IdentifierType,
+    purpose: OtpPurpose,
+    now: Date,
+  ): Promise<void> {
+    const outstanding = await otpRepository.findOutstandingOtp(database, {
+      identifier,
+      identifierType,
+      purpose,
+      now,
+    });
+    if (!outstanding) return;
+    if (
+      outstanding.code_hash === sharedTestCodeHash(identifier, identifierType)
+    )
+      return;
+    await otpRepository.recordOtpAttempt(database, outstanding.id, now);
+  }
+
   function failureStatusFor(purpose: OtpPurpose): number {
     return purpose === "phone_verification" || purpose === "email_verification"
       ? 400
@@ -539,17 +580,7 @@ export function createOtpService({
     });
 
     if (!match) {
-      const outstanding = await otpRepository.findOutstandingOtp(database, {
-        identifier,
-        identifierType,
-        purpose,
-        now,
-      });
-
-      if (outstanding) {
-        await otpRepository.recordOtpAttempt(database, outstanding.id, now);
-      }
-
+      await recordWrongGuess(identifier, identifierType, purpose, now);
       throw invalidCode(failureStatus);
     }
 
@@ -567,48 +598,53 @@ export function createOtpService({
     const failureStatus = failureStatusFor(purpose);
 
     const now = new Date();
+    const codeHash = hashToken(code);
+    const isSharedTestCode =
+      codeHash === sharedTestCodeHash(identifier, identifierType);
+
+    // A test account signs in with its fixed code whether or not a code is
+    // stored for it: a browser that remembers having asked for one does not
+    // ask again, so the stored one may have run out or been retired. The
+    // same checks as when the code is issued decide (resolveTestLoginCode),
+    // so an account refused the fixed code still needs its emailed one.
+    if (
+      isSharedTestCode &&
+      purpose === "login" &&
+      (await resolveTestLoginCode(identifier, identifierType)) === code
+    ) {
+      return;
+    }
 
     // Success path in one round trip. Any miss falls through to the two-step
     // path below, unchanged, so attempt accounting and failure responses
     // stay exactly as they were.
-    const consumedDirectly = await otpRepository.consumeMatchingActiveOtp(
-      database,
-      {
-        identifier,
-        identifierType,
-        purpose,
-        codeHash: hashToken(code),
-        now,
-      },
-    );
-    if (consumedDirectly) return;
+    if (!isSharedTestCode) {
+      const consumedDirectly = await otpRepository.consumeMatchingActiveOtp(
+        database,
+        { identifier, identifierType, purpose, codeHash, now },
+      );
+      if (consumedDirectly) return;
+    }
 
     const match = await otpRepository.findMatchingActiveOtp(database, {
       identifier,
       identifierType,
       purpose,
-      codeHash: hashToken(code),
+      codeHash,
       now,
     });
 
     if (!match) {
-      const outstanding = await otpRepository.findOutstandingOtp(database, {
-        identifier,
-        identifierType,
-        purpose,
-        now,
-      });
-
-      if (outstanding) {
-        await otpRepository.recordOtpAttempt(database, outstanding.id, now);
-      }
-
+      await recordWrongGuess(identifier, identifierType, purpose, now);
       throw invalidCode(failureStatus);
     }
 
     if (match.attempts >= OTP_MAX_ATTEMPTS) {
       throw invalidCode(failureStatus);
     }
+
+    // Left live for the other testers of the shared account.
+    if (isSharedTestCode) return;
 
     const consumed = await otpRepository.consumeOtp(database, match.id, now);
     if (!consumed) {
@@ -636,12 +672,31 @@ export function createOtpService({
     purpose: OtpPurpose,
     code: string,
   ): Promise<void> {
+    const codeHash = hashToken(code);
+    const now = new Date();
+
+    // A shared test account's code is checked and left live, as in
+    // verifyAndConsumeOtp.
+    if (codeHash === sharedTestCodeHash(identifier, identifierType)) {
+      const match = await otpRepository.findMatchingActiveOtp(transaction, {
+        identifier,
+        identifierType,
+        purpose,
+        codeHash,
+        now,
+      });
+      if (!match || match.attempts >= OTP_MAX_ATTEMPTS) {
+        throw invalidCode(failureStatusFor(purpose));
+      }
+      return;
+    }
+
     const consumed = await otpRepository.consumeMatchingActiveOtp(transaction, {
       identifier,
       identifierType,
       purpose,
-      codeHash: hashToken(code),
-      now: new Date(),
+      codeHash,
+      now,
     });
     if (!consumed) throw invalidCode(failureStatusFor(purpose));
   }

@@ -13,7 +13,7 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import type { UpdateCoursePricingRequest } from "@veolms/contracts";
 import type { CourseInclude } from "../../CourseOverviewPage";
 import {
-  formatDuration,
+  formatCourseDuration,
   resolveCourseDurationSeconds,
 } from "../../courseAdapter";
 import type { CurriculumSectionItem } from "../curriculumItems";
@@ -27,6 +27,7 @@ import {
   buildPricingPayload,
 } from "../pricingState";
 import type { ApiError } from "../../../lib/api-error";
+import type { IncludeDraftItem } from "../editorLocalTypes";
 
 export interface UsePricingHandlersArgs {
   currentCourseId: string | null;
@@ -114,6 +115,7 @@ export interface UsePricingHandlersArgs {
               currency: string;
               salePrice?: number | null | undefined;
               showDiscountBadge?: boolean | undefined;
+              linkedOnly?: boolean | undefined;
             }
           | null
           | undefined;
@@ -131,7 +133,17 @@ export interface UsePricingHandlersArgs {
             }
           | null
           | undefined;
-        includes?: { id: string; text: string; position: number }[] | undefined;
+        includes?:
+          | {
+              id: string;
+              text: string;
+              position: number;
+              detail?: string | null | undefined;
+              icon?: string | null | undefined;
+              color?: string | null | undefined;
+              kind?: "custom" | "video" | undefined;
+            }[]
+          | undefined;
       }
     | undefined;
   upsertPricingMutation: UseMutationResult<
@@ -142,6 +154,7 @@ export interface UsePricingHandlersArgs {
       currency: string;
       salePrice?: number | null | undefined;
       showDiscountBadge?: boolean | undefined;
+      linkedOnly?: boolean | undefined;
     },
     ApiError,
     { courseId: string; payload: UpdateCoursePricingRequest },
@@ -169,11 +182,7 @@ export interface UsePricingHandlersArgs {
   markPricingControlSaved: (controlKey: PricingControlKey) => void;
   markPricingControlFailed: (controlKey: PricingControlKey) => void;
   setToastMessage: Dispatch<SetStateAction<string | null>>;
-  manualIncludesDraft: {
-    id: string;
-    text: string;
-    isPendingCreation?: boolean;
-  }[];
+  manualIncludesDraft: IncludeDraftItem[];
 }
 
 export interface UsePricingHandlersResult {
@@ -186,6 +195,7 @@ export interface UsePricingHandlersResult {
   flushPricingPersistence: () => Promise<void>;
   handleSellingPriceChange: (val: string) => void;
   handleShowDiscountBadgeChange: (checked: boolean) => void;
+  handleLinkedOnlyChange: (checked: boolean) => void;
   handleOriginalPriceChange: (val: string) => void;
   handleCurrencyChange: (val: string) => Promise<void>;
 }
@@ -228,7 +238,7 @@ export function usePricingHandlers({
     editorData?.course?.totalDurationSeconds,
     editorData?.settings?.estimatedDuration,
   );
-  const computedDuration = formatDuration(courseDurationSeconds);
+  const computedDuration = formatCourseDuration(courseDurationSeconds);
 
   const previewInclusions: string[] = useMemo(() => {
     return manualIncludesDraft
@@ -355,12 +365,14 @@ export function usePricingHandlers({
               sellingPrice: previousSnapshot.sellingPrice,
               originalPrice: previousSnapshot.originalPrice,
               showDiscountBadge: previousSnapshot.showDiscountBadge,
+              linkedOnly: previousSnapshot.linkedOnly,
             };
             setPricingDraft((prev) => ({
               ...prev,
               sellingPrice: previousSnapshot.sellingPrice,
               originalPrice: previousSnapshot.originalPrice,
               showDiscountBadge: previousSnapshot.showDiscountBadge,
+              linkedOnly: previousSnapshot.linkedOnly,
             }));
             const field = lastEditedPricingFieldRef.current;
             if (field) {
@@ -472,6 +484,24 @@ export function usePricingHandlers({
     void persistPricingDetails();
   };
 
+  // Linked-only is one click too. Turning it off saves nothing until a
+  // price is entered: the course stays linked-only until then.
+  const handleLinkedOnlyChange = (checked: boolean) => {
+    lastEditedPricingFieldRef.current = null;
+    clearPricingControlStatus("pricingDetails");
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      linkedOnly: checked,
+    };
+    setPricingDraft((prev) => ({ ...prev, linkedOnly: checked }));
+    if (pricingValidationError) setPricingValidationError(null);
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+      pricingDebounceTimerRef.current = null;
+    }
+    void persistPricingDetails();
+  };
+
   const handleOriginalPriceChange = (val: string) => {
     lastEditedPricingFieldRef.current = "originalPrice";
     clearPricingControlStatus("originalPrice");
@@ -539,6 +569,7 @@ export function usePricingHandlers({
     flushPricingPersistence,
     handleSellingPriceChange,
     handleShowDiscountBadgeChange,
+    handleLinkedOnlyChange,
     handleOriginalPriceChange,
     handleCurrencyChange,
   };

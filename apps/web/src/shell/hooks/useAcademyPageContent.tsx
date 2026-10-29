@@ -32,6 +32,7 @@ import { COURSE_OVERVIEW_CHUNK_URL_PLACEHOLDER } from "../../routing/routeChunkP
 import { ChunkStylesheets } from "../../routing/ChunkStylesheets";
 import { isStaffRole, getWorkspaceRoleStorageKey } from "../workspaceRole";
 import { useAcademyRouteGuardState } from "../../routing/RouteGuards";
+import { NAVIGATION_PERMISSIONS } from "../navigationPermissions";
 import { SIDEBAR_DEFAULT_WIDTH } from "../sidebarPreferences";
 import type { ThemeRevealOrigin } from "../themeViewTransition";
 import type {
@@ -319,8 +320,15 @@ export function useAcademyPageContent({
     "platform.branding.update",
     "platform.homepage.update",
   );
-  // The academy-wide analytics view, rather than "all my courses".
-  const seesAcademyAnalytics = holds("analytics.revenue.read");
+  // The academy-wide analytics view, rather than "all my courses". It opens
+  // every tab, so it is for whoever holds every tab's key: a role with only
+  // some (the Revenue tab alone, say) gets the tabs its keys open, and the
+  // API still answers it for the whole academy.
+  const seesAcademyAnalytics =
+    isAdmin ||
+    (NAVIGATION_PERMISSIONS["/analytics"] ?? []).every(
+      (key) => permissions?.includes(key) ?? false,
+    );
   const renderPageContent = ({
     surfaceCourseSlug = courseSlug,
     surfaceDiscussionTab = discussionTab,

@@ -108,7 +108,13 @@ export function createLessonDiscussionAccess(options?: {
         return { canReadPrivateState: true, canModerate: true };
       }
 
-      if (actor && (await access.hasActiveAccess(db, actor.userId, courseId))) {
+      // "View discussions" for every course reads a lesson's discussion as a
+      // member of the course does; hidden posts stay with moderators.
+      if (
+        actor &&
+        ((await hasAcademyPermission(db, actor.userId, "discussion.read")) ||
+          (await access.hasActiveAccess(db, actor.userId, courseId)))
+      ) {
         return { canReadPrivateState: true, canModerate: false };
       }
 

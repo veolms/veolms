@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
 import type {
   DashboardRevenueOverview,
-  DashboardSummaryResponse,
+  DashboardLearningActivity,
 } from "@veolms/contracts";
 import { formatDashboardChartCurrency } from "./dashboardFormat";
 import {
@@ -29,12 +29,12 @@ interface DataCanvasProps {
   revenueTrend?: DashboardRevenueOverview["trend"];
   revenueCurrency?: string;
   revenueStatus?: "loading" | "empty" | "error";
-  activityBuckets?: DashboardSummaryResponse["learningActivity"]["enrollmentActivity"]["buckets"];
+  activityBuckets?: DashboardLearningActivity["enrollmentActivity"]["buckets"];
   activityStatus?: "loading" | "empty" | "error";
 }
 
 const EMPTY_REVENUE_TREND: DashboardRevenueOverview["trend"] = [];
-const EMPTY_ACTIVITY_BUCKETS: DashboardSummaryResponse["learningActivity"]["enrollmentActivity"]["buckets"] =
+const EMPTY_ACTIVITY_BUCKETS: DashboardLearningActivity["enrollmentActivity"]["buckets"] =
   [];
 
 export function DataCanvas({

@@ -105,6 +105,8 @@ export async function upsertPricing(
     sale_price: number;
     /** Left out while the column does not exist yet (migration pending). */
     show_discount_badge?: boolean;
+    /** Left out to keep what is stored. */
+    linked_only?: boolean;
     created_at: Date;
     updated_at: Date;
   },
@@ -121,6 +123,9 @@ export async function upsertPricing(
         ...(values.show_discount_badge === undefined
           ? {}
           : { show_discount_badge: values.show_discount_badge }),
+        ...(values.linked_only === undefined
+          ? {}
+          : { linked_only: values.linked_only }),
         updated_at: values.updated_at,
       }),
     )

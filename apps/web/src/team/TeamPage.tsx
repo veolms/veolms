@@ -53,7 +53,13 @@ function AccessDenied({ onNavigatePage }: { onNavigatePage?: NavigateTo }) {
           Your roles do not include viewing the team.
         </p>
         <div className="mt-4">
-          <Button onClick={() => onNavigatePage?.("/")}>Return home</Button>
+          <Button
+            elevation="flat"
+            motion="static"
+            onClick={() => onNavigatePage?.("/")}
+          >
+            Return home
+          </Button>
         </div>
       </ElevatedCard>
     </div>
@@ -135,7 +141,12 @@ function TeamWorkspace({ tab, onNavigatePage, setNotice }: TeamPageProps) {
             copyClassName="settings-page__heading-copy"
           />
           {action ? (
-            <Button className="shrink-0" onClick={() => setPanel(action.panel)}>
+            <Button
+              elevation="flat"
+              motion="static"
+              className="shrink-0"
+              onClick={() => setPanel(action.panel)}
+            >
               <action.icon size={17} weight="bold" />
               {action.label}
             </Button>

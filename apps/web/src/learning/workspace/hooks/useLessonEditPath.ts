@@ -2,18 +2,15 @@ import { getCourseEditorPath } from "../../../courses/courseEditorRouting";
 import { CURRICULUM_PERMISSIONS } from "../../../courses/course-editor/curriculumPermissions";
 import { isLearnerView } from "../../../lib/learner-view";
 import { useCapabilities } from "../../../services/authorization/authorization.queries";
-import {
-  getUserRoles,
-  hasAdminRole,
-  isStaffRole,
-} from "../../../shell/workspaceRole";
+import { getUserRoles, isStaffRole } from "../../../shell/workspaceRole";
 
 /**
  * Where the lesson page's "Edit" goes: the course editor's curriculum with
  * this lesson open in it. Only for someone who may change the curriculum or
- * its lessons (an admin, or a team member whose role covers this course, as
- * the course cards decide it), and never in Student view, which shows the page as a
- * learner sees it. Null when there is no such link.
+ * its lessons (a curriculum permission that covers this course, as the
+ * course cards decide it; an admin holds them all), and never in Student
+ * view, which shows the page as a learner sees it. Null when there is no
+ * such link.
  */
 export function useLessonEditPath({
   user,
@@ -32,11 +29,9 @@ export function useLessonEditPath({
     enabled: isStaffRole(roles) && !learnerView,
   });
   if (learnerView || !course?.id || !sectionId || !lessonId) return null;
-  const mayEdit =
-    hasAdminRole(roles) ||
-    CURRICULUM_PERMISSIONS.some((permission) =>
-      capabilities.canOnCourse(permission, course),
-    );
+  const mayEdit = CURRICULUM_PERMISSIONS.some((permission) =>
+    capabilities.canOnCourse(permission, course),
+  );
   if (!mayEdit) return null;
   return getCourseEditorPath({
     mode: "edit",

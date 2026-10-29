@@ -19,6 +19,7 @@ import {
   useSearchParams,
 } from "react-router";
 import { useDebounce } from "../hooks";
+import { SearchHighlightProvider } from "../lib/searchHighlight";
 import type { AcademyStaticPageData } from "../routes/academyStaticPageData";
 import type { LessonPageSeed } from "./staticLessonPage";
 import { ThreadSurface } from "./discussion/ThreadSurface";
@@ -108,6 +109,7 @@ import {
   useSessionStorageState,
 } from "./useSessionStorageState";
 import { useCurrentUser } from "../services/auth";
+import { useCapabilities } from "../services/authorization";
 import {
   useCreateLessonThread,
   useCreateNote,
@@ -183,6 +185,7 @@ function DiscussionInner({
   persistenceKey,
   courseSlug,
   courseId,
+  courseCreatorId,
   lessonId,
   mobileLessonHeader,
   mobileBottomNavigation = false,
@@ -477,19 +480,12 @@ function DiscussionInner({
   const deleteThreadMutation = useDeleteThread(courseId, lessonId);
   const createReportMutation = useCreateReport();
 
-  const currentUserRole = useMemo(() => {
-    if (!currentUser?.roles) return "Student";
-    const lowerRoles = currentUser.roles.map((r) => r.toLowerCase());
-    if (lowerRoles.includes("admin")) return "Admin";
-    if (
-      lowerRoles.includes("instructor") ||
-      lowerRoles.includes("creator") ||
-      lowerRoles.includes("teacher")
-    ) {
-      return "Instructor";
-    }
-    return "Student";
-  }, [currentUser?.roles]);
+  // Who may lock any thread here and accept any answer, as the API decides
+  // it: the course's creator, or a role that moderates every course.
+  const { canOnCourse } = useCapabilities({ enabled: Boolean(currentUser) });
+  const canModerate =
+    Boolean(currentUser?.id && courseCreatorId === currentUser.id) ||
+    canOnCourse("discussion.moderate", null);
 
   const legacyNotes = useMemo<LearningNoteCacheItem[]>(() => {
     const legacyNotesData = notesData as unknown as
@@ -2480,157 +2476,166 @@ function DiscussionInner({
         type="error"
         onDismiss={() => setCreationToast(null)}
       />
-      <ThreadSurface
-        scrollMemoryKey={persistenceKey}
-        lessonDescription={lessonDescription}
-        isLessonDescriptionLoading={isLessonDescriptionLoading}
-        mobileLessonHeader={mobileLessonHeader}
-        draft={activeDraft}
-        draftRestoreToken={draftRestoreToken}
-        entryKind={activeEntryKind}
-        visibility={activeVisibility}
-        editingEntryId={editingEntry?.id ?? null}
-        notice={notice}
-        entryFilter={entryFilter}
-        feedView={feedView}
-        canFilterMine={Boolean(currentUser)}
-        search={discussionSearch}
-        isSearchActive={Boolean(feedSearch)}
-        isSearchPending={unifiedDiscussions.isPlaceholderData}
-        onSearchChange={setDiscussionSearch}
-        entries={displayEntries}
-        noteDeepLinkTargetId={noteDeepLinkReadyForFocus ? noteDeepLinkId : null}
-        onNoteDeepLinkHandled={consumeNoteDeepLink}
-        linkedThreadId={spotlightEntry ? spotlightThreadId : null}
-        highlightedThreadId={highlightedThreadId}
-        onThreadHighlightShown={clearHighlightedThread}
-        discussionCount={discussionCount}
-        draftIsTooLong={draftIsTooLong}
-        draftAttachmentCount={draftAttachmentCount}
-        canSubmitDraft={canSubmitDraft}
-        attachments={composerAttachments}
-        onAttachmentsChange={setComposerAttachments}
-        isNotesLoading={
-          isNotesLoading ||
-          Boolean(
-            isNoteDeepLinkPending &&
-            isValidNoteDeepLink &&
-            isDirectNoteLoading &&
-            !noteDeepLinkTargetEntry,
-          )
-        }
-        isNotesError={isNotesError}
-        onRetryNotes={() => refetchNotes()}
-        onLoadMore={loadMoreDiscussion}
-        onRetryNextPage={loadMoreDiscussion}
-        hasNextPage={isNoteDeepLinkPending ? false : hasNextDiscussionPage}
-        isFetchingNextPage={isFetchingNextDiscussionPage}
-        isNextPageError={
-          isNoteDeepLinkPending
-            ? false
-            : unifiedDiscussions.isFetchNextPageError
-        }
-        isThreadsLoading={isThreadsLoading}
-        isThreadDeepLinkPending={isThreadDeepLinkPending}
-        isAllInitialLoading={isAllInitialLoading}
-        isThreadsError={isThreadsError}
-        onRetryThreads={() => refetchThreads()}
-        mobileBottomNavigation={mobileBottomNavigation}
-        mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-        capabilities={capabilities}
-        isInteractionCapabilitiesLoading={isInteractionCapabilitiesLoading}
-        isAllDisabled={isAllDisabled}
-        availableFilters={availableFilters}
-        enabledKinds={enabledKinds}
-        promptText={promptText}
-        authorAvatar={authorAvatar}
-        viewerKnown={Boolean(currentUser)}
-        lessonContentAccess={lessonContentAccess}
-        lessonContentAccessReason={lessonContentAccessReason}
-        canParticipate={canParticipate}
-        participationState={participationState}
-        participationActionLabel={participationActionLabel}
-        onParticipationAction={onParticipationAction}
-        loginToParticipate={loginToParticipate}
-        onDraftChange={(value) => {
-          if (editingEntry) {
-            setEditingEntry((current) =>
-              current ? { ...current, draft: value } : current,
-            );
-          } else {
-            setDraft(value);
+      <SearchHighlightProvider value={feedSearch}>
+        <ThreadSurface
+          scrollMemoryKey={persistenceKey}
+          lessonDescription={lessonDescription}
+          isLessonDescriptionLoading={isLessonDescriptionLoading}
+          mobileLessonHeader={mobileLessonHeader}
+          draft={activeDraft}
+          draftRestoreToken={draftRestoreToken}
+          entryKind={activeEntryKind}
+          visibility={activeVisibility}
+          editingEntryId={editingEntry?.id ?? null}
+          notice={notice}
+          entryFilter={entryFilter}
+          feedView={feedView}
+          canFilterMine={Boolean(currentUser)}
+          search={discussionSearch}
+          isSearchActive={Boolean(feedSearch)}
+          isSearchPending={unifiedDiscussions.isPlaceholderData}
+          onSearchChange={setDiscussionSearch}
+          entries={displayEntries}
+          noteDeepLinkTargetId={
+            noteDeepLinkReadyForFocus ? noteDeepLinkId : null
           }
-          setNotice(
-            countCharacters(value.plainText) >
-              DISCUSSION_COMMENT_CHARACTER_LIMIT
-              ? COMMENT_LENGTH_NOTICE
-              : "",
-          );
-        }}
-        onEntryKindChange={(value) => {
-          if (editingEntry) return;
-          setEntryKind(value);
-          setVisibility((current) => getAllowedVisibility(value, current));
-        }}
-        onVisibilityChange={(value) => {
-          const allowedVisibility = getAllowedVisibility(
-            activeEntryKind,
-            value,
-          );
-          if (editingEntry) {
-            setEditingEntry((current) =>
-              current ? { ...current, visibility: allowedVisibility } : current,
-            );
-          } else {
-            setVisibility(allowedVisibility);
+          onNoteDeepLinkHandled={consumeNoteDeepLink}
+          linkedThreadId={spotlightEntry ? spotlightThreadId : null}
+          highlightedThreadId={highlightedThreadId}
+          onThreadHighlightShown={clearHighlightedThread}
+          discussionCount={discussionCount}
+          draftIsTooLong={draftIsTooLong}
+          draftAttachmentCount={draftAttachmentCount}
+          canSubmitDraft={canSubmitDraft}
+          attachments={composerAttachments}
+          onAttachmentsChange={setComposerAttachments}
+          isNotesLoading={
+            isNotesLoading ||
+            Boolean(
+              isNoteDeepLinkPending &&
+              isValidNoteDeepLink &&
+              isDirectNoteLoading &&
+              !noteDeepLinkTargetEntry,
+            )
           }
-        }}
-        onSubmit={submitEntry}
-        onCancelEdit={() => setEditingEntry(null)}
-        onEntryFilterChange={setEntryFilter}
-        onFeedViewChange={setFeedView}
-        onLike={onLike}
-        onEdit={beginEditingEntry}
-        onDelete={deleteEntry}
-        onReport={handleOpenReport}
-        onOpenThread={(id, focusComposer = false) => {
-          const entry = combinedEntries.find(
-            (candidate) => getClientEntityId(candidate) === String(id),
-          );
-          if (entry?.entryKind === "note") return;
-          if (!entry) return;
-          const clientId = getClientEntityId(entry);
-          const serverId = getServerEntityId(entry);
-          expectThreadAddress(serverId);
-          setOpenThread({
-            id: clientId,
-            focusComposer: canParticipate && focusComposer,
-          });
-          setSearchParams(
-            (prev) => {
-              const next = new URLSearchParams(prev);
-              if (serverId) next.set("thread", serverId);
-              else next.delete("thread");
-              return next;
-            },
-            { replace: true, state: withKeepScroll(window.history.state?.usr) },
-          );
-        }}
-        isBackendMode={isBackendMode}
-        currentUserId={currentUser?.id}
-        userRole={currentUserRole}
-        onToggleAcceptReply={handleToggleAcceptReply}
-        onToggleLockThread={handleToggleLockThread}
-        onToggleBookmark={handleToggleBookmark}
-        onToggleFollow={handleToggleFollow}
-        onSeekToTimestamp={onSeekToTimestamp}
-        onCopyTextNotice={setNotice}
-        onReplyEditFailure={() =>
-          setNotice("Failed to update reply. Please try again.")
-        }
-        onDeleteFailure={setNotice}
-        courseId={courseId}
-      />
+          isNotesError={isNotesError}
+          onRetryNotes={() => refetchNotes()}
+          onLoadMore={loadMoreDiscussion}
+          onRetryNextPage={loadMoreDiscussion}
+          hasNextPage={isNoteDeepLinkPending ? false : hasNextDiscussionPage}
+          isFetchingNextPage={isFetchingNextDiscussionPage}
+          isNextPageError={
+            isNoteDeepLinkPending
+              ? false
+              : unifiedDiscussions.isFetchNextPageError
+          }
+          isThreadsLoading={isThreadsLoading}
+          isThreadDeepLinkPending={isThreadDeepLinkPending}
+          isAllInitialLoading={isAllInitialLoading}
+          isThreadsError={isThreadsError}
+          onRetryThreads={() => refetchThreads()}
+          mobileBottomNavigation={mobileBottomNavigation}
+          mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+          capabilities={capabilities}
+          isInteractionCapabilitiesLoading={isInteractionCapabilitiesLoading}
+          isAllDisabled={isAllDisabled}
+          availableFilters={availableFilters}
+          enabledKinds={enabledKinds}
+          promptText={promptText}
+          authorAvatar={authorAvatar}
+          viewerKnown={Boolean(currentUser)}
+          lessonContentAccess={lessonContentAccess}
+          lessonContentAccessReason={lessonContentAccessReason}
+          canParticipate={canParticipate}
+          participationState={participationState}
+          participationActionLabel={participationActionLabel}
+          onParticipationAction={onParticipationAction}
+          loginToParticipate={loginToParticipate}
+          onDraftChange={(value) => {
+            if (editingEntry) {
+              setEditingEntry((current) =>
+                current ? { ...current, draft: value } : current,
+              );
+            } else {
+              setDraft(value);
+            }
+            setNotice(
+              countCharacters(value.plainText) >
+                DISCUSSION_COMMENT_CHARACTER_LIMIT
+                ? COMMENT_LENGTH_NOTICE
+                : "",
+            );
+          }}
+          onEntryKindChange={(value) => {
+            if (editingEntry) return;
+            setEntryKind(value);
+            setVisibility((current) => getAllowedVisibility(value, current));
+          }}
+          onVisibilityChange={(value) => {
+            const allowedVisibility = getAllowedVisibility(
+              activeEntryKind,
+              value,
+            );
+            if (editingEntry) {
+              setEditingEntry((current) =>
+                current
+                  ? { ...current, visibility: allowedVisibility }
+                  : current,
+              );
+            } else {
+              setVisibility(allowedVisibility);
+            }
+          }}
+          onSubmit={submitEntry}
+          onCancelEdit={() => setEditingEntry(null)}
+          onEntryFilterChange={setEntryFilter}
+          onFeedViewChange={setFeedView}
+          onLike={onLike}
+          onEdit={beginEditingEntry}
+          onDelete={deleteEntry}
+          onReport={handleOpenReport}
+          onOpenThread={(id, focusComposer = false) => {
+            const entry = combinedEntries.find(
+              (candidate) => getClientEntityId(candidate) === String(id),
+            );
+            if (entry?.entryKind === "note") return;
+            if (!entry) return;
+            const clientId = getClientEntityId(entry);
+            const serverId = getServerEntityId(entry);
+            expectThreadAddress(serverId);
+            setOpenThread({
+              id: clientId,
+              focusComposer: canParticipate && focusComposer,
+            });
+            setSearchParams(
+              (prev) => {
+                const next = new URLSearchParams(prev);
+                if (serverId) next.set("thread", serverId);
+                else next.delete("thread");
+                return next;
+              },
+              {
+                replace: true,
+                state: withKeepScroll(window.history.state?.usr),
+              },
+            );
+          }}
+          isBackendMode={isBackendMode}
+          currentUserId={currentUser?.id}
+          canModerate={canModerate}
+          onToggleAcceptReply={handleToggleAcceptReply}
+          onToggleLockThread={handleToggleLockThread}
+          onToggleBookmark={handleToggleBookmark}
+          onToggleFollow={handleToggleFollow}
+          onSeekToTimestamp={onSeekToTimestamp}
+          onCopyTextNotice={setNotice}
+          onReplyEditFailure={() =>
+            setNotice("Failed to update reply. Please try again.")
+          }
+          onDeleteFailure={setNotice}
+          courseId={courseId}
+        />
+      </SearchHighlightProvider>
       {threadPanelMounted ? (
         <Suspense fallback={null}>
           <DiscussionThreadPanel
@@ -2640,7 +2645,7 @@ function DiscussionInner({
             entries={threadEntries}
             isBackendMode={isBackendMode}
             currentUserId={currentUser?.id}
-            userRole={currentUserRole}
+            canModerate={canModerate}
             currentUser={{ name: authorName, avatar: authorAvatar }}
             canParticipate={canParticipate}
             participationState={participationState}

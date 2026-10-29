@@ -2,17 +2,17 @@ import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
-import {
-  permissionCatalogue,
-  permissions as allPermissions,
-  type TeamRole,
-} from "@veolms/contracts";
+import { permissionCatalogue, type TeamRole } from "@veolms/contracts";
 import { useState } from "react";
 import { Button } from "../../components/Button";
 import { ElevatedCard } from "../../components/ElevatedCard";
 import { useTeamRoles } from "../../services/team";
 import type { ToastMessage } from "../../ToastNotification";
-import { roleLabel } from "../teamFormat";
+import {
+  countOfferedPermissions,
+  OFFERED_PERMISSION_COUNT,
+  roleLabel,
+} from "../teamFormat";
 import { chipClassName, EmptyState, LoadError } from "../TeamBits";
 import { useTeamAccess } from "../useTeamAccess";
 import { RoleEditorPanel, type RoleEditorTarget } from "./RoleEditorPanel";
@@ -21,7 +21,8 @@ const line = "border-(--border)";
 
 /** Broadest first, as the list in the side column reads. */
 const byReach = (a: TeamRole, b: TeamRole) =>
-  b.permissions.length - a.permissions.length || a.name.localeCompare(b.name);
+  countOfferedPermissions(b.permissions) -
+    countOfferedPermissions(a.permissions) || a.name.localeCompare(b.name);
 
 function RoleListItem({
   role,
@@ -44,7 +45,7 @@ function RoleListItem({
         <span
           className={`${chipClassName} shrink-0 tabular-nums ${active ? "text-(--accent)!" : "text-(--muted)!"}`}
         >
-          {role.permissions.length}
+          {countOfferedPermissions(role.permissions)}
         </span>
       </button>
     </li>
@@ -128,7 +129,7 @@ export function RolesTab({
   if (!selected) return <EmptyState icon={ShieldCheck} title="No roles yet" />;
 
   const editable = canEditRole(selected);
-  const total = allPermissions.length;
+  const total = OFFERED_PERMISSION_COUNT;
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
@@ -194,6 +195,8 @@ export function RolesTab({
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
+              elevation="flat"
+              motion="static"
               variant={editable ? "primary" : "quiet"}
               onClick={() => setEditor({ mode: "edit", role: selected })}
             >
@@ -208,6 +211,8 @@ export function RolesTab({
             </Button>
             {canCreate ? (
               <Button
+                elevation="flat"
+                motion="static"
                 variant="quiet"
                 onClick={() => setEditor({ mode: "create", from: selected })}
               >
@@ -221,7 +226,7 @@ export function RolesTab({
         <div className="mt-5 mb-6 flex flex-wrap gap-8">
           <span className="text-sm text-(--muted)">
             <strong className="text-2xl font-bold text-(--text)">
-              {selected.permissions.length}
+              {countOfferedPermissions(selected.permissions)}
             </strong>{" "}
             of {total} permissions
           </span>

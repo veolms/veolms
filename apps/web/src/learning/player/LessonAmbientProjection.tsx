@@ -73,6 +73,9 @@ export function LessonAmbientProjection({
     setPortalHost(shell?.closest<HTMLElement>(".courses-app") ?? null);
   }, [getShell]);
 
+  // Entering or leaving full screen swaps the shell canvas for a new, blank
+  // one (see below), so it is painted again then: otherwise only the loop
+  // that runs while the video plays would, and a paused video kept no glow.
   useEffect(() => {
     if (!enabled) return undefined;
     const video = getShell()?.querySelector<HTMLVideoElement>(
@@ -105,7 +108,7 @@ export function LessonAmbientProjection({
       video?.removeEventListener("loadeddata", paintFrame);
       video?.removeEventListener("seeked", paintFrame);
     };
-  }, [enabled, getShell, paintFrame, playing, shellHost]);
+  }, [enabled, fullscreen, getShell, paintFrame, playing, shellHost]);
 
   const visible = enabled && !error;
   return (

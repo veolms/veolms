@@ -49,6 +49,12 @@ const DISMISS_DURATION = 200;
 type MiniPlayerDismissDirection = "down" | "left" | "right" | "up";
 /** Dragged this much out of the window (by area) and let go, it closes. */
 const DISMISS_OUTSIDE_FRACTION = 0.5;
+
+/** Told how much of the player is out of the window, 0 to 1, as it moves. */
+export type OutsideFractionListener = (fraction: number) => void;
+export type SubscribeOutsideFraction = (
+  listener: OutsideFractionListener,
+) => () => void;
 /** How long it takes to come to rest once let go: an unhurried glide. */
 const SETTLE_DURATION = 560;
 
@@ -396,8 +402,26 @@ export function useLearningMiniPlayerGestures(
   const [dismissDistance, setDismissDistance] = useState(0);
   const [dismissShift, setDismissShift] = useState(0);
   // How much of the player is dragged out of the window, 0 to 1: its
-  // sound drops by as much (see useMiniPlayerSwipeVolume).
-  const [outsideFraction, setOutsideFraction] = useState(0);
+  // sound drops by as much (see useMiniPlayerSwipeVolume). Told to those
+  // listening rather than kept as state: as state it drew the whole player
+  // again with every move of the finger, which a phone could not keep up
+  // with (the drag stuttered and the video stalled).
+  const outsideFractionRef = useRef(0);
+  const outsideListenersRef = useRef(new Set<OutsideFractionListener>());
+  const setOutsideFraction = useCallback((fraction: number) => {
+    if (fraction === outsideFractionRef.current) return;
+    outsideFractionRef.current = fraction;
+    for (const listener of outsideListenersRef.current) listener(fraction);
+  }, []);
+  const subscribeOutsideFraction = useCallback(
+    (listener: OutsideFractionListener) => {
+      outsideListenersRef.current.add(listener);
+      return () => {
+        outsideListenersRef.current.delete(listener);
+      };
+    },
+    [],
+  );
   const layoutRef = useRef<MiniPlayerLayout | null>(null);
   const restingPlaceRef = useRef<MiniPlayerRestingPlace | null>(null);
   const modeRef = useRef<MiniPlayerGestureMode>("idle");
@@ -661,7 +685,7 @@ export function useLearningMiniPlayerGestures(
       window.clearTimeout(settleTimerRef.current);
       settleTimerRef.current = null;
     }
-  }, [enabled, measureLayout]);
+  }, [enabled, measureLayout, setOutsideFraction]);
 
   // On a phone the mini player rests on the bottom menu. When the menu
   // hides or shows it is settled again, which carries it down or up to its
@@ -1114,6 +1138,7 @@ export function useLearningMiniPlayerGestures(
     [
       enabled,
       isExpanded,
+      setOutsideFraction,
       showLiveLayout,
       startPinchGesture,
       startSingleGesture,
@@ -1305,6 +1330,7 @@ export function useLearningMiniPlayerGestures(
       isExpanded,
       rememberRestingPlace,
       scheduleClickRelease,
+      setOutsideFraction,
       settleLayout,
       showLiveLayout,
       startSingleGesture,
@@ -1359,7 +1385,7 @@ export function useLearningMiniPlayerGestures(
 
   return {
     mode,
-    outsideFraction,
+    subscribeOutsideFraction,
     style,
     gestureProps: {
       onClickCapture: handleClickCapture,

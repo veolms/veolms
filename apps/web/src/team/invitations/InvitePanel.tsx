@@ -268,7 +268,9 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
         {results ? (
           <>
             <span />
-            <Button onClick={onClose}>Done</Button>
+            <Button elevation="flat" motion="static" onClick={onClose}>
+              Done
+            </Button>
           </>
         ) : (
           <>
@@ -301,7 +303,12 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
               >
                 Cancel
               </button>
-              <Button disabled={!canSend} onClick={() => void submit()}>
+              <Button
+                elevation="flat"
+                motion="static"
+                disabled={!canSend}
+                onClick={() => void submit()}
+              >
                 {create.isPending ? "Sending…" : sendLabel(kind, valid.length)}
               </Button>
             </div>

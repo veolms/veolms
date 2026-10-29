@@ -37,7 +37,7 @@ const guestHomeCardFacts = ["sections", "lectures"] as const;
 
 /**
  * One row of cards, sized by the room the section actually has (the sidebar
- * changes it): a phone stacks two cards, then the row holds two or three
+ * changes it): a phone stacks three cards, then the row holds two or three
  * across. Laptop screens stay at three; only a large monitor (a section
  * 100rem or wider) shows four. Cards that do not fit are left out rather
  * than wrapped, so a section never grows a second row.
@@ -45,7 +45,7 @@ const guestHomeCardFacts = ["sections", "lectures"] as const;
 const courseRowClasses = [
   "grid grid-cols-1 gap-4",
   guestHomeCourseRowBleed,
-  "@max-lg/courses:[&>*:nth-child(n+3)]:hidden",
+  "@max-lg/courses:[&>*:nth-child(n+4)]:hidden",
   "@lg/courses:grid-cols-2 @lg/courses:@max-2xl/courses:[&>*:nth-child(n+3)]:hidden",
   "@2xl/courses:grid-cols-3 @2xl/courses:gap-5 @2xl/courses:@max-[100rem]/courses:[&>*:nth-child(n+4)]:hidden",
   "@[100rem]/courses:grid-cols-4",

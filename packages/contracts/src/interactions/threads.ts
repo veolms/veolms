@@ -103,6 +103,25 @@ export type DiscussionAttachmentSummary = z.infer<
   typeof discussionAttachmentSummarySchema
 >;
 
+/**
+ * The creator's heart on a comment or question: who gave it, shown as their
+ * avatar with a small heart, like a creator's heart on a video comment.
+ */
+export const creatorHeartSchema = z.object({
+  displayName: z.string(),
+  avatarUrl: z.string().nullable(),
+});
+export type CreatorHeart = z.infer<typeof creatorHeartSchema>;
+
+/**
+ * Marks staff put on a thread. `pinnedAt` is set while it is pinned to the
+ * top of its lesson's discussion.
+ */
+const threadMarksShape = {
+  pinnedAt: z.string().nullable().optional(),
+  creatorHeart: creatorHeartSchema.nullable().optional(),
+};
+
 export const learningThreadSchema = z.object({
   id: z.uuid(),
   courseId: z.uuid(),
@@ -123,6 +142,7 @@ export const learningThreadSchema = z.object({
   isBookmarked: z.boolean().optional(),
   isFollowing: z.boolean().optional(),
   isOwn: z.boolean().optional(),
+  ...threadMarksShape,
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -282,6 +302,8 @@ export const workspaceDiscussionItemSchema = z.object({
   /** Whether the viewer has liked this thread, reply or note. */
   isLiked: z.boolean().optional(),
   mentionedAt: z.string().optional(),
+  /** Threads only. */
+  ...threadMarksShape,
   attachmentSummary: discussionAttachmentSummarySchema,
   createdAt: z.string(),
   updatedAt: z.string(),

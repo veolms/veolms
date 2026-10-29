@@ -34,9 +34,12 @@ const accessRoutes: RoutePlugin = async (app, options) => {
         body: createManualAccessGrantRequestSchema,
         response: {
           201: jsonResponse("Access grant created", accessGrantSchema),
-          400: errorResponse("Invalid request body"),
+          400: errorResponse(
+            "Invalid request body, a past end date, or a course that is not published",
+          ),
           401: errorResponse("Unauthorized"),
           403: errorResponse("Forbidden - Admin required"),
+          404: errorResponse("Learner or course not found"),
         },
       },
     },

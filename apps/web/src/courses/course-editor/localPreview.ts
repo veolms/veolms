@@ -1,6 +1,7 @@
 import type { CourseEditorDataResponse } from "@veolms/contracts";
 import type { AccessType, AccessRulesFormState } from "./accessRulesState";
 import { type PricingFormState, buildPricingPayload } from "./pricingState";
+import type { IncludeDraftItem } from "./editorLocalTypes";
 
 export interface BuildLocalPreviewParams {
   currentCourseId: string | null;
@@ -38,7 +39,7 @@ export interface BuildLocalPreviewParams {
   pricingDraft: PricingFormState;
   accessRulesDraft: AccessRulesFormState;
   enableCertificate: boolean;
-  manualIncludesDraft: Array<{ id: string; text: string }>;
+  manualIncludesDraft: IncludeDraftItem[];
   editorDefaults?: {
     course?: {
       slug?: string;
@@ -199,6 +200,10 @@ export function buildLocalPreviewData({
       id: inc.id,
       text: inc.text.trim(),
       position: index,
+      detail: inc.detail,
+      icon: inc.icon,
+      color: inc.color,
+      kind: inc.kind,
     }));
 
   return {

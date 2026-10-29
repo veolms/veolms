@@ -212,6 +212,12 @@ function useRemeasureRowsOnWidthChange(
  * just been measured at, so every row sat at its estimated height, shorter
  * than most rows, and was drawn over the next one until something measured
  * the rows again (half a second or more).
+ *
+ * The rows' places are laid out again from the estimates between the reset
+ * and the measuring. Without it, a list seen before (a search cleared) kept
+ * its places at the heights measured last time: measuring a row again found
+ * no difference from them, so its height was never kept, and on the next
+ * layout every row fell back to the estimate and the rows overlapped.
  */
 function useResetMeasurementsBeforePaint(
   virtualizer: DiscussionWorkspaceVirtualizer,
@@ -221,6 +227,7 @@ function useResetMeasurementsBeforePaint(
 ) {
   useLayoutEffect(() => {
     virtualizer.measure();
+    virtualizer.getTotalSize();
     feedRef.current
       ?.querySelectorAll("[data-discussion-workspace-virtual-row]")
       .forEach((row) => virtualizer.measureElement(row));

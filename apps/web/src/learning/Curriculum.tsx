@@ -135,7 +135,7 @@ const JUMP_CHIP_LAST_CLASS = `${JUMP_CHIP_DIVIDER_CLASS} ${JUMP_CHIP_RIPPLE_CLAS
  */
 // Written out in full: Tailwind only generates classes it can read whole.
 const STICKY_BAR_CLASS =
-  "sticky top-0 z-4 flex min-w-0 shrink-0 [padding:calc(10px_*_(1_-_var(--bar-stick,0)))_calc(16px_*_(1_-_var(--bar-stick,0)))_calc(8px_*_(1_-_var(--bar-stick,0)))] [gap:calc(6px_*_(1_-_var(--bar-stick,0)))] [--curriculum-top-radius:var(--control-radius-learning-panel,8px)] bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] max-[820px]:[--curriculum-top-radius:16px] max-[820px]:bg-(--canvas) max-[820px]:before:pointer-events-none max-[820px]:before:absolute max-[820px]:before:top-0 max-[820px]:before:left-1/2 max-[820px]:before:z-1 max-[820px]:before:h-2.5 max-[820px]:before:w-28 max-[820px]:before:-translate-x-1/2 max-[820px]:before:rounded-b-lg max-[820px]:before:bg-(--canvas) max-[820px]:before:opacity-(--bar-stick,0) max-[820px]:before:content-['']";
+  "sticky top-0 z-4 flex min-w-0 shrink-0 [padding:calc(10px_*_(1_-_var(--bar-stick,0)))_calc(16px_*_(1_-_var(--bar-stick,0)))_calc(8px_*_(1_-_var(--bar-stick,0)))] [gap:calc(6px_*_(1_-_var(--bar-stick,0)))] [--curriculum-top-radius:var(--control-radius-learning-panel,8px)] bg-[color-mix(in_srgb,var(--surface)_91%,var(--canvas))] max-[820px]:[--curriculum-top-radius:0px] max-[820px]:bg-(--canvas) max-[820px]:before:pointer-events-none max-[820px]:before:absolute max-[820px]:before:top-0 max-[820px]:before:left-1/2 max-[820px]:before:z-1 max-[820px]:before:h-2.5 max-[820px]:before:w-28 max-[820px]:before:-translate-x-1/2 max-[820px]:before:rounded-b-lg max-[820px]:before:bg-(--canvas) max-[820px]:before:opacity-(--bar-stick,0) max-[820px]:before:content-['']";
 /**
  * How far below the bar's line the first section stands, and an open
  * section's heading holds (the list's top padding, learning.css).
@@ -247,14 +247,9 @@ const SECTION_CLOSE_MS = 260;
 /** The learner taking the scroll back ends a hold on it. */
 interface ScrollToItemOptions {
   instant?: boolean;
-  onSettled?: () => void;
 }
 
-interface RevealOptions {
-  instant?: boolean;
-  /** Keeps the lessons out of sight until the list rests on the item. */
-  hidden?: boolean;
-}
+type RevealOptions = ScrollToItemOptions;
 
 // A full screen the page draws itself (Safari on iPhone) counts as one.
 const FULLSCREEN_CHANGE_EVENTS = [
@@ -529,33 +524,16 @@ export const Curriculum = memo(function Curriculum({
   );
 
   /**
-   * The lessons are hidden while the list is moved for the learner rather
-   * than by them (a page just opened, the panel shown again, full screen
-   * entered or left): they appear already at the lesson being played, and
-   * the list is never seen running down to it.
-   */
-  const setLessonsHidden = useCallback((hidden: boolean) => {
-    const lessonList = lessonListRef.current;
-    if (!lessonList) return;
-    if (hidden) lessonList.style.visibility = "hidden";
-    else lessonList.style.removeProperty("visibility");
-  }, []);
-
-  /**
    * `instant` moves the list in one step, for a move the learner did not
    * make themself (a lesson opened, the panel shown); the jump chips glide.
-   * `onSettled` is called once the list rests on the item.
    */
   const scrollItemToTop = useCallback(
     (
       element: HTMLElement | null,
-      { instant = false, onSettled }: ScrollToItemOptions = {},
+      { instant = false }: ScrollToItemOptions = {},
     ) => {
       const curriculum = element?.closest<HTMLElement>(".learning-curriculum");
-      if (!element || !curriculum) {
-        onSettled?.();
-        return;
-      }
+      if (!element || !curriculum) return;
       const behavior =
         instant || window.matchMedia("(prefers-reduced-motion: reduce)").matches
           ? "auto"
@@ -583,7 +561,6 @@ export const Curriculum = memo(function Curriculum({
         for (const type of HOLD_CANCEL_EVENTS) {
           curriculum.removeEventListener(type, stop);
         }
-        onSettled?.();
       };
       const settle = () => {
         if (!element.isConnected) return stop();
@@ -607,37 +584,29 @@ export const Curriculum = memo(function Curriculum({
   );
 
   /**
-   * Scrolls the list so the item stands at its top, two frames on (once
-   * what was just opened is laid out). Near the end of the list there is
-   * not enough below the item for that, so room is added under the list
-   * first (`--curriculum-reveal-space`).
+   * Scrolls the list so the item stands at its top. Near the end of the
+   * list there is not enough below the item for that, so room is added
+   * under the list first (`--curriculum-reveal-space`).
+   *
+   * `instant`: at once, in one step, when the item is already drawn: the
+   * list is first painted already at it, never at its top and then moved,
+   * and never blank. Otherwise (and when it is not drawn yet) two frames
+   * on, once what was just opened is laid out.
    */
   const revealAtTop = useCallback(
     (
       getTarget: () => HTMLElement | null,
-      { instant = false, hidden = false }: RevealOptions = {},
+      { instant = false }: RevealOptions = {},
     ) => {
-      if (hidden) setLessonsHidden(true);
-      const options: ScrollToItemOptions = {
-        instant,
-        onSettled: hidden ? () => setLessonsHidden(false) : undefined,
-      };
-      // On a page just opened the lessons may not be drawn yet (a section
-      // has its lessons once the course's file is in), so the item is
-      // looked for again each frame, for half a second at most.
-      let tries = 0;
-      const attempt = () => {
+      const options: ScrollToItemOptions = { instant };
+      // Whether the item was found and the list sent to it.
+      const attempt = (): boolean => {
         const targetElement = getTarget();
         const curriculum = targetElement?.closest<HTMLElement>(
           ".learning-curriculum",
         );
         const lessonList = lessonListRef.current;
-        if (!targetElement || !curriculum || !lessonList) {
-          tries += 1;
-          if (tries < 30) window.requestAnimationFrame(attempt);
-          else options.onSettled?.();
-          return;
-        }
+        if (!targetElement || !curriculum || !lessonList) return false;
 
         const targetTop = measureItemTop(targetElement, curriculum);
         const currentRevealSpace = Number.parseFloat(
@@ -659,19 +628,35 @@ export const Curriculum = memo(function Curriculum({
             "--curriculum-reveal-space",
             `${nextRevealSpace}px`,
           );
-          window.requestAnimationFrame(() => {
-            window.requestAnimationFrame(() =>
-              scrollItemToTop(targetElement, options),
-            );
-          });
-          return;
+          // In one step the room is measured at once with the scroll (its
+          // reading lays the list out again); a glide waits for it.
+          if (!instant) {
+            window.requestAnimationFrame(() => {
+              window.requestAnimationFrame(() =>
+                scrollItemToTop(targetElement, options),
+              );
+            });
+            return true;
+          }
         }
 
         scrollItemToTop(targetElement, options);
+        return true;
       };
-      window.requestAnimationFrame(() => window.requestAnimationFrame(attempt));
+      if (instant && attempt()) return;
+
+      // On a page just opened the lessons may not be drawn yet (a section
+      // has its lessons once the course's file is in), so the item is
+      // looked for again each frame, for half a second at most.
+      let tries = 0;
+      const retry = () => {
+        if (attempt()) return;
+        tries += 1;
+        if (tries < 30) window.requestAnimationFrame(retry);
+      };
+      window.requestAnimationFrame(() => window.requestAnimationFrame(retry));
     },
-    [measureItemTop, scrollItemToTop, setLessonsHidden],
+    [measureItemTop, scrollItemToTop],
   );
 
   const revealAndScrollTo = (
@@ -697,40 +682,23 @@ export const Curriculum = memo(function Curriculum({
   // the learner is searching it.
   // Read when a lesson opens, not followed: opening the search must not
   // scroll the list again.
-  // The list moves in one step; the first time (the page just opened) its
-  // lessons stay hidden until it is there.
+  // The list moves in one step, before it is painted (see revealAtTop).
   const lessonRevealedRef = useRef(false);
   const revealOpenedLesson = useEffectEvent(() => {
-    const firstReveal = !lessonRevealedRef.current;
     lessonRevealedRef.current = true;
-    if (hideHero || searchOpen) {
-      if (firstReveal) setLessonsHidden(false);
-      return;
-    }
-    revealAtTop(() => activeLessonRef.current, {
-      instant: true,
-      hidden: firstReveal,
-    });
+    if (hideHero || searchOpen) return;
+    revealAtTop(() => activeLessonRef.current, { instant: true });
   });
-  // Hidden before the first paint, so the list is never seen at its top
-  // and then moved; `revealOpenedLesson` shows it again. Not when the
-  // sections are opened from outside, where no reveal follows.
-  useLayoutEffect(() => {
-    if (!hideHero && !searchOpen && !expandAllSections && !isExpandedControlled)
-      setLessonsHidden(true);
-    // Only on the first paint.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   /**
-   * The lesson being played is brought back to the top, in one step and
-   * out of sight, whenever the list is shown again: when full screen is
-   * entered or left (the side panel was left behind it, the full-screen
-   * panel opens with it) and when the panel goes from hidden to shown.
+   * The lesson being played is brought back to the top, in one step,
+   * whenever the list is shown again: when full screen is entered or left
+   * (the side panel was left behind it, the full-screen panel opens with
+   * it) and when the panel goes from hidden to shown.
    */
   const revealAgain = useEffectEvent(() => {
     if (hideHero || searchOpen || !lessonRevealedRef.current) return;
-    revealAtTop(() => activeLessonRef.current, { instant: true, hidden: true });
+    revealAtTop(() => activeLessonRef.current, { instant: true });
   });
   useEffect(() => {
     const scrollport = curriculumRef.current;
@@ -755,7 +723,8 @@ export const Curriculum = memo(function Curriculum({
       observer?.disconnect();
     };
   }, []);
-  useEffect(() => {
+  // Before the list is painted, so it is first seen at the lesson.
+  useLayoutEffect(() => {
     if (expandAllSections || isExpandedControlled) return;
     const sectionChanged = openedForSectionRef.current !== currentSection.id;
     openedForSectionRef.current = currentSection.id;
@@ -893,9 +862,12 @@ export const Curriculum = memo(function Curriculum({
     frame = window.requestAnimationFrame(hold);
   };
 
-  useEffect(() => {
+  // The panel was just opened to show where the learner is: the lessons
+  // are painted there, not at wherever the list was left (at once when the
+  // lesson is drawn, see revealAtTop).
+  useLayoutEffect(() => {
     if (!focusRequest || focusRequest === handledFocusRequestRef.current)
-      return undefined;
+      return;
 
     handledFocusRequestRef.current = focusRequest;
     setExpanded((current) =>
@@ -903,37 +875,8 @@ export const Curriculum = memo(function Curriculum({
         ? current
         : [...current, currentSection.id],
     );
-
-    // The panel was just opened to show where the learner is: the lessons
-    // appear there, not at wherever the list was left.
-    setLessonsHidden(true);
-    const reveal = () => setLessonsHidden(false);
-    let firstFrame: number;
-    let secondFrame: number | undefined;
-    firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        secondFrame = undefined;
-        scrollItemToTop(activeLessonRef.current, {
-          instant: true,
-          onSettled: reveal,
-        });
-      });
-    });
-
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      if (secondFrame) {
-        window.cancelAnimationFrame(secondFrame);
-        reveal();
-      }
-    };
-  }, [
-    focusRequest,
-    currentSection.id,
-    scrollItemToTop,
-    setExpanded,
-    setLessonsHidden,
-  ]);
+    revealAtTop(() => activeLessonRef.current, { instant: true });
+  }, [focusRequest, currentSection.id, revealAtTop, setExpanded]);
 
   useEffect(() => {
     if (!topRequest || topRequest === handledTopRequestRef.current)

@@ -13,6 +13,16 @@ export function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * Whether the address belongs to a shared test account (TEST_LOGIN_ACCOUNTS).
+ * Several testers use such an account at once, so it is spared the limits
+ * meant for one real student: the device limit, and leaving only free
+ * courses.
+ */
+export function isTestLoginAccount(email: string | null | undefined): boolean {
+  return Boolean(email && config.TEST_LOGIN_ACCOUNTS.has(email.toLowerCase()));
+}
+
 export function generateRandomToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
@@ -226,4 +236,20 @@ export function verifyTotp(
     return null;
   }
   return null;
+}
+
+/**
+ * Whether a sign-in by phone must be refused because the number was never
+ * confirmed. Whoever holds an unconfirmed number receives its codes, so it
+ * proves nothing while the account has an email to sign in with instead,
+ * confirmed or not (a student added by staff has neither confirmed yet). An
+ * account with no email keeps its number: it was opened with it.
+ */
+export function refusesUnconfirmedPhoneSignIn(
+  identifierType: "email" | "phone",
+  user: { email: string | null; phone_verified_at: Date | null },
+): boolean {
+  return (
+    identifierType === "phone" && !user.phone_verified_at && Boolean(user.email)
+  );
 }

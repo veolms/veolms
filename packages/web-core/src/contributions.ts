@@ -90,7 +90,8 @@ export interface AnalyticsTabFilters {
   /** One course, or every course the viewer may see when absent. */
   courseId?: string;
   /** The range's preset, for a tab that wants to label it. */
-  rangeKey: "7d" | "30d" | "3m" | "1y";
+  /** A preset, or "custom" for dates the person picked (see from/to). */
+  rangeKey: "1d" | "7d" | "30d" | "3m" | "1y" | "custom";
 }
 
 /** One table of a tab, as a CSV export wants it. */
@@ -167,6 +168,11 @@ export interface AnalyticsTabContribution {
   component: ComponentType<AnalyticsTabProps>;
   /** Shown to admins only when true (an instructor never sees it). */
   adminOnly?: boolean;
+  /**
+   * The permission key that opens the tab (a role editor tick), in place
+   * of `adminOnly`: whoever holds it sees the tab.
+   */
+  permission?: string;
   /** Drawn while the section's code and data load; grey blocks without it. */
   placeholder?: AnalyticsTabPlaceholderSpec;
 }

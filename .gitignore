@@ -18,3 +18,9 @@ scratch/
 .github/hooks/impeccable.json
 
 .wrangler/
+
+# Local agent skills (personal use)
+.claude/skills/
+skills-lock.json
+CLAUDE.md
+tasks/

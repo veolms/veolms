@@ -157,7 +157,8 @@ interface ThreadSurfaceProps {
   onOpenThread: (id: string | number, focusComposer?: boolean) => void;
   isBackendMode?: boolean;
   currentUserId?: string;
-  userRole?: string;
+  /** May lock any thread and accept any answer (see Discussion). */
+  canModerate?: boolean;
   onToggleAcceptReply?: (
     threadId: string | number,
     replyId: string | number,
@@ -330,7 +331,7 @@ export function ThreadSurface({
   onOpenThread,
   isBackendMode = false,
   currentUserId,
-  userRole,
+  canModerate,
   onToggleAcceptReply,
   onToggleLockThread,
   onToggleBookmark,
@@ -691,7 +692,7 @@ export function ThreadSurface({
         onOpenThread={onOpenThread}
         isBackendMode={isBackendMode}
         currentUserId={currentUserId}
-        userRole={userRole}
+        canModerate={canModerate}
         onToggleAcceptReply={onToggleAcceptReply}
         onToggleLockThread={onToggleLockThread}
         onToggleBookmark={onToggleBookmark}
@@ -750,7 +751,7 @@ export function ThreadSurface({
       linkedThreadId,
       highlightedThreadId,
       onThreadHighlightShown,
-      userRole,
+      canModerate,
     ],
   );
 

@@ -158,6 +158,7 @@ export function CourseCard({
     isPublic,
     publicAction,
     canSelfEnroll: course.canSelfEnroll,
+    comesWithAnotherCourse: Boolean(course.includedWith?.length),
   };
   const isPublicEnrollmentAction =
     isPublic && courseCardOffersEnrollment(cardOffer);
@@ -756,6 +757,17 @@ export function CourseCard({
             <CourseCardPricing
               pricing={course.pricing}
               studentHome={studentHome}
+              freeWith={course.includedWith?.[0]?.title}
+              freeWithHref={
+                course.includedWith?.[0]
+                  ? courseOverviewPath({
+                      ...course,
+                      id: course.includedWith[0].id,
+                      slug: course.includedWith[0].slug,
+                    })
+                  : undefined
+              }
+              onNavigate={onNavigatePage}
             />
           ) : null}
 

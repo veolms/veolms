@@ -95,6 +95,7 @@ function persistAuthenticatedSession(
     phoneNo: data.user.phoneNo,
     mobileVerified: data.user.mobileVerified,
     roles: data.user.roles,
+    isTestAccount: data.user.isTestAccount,
     mfaVerified: !data.mfaRequired,
     totpEnabled: data.totpEnabled,
     passkeyEnabled: data.passkeyEnabled,

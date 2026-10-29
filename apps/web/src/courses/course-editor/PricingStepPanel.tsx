@@ -3,9 +3,11 @@ import { CourseQuizPricingCard } from "../CourseQuizPricingCard";
 import { CourseLinkedCoursesCard } from "../CourseLinkedCoursesCard";
 import { ArrowUpRightIcon as ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
+import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { ThemedSelect } from "../../ThemedSelect";
+import { Switch } from "../../home-page-settings/homePageSettingsControls";
 import type { NavigateTo } from "../../routing/navigation";
 import { useCapabilities } from "../../services/authorization";
 import { type CourseWizardStepId, parseWizardTab } from "./wizardSteps";
@@ -33,6 +35,7 @@ export interface PricingStepPanelProps {
   flushPricingPersistence: () => Promise<void>;
   handleOriginalPriceChange: (val: string) => void;
   handleShowDiscountBadgeChange: (checked: boolean) => void;
+  handleLinkedOnlyChange: (checked: boolean) => void;
   currentCourseId: string | null;
   navigateToStep: (destination: CourseWizardStepId) => Promise<void>;
   onNavigatePage: NavigateTo | undefined;
@@ -50,6 +53,7 @@ export function PricingStepPanel({
   flushPricingPersistence,
   handleOriginalPriceChange,
   handleShowDiscountBadgeChange,
+  handleLinkedOnlyChange,
   currentCourseId,
   navigateToStep,
   onNavigatePage,
@@ -87,6 +91,43 @@ export function PricingStepPanel({
             </div>
           </div>
 
+          {/* Linked course only */}
+          <div className="flex items-start justify-between gap-4 mb-5 rounded-xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_55%,var(--surface))] px-4 py-3.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-(--text) text-[0.88rem] font-semibold">
+                  Linked course only
+                </span>
+                <PricingControlStatusIndicator
+                  status={getPricingControlDisplayStatus(
+                    "pricingDetails",
+                  )}
+                  testId="pricing-field-status-linkedOnly"
+                />
+              </div>
+              <p className="m-0 mt-1 text-(--muted) text-[0.8rem]">
+                No price and not for sale. Hidden from the course list;
+                learners get it only through a course that links it.
+              </p>
+            </div>
+            <Switch
+              checked={pricing.linkedOnly}
+              onChange={handleLinkedOnlyChange}
+              label="Linked course only"
+            />
+          </div>
+
+          {pricing.linkedOnly ? (
+            <div className="flex items-start gap-2.5 text-(--muted) text-[0.82rem]">
+              <LinkSimple size={16} weight="bold" className="shrink-0 mt-0.5" />
+              <span>
+                To give this course to learners, open the course that
+                includes it and add it under Linked courses on its
+                Pricing tab. Turn this off and enter a price to sell it
+                on its own.
+              </span>
+            </div>
+          ) : (
           <div className="flex flex-col gap-1.75">
             {/* Currency Combobox Field */}
             <div className="flex flex-col gap-2 mb-5">
@@ -277,6 +318,7 @@ export function PricingStepPanel({
               );
             })()}
           </div>
+          )}
         </div>
       </div>
 

@@ -105,10 +105,11 @@ export function LearnerHome({
   onNavigatePage: NavigateTo;
 }) {
   const enrolledCourses = knownCourses ?? NO_COURSES;
-  // An admin in Student view can leave any course they enrolled in; doing
-  // so clears their progress in it.
+  // An admin in Student view, or a shared test account, can leave any
+  // course they enrolled in; doing so clears their progress in it.
   const currentUser = useCurrentUser().data;
-  const isAdmin = hasAdminRole(currentUser?.roles);
+  const leavesAnyCourse =
+    hasAdminRole(currentUser?.roles) || Boolean(currentUser?.isTestAccount);
   const [pendingUnenroll, setPendingUnenroll] = useState<EnrolledCourse | null>(
     null,
   );
@@ -348,7 +349,7 @@ export function LearnerHome({
             pinnedCourseId={plan.heroPinned ? heroCourse.courseId : null}
             onPinCourse={pinCourse}
             onUnpinCourse={unpinAndSay}
-            onUnenrollCourse={isAdmin ? setPendingUnenroll : undefined}
+            onUnenrollCourse={leavesAnyCourse ? setPendingUnenroll : undefined}
             onNavigatePage={onNavigatePage}
           />
         ) : null}

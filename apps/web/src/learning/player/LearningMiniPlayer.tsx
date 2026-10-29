@@ -189,7 +189,7 @@ export function LearningMiniPlayer({
   // swiped away, it fades out with the player instead of stopping at once.
   useMiniPlayerSwipeVolume(
     playerRef,
-    miniPlayerGestures.outsideFraction,
+    miniPlayerGestures.subscribeOutsideFraction,
     miniPlayerGestures.mode === "dismissing",
   );
 

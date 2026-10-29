@@ -225,6 +225,10 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   inset: 1%;
   width: 98%;
   height: 98%;
+  /* With the lessons beside the video (LessonVideoPlayer sets these), the
+     glow is behind the video's own pane, not the whole screen. */
+  left: var(--learning-fullscreen-video-offset-x, 1%);
+  width: var(--learning-fullscreen-video-width, 98%);
 }
 
 @media (max-width: 640px) {

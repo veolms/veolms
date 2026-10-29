@@ -842,10 +842,10 @@ export function CourseCreatePage({
   const {
     dragEnabledInclusionId,
     setDragEnabledInclusionId,
-    focusedInclusionId,
-    setFocusedInclusionId,
     handleAddManualInclusion,
     handleUpdateManualInclusionText,
+    handleUpdateManualInclusionDetail,
+    handleSetInclusionStyle,
     handleManualInclusionBlur,
     handleDeleteManualInclusion,
     handleInclusionDragStart,
@@ -1057,6 +1057,7 @@ export function CourseCreatePage({
     flushPricingPersistence,
     handleSellingPriceChange,
     handleShowDiscountBadgeChange,
+    handleLinkedOnlyChange,
     handleOriginalPriceChange,
     handleCurrencyChange,
   } = usePricingHandlers({
@@ -1693,6 +1694,7 @@ export function CourseCreatePage({
                   flushPricingPersistence={flushPricingPersistence}
                   handleOriginalPriceChange={handleOriginalPriceChange}
                   handleShowDiscountBadgeChange={handleShowDiscountBadgeChange}
+                  handleLinkedOnlyChange={handleLinkedOnlyChange}
                   currentCourseId={currentCourseId}
                   navigateToStep={navigateToStep}
                   onNavigatePage={onNavigatePage}
@@ -1724,14 +1726,15 @@ export function CourseCreatePage({
                   handleInclusionDragOver={handleInclusionDragOver}
                   handleInclusionDragEnd={handleInclusionDragEnd}
                   setDragEnabledInclusionId={setDragEnabledInclusionId}
-                  setFocusedInclusionId={setFocusedInclusionId}
                   handleManualInclusionBlur={handleManualInclusionBlur}
                   handleUpdateManualInclusionText={
                     handleUpdateManualInclusionText
                   }
-                  focusedInclusionId={focusedInclusionId}
+                  handleUpdateManualInclusionDetail={
+                    handleUpdateManualInclusionDetail
+                  }
+                  handleSetInclusionStyle={handleSetInclusionStyle}
                   handleDeleteManualInclusion={handleDeleteManualInclusion}
-                  suggestedInclusions={suggestedInclusions}
                   handleAddManualInclusion={handleAddManualInclusion}
                 >
                   <PluginCourseEditorSections

@@ -218,25 +218,29 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
    * Analytics held through a role that reaches every course (admin, or a
    * team role) covers the whole academy; an instructor's covers their own.
    */
-  async function seesEveryCourse(actor: AnalyticsActor): Promise<boolean> {
-    const [course, revenue] = await Promise.all([
+  /** Which analytics keys the actor holds for every course. */
+  async function academyAnalytics(actor: AnalyticsActor) {
+    const [overview, course, revenue] = await Promise.all([
+      hasAcademyPermission(database, actor.id, "analytics.overview.read"),
       hasAcademyPermission(database, actor.id, "analytics.course.read"),
       hasAcademyPermission(database, actor.id, "analytics.revenue.read"),
     ]);
-    return course || revenue;
+    return { overview, course, revenue };
+  }
+
+  async function seesEveryCourse(actor: AnalyticsActor): Promise<boolean> {
+    const held = await academyAnalytics(actor);
+    return held.overview || held.course || held.revenue;
   }
 
   /**
    * Money reaches the holders of the revenue permission, and an instructor
-   * looking at their own courses. Course analytics held for every course
-   * (a team role) stop short of it.
+   * looking at their own courses. Analytics held for every course without
+   * the revenue key (a team role) stop short of it.
    */
   async function seesRevenue(actor: AnalyticsActor): Promise<boolean> {
-    const [course, revenue] = await Promise.all([
-      hasAcademyPermission(database, actor.id, "analytics.course.read"),
-      hasAcademyPermission(database, actor.id, "analytics.revenue.read"),
-    ]);
-    return revenue || !course;
+    const held = await academyAnalytics(actor);
+    return held.revenue || !(held.overview || held.course);
   }
 
   /** The overview with every money figure taken out. */
@@ -954,13 +958,38 @@ export function createAnalyticsService(options: AnalyticsServiceOptions) {
   }
 
   /**
-   * The dashboard is academy-wide: its route requires the platform-scoped
-   * analytics.revenue.read permission. Only "Your Courses" follows the
-   * caller's own course-management visibility.
+   * Every team member has a Home. Its academy-wide numbers need analytics
+   * for every course (the Overview or Revenue key), its money the revenue
+   * key; "Your Courses" follows the caller's own course visibility. What
+   * the caller may not see is null and never computed.
    */
   async function buildDashboard(
     actor: AnalyticsActor,
     range: DashboardRange = "30d",
+  ): Promise<DashboardSummaryResponse> {
+    const held = await academyAnalytics(actor);
+    if (!held.overview && !held.revenue) {
+      return {
+        revenue: null,
+        students: null,
+        activeLearners: null,
+        watchHours: null,
+        revenueOverview: null,
+        learningActivity: null,
+        yourCourses: await buildYourCourses(
+          await resolveDashboardCourses(actor),
+        ),
+      };
+    }
+    const full = await buildAcademyDashboard(actor, range);
+    return held.revenue
+      ? full
+      : { ...full, revenue: null, revenueOverview: null };
+  }
+
+  async function buildAcademyDashboard(
+    actor: AnalyticsActor,
+    range: DashboardRange,
   ): Promise<DashboardSummaryResponse> {
     const dashboardNow = new Date();
     const enrollmentActivityWindow =

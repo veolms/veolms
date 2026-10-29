@@ -17,7 +17,7 @@ import {
   type StudentsService,
 } from "../../students/index.ts";
 import type { CourseService } from "../../courses/index.ts";
-import { ADMIN_ROLE } from "../../auth/index.ts";
+import { ADMIN_ROLE, isTestLoginAccount } from "../../auth/index.ts";
 import { hasAcademyPermission } from "../../authorization/index.ts";
 import { createAccessService, type AccessService } from "../../access/index.ts";
 import {
@@ -53,10 +53,12 @@ export interface EnrollmentService {
    * An admin may leave any course they are enrolled in, however they got
    * it (they enroll to try the academy as a learner would). No money is
    * returned and the order is left as it is, and their progress in the
-   * course is cleared, so the next enrollment starts from nothing.
+   * course is cleared, so the next enrollment starts from nothing. A shared
+   * test account (TEST_LOGIN_ACCOUNTS) may do the same, so testers can buy
+   * or join a course again.
    */
   unenrollFromCourse(
-    actor: { id: string; roles: readonly string[] },
+    actor: { id: string; roles: readonly string[]; email: string | null },
     courseId: string,
   ): Promise<void>;
   listAcademyEnrollments(
@@ -202,11 +204,12 @@ export function createEnrollmentService({
   }
 
   async function unenrollFromCourse(
-    actor: { id: string; roles: readonly string[] },
+    actor: { id: string; roles: readonly string[]; email: string | null },
     courseId: string,
   ): Promise<void> {
     const userId = actor.id;
-    const isAdmin = actor.roles.includes(ADMIN_ROLE);
+    const leavesAnyCourse =
+      actor.roles.includes(ADMIN_ROLE) || isTestLoginAccount(actor.email);
     await database.transaction().execute(async (trx) => {
       const enrollment = await enrollmentRepo.findEnrollment(
         trx,
@@ -239,7 +242,7 @@ export function createEnrollmentService({
           freeOrderId = orderId;
         }
       }
-      if (!freeOrderId && !isAdmin) {
+      if (!freeOrderId && !leavesAnyCourse) {
         throw CommerceErrors.UNENROLL_NOT_ALLOWED();
       }
 
@@ -262,12 +265,13 @@ export function createEnrollmentService({
           await orderRepo.cancelFreeOrder(trx, freeOrderId);
         }
       } else {
-        // An admin leaving a course that was bought, came in a bundle or
-        // was granted: the access goes, the order behind it is not touched.
+        // An admin or test account leaving a course that was bought, came in
+        // a bundle or was granted: the access goes, the order behind it is
+        // not touched.
         await accessService.revokeCourseAccess(trx, userId, courseId);
       }
 
-      if (isAdmin) {
+      if (leavesAnyCourse) {
         await progressResetService.clearCourseProgressForLearner(
           trx,
           userId,

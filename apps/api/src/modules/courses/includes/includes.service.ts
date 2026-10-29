@@ -2,11 +2,15 @@ import type { Permission } from "@veolms/contracts";
 import crypto from "node:crypto";
 import type { Kysely } from "kysely";
 import type { Database } from "@veolms/database";
-import type {
-  CreateCourseIncludeRequest,
-  UpdateCourseIncludeRequest,
-  CourseIncludeItem,
+import {
+  COURSE_INCLUDE_PALETTE,
+  DEFAULT_COURSE_INCLUDES,
+  MAX_COURSE_INCLUDES,
+  type CreateCourseIncludeRequest,
+  type UpdateCourseIncludeRequest,
+  type CourseIncludeItem,
 } from "@veolms/contracts";
+import type { DatabaseExecutor } from "@veolms/database";
 import { AppError } from "../../../lib/errors.ts";
 import * as includesRepo from "./includes.repository.ts";
 import {
@@ -38,11 +42,19 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     id: string;
     text: string;
     position: number;
+    detail: string | null;
+    icon: string | null;
+    color: string | null;
+    kind: "custom" | "video";
   }): CourseIncludeItem {
     return {
       id: row.id,
       text: row.text,
       position: row.position,
+      detail: row.detail,
+      icon: row.icon,
+      color: row.color,
+      kind: row.kind,
     };
   }
 
@@ -59,6 +71,17 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
       "course.details.update",
     );
 
+    if (
+      (await includesRepo.countIncludes(database, courseId)) >=
+      MAX_COURSE_INCLUDES
+    ) {
+      throw new AppError(
+        400,
+        "TOO_MANY_INCLUDES",
+        `A course can list at most ${MAX_COURSE_INCLUDES} things it includes.`,
+      );
+    }
+
     let position = payload.position;
     if (position === undefined) {
       const maxPos = await includesRepo.findMaxIncludePosition(
@@ -70,18 +93,24 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
 
     const includeId = crypto.randomUUID();
     const now = new Date();
+    const row = {
+      id: includeId,
+      text: payload.text,
+      detail: payload.detail?.trim() || null,
+      icon: payload.icon ?? "check-circle",
+      color: payload.color ?? COURSE_INCLUDE_PALETTE[0],
+      kind: payload.kind ?? "custom",
+      position,
+    };
 
     await includesRepo.insertInclude(database, {
-      id: includeId,
+      ...row,
       course_id: courseId,
-      text: payload.text,
-      icon: payload.icon ?? null,
-      position,
       created_at: now,
       updated_at: now,
     });
 
-    return formatInclude({ id: includeId, text: payload.text, position });
+    return formatInclude(row);
   }
 
   async function listCourseIncludes(
@@ -137,7 +166,11 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     const now = new Date();
     await includesRepo.updateInclude(database, includeId, courseId, {
       text: payload.text,
+      ...(payload.detail !== undefined
+        ? { detail: payload.detail?.trim() || null }
+        : {}),
       icon: payload.icon,
+      color: payload.color,
       position: payload.position,
       updated_at: now,
     });
@@ -234,6 +267,32 @@ export function createIncludesService({ database }: IncludesServiceOptions) {
     deleteCourseInclude,
     reorderCourseIncludes,
   };
+}
+
+/**
+ * A new course's standard lines (`DEFAULT_COURSE_INCLUDES`), written with the
+ * caller's executor so they go in with the course.
+ */
+export async function seedDefaultIncludes(
+  database: DatabaseExecutor,
+  courseId: string,
+) {
+  const now = new Date();
+  await includesRepo.insertIncludes(
+    database,
+    DEFAULT_COURSE_INCLUDES.map((line, position) => ({
+      id: crypto.randomUUID(),
+      course_id: courseId,
+      text: line.text,
+      detail: line.detail,
+      icon: line.icon,
+      color: line.color,
+      kind: line.kind,
+      position,
+      created_at: now,
+      updated_at: now,
+    })),
+  );
 }
 
 export type IncludesService = ReturnType<typeof createIncludesService>;

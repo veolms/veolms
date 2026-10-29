@@ -4,6 +4,7 @@ import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import type { Course } from "./catalogue";
 import type { CourseCardLearnerAction } from "./courseCardAction";
 import { courseCardShimmerClass } from "./courseCardShimmer";
+import { FreeWithCourseNote } from "./FreeWithCourseNote";
 
 /** The card's main button, as every card draws it. */
 export const COURSE_CARD_BUTTON_CLASSES =
@@ -13,10 +14,41 @@ export const COURSE_CARD_BUTTON_CLASSES =
 export function CourseCardPricing({
   pricing,
   studentHome,
+  freeWith,
+  freeWithHref,
+  onNavigate,
 }: {
   pricing: NonNullable<Course["pricing"]>;
   studentHome: boolean;
+  /**
+   * The course a linked-only course comes free with: shown in place of a
+   * price, as "Free with" that course.
+   */
+  freeWith?: string;
+  /** That course's page: its name becomes a link to it. */
+  freeWithHref?: string;
+  onNavigate?: (path: string) => void;
 }) {
+  if (freeWith) {
+    return (
+      <div
+        className="mt-3 mb-4 flex min-w-0 items-baseline gap-x-2"
+        data-course-card-pricing
+        aria-label={`Free with ${freeWith}`}
+      >
+        <strong className="shrink-0 text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)">
+          Free
+        </strong>
+        <span className="min-w-0 truncate text-[0.9rem] font-medium leading-none text-(--text-secondary)">
+          <FreeWithCourseNote
+            title={freeWith}
+            href={freeWithHref}
+            onNavigate={onNavigate}
+          />
+        </span>
+      </div>
+    );
+  }
   return (
     <div
       className={`${studentHome ? "mt-3 mb-4 flex flex-wrap items-center gap-x-2 gap-y-1" : "mt-3 mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"}`}
@@ -195,6 +227,7 @@ export function CourseCardEarlyActions({
           <CourseCardPricing
             pricing={course.pricing}
             studentHome={studentHome}
+            freeWith={course.includedWith?.[0]?.title}
           />
         ) : null}
         <span

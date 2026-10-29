@@ -22,6 +22,7 @@ import {
   MAX_VOLUNTARY_AMOUNT,
   type Category,
   type CheckoutPreviewResponse,
+  type CourseAccessEnrollment,
   type CourseAccessResume,
   type CourseEditorDataResponse,
   type CourseOverviewResponse,
@@ -84,7 +85,13 @@ import {
 import { useCurrentUser } from "../services/auth";
 import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
-import { formatDuration, resolveCourseDurationSeconds } from "./courseAdapter";
+import {
+  formatCourseDuration,
+  formatDuration,
+  resolveCourseDurationSeconds,
+} from "./courseAdapter";
+import { IncludedCoursesList } from "./overview/IncludedCoursesList";
+import { FreeWithCourseNote } from "./FreeWithCourseNote";
 import { CourseLearnerProgressBar } from "./overview/CourseLearnerProgressBar";
 import { CourseLearnerProgressBarEarly } from "./overview/CourseLearnerProgressBarEarly";
 import { CourseOverviewCurriculum } from "./overview/CourseOverviewCurriculum";
@@ -101,6 +108,7 @@ import {
   coursePurchaseCheckoutNote,
   coursePurchaseGuarantee,
   getCoursePurchasePerks,
+  type CourseIncludeLine,
 } from "./overview/coursePurchasePerks";
 import {
   presumedGuestOnlyClasses,
@@ -322,12 +330,19 @@ const SUPPORT_AMOUNTS_OFFERED: boolean = false;
 interface CoursePurchaseSectionProps {
   course: Course;
   pricing?: CourseOverviewPricingProps;
-  inclusions?: string[];
+  inclusions?: readonly CourseIncludeLine[];
   onNavigatePage?: NavigateTo;
   isReadOnlyPreview?: boolean;
   isCreator?: boolean;
   /** The overview's `canSelfEnroll`; only `false` closes enrolment. */
   canSelfEnroll?: boolean;
+  /**
+   * The overview's `includedWith`: for a linked-only course, the courses
+   * it comes free with. The card sends a visitor to the first of them.
+   */
+  includedWith?: CourseOverviewResponse["includedWith"];
+  /** The overview's `includedCourses`: the courses that come free with it. */
+  includedCourses?: CourseOverviewResponse["includedCourses"];
   /**
    * Whether the page knows who is looking (see `courseViewerState`): a
    * purchase started before signing in waits for it.
@@ -343,6 +358,8 @@ function CoursePurchaseSection({
   isReadOnlyPreview = false,
   isCreator = false,
   canSelfEnroll,
+  includedWith,
+  includedCourses,
   viewerKnown = true,
 }: CoursePurchaseSectionProps) {
   const user = useAuthStore((state) => state.user);
@@ -412,6 +429,11 @@ function CoursePurchaseSection({
       isFree,
       canSelfEnroll,
     }) === "invitation-only";
+  // A linked-only course is not enrolled in on its own: it is had by
+  // buying the course it comes with. The card shows it as free with that
+  // course, and its button opens that course's page, where it is bought
+  // (with a coupon, if there is one).
+  const includingCourse = isInvitationOnly ? includedWith?.[0] : undefined;
 
   const checkoutItem = useMemo(
     () =>
@@ -1240,6 +1262,15 @@ function CoursePurchaseSection({
     }
   }
 
+  const includingCoursePath = includingCourse
+    ? `/courses/${encodeURIComponent(includingCourse.slug)}/overview`
+    : undefined;
+  if (includingCourse && includingCoursePath) {
+    ctaLabel = includingCourse.title;
+    ctaDisabled = false;
+    ctaOnClick = () => onNavigatePage?.(includingCoursePath);
+  }
+
   const priceLabel = isFree
     ? originalPrice
       ? basePrice
@@ -1255,18 +1286,32 @@ function CoursePurchaseSection({
       price={
         isCreatorNormal
           ? undefined
-          : {
-              label: priceLabel,
-              sizeClassName: priceTextClasses[priceSizeVariant],
-              struckThrough: struckThroughPrice,
-              badge: priceBadge,
-              // The only saving shown, and it is the coupon's.
-              badgeIsCoupon: Boolean(
-                priceBadge && appliedCoupon && !couponOnTopOfSale,
-              ),
-              couponBadge:
-                priceBadge && couponOnTopOfSale ? couponSavingLabel : undefined,
-            }
+          : includingCourse
+            ? {
+                label: "Free",
+                sizeClassName: priceTextClasses[priceSizeVariant],
+                note: (
+                  <FreeWithCourseNote
+                    title={includingCourse.title}
+                    href={includingCoursePath}
+                    onNavigate={onNavigatePage}
+                  />
+                ),
+              }
+            : {
+                label: priceLabel,
+                sizeClassName: priceTextClasses[priceSizeVariant],
+                struckThrough: struckThroughPrice,
+                badge: priceBadge,
+                // The only saving shown, and it is the coupon's.
+                badgeIsCoupon: Boolean(
+                  priceBadge && appliedCoupon && !couponOnTopOfSale,
+                ),
+                couponBadge:
+                  priceBadge && couponOnTopOfSale
+                    ? couponSavingLabel
+                    : undefined,
+              }
       }
       priceBreakdown={
         priceBreakdown
@@ -1310,12 +1355,27 @@ function CoursePurchaseSection({
         icon: ctaIcon,
         disabled: ctaDisabled,
         onClick: ctaOnClick,
+        ...(includingCoursePath
+          ? { link: { href: includingCoursePath, eyebrow: "Enroll in" } }
+          : {}),
       }}
-      closedMessage={isInvitationOnly ? INVITATION_ONLY_MESSAGE : undefined}
+      closedMessage={
+        isInvitationOnly && !includingCourse
+          ? INVITATION_ONLY_MESSAGE
+          : undefined
+      }
       notice={paymentNotice}
       error={paymentError}
       onDismissError={() => setPaymentError(null)}
       perks={perksList}
+      includedCourses={
+        includedCourses && includedCourses.length > 0 ? (
+          <IncludedCoursesList
+            courses={includedCourses}
+            onOpenCourse={onNavigatePage}
+          />
+        ) : undefined
+      }
       checkoutNote={isPaidPurchase ? coursePurchaseCheckoutNote : undefined}
       guarantee={isPaidPurchase ? coursePurchaseGuarantee : undefined}
     >
@@ -1539,7 +1599,8 @@ export interface AdaptedOverviewData {
   categoryName: string | undefined;
   language: string | undefined;
   sections: CourseSection[];
-  inclusions: string[];
+  /** The course's "This course includes" lines; absent on an old page. */
+  inclusions: CourseIncludeLine[] | undefined;
   pricing: CourseOverviewPricingProps;
   instructorName: string | undefined;
   trailerMediaId: string | null;
@@ -1550,6 +1611,33 @@ export interface AdaptedOverviewData {
   canSelfEnroll?: boolean;
   /** The overview's `accessValidity`: how long the course stays with a learner. */
   accessValidity?: CourseOverviewResponse["accessValidity"];
+  /** The overview's `includedWith`, for a linked-only course. */
+  includedWith?: CourseOverviewResponse["includedWith"];
+  /** The overview's `includedCourses`: the courses that come free with it. */
+  includedCourses?: CourseOverviewResponse["includedCourses"];
+}
+
+/**
+ * A course's stored "This course includes" lines, in their order. Absent
+ * (a page built before lines were stored) stays absent, so the card falls
+ * back to the standard lines.
+ */
+function toCourseIncludeLines(
+  includes:
+    ReadonlyArray<CourseIncludeLine & { position: number }> | null | undefined,
+): CourseIncludeLine[] | undefined {
+  if (!Array.isArray(includes)) return undefined;
+  return includes
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .filter((line) => line.text.trim())
+    .map(({ text, detail, icon, color, kind }) => ({
+      text: text.trim(),
+      detail,
+      icon,
+      color,
+      kind,
+    }));
 }
 
 export function adaptCourseOverviewResponse(
@@ -1581,7 +1669,7 @@ export function adaptCourseOverviewResponse(
     overview.stats?.totalDurationSeconds,
     overview.settings?.estimatedDuration,
   );
-  const resolvedDuration = formatDuration(resolvedDurationSeconds);
+  const resolvedDuration = formatCourseDuration(resolvedDurationSeconds);
 
   const resolvedThumbnail = c.thumbnailUrl || "";
 
@@ -1634,14 +1722,7 @@ export function adaptCourseOverviewResponse(
         }),
     }));
 
-  const finalPerks: string[] = Array.isArray(overview.includes)
-    ? overview.includes
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((inc) => inc.text.trim())
-        .filter(Boolean)
-        .slice(0, 6)
-    : [];
+  const finalPerks = toCourseIncludeLines(overview.includes);
 
   let pricingProps: CourseOverviewPricingProps = toOverviewPricingProps(
     overview.pricing,
@@ -1660,6 +1741,8 @@ export function adaptCourseOverviewResponse(
     trailerMediaId: c.trailerMediaId ?? null,
     canSelfEnroll: overview.canSelfEnroll,
     accessValidity: overview.accessValidity,
+    includedWith: overview.includedWith,
+    includedCourses: overview.includedCourses,
   };
 }
 
@@ -1706,7 +1789,7 @@ export function adaptPreviewDataToOverview(
     lectures: totalLessons,
     progress: null,
     enrolled: false,
-    duration: formatDuration(totalDurationSeconds),
+    duration: formatCourseDuration(totalDurationSeconds),
     students: 0,
     thumbnail: c.thumbnailUrl || "",
     thumbnailSrcSet: c.thumbnailSrcSet,
@@ -1744,14 +1827,7 @@ export function adaptPreviewDataToOverview(
         }),
     }));
 
-  const finalPerks: string[] = Array.isArray(previewData.includes)
-    ? previewData.includes
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((inc) => inc.text.trim())
-        .filter(Boolean)
-        .slice(0, 6)
-    : [];
+  const finalPerks = toCourseIncludeLines(previewData.includes);
 
   const pricingProps: CourseOverviewPricingProps = toOverviewPricingProps(
     previewData.pricing,
@@ -1940,7 +2016,10 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
         resume={access?.resume}
         enrolmentAccess={
           access?.enrolled
-            ? { accessExpiresAt: access.accessExpiresAt ?? null }
+            ? {
+                accessExpiresAt: access.accessExpiresAt ?? null,
+                enrollment: access.enrollment ?? null,
+              }
             : null
         }
       />
@@ -1961,8 +2040,14 @@ type CourseOverviewContentProps = CourseOverviewPageProps & {
   onRequestAllSections?: () => void;
   /** Where an enrolled learner carries on, from the access answer. */
   resume?: CourseAccessResume | null;
-  /** An enrolled learner's end of access, from the access answer. */
-  enrolmentAccess?: { accessExpiresAt: string | null } | null;
+  /**
+   * An enrolled learner's end of access and their enrolment, from the
+   * access answer.
+   */
+  enrolmentAccess?: {
+    accessExpiresAt: string | null;
+    enrollment?: CourseAccessEnrollment | null;
+  } | null;
 };
 
 function CourseOverviewContent({
@@ -2050,12 +2135,12 @@ function CourseOverviewContent({
       ? propIsPaidCourse
       : !isFreeCoursePricing(activePricing);
 
-  const inclusions: string[] | undefined = adaptedFromPreview
+  const inclusions: CourseIncludeLine[] | undefined = adaptedFromPreview
     ? adaptedFromPreview.inclusions
     : customInclusions !== undefined
       ? Array.from(
           new Set(customInclusions.map((s) => s.trim()).filter(Boolean)),
-        )
+        ).map((text) => ({ text }))
       : customIncludes !== undefined
         ? Array.from(
             new Set(
@@ -2067,7 +2152,7 @@ function CourseOverviewContent({
                     !/on-demand content/i.test(label),
                 ),
             ),
-          )
+          ).map((text) => ({ text }))
         : undefined;
 
   const [openSections, setOpenSections] = useState<Set<number>>(
@@ -2420,6 +2505,7 @@ function CourseOverviewContent({
                 started={Boolean(course.started)}
                 totalLessons={course.lectures}
                 resume={resume}
+                enrolment={enrolmentAccess}
                 onNavigatePage={onNavigatePage}
                 openIntent={learnerPlays ? learnerIntent : undefined}
               />
@@ -2432,6 +2518,8 @@ function CourseOverviewContent({
                 isReadOnlyPreview={isReadOnlyPreview}
                 isCreator={isCreator}
                 canSelfEnroll={adaptedFromPreview?.canSelfEnroll}
+                includedWith={adaptedFromPreview?.includedWith}
+                includedCourses={adaptedFromPreview?.includedCourses}
                 viewerKnown={viewer === "known"}
               />
             )}

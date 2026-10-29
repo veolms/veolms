@@ -9,8 +9,10 @@ import type { AnalyticsTabContribution } from "@veolms/web-core";
 import { handleRovingTabKeyDown } from "../accessibility/rovingTabFocus";
 import { elevatedCardTokenScopeClasses } from "../components/ElevatedCard";
 import { PageHeading } from "../components/PageHeading";
+import { ThemedDateRangePicker } from "../ThemedDateRangePicker";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { useWebContributions } from "../lib/web-contributions";
+import type { Permission } from "@veolms/contracts";
 import { useCapabilities } from "../services/authorization";
 import { SettingsTabBar } from "../settings/SettingsTabBar";
 import type { PageTabDefinition } from "../settings/settingsTabs";
@@ -24,13 +26,22 @@ import { CORE_ANALYTICS_TABS } from "./analyticsTabs";
  * chart code is reached from here.
  */
 
-export type AnalyticsRangeKey = "7d" | "30d" | "3m" | "1y";
+type AnalyticsPresetRange = "1d" | "7d" | "30d" | "3m" | "1y";
+/** A preset, or "custom": two days the person picked (`CustomDateRange`). */
+export type AnalyticsRangeKey = AnalyticsPresetRange | "custom";
+
+/** Inclusive calendar days, `YYYY-MM-DD`, as a date input gives them. */
+export interface CustomDateRange {
+  from: string;
+  to: string;
+}
 
 export const ANALYTICS_RANGE_OPTIONS: ReadonlyArray<{
-  key: AnalyticsRangeKey;
+  key: AnalyticsPresetRange;
   label: string;
   days: number;
 }> = [
+  { key: "1d", label: "1D", days: 1 },
   { key: "7d", label: "7D", days: 7 },
   { key: "30d", label: "30D", days: 30 },
   { key: "3m", label: "3M", days: 90 },
@@ -39,10 +50,41 @@ export const ANALYTICS_RANGE_OPTIONS: ReadonlyArray<{
 export const ANALYTICS_DEFAULT_RANGE: AnalyticsRangeKey = "30d";
 export const ANALYTICS_DEFAULT_TAB = "overview";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export function isAnalyticsRangeKey(
   value: string | null | undefined,
 ): value is AnalyticsRangeKey {
-  return ANALYTICS_RANGE_OPTIONS.some((option) => option.key === value);
+  return (
+    value === "custom" ||
+    ANALYTICS_RANGE_OPTIONS.some((option) => option.key === value)
+  );
+}
+
+/** A `YYYY-MM-DD` day, read as UTC midnight; null when it is not one. */
+export function parseDay(value: string | null | undefined): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Days the range covers, for "Compared with the previous N days". */
+export function rangeLengthInDays(
+  range: AnalyticsRangeKey,
+  custom?: CustomDateRange,
+): number {
+  if (range !== "custom") {
+    return ANALYTICS_RANGE_OPTIONS.find((option) => option.key === range)!.days;
+  }
+  const from = parseDay(custom?.from);
+  const to = parseDay(custom?.to);
+  return from && to
+    ? Math.max(1, Math.round((to.getTime() - from.getTime()) / DAY_MS) + 1)
+    : 1;
 }
 
 const TAB_DESCRIPTIONS: Record<string, string> = {
@@ -52,20 +94,27 @@ const TAB_DESCRIPTIONS: Record<string, string> = {
 };
 
 /**
- * Whether the Revenue section is for this person: the revenue permission
- * opens it, and so does an instructor's own-course analytics. Course
- * analytics held for every course (a team role) stop short of money, as
- * the API does.
+ * Which sections this person may open: each tab names the permission that
+ * opens it (one tick per tab in the role editor). Revenue also opens for an
+ * instructor's own-course analytics; analytics held for every course
+ * without the revenue key (a team role) stop short of money, as the API
+ * does.
  */
-function useSeesRevenue(seesAcademyRevenue: boolean): boolean {
+function useOpensTab(seesEverything: boolean) {
   const { data, can, canOnCourse } = useCapabilities({
-    enabled: !seesAcademyRevenue,
+    enabled: !seesEverything,
   });
-  if (seesAcademyRevenue) return true;
-  if (!data) return false;
-  return (
-    can("analytics.revenue.read") || !canOnCourse("analytics.course.read", null)
-  );
+  const academyAnalytics =
+    canOnCourse("analytics.overview.read", null) ||
+    canOnCourse("analytics.course.read", null);
+  const seesRevenue =
+    can("analytics.revenue.read") || (Boolean(data) && !academyAnalytics);
+  return (tab: AnalyticsTabContribution) => {
+    if (seesEverything) return true;
+    if (tab.id === "revenue") return seesRevenue;
+    if (tab.permission) return can(tab.permission as Permission);
+    return !tab.adminOnly;
+  };
 }
 
 /** The page's own sections and the ones plugins registered, in order. */
@@ -73,16 +122,17 @@ export function useAnalyticsTabs(
   isAdmin: boolean,
 ): readonly AnalyticsTabContribution[] {
   const contributions = useWebContributions();
-  const seesRevenue = useSeesRevenue(isAdmin);
+  const opensTab = useOpensTab(isAdmin);
+  const opened = [...CORE_ANALYTICS_TABS, ...contributions.analyticsTabs]
+    .filter(opensTab)
+    .map((tab) => tab.id)
+    .join(",");
   return useMemo(() => {
-    const extra = contributions.analyticsTabs.filter(
-      (tab) => isAdmin || !tab.adminOnly,
-    );
-    const core = CORE_ANALYTICS_TABS.filter(
-      (tab) => seesRevenue || tab.id !== "revenue",
-    );
-    return [...core, ...extra].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }, [contributions.analyticsTabs, isAdmin, seesRevenue]);
+    const ids = new Set(opened.split(","));
+    return [...CORE_ANALYTICS_TABS, ...contributions.analyticsTabs]
+      .filter((tab) => ids.has(tab.id))
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [contributions.analyticsTabs, opened]);
 }
 
 export function resolveAnalyticsTab(
@@ -119,13 +169,17 @@ function DateRangeTabs({
   value: AnalyticsRangeKey;
   onChange?: (value: AnalyticsRangeKey) => void;
 }) {
+  const choices: readonly { key: AnalyticsRangeKey; label: string }[] = [
+    ...ANALYTICS_RANGE_OPTIONS,
+    { key: "custom", label: "Custom" },
+  ];
   return (
     <div
       role="radiogroup"
       aria-label="Date range"
       className="flex gap-1 sm:gap-1.5 rounded-[12px] sm:rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_80%,var(--surface))] p-1 sm:p-1.5"
     >
-      {ANALYTICS_RANGE_OPTIONS.map((option) => (
+      {choices.map((option) => (
         <button
           key={option.key}
           type="button"
@@ -145,6 +199,27 @@ function DateRangeTabs({
         </button>
       ))}
     </div>
+  );
+}
+
+/** The days of a custom range, picked as one range; none after today. */
+function CustomRangeField({
+  value,
+  onChange,
+}: {
+  value: CustomDateRange;
+  onChange?: (value: CustomDateRange) => void;
+}) {
+  return (
+    <ThemedDateRangePicker
+      id="analytics-custom-range"
+      value={value}
+      max={formatDay(new Date())}
+      disabled={!onChange}
+      ariaLabel="Custom date range"
+      onChange={(range) => onChange?.(range)}
+      className="w-full sm:w-64"
+    />
   );
 }
 
@@ -186,11 +261,14 @@ export interface AnalyticsPageChromeProps {
   activeTab: AnalyticsTabContribution | null;
   isAdmin: boolean;
   range: AnalyticsRangeKey;
+  /** The picked days, when `range` is "custom". */
+  customRange?: CustomDateRange;
   courseId: string;
   courseOptions: readonly ThemedSelectOption<string>[];
   /** Without these the controls are drawn inert (the loading state). */
   onSelectTab?: (id: string) => void;
   onRangeChange?: (range: AnalyticsRangeKey) => void;
+  onCustomRangeChange?: (range: CustomDateRange) => void;
   onCourseChange?: (courseId: string) => void;
   onExport?: () => void;
   exportDisabled?: boolean;
@@ -204,10 +282,12 @@ export function AnalyticsPageChrome({
   activeTab,
   isAdmin,
   range,
+  customRange,
   courseId,
   courseOptions,
   onSelectTab,
   onRangeChange,
+  onCustomRangeChange,
   onCourseChange,
   onExport,
   exportDisabled = false,
@@ -219,9 +299,7 @@ export function AnalyticsPageChrome({
     () => tabs.map(({ id, label, Icon, tone }) => ({ id, label, Icon, tone })),
     [tabs],
   );
-  const rangeDays = ANALYTICS_RANGE_OPTIONS.find(
-    (option) => option.key === range,
-  )!.days;
+  const rangeDays = rangeLengthInDays(range, customRange);
   const localNavRef = useMemo(
     () => ({ current: null as HTMLElement | null }),
     [],
@@ -270,6 +348,12 @@ export function AnalyticsPageChrome({
 
       <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3">
         <DateRangeTabs value={range} onChange={onRangeChange} />
+        {range === "custom" && customRange ? (
+          <CustomRangeField
+            value={customRange}
+            onChange={onCustomRangeChange}
+          />
+        ) : null}
         <div className="w-full sm:w-72">
           <ThemedSelect
             value={courseId}
@@ -282,7 +366,8 @@ export function AnalyticsPageChrome({
           />
         </div>
         <p className="hidden md:block text-xs text-(--muted)">
-          Compared with the previous {rangeDays} days
+          Compared with the previous{" "}
+          {rangeDays === 1 ? "day" : `${rangeDays} days`}
         </p>
         {onReset ? (
           <div className="ml-auto">

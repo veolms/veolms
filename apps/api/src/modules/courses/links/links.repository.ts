@@ -1,4 +1,5 @@
 import type { DatabaseExecutor } from "@veolms/database";
+import { sql } from "kysely";
 
 /** The courses linked to a course, in the order they were added. */
 export async function listLinkedCourses(
@@ -13,6 +14,30 @@ export async function listLinkedCourses(
     .where("c.deleted_at", "is", null)
     .orderBy("cl.position", "asc")
     .orderBy("cl.created_at", "asc")
+    .execute();
+}
+
+/**
+ * The published courses that link this one, oldest link first: the courses
+ * that give it to whoever holds them. A linked-only course is left out: it
+ * is not sold, and access that came from a link does not pass on links of
+ * its own.
+ */
+export async function listPublishedCoursesLinking(
+  database: DatabaseExecutor,
+  linkedCourseId: string,
+) {
+  return await database
+    .selectFrom("course_links as cl")
+    .innerJoin("courses as c", "c.id", "cl.course_id")
+    .leftJoin("course_pricing as p", "p.course_id", "c.id")
+    .select(["c.id", "c.title", "c.slug"])
+    .where("cl.linked_course_id", "=", linkedCourseId)
+    .where("c.status", "=", "published")
+    .where("c.deleted_at", "is", null)
+    .where(sql<boolean>`coalesce(p.linked_only, false) = false`)
+    .orderBy("cl.created_at", "asc")
+    .orderBy("c.id", "asc")
     .execute();
 }
 

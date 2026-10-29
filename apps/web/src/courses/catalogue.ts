@@ -1,3 +1,4 @@
+import type { IncludedWithCourse } from "@veolms/contracts";
 import { fuzzyMatches } from "../lib/fuzzySearch";
 export type CourseLevel = "Beginner" | "Intermediate";
 export type CourseCategory = "Design" | "Development" | "Database" | "Cloud";
@@ -87,6 +88,12 @@ export interface Course {
    * that did not come from that list.
    */
   canSelfEnroll?: boolean;
+  /**
+   * The course list's `includedWith`: for a linked-only course, the courses
+   * it comes free with. Its card shows "Free with" the first of them in
+   * place of a price, and "Enroll Now" opens that course.
+   */
+  includedWith?: readonly IncludedWithCourse[];
 }
 
 /**

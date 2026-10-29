@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { mediaAssetStatusSchema } from "../media.ts";
+import {
+  COURSE_INCLUDE_DETAIL_MAX,
+  COURSE_INCLUDE_TEXT_MAX,
+  courseIncludeColorSchema,
+  courseIncludeIconSchema,
+  courseIncludeKindSchema,
+} from "./course-includes.ts";
 
 export interface CoursePricingSummary {
   pricingType: "free" | "paid";
@@ -38,6 +45,18 @@ export interface CourseSummary {
    * before the field existed; read that as true.
    */
   canSelfEnroll?: boolean;
+  /**
+   * For a linked-only course, the published courses it comes free with
+   * (see `courseOverviewSchema.includedWith`). Absent for any other course.
+   */
+  includedWith?: readonly IncludedWithCourse[];
+}
+
+/** A published course that gives a linked-only course to whoever holds it. */
+export interface IncludedWithCourse {
+  id: string;
+  slug: string;
+  title: string;
 }
 
 export interface PublicCourse {
@@ -82,6 +101,9 @@ const courseSummaryObjectSchema = z.strictObject({
   pricing: coursePricingSummarySchema,
   certificateEnabled: z.boolean().default(false),
   canSelfEnroll: z.boolean().optional(),
+  includedWith: z
+    .array(z.object({ id: z.uuid(), slug: z.string(), title: z.string() }))
+    .optional(),
 });
 
 export const courseSummarySchema: z.ZodType<CourseSummary> =
@@ -221,6 +243,11 @@ export const coursePricingSchema = z.object({
   currency: z.string().min(3).max(3).default("INR"),
   salePrice: z.number().int().nonnegative().nullable().optional(),
   showDiscountBadge: z.boolean().optional(),
+  /**
+   * Had only through another course's link: no price, not sold, and left
+   * out of the catalogue.
+   */
+  linkedOnly: z.boolean().optional(),
 });
 
 /**
@@ -244,6 +271,12 @@ export const updateCoursePricingRequestSchema = z
     salePrice: z.number().int().nonnegative(),
     /** Show the discount as a badge on the course's cards. Off by default. */
     showDiscountBadge: z.boolean().optional(),
+    /**
+     * Had only through another course's link. When on, both prices are
+     * stored as zero whatever was sent, and the course's access becomes
+     * restricted; turning it off makes access open to everyone again.
+     */
+    linkedOnly: z.boolean().optional(),
   })
   .refine((data) => data.salePrice <= data.price, {
     message: "salePrice cannot exceed price",
@@ -283,21 +316,46 @@ export type UpdateCourseSettingsRequest = z.infer<
   typeof updateCourseSettingsRequestSchema
 >;
 
+/**
+ * One line of a course's "This course includes" card (see
+ * course-includes.ts): its title (`text`), a quieter line under it, an icon
+ * and its colour. A line saved before icons and colours existed has none;
+ * the card then draws a check mark in teal.
+ */
 export const courseIncludeItemSchema = z.object({
   id: z.uuid(),
   text: z.string().min(1).max(255),
   position: z.number().int().nonnegative(),
+  detail: z.string().max(255).nullable().optional(),
+  icon: z.string().max(100).nullable().optional(),
+  color: z.string().max(16).nullable().optional(),
+  kind: courseIncludeKindSchema.optional(),
 });
 
 export const createCourseIncludeRequestSchema = z.object({
-  text: z.string().min(1).max(255),
-  icon: z.string().max(100).nullable().optional(),
+  text: z.string().trim().min(1).max(COURSE_INCLUDE_TEXT_MAX),
+  detail: z
+    .string()
+    .trim()
+    .max(COURSE_INCLUDE_DETAIL_MAX)
+    .nullable()
+    .optional(),
+  icon: courseIncludeIconSchema.nullable().optional(),
+  color: courseIncludeColorSchema.nullable().optional(),
+  kind: courseIncludeKindSchema.optional(),
   position: z.number().int().nonnegative().optional(),
 });
 
 export const updateCourseIncludeRequestSchema = z.object({
-  text: z.string().min(1).max(255).optional(),
-  icon: z.string().max(100).nullable().optional(),
+  text: z.string().trim().min(1).max(COURSE_INCLUDE_TEXT_MAX).optional(),
+  detail: z
+    .string()
+    .trim()
+    .max(COURSE_INCLUDE_DETAIL_MAX)
+    .nullable()
+    .optional(),
+  icon: courseIncludeIconSchema.nullable().optional(),
+  color: courseIncludeColorSchema.nullable().optional(),
   position: z.number().int().nonnegative().optional(),
 });
 
@@ -786,7 +844,16 @@ export const courseOverviewSchema = z.object({
     .nullable()
     .optional(),
   includes: z
-    .array(courseIncludeItemSchema.pick({ text: true, position: true }))
+    .array(
+      courseIncludeItemSchema.pick({
+        text: true,
+        position: true,
+        detail: true,
+        icon: true,
+        color: true,
+        kind: true,
+      }),
+    )
     .optional(),
   /**
    * Whether someone may take this course for themselves: enrol in it when it
@@ -802,6 +869,52 @@ export const courseOverviewSchema = z.object({
    * built before the field existed; read that as true.
    */
   canSelfEnroll: z.boolean().optional(),
+  /**
+   * For a linked-only course, the published courses that include it: it is
+   * not sold or enrolled in on its own, and whoever holds one of these
+   * holds it too. Present only for a linked-only course (possibly empty
+   * when nothing published links it yet). Like `canSelfEnroll` it describes
+   * the course, not the viewer.
+   */
+  includedWith: z
+    .array(
+      z.object({
+        id: z.uuid(),
+        slug: z.string(),
+        title: z.string(),
+      }),
+    )
+    .optional(),
+  /**
+   * The published courses that come free with this one (its linked
+   * courses), in the order they were linked, as the course list shows
+   * them. Absent when there are none. Like `canSelfEnroll` it describes the
+   * course, not the viewer.
+   */
+  includedCourses: z
+    .array(
+      courseSummaryObjectSchema
+        .pick({
+          id: true,
+          slug: true,
+          title: true,
+          thumbnailUrl: true,
+          thumbnailSrcSet: true,
+        })
+        .extend({
+          /**
+           * What the course sells for on its own, for a course that is also
+           * sold separately. Null for a linked-only course and a free one.
+           */
+          worth: z
+            .object({
+              amount: z.number().int().positive(),
+              currency: z.string(),
+            })
+            .nullable(),
+        }),
+    )
+    .optional(),
   /**
    * How long a learner keeps the course once they have it: for life, for a
    * number of days from enrolling, or until a date set for each learner.

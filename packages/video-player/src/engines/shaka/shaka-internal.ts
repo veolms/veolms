@@ -153,6 +153,8 @@ export interface ShakaPlayerLike {
   getConfiguration?(): { drm?: { servers?: Record<string, string> } };
   getNetworkingEngine(): ShakaNetworkingEngineLike | null;
   getStats?(): { estimatedBandwidth?: number; maxSegmentDuration?: number };
+  /** Resumes streams stopped by a failure, after `retryDelaySeconds`. */
+  retryStreaming?(retryDelaySeconds?: number): boolean;
   /** Deprecated in Shaka 5 but still exported; read only for segment times. */
   getManifest?(): ShakaManifestLike | null;
   getVariantTracks(): ShakaVariantTrackLike[];

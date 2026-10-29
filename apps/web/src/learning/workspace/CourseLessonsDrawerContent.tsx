@@ -181,7 +181,12 @@ export function CourseLessonsDrawerContent({
       className={[
         "learning-course-content-drawer overflow-hidden",
         phoneLessonDrawer
-          ? "[--drawer-bleed-background:var(--canvas)] bg-(--canvas) data-[swipe-direction=down]:rounded-t-2xl data-[swipe-direction=down]:border-t-0 data-expanded:rounded-none data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] shadow-[0_-18px_48px_rgba(0,0,0,0.32)]"
+          ? // Square at the top: the sheet hangs from the player's bottom
+            // edge, and rounded corners left a notch on each side through
+            // which the page behind showed (reading mode's grain, as a
+            // patch of noise beside the video). The list in it is not
+            // rounded either.
+            "[--drawer-bleed-background:var(--canvas)] bg-(--canvas) data-[swipe-direction=down]:border-t-0 data-[swipe-axis=y]:[--drawer-content-max-height:100dvh] shadow-[0_-18px_48px_rgba(0,0,0,0.32)] [&_.learning-curriculum]:rounded-none!"
           : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] [--drawer-bleed-background:color-mix(in_srgb,var(--app-shell)_74%,transparent)] overflow-hidden rounded-l-[12px]! rounded-r-(--learning-floating-curriculum-radius)! bg-[color-mix(in_srgb,var(--app-shell)_74%,transparent)] shadow-(--sidebar-menu-active-shadow) backdrop-blur-[calc(var(--sidebar-floating-base-blur,6px)+var(--sidebar-backdrop-blur,8px))] backdrop-saturate-[1.2] data-[swipe-direction=right]:rounded-l-[12px]! data-[swipe-direction=right]:rounded-r-(--learning-floating-curriculum-radius)! [&_.learning-curriculum]:rounded-none! [&_.learning-curriculum]:bg-transparent!",
       ].join(" ")}
     >

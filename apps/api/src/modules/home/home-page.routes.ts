@@ -1,9 +1,11 @@
 import {
   guestHomePageResponseSchema,
   heroVideoPlaybackSchema,
+  homePageDiscussionListResponseSchema,
   homePageLessonVideoOptionsResponseSchema,
   homePageOptionsResponseSchema,
   homePageSettingsResponseSchema,
+  updateHomePageDiscussionRequestSchema,
   updateHomePageSettingsRequestSchema,
   videoPlaybackTokenSchema,
 } from "@veolms/contracts";
@@ -25,6 +27,12 @@ import { createHomePageService } from "./home-page.service.ts";
 
 const homePageRoutes: RoutePlugin = async (app, options) => {
   const { requires } = createPermissionPreHandlers(options.database);
+  // The Platform page opens with platform.settings.read, its Home page tab
+  // included: reading what the home page shows takes no more than that.
+  const readsHomePageSettings = requires([
+    "platform.settings.read",
+    "platform.homepage.update",
+  ]);
 
   const service = createHomePageService({
     database: options.database,
@@ -70,7 +78,7 @@ const homePageRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/home/page-settings",
     {
-      preHandler: requires("platform.homepage.update"),
+      preHandler: readsHomePageSettings,
       schema: {
         operationId: "getHomePageSettings",
         tags: ["Home"],
@@ -91,7 +99,7 @@ const homePageRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/home/page-settings/options",
     {
-      preHandler: requires("platform.homepage.update"),
+      preHandler: readsHomePageSettings,
       schema: {
         operationId: "getHomePageSettingsOptions",
         tags: ["Home"],
@@ -114,7 +122,7 @@ const homePageRoutes: RoutePlugin = async (app, options) => {
   app.get(
     "/home/page-settings/options/courses/:courseId/lessons",
     {
-      preHandler: requires("platform.homepage.update"),
+      preHandler: readsHomePageSettings,
       schema: {
         operationId: "getHomePageLessonVideoOptions",
         tags: ["Home"],
@@ -198,6 +206,54 @@ const homePageRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.updateSettings,
+  );
+
+  app.get(
+    "/home/page-settings/discussions",
+    {
+      preHandler: readsHomePageSettings,
+      schema: {
+        operationId: "getHomePageDiscussionList",
+        tags: ["Home"],
+        summary: "List the comments chosen for the home page",
+        response: {
+          200: jsonResponse(
+            "The listed and hidden comment ids.",
+            homePageDiscussionListResponseSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+        },
+      },
+    },
+    controller.getDiscussionList,
+  );
+
+  app.post(
+    "/home/page-settings/discussions/:threadId",
+    {
+      preHandler: requires("platform.homepage.update"),
+      schema: {
+        operationId: "updateHomePageDiscussion",
+        tags: ["Home"],
+        summary: "Add a comment to the home page, or hide or remove it",
+        description:
+          "Changes one comment on the home page's list and saves the settings straight away, so a lesson or the Discussions page can feature a comment without opening the settings.",
+        params: z.object({ threadId: z.uuid() }),
+        body: updateHomePageDiscussionRequestSchema,
+        response: {
+          200: jsonResponse(
+            "The list after the change.",
+            homePageDiscussionListResponseSchema,
+          ),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          409: errorResponse("The comment cannot be listed"),
+          503: errorResponse("Settings storage is not available yet"),
+        },
+      },
+    },
+    controller.updateDiscussion,
   );
 };
 

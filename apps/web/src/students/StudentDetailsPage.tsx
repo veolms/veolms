@@ -11,6 +11,7 @@ import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/Gradua
 import { LinkedinLogoIcon as LinkedinLogo } from "@phosphor-icons/react/LinkedinLogo";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { PhoneIcon as Phone } from "@phosphor-icons/react/Phone";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { TrendUpIcon as TrendUp } from "@phosphor-icons/react/TrendUp";
 import { UserPlusIcon as UserPlus } from "@phosphor-icons/react/UserPlus";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
@@ -19,11 +20,9 @@ import type { AdminOrder, StudentCourseDetail } from "@veolms/contracts";
 import { safeExternalUrl } from "../lib/external-url";
 import { OrderRefundModal } from "../orders/OrderRefundModal";
 import type { NavigateTo } from "../routing/navigation";
-import { useCurrentUser } from "../services/auth";
 import { useFetchOrder } from "../services/orders";
 import { useStudent } from "../services/students";
 import { useCapabilities } from "../services/authorization";
-import { hasAdminRole } from "../shell/workspaceRole";
 import {
   StudentCourseAccessModal,
   type StudentCourseAccessChange,
@@ -38,10 +37,18 @@ export interface StudentDetailsPageProps {
   setNotice?: (message: string) => void;
 }
 
-// Only admins open it, and it carries the contact form's validation.
+// Only staff who may edit contact details open it, and it carries the
+// contact form's validation.
 const StudentContactModal = lazy(() =>
   import("./StudentContactModal").then((module) => ({
     default: module.StudentContactModal,
+  })),
+);
+
+// Only staff who may manage course access open it.
+const GrantCoursePanel = lazy(() =>
+  import("./GrantCoursePanel").then((module) => ({
+    default: module.GrantCoursePanel,
   })),
 );
 
@@ -58,11 +65,11 @@ export function StudentDetailsPage({
   setNotice,
 }: StudentDetailsPageProps) {
   const { data, isLoading, isError, refetch } = useStudent(username);
-  // A learner's day-by-day progress is theirs to share; an admin can open
-  // it either way. Anyone else here would only be told it is private.
-  const isAdmin = hasAdminRole(useCurrentUser().data?.roles);
-  const canOpenProgress = isAdmin;
-  const { can } = useCapabilities();
+  // A learner's day-by-day progress is theirs to share; staff who see every
+  // student (student.read for every course, as an admin has) can open it
+  // either way. Anyone else here would only be told it is private.
+  const { can, canOnCourse } = useCapabilities();
+  const canOpenProgress = canOnCourse("student.read", null);
   const canEditContact = can("student.contact.update");
   const canManageAccess = can("student.access.manage");
   const canIssueRefunds = can("billing.manage");
@@ -76,6 +83,7 @@ export function StudentDetailsPage({
   const [accessChange, setAccessChange] =
     useState<StudentCourseAccessChange | null>(null);
   const [editingContact, setEditingContact] = useState(false);
+  const [grantingCourses, setGrantingCourses] = useState(false);
 
   const openCourse = (course: StudentCourseDetail) =>
     onNavigatePage?.(`/courses/${course.courseSlug}`);
@@ -505,6 +513,17 @@ export function StudentDetailsPage({
               >
                 Enrolled Courses ({courses.length})
               </h2>
+              {canManageAccess && courses.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setGrantingCourses(true)}
+                  aria-haspopup="dialog"
+                  className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-xl bg-(--accent)/12 px-3.5 text-sm font-semibold text-(--accent) transition-colors hover:bg-(--accent)/20"
+                >
+                  <Plus size={16} weight="bold" className="shrink-0" />
+                  <span>Grant course</span>
+                </button>
+              ) : null}
             </div>
 
             {courses.length > 0 ? (
@@ -541,9 +560,20 @@ export function StudentDetailsPage({
                   No courses enrolled yet
                 </h3>
                 <p className="mt-1 text-xs md:text-sm text-(--muted) max-w-sm leading-relaxed">
-                  This student has registered an account but has not yet
-                  enrolled in any academy courses.
+                  This student has an account but is not enrolled in any academy
+                  course yet.
                 </p>
+                {canManageAccess ? (
+                  <button
+                    type="button"
+                    onClick={() => setGrantingCourses(true)}
+                    aria-haspopup="dialog"
+                    className="mt-4 inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-xl bg-(--accent) px-4 text-sm font-semibold text-white transition-[filter] hover:brightness-110"
+                  >
+                    <Plus size={16} weight="bold" className="shrink-0" />
+                    <span>Grant course</span>
+                  </button>
+                ) : null}
               </ElevatedCard>
             )}
           </section>
@@ -578,6 +608,27 @@ export function StudentDetailsPage({
             phoneNo={student.phoneNo ?? null}
             onClose={() => setEditingContact(false)}
             setNotice={setNotice}
+          />
+        </Suspense>
+      ) : null}
+
+      {grantingCourses && student ? (
+        <Suspense fallback={null}>
+          <GrantCoursePanel
+            userId={student.id}
+            studentName={student.displayName || `@${student.username}`}
+            // Lost access comes back with Restore on its card; only an
+            // expired course is offered again.
+            heldCourseIds={courses
+              .filter((course) => course.accessStatus !== "expired")
+              .map((course) => course.courseId)}
+            onClose={() => setGrantingCourses(false)}
+            onGranted={(count) => {
+              setGrantingCourses(false);
+              setNotice?.(
+                `${student.displayName || `@${student.username}`} can open ${count === 1 ? "the course" : `${count} courses`} now.`,
+              );
+            }}
           />
         </Suspense>
       ) : null}

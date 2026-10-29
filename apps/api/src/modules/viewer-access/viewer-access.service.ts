@@ -1,6 +1,7 @@
 import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import type {
+  CourseAccessEnrollment,
   CourseAccessListResponse,
   CourseAccessProgress,
   CourseAccessResponse,
@@ -12,12 +13,18 @@ import { AppError } from "../../lib/errors.ts";
 import { createAccessService, type AccessService } from "../access/index.ts";
 import { hasAcademyPermission } from "../authorization/index.ts";
 import type { EnrollmentService } from "../commerce/index.ts";
+import { toOrderPaymentMethod } from "../commerce/orders/order.mapper.ts";
 import {
   resolveOverviewVisibility,
   type CourseAccessFacts,
   type CourseService,
 } from "../courses/index.ts";
 import type { LearningProgressService } from "../learning-progress/learning-progress.service.ts";
+import { decidePace, PACE_WINDOW_DAYS } from "./viewer-access.pace.ts";
+import {
+  findCourseActivity,
+  findEnrollmentOrder,
+} from "./viewer-access.repository.ts";
 import {
   decideCourseAccess,
   isGrantInForce,
@@ -184,6 +191,40 @@ export function createViewerAccessService({
   }
 
   /**
+   * The learner's enrolment for the course page: when it began, the order
+   * that gave it, and their pace. Undefined when they hold no active one.
+   */
+  async function getEnrollment(
+    user: ViewerAccessUser,
+    courseId: string,
+    lessonsLeft: number,
+  ): Promise<CourseAccessEnrollment | undefined> {
+    const now = new Date();
+    const since = new Date(now.getTime() - PACE_WINDOW_DAYS * 86_400_000);
+    const [row, activity] = await Promise.all([
+      findEnrollmentOrder(database, user.id, courseId),
+      findCourseActivity(database, user.id, courseId, since),
+    ]);
+    if (!row) return undefined;
+    return {
+      enrolledAt: (row.paid_at ?? row.access_starts_at).toISOString(),
+      order:
+        row.order_id && row.order_number && row.currency
+          ? {
+              id: row.order_id,
+              orderNumber: row.order_number,
+              totalAmount: row.total_amount ?? 0,
+              currency: row.currency,
+              paymentMethod:
+                toOrderPaymentMethod(row.payment_method)?.method ?? null,
+              hasInvoice: row.invoice_number !== null,
+            }
+          : null,
+      pace: decidePace({ now, ...activity, lessonsLeft }),
+    };
+  }
+
+  /**
    * The rule the discussions apply to posting
    * (`assertCanParticipateInCourse`): whoever reads every course's
    * discussions (admins, through their role), the course's creator, and
@@ -241,11 +282,21 @@ export function createViewerAccessService({
       mayJoinCourseDiscussions(user, course.creator_id, holdsGrant),
     ]);
 
+    const enrollmentDetails =
+      user && enrollment
+        ? await getEnrollment(
+            user,
+            course.id,
+            resume ? resume.totalLessons - resume.completedLessons : 0,
+          )
+        : undefined;
+
     return {
       ...summary,
       mayJoinDiscussions,
       resume,
       accessExpiresAt: enrollment?.accessExpiresAt?.toISOString() ?? null,
+      enrollment: enrollmentDetails ?? null,
       curriculumVersion: curriculumVersion ?? NO_PUBLIC_CURRICULUM,
     };
   }
