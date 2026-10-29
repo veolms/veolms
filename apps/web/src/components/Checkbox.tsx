@@ -42,11 +42,14 @@ export function Checkbox({
   disabled = false,
   className = "",
 }: CheckboxProps) {
+  // `relative` keeps the visually hidden input inside its label: placed
+  // against a far ancestor instead, focusing it scrolled that ancestor
+  // (once the whole app shell) to reach it.
   return (
     <label
       htmlFor={id}
       data-checkbox
-      className={`group inline-flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-(--text-secondary) transition-colors sm:text-sm ${disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer hover:bg-(--hover)"} ${className}`}
+      className={`group relative inline-flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-xs font-medium text-(--text-secondary) transition-colors sm:text-sm ${disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer hover:bg-(--hover)"} ${className}`}
     >
       <input
         id={id}
