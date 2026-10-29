@@ -1,6 +1,12 @@
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { Play } from "@phosphor-icons/react/Play";
+import { PlayCircle } from "@phosphor-icons/react/PlayCircle";
 import { Button } from "../../components/Button";
+import { CourseEnrolmentDetailsEarly } from "./CourseEnrolmentDetailsEarly";
+import {
+  progressActionColumnClasses,
+  upNextClasses,
+} from "./CourseLearnerProgressBar";
 import {
   priceBarActionClasses,
   priceBarPaddingClasses,
@@ -13,7 +19,8 @@ import {
  * from what the document's head found in the tab's copies
  * (`courseCardEarlyState`). The figure, the bar, the lessons done and the
  * button's words come from the style it writes; the parts it says nothing
- * about stay hidden. Nothing in it can be pressed: the real band takes its
+ * about stay hidden: "Up next" and "Your enrollment" show when the tab
+ * kept the course's access answer and the panel's words. Nothing in it can be pressed: the real band takes its
  * place once the page knows. Keep the two looking the same.
  */
 export function CourseLearnerProgressBarEarly() {
@@ -62,27 +69,40 @@ export function CourseLearnerProgressBarEarly() {
           </span>
         </div>
 
-        <Button
-          motion="static"
-          className={`${priceBarActionClasses} w-full @2xl/price:w-auto @2xl/price:min-w-60`}
-          tabIndex={-1}
-        >
-          <Play
-            size="1.15em"
-            weight="fill"
-            className="shrink-0"
-            aria-hidden="true"
-          />
-          <span className="truncate">
-            <span data-course-card-early-label="start">Start Learning</span>
-            <span data-course-card-early-label="continue" className="hidden">
-              Continue Learning
+        <div className={progressActionColumnClasses}>
+          <Button
+            motion="static"
+            className={`${priceBarActionClasses} w-full`}
+            tabIndex={-1}
+          >
+            <Play
+              size="1.15em"
+              weight="fill"
+              className="shrink-0"
+              aria-hidden="true"
+            />
+            <span className="truncate">
+              <span data-course-card-early-label="start">Start Learning</span>
+              <span data-course-card-early-label="continue" className="hidden">
+                Continue Learning
+              </span>
+              <span data-course-card-early-label="review" className="hidden">
+                Review Course
+              </span>
             </span>
-            <span data-course-card-early-label="review" className="hidden">
-              Review Course
-            </span>
-          </span>
-        </Button>
+          </Button>
+          <p className={`${upNextClasses} hidden`} data-course-early-up-next="">
+            <PlayCircle size={14} className="shrink-0" aria-hidden="true" />
+            <span className="shrink-0">Up next</span>
+            <span className="truncate font-medium text-(--text) after:content-(--course-early-up-next)" />
+          </p>
+        </div>
+      </div>
+      <div
+        className={`${priceBarPaddingClasses} hidden pt-0!`}
+        data-course-early-enrolment=""
+      >
+        <CourseEnrolmentDetailsEarly />
       </div>
     </section>
   );

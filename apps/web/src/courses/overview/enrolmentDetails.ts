@@ -1,4 +1,9 @@
-import type { CourseAccessPace } from "@veolms/contracts";
+import type {
+  CourseAccessEnrollment,
+  CourseAccessPace,
+} from "@veolms/contracts";
+import { formatMoney } from "@veolms/contracts/commerce/money";
+import { formatTimeAgo } from "../../lib/timeAgo";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -139,5 +144,64 @@ export function describePace(
   return {
     value,
     note: `On track to finish around ${MONTH_FORMAT.format(finish)}${against}`,
+  };
+}
+
+/**
+ * Everything "Your enrollment" says, as text. The panel is drawn from it,
+ * and so is its early copy, the one the document's head draws from this
+ * tab's session storage before the page's scripts have run (see
+ * `enrolmentWordsCopy`), so the two read the same.
+ */
+export interface EnrolmentWords {
+  /** "20 Oct 2026". */
+  enrolledOn: string;
+  /** "(1 week ago)". */
+  enrolledAgo: string;
+  /** "Order #ORD-1 · ₹8,999 via UPI", or "Given free of charge". */
+  order: string;
+  /** Whether "Invoice" follows the order. */
+  hasInvoice: boolean;
+  access: EnrolmentAccess;
+  /** "Access", "Access until" or, while it is ending, "Access ends soon". */
+  accessLabel: string;
+  /** Under the access row: only access that does not end has one. */
+  accessNote: string | null;
+  pace: { value: string; note: string | null };
+}
+
+export function describeEnrolmentWords(
+  enrollment: CourseAccessEnrollment,
+  accessExpiresAt: string | null,
+  now: Date = new Date(),
+): EnrolmentWords {
+  const access = describeEnrolmentAccess(accessExpiresAt, now);
+  const order = enrollment.order;
+  const method = paymentMethodLabel(order?.paymentMethod ?? null);
+  return {
+    enrolledOn: formatEnrolmentDate(enrollment.enrolledAt),
+    enrolledAgo: `(${formatTimeAgo(enrollment.enrolledAt, now.getTime())})`,
+    order: order
+      ? `Order #${order.orderNumber.replace(/^#/u, "")}${
+          order.totalAmount > 0
+            ? ` · ${formatMoney(order.totalAmount, { currency: order.currency })}${
+                method ? ` via ${method}` : ""
+              }`
+            : ""
+        }`
+      : "Given free of charge",
+    hasInvoice: Boolean(order?.hasInvoice),
+    access,
+    accessLabel:
+      access.tone === "ending"
+        ? "Access ends soon"
+        : access.tone === "lifetime"
+          ? "Access"
+          : "Access until",
+    accessNote:
+      access.tone === "lifetime"
+        ? "No end date · learn at whatever pace suits you"
+        : null,
+    pace: describePace(enrollment.pace, accessExpiresAt),
   };
 }
