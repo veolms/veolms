@@ -36,6 +36,7 @@ export interface UseCurriculumResizeArgs {
   setCurriculumWidth: Dispatch<SetStateAction<number>>;
   curriculumCollapsed: boolean;
   setCurriculumCollapsed: Dispatch<SetStateAction<boolean>>;
+  setCurriculumFocusRequest: Dispatch<SetStateAction<number>>;
   curriculumResizing: boolean;
   setCurriculumResizing: Dispatch<SetStateAction<boolean>>;
   setCurriculumResizePreviewWidth: Dispatch<SetStateAction<number | null>>;
@@ -83,6 +84,7 @@ export function useCurriculumResize({
   setCurriculumWidth,
   curriculumCollapsed,
   setCurriculumCollapsed,
+  setCurriculumFocusRequest,
   curriculumResizing,
   setCurriculumResizing,
   setCurriculumResizePreviewWidth,
@@ -311,6 +313,11 @@ export function useCurriculumResize({
       if (lessonDrawer) closeLessonDrawer();
       else openLessonDrawer();
       return;
+    }
+    // Opened again, the list comes back at the lesson being played, not
+    // wherever it was scrolled to before it was closed.
+    if (curriculumCollapsed) {
+      setCurriculumFocusRequest((request) => request + 1);
     }
     setCurriculumCollapsed((collapsed) => !collapsed);
   };

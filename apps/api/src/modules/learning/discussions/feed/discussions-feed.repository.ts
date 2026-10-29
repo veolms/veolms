@@ -38,6 +38,11 @@ export interface FeedCandidateOptions {
   /** Text to find, as typed; none lists everything. */
   search?: string;
   sort: LessonDiscussionSort;
+  /**
+   * `exclude` leaves pinned threads out (they are listed on their own, above
+   * the feed); `only` lists just them, newest pin first, with no notes.
+   */
+  pinned?: "exclude" | "only";
   cursor?: {
     entityId: string;
     sourceRank: number;
@@ -140,7 +145,31 @@ export function createDiscussionsFeedRepository(): DiscussionsFeedRepository {
           options.mine,
         )}
         ${searchPattern ? sql`and ${threadSearchSql(searchPattern)}` : sql``}
+        ${
+          options.pinned === "exclude"
+            ? sql`and t.pinned_at is null`
+            : options.pinned === "only"
+              ? sql`and t.pinned_at is not null`
+              : sql``
+        }
     `);
+      }
+
+      if (options.pinned === "only") {
+        if (sources.length === 0) return [];
+        const pinnedRows = await sql<FeedCandidate>`
+    select feed.*
+    from (${sources[0]}) as feed
+    join learning_threads as pt on pt.id = feed."entityId"
+    order by pt.pinned_at desc, feed."entityId" desc
+    limit ${options.limit}
+  `.execute(db);
+        return pinnedRows.rows.map((row) => ({
+          ...row,
+          createdAt: toDate(row.createdAt),
+          sourceRank: Number(row.sourceRank),
+          score: Number(row.score),
+        }));
       }
 
       if (options.includeNotes) {

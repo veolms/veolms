@@ -182,7 +182,38 @@ export function createAccessService(): AccessService {
       );
     }
 
+    if (params.validUntil && params.validUntil.getTime() <= Date.now()) {
+      throw new AppError(
+        400,
+        "INVALID_VALID_UNTIL",
+        "The access end date must be in the future.",
+      );
+    }
+
     return inTransaction(outerDatabase, async (database) => {
+      // An unknown id reached the foreign keys and came back as a server
+      // error. Only an active account, and only a published course: a draft
+      // stays closed to every learner, and access to an archived one is kept
+      // for those who already had it, not handed out.
+      const { user, course } = await accessRepo.findManualGrantTargets(
+        database,
+        params.userId,
+        params.courseId,
+      );
+      if (!user || user.is_deleted) {
+        throw new AppError(404, "USER_NOT_FOUND", "Learner not found.");
+      }
+      if (!course || course.deleted_at) {
+        throw new AppError(404, "COURSE_NOT_FOUND", "Course not found.");
+      }
+      if (course.status !== "published") {
+        throw new AppError(
+          400,
+          "COURSE_NOT_GRANTABLE",
+          "Only published courses can be given to a student.",
+        );
+      }
+
       const now = new Date();
       const grant = await grantAccess(database, {
         userId: params.userId,

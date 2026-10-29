@@ -133,6 +133,32 @@ export type HomePageOptionsResponse = z.infer<
   typeof homePageOptionsResponseSchema
 >;
 
+/**
+ * The comments on the home page's "What students say", as the lesson and
+ * Discussions pages need them to offer "Add to home page" on a comment.
+ */
+export const homePageDiscussionListResponseSchema = z.strictObject({
+  /** On the home page's list, in its order (hidden ones included). */
+  pinnedThreadIds: z.array(z.uuid()),
+  /** Kept off the home page, listed or not. */
+  hiddenThreadIds: z.array(z.uuid()),
+});
+export type HomePageDiscussionListResponse = z.infer<
+  typeof homePageDiscussionListResponseSchema
+>;
+
+/**
+ * One change to that list, saved at once: `add` puts the comment first on
+ * the list (and shows it), `remove` takes it off, `hide` keeps it on the
+ * list but off the home page, `show` undoes `hide`.
+ */
+export const updateHomePageDiscussionRequestSchema = z.strictObject({
+  action: z.enum(["add", "remove", "hide", "show"]),
+});
+export type UpdateHomePageDiscussionRequest = z.infer<
+  typeof updateHomePageDiscussionRequestSchema
+>;
+
 /** A lesson with a video, as the hero video picker lists a course's lessons. */
 export const homePageLessonVideoOptionSchema = z.strictObject({
   id: z.uuid(),

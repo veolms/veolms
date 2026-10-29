@@ -100,6 +100,23 @@ const STANDBY_READY_WAIT_MS = 1_500;
 const STANDBY_FIRST_FRAME_TIMEOUT_MS = 8_000;
 /** `HTMLMediaElement.HAVE_CURRENT_DATA`: a frame is decoded and showable. */
 const HAVE_CURRENT_DATA = 2;
+/**
+ * A segment that still could not be downloaded after its own retries (the
+ * CDN answering 500, or nothing arriving for a while) stops that stream for
+ * good in Shaka on a video that is not live: it then switches to another
+ * quality, but only with automatic quality on and another stream to switch
+ * to. A chosen quality, and the one audio stream of a DASH lesson, have
+ * none, so the error was final: "Something went wrong" on HLS lessons, and
+ * on DASH lessons a picture that froze once what was buffered ran out. It
+ * showed at the very end because that is where the last segments are
+ * fetched on a slow link, beside the next lesson preloading. The stream is
+ * now asked for again, this many times in a row before the error stands...
+ */
+const STREAMING_RETRY_LIMIT = 8;
+/** ...this long after the first failure, twice as long after each next one... */
+const STREAMING_RETRY_FIRST_DELAY_SECONDS = 1;
+/** ...and never longer than this. */
+const STREAMING_RETRY_MAX_DELAY_SECONDS = 8;
 
 /** Resolves true once `media` has a decoded frame to show, false on timeout. */
 function waitForFirstFrame(
@@ -372,6 +389,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #standbyMedia: HTMLMediaElement | null = null;
   /** Settles once the player last playing in the standby element is gone. */
   #standbyReleased: Promise<void> = Promise.resolve();
+  /** Streaming failures retried in a row (see `STREAMING_RETRY_LIMIT`). */
+  #streamingRetries = 0;
   #stopWatchingSpeculativePreloads: (() => void) | null = null;
   /** Drops a source's streaming settings still waiting for its first frame. */
   #cancelDeferredStreaming: (() => void) | null = null;
@@ -423,6 +442,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     let player = this.requirePlayer();
     const runtime = this.requireRuntime();
     const generation = this.beginOperation();
+    this.#streamingRetries = 0;
     this.hideOutgoingVideo(media);
     this.startLoading(source);
     this.#selectedTextTrackId = null;
@@ -557,6 +577,47 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       }
       throw normalized;
     }
+  }
+
+  /**
+   * See `VideoEngine.stop`. The Shaka player that played the video is
+   * destroyed, which takes its MediaSource, its downloads and its licences
+   * with it, and a new one is attached to the same element for the next
+   * load. A load on its way is given up (`beginOperation`). The hidden
+   * standby and what is prepared in it are left alone: they are for the
+   * next video.
+   */
+  async stop(): Promise<void> {
+    const media = this.mediaElement;
+    const runtime = this.#runtime;
+    const previous = this.#player;
+    this.beginOperation();
+    media?.pause();
+    if (!media || !runtime || !previous) return;
+    this.updateSnapshot({ lifecycle: "unloading" });
+    this.#cancelDeferredStreaming?.();
+    rememberShakaBandwidthEstimate(previous);
+    this.clearNetworkingFilters();
+    this.unbindShakaEvents(previous);
+    const adoptedSession = this.#adoptedPreloadSession;
+    this.#adoptedPreloadSession = null;
+    if (adoptedSession && !adoptedSession.consumed) {
+      consumeEarlyShakaPreloadSession(adoptedSession);
+      await discardEarlyShakaPreloadManager(adoptedSession);
+    }
+    // In place before the old one is gone, so nothing finds no player.
+    const next = new runtime.Player();
+    this.#player = next;
+    this.bindShakaEvents(next);
+    await previous.destroy().catch(() => undefined);
+    if (media.currentSrc || media.hasAttribute("src")) {
+      media.removeAttribute("src");
+      media.load();
+    }
+    await next.attach(media);
+    this.revealVideo();
+    this.clearTrackMaps();
+    this.finishUnloading();
   }
 
   async unload(): Promise<void> {
@@ -1447,7 +1508,19 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         "SHAKA_ERROR",
         "UNKNOWN",
       );
-      this.emitError(error, error.fatal);
+      if (this.retryFailedStreaming(player, error)) return;
+      // One Shaka got over by itself (another quality took over) is told to
+      // whoever listens, but is not the player's error: shown as one, the
+      // video played on under "Something went wrong" until it was paused.
+      if (!error.fatal) {
+        this.emit("error", { error });
+        return;
+      }
+      this.emitError(error);
+    });
+    // A segment in again: the streams are healthy.
+    listen("segmentappended", () => {
+      this.#streamingRetries = 0;
     });
     listen("buffering", (event) => {
       this.setBuffering(Boolean(event.buffering));
@@ -1480,6 +1553,40 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.refreshTracks(true);
       this.emit("manifestupdated", undefined);
     });
+  }
+
+  /**
+   * Asks Shaka to stream again after a segment could not be downloaded
+   * (see `STREAMING_RETRY_LIMIT`), waiting longer each time. True when it
+   * will: the error is then not the player's, and the loader shows while
+   * playback waits for the segment.
+   */
+  private retryFailedStreaming(
+    player: ShakaPlayerLike,
+    error: VideoEngineError,
+  ): boolean {
+    if (
+      !error.fatal ||
+      error.category !== "NETWORK" ||
+      this.#player !== player ||
+      this.getSnapshot().lifecycle !== "ready" ||
+      this.#streamingRetries >= STREAMING_RETRY_LIMIT ||
+      !player.retryStreaming
+    ) {
+      return false;
+    }
+    const delay = Math.min(
+      STREAMING_RETRY_MAX_DELAY_SECONDS,
+      STREAMING_RETRY_FIRST_DELAY_SECONDS * 2 ** this.#streamingRetries,
+    );
+    if (!player.retryStreaming(delay)) return false;
+    this.#streamingRetries += 1;
+    markPlayback("streaming-retry", {
+      attempt: this.#streamingRetries,
+      delay,
+      code: error.code,
+    });
+    return true;
   }
 
   private unbindShakaEvents(player: ShakaPlayerLike): void {

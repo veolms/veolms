@@ -706,3 +706,21 @@ export async function getStudentEnrolledCourses(
   }
   return await query.orderBy("e.created_at", "desc").execute();
 }
+
+/**
+ * The courses staff may open for a student by hand: published and not
+ * deleted. Ids that are missing, deleted, draft or archived are left out.
+ */
+export async function listGrantableCourses(
+  database: StudentsExecutor,
+  courseIds: readonly string[],
+) {
+  if (courseIds.length === 0) return [];
+  return await database
+    .selectFrom("courses")
+    .select(["id", "title"])
+    .where("id", "in", [...courseIds])
+    .where("status", "=", "published")
+    .where("deleted_at", "is", null)
+    .execute();
+}

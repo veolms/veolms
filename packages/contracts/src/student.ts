@@ -169,3 +169,40 @@ export const studentContactUpdateResponseSchema = z.strictObject({
 export type StudentContactUpdateResponse = z.infer<
   typeof studentContactUpdateResponseSchema
 >;
+
+/**
+ * Staff add a student by hand (POST /students). The account is created at
+ * once with the student role; the student later signs in with this email and
+ * a code, with no registration step. The email and number are saved
+ * unverified. Courses listed here are opened in the same step, lifetime
+ * unless `validUntil` is given; only published courses can be opened.
+ */
+export const studentCreateRequestSchema = z.strictObject({
+  displayName: z
+    .string()
+    .trim()
+    .min(1, "Name is required")
+    .max(100, "Name is too long"),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(255)
+    .email("Enter a valid email address"),
+  phoneNo: phoneNumberSchema.nullable().optional(),
+  courseIds: z.array(z.uuid()).max(50).optional(),
+  validUntil: z.iso.datetime({ offset: true }).nullable().optional(),
+});
+export type StudentCreateRequest = z.infer<typeof studentCreateRequestSchema>;
+
+export const studentCreateResponseSchema = z.strictObject({
+  id: z.uuid(),
+  username: z.string(),
+  displayName: z.string(),
+  email: z.string().email(),
+  phoneNo: z.string().nullable(),
+  grantedCourseIds: z.array(z.uuid()),
+  /** False when the welcome email could not be sent; the account stands. */
+  welcomeEmailSent: z.boolean(),
+});
+export type StudentCreateResponse = z.infer<typeof studentCreateResponseSchema>;

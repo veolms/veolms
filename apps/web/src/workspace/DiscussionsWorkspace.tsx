@@ -3,14 +3,13 @@ import {
   cloneElement,
   useCallback,
   useEffect,
-  lazy,
   useMemo,
   useRef,
-  Suspense,
   useState,
   useSyncExternalStore,
 } from "react";
 import "../styles/features/discussions.css";
+import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 import { elevatedCardTokenScopeClasses } from "../components/ElevatedCard";
 import type { PublicPopularDiscussion } from "@veolms/contracts";
 import type {
@@ -102,14 +101,6 @@ import {
   readApplicationScrollPosition,
   type ApplicationScrollPosition,
 } from "../shell/applicationScroll";
-
-const loadDiscussionMarkdown = () =>
-  import("../learning/discussion-editor/DiscussionMarkdown");
-const DiscussionMarkdown = lazy(() =>
-  loadDiscussionMarkdown().then((module) => ({
-    default: module.DiscussionMarkdown,
-  })),
-);
 
 type DiscussionStatus = NonNullable<DiscussionWorkspaceCard["status"]>;
 type DiscussionEffectiveOwnership = "all" | "mine";
@@ -755,20 +746,12 @@ function DiscussionWorkspaceCardContent({
               <HighlightedText text={normalizedTitle} />
             </div>
           )}
-          <Suspense
-            fallback={
-              <div className="discussion-hub__card-expanded-markdown max-w-none">
-                {normalizedBody}
-              </div>
-            }
-          >
-            <DiscussionMarkdown
-              content={content}
-              label={`${label} by ${thread.author}`}
-              preserveSoftBreaks
-              className="discussion-hub__card-expanded-markdown max-w-none"
-            />
-          </Suspense>
+          <DiscussionMarkdown
+            content={content}
+            label={`${label} by ${thread.author}`}
+            preserveSoftBreaks
+            className="discussion-hub__card-expanded-markdown max-w-none"
+          />
           {utility(true)}
         </div>
       ) : (
@@ -1884,9 +1867,10 @@ export function DiscussionsWorkspace({
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounce(query, DEFAULT_DEBOUNCE_DELAY_MS);
   const [status, setStatus] = useState("all");
-  const [sort, setSort] = useState("activity");
+  // Newest first by default: the order the posts were written in.
+  const [sort, setSort] = useState("latest");
   const [qnaStatus, setQnaStatus] = useState("all");
-  const [qnaSort, setQnaSort] = useState("activity");
+  const [qnaSort, setQnaSort] = useState("latest");
   const [notesSort, setNotesSort] = useState<"activity" | "latest">("activity");
   const [composer, setComposer] = useState<"question" | "discussion" | null>(
     null,
@@ -1904,10 +1888,6 @@ export function DiscussionsWorkspace({
     top: string;
     width: string;
   } | null>(null);
-
-  useEffect(() => {
-    void loadDiscussionMarkdown().catch(() => undefined);
-  }, []);
 
   useEffect(() => {
     setMobileActionTarget(null);
@@ -2214,16 +2194,16 @@ export function DiscussionsWorkspace({
       courseId: "all",
       ownership: effectiveOwnership,
       qnaStatus: "all",
-      qnaSort: "activity",
+      qnaSort: "latest",
       notesSort: "activity",
-      sort: "activity",
+      sort: "latest",
     });
 
     if (isQnaTab) {
       setQnaStatus("all");
-      setQnaSort("activity");
+      setQnaSort("latest");
     } else if (isCommentsTab || isAllTab) {
-      setSort("activity");
+      setSort("latest");
     } else if (isNotesTab) {
       setNotesSort("activity");
     }
@@ -2771,11 +2751,12 @@ export function DiscussionsWorkspace({
                     options={
                       isQnaTab
                         ? ([
-                            ["activity", "Latest activity"],
                             ["latest", "Newest"],
+                            ["activity", "Latest activity"],
                             ["replies", "Most replies"],
                           ] as const)
                         : ([
+                            ["latest", "Newest"],
                             ["activity", "Latest activity"],
                             ["replies", "Most replies"],
                           ] as const)

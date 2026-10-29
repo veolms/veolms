@@ -1,6 +1,4 @@
 import {
-  lazy,
-  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -16,6 +14,7 @@ import { DiscussionAvatar } from "../learning/DiscussionAvatar";
 import type { NavigateTo } from "../routing/navigation";
 import { DiscussionLikeButton } from "./DiscussionLikeButton";
 import { DiscussionRowAction } from "./DiscussionRowAction";
+import { DiscussionStaffActions } from "./DiscussionStaffActions";
 import { DiscussionWorkspaceActionMenu } from "./DiscussionWorkspaceActionMenu";
 import { useDiscussionWorkspaceCardLongPress } from "./useDiscussionWorkspaceCardLongPress";
 import type { DiscussionWorkspaceCard } from "./discussions-workspace.adapter";
@@ -29,13 +28,9 @@ import { renderContentWithMentions } from "../learning/discussion-editor/Mention
 import { requestDiscussionReplyFocus } from "./discussionReplyFocus";
 import { cn } from "../lib/utils";
 import { createDiscussionDraft } from "../learning/discussion-editor/types";
-
-// Loaded once the list has rows to draw, as the rest of the page loads it.
-const DiscussionMarkdown = lazy(() =>
-  import("../learning/discussion-editor/DiscussionMarkdown").then((module) => ({
-    default: module.DiscussionMarkdown,
-  })),
-);
+// Drawn with the row, not loaded after it: a post first shown as plain
+// text and then redrawn as Markdown jumps in front of the learner.
+import { DiscussionMarkdown } from "../learning/discussion-editor/DiscussionMarkdown";
 
 const ROW_TEXT_CLASS =
   "max-w-180 text-base leading-relaxed max-[48.75rem]:text-[0.9375rem] wrap-anywhere text-(--text) select-text";
@@ -43,8 +38,8 @@ const ROW_TEXT_CLASS =
 /**
  * A row's post, drawn as Markdown (a table as a table, a list as a list)
  * and kept to four lines' height: a longer one is cut there and fades out,
- * and opens in full with the discussion. Until the Markdown is drawn, and
- * for a post with none, its plain text stands in, cut to four lines.
+ * and opens in full with the discussion. A post with no Markdown shows its
+ * plain text, cut to four lines.
  */
 function RowMarkdown({
   markdown,
@@ -88,14 +83,12 @@ function RowMarkdown({
           "[mask-image:linear-gradient(to_bottom,black_calc(100%-1.5lh),transparent)]",
       )}
     >
-      <Suspense fallback={plain}>
-        <DiscussionMarkdown
-          content={content}
-          label="Post"
-          preserveSoftBreaks
-          className="max-w-none [&_p:first-child]:mt-0"
-        />
-      </Suspense>
+      <DiscussionMarkdown
+        content={content}
+        label="Post"
+        preserveSoftBreaks
+        className="max-w-none [&_p:first-child]:mt-0"
+      />
     </div>
   );
 }
@@ -368,6 +361,7 @@ export function DiscussionWorkspaceRow({
               }}
             />
           )}
+          <DiscussionStaffActions card={card} staff={actions.staff} />
         </div>
       </div>
 

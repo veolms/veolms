@@ -1256,6 +1256,55 @@ export function createThreadsService(
     },
   };
 
+  /**
+   * The pin and creator's heart of each thread, read in one lookup for a page
+   * rather than joined into every query that lists threads.
+   */
+  async function addThreadMarks<
+    T extends { id: string; itemType?: "thread" | "note" | "reply" },
+  >(db: DatabaseExecutor, items: readonly T[]): Promise<T[]> {
+    const threadIds = items.flatMap((item) =>
+      !item.itemType || item.itemType === "thread" ? [item.id] : [],
+    );
+    if (threadIds.length === 0) return [...items];
+    const marks = new Map(
+      (await threadsRepo.listThreadMarks(db, threadIds)).map((row) => [
+        row.id,
+        row,
+      ]),
+    );
+    return items.map((item) => {
+      if (item.itemType && item.itemType !== "thread") return item;
+      const mark = marks.get(item.id);
+      return {
+        ...item,
+        pinnedAt: mark?.pinnedAt ? toIsoString(mark.pinnedAt) : null,
+        creatorHeart: mark?.heartedAt
+          ? {
+              displayName: mark.hearterName || "Creator",
+              avatarUrl: mark.hearterAvatarUrl,
+            }
+          : null,
+      };
+    });
+  }
+
+  const getThreadWithoutMarks = service.getThread;
+  service.getThread = async (db, threadId, actor) => {
+    const thread = await getThreadWithoutMarks(db, threadId, actor);
+    const [marked] = await addThreadMarks(db, [thread]);
+    return marked ?? thread;
+  };
+
+  const listThreadsWithoutMarks = service.listThreads;
+  service.listThreads = async (db, query) => {
+    const response = await listThreadsWithoutMarks(db, query);
+    return {
+      ...response,
+      threads: await addThreadMarks(db, response.threads),
+    };
+  };
+
   // Every tab of the Discussions page shows a Like button, so each item says
   // whether the viewer liked it. Added here, in one lookup for the page,
   // rather than in each tab's own query.
@@ -1286,9 +1335,10 @@ export function createThreadsService(
     const numberByLesson = new Map(
       lessonNumbers.map((row) => [row.id, row.lessonNumber]),
     );
+    const marked = await addThreadMarks(db, response.items);
     return {
       ...response,
-      items: response.items.map((item) => ({
+      items: marked.map((item) => ({
         ...item,
         ...(likes ? { isLiked: liked.has(`${item.itemType}:${item.id}`) } : {}),
         lessonNumber: item.lessonId

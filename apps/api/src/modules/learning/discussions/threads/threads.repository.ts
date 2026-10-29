@@ -96,6 +96,14 @@ export interface ThreadRowWithAuthor {
   authorRole: string | null;
 }
 
+export interface ThreadMarksRow {
+  id: string;
+  pinnedAt: Date | null;
+  heartedAt: Date | null;
+  hearterName: string | null;
+  hearterAvatarUrl: string | null;
+}
+
 export interface PublicPopularThreadRow {
   id: string;
   kind: "comment" | "question";
@@ -515,6 +523,29 @@ export interface ThreadsRepository {
     threadId: string,
     status: InteractionStatus,
   ): Promise<void>;
+
+  /**
+   * Pins the thread to the top of its lesson's discussion, or unpins it
+   * (`byUserId` null). Its `updated_at` is left alone: a pin is not activity.
+   */
+  setPinned(
+    db: DatabaseExecutor,
+    threadId: string,
+    byUserId: string | null,
+  ): Promise<void>;
+
+  /** Gives the creator's heart, or takes it back (`byUserId` null). */
+  setHearted(
+    db: DatabaseExecutor,
+    threadId: string,
+    byUserId: string | null,
+  ): Promise<void>;
+
+  /** The pin and heart of each of the given threads that has either. */
+  listThreadMarks(
+    db: DatabaseExecutor,
+    threadIds: readonly string[],
+  ): Promise<ThreadMarksRow[]>;
 
   /** Which of the given threads the user has liked. */
   listThreadLikes(
@@ -1262,7 +1293,7 @@ export function createThreadsRepository(): ThreadsRepository {
         .updateTable("learning_threads")
         .set((eb) => ({
           replies_count: sql`GREATEST(0, ${eb.ref("replies_count")} + ${delta})`,
-          updated_at: new Date(),
+          ...(delta > 0 ? { updated_at: new Date() } : {}),
         }))
         .where("id", "=", threadId)
         .execute();
@@ -1273,7 +1304,6 @@ export function createThreadsRepository(): ThreadsRepository {
         .updateTable("learning_threads")
         .set((eb) => ({
           likes_count: sql`GREATEST(0, ${eb.ref("likes_count")} + ${delta})`,
-          updated_at: new Date(),
         }))
         .where("id", "=", threadId)
         .execute();
@@ -1284,7 +1314,6 @@ export function createThreadsRepository(): ThreadsRepository {
         .updateTable("learning_threads")
         .set({
           accepted_answer_id: replyId,
-          updated_at: new Date(),
         })
         .where("id", "=", threadId)
         .execute();
@@ -1306,9 +1335,56 @@ export function createThreadsRepository(): ThreadsRepository {
         .set({
           is_locked: isLocked,
           locked_by_user_id: isLocked ? lockedByUserId : null,
-          updated_at: new Date(),
         })
         .where("id", "=", threadId)
+        .execute();
+    },
+
+    async setPinned(db, threadId, byUserId) {
+      await db
+        .updateTable("learning_threads")
+        .set({
+          pinned_at: byUserId ? new Date() : null,
+          pinned_by_user_id: byUserId,
+        })
+        .where("id", "=", threadId)
+        .execute();
+    },
+
+    async setHearted(db, threadId, byUserId) {
+      await db
+        .updateTable("learning_threads")
+        .set({
+          hearted_at: byUserId ? new Date() : null,
+          hearted_by_user_id: byUserId,
+        })
+        .where("id", "=", threadId)
+        .execute();
+    },
+
+    async listThreadMarks(db, threadIds) {
+      if (threadIds.length === 0) return [];
+      return await db
+        .selectFrom("learning_threads as t")
+        .leftJoin("users as hu", (join) =>
+          join
+            .onRef("hu.id", "=", "t.hearted_by_user_id")
+            .on("hu.is_deleted", "=", false),
+        )
+        .select([
+          "t.id as id",
+          "t.pinned_at as pinnedAt",
+          "t.hearted_at as heartedAt",
+          "hu.display_name as hearterName",
+          "hu.avatar_data_url as hearterAvatarUrl",
+        ])
+        .where("t.id", "in", threadIds)
+        .where((eb) =>
+          eb.or([
+            eb("t.pinned_at", "is not", null),
+            eb("t.hearted_at", "is not", null),
+          ]),
+        )
         .execute();
     },
 
@@ -1317,7 +1393,6 @@ export function createThreadsRepository(): ThreadsRepository {
         .updateTable("learning_threads")
         .set({
           status,
-          updated_at: new Date(),
         })
         .where("id", "=", threadId)
         .execute();

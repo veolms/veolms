@@ -423,3 +423,70 @@ export function teamPreapprovedEmail({
     }),
   };
 }
+
+export interface StudentAddedInput {
+  academyName: string;
+  logoUrl?: string | null;
+  /** Who added the student, when known. */
+  addedByName: string | null;
+  /** The address the account was made with: the one to sign in with. */
+  email: string;
+  /** Titles of the courses opened with the account, if any. */
+  courseTitles: readonly string[];
+  signInUrl: string;
+}
+
+/**
+ * Sent when staff create a student account by hand. Nothing to accept or
+ * set up: signing in with this address and the code sent to it is enough.
+ */
+export function studentAddedEmail({
+  academyName,
+  logoUrl = null,
+  addedByName,
+  email,
+  courseTitles,
+  signInUrl,
+}: StudentAddedInput): EmailContent {
+  const title = `Welcome to ${academyName}`;
+  const who = addedByName ? `${addedByName} created` : "We created";
+  const intro = `${who} a ${academyName} account for you.`;
+  const courses =
+    courseTitles.length === 0
+      ? null
+      : `You have access to ${courseTitles.length === 1 ? "this course" : "these courses"}:`;
+  const next = `To sign in, enter ${email} and the code we email you. There is no password to remember.`;
+
+  const courseListHtml = courses
+    ? paragraph(escapeHtml(courses)) +
+      `<ul style="margin:0 0 18px;padding-left:20px;font-size:15px;line-height:24px">${courseTitles
+        .map((courseTitle) => `<li>${escapeHtml(courseTitle)}</li>`)
+        .join("")}</ul>`
+    : "";
+
+  return {
+    subject: title,
+    text:
+      `${intro}\n\n` +
+      (courses
+        ? `${courses}\n${courseTitles.map((courseTitle) => `- ${courseTitle}`).join("\n")}\n\n`
+        : "") +
+      `${next}\n\nSign in: ${signInUrl}\n\nIf you did not expect this, you can ignore this email.`,
+    html: layout({
+      academyName,
+      logoUrl,
+      title,
+      preheader: intro,
+      bodyHtml: [
+        heading(title),
+        paragraph(escapeHtml(intro)),
+        courseListHtml,
+        paragraph(escapeHtml(next), { last: true }),
+        button(signInUrl, `Sign in to ${academyName}`),
+        divider(),
+        smallPrint("If you did not expect this, you can ignore this email."),
+      ].join(""),
+      footer: `Sent by ${escapeHtml(academyName)} because an account was created for this address.`,
+    }),
+  };
+}

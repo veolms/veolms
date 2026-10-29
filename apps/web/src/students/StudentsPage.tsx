@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
@@ -15,12 +15,20 @@ import {
   useDebounceValue,
 } from "../hooks/useDebounce";
 import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
+import { UserPlusIcon as UserPlus } from "@phosphor-icons/react/UserPlus";
+import { useCapabilities } from "../services/authorization";
 import { useCourseOptions } from "../services/courses";
 import { useStudents } from "../services/students";
 import { StudentsTable } from "./StudentsTable";
 import { StudentFiltersBar } from "./StudentFiltersBar";
 import { StudentsTableSkeleton } from "./StudentsTableSkeleton";
 import { ElevatedCard } from "../components/ElevatedCard";
+
+const AddStudentPanel = lazy(() =>
+  import("./AddStudentPanel").then((module) => ({
+    default: module.AddStudentPanel,
+  })),
+);
 
 export interface StudentsPageProps {
   onNavigatePage?: NavigateTo;
@@ -41,6 +49,9 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
     "recent" | "name" | "courses" | "progress"
   >("recent");
   const [isCourseFilterOpen, setIsCourseFilterOpen] = useState(false);
+  const [addingStudent, setAddingStudent] = useState(false);
+  const { can } = useCapabilities();
+  const canAddStudents = can("student.create");
 
   // A course card's "Manage Students" link opens this page with ?course=<id>,
   // which used to be ignored. It is read once and becomes the course filter
@@ -159,13 +170,43 @@ export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
           </p>
         </div>
 
-        <span
-          className="inline-flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent)"
-          aria-hidden="true"
-        >
-          <Users size={26} weight="duotone" />
-        </span>
+        <div className="flex shrink-0 items-center gap-3">
+          {canAddStudents ? (
+            <button
+              type="button"
+              onClick={() => setAddingStudent(true)}
+              aria-haspopup="dialog"
+              className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl bg-(--accent) px-4 text-sm font-semibold text-white transition-[filter] hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+            >
+              <UserPlus size={18} weight="bold" className="shrink-0" />
+              <span>Add student</span>
+            </button>
+          ) : null}
+          <span
+            className="hidden sm:inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent)"
+            aria-hidden="true"
+          >
+            <Users size={26} weight="duotone" />
+          </span>
+        </div>
       </header>
+
+      {addingStudent ? (
+        <Suspense fallback={null}>
+          <AddStudentPanel
+            canGrantCourses={can("student.access.manage")}
+            onClose={() => setAddingStudent(false)}
+            onCreated={(student) => {
+              setAddingStudent(false);
+              setNotice?.(
+                student.welcomeEmailSent
+                  ? `${student.displayName} was added. We emailed ${student.email} how to sign in.`
+                  : `${student.displayName} was added, but the welcome email could not be sent. They can still sign in with ${student.email}.`,
+              );
+            }}
+          />
+        </Suspense>
+      ) : null}
 
       {/* Key Stats Summary Banner */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3.5 mb-6">
