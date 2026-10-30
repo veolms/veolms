@@ -2458,7 +2458,7 @@ export function createMediaService({
     media: VideoAssetForPlayback,
     details: { mediaKey: string; title?: string | null },
   ): Promise<HeroVideoPlayback> {
-    const { manifestKey } = await getReadyPlaybackOutput(
+    const { manifestKey, outputVersion } = await getReadyPlaybackOutput(
       media.id,
       {
         media_type: media.type,
@@ -2476,6 +2476,8 @@ export function createMediaService({
       );
     }
     const playbackToken = createPlaybackSegmentToken(manifestKey);
+    // The seek previews, as a lesson's (read from a cache, never failing).
+    const storyboardUrl = await readStoryboardUrl(manifestKey, outputVersion);
     return {
       mediaKey: details.mediaKey,
       manifestUrl,
@@ -2489,6 +2491,7 @@ export function createMediaService({
         ? { duration: Number(media.durationSeconds) }
         : {}),
       ...(details.title ? { title: details.title } : {}),
+      ...(storyboardUrl ? { storyboardUrl } : {}),
     };
   }
 

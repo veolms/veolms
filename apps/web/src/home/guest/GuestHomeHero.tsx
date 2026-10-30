@@ -1,4 +1,5 @@
-import { guestHomeGutter } from "./guestHomeSpacing";
+import { LearnerPhoneBackdrop } from "../learner/LearnerPhoneBackdrop";
+import { guestHomeGutter, guestHomeGutterBleed } from "./guestHomeSpacing";
 import {
   homeHeroHeightClasses,
   homeHeroPictureBesideCopyClasses,
@@ -9,7 +10,7 @@ import type { HomePageHero } from "@veolms/contracts/home-page-defaults";
 import type { NavigateTo } from "../../routing/navigation";
 import { GuestHomeLink } from "./GuestHomeLink";
 import type { MouseEvent, ReactNode } from "react";
-import { HeroDesk, heroPictureBandFade } from "./HeroDesk";
+import { HeroDesk } from "./HeroDesk";
 import { guestHeroCopyWhenComplete, HeroCopyEnd } from "./HeroPicture";
 import { glassActionClasses, primaryActionClasses } from "./heroActionClasses";
 
@@ -44,41 +45,65 @@ const forReturningLearner =
   "hidden [:root[data-session-hint=signed-in][data-home-hint=new-learner]_&]:block";
 
 /**
- * The greeting is a line the visitor's copy does not have. To keep the hero
- * the height it shares with the visitor's and the learner's heroes (see
- * homeHeroHeight.ts), the copy gives that line back from its padding and
- * the gap above the actions; without this the copy outgrew the hero on
- * pages under about 100rem and the page below moved down at sign-in.
+ * The hero has two forms, by the width of the page:
+ *
+ * - From 50rem, the copy lies over the empty left side of the desk picture,
+ *   with the laptop playing the hero video on the right.
+ * - Narrower (phones, and tablets up to about an iPad mini held upright),
+ *   there is no picture: the copy stands on the page itself, followed by the
+ *   video in a card of its own and the actions. A desk cropped to that width
+ *   showed little more than the laptop, and left the copy cramped above it.
+ *
+ * Both are in the page from the first paint and the page's width picks one
+ * (`@[50rem]/home` and `@max-[50rem]/home` below), so a page built ahead of
+ * time is right before any script runs.
  */
-const visitorSpacing = { copy: "py-8 sm:py-12", actions: "sm:mt-8" };
-// Measured against the visitor's copy: the same height on phones, beside the
-// picture, and between the two (where the hero is as tall as its copy).
+
+/**
+ * Space around the copy. The learner's greeting is a larger line than the
+ * visitor's welcome above the title, so the greeted copy gives a little
+ * back from its padding and the gap above the actions, keeping the hero the
+ * height the visitor's and the learner's heroes share beside the picture
+ * (see homeHeroHeight.ts).
+ */
+const visitorSpacing = {
+  copy: "pt-7 pb-9 @[50rem]/home:py-10",
+  actions: "@[50rem]/home:mt-8",
+};
 const greetedSpacing = {
-  copy: "py-3.25 @max-[50rem]/home:sm:py-8.5 @[50rem]/home:py-6",
-  actions: "sm:mt-5",
+  copy: "pt-7 pb-9 @[50rem]/home:py-7",
+  actions: "@[50rem]/home:mt-6",
 };
 // The prerendered page, before the session answers: the visitor's spacing,
 // and the greeted spacing by the same document attributes that show the
 // greeting (the attribute selector outranks the plain utility). Written out
 // in full because Tailwind only makes classes it finds whole in the source.
 const greetedSpacingForReturningLearner = {
-  copy: "py-8 sm:py-12 [:root[data-session-hint=signed-in][data-home-hint=new-learner]_&]:py-3.25 @max-[50rem]/home:sm:[:root[data-session-hint=signed-in][data-home-hint=new-learner]_&]:py-8.5 @[50rem]/home:[:root[data-session-hint=signed-in][data-home-hint=new-learner]_&]:py-6",
+  copy: "pt-7 pb-9 @[50rem]/home:py-10 @[50rem]/home:[:root[data-session-hint=signed-in][data-home-hint=new-learner]_&]:py-7",
   actions:
-    "sm:mt-8 sm:[:root[data-session-hint=signed-in][data-home-hint=new-learner]_&]:mt-5",
+    "@[50rem]/home:mt-8 @[50rem]/home:[:root[data-session-hint=signed-in][data-home-hint=new-learner]_&]:mt-6",
 };
 
 const greetingClasses =
-  "mb-2 text-[1.375rem] leading-snug font-semibold text-slate-200 [:root[data-theme=light]_&]:text-slate-700 sm:mb-3 sm:text-[clamp(1.375rem,2.4vw,2rem)]";
-/**
- * Where the picture is held: towards the desk on a phone, centred once the
- * hero is wide enough to show all of it, and, where the copy lies beside it,
- * just where the learner's hero holds it (see `homeHeroPictureSizeClasses`),
- * so the desk does not move when the visitor signs in.
- */
-const picturePosition = `object-[62%_center] sm:object-[72%_center] xl:object-center ${homeHeroPictureBesideCopyClasses}`;
+  "mb-2 text-[1.375rem] leading-snug font-semibold text-slate-200 [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:mb-3 @[50rem]/home:text-[clamp(1.375rem,2.4vw,2rem)]";
 
+/** The small line above the title ("Welcome to …"). */
+const eyebrowClasses =
+  "mb-3 text-xs leading-normal font-semibold tracking-[0.22em] text-slate-400 uppercase [:root[data-theme=light]_&]:text-slate-500 @[50rem]/home:mb-4";
+
+/**
+ * Where the picture is held where the copy lies beside it: just where the
+ * learner's hero holds it (see `homeHeroPictureSizeClasses`), so the desk
+ * does not move when the visitor signs in.
+ */
+const picturePosition = `object-[72%_center] xl:object-center ${homeHeroPictureBesideCopyClasses}`;
+
+/**
+ * The supporting text, set as a quote: Lora italic, a little larger than
+ * body text and with room between its lines.
+ */
 const descriptionClasses =
-  "mt-4 max-w-md text-[0.9375rem] leading-relaxed text-pretty text-slate-200/90 [:root[data-theme=light]_&]:text-slate-700 sm:mt-5 sm:max-w-[min(32rem,54cqw)] sm:text-lg";
+  "mt-4 max-w-xl font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-pretty text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(34rem,54cqw)] @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
 
 function HeroHeadline({
   hero,
@@ -100,10 +125,11 @@ function HeroHeadline({
 }
 
 /**
- * The hero is a picture of a desk with the copy laid over its empty side. By
- * night (dark theme) the copy is light on the picture's navy; by day (light
- * theme) it is dark on the sunlit wall. The fades run into the picture's own
- * colours rather than the page surface.
+ * Where the copy lies beside it, the hero is a picture of a desk with the
+ * copy laid over its empty side. By night (dark theme) the copy is light on
+ * the picture's navy; by day (light theme) it is dark on the sunlit wall.
+ * The fades run into the picture's own colours rather than the page
+ * surface. Narrower, the hero is the page's own surface (see above).
  */
 export function GuestHomeHero({
   hero,
@@ -112,6 +138,7 @@ export function GuestHomeHero({
   onNavigatePage,
   freeCoursesSectionId,
   laptopScreen,
+  introVideo,
 }: {
   /** The configured copy; while it is still loading the hero shows its picture and placeholders. */
   hero?: HomePageHero;
@@ -128,6 +155,8 @@ export function GuestHomeHero({
   freeCoursesSectionId?: string;
   /** What the laptop in the picture shows (see `HeroDesk`). */
   laptopScreen?: ReactNode;
+  /** The same video for the narrow form, drawn in a card of its own. */
+  introVideo?: ReactNode;
 }) {
   const spacing =
     hero && greeting
@@ -135,17 +164,27 @@ export function GuestHomeHero({
       : hero && returningLearnerHero
         ? greetedSpacingForReturningLearner
         : visitorSpacing;
+  const eyebrow = hero && !greeting ? hero.eyebrow : "";
   return (
     <HeroDesk
       labelledBy="guest-home-hero-title"
       // Beside the picture it is as tall as the signed-in learner's hero,
       // and its picture as big and in the same place, so the page keeps its
-      // height and its desk when someone signs in on it.
-      className={`min-h-104 justify-start sm:min-h-[clamp(23rem,27vw,25rem)] sm:justify-center ${homeHeroHeightClasses} ${homeHeroPictureSizeClasses}`}
+      // height and its desk when someone signs in on it. Narrower it is as
+      // tall as its content, on the page's own background, and not faded out
+      // at its foot (its actions are there).
+      className={`justify-start @[50rem]/home:justify-center @max-[50rem]/home:bg-transparent! @max-[50rem]/home:[mask-image:none]! ${homeHeroHeightClasses} ${homeHeroPictureSizeClasses}`}
       picturePosition={picturePosition}
-      // Wider screens: the copy sits on the picture's empty left side, which
-      // is deepened so the text stays readable at every crop.
-      fadeClassName="hidden sm:block sm:bg-[linear-gradient(to_right,rgb(5_9_21/0.95)_0,rgb(5_9_21/0.86)_36%,rgb(5_9_21/0.45)_62%,transparent_84%)] sm:[:root[data-theme=light]_&]:bg-[linear-gradient(to_right,rgb(250_245_236/0.9)_0,rgb(250_245_236/0.74)_34%,rgb(250_245_236/0.28)_56%,transparent_74%)]"
+      deskLayersClassName="@max-[50rem]/home:hidden"
+      // A phone's top right corner switches the lamp, as on the signed-in
+      // learner's home (the glow behind the copy follows it); a wider page
+      // with no picture has no lamp to switch.
+      lampCornerOnPhone
+      lampSwitchClassName="@max-[50rem]/home:sm:hidden"
+      picturesWhenShown
+      // The copy sits on the picture's empty left side, which is deepened so
+      // the text stays readable at every crop.
+      fadeClassName="hidden @[50rem]/home:block @[50rem]/home:bg-[linear-gradient(to_right,rgb(5_9_21/0.95)_0,rgb(5_9_21/0.86)_36%,rgb(5_9_21/0.45)_62%,transparent_84%)] @[50rem]/home:[:root[data-theme=light]_&]:bg-[linear-gradient(to_right,rgb(250_245_236/0.9)_0,rgb(250_245_236/0.74)_34%,rgb(250_245_236/0.28)_56%,transparent_74%)]"
       laptopScreen={laptopScreen}
     >
       {(pictures) => (
@@ -154,20 +193,32 @@ export function GuestHomeHero({
           // through to the screen, and only its own content takes it.
           className={`pointer-events-none flex w-full max-w-3xl flex-col items-start *:pointer-events-auto ${spacing.copy} ${guestHomeGutter} ${guestHeroCopyWhenComplete}`}
         >
+          {/* A phone has no picture: the signed-in learner's glow from the
+              hero's top right corner stands behind the copy instead, in a
+              box as tall as that learner's hero (this one is taller, with
+              the video in it), so the light falls the same way. */}
+          <LearnerPhoneBackdrop className="bottom-auto h-[26rem]" />
           {hero && greeting ? (
             <p className={greetingClasses}>{greeting}</p>
           ) : hero && returningLearnerHero ? (
-            // The greeting's line, kept empty: the name is not known yet.
-            <p
-              aria-hidden="true"
-              className={`invisible ${forReturningLearner} ${greetingClasses}`}
-            >
-              Hi 👋
-            </p>
+            <>
+              {eyebrow ? (
+                <p className={`${eyebrowClasses} ${forGuest}`}>{eyebrow}</p>
+              ) : null}
+              {/* The greeting's line, kept empty: the name is not known yet. */}
+              <p
+                aria-hidden="true"
+                className={`invisible ${forReturningLearner} ${greetingClasses}`}
+              >
+                Hi 👋
+              </p>
+            </>
+          ) : eyebrow ? (
+            <p className={eyebrowClasses}>{eyebrow}</p>
           ) : null}
           <h1
             id="guest-home-hero-title"
-            className="text-[clamp(1.5rem,7.4vw,2.75rem)] leading-[1.06] font-extrabold tracking-[-0.03em] sm:text-[clamp(2.25rem,4.4vw,3.5rem)]"
+            className="text-[clamp(1.875rem,8cqw,2.75rem)] leading-[1.06] font-extrabold tracking-[-0.03em] @[50rem]/home:text-[clamp(2.25rem,4.4vw,3.5rem)]"
           >
             {hero ? (
               <>
@@ -204,46 +255,73 @@ export function GuestHomeHero({
             </p>
           ) : null}
 
-          {/* The pictures. On a phone they are a band of their own between the
-              copy and the actions (the copy's last line runs a little over
-              their top), faded into the hero at its top and bottom
-              edges; on wider screens this box steps aside and they fill the
-              whole hero behind the copy. They are drawn as soon as they
-              are there, whatever the copy around them is waiting for. */}
-          <div
-            className={`pointer-events-none! visible relative -mx-[clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)] -mt-6 h-56 self-stretch ${heroPictureBandFade} sm:static sm:mx-0 sm:mt-0 sm:h-auto sm:before:hidden`}
-          >
+          {/* The pictures, where the copy lies beside them: this box steps
+              aside (its own box is not drawn) and they fill the whole hero
+              behind the copy. They are drawn as soon as they are there,
+              whatever the copy around them is waiting for. Narrower they are
+              not drawn at all. */}
+          <div className="pointer-events-none! visible hidden @[50rem]/home:contents">
             {pictures}
           </div>
 
-          <div
-            className={`mt-3.5 flex w-full flex-col gap-3 min-[420px]:w-auto min-[420px]:flex-row min-[420px]:items-center ${spacing.actions}`}
-          >
-            <GuestHomeLink
-              href="/courses"
-              onNavigatePage={onNavigatePage}
-              data-control-radius-action
-              className={primaryActionClasses}
+          {introVideo ? (
+            // From one edge of the page to the other, over the gutters.
+            <div
+              className={`relative mt-6 self-stretch rounded-xl ${guestHomeGutterBleed} shadow-[0_20px_44px_-22px_rgb(0_0_0/0.75)] [:root[data-theme=light]_&]:shadow-[0_18px_40px_-22px_rgb(15_23_42/0.4)] @[50rem]/home:hidden`}
             >
-              {hero?.primaryActionLabel ?? "Browse courses"}
-              <ArrowRight
-                size={18}
-                weight="bold"
-                aria-hidden="true"
-                className="transition-transform duration-150 group-hover/cta:translate-x-0.5 motion-reduce:transition-none"
-              />
-            </GuestHomeLink>
-            {freeCoursesSectionId && hero?.secondaryActionLabel ? (
-              <a
-                href={`#${freeCoursesSectionId}`}
+              {introVideo}
+            </div>
+          ) : null}
+
+          <div
+            className={`mt-6 flex w-full flex-col items-stretch gap-4 @[30rem]/home:flex-row @[30rem]/home:items-center @[30rem]/home:justify-between @[50rem]/home:w-auto @[50rem]/home:justify-start @[50rem]/home:gap-3 ${spacing.actions}`}
+          >
+            <div className="flex flex-col gap-3 @[30rem]/home:flex-row @[30rem]/home:items-center">
+              <GuestHomeLink
+                href="/courses"
+                onNavigatePage={onNavigatePage}
                 data-control-radius-action
-                className={glassActionClasses}
-                onClick={(event) =>
-                  scrollToSection(event, freeCoursesSectionId)
-                }
+                // No lamp light on it where no lamp is drawn beside it.
+                className={`${primaryActionClasses} @max-[50rem]/home:before:hidden`}
               >
-                {hero.secondaryActionLabel}
-              </a>
+                {hero?.primaryActionLabel ?? "Browse courses"}
+                <ArrowRight
+                  size={18}
+                  weight="bold"
+                  aria-hidden="true"
+                  className="transition-transform duration-150 group-hover/cta:translate-x-0.5 motion-reduce:transition-none"
+                />
+              </GuestHomeLink>
+              {freeCoursesSectionId && hero?.secondaryActionLabel ? (
+                // Glass over the picture; narrower, the free courses are the
+                // next thing down the page anyway.
+                <a
+                  href={`#${freeCoursesSectionId}`}
+                  data-control-radius-action
+                  className={`${glassActionClasses} @max-[50rem]/home:hidden`}
+                  onClick={(event) =>
+                    scrollToSection(event, freeCoursesSectionId)
+                  }
+                >
+                  {hero.secondaryActionLabel}
+                </a>
+              ) : null}
+            </div>
+            {hero && !greeting ? (
+              <p
+                className={`text-center text-sm font-medium text-slate-400 [:root[data-theme=light]_&]:text-slate-600 @[50rem]/home:hidden ${returningLearnerHero ? forGuest : ""}`}
+              >
+                {/* For a new learner as for a returning one: signing in
+                    makes an account too. */}
+                New here or coming back?{" "}
+                <GuestHomeLink
+                  href="/login"
+                  onNavigatePage={onNavigatePage}
+                  className="font-semibold text-[color-mix(in_srgb,var(--accent)_70%,white)] underline-offset-4 hover:underline [:root[data-theme=light]_&]:text-(--accent-ink,var(--accent))"
+                >
+                  Sign in
+                </GuestHomeLink>
+              </p>
             ) : null}
           </div>
           <HeroCopyEnd />

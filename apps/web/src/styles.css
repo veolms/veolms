@@ -79,3 +79,29 @@
   descent-override: 29.7%;
   line-gap-override: 0%;
 }
+
+/* Lora italic, for a line set as a quote (the home hero's supporting text).
+   Fetched only by a page that sets text in it. Until it has arrived the
+   text is drawn in Georgia italic, scaled and spaced to Lora's measure (by
+   width and line box, measured in Chrome), so it does not move when Lora
+   takes over. */
+@font-face {
+  font-family: "Lora";
+  font-style: italic;
+  font-display: swap;
+  font-weight: 400 700;
+  src: url("./assets/fonts/lora-italic-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Lora Fallback";
+  font-style: italic;
+  src: local("Georgia Italic"), local("Georgia-Italic");
+  size-adjust: 100.39%;
+  ascent-override: 100.61%;
+  descent-override: 26.9%;
+  line-gap-override: 0%;
+}

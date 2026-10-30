@@ -11,7 +11,7 @@ import {
 import { GuestHomeDiscussions } from "./home/guest/GuestHomeDiscussions";
 import { GuestHomeHero } from "./home/guest/GuestHomeHero";
 import { GuestHomeHighlights } from "./home/guest/GuestHomeHighlights";
-import { HeroLaptopVideo } from "./home/guest/HeroLaptopVideo";
+import { HeroVideo } from "./home/guest/HeroVideo";
 import {
   getNewLearnerGreeting,
   getNewLearnerHero,
@@ -154,7 +154,8 @@ export function GuestHome({
         freeCoursesSectionId={
           showFreeCourses ? FREE_COURSES_SECTION_ID : undefined
         }
-        laptopScreen={<HeroLaptopVideo poster={heroLaptopPoster} />}
+        laptopScreen={<HeroVideo poster={heroLaptopPoster} frame="laptop" />}
+        introVideo={<HeroVideo poster={heroLaptopPoster} frame="card" />}
       />
       {showBody ? (
         <div

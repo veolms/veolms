@@ -8,6 +8,7 @@ export function HeroPicture({
   className,
   priority = false,
   warmUp = false,
+  whenShown = false,
   imageRef,
   onLoad,
   onError,
@@ -22,6 +23,14 @@ export function HeroPicture({
    * when it comes into view) and after what the page itself is loading.
    */
   warmUp?: boolean;
+  /**
+   * For a picture that some screens are not shown: fetched only once it is
+   * laid out (a lazy image whose box is not drawn is never fetched, and one
+   * that is drawn, even invisible, is fetched at once), at the priority the
+   * two props above give it. Such a picture is preloaded from the page's
+   * head where it is shown, so it is no later for this.
+   */
+  whenShown?: boolean;
   imageRef?: Ref<HTMLImageElement>;
   onLoad?: (image: HTMLImageElement) => void;
   onError?: () => void;
@@ -43,7 +52,7 @@ export function HeroPicture({
         width={picture.wide.width}
         height={picture.wide.height}
         alt=""
-        loading={priority || warmUp ? "eager" : "lazy"}
+        loading={(priority || warmUp) && !whenShown ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : warmUp ? "low" : undefined}
         decoding="async"
         onLoad={onLoad ? (event) => onLoad(event.currentTarget) : undefined}
@@ -63,11 +72,11 @@ export function HeroPicture({
  * classes. (A browser without `:has()` ignores the rule and draws the copy
  * as before.)
  *
- * The guest's hero centres its copy from the `sm` breakpoint up, and the
- * learner's where the copy stands beside the picture.
+ * Both the guest's hero and the learner's centre their copy where it stands
+ * beside the picture.
  */
 export const guestHeroCopyWhenComplete =
-  "sm:[&:not(:has(>[data-hero-copy-end]))]:invisible";
+  "@[50rem]/home:[&:not(:has(>[data-hero-copy-end]))]:invisible";
 export const learnerHeroCopyWhenComplete =
   "@[50rem]/home:[&:not(:has(>[data-hero-copy-end]))]:invisible";
 

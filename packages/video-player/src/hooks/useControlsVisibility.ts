@@ -95,12 +95,19 @@ export function useControlsVisibility({
       typeof window !== "undefined" && typeof window.matchMedia === "function"
         ? window.matchMedia(FINE_POINTER_QUERY)
         : null;
-    const usesDesktopPointer = () =>
-      !mobileInteraction && (pointerQuery?.matches ?? false);
+    // A mouse shows the controls as it comes over the player and hides them
+    // as it leaves, in the phone layout too (a narrow window on a computer).
+    // In between, the desktop layout shows them whenever the mouse moves;
+    // the phone layout leaves that to a click, as a tap, which shows or
+    // hides them (PlayerGestureSurface), and moving only keeps up the ones
+    // that are already showing. A finger shows and hides them with taps.
+    const usesDesktopPointer = () => pointerQuery?.matches ?? false;
     const isDesktopMousePointer = (event: PointerEvent) =>
-      event.pointerType === "mouse" && !mobileInteraction;
+      event.pointerType === "mouse";
     if (!initializedPointerModeRef.current || mobileInteraction) {
-      pointerModeRef.current = usesDesktopPointer() ? "mouse" : "touch";
+      if (!initializedPointerModeRef.current) {
+        pointerModeRef.current = usesDesktopPointer() ? "mouse" : "touch";
+      }
       initializedPointerModeRef.current = true;
       previousPausedRef.current = paused;
     }
@@ -176,6 +183,11 @@ export function useControlsVisibility({
 
     const handlePointerMove = (event: PointerEvent) => {
       if (!isDesktopMousePointer(event)) return;
+      if (mobileInteraction && !controller.getSnapshot().ui.controlsVisible) {
+        pointerModeRef.current = "mouse";
+        pointerInsideRef.current = true;
+        return;
+      }
       revealFromPointer(event);
     };
 

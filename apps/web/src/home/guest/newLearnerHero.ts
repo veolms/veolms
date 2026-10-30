@@ -3,11 +3,13 @@ import type { HomePageHero } from "@veolms/contracts/home-page-defaults";
 /**
  * The hero for a signed-in learner who has not enrolled in anything yet: it
  * points them at a first course. The two actions keep the labels the academy
- * configured.
+ * configured. The line above the headline is their greeting instead (see
+ * `getNewLearnerGreeting`).
  */
 export function getNewLearnerHero(hero: HomePageHero): HomePageHero {
   return {
     ...hero,
+    eyebrow: "",
     headline: "Start Your",
     highlightedHeadline: "Learning Journey.",
     description:

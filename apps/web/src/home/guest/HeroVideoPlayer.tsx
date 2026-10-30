@@ -1,0 +1,273 @@
+import "../../learning/learning-feature.css";
+import type { HeroVideoPlayback } from "@veolms/contracts";
+import {
+  ShakaVideoEngine,
+  VideoPlayer,
+  type VideoEngine,
+  type VideoPlayerHandle,
+} from "@veolms/video-player";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LessonAmbientProjection } from "../../learning/player/LessonAmbientProjection";
+import {
+  LessonCentralControls,
+  LessonPlayerControls,
+} from "../../learning/player/LessonPlayerControls";
+import { LearningMiniPlayerBufferingIndicator } from "../../learning/player/learningMiniPlayerBufferingIndicator";
+import {
+  readAmbientPreference,
+  writeAmbientPreference,
+} from "../../learning/player/lessonPlayerPersistence";
+import { useLearningPlayerTheme } from "../../learning/player/useLearningPlayerTheme";
+import type { HeroVideoFrame } from "./HeroVideo";
+import { flyHeroLaptopVideo } from "./heroFullscreenFlight";
+import {
+  createHeroVideoSource,
+  HERO_WAITING_BUFFER_SECONDS,
+} from "./heroVideoSource";
+
+// As the lesson page's player (LessonVideoPlayer).
+const CONTROLS_IDLE_DELAY_MS = 1_000;
+const CONTROLS_TOUCH_IDLE_DELAY_MS = 3_000;
+const SHORTCUTS = {
+  seekBackwardLarge: false,
+  seekForwardLarge: false,
+  toggleTheaterMode: false,
+  togglePictureInPicture: false,
+} as const;
+const noop = () => undefined;
+
+/**
+ * Where the video's glow goes, as the lesson page's: around the video, and
+ * on a page wide enough for it behind the page too, placed by this anchor
+ * name (learning.css). A phone's lesson page clips the glow to the video;
+ * the hero lets it spread past the card to the screen's sides and well
+ * above and below it (the hero itself clips it at its edges, so the page
+ * does not grow wider).
+ */
+/**
+ * A swipe over the hero's video scrolls the page (the phone layout keeps
+ * vertical swipes for itself otherwise), and the timeline runs between the
+ * same margins as the time and full screen buttons below it, not from edge
+ * to edge.
+ */
+const heroSharedClasses =
+  "[&_[data-video-player-root]]:touch-pan-y! [&_[data-player-zoom-surface]]:touch-pan-y! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:inset-x-2!";
+
+const cardClasses =
+  // The card keeps its rounded corners, so the timeline runs a little above
+  // its lower edge, where the corners have rounded off and its thumb is
+  // clear of them, and the time and full screen buttons sit a little above
+  // it (at every width: a wider window would raise the timeline into the
+  // time). Full screen keeps the lesson's layout.
+  `${heroSharedClasses} ` +
+  "[&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:bottom-0! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:translate-y-[calc(50%-12px)]! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-mobile-player-corner]]:bottom-4! " +
+  "[anchor-name:--learning-ambient-video-shell] [&_[data-video-player-shell-overlay-host]]:overflow-visible! [&_[data-video-player-shell-overlay-host]]:[contain:none]! [&_[data-ambient-inline-projection]]:[transform:scale(1.18,1.45)]! [&_[data-ambient-inline-projection]]:[filter:blur(44px)_saturate(1.6)]!";
+
+/**
+ * The laptop's screen is filled edge to edge (its glass is about 3:2, the
+ * video is cropped to it as the poster is) and its corners are the screen's.
+ * The timeline runs a little above the screen's lower edge, far enough for
+ * its thumb, grown under a pointer, to stay clear of the edge (which cuts
+ * off anything past it), and the time and full screen buttons sit a little
+ * above it, a size smaller than a phone's, and the settings menu (which
+ * opens in the video, as on a desktop) is drawn smaller too, to leave some of
+ * the short screen around it, with all its rows (the height it is given is
+ * the screen's, before it is drawn smaller). Full screen keeps the lesson's
+ * layout.
+ */
+const laptopClasses =
+  `${heroSharedClasses} ` +
+  "h-full [&_[data-video-player-poster-overlay]]:object-cover! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:bottom-0! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:translate-y-[calc(50%-12px)]! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-mobile-player-corner]]:bottom-4! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-mobile-player-corner]]:scale-85 [&_[data-mobile-player-corner=time]]:origin-bottom-left [&_[data-mobile-player-corner=fullscreen]]:origin-bottom-right [&:not(:fullscreen):not([data-player-page-fullscreen])_[role=menu]]:origin-top-right [&:not(:fullscreen):not([data-player-page-fullscreen])_[role=menu]]:scale-70 [&:not(:fullscreen):not([data-player-page-fullscreen])_[role=menu]]:max-h-none! " +
+  // The seek preview, its time and the timeline's thumb are drawn smaller
+  // too, and the preview lower, so it leaves most of the screen showing.
+  "[&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=frame]]:mb-2! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=frame]]:origin-bottom [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=frame]]:scale-70 [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=time]>span]:scale-80 [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=pill]]:origin-bottom [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=pill]]:scale-80 [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-timeline-thumb]]:size-2.5!";
+
+/**
+ * The hero's video played by the lesson page's player with its controls, in
+ * the phone layout at every width (the laptop's in full screen has the
+ * desktop's). What belongs to a course is left out:
+ * the previous and next lesson buttons, autoplay, the Lessons button and
+ * minimize. Settings (quality, speed, picture in picture and, in the card,
+ * ambient mode), full screen, the timeline, and the taps and gestures are
+ * the lesson's. A glow would only be cut off by the laptop's screen, so
+ * the laptop has no ambient mode.
+ *
+ * It is put up under the poster, loaded and paused, ahead of a press on play,
+ * or after the press, playing (see HeroVideo).
+ */
+export default function HeroVideoPlayer({
+  playback,
+  poster,
+  frame,
+  autoPlay,
+  active,
+  onPlayer,
+}: {
+  playback: HeroVideoPlayback;
+  poster?: string;
+  frame: HeroVideoFrame;
+  /** Plays as soon as it is loaded (read when the video loads). */
+  autoPlay: boolean;
+  /**
+   * False while it waits, loaded, under the poster: its keys are left to
+   * the page until the visitor has pressed play.
+   */
+  active: boolean;
+  /** Told the player's handle once it is up (and null when it goes). */
+  onPlayer: (player: VideoPlayerHandle | null) => void;
+}) {
+  const playerRef = useRef<VideoPlayerHandle>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const playerTheme = useLearningPlayerTheme();
+  const [ambientEnabled, setAmbientEnabled] = useState(readAmbientPreference);
+  const [inView, setInView] = useState(true);
+  const [fullscreen, setFullscreen] = useState(false);
+  const card = frame === "card";
+  // The laptop's video in full screen fills a desktop's screen, and gets
+  // the desktop's controls there: the bar along the bottom. The card keeps
+  // the phone's in full screen too.
+  const desktopFullscreen = !card && fullscreen;
+
+  const source = useMemo(() => createHeroVideoSource(playback), [playback]);
+
+  // A video left playing out of sight would keep talking over the page, and
+  // its keys (Space, the arrows) belong to the page once it is scrolled away.
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry) return;
+      setInView(entry.isIntersecting);
+      if (!entry.isIntersecting) playerRef.current?.pause();
+    });
+    observer.observe(shell);
+    return () => observer.disconnect();
+  }, []);
+
+  // While it waits under the poster it buffers only what the preload fetched
+  // (Shaka would otherwise fill its whole buffer for a visitor who may never
+  // play it); the press gives it its full buffer back.
+  const engineRef = useRef<VideoEngine | null>(null);
+  const engineFactory = useCallback(() => {
+    const engine = new ShakaVideoEngine();
+    engineRef.current = engine;
+    return engine;
+  }, []);
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+    if (active) engineRef.current?.setBufferAheadLimit?.(null);
+  }, [active]);
+
+  const setPlayerRef = useCallback(
+    (handle: VideoPlayerHandle | null) => {
+      playerRef.current = handle;
+      onPlayer(handle);
+    },
+    [onPlayer],
+  );
+
+  // On the laptop, leaving full screen flies the picture back into the
+  // laptop's screen (see `flyHeroLaptopVideo`); going full screen is the
+  // browser's own.
+  const fullscreenRef = useRef(false);
+  const handleFullscreenChange = useCallback(
+    (active: boolean) => {
+      const left = fullscreenRef.current && !active;
+      fullscreenRef.current = active;
+      setFullscreen(active);
+      const shell = shellRef.current;
+      if (left && !card && shell) {
+        void flyHeroLaptopVideo(shell, "in").then((land) => land());
+      }
+    },
+    [card],
+  );
+
+  const handleAmbientEnabledChange = useCallback((enabled: boolean) => {
+    setAmbientEnabled(enabled);
+    writeAmbientPreference(enabled);
+  }, []);
+
+  return (
+    <div ref={shellRef} className={card ? undefined : "size-full"}>
+      <VideoPlayer
+        ref={setPlayerRef}
+        source={source}
+        poster={poster}
+        spriteStoryboardUrl={playback.storyboardUrl}
+        theme={playerTheme}
+        engine="shaka"
+        engineFactory={engineFactory}
+        autoPlay={autoPlay}
+        interactionMode={desktopFullscreen ? "desktop" : "mobile"}
+        keyboardEnabled={active && inView}
+        shortcuts={SHORTCUTS}
+        emptyTapBehavior="responsive"
+        controlsIdleDelay={CONTROLS_IDLE_DELAY_MS}
+        controlsTouchIdleDelay={CONTROLS_TOUCH_IDLE_DELAY_MS}
+        keepControlsVisibleUntilFirstPlay
+        keepPosterVisibleUntilFirstPlay
+        lockLandscapeOnFullscreen
+        // A swipe over the video scrolls the page, as anywhere else on it: no
+        // swipe up into full screen, no pinch to zoom.
+        zoomEnabled={false}
+        ariaLabel={playback.title ? `Video: ${playback.title}` : "Video"}
+        onEvent={(event) => {
+          if (event.type === "loaded" && !activeRef.current) {
+            engineRef.current?.setBufferAheadLimit?.(
+              HERO_WAITING_BUFFER_SECONDS,
+            );
+          }
+          if (event.type === "fullscreenchange") {
+            handleFullscreenChange(event.detail.active);
+          }
+        }}
+        className={card ? cardClasses : laptopClasses}
+        playerClassName={
+          card
+            ? "!shadow-none"
+            : "!aspect-auto h-full !rounded-none !shadow-none"
+        }
+        // Cropped to the laptop's glass, but whole in full screen.
+        mediaClassName={card || fullscreen ? undefined : "!object-cover"}
+        centralControl={
+          <LessonCentralControls
+            showLessonNavigation={false}
+            canGoNext={false}
+            canGoPrevious={false}
+            onGoNext={noop}
+            onGoPrevious={noop}
+          />
+        }
+        controls={
+          <LessonPlayerControls
+            showAutoplayControl={false}
+            showLessonNavigation={false}
+            showAmbientControl={card}
+            // The card's settings are the phone's sheet, at a phone's width
+            // on a wide screen; the laptop's open in the video, as on a
+            // desktop.
+            settingsPresentation={card ? "sheet" : "popover"}
+            // The timeline comes and goes with the other controls.
+            progressWhileHidden={false}
+            sheetPanelClassName="mx-auto max-w-md"
+            ambientEnabled={card && ambientEnabled}
+            autoplayEnabled={false}
+            canGoNext={false}
+            canGoPrevious={false}
+            lessonTitle={playback.title}
+            onAmbientEnabledChange={handleAmbientEnabledChange}
+            onAutoplayEnabledChange={noop}
+            onGoNext={noop}
+            onGoPrevious={noop}
+          />
+        }
+        overlays={
+          card ? <LessonAmbientProjection enabled={ambientEnabled} /> : null
+        }
+        bufferingIndicator={<LearningMiniPlayerBufferingIndicator />}
+      />
+    </div>
+  );
+}
