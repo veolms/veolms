@@ -1,7 +1,6 @@
 import {
   isPlaybackStalled,
   FullscreenButton,
-  MuteButton,
   PlayerIconButton,
   PlayerMenuItem,
   PlayButton,
@@ -53,6 +52,7 @@ import {
   LessonChaptersToggleButton,
 } from "./chapters/LessonChaptersControl";
 import { LessonChaptersPanel } from "./chapters/LessonChaptersPanel";
+import { LessonVolumePill } from "./LessonVolumePill";
 import { updateLearningPreferences } from "../../settings/settingsPreferences";
 
 /**
@@ -502,6 +502,24 @@ export interface LessonPlayerControlsProps {
    */
   seekTimeOnly?: boolean;
   ambientEnabled: boolean;
+  /** False leaves ambient mode out of the settings. */
+  showAmbientControl?: boolean;
+  /**
+   * Classes for the phone layout's settings and chapters sheets outside a
+   * sideways full screen (a page that shows the phone layout on a wide
+   * screen narrows them).
+   */
+  sheetPanelClassName?: string;
+  /**
+   * How the phone layout opens its settings: as a sheet from the bottom of
+   * the screen, or as the desktop's menu in the player.
+   */
+  settingsPresentation?: "sheet" | "popover";
+  /**
+   * The phone layout keeps a thin progress line along the video's foot
+   * while its controls are hidden. False hides it with them.
+   */
+  progressWhileHidden?: boolean;
   autoplayEnabled: boolean;
   showAutoplayControl?: boolean;
   circularSettingsControl?: boolean;
@@ -946,6 +964,10 @@ export function LessonPlayerControls({
   shortPlayer = false,
   seekTimeOnly = false,
   ambientEnabled,
+  showAmbientControl = true,
+  sheetPanelClassName,
+  settingsPresentation = "sheet",
+  progressWhileHidden = true,
   autoplayEnabled,
   showAutoplayControl = true,
   circularSettingsControl = false,
@@ -1066,7 +1088,11 @@ export function LessonPlayerControls({
   const chaptersSideHost =
     desktopLayout && !fullscreen ? (chaptersPanelHost ?? null) : null;
   const persistentProgressVisible =
-    ready && !controlsSuppressed && mobileInteraction && !fullscreen;
+    progressWhileHidden &&
+    ready &&
+    !controlsSuppressed &&
+    mobileInteraction &&
+    !fullscreen;
   const timelineDisplayed = visible || persistentProgressVisible;
   const landscapeOrientation = useLandscapeOrientation();
   const mobileLandscapeFullscreen = mobileFullscreen && landscapeOrientation;
@@ -1153,7 +1179,7 @@ export function LessonPlayerControls({
     ? fullscreenCoursePanelVisible
       ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(var(--player-screen-height,100dvh),var(--learning-fullscreen-video-width))] !-translate-x-1/2"
       : "[&&]:!rounded-b-none mx-auto max-w-[var(--player-screen-height,100dvh)]"
-    : undefined;
+    : sheetPanelClassName;
   const mobileSheetPortalTarget = mobileLandscapeFullscreen
     ? mobileSettingsSheetHost
     : undefined;
@@ -1344,6 +1370,16 @@ export function LessonPlayerControls({
       cluster="player-actions"
       className={`relative isolate flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${circularSettingsControl ? "!size-9 !rounded-full !p-0 !justify-center sm:!size-9 sm:!p-0 [&>div]:!size-9 [&>div>button]:!size-9" : ""}`}
     >
+      {/* First in the corner: tapped, it opens into a pill with the
+          volume slider that grows to the left. */}
+      <span
+        className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
+        data-mobile-volume-control=""
+      >
+        <LessonVolumePill
+          buttonClassName={getPlayerIconPillClass(mobileInteraction)}
+        />
+      </span>
       {showAutoplayControl ? (
         <AutoplayToggle
           enabled={autoplayEnabled}
@@ -1351,18 +1387,9 @@ export function LessonPlayerControls({
           onEnabledChange={onAutoplayEnabledChange}
         />
       ) : null}
-      <span
-        className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
-        data-mobile-volume-control=""
-      >
-        <MuteButton
-          className={getPlayerIconPillClass(mobileInteraction)}
-          iconSize={22}
-        />
-      </span>
       <SettingsMenu
         includePictureInPicture
-        mobilePresentation="sheet"
+        mobilePresentation={settingsPresentation}
         forceSheet={desktopSettingsAsSheet}
         mobileSheetPanelClassName={mobileSheetPanelClassName}
         mobileSheetPortalTarget={mobileSheetPortalTarget}
@@ -1385,10 +1412,12 @@ export function LessonPlayerControls({
             "!inline-flex !size-9 !w-9 !items-center !justify-center !p-0 !rounded-full !leading-none [&>svg]:!block [&>svg]:!shrink-0",
         )}
         extraMainItems={
-          <AmbientSettingsItem
-            enabled={ambientEnabled}
-            onEnabledChange={onAmbientEnabledChange}
-          />
+          showAmbientControl ? (
+            <AmbientSettingsItem
+              enabled={ambientEnabled}
+              onEnabledChange={onAmbientEnabledChange}
+            />
+          ) : undefined
         }
         side={inBottomRow ? "top" : "bottom"}
         onQualityChange={rememberQualityChoice}

@@ -139,13 +139,15 @@ function projectOnto(
 /**
  * Where the laptop is in the hero picture, following the picture as the hero
  * changes size: the transform that fits the screen's content onto the
- * laptop, and the spot under the display its power is held at. Both are
- * missing until the picture has been measured.
+ * laptop, how much smaller than it is laid out that content is drawn (along
+ * the screen's top edge), and the spot under the display its power is held
+ * at. All are missing until the picture has been measured.
  */
 export function useHeroLaptopScreen(
   imageRef: RefObject<HTMLImageElement | null>,
 ) {
   const [transform, setTransform] = useState<string>();
+  const [drawnScale, setDrawnScale] = useState<number>();
   const [powerSpot, setPowerSpot] = useState<HeroLaptopPowerSpot>();
 
   // Measured before the page is drawn: the home is drawn with its laptop's
@@ -175,6 +177,12 @@ export function useHeroLaptopScreen(
               origin.top + offsetY + y * scale,
             ]),
           ),
+        );
+        const [[topLeftX, topLeftY], [topRightX, topRightY]] =
+          screenInWidePicture;
+        setDrawnScale(
+          (Math.hypot(topRightX - topLeftX, topRightY - topLeftY) * scale) /
+            HERO_LAPTOP_SCREEN_WIDTH,
         );
 
         // The power spot starts at the screen's bottom edge and reaches down
@@ -229,5 +237,5 @@ export function useHeroLaptopScreen(
     };
   }, [imageRef]);
 
-  return { transform, powerSpot };
+  return { transform, drawnScale, powerSpot };
 }

@@ -143,6 +143,14 @@ function HomePageSettingsForm({
         title="Hero"
         description="The banner at the top of the page, over the hero picture."
       >
+        <TextField
+          id="home-page-hero-eyebrow"
+          label="Line above the headline"
+          value={draft.hero.eyebrow}
+          onChange={(eyebrow) => update("hero", { ...draft.hero, eyebrow })}
+          maxLength={40}
+          hint="Shown small and in capitals. Leave empty to hide it."
+        />
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
             id="home-page-hero-headline"

@@ -33,6 +33,8 @@ export const HOME_PAGE_HERO_LESSON = {
 } as const;
 
 export interface HomePageHero {
+  /** A short line above the headline, such as "Welcome to …". May be empty. */
+  eyebrow: string;
   headline: string;
   /** The second headline line, shown in the accent colour. May be empty. */
   highlightedHeadline: string;
@@ -91,6 +93,7 @@ export interface HomePageSettings {
 
 export const DEFAULT_HOME_PAGE_SETTINGS: HomePageSettings = {
   hero: {
+    eyebrow: "Welcome to ProCodrr",
     headline: "Learn In Depth.",
     highlightedHeadline: "Build With Confidence.",
     description:
