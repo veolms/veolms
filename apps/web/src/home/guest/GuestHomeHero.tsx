@@ -9,7 +9,12 @@ import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import type { HomePageHero } from "@veolms/contracts/home-page-defaults";
 import type { NavigateTo } from "../../routing/navigation";
 import { GuestHomeLink } from "./GuestHomeLink";
-import type { MouseEvent, ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { HeroDesk } from "./HeroDesk";
 import { guestHeroCopyWhenComplete, HeroCopyEnd } from "./HeroPicture";
 import { glassActionClasses, primaryActionClasses } from "./heroActionClasses";
@@ -102,11 +107,29 @@ const picturePosition = `object-[72%_center] xl:object-center ${homeHeroPictureB
  * The supporting text, set as a quote: Lora italic, a little larger than
  * body text and with room between its lines.
  */
-// Beside the picture the quote is kept to about 23 of its letters' widths
-// (in its own size, set on the box too): just room for it in two even
-// lines.
+/**
+ * Beside the picture, the copy is sized to the room it has before the
+ * laptop (written out in the classes below, as Tailwind needs): from the
+ * copy's start (the page's gutter) to 1.5rem short of the laptop's screen,
+ * which begins 1.05 picture heights in from the picture's right edge (drawn
+ * `--picture-shift` past the hero's). Measured against the page's own
+ * width, so it follows the sidebar as it is resized.
+ */
+
+/**
+ * Beside the picture the quote is kept to about 23 of its letters' widths
+ * (in its own size, set on the box too), just room for it in two even
+ * lines, and never past the laptop.
+ */
 const descriptionBoxClasses =
-  "mt-4 w-fit max-w-xl text-[clamp(1.0625rem,2.4cqw,1.25rem)] @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(23em,52cqw)] @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
+  "mt-4 w-fit max-w-xl text-[clamp(1.0625rem,2.4cqw,1.25rem)] @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(23em,calc(100cqw_-_var(--picture-h)_*_1.05_+_var(--picture-shift)_-_clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)_-_1.5rem))] @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
+
+/**
+ * The headline's size beside the picture: as before, but small enough for
+ * its longer line (about 10.8 times the size wide) to end before the laptop.
+ */
+const headlineBesideCopySize =
+  "@[50rem]/home:text-[length:min(clamp(2.25rem,4.4cqw,3.5rem),max(1.75rem,calc(calc(100cqw_-_var(--picture-h)_*_1.05_+_var(--picture-shift)_-_clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)_-_1.5rem)_/_10.8)))]";
 const descriptionTextClasses =
   "font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-balance text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
 const descriptionClasses = `${descriptionBoxClasses} ${descriptionTextClasses}`;
@@ -128,6 +151,44 @@ function HeroHeadline({
       ) : null}
     </span>
   );
+}
+
+/**
+ * The quote's author ends where the quote's longest line ends. Its lines
+ * are balanced, so they stop short of the box's edge by an amount CSS
+ * cannot know; it is measured, again whenever the quote changes size (the
+ * page resized, the serif font arriving).
+ */
+function useAuthorAtQuoteEnd(text: string | undefined) {
+  const quoteRef = useRef<HTMLQuoteElement>(null);
+  const captionRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    const quote = quoteRef.current;
+    const caption = captionRef.current;
+    if (!quote || !caption) return undefined;
+
+    const place = () => {
+      const lines = document.createRange();
+      lines.selectNodeContents(quote);
+      const left = caption.getBoundingClientRect().left;
+      let quoteEnd = 0;
+      for (const line of lines.getClientRects()) {
+        quoteEnd = Math.max(quoteEnd, line.right - left);
+      }
+      const spare = caption.clientWidth - quoteEnd;
+      caption.style.paddingRight =
+        quoteEnd > 0 && spare > 0 ? `${Math.floor(spare)}px` : "";
+    };
+
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(quote);
+    void document.fonts.ready.then(place);
+    return () => observer.disconnect();
+  }, [text]);
+
+  return { quoteRef, captionRef };
 }
 
 /**
@@ -164,6 +225,7 @@ export function GuestHomeHero({
   /** The same video for the narrow form, drawn in a card of its own. */
   introVideo?: ReactNode;
 }) {
+  const { quoteRef, captionRef } = useAuthorAtQuoteEnd(hero?.description);
   const spacing =
     hero && greeting
       ? greetedSpacing
@@ -224,7 +286,7 @@ export function GuestHomeHero({
           ) : null}
           <h1
             id="guest-home-hero-title"
-            className="text-[clamp(1.875rem,8cqw,2.75rem)] leading-[1.14] font-extrabold tracking-[-0.03em] @[50rem]/home:text-[clamp(2.25rem,4.4vw,3.5rem)] @[50rem]/home:leading-[1.1]"
+            className={`text-[clamp(1.875rem,8cqw,2.75rem)] leading-[1.14] font-extrabold tracking-[-0.03em] @[50rem]/home:leading-[1.1] ${headlineBesideCopySize}`}
           >
             {hero ? (
               <>
@@ -253,13 +315,15 @@ export function GuestHomeHero({
             <figure
               className={`${descriptionBoxClasses} ${returningLearnerHero ? forGuest : ""}`}
             >
-              <blockquote className={descriptionTextClasses}>
+              <blockquote ref={quoteRef} className={descriptionTextClasses}>
                 {hero?.description}
               </blockquote>
               {hero ? (
-                // At the quote box's right edge, which is at or past the end of
-                // its longest line.
-                <figcaption className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600">
+                // Ending where the quote's longest line ends.
+                <figcaption
+                  ref={captionRef}
+                  className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600"
+                >
                   <span aria-hidden="true" className="h-px w-6 bg-current/60" />
                   ProCodrr
                 </figcaption>
