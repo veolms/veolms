@@ -1,6 +1,7 @@
 import "../../learning/learning-feature.css";
 import type { HeroVideoPlayback } from "@veolms/contracts";
 import {
+  getPageFullscreenElement,
   ShakaVideoEngine,
   VideoPlayer,
   type VideoEngine,
@@ -35,6 +36,8 @@ const SHORTCUTS = {
   togglePictureInPicture: false,
 } as const;
 const noop = () => undefined;
+/** How long after full screen opens or closes the page is left to settle. */
+const FULLSCREEN_SETTLE_MS = 1_500;
 
 /**
  * Where the video's glow goes, as the lesson page's: around the video, and
@@ -130,6 +133,10 @@ export default function HeroVideoPlayer({
 
   const source = useMemo(() => createHeroVideoSource(playback), [playback]);
 
+  // Whether full screen is open, and when it last opened or closed.
+  const fullscreenRef = useRef(false);
+  const fullscreenChangedAtRef = useRef(Number.NEGATIVE_INFINITY);
+
   // A video left playing out of sight would keep talking over the page, and
   // its keys (Space, the arrows) belong to the page once it is scrolled away.
   useEffect(() => {
@@ -138,7 +145,18 @@ export default function HeroVideoPlayer({
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry) return;
       setInView(entry.isIntersecting);
-      if (!entry.isIntersecting) playerRef.current?.pause();
+      // Full screen takes the page's own box out of sight (a phone turned
+      // sideways for it, too, for a moment as it turns back): that is no
+      // reason to stop.
+      const aroundFullscreen =
+        fullscreenRef.current ||
+        Boolean(document.fullscreenElement) ||
+        getPageFullscreenElement() !== null ||
+        performance.now() - fullscreenChangedAtRef.current <
+          FULLSCREEN_SETTLE_MS;
+      if (!entry.isIntersecting && !aroundFullscreen) {
+        playerRef.current?.pause();
+      }
     });
     observer.observe(shell);
     return () => observer.disconnect();
@@ -170,11 +188,11 @@ export default function HeroVideoPlayer({
   // On the laptop, leaving full screen flies the picture back into the
   // laptop's screen (see `flyHeroLaptopVideo`); going full screen is the
   // browser's own.
-  const fullscreenRef = useRef(false);
   const handleFullscreenChange = useCallback(
     (active: boolean) => {
       const left = fullscreenRef.current && !active;
       fullscreenRef.current = active;
+      fullscreenChangedAtRef.current = performance.now();
       setFullscreen(active);
       const shell = shellRef.current;
       if (left && !card && shell) {
