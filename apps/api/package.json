@@ -19,7 +19,8 @@
     "import:youtube": "node --env-file-if-exists=../../.env src/cli/import-youtube.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"src/**/*.test.ts\""
+    "test": "node --test \"src/**/*.test.ts\"",
+    "test:flows": "node test/flows/setup/prepare-database.ts && node --test --test-concurrency=1 \"test/flows/*.flow.test.ts\""
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1115.0",

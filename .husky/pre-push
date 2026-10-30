@@ -3,3 +3,8 @@ if [ "$current_branch" = "development" ]; then
   echo "Direct push to the development branch is not allowed. Please use a feature/fix/chore branch and open a Pull Request."
   exit 1
 fi
+
+pnpm --filter @veolms/api test || {
+  echo "API tests failed. Fix them before pushing."
+  exit 1
+}
