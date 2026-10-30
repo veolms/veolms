@@ -33,6 +33,7 @@ import { PlayerBehaviorBridge } from "./PlayerBehaviorBridge";
 import type { PlayerMediaProps } from "./PlayerMedia";
 import { PlayerMetadataBridge } from "./PlayerMetadataBridge";
 import { PlayerRoot, type VideoPlayerHandle } from "./PlayerRoot";
+import { SubtitleLayer } from "./SubtitleLayer";
 import {
   PlayerZoomMedia,
   type PlayerZoomOverflowBoundary,
@@ -443,6 +444,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             emptyTapBehavior={emptyTapBehavior}
             seekIntervalSeconds={seekIntervalSeconds}
           />
+          <SubtitleLayer />
           {zoomEnabled ? <ZoomLevelIndicator variant="feedback" /> : null}
           {overlays}
           {centralControl === false
