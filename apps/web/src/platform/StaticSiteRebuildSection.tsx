@@ -10,7 +10,7 @@ import { SettingRow } from "../settings/SettingsControls";
 
 const STATUS_TEXT = {
   queued: "Queued. The build starts in a moment.",
-  running: "Building every public page. This takes about 15 minutes.",
+  running: "Building every public page. This takes about 6 minutes.",
   succeeded: "All public pages were rebuilt and published.",
 } as const;
 

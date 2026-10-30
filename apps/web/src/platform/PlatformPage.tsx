@@ -74,6 +74,7 @@ const PlatformTabContent = memo(function PlatformTabContent({
             </div>
           </header>
           <AcademyBrandSection setNotice={setNotice} />
+          <StaticSiteRebuildSection />
         </div>
       );
     case "invoice":
