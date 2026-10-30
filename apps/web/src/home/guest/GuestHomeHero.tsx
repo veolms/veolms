@@ -286,9 +286,11 @@ export function GuestHomeHero({
           ) : null}
 
           <div
-            className={`mt-6 flex w-full flex-col items-stretch gap-4 @[30rem]/home:flex-row @[30rem]/home:items-center @[30rem]/home:justify-between @[50rem]/home:w-auto @[50rem]/home:justify-start @[50rem]/home:gap-3 ${spacing.actions}`}
+            className={`mt-6 flex w-full flex-col items-stretch gap-4 @[50rem]/home:flex-row @[50rem]/home:items-center @[50rem]/home:w-auto @[50rem]/home:justify-start @[50rem]/home:gap-3 ${spacing.actions}`}
           >
-            <div className="flex flex-col gap-3 @[30rem]/home:flex-row @[30rem]/home:items-center">
+            {/* Stacked, the button above the sign-in line, wherever the hero
+                has no picture; beside the picture the actions share a row. */}
+            <div className="flex flex-col gap-3 @[50rem]/home:flex-row @[50rem]/home:items-center">
               <GuestHomeLink
                 href="/courses"
                 onNavigatePage={onNavigatePage}
