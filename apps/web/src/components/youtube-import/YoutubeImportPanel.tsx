@@ -82,7 +82,7 @@ const COPY: Record<
   },
   "home-page": {
     replacement:
-      "The laptop plays the imported video once it is ready; until then the play button does nothing.",
+      "It is saved as the laptop's video at once, and plays once it is ready; until then the default lesson plays.",
     rights:
       "I own this video or have the rights to use it on this academy's home page.",
   },

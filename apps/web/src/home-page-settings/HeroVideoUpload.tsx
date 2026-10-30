@@ -100,7 +100,7 @@ function ProcessingStatus({ mediaId }: { mediaId: string }) {
     <div className="grid gap-1.5">
       <p className="text-xs text-(--muted)">
         Processing{status ? ` (${percent}%)` : "..."}. Visitors see it once it
-        is ready; until then the laptop&apos;s play button does nothing.
+        is ready; until then the laptop plays the default lesson.
       </p>
       <ProgressBar percent={percent} label="Video processing" />
     </div>
@@ -109,16 +109,19 @@ function ProcessingStatus({ mediaId }: { mediaId: string }) {
 
 /**
  * Uploads a video for the hero alone, or imports one from YouTube. It goes
- * through the same processing as a lesson's video; it is chosen as soon as
- * it has been sent (or its import queued), and can be saved while it is
- * still being processed.
+ * through the same processing as a lesson's video; it is saved as the
+ * laptop's video as soon as it has been sent (or its import queued), and
+ * plays once it has been processed.
  */
 export function HeroVideoUpload({
   uploaded,
+  saving,
   onUploaded,
 }: {
   /** The upload chosen now, if the hero plays one. */
   uploaded: { mediaId: string; fileName: string } | null;
+  /** The choice of `uploaded` is being saved. */
+  saving: boolean;
   onUploaded: (mediaId: string, fileName: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -174,6 +177,11 @@ export function HeroVideoUpload({
             {uploaded.fileName}
           </p>
           <YoutubeSource mediaId={uploaded.mediaId} />
+          {saving ? (
+            <p className="text-xs text-(--muted)" role="status">
+              Saving it as the laptop&apos;s video...
+            </p>
+          ) : null}
           <ProcessingStatus mediaId={uploaded.mediaId} />
         </div>
       ) : null}
