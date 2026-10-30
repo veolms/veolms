@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { CourseStaticPageRefreshStatus } from "@veolms/contracts";
+import type {
+  CourseStaticPageRefreshStatus,
+  StaticSiteRebuildStatus,
+} from "@veolms/contracts";
 import type { FastifyBaseLogger } from "fastify";
 
 export interface CourseStaticPageRefreshService {
@@ -9,6 +12,9 @@ export interface CourseStaticPageRefreshService {
   }): CourseStaticPageRefreshStatus;
   getStatus(courseId: string): CourseStaticPageRefreshStatus;
   retry(courseId: string): CourseStaticPageRefreshStatus;
+  /** Every public page built again (the admin's "Rebuild all public pages"). */
+  requestFullRebuild(): StaticSiteRebuildStatus;
+  getFullRebuildStatus(): StaticSiteRebuildStatus;
 }
 
 interface CreateCourseStaticPageRefreshServiceOptions {
@@ -17,6 +23,12 @@ interface CreateCourseStaticPageRefreshServiceOptions {
   ref?: string;
   workflow?: string;
   logger: FastifyBaseLogger;
+  /** How long a course has to stay unchanged before its pages are built. */
+  quietPeriodMs?: number;
+  /** The longest a changed course waits while it keeps being edited. */
+  maxWaitMs?: number;
+  /** How often GitHub is asked about the run. */
+  pollIntervalMs?: number;
 }
 
 interface GitHubWorkflowRun {
@@ -29,32 +41,64 @@ interface GitHubWorkflowRun {
 
 const GITHUB_API = "https://api.github.com";
 const RUN_START_TIMEOUT_MS = 90_000;
-const RUN_COMPLETE_TIMEOUT_MS = 12 * 60_000;
-const RUN_POLL_INTERVAL_MS = 2_000;
+// A full build of every page takes most of half an hour.
+const RUN_COMPLETE_TIMEOUT_MS = 50 * 60_000;
+const RUN_POLL_INTERVAL_MS = 5_000;
+const QUIET_PERIOD_MS = 20_000;
+const MAX_WAIT_MS = 2 * 60_000;
+/**
+ * GitHub keeps one waiting run per deployment group and cancels the one it
+ * replaces; a cancelled refresh is started again this many times.
+ */
+const MAX_CANCELLED_ATTEMPTS = 3;
+const NOT_CONFIGURED =
+  "Course page refresh is not configured. Set COURSE_STATIC_REFRESH_GITHUB_TOKEN and COURSE_STATIC_REFRESH_REPOSITORY.";
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Course page deployment failed.";
+  return error instanceof Error ? error.message : "Page deployment failed.";
 }
 
+/**
+ * Builds the public pages again after their content changes, through a
+ * GitHub Actions workflow that renders and deploys them.
+ *
+ * Changes are gathered: a course is built once it has been left unchanged
+ * for a short while (an editor saves as the admin types), and all courses
+ * waiting by then go in one run. One run at a time; a full rebuild covers
+ * every course waiting with it.
+ *
+ * The state lives in this process: it is lost on restart, and each API
+ * process tracks the changes it received.
+ */
 export function createCourseStaticPageRefreshService({
   githubToken,
   repository,
   ref = "main",
   workflow = "deploy-pages.yml",
   logger,
+  quietPeriodMs = QUIET_PERIOD_MS,
+  maxWaitMs = MAX_WAIT_MS,
+  pollIntervalMs = RUN_POLL_INTERVAL_MS,
 }: CreateCourseStaticPageRefreshServiceOptions): CourseStaticPageRefreshService {
+  const configured = Boolean(githubToken && repository);
   const statuses = new Map<string, CourseStaticPageRefreshStatus>();
-  const requestedRevision = new Map<string, number>();
-  const completedRevision = new Map<string, number>();
-  const courseSlugs = new Map<string, string | null>();
-  const activeCourses = new Set<string>();
-  let deploymentTail: Promise<void> = Promise.resolve();
+  let siteStatus: StaticSiteRebuildStatus = {
+    status: "idle",
+    message: null,
+    updatedAt: new Date().toISOString(),
+    runUrl: null,
+  };
+  /** Courses waiting for a run, with how many cancelled runs they had. */
+  const pendingCourses = new Map<string, number>();
+  let fullRebuildPending = false;
+  let firstPendingAt = 0;
+  let lastChangeAt = 0;
+  let wakeUp: ReturnType<typeof setTimeout> | null = null;
+  let draining = false;
 
   function getStatus(courseId: string): CourseStaticPageRefreshStatus {
     return (
@@ -81,15 +125,18 @@ export function createCourseStaticPageRefreshService({
     });
   }
 
+  function updateSiteStatus(updates: Partial<StaticSiteRebuildStatus>) {
+    siteStatus = {
+      ...siteStatus,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   async function githubRequest<T>(
     pathname: string,
     init?: RequestInit,
   ): Promise<T> {
-    if (!githubToken) {
-      throw new Error(
-        "Course page refresh is not configured. Set COURSE_STATIC_REFRESH_GITHUB_TOKEN.",
-      );
-    }
     const response = await fetch(`${GITHUB_API}${pathname}`, {
       ...init,
       // Background work, but each poll iteration should still be bounded —
@@ -110,12 +157,10 @@ export function createCourseStaticPageRefreshService({
     return (await response.json()) as T;
   }
 
-  async function waitForWorkflow(requestId: string) {
-    if (!repository) {
-      throw new Error(
-        "Course page refresh is not configured. Set COURSE_STATIC_REFRESH_REPOSITORY.",
-      );
-    }
+  async function waitForWorkflow(
+    requestId: string,
+    onStarted: (runUrl: string | null) => void,
+  ) {
     const workflowPath = encodeURIComponent(workflow);
     const basePath = `/repos/${repository}/actions/workflows/${workflowPath}`;
     const startDeadline = Date.now() + RUN_START_TIMEOUT_MS;
@@ -132,12 +177,13 @@ export function createCourseStaticPageRefreshService({
           candidate.display_title === `Public pages refresh ${requestId}`,
       );
       if (run) break;
-      await delay(RUN_POLL_INTERVAL_MS);
+      await delay(pollIntervalMs);
     }
 
     if (!run) {
       throw new Error("The page refresh workflow did not start in time.");
     }
+    onStarted(run.html_url ?? null);
 
     const completeDeadline = Date.now() + RUN_COMPLETE_TIMEOUT_MS;
     while (Date.now() < completeDeadline) {
@@ -150,17 +196,17 @@ export function createCourseStaticPageRefreshService({
           conclusion: current.conclusion,
         };
       }
-      await delay(RUN_POLL_INTERVAL_MS);
+      await delay(pollIntervalMs);
     }
     throw new Error("The page refresh workflow exceeded its time limit.");
   }
 
-  async function dispatch(courseId: string, requestId: string) {
-    if (!repository) {
-      throw new Error(
-        "Course page refresh is not configured. Set COURSE_STATIC_REFRESH_REPOSITORY.",
-      );
-    }
+  /** One run: these courses' pages, or every page when `courseIds` is empty. */
+  async function dispatch(
+    courseIds: readonly string[],
+    requestId: string,
+    onStarted: (runUrl: string | null) => void,
+  ) {
     const workflowPath = encodeURIComponent(workflow);
     await githubRequest<void>(
       `/repos/${repository}/actions/workflows/${workflowPath}/dispatches`,
@@ -168,85 +214,149 @@ export function createCourseStaticPageRefreshService({
         method: "POST",
         body: JSON.stringify({
           ref,
-          inputs: {
-            course_id: courseId,
-            course_slug: courseSlugs.get(courseId) ?? "",
-            request_id: requestId,
-          },
+          inputs: { course_ids: courseIds.join(","), request_id: requestId },
         }),
       },
     );
-    return waitForWorkflow(requestId);
+    return waitForWorkflow(requestId, onStarted);
   }
 
-  async function serializeDeployment<T>(
-    operation: () => Promise<T>,
-  ): Promise<T> {
-    const previous = deploymentTail;
-    let release!: () => void;
-    deploymentTail = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await previous;
+  function schedule() {
+    if (wakeUp) clearTimeout(wakeUp);
+    wakeUp = null;
+    if (draining) return;
+    const dueAt = fullRebuildPending
+      ? Date.now()
+      : Math.min(lastChangeAt + quietPeriodMs, firstPendingAt + maxWaitMs);
+    wakeUp = setTimeout(
+      () => {
+        wakeUp = null;
+        void drain();
+      },
+      Math.max(0, dueAt - Date.now()),
+    );
+    wakeUp.unref?.();
+  }
+
+  async function runOnce() {
+    const full = fullRebuildPending;
+    const batch = new Map(pendingCourses);
+    fullRebuildPending = false;
+    pendingCourses.clear();
+    const courseIds = [...batch.keys()];
+    const requestId = randomUUID();
+    for (const courseId of courseIds) {
+      updateStatus(courseId, {
+        status: "running",
+        message: null,
+        requestId,
+        runUrl: null,
+      });
+    }
+    if (full) {
+      updateSiteStatus({ status: "running", message: null, runUrl: null });
+    }
+
     try {
-      return await operation();
-    } finally {
-      release();
+      const result = await dispatch(
+        full ? [] : courseIds,
+        requestId,
+        (runUrl) => {
+          for (const courseId of courseIds) updateStatus(courseId, { runUrl });
+          if (full) updateSiteStatus({ runUrl });
+        },
+      );
+      if (result.conclusion === "cancelled") {
+        // Replaced while it waited for an earlier deployment.
+        const retried = [...batch].filter(
+          ([, attempts]) => attempts + 1 < MAX_CANCELLED_ATTEMPTS,
+        );
+        for (const [courseId, attempts] of batch) {
+          if (attempts + 1 < MAX_CANCELLED_ATTEMPTS) {
+            pendingCourses.set(courseId, attempts + 1);
+            updateStatus(courseId, { status: "queued", runUrl: null });
+          } else {
+            updateStatus(courseId, {
+              status: "failed",
+              message: "The page deployment was cancelled.",
+            });
+          }
+        }
+        if (full) fullRebuildPending = true;
+        if (retried.length > 0 || full) {
+          logger.warn(
+            { courseIds, requestId, full },
+            "Public page refresh was cancelled; starting it again",
+          );
+          return;
+        }
+      }
+      if (result.conclusion !== "success") {
+        throw Object.assign(
+          new Error(
+            `Page deployment ended with ${result.conclusion ?? "no conclusion"}.`,
+          ),
+          { runUrl: result.runUrl },
+        );
+      }
+      for (const courseId of courseIds) {
+        updateStatus(courseId, {
+          status: "succeeded",
+          message: null,
+          runUrl: result.runUrl,
+        });
+      }
+      if (full) {
+        updateSiteStatus({
+          status: "succeeded",
+          message: null,
+          runUrl: result.runUrl,
+        });
+      }
+    } catch (error) {
+      logger.error(
+        { err: error, courseIds, requestId, full },
+        "Public page refresh failed",
+      );
+      const runUrl =
+        error && typeof error === "object" && "runUrl" in error
+          ? (error.runUrl as string | null)
+          : undefined;
+      for (const courseId of courseIds) {
+        updateStatus(courseId, {
+          status: "failed",
+          message: errorMessage(error),
+          ...(runUrl !== undefined ? { runUrl } : {}),
+        });
+      }
+      if (full) {
+        updateSiteStatus({
+          status: "failed",
+          message: errorMessage(error),
+          ...(runUrl !== undefined ? { runUrl } : {}),
+        });
+      }
     }
   }
 
-  async function processCourse(courseId: string) {
+  async function drain() {
+    if (draining) return;
+    draining = true;
     try {
-      while (
-        (completedRevision.get(courseId) ?? 0) <
-        (requestedRevision.get(courseId) ?? 0)
-      ) {
-        const revision = requestedRevision.get(courseId) ?? 0;
-        const requestId = randomUUID();
-        updateStatus(courseId, {
-          status: "running",
-          message: null,
-          requestId,
-          runUrl: null,
-        });
-
-        try {
-          const result = await serializeDeployment(() =>
-            dispatch(courseId, requestId),
-          );
-          if (result.conclusion !== "success") {
-            updateStatus(courseId, { runUrl: result.runUrl });
-            throw new Error(
-              `Page deployment ended with ${result.conclusion ?? "no conclusion"}.`,
-            );
-          }
-          completedRevision.set(courseId, revision);
-          updateStatus(courseId, {
-            status: "succeeded",
-            message: null,
-            runUrl: result.runUrl,
-          });
-        } catch (error) {
-          completedRevision.set(courseId, revision);
-          logger.error(
-            { err: error, courseId, requestId },
-            "Course public page refresh failed",
-          );
-          updateStatus(courseId, {
-            status: "failed",
-            message: errorMessage(error),
-          });
+      while (fullRebuildPending || pendingCourses.size > 0) {
+        // Changes made while the last run went are gathered as well.
+        const dueAt = Math.min(
+          lastChangeAt + quietPeriodMs,
+          firstPendingAt + maxWaitMs,
+        );
+        if (!fullRebuildPending && Date.now() < dueAt) {
+          await delay(dueAt - Date.now());
+          continue;
         }
+        await runOnce();
       }
     } finally {
-      activeCourses.delete(courseId);
-      if (
-        (completedRevision.get(courseId) ?? 0) <
-        (requestedRevision.get(courseId) ?? 0)
-      ) {
-        activeCourses.add(courseId);
-        void processCourse(courseId);
-      }
+      draining = false;
     }
   }
 
@@ -254,7 +364,7 @@ export function createCourseStaticPageRefreshService({
     courseId: string;
     courseSlug?: string | null;
   }): CourseStaticPageRefreshStatus {
-    if (!githubToken || !repository) {
+    if (!configured) {
       return {
         courseId: input.courseId,
         status: "idle",
@@ -264,24 +374,32 @@ export function createCourseStaticPageRefreshService({
         runUrl: null,
       };
     }
-
-    if (input.courseSlug !== undefined) {
-      courseSlugs.set(input.courseId, input.courseSlug);
+    const now = Date.now();
+    if (pendingCourses.size === 0) firstPendingAt = now;
+    lastChangeAt = now;
+    if (!pendingCourses.has(input.courseId)) {
+      pendingCourses.set(input.courseId, 0);
     }
-    requestedRevision.set(
-      input.courseId,
-      (requestedRevision.get(input.courseId) ?? 0) + 1,
-    );
     updateStatus(input.courseId, {
       status: "queued",
       message: null,
       runUrl: null,
     });
-    if (!activeCourses.has(input.courseId)) {
-      activeCourses.add(input.courseId);
-      void processCourse(input.courseId);
-    }
+    schedule();
     return getStatus(input.courseId);
+  }
+
+  function requestFullRebuild(): StaticSiteRebuildStatus {
+    if (!configured) {
+      updateSiteStatus({ status: "failed", message: NOT_CONFIGURED });
+      return siteStatus;
+    }
+    if (siteStatus.status !== "queued" && siteStatus.status !== "running") {
+      fullRebuildPending = true;
+      updateSiteStatus({ status: "queued", message: null, runUrl: null });
+      schedule();
+    }
+    return siteStatus;
   }
 
   return {
@@ -292,5 +410,7 @@ export function createCourseStaticPageRefreshService({
         ? requestRefresh({ courseId })
         : getStatus(courseId);
     },
+    requestFullRebuild,
+    getFullRebuildStatus: () => siteStatus,
   };
 }
