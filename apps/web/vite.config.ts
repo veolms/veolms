@@ -1,6 +1,7 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
@@ -197,6 +198,14 @@ const ROUTE_CHUNK_PRELOADS = [
     manifestSrcSuffix: "courses/CourseOverviewPage.tsx",
     devUrl: "/src/courses/CourseOverviewPage.tsx",
   },
+  {
+    placeholder: "__VEO_LEARNING_PLAYER_HOST_CHUNK_URL__",
+    cssPlaceholder: "__VEO_LEARNING_PLAYER_HOST_CSS_URLS__",
+    jsPlaceholder: "__VEO_LEARNING_PLAYER_HOST_JS_URLS__",
+    moduleSuffix: "/src/learning/player/PersistentLearningPlayerHost.tsx",
+    manifestSrcSuffix: "learning/player/PersistentLearningPlayerHost.tsx",
+    devUrl: "/src/learning/player/PersistentLearningPlayerHost.tsx",
+  },
 ];
 
 // The chunk a lazy route body's dynamic import loads. Usually the module is
@@ -223,9 +232,41 @@ function findRouteBodyChunk(
   );
 }
 
+/**
+ * A digest of the code of every module in the route bodies' static graphs:
+ * what their chunks' hashed file names, and so the replaced URLs, are made
+ * of. Computed once per output pass.
+ */
+function routeBodyGraphDigest(
+  context: Pick<Rolldown.PluginContext, "getModuleInfo">,
+): string {
+  const hash = createHash("sha1");
+  const seen = new Set<string>();
+  const appRoot = path.dirname(fileURLToPath(import.meta.url));
+  const moduleInfo = (id: string) =>
+    context.getModuleInfo(id) ??
+    context.getModuleInfo(id.replaceAll("/", "\\")) ??
+    context.getModuleInfo(id.replaceAll("\\", "/"));
+  for (const entry of ROUTE_CHUNK_PRELOADS) {
+    const pending = [path.join(appRoot, entry.devUrl)];
+    while (pending.length) {
+      const id = pending.pop() as string;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const info = moduleInfo(id);
+      if (!info) continue;
+      hash.update(id.replaceAll("\\", "/")).update(" ");
+      hash.update(info.code ?? "").update(" ");
+      pending.push(...info.importedIds);
+    }
+  }
+  return hash.digest("hex");
+}
+
 function routeChunkPreloadPlugin(): Plugin {
   let publicBase = "/";
   let command: "build" | "serve" = "build";
+  let graphDigest: string | null = null;
   // What the client pass resolved. React Router builds the client first and
   // shares plugin instances across its environments, so the server pass,
   // which renders the prerendered documents, reuses these.
@@ -236,6 +277,35 @@ function routeChunkPreloadPlugin(): Plugin {
     configResolved(config) {
       command = config.command;
       publicBase = config.base || "/";
+    },
+    renderStart() {
+      graphDigest = null;
+    },
+    // The URLs are written into the chunks below (generateBundle), after
+    // their hashed file names were settled with the placeholders still in.
+    // A chunk such as routeChunkPreloads' own would keep its file name from
+    // build to build while the URLs inside it changed, and a browser holding
+    // it (assets are immutable for a year) would preload, wait for and link
+    // the previous build's chunks. So the hash of every chunk that carries
+    // a placeholder also takes in what the replaced URLs are made of: the
+    // code of the route bodies' whole static graphs.
+    augmentChunkHash(chunk) {
+      if (command !== "build") return undefined;
+      const placeholders = ROUTE_CHUNK_PRELOADS.flatMap((entry) => [
+        entry.placeholder,
+        entry.cssPlaceholder,
+        entry.jsPlaceholder,
+      ]);
+      const carries = Object.keys(chunk.modules).some((id) => {
+        const code = this.getModuleInfo(id)?.code;
+        return Boolean(
+          code &&
+          placeholders.some((placeholder) => code.includes(placeholder)),
+        );
+      });
+      if (!carries) return undefined;
+      graphDigest ??= routeBodyGraphDigest(this);
+      return graphDigest;
     },
     transform(code) {
       if (command !== "serve") return undefined;

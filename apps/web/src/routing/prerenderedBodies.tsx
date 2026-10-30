@@ -6,6 +6,7 @@ import {
   CATALOGUE_CHUNK_URL_PLACEHOLDER,
   COURSE_OVERVIEW_CHUNK_URL_PLACEHOLDER,
   GUEST_HOME_CHUNK_URL_PLACEHOLDER,
+  LEARNING_PLAYER_HOST_CHUNK_URL_PLACEHOLDER,
 } from "./routeChunkPreloads";
 
 /**
@@ -196,6 +197,18 @@ export function preloadPrerenderedBodies(): Promise<unknown> | null {
     documentPreloads(COURSE_OVERVIEW_CHUNK_URL_PLACEHOLDER)
   ) {
     pending.push(courseOverviewBody.preload());
+  }
+  // A lesson page's video player host: mounted by the academy layout the
+  // moment the hydrated page registers its player, so its module must be
+  // in by then, or the player's body suspends on it and React holds the
+  // player back for its fallback throttle (see routeChunkPreloads.ts).
+  const isDevelopmentLessonPage =
+    import.meta.env.DEV && window.location.pathname.startsWith("/learn/");
+  if (
+    isDevelopmentLessonPage ||
+    documentPreloads(LEARNING_PLAYER_HOST_CHUNK_URL_PLACEHOLDER)
+  ) {
+    pending.push(persistentLearningPlayerHostBody.preload());
   }
   return pending.length ? Promise.all(pending) : null;
 }

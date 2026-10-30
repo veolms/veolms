@@ -104,7 +104,11 @@ import {
 import { createPlaybackTelemetry } from "./playbackTelemetry";
 import { trackAnalyticsEvent } from "../../lib/analytics-track";
 
-const RESUME_PERSIST_INTERVAL_MS = 5_000;
+// Where the learner is, kept this often while the video plays: a reload
+// then starts within half a second of where it was (it is also kept the
+// moment the page is hidden or left, see below). Two localStorage writes
+// and an in-memory note each time; nothing goes to the server here.
+const RESUME_PERSIST_INTERVAL_MS = 500;
 // A lesson left this close to its end counts as finished when it is reopened.
 const FINISHED_LESSON_RESUME_TAIL_SECONDS = 3;
 // From here on the next lesson is preloaded, whatever the video's length: a
@@ -482,6 +486,7 @@ export function LessonVideoPlayer({
   protectedPlayback = false,
 }: LessonVideoPlayerProps) {
   const playerRef = useRef<VideoPlayerHandle>(null);
+  // Sharp drag frames from the kept segments, on a mouse or trackpad only.
   const latestPositionRef = useRef(0);
   const lastPersistedAtRef = useRef<number | null>(null);
   const preferencesReadyRef = useRef(false);
@@ -728,6 +733,28 @@ export function LessonVideoPlayer({
     writeResumePosition(activeMediaKeyRef.current, position);
     lastPersistedAtRef.current = now;
   }, []);
+
+  // The page being hidden, reloaded or left: where the learner is goes to
+  // storage at once, whatever the interval above says. In the capture
+  // phase, so it runs before the progress hook's own page-hide listener
+  // sends the account's positions to the server (useLearningProgress),
+  // and that batch carries this very position.
+  useEffect(() => {
+    const keepPosition = () => persistResumePosition(true);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") keepPosition();
+    };
+    window.addEventListener("pagehide", keepPosition, { capture: true });
+    document.addEventListener("visibilitychange", onVisibilityChange, {
+      capture: true,
+    });
+    return () => {
+      window.removeEventListener("pagehide", keepPosition, { capture: true });
+      document.removeEventListener("visibilitychange", onVisibilityChange, {
+        capture: true,
+      });
+    };
+  }, [persistResumePosition]);
 
   // The moment another lesson is asked for, the one playing is stopped
   // outright: paused, its source taken off and its streaming player
@@ -1003,6 +1030,11 @@ export function LessonVideoPlayer({
         const snapshot = playerRef.current?.getSnapshot();
         const duration = snapshot?.media.duration ?? 0;
         const currentTime = snapshot?.media.currentTime ?? 0;
+        // A jump is kept at once: a reload right after it starts there.
+        if (activeMediaKeyRef.current === requestedMediaKeyRef.current) {
+          latestPositionRef.current = currentTime;
+          persistResumePosition(true);
+        }
         if (
           showEndScreen &&
           !quizOfferedBeforeEndRef.current &&
