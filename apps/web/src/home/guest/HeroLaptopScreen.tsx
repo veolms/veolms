@@ -65,7 +65,7 @@ export function HeroLaptopScreen({
           left side, reaching faintly past the middle. */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,rgb(255_255_255/0.1)_0%,rgb(255_255_255/0.03)_30%,transparent_52%)] shadow-[inset_0_0_60px_rgb(0_0_0/0.4)] [:root[data-theme=light]_&]:bg-[radial-gradient(130%_190%_at_0%_0%,rgb(255_255_255/0.32)_0%,rgb(255_255_255/0.2)_20%,rgb(255_255_255/0.11)_40%,rgb(255_255_255/0.05)_58%,rgb(255_255_255/0.015)_74%,transparent_88%)] [:root[data-theme=light]_&]:shadow-[inset_0_0_48px_rgb(30_24_16/0.16)]"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,rgb(255_255_255/0.1)_0%,rgb(255_255_255/0.03)_30%,transparent_52%)] shadow-[inset_0_0_60px_rgb(0_0_0/0.4)] [:root[data-theme=light]_&]:bg-[radial-gradient(120%_175%_at_0%_0%,rgb(255_255_255/0.27)_0%,rgb(255_255_255/0.16)_20%,rgb(255_255_255/0.08)_40%,rgb(255_255_255/0.035)_58%,rgb(255_255_255/0.01)_74%,transparent_86%)] [:root[data-theme=light]_&]:shadow-[inset_0_0_48px_rgb(30_24_16/0.16)]"
       />
       {/* The lamp's light, falling on the screen's top right corner, frosted
           and warm: on by night unless it is switched off, and fainter by day
