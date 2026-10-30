@@ -23,6 +23,7 @@ import {
 import { useLearningPlayerTheme } from "../../learning/player/useLearningPlayerTheme";
 import type { HeroVideoFrame } from "./HeroVideo";
 import { flyHeroLaptopVideo } from "./heroFullscreenFlight";
+import { heroVideoSync } from "./heroVideoSync";
 import {
   createHeroVideoSource,
   HERO_WAITING_BUFFER_SECONDS,
@@ -155,6 +156,30 @@ export default function HeroVideoPlayer({
 
   const source = useMemo(() => createHeroVideoSource(playback), [playback]);
 
+  /**
+   * Puts this frame's video where the hero's other frame left it, to the
+   * second, and plays it if that one was playing.
+   */
+  // Until this frame has been put where the other one was, its own early
+  // times (from the start) are not taken as the video's position.
+  const carryOnPendingRef = useRef(heroVideoSync.started);
+  const carryOnFromOtherFrame = useCallback(() => {
+    const shell = shellRef.current;
+    const player = playerRef.current;
+    if (!shell || !player || !shell.checkVisibility()) return;
+    const media = shell.querySelector<HTMLVideoElement>(
+      "video:not([data-player-standby])",
+    );
+    if (!media || media.readyState < 1) return;
+    carryOnPendingRef.current = false;
+    if (Math.abs(media.currentTime - heroVideoSync.time) > 0.5) {
+      player.seekTo(heroVideoSync.time);
+    }
+    if (heroVideoSync.playing && media.paused) {
+      void player.play().catch(() => undefined);
+    }
+  }, []);
+
   // Whether full screen is open, and when it last opened or closed.
   const fullscreenRef = useRef(false);
   const fullscreenChangedAtRef = useRef(Number.NEGATIVE_INFINITY);
@@ -179,10 +204,42 @@ export default function HeroVideoPlayer({
       if (!entry.isIntersecting && !aroundFullscreen) {
         playerRef.current?.pause();
       }
+      // Coming into view after the hero's other frame was the one shown (a
+      // window resized across the switch): carry on where it was.
+      if (entry.isIntersecting && heroVideoSync.started) {
+        carryOnPendingRef.current = true;
+        carryOnFromOtherFrame();
+      }
     });
     observer.observe(shell);
-    return () => observer.disconnect();
-  }, []);
+
+    // Where the shown frame is, for the other one to carry on from. A frame
+    // that is not drawn (or paused for being hidden) says nothing.
+    const video = () =>
+      shell.querySelector<HTMLVideoElement>("video:not([data-player-standby])");
+    const note = (event: Event) => {
+      const media = video();
+      if (!media || event.target !== media || !shell.checkVisibility()) return;
+      if (carryOnPendingRef.current) {
+        carryOnFromOtherFrame();
+        return;
+      }
+      heroVideoSync.time = media.currentTime;
+      if (event.type === "play") heroVideoSync.playing = true;
+      if (event.type === "pause" || event.type === "ended") {
+        heroVideoSync.playing = false;
+      }
+    };
+    for (const type of ["timeupdate", "seeked", "play", "pause", "ended"]) {
+      shell.addEventListener(type, note, true);
+    }
+    return () => {
+      observer.disconnect();
+      for (const type of ["timeupdate", "seeked", "play", "pause", "ended"]) {
+        shell.removeEventListener(type, note, true);
+      }
+    };
+  }, [carryOnFromOtherFrame]);
 
   // While it waits under the poster it buffers only what the preload fetched
   // (Shaka would otherwise fill its whole buffer for a visitor who may never
@@ -251,6 +308,9 @@ export default function HeroVideoPlayer({
         lockLandscapeOnFullscreen
         ariaLabel={playback.title ? `Video: ${playback.title}` : "Video"}
         onEvent={(event) => {
+          if (event.type === "loaded" && heroVideoSync.started) {
+            carryOnFromOtherFrame();
+          }
           if (event.type === "loaded" && !activeRef.current) {
             engineRef.current?.setBufferAheadLimit?.(
               HERO_WAITING_BUFFER_SECONDS,

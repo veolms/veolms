@@ -7,12 +7,19 @@ import {
   useCallback,
   useEffect,
   useState,
+  useSyncExternalStore,
   type Ref,
 } from "react";
 import { LoadingSpinnerIcon } from "../../components/LoadingSpinner";
 import { prefersReducedData } from "../../lib/reduced-data";
 import { homeService } from "../../services/home";
 import { heroLaptopDrawnSizeClasses } from "./HeroLaptopScreen";
+import {
+  heroVideoSync,
+  isHeroVideoStarted,
+  markHeroVideoStarted,
+  subscribeToHeroVideoStarted,
+} from "./heroVideoSync";
 
 const loadHeroVideoPlayer = () => import("./HeroVideoPlayer");
 const HeroVideoPlayer = lazy(loadHeroVideoPlayer);
@@ -127,7 +134,15 @@ export function HeroVideo({
   frame: HeroVideoFrame;
 }) {
   const [playback, setPlayback] = useState<HeroVideoPlayback | null>(null);
-  const [pressed, setPressed] = useState(false);
+  const [ownPress, setPressed] = useState(false);
+  // Started in the hero's other frame (before the window was resized across
+  // the switch) counts as started here: this one carries on from it.
+  const startedElsewhere = useSyncExternalStore(
+    subscribeToHeroVideoStarted,
+    isHeroVideoStarted,
+    () => false,
+  );
+  const pressed = ownPress || startedElsewhere;
   const [loading, setLoading] = useState(false);
   const [player, setPlayer] = useState<VideoPlayerHandle | null>(null);
   const [posterElement, setPosterElement] = useState<HTMLDivElement | null>(
@@ -140,6 +155,7 @@ export function HeroVideo({
 
   const start = () => {
     setPressed(true);
+    markHeroVideoStarted();
     if (player) {
       void player.play().catch(() => undefined);
       return;
@@ -177,7 +193,7 @@ export function HeroVideo({
               frame={frame}
               // Played by the press when it is up by then (the usual case),
               // or as soon as it is loaded after a press.
-              autoPlay={pressed}
+              autoPlay={ownPress || (pressed && heroVideoSync.playing)}
               active={pressed}
               onPlayer={setPlayer}
             />
