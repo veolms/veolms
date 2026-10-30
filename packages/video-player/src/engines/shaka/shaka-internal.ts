@@ -146,6 +146,11 @@ export interface ShakaPlayerLike {
     initializeMediaSource?: boolean,
   ): Promise<void>;
   detach(): Promise<void>;
+  /**
+   * Where Shaka draws subtitles itself (as page elements) rather than in the
+   * media element. Read when a video is loaded.
+   */
+  setVideoContainer?(container: HTMLElement | null): void;
   load(
     uriOrPreloader: string | ShakaPreloadManagerLike | null,
     startTime?: number,
