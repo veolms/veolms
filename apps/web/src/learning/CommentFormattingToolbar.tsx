@@ -19,6 +19,7 @@ import {
 import type { DiscussionEditorController } from "./discussion-editor/DiscussionEditor";
 import type { DiscussionFormattingState } from "./discussion-editor/commands";
 import { DISCUSSION_ATTACHMENTS_ENABLED } from "./discussion-editor/image-storage";
+import { CommentEmojiPicker } from "./CommentEmojiPicker";
 
 interface CommentFormattingToolbarProps {
   /**
@@ -291,6 +292,10 @@ export function CommentFormattingToolbar({
             >
               <TextItalic size={17} />
             </ToolbarButton>
+            <CommentEmojiPicker
+              editor={editor}
+              onEditorNeeded={onEditorNeeded}
+            />
             <ToolbarButton
               label="Inline code"
               active={formattingState.code}
