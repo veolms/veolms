@@ -5,8 +5,11 @@
 // have changed.
 //
 //   node scripts/refresh-course-static-pages.mjs --course-id <uuid>[,<uuid>...]
+//   node scripts/refresh-course-static-pages.mjs --home-page
 //
-// (or COURSE_STATIC_COURSE_IDS). It needs the build the site was deployed
+// (or COURSE_STATIC_COURSE_IDS and COURSE_STATIC_HOME_PAGE=true). With the
+// home page, its own changes (its settings, the video its hero plays) are
+// deployed too; it can be refreshed with no course. It needs the build the site was deployed
 // from in build/ (client and server) and the dependencies it was built
 // with. Pages are rendered by that build's own server bundle, as React
 // Router's prerender renders them, so they reference the deployed assets.
@@ -238,8 +241,13 @@ async function main() {
     .split(",")
     .map((id) => id.trim().toLowerCase())
     .filter(Boolean);
-  if (requested.length === 0) {
-    throw new Error("Pass --course-id <uuid>[,<uuid>...].");
+  // The home page (and the catalogue) were changed themselves, not only
+  // through a course: their changes are deployed as well.
+  const homePage =
+    process.env.COURSE_STATIC_HOME_PAGE === "true" ||
+    args.get("home-page") === true;
+  if (requested.length === 0 && !homePage) {
+    throw new Error("Pass --course-id <uuid>[,<uuid>...] or --home-page.");
   }
 
   // The server bundle reads its data only while building (see
@@ -371,7 +379,8 @@ async function main() {
 
   // A course's change shows on its own pages. The catalogue and the home
   // page are deployed with them; on their own they differ only by the time
-  // they were built (the home page's clock), which is no reason to deploy.
+  // they were built (the home page's clock), which is no reason to deploy,
+  // unless the home page itself was changed.
   let updatedPages = 0;
   for (const [pathname, before] of previous) {
     const files = pageFiles(pathname);
@@ -385,7 +394,7 @@ async function main() {
     ) {
       updatedPages += 1;
       console.log(`Updated ${pathname}`);
-      if (!SHARED_PAGES.includes(pathname)) changed = true;
+      if (homePage || !SHARED_PAGES.includes(pathname)) changed = true;
     }
   }
   console.log(
@@ -397,7 +406,13 @@ async function main() {
   if (!changed) console.log("No public page changes to deploy.");
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+// Ends the process once the work is done: the server bundle leaves timers
+// running (its query cache's), which would hold it open for minutes and
+// keep the workflow from deploying.
+main().then(
+  () => process.exit(process.exitCode ?? 0),
+  (error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  },
+);

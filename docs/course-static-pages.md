@@ -31,10 +31,18 @@ course's pages rendered again.
 5. The course editor shows the refresh status and offers a retry when it
    fails. The database save is already complete and is not rolled back.
 
+The home page is refreshed the same way when its settings are saved (Home
+page settings, its pinned and hidden discussions): the run has `home_page`
+set, with or without courses, and the home page and the catalogue are
+deployed when they changed. A video chosen for the hero while it is still
+being processed shows the default lesson's picture meanwhile; the API
+watches it (`home-hero-video-ready.ts`, picked up again after a restart)
+and refreshes the home page once more when it is ready.
+
 An administrator can rebuild every page from Platform > General > Public
 pages (`POST /platform/static-pages/rebuild`): a run with no course ids is a
 full build. Use it after changes that reach every page (the academy's look,
-the home page, categories), which are not rebuilt on their own.
+categories), which are not rebuilt on their own.
 
 ## Configuration
 
