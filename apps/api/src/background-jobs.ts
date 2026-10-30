@@ -19,6 +19,7 @@ import { createAttachmentsService } from "./modules/learning/discussions/attachm
 import { createNotificationProcessor } from "./modules/notifications/index.ts";
 import { startYoutubeImportWorker } from "./modules/media/youtube-import/youtube-import.worker.ts";
 import { getYoutubeImportTools } from "./modules/media/youtube-import/youtube-import.tools.ts";
+import { getHeroVideoReadyWatch } from "./modules/home/home-hero-video-ready.ts";
 import {
   createInvoiceService,
   invoiceStorage,
@@ -102,16 +103,40 @@ export function registerBackgroundJobs(
 
   // "Import from YouTube": off unless an operator turns it on, because it
   // downloads and packages video on this host.
-  const stopYoutubeImportWorker = config.YOUTUBE_IMPORT_ENABLED
-    ? startYoutubeImportWorker({
-        database,
-        services,
-        tools: getYoutubeImportTools(services.config, app.log),
-        logger: app.log,
-      })
-    : null;
+  let stopYoutubeImportWorker: (() => Promise<void>) | null = null;
+  if (config.YOUTUBE_IMPORT_ENABLED) {
+    const youtubeImportTools = getYoutubeImportTools(services.config, app.log);
+    // yt-dlp is found and updated now, not while the first video is checked.
+    void youtubeImportTools.getYtDlp().catch((error: unknown) => {
+      app.log.warn(
+        { err: error, feature: "youtube-import" },
+        "yt-dlp is not ready yet",
+      );
+    });
+    stopYoutubeImportWorker = startYoutubeImportWorker({
+      database,
+      services,
+      tools: youtubeImportTools,
+      logger: app.log,
+    });
+  }
+
+  // The static home page is built again once the video chosen for its hero
+  // has been processed; a restart picks that watch up from the settings.
+  const heroVideoReadyWatch = getHeroVideoReadyWatch({
+    database,
+    onReady: () => services.courseStaticPages?.requestHomePageRefresh(),
+    logger: app.log,
+  });
+  void heroVideoReadyWatch.resume().catch((error: unknown) => {
+    app.log.warn(
+      { err: error, feature: "home-hero-video" },
+      "Could not resume watching the hero video",
+    );
+  });
 
   app.addHook("onClose", async () => {
+    heroVideoReadyWatch.stop();
     await paymentEventQueue.stop?.();
     // Awaited so an in-flight reconciliation cycle finishes before the
     // shared Kysely instance is destroyed right after these hooks.

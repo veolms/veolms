@@ -286,6 +286,22 @@ export const videoJobProgressResponseSchema = z.object({
   source: z.enum(["upload", "youtube"]).optional(),
 });
 
+/** Where a video came from, e.g. the YouTube video it was imported from. */
+export const mediaSourceSchema = z.strictObject({
+  provider: z.literal("youtube"),
+  /** The provider's id of the video (YouTube's 11-character id). */
+  externalId: z.string(),
+  url: z.url(),
+  /** As the provider showed them at import time. */
+  title: z.string().nullable(),
+  channel: z.string().nullable(),
+});
+
+/** A video's source; null for an uploaded file or one not known. */
+export const mediaSourceResponseSchema = z.strictObject({
+  source: mediaSourceSchema.nullable(),
+});
+
 /** Whether a transcode was (re)queued. Internal job ids stay server-side. */
 export const videoTranscodeRetryResponseSchema = z.strictObject({
   queued: z.boolean(),
@@ -409,6 +425,8 @@ export type MediaImageVariantManifest = z.infer<
 export type VideoJobProgressResponse = z.infer<
   typeof videoJobProgressResponseSchema
 >;
+export type MediaSource = z.infer<typeof mediaSourceSchema>;
+export type MediaSourceResponse = z.infer<typeof mediaSourceResponseSchema>;
 export type VideoTranscodeRetryResponse = z.infer<
   typeof videoTranscodeRetryResponseSchema
 >;

@@ -172,7 +172,9 @@ const prerenderConfig = {
       ...(await getStaticLearningPaths(courseSlugs)),
     ];
   },
-  concurrency: 1,
+  // Pages rendered at once. A lesson page mostly waits on the API, so a
+  // deployment build (over a thousand pages) sets a few; one by default.
+  concurrency: Math.max(1, Number(process.env.VEO_PRERENDER_CONCURRENCY) || 1),
   timeout: 120_000,
   retryCount: 2,
   retryDelay: 1_000,

@@ -705,7 +705,14 @@ const collectSharedTokens = async (root, pages) => {
   return shared;
 };
 
-export async function inlineCriticalCss(clientDirectory) {
+/**
+ * `quiet`: no line for a page processed before (a refresh of some pages in
+ * a finished build, see refresh-course-static-pages.mjs).
+ */
+export async function inlineCriticalCss(
+  clientDirectory,
+  { quiet = false } = {},
+) {
   const root = path.resolve(clientDirectory);
   const pages = await collectPages(root);
   if (pages.length === 0) {
@@ -746,6 +753,7 @@ export async function inlineCriticalCss(clientDirectory) {
       throw error;
     }
     if (result.alreadyDone) {
+      if (quiet) continue;
       console.log(`Critical CSS: ${page} already processed, left as it is`);
       continue;
     }

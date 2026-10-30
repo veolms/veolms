@@ -159,6 +159,7 @@ with the old key.
 | `CACHE_BUS_ENABLED`                    | true    | Cross-process cache invalidation over Postgres LISTEN/NOTIFY (one connection per process).                                                                                                        |
 | `NOTIFICATION_INLINE_WORKER`           | true    | See above.                                                                                                                                                                                        |
 | `NOTIFICATION_INLINE_INTERVAL_SECONDS` | 5       | Inline processor cycle.                                                                                                                                                                           |
+| `NOTIFICATION_COURSE_WIDE_EMAIL`       | true    | `false` keeps course-wide notifications (course published, quiz assigned) in-app only, so they send no bulk email. Sign-in codes and account/payment emails are unaffected.                       |
 | `OPS_HEARTBEAT_SECONDS`                | 60      | Ops gauge interval; `0` disables.                                                                                                                                                                 |
 
 ## Migration notes

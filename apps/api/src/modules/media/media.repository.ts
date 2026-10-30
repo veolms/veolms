@@ -208,6 +208,17 @@ export async function insertMediaSource(
     .execute();
 }
 
+export async function findMediaSource(
+  database: DatabaseExecutor,
+  mediaId: string,
+) {
+  return await database
+    .selectFrom("media_sources")
+    .select(["provider", "external_id", "source_url", "title", "channel"])
+    .where("media_id", "=", mediaId)
+    .executeTakeFirst();
+}
+
 /**
  * Fills in the title and channel once they are known (an import learns
  * them only when its worker reads the video), keeping any already set.

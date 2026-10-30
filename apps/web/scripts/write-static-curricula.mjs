@@ -10,10 +10,14 @@ import path from "node:path";
  *
  * A course whose curriculum cannot be read fails the build, as a page that
  * cannot be prerendered does: a site is deployed whole or not at all.
+ *
+ * `onlySlugs`: just these courses (a refresh of some courses' pages, see
+ * refresh-course-static-pages.mjs).
  */
 export async function writeStaticCurricula(
   clientBuildDirectory,
   configuredApiUrl = process.env.STATIC_BUILD_API_URL,
+  { onlySlugs } = {},
 ) {
   const coursesDirectory = path.join(clientBuildDirectory, "courses");
   const slugs = [];
@@ -27,6 +31,9 @@ export async function writeStaticCurricula(
       "overview",
       "index.html",
     );
+    if (onlySlugs && !onlySlugs.includes(decodeURIComponent(entry.name))) {
+      continue;
+    }
     if (await stat(overviewPage).catch(() => null)) slugs.push(entry.name);
   }
 

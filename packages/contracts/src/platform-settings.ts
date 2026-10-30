@@ -122,3 +122,20 @@ export const publicPlatformSettingsResponseSchema = platformSettingsSchema.omit(
   { invoice: true },
 ) satisfies z.ZodType<PublicPlatformSettings>;
 export type PublicPlatformSettingsResponse = PublicPlatformSettings;
+
+/**
+ * The last "Rebuild all public pages" of the API process that answers: every
+ * course page, lesson page and the home page built again and deployed.
+ */
+export const staticSiteRebuildStatusSchema = z.strictObject({
+  status: z.enum(["idle", "queued", "running", "succeeded", "failed"]),
+  message: z.string().nullable(),
+  updatedAt: z.string(),
+  runUrl: z.string().url().nullable(),
+});
+export type StaticSiteRebuildStatus = z.infer<
+  typeof staticSiteRebuildStatusSchema
+>;
+z.globalRegistry.add(staticSiteRebuildStatusSchema, {
+  id: "StaticSiteRebuildStatus",
+});
