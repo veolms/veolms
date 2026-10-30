@@ -60,11 +60,17 @@ function ChosenLesson({
 export function HeroVideoEditor({
   heroVideo,
   onChange,
+  onUploadChosen,
+  uploadSaving,
   courses,
   optionsLoading,
 }: {
   heroVideo: HomePageHeroVideo;
   onChange: (heroVideo: HomePageHeroVideo) => void;
+  /** An upload sent or an import queued: saved at once, unlike the rest. */
+  onUploadChosen: (heroVideo: HomePageHeroVideo) => void;
+  /** That save is under way. */
+  uploadSaving: boolean;
   courses: readonly HomePageCourseOption[];
   optionsLoading: boolean;
 }) {
@@ -138,8 +144,9 @@ export function HeroVideoEditor({
       {mode === "upload" ? (
         <HeroVideoUpload
           uploaded={heroVideo.source === "upload" ? heroVideo : null}
+          saving={uploadSaving}
           onUploaded={(mediaId, fileName) =>
-            onChange({ source: "upload", mediaId, fileName })
+            onUploadChosen({ source: "upload", mediaId, fileName })
           }
         />
       ) : null}
