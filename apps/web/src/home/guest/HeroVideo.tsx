@@ -10,7 +10,6 @@ import {
   useSyncExternalStore,
   type Ref,
 } from "react";
-import { LoadingSpinnerIcon } from "../../components/LoadingSpinner";
 import { prefersReducedData } from "../../lib/reduced-data";
 import { homeService } from "../../services/home";
 import { heroLaptopDrawnSizeClasses } from "./HeroLaptopScreen";
@@ -252,17 +251,16 @@ function HeroVideoPoster({
           className="size-full object-cover"
         />
       ) : null}
+      {/* Pressed, it steps aside: the player's own loader shows while the
+          video gets ready. */}
       <button
         type="button"
         aria-label={loading ? "Loading video" : "Play video"}
+        aria-busy={loading || undefined}
         onClick={onPlay}
-        className="absolute top-1/2 left-1/2 grid size-15.5 -translate-1/2 cursor-pointer place-items-center rounded-full bg-[rgb(5_7_11/0.5)] text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className={`absolute top-1/2 left-1/2 grid size-15.5 -translate-1/2 cursor-pointer place-items-center rounded-full bg-[rgb(5_7_11/0.5)] text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${loading ? "opacity-0" : ""}`}
       >
-        {loading ? (
-          <LoadingSpinnerIcon size={29} />
-        ) : (
-          <Play weight="fill" size={29} />
-        )}
+        <Play weight="fill" size={29} />
       </button>
     </div>
   );
