@@ -304,6 +304,11 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
               className={classNames(
                 resolvedTheme.className,
                 mobileInteraction ? "touch-none" : "touch-pan-y",
+                // A touch screen in full screen (a tablet's, laid out as a
+                // desktop) has nothing to scroll: every touch is the
+                // player's. Allowed to pan, the browser took a pinch over as
+                // soon as a finger was on a button, and the zoom stopped.
+                "[@media(any-pointer:coarse)]:[:fullscreen_&]:touch-none! [@media(any-pointer:coarse)]:[[data-player-page-fullscreen]_&]:touch-none!",
                 className,
               )}
               style={themeStyle}
