@@ -44,7 +44,10 @@ import {
   formatCourseProgress,
   roundCourseProgress,
 } from "./courseProgressFormat";
-import { STICKY_BAR_GAP } from "./curriculumEarlyScroll";
+import {
+  CURRICULUM_EARLY_PLACED_ATTRIBUTE,
+  STICKY_BAR_GAP,
+} from "./curriculumEarlyScroll";
 
 const EMPTY_CURRICULUM_SECTIONS: CourseSection[] = [];
 const EMPTY_LESSONS_BY_ID: ReadonlyMap<number, Lesson> = new Map();
@@ -272,6 +275,8 @@ const HOLD_CANCEL_EVENTS = [
   "pointerdown",
   "keydown",
 ] as const;
+/** How long a list scrolled to an item keeps following it (`scrollItemToTop`). */
+const HOLD_FOLLOW_MS = 1500;
 
 /**
  * A section's lessons, kept in the page while the section closes. The
@@ -357,6 +362,8 @@ export const Curriculum = memo(function Curriculum({
     controlledExpandedSectionIds ?? uncontrolledExpandedSectionIds;
   const expandedRef = useRef(expanded);
   expandedRef.current = expanded;
+  // The section the effect below last opened the lesson's section for.
+  const openedForSectionRef = useRef<number | null>(null);
   const setExpanded = useCallback(
     (
       value:
@@ -410,6 +417,18 @@ export const Curriculum = memo(function Curriculum({
     ) ||
     sections[0] ||
     fallbackSection;
+  // The lesson's section, which the effect below adds to the open set the
+  // moment the lesson (or the sections) arrive: shown open already in that
+  // render, not one render later. The sections arrive on a reload after
+  // the curriculum has rendered without them; rendered closed first, the
+  // section's wider margins and its chevron were seen animating open, and
+  // the lesson's section is never meant to open before the eye.
+  const sectionOpeningForLesson =
+    expandAllSections || isExpandedControlled
+      ? null
+      : openedForSectionRef.current === currentSection.id
+        ? null
+        : currentSection.id;
   const currentLesson =
     lessonsById?.get(selectedLesson) || lessonsById?.get(1) || fallbackLesson;
   // Lessons are numbered from 1 in each section unless the learner has
@@ -562,34 +581,39 @@ export const Curriculum = memo(function Curriculum({
       // The list above the item may change height as the list scrolls
       // (lessons far above come in and out of layout), which moves the
       // item. Until the list has come to rest on it, the target is measured
-      // again each frame and the scroll sent after it when it has moved;
-      // the learner taking the scroll back ends that.
-      const started = performance.now();
-      let settledFrames = 0;
-      let frame = 0;
+      // again whenever the list changes height and the scroll sent after
+      // it when it has moved; the learner taking the scroll back ends that.
+      // Measured when the resize observer reports the change, once the
+      // browser has laid the page out, and not from a frame callback ahead
+      // of the layout: measured there, every frame for up to a second and
+      // a half, each measurement laid the whole page out anew (40 to 60 ms
+      // a frame) while the page was still hydrating and the video being
+      // attached and decoded.
+      if (typeof ResizeObserver === "undefined") return;
+      let stopTimer = 0;
+      let observer: ResizeObserver | null = null;
       const stop = () => {
-        window.cancelAnimationFrame(frame);
+        window.clearTimeout(stopTimer);
+        observer?.disconnect();
+        observer = null;
         for (const type of HOLD_CANCEL_EVENTS) {
           curriculum.removeEventListener(type, stop);
         }
       };
-      const settle = () => {
+      observer = new ResizeObserver(() => {
         if (!element.isConnected) return stop();
         const next = measureItemTop(element, curriculum);
         if (Math.abs(next - target) > 1) {
           target = next;
-          settledFrames = 0;
           go();
-        } else if (Math.abs(curriculum.scrollTop - target) <= 1) {
-          settledFrames += 1;
         }
-        if (settledFrames >= 3 || performance.now() - started > 1500) stop();
-        else frame = window.requestAnimationFrame(settle);
-      };
+      });
+      for (const child of curriculum.children) observer.observe(child);
+      observer.observe(element);
       for (const type of HOLD_CANCEL_EVENTS) {
         curriculum.addEventListener(type, stop, { passive: true });
       }
-      frame = window.requestAnimationFrame(settle);
+      stopTimer = window.setTimeout(stop, HOLD_FOLLOW_MS);
     },
     [measureItemTop],
   );
@@ -622,6 +646,23 @@ export const Curriculum = memo(function Curriculum({
         if (!targetElement || !curriculum || !lessonList) return false;
 
         const targetTop = measureItemTop(targetElement, curriculum);
+        // A page just opened had its list put at the lesson before it was
+        // first drawn, by the head's script (curriculumEarlyScroll.ts) and
+        // by this same measure. Found there, give or take the rounding of
+        // a scroll position (a screen at 125% keeps them in steps of
+        // 0.8px), it is left exactly where it stands: sent to the measure
+        // again, as the page's first effects did twice, it moved by that
+        // rounding under the eye on every reload. Holds for every one-step
+        // move on such a page: a list already at its item has nowhere to go.
+        if (
+          instant &&
+          document.documentElement.hasAttribute(
+            CURRICULUM_EARLY_PLACED_ATTRIBUTE,
+          ) &&
+          Math.abs(curriculum.scrollTop - targetTop) <= 2
+        ) {
+          return true;
+        }
         const currentRevealSpace = Number.parseFloat(
           lessonList.dataset.revealSpace || "0",
         );
@@ -829,6 +870,7 @@ export const Curriculum = memo(function Curriculum({
   // Before the list is painted, so it is first seen at the lesson.
   useLayoutEffect(() => {
     if (expandAllSections || isExpandedControlled) return;
+    openedForSectionRef.current = currentSection.id;
     const opens = !expandedRef.current.includes(currentSection.id);
     if (opens) {
       openSectionsAtOnce();
@@ -1155,7 +1197,7 @@ export const Curriculum = memo(function Curriculum({
                     )}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-[clamp(0.9375rem,4cqi,1.0625rem)] leading-snug font-semibold tracking-[-0.015em]">
+                    <h2 className="learning-curriculum__course-title text-[clamp(0.9375rem,4cqi,1.0625rem)] font-semibold tracking-[-0.015em]">
                       <button
                         type="button"
                         className="block max-w-full cursor-pointer truncate rounded-sm border-0 bg-transparent p-0 text-left text-inherit underline-offset-[3px] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
@@ -1204,13 +1246,20 @@ export const Curriculum = memo(function Curriculum({
               />
             </div>
 
-            <div className="mt-2.5 flex items-center gap-2.5">
+            {/* The figure and its shimmer are both in the markup, the
+                row's attribute choosing: a page drawn before its scripts
+                run shows the learner's figure from the browser's copy by
+                setting the text and taking the attribute off
+                (lessonPageEarlyState.ts), and the first render then agrees
+                with it. */}
+            <div
+              className="mt-2.5 flex items-center gap-2.5"
+              data-curriculum-course-progress=""
+              data-progress-pending={progressPending || undefined}
+              data-lesson-count={allLessons.length}
+            >
               <span
-                className={`learning-curriculum__progress-track block h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)] ${
-                  progressPending
-                    ? "[:root[data-session-hint=signed-in]_&]:animate-pulse [:root[data-session-hint=signed-in]_&]:motion-reduce:animate-none"
-                    : ""
-                }`}
+                className="learning-curriculum__progress-track block h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)] [:root[data-session-hint=signed-in]_[data-progress-pending]_&]:animate-pulse [:root[data-session-hint=signed-in]_[data-progress-pending]_&]:motion-reduce:animate-none"
                 aria-busy={progressPending || undefined}
                 role="progressbar"
                 aria-label={`Course progress: ${courseProgress} percent`}
@@ -1219,11 +1268,7 @@ export const Curriculum = memo(function Curriculum({
                 aria-valuenow={courseProgress}
               >
                 <span
-                  className={`block h-full rounded-full bg-(--accent) ${
-                    progressPending
-                      ? "[:root[data-session-hint=signed-in]_&]:invisible"
-                      : ""
-                  }`}
+                  className="block h-full rounded-full bg-(--accent) [:root[data-session-hint=signed-in]_[data-progress-pending]_&]:invisible"
                   style={{
                     width: `${courseProgress}%`,
                     minWidth: courseStarted ? "0.375rem" : undefined,
@@ -1231,19 +1276,16 @@ export const Curriculum = memo(function Curriculum({
                 />
               </span>
               <span className="shrink-0 text-xs leading-4 font-medium text-(--muted) tabular-nums">
-                {progressPending ? (
-                  <>
-                    <span className="[:root[data-session-hint=signed-in]_&]:hidden">
-                      {formatCourseProgress(0)}
-                    </span>
-                    <i
-                      aria-hidden="true"
-                      className={`${PROGRESS_SHIMMER} hidden h-3 w-10 align-middle [:root[data-session-hint=signed-in]_&]:inline-block`}
-                    />
-                  </>
-                ) : (
-                  formatCourseProgress(courseProgress)
-                )}
+                <span
+                  className="[:root[data-session-hint=signed-in]_[data-progress-pending]_&]:hidden"
+                  data-curriculum-course-progress-text=""
+                >
+                  {formatCourseProgress(courseProgress)}
+                </span>
+                <i
+                  aria-hidden="true"
+                  className={`${PROGRESS_SHIMMER} hidden h-3 w-10 align-middle [:root[data-session-hint=signed-in]_[data-progress-pending]_&]:inline-block`}
+                />
               </span>
             </div>
           </ContextMenuTrigger>
@@ -1273,13 +1315,17 @@ export const Curriculum = memo(function Curriculum({
                 revealAndScrollTo("section", currentSection.id);
               }}
             >
+              {/* Whole-pixel line heights on the texts (the button itself
+                  takes its font from the page, see the lesson card for why). */}
               <span
-                className="shrink-0 font-bold text-(--accent-ink,var(--accent)) tabular-nums"
+                className="shrink-0 leading-5 font-bold text-(--accent-ink,var(--accent)) tabular-nums"
                 aria-hidden="true"
               >
                 S{currentSection.id}
               </span>
-              <span className="min-w-0 truncate">{currentSection.title}</span>
+              <span className="min-w-0 truncate leading-5">
+                {currentSection.title}
+              </span>
             </button>
             <button
               type="button"
@@ -1296,12 +1342,14 @@ export const Curriculum = memo(function Curriculum({
               }}
             >
               <span
-                className="shrink-0 font-bold text-(--accent-ink,var(--accent)) tabular-nums"
+                className="shrink-0 leading-5 font-bold text-(--accent-ink,var(--accent)) tabular-nums"
                 aria-hidden="true"
               >
                 L{selectedLessonDisplayNumber}
               </span>
-              <span className="min-w-0 truncate">{currentLesson[1]}</span>
+              <span className="min-w-0 truncate leading-5">
+                {currentLesson[1]}
+              </span>
             </button>
           </div>
         ) : null}
@@ -1366,6 +1414,7 @@ export const Curriculum = memo(function Curriculum({
                 lessonCount > 0 && completedLessons === lessonCount;
               const isOpen =
                 expanded.includes(section.id) ||
+                section.id === sectionOpeningForLesson ||
                 Boolean(activeLessonSearch && matchingLessons.length > 0);
               if (
                 activeLessonSearch &&
@@ -1409,6 +1458,15 @@ export const Curriculum = memo(function Curriculum({
                       : `learning-curriculum__section relative transition-[margin] duration-220 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${isOpen ? "-mx-[13px] max-[820px]:mx-0" : "mx-0"}`
                   }
                   data-fixed-radius={hideHero ? undefined : ""}
+                  // The lessons it numbers, and whether every one is done,
+                  // for the heading's tick and count (see the course's
+                  // progress above): "4-16".
+                  data-lesson-range={
+                    section.lessons.length > 0
+                      ? `${section.lessons[0]![0]}-${section.lessons[section.lessons.length - 1]![0]}`
+                      : undefined
+                  }
+                  data-section-complete={sectionComplete || undefined}
                   data-expanded={isOpen}
                 >
                   <button
@@ -1441,7 +1499,10 @@ export const Curriculum = memo(function Curriculum({
                         <span className="min-w-0 flex-1 truncate">
                           Section {section.id}: {section.title}
                         </span>
-                        <span className="learning-curriculum__section-progress">
+                        <span
+                          className="learning-curriculum__section-progress"
+                          data-curriculum-section-count=""
+                        >
                           {sectionProgress}
                         </span>
                       </>
@@ -1451,13 +1512,17 @@ export const Curriculum = memo(function Curriculum({
                             line under it: its number, how many lessons, how
                             long. */}
                         <span className="flex min-w-0 flex-1 flex-col gap-1">
-                          <span className="line-clamp-2 text-[0.95rem] leading-snug font-semibold tracking-[-0.01em]">
+                          {/* Whole, even line heights (see the lesson card):
+                              the sections stack too, and the count and
+                              caret are centred against this column, so an
+                              odd height would put them on a half pixel. */}
+                          <span className="line-clamp-2 text-[0.95rem]/[1.375rem] font-semibold tracking-[-0.01em]">
                             <span className="sr-only">
                               Section {section.id}:{" "}
                             </span>
                             {section.title}
                           </span>
-                          <span className="inline-flex flex-wrap items-center gap-x-1.5 text-[0.78rem] font-medium text-(--muted) tabular-nums">
+                          <span className="inline-flex flex-wrap items-center gap-x-1.5 text-[0.78rem]/5 font-medium text-(--muted) tabular-nums">
                             <span aria-hidden="true">Section {section.id}</span>
                             <Dot />
                             <span>
@@ -1472,28 +1537,32 @@ export const Curriculum = memo(function Curriculum({
                             ) : null}
                           </span>
                         </span>
-                        <span className="sr-only">
-                          {completedLessons} of {lessonCount} lessons completed
+                        <span
+                          className="sr-only"
+                          data-curriculum-section-spoken=""
+                        >
+                          {`${completedLessons} of ${lessonCount} lessons completed`}
                         </span>
                         {/* How far the section has come, then a round caret
                             that turns as it opens. A finished section shows
                             a green tick in place of its count. */}
                         <span className="flex shrink-0 items-center gap-2">
-                          {sectionComplete ? (
-                            <CheckCircle
-                              size={18}
-                              weight="fill"
-                              className="text-(--success)"
-                              aria-hidden="true"
-                            />
-                          ) : (
-                            <span
-                              className="text-[0.8rem] font-semibold text-(--text-secondary,var(--muted)) tabular-nums"
-                              aria-hidden="true"
-                            >
-                              {sectionProgress}
-                            </span>
-                          )}
+                          {/* Both are in the markup; the section's own
+                              attribute picks one (see the course's
+                              progress above). */}
+                          <CheckCircle
+                            size={18}
+                            weight="fill"
+                            className="hidden text-(--success) [[data-section-complete]_&]:block"
+                            aria-hidden="true"
+                          />
+                          <span
+                            className="text-[0.8rem]/5 font-semibold text-(--text-secondary,var(--muted)) tabular-nums [[data-section-complete]_&]:hidden"
+                            aria-hidden="true"
+                            data-curriculum-section-count=""
+                          >
+                            {sectionProgress}
+                          </span>
                           <span
                             className={`learning-curriculum__section-arrow size-7 rounded-full bg-[color-mix(in_srgb,var(--text)_6%,transparent)] transition-[transform,background-color,color] group-hover/section:bg-[color-mix(in_srgb,var(--text)_10%,transparent)] group-hover/section:text-(--text) ${
                               isOpen
@@ -1505,12 +1574,17 @@ export const Curriculum = memo(function Curriculum({
                             <CaretDown size={14} weight="bold" />
                           </span>
                         </span>
-                        {isOpen ||
-                        (completedLessons > 0 && !sectionComplete) ? (
-                          <CurriculumProgressBar
-                            percent={(completedLessons / lessonCount) * 100}
-                          />
-                        ) : null}
+                        <CurriculumProgressBar
+                          percent={
+                            lessonCount > 0
+                              ? (completedLessons / lessonCount) * 100
+                              : 0
+                          }
+                          hidden={
+                            !isOpen &&
+                            (completedLessons === 0 || sectionComplete)
+                          }
+                        />
                       </>
                     )}
                   </button>

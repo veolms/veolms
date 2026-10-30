@@ -25,3 +25,57 @@
   unicode-range:
     U+0020-007E, U+00A0-00FF, U+20AC, U+20B9, U+2190-2193, U+2318, U+2325;
 }
+
+/*
+ * What stands in for Manrope until its file is in (font-display: swap): the
+ * system face Chrome on Windows falls back to, sized to Manrope's average
+ * glyph width at each weight the app uses and given Manrope's ascent and
+ * descent, so text takes the same room before and after the swap and
+ * nothing moves when the font arrives (measured in Chrome: Manrope runs 1
+ * to 4% wider than Segoe UI, most at the semibold titles, and a late font
+ * moved a lesson title's last word 7px). Elsewhere these local faces do
+ * not exist and the stack goes on to the system font.
+ */
+@font-face {
+  font-family: "Manrope Fallback";
+  font-style: normal;
+  font-weight: 100 450;
+  src: local("Segoe UI");
+  size-adjust: 102%;
+  ascent-override: 104.5%;
+  descent-override: 29.4%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "Manrope Fallback";
+  font-style: normal;
+  font-weight: 451 550;
+  src: local("Segoe UI");
+  size-adjust: 101.5%;
+  ascent-override: 105%;
+  descent-override: 29.6%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "Manrope Fallback";
+  font-style: normal;
+  font-weight: 551 650;
+  src: local("Segoe UI Semibold");
+  size-adjust: 103.5%;
+  ascent-override: 103%;
+  descent-override: 29%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "Manrope Fallback";
+  font-style: normal;
+  font-weight: 651 900;
+  src: local("Segoe UI Bold");
+  size-adjust: 101%;
+  ascent-override: 105.5%;
+  descent-override: 29.7%;
+  line-gap-override: 0%;
+}
