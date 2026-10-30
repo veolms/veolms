@@ -448,13 +448,12 @@ export function LearningMiniPlayer({
     });
   }, [progressTarget]);
 
+  const claimCourseKey = progressTarget?.courseKey;
   useEffect(() => {
     return () => {
-      if (progressTarget) {
-        markNotPlaying(progressTarget.courseKey);
-      }
+      if (claimCourseKey) markNotPlaying(claimCourseKey);
     };
-  }, [progressTarget]);
+  }, [claimCourseKey]);
 
   useEffect(() => {
     if (!progressTarget) return undefined;
@@ -491,9 +490,10 @@ export function LearningMiniPlayer({
         completePreparation();
         if (progressTarget) {
           const currentLessonId =
-            progressTarget.lessonIdsByNumber?.get(selectedLesson) ??
-            String(selectedLesson);
-          markPlaying(progressTarget.courseKey, currentLessonId);
+            progressTarget?.lessonIdsByNumber?.get(selectedLesson);
+          if (currentLessonId) {
+            markPlaying(progressTarget.courseKey, currentLessonId);
+          }
         }
       } else if (event.type === "seeked") {
         lessonEndedRef.current = false;

@@ -573,7 +573,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
 
       const mine = live.find((s) => s.id === sessionId);
       const claimedAt =
-        playing.event === "play" || !mine ? now : mine.playing_claimed_at;
+        playing.event === "play" ? now : (mine?.playing_claimed_at ?? now);
       const others = live.filter((s) => s.id !== sessionId);
 
       const allClaims: Array<{
