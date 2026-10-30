@@ -102,8 +102,11 @@ const picturePosition = `object-[72%_center] xl:object-center ${homeHeroPictureB
  * The supporting text, set as a quote: Lora italic, a little larger than
  * body text and with room between its lines.
  */
+// Beside the picture the quote is kept to about 26 of its letters' widths
+// (in its own size, set on the box too), so that it and its author end
+// before the mug on the desk.
 const descriptionBoxClasses =
-  "mt-4 w-fit max-w-xl @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(34rem,54cqw)]";
+  "mt-4 w-fit max-w-xl text-[clamp(1.0625rem,2.4cqw,1.25rem)] @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(26em,40cqw)] @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
 const descriptionTextClasses =
   "font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-pretty text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
 const descriptionClasses = `${descriptionBoxClasses} ${descriptionTextClasses}`;
@@ -254,7 +257,9 @@ export function GuestHomeHero({
                 {hero?.description}
               </blockquote>
               {hero ? (
-                <figcaption className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600">
+                // Under the quote's right end, or its start beside a picture
+                // narrow enough to bring the mug on the desk up to its end.
+                <figcaption className="mt-1.5 flex items-center justify-end gap-2.5 @[50rem]/home:@max-[64rem]/home:justify-start text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600">
                   <span aria-hidden="true" className="h-px w-6 bg-current/60" />
                   ProCodrr
                 </figcaption>

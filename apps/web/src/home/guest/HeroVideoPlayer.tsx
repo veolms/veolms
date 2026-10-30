@@ -57,7 +57,8 @@ const FULLSCREEN_SETTLE_MS = 1_500;
  * to edge.
  */
 const heroSharedClasses =
-  "[&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-root]]:touch-pan-y! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-zoom-surface]]:touch-pan-y! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:inset-x-2!";
+  // While the timeline is dragged the buttons along the top step aside too.
+  "[&:has([data-video-player-timeline][data-scrubbing=true])_[data-player-fullscreen-swipe-top-zone]]:opacity-0 [&:has([data-video-player-timeline][data-scrubbing=true])_[data-player-fullscreen-swipe-top-zone]]:pointer-events-none [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-root]]:touch-pan-y! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-zoom-surface]]:touch-pan-y! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:inset-x-2!";
 
 const cardClasses =
   // The card keeps its rounded corners, so the timeline runs a little above
