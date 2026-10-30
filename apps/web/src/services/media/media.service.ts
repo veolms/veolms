@@ -1,5 +1,6 @@
 import type {
   MediaImageVariantManifest,
+  MediaSourceResponse,
   MediaUploadCompleteResponse,
   MultipartUploadAbortResponse,
   MultipartUploadPartUrlsResponse,
@@ -208,6 +209,10 @@ export const mediaService = {
     return api.post<MediaUploadCompleteResponse>(
       `/media/${mediaAssetId}/upload-complete`,
     );
+  },
+
+  getMediaSource(mediaAssetId: string): Promise<MediaSourceResponse> {
+    return api.get<MediaSourceResponse>(`/media/${mediaAssetId}/source`);
   },
 
   getVideoJobProgress(mediaAssetId: string): Promise<VideoJobProgressResponse> {

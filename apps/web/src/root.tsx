@@ -13,6 +13,7 @@ import {
 } from "react-router";
 import type { Route } from "./+types/root";
 import { installTabFocusVisibility } from "./accessibility/tabFocusVisibility";
+import { registerSegmentCacheReclaimer } from "./learning/player/segmentCacheReclaimer";
 import { useTruncatedTextTitles } from "./shell/useTruncatedTextTitles";
 import { appBaseStylesheet } from "./appStylesheet";
 import manropeFontUrl from "./assets/fonts/manrope-core.woff2?url";
@@ -38,11 +39,14 @@ import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getSessionPresenceBootstrapScript } from "./store/sessionPresence";
 import { getProfileHintBootstrapScript } from "./shell/profileHintEarlyState";
 import { getNavigationOriginBootstrapScript } from "./routing/navigationOriginEarlyState";
+import { getLessonMenuSectionBootstrapScript } from "./shell/lessonMenuEarlyState";
 import { getCourseCardsEarlyStateBootstrapScript } from "./courses/courseCardEarlyState";
 import { getLearnerStartedBootstrapScript } from "./home/learner/learnerCoursesSubtitle";
 import { getHomeHintBootstrapScript } from "./store/homeHint";
 import { getLearnerHomeSnapshotBootstrapScript } from "./home/learner/learnerHomeSnapshot";
 import { getPlaybackBootstrapHeadStartScript } from "./learning/playbackBootstrapHeadStart";
+import { getCurriculumEarlyScrollScript } from "./learning/curriculumEarlyScroll";
+import { getLessonPageEarlyStateScript } from "./learning/lessonPageEarlyState";
 import { getApiBaseUrl } from "./lib/api-client";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
 import {
@@ -268,12 +272,13 @@ export function Layout({ children }: LayoutProps) {
           rel="preload"
           href={manropeFontUrl}
           as="font"
+          fetchPriority="high"
           type="font/woff2"
           crossOrigin="anonymous"
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}`,
+            __html: `${getOauthDialogReturnScript()}${getOauthPopupHandoffScript()}${getLoginDialogSnapshotScript(OAUTH_REDIRECT_RESULT_STORAGE_KEY)}${getSessionPresenceBootstrapScript()}${getProfileHintBootstrapScript()}${getNavigationOriginBootstrapScript()}${getLessonMenuSectionBootstrapScript()}${getCourseCardsEarlyStateBootstrapScript()}${getLearnerStartedBootstrapScript()}${getHomeHintBootstrapScript()}${getLearnerHomeSnapshotBootstrapScript()}${getSidebarShellBootstrapScript()}${getSidebarCollapsedMarkupBootstrapScript()}${getSidebarPresentationBootstrapScript()}${getLearningShellBootstrapScript()}${getLearningPlayerBootstrapScript()}${getLessonPageEarlyStateScript()}${getCurriculumEarlyScrollScript()}`,
           }}
         />
         <Meta />
@@ -410,6 +415,7 @@ function HydrationMarker() {
     root.dataset.appHydrated = "true";
     const removeTabFocusListeners = installTabFocusVisibility(root);
     const removeChunkReloadHandler = installChunkReloadHandler();
+    registerSegmentCacheReclaimer();
 
     return () => {
       removeChunkReloadHandler();

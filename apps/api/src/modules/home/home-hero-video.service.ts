@@ -81,7 +81,8 @@ export function createHomeHeroVideoService({
 
   /**
    * The configured video, or the default lesson when the chosen one is no
-   * longer there (its lesson deleted or unpublished, say).
+   * longer there (its lesson deleted or unpublished, say) or cannot play yet
+   * (an upload still being processed).
    */
   async function resolve(
     heroVideo: HomePageHeroVideo,
@@ -96,7 +97,9 @@ export function createHomeHeroVideoService({
       if (resolved) return resolved;
     } else if (heroVideo.source === "upload") {
       const asset = await findVideoAsset(database, heroVideo.mediaId);
-      if (asset?.type === "video") {
+      // An upload still being processed (or one that failed) has nothing to
+      // stream yet: the default plays meanwhile, so the laptop always works.
+      if (asset?.type === "video" && asset.status === "ready") {
         return {
           media: {
             id: asset.id,
@@ -107,14 +110,11 @@ export function createHomeHeroVideoService({
           },
           mediaKey: `home-hero-${asset.id}`,
           title: null,
-          // The transcoder captures this frame before it encodes the video.
+          // The transcoder (or the import) captures this frame.
           poster: {
-            url:
-              asset.status === "ready"
-                ? storage.getCdnObjectUrl(
-                    `public/thumbnails/${asset.id}/original.webp`,
-                  )
-                : null,
+            url: storage.getCdnObjectUrl(
+              `public/thumbnails/${asset.id}/original.webp`,
+            ),
           },
         };
       }

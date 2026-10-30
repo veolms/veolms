@@ -155,14 +155,17 @@ function ScrubTimePill({
   chapterTitle: string | null;
   position: number;
   previewTime: number;
-  /** A finger drag: the pill rises clear of the thumb on the timeline. */
+  /**
+   * A finger drag: the pill rises clear of the fingertip on the thumb, a
+   * little above it (higher, it read as apart from the thumb).
+   */
   touch: boolean;
 }) {
   // The thumb's centre, as the thumb itself is placed (see `Timeline`).
   const thumbX = `(${position / 100} * (100cqw - ${TIMELINE_THUMB_SIZE_PX}px) + ${TIMELINE_THUMB_SIZE_PX / 2}px)`;
   return (
     <div
-      className={`pointer-events-none absolute inset-x-0 bottom-full z-30 h-0 @container ${touch ? "mb-12.5" : "mb-5"}`}
+      className={`pointer-events-none absolute inset-x-0 bottom-full z-30 h-0 @container ${touch ? "mb-8" : "mb-5"}`}
       data-video-player-preview=""
       data-video-player-preview-mode="time"
     >

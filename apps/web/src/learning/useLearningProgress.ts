@@ -12,9 +12,11 @@ import {
   getLearningProgressMap,
   getLearningProgressStorageKey,
   getPendingLearningProgress,
+  hasStoredLearningProgress,
   markLearningProgressSynced,
   mergeServerLearningProgress,
   mergeLocalLearningProgress,
+  parseLearningProgress,
   readLearningProgress,
   recordLearningProgress,
   writeLearningProgress,
@@ -34,6 +36,7 @@ import {
 } from "./lessonPositionOutbox";
 import { getApiError } from "../lib/api-client";
 import { markCourseResumeStale } from "./courseResumeCache";
+import { readEarlyProgressCopy } from "../store/lessonEarlyState";
 import {
   adoptServerLearningProgress,
   snapshotAnswersSyncedProgress,
@@ -62,9 +65,36 @@ export function useLearningProgress({
   const syncEnabled = Boolean(enabled && courseKey && userId);
   const storageIdentity =
     userId && courseKey ? `${userId}\u0000${courseKey}` : null;
-  const [localState, setLocalState] = useState<LocalLearningProgressState>(() =>
-    readLearningProgress(userId, courseKey),
+  // Read in the first render, a built page's hydration included: that page
+  // is drawn with the kept progress before its scripts run (see
+  // lessonPageEarlyState.ts), so the first render has to show the same
+  // ("42% complete" on a lesson card) or React throws the whole page away
+  // and draws it again. Whether a copy is held at all is what tells the
+  // page the progress is known (`progressKnown`): an empty copy says the
+  // learner had made none when it was written.
+  // The copy as the document's head read it, when the head drew the page
+  // from one (store/lessonEarlyState.ts): storage may have moved on since.
+  const [localState, setLocalState] = useState<LocalLearningProgressState>(
+    () => {
+      const early = readEarlyProgressCopy(userId, courseKey);
+      return early === undefined
+        ? readLearningProgress(userId, courseKey)
+        : parseLearningProgress(early);
+    },
   );
+  const heldInBrowser = useMemo(
+    () => {
+      const early = readEarlyProgressCopy(userId, courseKey);
+      return early === undefined
+        ? hasStoredLearningProgress(userId, courseKey)
+        : early !== null;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- storageIdentity stands for the pair
+    [storageIdentity],
+  );
+  // The identity the first render read storage for: the effect below need
+  // not read it again for the same one.
+  const readForIdentityRef = useRef<string | null | undefined>(storageIdentity);
   const localStateRef = useRef(localState);
   const lessonIdsByNumberRef = useRef(lessonIdsByNumber);
   useEffect(() => {
@@ -95,6 +125,11 @@ export function useLearningProgress({
 
   useEffect(() => {
     syncedProgressKnownAtRef.current = Date.now();
+    if (readForIdentityRef.current === storageIdentity) {
+      readForIdentityRef.current = undefined;
+      return;
+    }
+    readForIdentityRef.current = undefined;
     setLocalState(
       storageIdentity
         ? readLearningProgress(userId, courseKey)
@@ -341,6 +376,7 @@ export function useLearningProgress({
   // is not in) or failed: there is nothing more to show then.
   const progressKnown =
     !syncEnabled ||
+    heldInBrowser ||
     localState.items.length > 0 ||
     serverProgress !== undefined ||
     isSnapshotError;

@@ -203,6 +203,18 @@ export function FloatingScrollbar({
         animationFrame = window.requestAnimationFrame(syncScrollbar);
       }
     };
+    // A resize observer reports once the browser has laid the page out, so
+    // measuring right then costs nothing. Put off to the next frame, as a
+    // scroll is, the measurement came before that frame's layout and laid
+    // the whole page out anew whenever anything had changed since (30 to
+    // 40 ms a time while a lesson page loads).
+    const syncAfterLayout = () => {
+      if (animationFrame !== 0) {
+        window.cancelAnimationFrame(animationFrame);
+        animationFrame = 0;
+      }
+      syncScrollbar();
+    };
 
     // A scrollport can move without resizing when navigation or the sidebar
     // changes the surrounding layout. Observe and listen through that chain so
@@ -231,7 +243,7 @@ export function FloatingScrollbar({
     const resizeObserver =
       typeof ResizeObserver === "undefined"
         ? null
-        : new ResizeObserver(scheduleSync);
+        : new ResizeObserver(syncAfterLayout);
     resizeObserver?.observe(scrollport);
     if (rightEdgeRef?.current) resizeObserver?.observe(rightEdgeRef.current);
     layoutAncestors.forEach((ancestor) => resizeObserver?.observe(ancestor));

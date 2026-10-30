@@ -18,7 +18,11 @@ const SOURCES: readonly [Source, string, string][] = [
     `Lesson ${HOME_PAGE_HERO_LESSON.lessonNumber} of /courses/${HOME_PAGE_HERO_LESSON.courseSlug}.`,
   ],
   ["lesson", "A course lesson", "Open a course and pick one of its videos."],
-  ["upload", "Upload a video", "A video of its own, just for the home page."],
+  [
+    "upload",
+    "Upload a video",
+    "A video of its own, uploaded or from YouTube, just for the home page.",
+  ],
 ];
 
 /** The lesson chosen now, by name, under the choices. */
@@ -56,11 +60,17 @@ function ChosenLesson({
 export function HeroVideoEditor({
   heroVideo,
   onChange,
+  onUploadChosen,
+  uploadSaving,
   courses,
   optionsLoading,
 }: {
   heroVideo: HomePageHeroVideo;
   onChange: (heroVideo: HomePageHeroVideo) => void;
+  /** An upload sent or an import queued: saved at once, unlike the rest. */
+  onUploadChosen: (heroVideo: HomePageHeroVideo) => void;
+  /** That save is under way. */
+  uploadSaving: boolean;
   courses: readonly HomePageCourseOption[];
   optionsLoading: boolean;
 }) {
@@ -117,7 +127,7 @@ export function HeroVideoEditor({
         <p className="text-sm text-(--muted)" role="status">
           {mode === "lesson"
             ? "Pick a lesson below to play it on the laptop."
-            : "Upload a video below to play it on the laptop."}
+            : "Upload or import a video below to play it on the laptop."}
         </p>
       ) : null}
 
@@ -134,8 +144,9 @@ export function HeroVideoEditor({
       {mode === "upload" ? (
         <HeroVideoUpload
           uploaded={heroVideo.source === "upload" ? heroVideo : null}
+          saving={uploadSaving}
           onUploaded={(mediaId, fileName) =>
-            onChange({ source: "upload", mediaId, fileName })
+            onUploadChosen({ source: "upload", mediaId, fileName })
           }
         />
       ) : null}

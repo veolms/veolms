@@ -1,7 +1,9 @@
 import type { LearningProgressLesson } from "@veolms/contracts";
 
 export const LEARNING_PROGRESS_STORAGE_VERSION = 1;
-const STORAGE_PREFIX = "veolms-learning-progress-v1";
+/** Before `:<user id>:<course key>` (both URI-encoded); the head reads it too. */
+export const LEARNING_PROGRESS_STORAGE_PREFIX = "veolms-learning-progress-v1";
+const STORAGE_PREFIX = LEARNING_PROGRESS_STORAGE_PREFIX;
 const MAX_STORED_PROGRESS_ITEMS = 500;
 
 export interface LocalLearningProgressItem {
@@ -99,6 +101,19 @@ function normalizeState(value: unknown): LocalLearningProgressState {
   };
 }
 
+/** A stored copy as read (`readLearningProgress` without the reading). */
+export function parseLearningProgress(
+  raw: string | null,
+): LocalLearningProgressState {
+  try {
+    return raw
+      ? normalizeState(JSON.parse(raw))
+      : EMPTY_LEARNING_PROGRESS_STATE;
+  } catch {
+    return EMPTY_LEARNING_PROGRESS_STATE;
+  }
+}
+
 export function readLearningProgress(
   userId: string | undefined,
   courseKey: string | undefined,
@@ -108,12 +123,31 @@ export function readLearningProgress(
   }
 
   try {
-    const raw = window.localStorage.getItem(getStorageKey(userId, courseKey));
-    return raw
-      ? normalizeState(JSON.parse(raw))
-      : EMPTY_LEARNING_PROGRESS_STATE;
+    return parseLearningProgress(
+      window.localStorage.getItem(getStorageKey(userId, courseKey)),
+    );
   } catch {
     return EMPTY_LEARNING_PROGRESS_STATE;
+  }
+}
+
+/**
+ * Whether this browser holds a copy of the learner's progress in a course,
+ * empty or not: it is written on every visit, once the server's figures
+ * have been taken in, so a copy with nothing in it says the learner had
+ * made no progress then.
+ */
+export function hasStoredLearningProgress(
+  userId: string | undefined,
+  courseKey: string | undefined,
+): boolean {
+  if (typeof window === "undefined" || !userId || !courseKey) return false;
+  try {
+    return (
+      window.localStorage.getItem(getStorageKey(userId, courseKey)) !== null
+    );
+  } catch {
+    return false;
   }
 }
 

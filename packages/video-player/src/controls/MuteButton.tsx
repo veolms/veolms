@@ -6,9 +6,18 @@ import { PlayerIconButton } from "./PlayerIconButton";
 export interface MuteButtonProps {
   className?: string;
   iconSize?: number;
+  /** Replaces what a press does (muting or unmuting). */
+  onPress?: () => void;
+  /** Replaces the label, for a press that does something else. */
+  label?: string;
 }
 
-export function MuteButton({ className, iconSize = 24 }: MuteButtonProps) {
+export function MuteButton({
+  className,
+  iconSize = 24,
+  onPress,
+  label,
+}: MuteButtonProps) {
   const controller = usePlayerController();
   const { muted, volume } = useVolume();
   const silent = muted || volume === 0;
@@ -32,7 +41,7 @@ export function MuteButton({ className, iconSize = 24 }: MuteButtonProps) {
     <PlayerIconButton
       className={className}
       data-volume-level={volumeLevel}
-      label={silent ? "Unmute" : "Mute"}
+      label={label ?? (silent ? "Unmute" : "Mute")}
       icon={
         <>
           <span
@@ -49,8 +58,8 @@ export function MuteButton({ className, iconSize = 24 }: MuteButtonProps) {
           </span>
         </>
       }
-      pressed={silent}
-      onClick={() => controller.toggleMuted()}
+      pressed={onPress ? undefined : silent}
+      onClick={onPress ?? (() => controller.toggleMuted())}
     />
   );
 }

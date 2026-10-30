@@ -192,6 +192,26 @@ export interface VideoStreamingConfiguration {
    * load starts: a source differing in it alone is not loaded again.
    */
   preferredVideoHeight?: number;
+  /**
+   * A picture height to start at while ABR stays on, such as the rendition
+   * already kept on the device: the first variant is the highest not above
+   * it, and from the first frame ABR chooses freely (it starts from at
+   * least that variant's bandwidth, so it does not step down before it has
+   * measured anything). Ignored when `preferredVideoHeight` is set. Like
+   * `startTime`, a source differing in it alone is not loaded again.
+   */
+  startVideoHeight?: number;
+  /**
+   * A picture height the device already keeps the source at (its segments
+   * on disk): playback starts at the highest variant not above it and holds
+   * there, with ABR off, for as long as the video segments come from the
+   * device. The first video segment that comes from the network releases
+   * the hold: ABR chooses freely from then on, starting from at least that
+   * variant's bandwidth. Ignored when `preferredVideoHeight` is set; takes
+   * the place of `startVideoHeight`. Like `startTime`, a source differing
+   * in it alone is not loaded again.
+   */
+  holdVideoHeight?: number;
   abrRestrictions?: AbrRestrictions;
   /**
    * Bits per second assumed before the first segment is measured. Left out,

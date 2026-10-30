@@ -86,6 +86,16 @@ export interface ShakaNetworkResponseLike {
   headers?: Record<string, string>;
   data: ArrayBuffer;
   status?: number;
+  /** Set by a scheme plugin that answered from a cache of its own. */
+  fromCache?: boolean;
+  /** The request answered; its content type names the stream (video, audio). */
+  originalRequest?: { contentType?: string };
+}
+
+/** What Shaka tells a filter about the request a response answers. */
+export interface ShakaRequestContextLike {
+  type?: string;
+  stream?: { type?: string };
 }
 
 export type ShakaRequestFilterLike = (
@@ -315,6 +325,19 @@ function readStoredBandwidth(): number | null {
 let lastEstimatedBandwidth: number | null = readStoredBandwidth();
 
 /**
+ * Estimates the engine gave a player itself (see `startVideoHeight`): Shaka
+ * reports one back until it has measured, and it is not to be remembered.
+ */
+const assumedBandwidthEstimates = new WeakMap<object, number>();
+
+export function noteAssumedShakaBandwidthEstimate(
+  player: object,
+  estimate: number,
+): void {
+  assumedBandwidthEstimates.set(player, estimate);
+}
+
+/**
  * Remembers what Shaka measured, so the next video in this page (and the
  * next page load, see above) starts at a tier the connection is known to
  * sustain.
@@ -332,6 +355,7 @@ export function rememberShakaBandwidthEstimate(
   if (estimate <= 0) return;
   // The start value a chosen quality sets (nothing measured yet).
   if (estimate >= PREFERRED_QUALITY_START_BANDWIDTH) return;
+  if (player && assumedBandwidthEstimates.get(player) === estimate) return;
   lastEstimatedBandwidth = Math.min(
     MAX_REMEMBERED_BANDWIDTH,
     Math.max(MIN_REMEMBERED_BANDWIDTH, estimate),
@@ -381,6 +405,49 @@ export function shakaPreferredVideoHeight(source: VideoSource): number | null {
   return typeof height === "number" && Number.isFinite(height) && height > 0
     ? height
     : null;
+}
+
+/**
+ * The height `source` starts at with ABR on (see `startVideoHeight`), or
+ * null; none when a quality was chosen.
+ */
+export function shakaStartVideoHeight(source: VideoSource): number | null {
+  if (shakaPreferredVideoHeight(source) !== null) return null;
+  const height = source.streaming?.startVideoHeight;
+  return typeof height === "number" && Number.isFinite(height) && height > 0
+    ? height
+    : null;
+}
+
+/**
+ * The height `source` holds at while its segments come from the device
+ * (see `holdVideoHeight`), or null; none when a quality was chosen.
+ */
+export function shakaHeldVideoHeight(source: VideoSource): number | null {
+  if (shakaPreferredVideoHeight(source) !== null) return null;
+  const height = source.streaming?.holdVideoHeight;
+  return typeof height === "number" && Number.isFinite(height) && height > 0
+    ? height
+    : null;
+}
+
+/**
+ * `source` without a start or held height: what applies once ABR chooses
+ * freely.
+ */
+export function withoutStartVideoHeight(source: VideoSource): VideoSource {
+  if (
+    source.streaming?.startVideoHeight === undefined &&
+    source.streaming?.holdVideoHeight === undefined
+  ) {
+    return source;
+  }
+  const {
+    startVideoHeight: _start,
+    holdVideoHeight: _held,
+    ...streaming
+  } = source.streaming;
+  return { ...source, streaming };
 }
 
 /** Whether ABR chooses the quality of `source` (no quality was chosen). */
@@ -643,6 +710,12 @@ export function createShakaConfiguration(
   };
 
   const preferredHeight = shakaPreferredVideoHeight(source);
+  // A start height caps the first choice the same way, with ABR on; the cap
+  // is lifted once the first frame has played (`ShakaVideoEngine`). A held
+  // height caps it with ABR off, until the engine releases the hold.
+  const heldHeight = shakaHeldVideoHeight(source);
+  const capHeight =
+    preferredHeight ?? heldHeight ?? shakaStartVideoHeight(source);
   // A chosen quality: the first variant is the highest not above it (every
   // variant looks affordable at this estimate, so ABR takes the top one the
   // restriction leaves), and ABR stays off so playback stays there. The
@@ -652,14 +725,14 @@ export function createShakaConfiguration(
     ...streaming?.abrRestrictions,
     maxHeight: Math.min(
       streaming?.abrRestrictions?.maxHeight ?? Infinity,
-      preferredHeight ?? Infinity,
+      capHeight ?? Infinity,
     ),
   };
   result.abr = {
-    enabled: isShakaAutoQuality(source),
+    enabled: isShakaAutoQuality(source) && heldHeight === null,
     useNetworkInformation: SHAKA_ABR_DEFAULTS.useNetworkInformation,
     defaultBandwidthEstimate:
-      preferredHeight === null
+      capHeight === null
         ? (streaming?.abrDefaultBandwidthEstimate ??
           getShakaStartupBandwidthEstimate())
         : PREFERRED_QUALITY_START_BANDWIDTH,

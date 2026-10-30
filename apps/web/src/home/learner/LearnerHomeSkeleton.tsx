@@ -223,6 +223,7 @@ export function LearnerCoursesSkeleton() {
  */
 export function LearnerHomeShell({
   learnerName = "",
+  pictureWhenShown = false,
 }: {
   /**
    * The name this tab remembers, where the shell is only ever rendered in
@@ -231,6 +232,12 @@ export function LearnerHomeShell({
    * to say it, so a page built ahead of time must not be given one.
    */
   learnerName?: string;
+  /**
+   * For a shell put in the page hidden, in case it is the one to show: its
+   * picture is then fetched only if it is drawn. A visitor's phone, shown
+   * no picture on its own home, would otherwise download this one too.
+   */
+  pictureWhenShown?: boolean;
 }) {
   const firstName = learnerName.trim().split(/\s+/u)[0] ?? "";
   const pictures = (
@@ -238,7 +245,7 @@ export function LearnerHomeShell({
       <HeroPicture
         picture={guestHeroImage}
         position={picturePlacementClasses}
-        priority
+        priority={!pictureWhenShown}
         className="-z-40 max-sm:translate-x-[calc(0.34%+0.72px)] [:root[data-theme=light]_&]:invisible"
       />
       <HeroPicture

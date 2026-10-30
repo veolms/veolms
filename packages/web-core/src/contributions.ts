@@ -200,11 +200,35 @@ export interface CourseEditorSectionContribution {
   adminOnly?: boolean;
 }
 
+/**
+ * A row a plugin adds to a section of the Settings page, drawn after the
+ * section's own rows. For "storage": what the plugin keeps on this device
+ * (its size, and how to clear it or where that is done).
+ */
+export interface SettingsRowContribution {
+  id: string;
+  order?: number;
+  section: "storage";
+  component: ComponentType;
+}
+
+/**
+ * Something on this device that can give back disk space on request, such
+ * as core's cache of lesson video segments. A plugin that needs room (a
+ * download) asks through `reclaimStorage` before refusing.
+ */
+export interface StorageReclaimer {
+  id: string;
+  /** Frees up to `bytesNeeded`; resolves once done. */
+  reclaim(bytesNeeded: number): Promise<void>;
+}
+
 export interface WebContributions {
   lessonCardActions: readonly LessonCardActionContribution[];
   profileMenuLinks: readonly ProfileMenuLinkContribution[];
   analyticsTabs: readonly AnalyticsTabContribution[];
   courseEditorSections: readonly CourseEditorSectionContribution[];
+  settingsRows: readonly SettingsRowContribution[];
 }
 
 /**
@@ -279,6 +303,19 @@ export interface PlaybackSummary {
   watchedSeconds: number;
   /** Seconds played at each rendition height. */
   qualities: Array<{ height: number; seconds: number }>;
+  /**
+   * What the on-device segment cache did during this playback (absent where
+   * the browser keeps none).
+   */
+  segmentCache?: {
+    hits: number;
+    misses: number;
+    bytesFromCache: number;
+    bytesFromNetwork: number;
+    /** Segments not kept, to leave room free on the disk. */
+    skippedForReserve: number;
+    lessonsEvicted: number;
+  };
 }
 
 /**
@@ -312,6 +349,7 @@ interface ContributionStore {
   analyticsSink?: AnalyticsSink | null;
   /** Unset until the session is known; `null` is a guest. */
   analyticsVisitor?: AnalyticsVisitor | null;
+  storageReclaimers?: Map<string, StorageReclaimer>;
 }
 
 // One store per page, shared even when the module is bundled twice (core
@@ -328,6 +366,7 @@ function getStore(): ContributionStore {
       profileMenuLinks: [],
       analyticsTabs: [],
       courseEditorSections: [],
+      settingsRows: [],
     },
     listeners: new Set(),
   };
@@ -418,6 +457,54 @@ export function registerCourseEditorSection(
         (entry) => entry !== contribution,
       ),
     });
+}
+
+/**
+ * Adds (or replaces, by id) a row to a section of the Settings page.
+ * Returns a function that removes it again.
+ */
+export function registerSettingsRow(
+  contribution: SettingsRowContribution,
+): () => void {
+  const others = (getStore().snapshot.settingsRows ?? []).filter(
+    (entry) => entry.id !== contribution.id,
+  );
+  update({ settingsRows: [...others, contribution].sort(byOrder) });
+  return () =>
+    update({
+      settingsRows: getStore().snapshot.settingsRows.filter(
+        (entry) => entry !== contribution,
+      ),
+    });
+}
+
+/** Adds (or replaces, by id) something that can give back disk space. */
+export function registerStorageReclaimer(
+  reclaimer: StorageReclaimer,
+): () => void {
+  const store = getStore();
+  store.storageReclaimers ??= new Map();
+  store.storageReclaimers.set(reclaimer.id, reclaimer);
+  return () => {
+    if (store.storageReclaimers?.get(reclaimer.id) === reclaimer) {
+      store.storageReclaimers.delete(reclaimer.id);
+    }
+  };
+}
+
+/**
+ * Asks every registered reclaimer to free up to `bytesNeeded` (they run
+ * together; one that fails is skipped). Read the storage estimate again
+ * afterwards to see what was freed.
+ */
+export async function reclaimStorage(bytesNeeded: number): Promise<void> {
+  if (!(bytesNeeded > 0)) return;
+  const reclaimers = [...(getStore().storageReclaimers?.values() ?? [])];
+  await Promise.all(
+    reclaimers.map((reclaimer) =>
+      reclaimer.reclaim(bytesNeeded).catch(() => undefined),
+    ),
+  );
 }
 
 /** Current contributions; the same object until something changes. */

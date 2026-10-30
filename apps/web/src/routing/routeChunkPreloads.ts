@@ -11,6 +11,17 @@ export const CATALOGUE_CHUNK_URL_PLACEHOLDER = "__VEO_CATALOGUE_CHUNK_URL__";
 export const GUEST_HOME_CHUNK_URL_PLACEHOLDER = "__VEO_GUEST_HOME_CHUNK_URL__";
 export const COURSE_OVERVIEW_CHUNK_URL_PLACEHOLDER =
   "__VEO_COURSE_OVERVIEW_CHUNK_URL__";
+/**
+ * The lesson page's video player host (`PersistentLearningPlayerHost`),
+ * mounted by the academy layout once the page registers its player. Loaded
+ * only then, it was never in by the time the player's body first rendered:
+ * the body suspended on it and React held the player back for its fallback
+ * throttle, a third of a second of empty black box after the prerendered
+ * placeholder had gone. Preloaded from the document, and waited for before
+ * hydration, it renders in the same commit as the registration.
+ */
+export const LEARNING_PLAYER_HOST_CHUNK_URL_PLACEHOLDER =
+  "__VEO_LEARNING_PLAYER_HOST_CHUNK_URL__";
 
 /**
  * Comma-joined stylesheet URLs of the same chunks. The feature CSS of a
@@ -23,6 +34,8 @@ export const CATALOGUE_CSS_URLS_PLACEHOLDER = "__VEO_CATALOGUE_CSS_URLS__";
 export const GUEST_HOME_CSS_URLS_PLACEHOLDER = "__VEO_GUEST_HOME_CSS_URLS__";
 export const COURSE_OVERVIEW_CSS_URLS_PLACEHOLDER =
   "__VEO_COURSE_OVERVIEW_CSS_URLS__";
+export const LEARNING_PLAYER_HOST_CSS_URLS_PLACEHOLDER =
+  "__VEO_LEARNING_PLAYER_HOST_CSS_URLS__";
 
 /**
  * Comma-joined URLs of the chunks those lazy chunks import statically.
@@ -33,6 +46,8 @@ export const CATALOGUE_JS_URLS_PLACEHOLDER = "__VEO_CATALOGUE_JS_URLS__";
 export const GUEST_HOME_JS_URLS_PLACEHOLDER = "__VEO_GUEST_HOME_JS_URLS__";
 export const COURSE_OVERVIEW_JS_URLS_PLACEHOLDER =
   "__VEO_COURSE_OVERVIEW_JS_URLS__";
+export const LEARNING_PLAYER_HOST_JS_URLS_PLACEHOLDER =
+  "__VEO_LEARNING_PLAYER_HOST_JS_URLS__";
 
 /** Splits a replaced URL-list placeholder; an unreplaced one yields none. */
 export function splitChunkCssUrls(value: string): string[] {

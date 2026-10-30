@@ -1,5 +1,4 @@
 import {
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -21,7 +20,12 @@ import {
   LEARNING_LESSON_NUMBER_META_NAME,
 } from "../learning/learningHlsBootstrap";
 import { resolveLessonIdentifier } from "../learning/courseContent";
-import { LearningWorkspaceFallback } from "../learning/LearningWorkspaceFallback";
+import { ChunkStylesheets } from "../routing/ChunkStylesheets";
+import { LEARNING_PLAYER_HOST_CHUNK_URL_PLACEHOLDER } from "../routing/routeChunkPreloads";
+import {
+  LEARNING_PLAYER_HOST_CSS_URLS,
+  LEARNING_PLAYER_HOST_JS_URLS,
+} from "../shell/academyRouteChunkUrls";
 // Imported with the route, not lazily: a lesson page is built with the
 // workspace drawn, and the route's code is loaded before the page hydrates,
 // so the built page is hydrated as it is and its stylesheets are linked in
@@ -58,7 +62,7 @@ import { useLearningCourse } from "../learning/useLearningCourse";
 import { staticCurriculumUrl } from "../courses/staticCurriculum";
 import type { AcademyStaticPageData } from "./academyStaticPageData";
 import { withKeepScroll } from "../shell/applicationScroll";
-import { useAuthStore } from "../store/auth.store";
+import { useAuthStore, useRememberedAccount } from "../store/auth.store";
 import type { AcademyOutletContext } from "./academy-layout";
 import type { LearningMiniPlayerRequest } from "../learning/player/learningMiniPlayerTypes";
 import { getVideoPlaybackApiOrigin } from "../learning/videoPlaybackBootstrap";
@@ -149,6 +153,11 @@ export default function LearningRoute() {
   const { data: authUser } = useCurrentUser();
   const storeUser = useAuthStore((state) => state.user);
   const activeUser = authUser || storeUser;
+  // Until the session check answers, the account this tab remembers: the
+  // page is drawn for it before its scripts run (its progress from the
+  // browser's copy), and the first render must agree with that drawing.
+  const rememberedAccount = useRememberedAccount();
+  const learnerId = activeUser?.id ?? rememberedAccount?.userId;
   // The page the player was opened from. Minimizing goes back to it.
   const playerReturnPath = useSyncExternalStore(
     subscribeToLearningReturnLocation,
@@ -409,12 +418,34 @@ export default function LearningRoute() {
     ],
   );
 
+  // No Suspense boundary here: nothing in the workspace suspends (its lazy
+  // parts have their own), and a boundary is hydrated in a pass of its own
+  // after the rest of the page. The effects of that first pass had already
+  // put this tab's copies of the learner's answers in place (their access,
+  // see services/accountSessionCopies.ts), so the workspace then rendered
+  // locks the built page did not have, and React threw the whole lesson
+  // page away and drew it again: the list back at its top, the bar loose.
   return (
-    <Suspense fallback={<LearningWorkspaceFallback />}>
+    <>
+      {/* The video player's host is mounted by the academy layout the
+          moment this page registers its player, from a module loaded on
+          demand. The document preloads that module (and waits for it
+          before hydrating, see routing/prerenderedBodies.tsx), so the
+          player renders in the same commit as the registration instead of
+          suspending on its code and sitting out React's fallback throttle
+          as an empty black box. */}
+      <link
+        rel="modulepreload"
+        href={LEARNING_PLAYER_HOST_CHUNK_URL_PLACEHOLDER}
+      />
+      {LEARNING_PLAYER_HOST_JS_URLS.map((href) => (
+        <link key={href} rel="modulepreload" href={href} />
+      ))}
+      <ChunkStylesheets hrefs={LEARNING_PLAYER_HOST_CSS_URLS} />
       <LearningWorkspace
         key={courseSlug}
         courseSlug={courseSlug}
-        userId={activeUser?.id}
+        userId={learnerId}
         lessonId={lessonId}
         initialLessonView={isQuizViewRequested ? "quiz" : "video"}
         mobileBottomNavigation={mobileBottomNavigation}
@@ -443,6 +474,6 @@ export default function LearningRoute() {
         quizAssignments={myQuizAssignments?.assignments ?? null}
         quizAssignmentLoading={myQuizAssignmentsLoading}
       />
-    </Suspense>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   PlatformSettingsResponse,
   PublicPlatformSettingsResponse,
+  StaticSiteRebuildStatus,
   UpdatePlatformSettingsRequest,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
@@ -62,6 +63,17 @@ export function useUpdatePlatformSettings() {
       if (changes.security?.requireVerifiedPhoneForEnrollment !== undefined) {
         void queryClient.invalidateQueries({ queryKey: authKeys.config() });
       }
+    },
+  });
+}
+
+/** Starts a build of every public page (or joins the one under way). */
+export function useRebuildStaticSite() {
+  const queryClient = useQueryClient();
+  return useMutation<StaticSiteRebuildStatus, ApiError>({
+    mutationFn: () => platformService.rebuildStaticSite(),
+    onSuccess: (status) => {
+      queryClient.setQueryData(platformKeys.staticSiteRebuild(), status);
     },
   });
 }

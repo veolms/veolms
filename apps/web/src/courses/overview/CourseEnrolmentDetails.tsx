@@ -5,16 +5,33 @@ import { Infinity as InfinityIcon } from "@phosphor-icons/react/Infinity";
 import { TrendUp } from "@phosphor-icons/react/TrendUp";
 import { Warning } from "@phosphor-icons/react/Warning";
 import type { CourseAccessEnrollment } from "@veolms/contracts";
-import { formatMoney } from "@veolms/contracts/commerce/money";
-import { formatTimeAgo } from "../../lib/timeAgo";
 import { ordersService } from "../../services/orders";
 import {
-  describeEnrolmentAccess,
-  describePace,
-  formatEnrolmentDate,
-  paymentMethodLabel,
+  describeEnrolmentWords,
   type EnrolmentAccessTone,
 } from "./enrolmentDetails";
+
+/** The box around "Your enrollment", its heading and its list. */
+export const enrolmentPanelClasses =
+  "flex flex-col gap-4 border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] pt-5";
+export const enrolmentListClasses =
+  "grid gap-4 text-[0.9rem] @2xl/price:grid-cols-3 @2xl/price:gap-6";
+export const enrolmentNeutralTileClasses =
+  "bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent)";
+export const enrolmentPaceTileClasses =
+  "bg-violet-500/12 text-violet-600 dark:text-violet-400";
+/** The row that stands out while access is ending. */
+export const enrolmentEndingRowClasses =
+  "flex min-w-0 gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3";
+export const enrolmentEndingLabelClasses =
+  "text-[0.78rem] font-semibold text-amber-600 dark:text-amber-400";
+export const enrolmentTileClasses =
+  "grid size-9 shrink-0 place-items-center rounded-lg";
+export const enrolmentLabelClasses = "text-[0.78rem] text-(--muted)";
+export const enrolmentValueClasses = "font-semibold text-(--text)";
+export const enrolmentNoteClasses = "mt-0.5 text-[0.78rem] text-(--muted)";
+export const invoiceLinkClasses =
+  "text-(--accent) underline underline-offset-2";
 
 interface CourseEnrolmentDetailsProps {
   enrollment: CourseAccessEnrollment;
@@ -22,7 +39,7 @@ interface CourseEnrolmentDetailsProps {
   accessExpiresAt: string | null;
 }
 
-const toneClasses: Record<
+export const enrolmentToneClasses: Record<
   EnrolmentAccessTone,
   { tile: string; remaining: string }
 > = {
@@ -44,7 +61,7 @@ const toneClasses: Record<
   },
 };
 
-function DetailRow({
+export function EnrolmentDetailRow({
   icon,
   tileClassName,
   label,
@@ -61,16 +78,14 @@ function DetailRow({
     <li className="flex min-w-0 gap-3">
       <span
         aria-hidden="true"
-        className={`grid size-9 shrink-0 place-items-center rounded-lg ${tileClassName}`}
+        className={`${enrolmentTileClasses} ${tileClassName}`}
       >
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="text-[0.78rem] text-(--muted)">{label}</p>
-        <p className="font-semibold text-(--text)">{children}</p>
-        {note ? (
-          <p className="mt-0.5 text-[0.78rem] text-(--muted)">{note}</p>
-        ) : null}
+        <p className={enrolmentLabelClasses}>{label}</p>
+        <p className={enrolmentValueClasses}>{children}</p>
+        {note ? <p className={enrolmentNoteClasses}>{note}</p> : null}
       </div>
     </li>
   );
@@ -78,84 +93,73 @@ function DetailRow({
 
 /**
  * The learner's enrolment under their progress: when they enrolled and the
- * order it came with, how long their access lasts, and their pace.
+ * order it came with, how long their access lasts, and their pace. Its
+ * words are `describeEnrolmentWords`; `CourseEnrolmentDetailsEarly` is the
+ * same panel before the page's scripts run, so keep the two alike.
  */
 export function CourseEnrolmentDetails({
   enrollment,
   accessExpiresAt,
 }: CourseEnrolmentDetailsProps) {
-  const access = describeEnrolmentAccess(accessExpiresAt);
-  const pace = describePace(enrollment.pace, accessExpiresAt);
+  const words = describeEnrolmentWords(enrollment, accessExpiresAt);
+  const { access, pace } = words;
   const order = enrollment.order;
-  const method = paymentMethodLabel(order?.paymentMethod ?? null);
-  const tone = toneClasses[access.tone];
-  const neutralTile =
-    "bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent)";
-
-  const orderNote = order ? (
-    <>
-      Order #{order.orderNumber.replace(/^#/u, "")}
-      {order.totalAmount > 0 ? (
-        <>
-          {" · "}
-          {formatMoney(order.totalAmount, { currency: order.currency })}
-          {method ? ` via ${method}` : null}
-        </>
-      ) : null}
-      {order.hasInvoice ? (
-        <>
-          {" · "}
-          <a
-            href={ordersService.getInvoiceDownloadUrl(order.id, "student")}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-(--accent) underline underline-offset-2"
-          >
-            Invoice
-          </a>
-        </>
-      ) : null}
-    </>
-  ) : (
-    "Given free of charge"
-  );
+  const tone = enrolmentToneClasses[access.tone];
 
   return (
-    <div className="flex flex-col gap-4 border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] pt-5">
+    <div className={enrolmentPanelClasses}>
       <h3 className="font-bold text-(--text)">Your enrollment</h3>
-      <ul className="grid gap-4 text-[0.9rem] @2xl/price:grid-cols-3 @2xl/price:gap-6">
-        <DetailRow
+      <ul className={enrolmentListClasses}>
+        <EnrolmentDetailRow
           icon={<CalendarCheck size={18} />}
-          tileClassName={neutralTile}
+          tileClassName={enrolmentNeutralTileClasses}
           label="Enrolled on"
-          note={orderNote}
+          note={
+            <>
+              {words.order}
+              {order && words.hasInvoice ? (
+                <>
+                  {" · "}
+                  <a
+                    href={ordersService.getInvoiceDownloadUrl(
+                      order.id,
+                      "student",
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={invoiceLinkClasses}
+                  >
+                    Invoice
+                  </a>
+                </>
+              ) : null}
+            </>
+          }
         >
-          {formatEnrolmentDate(enrollment.enrolledAt)}{" "}
+          {words.enrolledOn}{" "}
           <span className="font-normal text-(--muted)">
-            ({formatTimeAgo(enrollment.enrolledAt)})
+            {words.enrolledAgo}
           </span>
-        </DetailRow>
+        </EnrolmentDetailRow>
 
         {access.tone === "ending" ? (
-          <li className="flex min-w-0 gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+          <li className={enrolmentEndingRowClasses}>
             <span
               aria-hidden="true"
-              className={`grid size-9 shrink-0 place-items-center rounded-lg ${tone.tile}`}
+              className={`${enrolmentTileClasses} ${tone.tile}`}
             >
               <Warning size={18} />
             </span>
             <div className="min-w-0">
-              <p className="text-[0.78rem] font-semibold text-amber-600 dark:text-amber-400">
-                Access ends soon
-              </p>
-              <p className="font-semibold text-(--text)">
+              <p className={enrolmentEndingLabelClasses}>{words.accessLabel}</p>
+              <p className={enrolmentValueClasses}>
                 {access.value}{" "}
                 <span className={tone.remaining}>({access.remaining})</span>
               </p>
             </div>
           </li>
         ) : (
-          <DetailRow
+          <EnrolmentDetailRow
             icon={
               access.tone === "lifetime" ? (
                 <InfinityIcon size={18} />
@@ -164,28 +168,24 @@ export function CourseEnrolmentDetails({
               )
             }
             tileClassName={tone.tile}
-            label={access.tone === "lifetime" ? "Access" : "Access until"}
-            note={
-              access.tone === "lifetime"
-                ? "No end date · learn at whatever pace suits you"
-                : undefined
-            }
+            label={words.accessLabel}
+            note={words.accessNote ?? undefined}
           >
             {access.value}{" "}
             <span className={`font-normal ${tone.remaining}`}>
               ({access.remaining})
             </span>
-          </DetailRow>
+          </EnrolmentDetailRow>
         )}
 
-        <DetailRow
+        <EnrolmentDetailRow
           icon={<TrendUp size={18} />}
-          tileClassName="bg-violet-500/12 text-violet-600 dark:text-violet-400"
+          tileClassName={enrolmentPaceTileClasses}
           label="Your pace"
           note={pace.note}
         >
           {pace.value}
-        </DetailRow>
+        </EnrolmentDetailRow>
       </ul>
     </div>
   );

@@ -102,6 +102,7 @@ export function LearningWorkspace({
     isAuthenticated,
     resolvedAuthUser,
     isAuthResolutionPending,
+    rememberedAccount,
     courseAccessQuery,
     isApiRoute,
     courseOverview,
@@ -370,9 +371,11 @@ export function LearningWorkspace({
   });
   // The course's progress in the lesson list waits for the learner's own
   // (a visitor has none to wait for): until then it shimmers, rather than
-  // saying 0% and then changing.
+  // saying 0% and then changing. A learner this tab remembers has theirs
+  // from the browser's copy at once, when it holds one.
   const progressPending =
-    isAuthResolutionPending || (isAuthenticated && !progressKnown);
+    (isAuthResolutionPending && !rememberedAccount) ||
+    ((isAuthenticated || rememberedAccount !== null) && !progressKnown);
 
   const {
     stickyPlayer,
@@ -521,6 +524,8 @@ export function LearningWorkspace({
       isCourseContentDrawerLayout,
       openLessonDrawer,
       closeLessonDrawer,
+      fullscreenLessonsBeside: mobileLandscapeFullscreen,
+      toggleLessonDrawerFromPlayer,
     });
 
   const {
@@ -899,7 +904,7 @@ export function LearningWorkspace({
         snapToSequentialPoints={phoneLessonDrawer}
         showSwipeHandle={phoneLessonDrawer}
         swipeDirection={phoneLessonDrawer ? "down" : "right"}
-        swipeHandleClassName="pointer-events-none absolute inset-x-0 top-0 z-30 pt-[3px] after:pointer-events-auto group-data-[swipe-axis=y]/drawer-popup:h-7 group-data-[swipe-direction=down]/drawer-popup:items-start after:bg-white/75 [:where([data-slot=drawer-popup]):has([data-curriculum-sticky-bar][data-collision])_&]:after:animate-[curriculum-seam-thumb-shake_480ms_ease-out_both] motion-reduce:after:animate-none!"
+        swipeHandleClassName="pointer-events-none absolute inset-x-0 top-0 z-30 pt-[3px] after:pointer-events-auto group-data-[swipe-axis=y]/drawer-popup:h-7 group-data-[swipe-direction=down]/drawer-popup:items-start after:bg-white/75"
         triggerId="learning-course-content-trigger"
       >
         <CourseLessonsDrawerContent

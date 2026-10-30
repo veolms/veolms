@@ -1,16 +1,18 @@
 import { useEffect } from "react";
 import type { RefObject } from "react";
+import {
+  BAR_APPROACH_PX,
+  CURRICULUM_HELD_EVENT,
+} from "./curriculumEarlyScroll";
 
 const STICKY_BAR_SELECTOR = "[data-curriculum-sticky-bar]";
 const OPEN_SECTION_HEADING_SELECTOR =
   '.learning-curriculum__section[data-expanded="true"] > .learning-curriculum__section-toggle';
 const LESSON_LIST_SELECTOR = ".learning-curriculum__lesson-list";
-/** Over its last this many px of travel the bar takes on its held form. */
-const BAR_APPROACH_PX = 48;
 /**
  * Scrolling slower than this (px per ms) when the bar comes to hold counts
  * as arriving slowly: a deliberate pull, not a flick. Only then is the
- * arrival played out (the ripple from the seam, the handle's shake).
+ * arrival played out (the ripple from the seam).
  */
 const SLOW_ARRIVAL_PX_PER_MS = 0.8;
 
@@ -74,7 +76,13 @@ export function useStuckSectionHeadings(
     let lastScrollAt = 0;
     let speed = Infinity;
 
-    const update = () => {
+    // `fromScroll`: called from a scroll event, the only way the bar comes to
+    // hold by the learner's hand. The first measure, a resize and a
+    // transition's end measure too, and a bar found holding then (the page
+    // built or opened at a lesson down the list) has not arrived at all:
+    // nothing is played for it. Two such measures in a row also read as a
+    // speed of zero, which looked like the slowest of arrivals.
+    const update = (fromScroll = false) => {
       const now = performance.now();
       const scrollTop = scrollport.scrollTop;
       if (lastScrollAt) {
@@ -106,7 +114,9 @@ export function useStuckSectionHeadings(
           // to a place where it already holds, nothing is played.)
           if (!("stuck" in bar.dataset)) {
             bar.dataset.stuck = "";
-            if (speed < SLOW_ARRIVAL_PX_PER_MS) bar.dataset.collision = "";
+            if (fromScroll && speed < SLOW_ARRIVAL_PX_PER_MS) {
+              bar.dataset.collision = "";
+            }
           }
         } else {
           delete bar.dataset.stuck;
@@ -177,17 +187,31 @@ export function useStuckSectionHeadings(
 
     clearAll();
     update();
+    // From here on the bar and the headings are kept here; the head's
+    // script that kept them while the page loaded stops.
+    document.dispatchEvent(new Event(CURRICULUM_HELD_EVENT));
     // Scrolling is followed in the event itself, so the frame painted for
-    // the scroll already has the new values; the rest can wait a frame.
-    scrollport.addEventListener("scroll", update, { passive: true });
+    // the scroll already has the new values; transitions can wait a frame.
+    const onScroll = () => update(true);
+    scrollport.addEventListener("scroll", onScroll, { passive: true });
     scrollport.addEventListener("transitionend", schedule);
-    const resizeObserver = new ResizeObserver(schedule);
+    // A change of size is followed before the frame it shows in is
+    // painted: lessons above one that holds a heading growing or
+    // shrinking move its frame under the heading, and a cut measured
+    // before that would crop the lessons below it for a frame.
+    const resizeObserver = new ResizeObserver(() => update());
     resizeObserver.observe(scrollport);
     const lessonList = scrollport.querySelector(LESSON_LIST_SELECTOR);
     if (lessonList) resizeObserver.observe(lessonList);
+    for (const heading of scrollport.querySelectorAll<HTMLElement>(
+      OPEN_SECTION_HEADING_SELECTOR,
+    )) {
+      const frame = heading.nextElementSibling;
+      if (frame) resizeObserver.observe(frame);
+    }
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
-      scrollport.removeEventListener("scroll", update);
+      scrollport.removeEventListener("scroll", onScroll);
       scrollport.removeEventListener("transitionend", schedule);
       resizeObserver.disconnect();
       clearAll();

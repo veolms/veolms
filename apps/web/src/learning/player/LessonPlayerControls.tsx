@@ -1,7 +1,6 @@
 import {
   isPlaybackStalled,
   FullscreenButton,
-  MuteButton,
   PlayerIconButton,
   PlayerMenuItem,
   PlayButton,
@@ -53,6 +52,7 @@ import {
   LessonChaptersToggleButton,
 } from "./chapters/LessonChaptersControl";
 import { LessonChaptersPanel } from "./chapters/LessonChaptersPanel";
+import { LessonVolumePill } from "./LessonVolumePill";
 import { updateLearningPreferences } from "../../settings/settingsPreferences";
 
 /**
@@ -123,6 +123,27 @@ const getWideViewportSnapshot = () =>
   layoutQueryMatches(layoutQuery(WIDE_VIEWPORT_QUERY));
 
 const getWideViewportServerSnapshot = () => false;
+
+const subscribeToNothing = () => () => {};
+const getHydratedSnapshot = () => true;
+const getHydratedServerSnapshot = () => false;
+
+// The prerendered page, and the render that hydrates it, take the viewport
+// as narrow, which put the actions pill in the top corner until React took
+// over and moved it down. So that first frame draws the pill in both of its
+// places and a container query on the control frame shows the one the
+// measured layout then keeps: the bottom row while everything fits there
+// (stage 0 of measureDesktopEndControlsStage), the top corner otherwise.
+// 607px is that stage-0 sum on a lesson page with the time at "0:00 /
+// 0:00", as it reads until the video loads: the start pills 299 (42, 84,
+// 42 and 107 with their gaps), Lessons 104, the pill with fullscreen 168,
+// gaps and insets 36.
+const STATIC_ACTIONS_BOTTOM_CLASS =
+  "hidden @min-[607px]/player-controls:contents";
+const STATIC_ACTIONS_TOP_CLASS =
+  "contents sm:@min-[607px]/player-controls:hidden";
+const STATIC_FULLSCREEN_CORNER_CLASS =
+  "contents @min-[607px]/player-controls:hidden";
 
 /**
  * Keeps a control layer hidden while the expand (maximize) motion is still
@@ -481,6 +502,24 @@ export interface LessonPlayerControlsProps {
    */
   seekTimeOnly?: boolean;
   ambientEnabled: boolean;
+  /** False leaves ambient mode out of the settings. */
+  showAmbientControl?: boolean;
+  /**
+   * Classes for the phone layout's settings and chapters sheets outside a
+   * sideways full screen (a page that shows the phone layout on a wide
+   * screen narrows them).
+   */
+  sheetPanelClassName?: string;
+  /**
+   * How the phone layout opens its settings: as a sheet from the bottom of
+   * the screen, or as the desktop's menu in the player.
+   */
+  settingsPresentation?: "sheet" | "popover";
+  /**
+   * The phone layout keeps a thin progress line along the video's foot
+   * while its controls are hidden. False hides it with them.
+   */
+  progressWhileHidden?: boolean;
   autoplayEnabled: boolean;
   showAutoplayControl?: boolean;
   circularSettingsControl?: boolean;
@@ -925,6 +964,10 @@ export function LessonPlayerControls({
   shortPlayer = false,
   seekTimeOnly = false,
   ambientEnabled,
+  showAmbientControl = true,
+  sheetPanelClassName,
+  settingsPresentation = "sheet",
+  progressWhileHidden = true,
   autoplayEnabled,
   showAutoplayControl = true,
   circularSettingsControl = false,
@@ -959,6 +1002,11 @@ export function LessonPlayerControls({
     subscribeToWideViewport,
     getWideViewportSnapshot,
     getWideViewportServerSnapshot,
+  );
+  const hydrated = useSyncExternalStore(
+    subscribeToNothing,
+    getHydratedSnapshot,
+    getHydratedServerSnapshot,
   );
   const timelineAnchorRef = useRef<HTMLSpanElement>(null);
   const [timelineHost, setTimelineHost] = useState<HTMLElement | null>(null);
@@ -1040,7 +1088,11 @@ export function LessonPlayerControls({
   const chaptersSideHost =
     desktopLayout && !fullscreen ? (chaptersPanelHost ?? null) : null;
   const persistentProgressVisible =
-    ready && !controlsSuppressed && mobileInteraction && !fullscreen;
+    progressWhileHidden &&
+    ready &&
+    !controlsSuppressed &&
+    mobileInteraction &&
+    !fullscreen;
   const timelineDisplayed = visible || persistentProgressVisible;
   const landscapeOrientation = useLandscapeOrientation();
   const mobileLandscapeFullscreen = mobileFullscreen && landscapeOrientation;
@@ -1127,7 +1179,7 @@ export function LessonPlayerControls({
     ? fullscreenCoursePanelVisible
       ? "[&&]:!rounded-b-none !inset-x-auto !right-auto !left-[calc(var(--learning-fullscreen-video-offset-x)+var(--learning-fullscreen-video-width)/2)] !w-[min(var(--player-screen-height,100dvh),var(--learning-fullscreen-video-width))] !-translate-x-1/2"
       : "[&&]:!rounded-b-none mx-auto max-w-[var(--player-screen-height,100dvh)]"
-    : undefined;
+    : sheetPanelClassName;
   const mobileSheetPortalTarget = mobileLandscapeFullscreen
     ? mobileSettingsSheetHost
     : undefined;
@@ -1305,11 +1357,29 @@ export function LessonPlayerControls({
   const actionsInBottomRow = desktopLayout && !actionsAtTop;
   const fullscreenInActionsPill =
     actionsInBottomRow && !circularSettingsControl;
-  const playerActions = (
+  // Only for the lesson page's own row, which the 607px above is measured on.
+  const staticActionsPlacement =
+    !hydrated &&
+    !mobileInteraction &&
+    showAutoplayControl &&
+    showLessonNavigation &&
+    !circularSettingsControl &&
+    Boolean(onCourseLessonsToggle);
+  const renderPlayerActions = (inBottomRow: boolean) => (
     <PlayerControlSurface
       cluster="player-actions"
       className={`relative isolate flex h-8 items-center gap-1 rounded-full !bg-transparent p-0 !shadow-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-full before:bg-(--video-player-control-surface) before:shadow-(--video-player-control-shadow) before:content-[''] [&>*]:relative [&>*]:z-10 max-sm:before:hidden sm:h-10.5 sm:p-[3px] ${mobileInteraction ? "sm:!h-8 sm:!p-0 sm:before:hidden" : ""} ${circularSettingsControl ? "!size-9 !rounded-full !p-0 !justify-center sm:!size-9 sm:!p-0 [&>div]:!size-9 [&>div>button]:!size-9" : ""}`}
     >
+      {/* First in the corner: tapped, it opens into a pill with the
+          volume slider that grows to the left. */}
+      <span
+        className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
+        data-mobile-volume-control=""
+      >
+        <LessonVolumePill
+          buttonClassName={getPlayerIconPillClass(mobileInteraction)}
+        />
+      </span>
       {showAutoplayControl ? (
         <AutoplayToggle
           enabled={autoplayEnabled}
@@ -1317,18 +1387,9 @@ export function LessonPlayerControls({
           onEnabledChange={onAutoplayEnabledChange}
         />
       ) : null}
-      <span
-        className={`inline-flex sm:hidden ${mobileInteraction ? "sm:!inline-flex" : ""}`}
-        data-mobile-volume-control=""
-      >
-        <MuteButton
-          className={getPlayerIconPillClass(mobileInteraction)}
-          iconSize={22}
-        />
-      </span>
       <SettingsMenu
         includePictureInPicture
-        mobilePresentation="sheet"
+        mobilePresentation={settingsPresentation}
         forceSheet={desktopSettingsAsSheet}
         mobileSheetPanelClassName={mobileSheetPanelClassName}
         mobileSheetPortalTarget={mobileSheetPortalTarget}
@@ -1351,15 +1412,17 @@ export function LessonPlayerControls({
             "!inline-flex !size-9 !w-9 !items-center !justify-center !p-0 !rounded-full !leading-none [&>svg]:!block [&>svg]:!shrink-0",
         )}
         extraMainItems={
-          <AmbientSettingsItem
-            enabled={ambientEnabled}
-            onEnabledChange={onAmbientEnabledChange}
-          />
+          showAmbientControl ? (
+            <AmbientSettingsItem
+              enabled={ambientEnabled}
+              onEnabledChange={onAmbientEnabledChange}
+            />
+          ) : undefined
         }
-        side={actionsInBottomRow ? "top" : "bottom"}
+        side={inBottomRow ? "top" : "bottom"}
         onQualityChange={rememberQualityChoice}
       />
-      {fullscreenInActionsPill ? (
+      {inBottomRow && !circularSettingsControl ? (
         <FullscreenButton
           className={getPlayerIconPillClass(mobileInteraction)}
           iconSize={22}
@@ -1581,13 +1644,13 @@ export function LessonPlayerControls({
           ? createPortal(timelineLayer, timelineHost)
           : timelineLayer}
         <div
-          className={
+          className={`${
             mobileFullscreen
               ? fullscreenCoursePanelVisible
                 ? "absolute inset-0"
                 : "absolute inset-y-0 left-1/2 w-[min(100%,calc(var(--player-screen-height,100dvh)*16/9))] max-w-full -translate-x-1/2"
               : "absolute inset-0"
-          }
+          } ${staticActionsPlacement ? "@container/player-controls" : ""}`}
           ref={controlFrameRef}
           data-player-control-frame=""
           data-player-mobile-fullscreen-frame={
@@ -1614,7 +1677,15 @@ export function LessonPlayerControls({
               />
             ) : null}
             {lessonsAtTop ? desktopLessonsButton : null}
-            {desktopLayout && !actionsAtTop ? null : playerActions}
+            {desktopLayout && !actionsAtTop ? null : (
+              <span
+                className={
+                  staticActionsPlacement ? STATIC_ACTIONS_TOP_CLASS : "contents"
+                }
+              >
+                {renderPlayerActions(false)}
+              </span>
+            )}
           </div>
 
           {!mobileInteraction ? (
@@ -1623,9 +1694,27 @@ export function LessonPlayerControls({
               className="pointer-events-auto absolute right-2 bottom-2.5 hidden items-center gap-2 sm:flex"
             >
               {lessonsAtTop ? null : desktopLessonsButton}
-              {actionsInBottomRow ? playerActions : null}
+              {actionsInBottomRow || staticActionsPlacement ? (
+                <span
+                  className={
+                    staticActionsPlacement
+                      ? STATIC_ACTIONS_BOTTOM_CLASS
+                      : "contents"
+                  }
+                >
+                  {renderPlayerActions(true)}
+                </span>
+              ) : null}
               {fullscreenInActionsPill ? null : (
-                <CircularFullscreenButton desktop />
+                <span
+                  className={
+                    staticActionsPlacement
+                      ? STATIC_FULLSCREEN_CORNER_CLASS
+                      : "contents"
+                  }
+                >
+                  <CircularFullscreenButton desktop />
+                </span>
               )}
             </div>
           ) : null}

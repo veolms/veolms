@@ -9,6 +9,7 @@
     "./shaka": "./src/engines/shaka/index.ts",
     "./shaka-preload": "./src/engines/shaka/shaka-early-preload.ts",
     "./shaka-runtime-hooks": "./src/engines/shaka/shaka-runtime-hooks.ts",
+    "./preview-cache": "./src/storyboard/previewChunkCache.ts",
     "./styles.css": "./src/styles/player.css"
   },
   "sideEffects": [

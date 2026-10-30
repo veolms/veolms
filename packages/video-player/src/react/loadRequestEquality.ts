@@ -83,8 +83,19 @@ function areLoadObjectsEqual(left: unknown, right: unknown): boolean {
 function ignoringPreferredVideoHeight<T extends Pick<VideoSource, "streaming">>(
   source: T,
 ): T {
-  if (source.streaming?.preferredVideoHeight === undefined) return source;
-  const { preferredVideoHeight: _preferred, ...streaming } = source.streaming;
+  if (
+    source.streaming?.preferredVideoHeight === undefined &&
+    source.streaming?.startVideoHeight === undefined &&
+    source.streaming?.holdVideoHeight === undefined
+  ) {
+    return source;
+  }
+  const {
+    preferredVideoHeight: _preferred,
+    startVideoHeight: _start,
+    holdVideoHeight: _held,
+    ...streaming
+  } = source.streaming;
   return { ...source, streaming };
 }
 

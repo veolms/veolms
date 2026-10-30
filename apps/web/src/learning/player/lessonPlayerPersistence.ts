@@ -359,16 +359,42 @@ export function writeResumePosition(
 }
 
 /**
+ * A position kept this recently is picked up exactly where it was: the
+ * page was reloaded, or the lesson reopened a moment later. Older than
+ * this, it is a return, and the few seconds before help pick the thread
+ * up again.
+ */
+export const RESUME_EXACT_WINDOW_MS = 5 * 60_000;
+
+/**
  * Where to start a lesson that is opened (not one handed over between
- * players, which carries on where it was): where it was left, a few
- * seconds before (`RESUME_REWIND_SECONDS`).
+ * players, which carries on where it was): exactly where it was left when
+ * that was moments ago (`RESUME_EXACT_WINDOW_MS`), otherwise a few seconds
+ * before (`RESUME_REWIND_SECONDS`).
  */
 export function readStartPosition(
   mediaKey: string,
   duration?: number,
   storage: StorageReader | null = getBrowserStorage(),
+  now = Date.now(),
 ): number {
   const position = readResumePosition(mediaKey, duration, storage);
+  if (position <= 0) return 0;
+  let savedAt = 0;
+  try {
+    savedAt = Number(
+      storage?.getItem(lessonPlayerStorageKeys.resumeAt(mediaKey)),
+    );
+  } catch {
+    savedAt = 0;
+  }
+  if (
+    Number.isFinite(savedAt) &&
+    savedAt > 0 &&
+    now - savedAt <= RESUME_EXACT_WINDOW_MS
+  ) {
+    return position;
+  }
   return position > RESUME_REWIND_SECONDS
     ? position - RESUME_REWIND_SECONDS
     : 0;

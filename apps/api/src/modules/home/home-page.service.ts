@@ -24,6 +24,7 @@ import type { Kysely } from "kysely";
 import { httpError } from "../../lib/errors.ts";
 import type { CourseService } from "../courses/course/course.service.ts";
 import type { ThreadsService } from "../learning/discussions/index.ts";
+import type { HeroVideoReadyWatch } from "./home-hero-video-ready.ts";
 import type { HomeHeroVideoService } from "./home-hero-video.service.ts";
 import {
   findHomePageSettings,
@@ -99,11 +100,16 @@ export function createHomePageService({
   courseService,
   threadsService,
   heroVideoService,
+  staticPages,
+  heroVideoReadyWatch,
 }: {
   database: Kysely<Database>;
   courseService: Pick<CourseService, "listPublicCourseSummaries">;
   threadsService: Pick<ThreadsService, "listPublicPopularDiscussions">;
   heroVideoService: HomeHeroVideoService;
+  /** Builds the public home page again; absent where there is none. */
+  staticPages?: { requestHomePageRefresh(): void };
+  heroVideoReadyWatch?: Pick<HeroVideoReadyWatch, "watch">;
 }): HomePageService {
   function toDiscussionList(
     settings: HomePageSettings,
@@ -131,6 +137,14 @@ export function createHomePageService({
     }
     // Other processes are cleared by the site change this save is.
     guestPages.delete(GUEST_PAGE_KEY);
+    // The public home page is a static page: it is built again with these
+    // settings, and once more when the video chosen for the hero is ready.
+    staticPages?.requestHomePageRefresh();
+    heroVideoReadyWatch?.watch(
+      settings.heroVideo.source === "upload"
+        ? settings.heroVideo.mediaId
+        : null,
+    );
     return row;
   }
 

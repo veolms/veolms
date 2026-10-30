@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { courseSummarySchema, type CourseSummary } from "./course/course.ts";
 import {
+  DEFAULT_HOME_PAGE_SETTINGS,
   HOME_PAGE_HIGHLIGHT_COUNT,
   HOME_PAGE_MAX_HIDDEN_DISCUSSIONS,
   HOME_PAGE_MAX_PINNED_DISCUSSIONS,
@@ -38,6 +39,12 @@ export type HomeDiscoveryResponse = {
 // ---------------------------------------------------------------------------
 
 export const homePageHeroSchema = z.strictObject({
+  // Settings saved before the line existed get the default one.
+  eyebrow: z
+    .string()
+    .trim()
+    .max(40)
+    .default(DEFAULT_HOME_PAGE_SETTINGS.hero.eyebrow),
   headline: z.string().trim().min(1).max(60),
   highlightedHeadline: z.string().trim().max(60),
   description: z.string().trim().max(240),
