@@ -19,6 +19,7 @@ import { createAttachmentsService } from "./modules/learning/discussions/attachm
 import { createNotificationProcessor } from "./modules/notifications/index.ts";
 import { startYoutubeImportWorker } from "./modules/media/youtube-import/youtube-import.worker.ts";
 import { getYoutubeImportTools } from "./modules/media/youtube-import/youtube-import.tools.ts";
+import { getHeroVideoReadyWatch } from "./modules/home/home-hero-video-ready.ts";
 import {
   createInvoiceService,
   invoiceStorage,
@@ -120,7 +121,22 @@ export function registerBackgroundJobs(
     });
   }
 
+  // The static home page is built again once the video chosen for its hero
+  // has been processed; a restart picks that watch up from the settings.
+  const heroVideoReadyWatch = getHeroVideoReadyWatch({
+    database,
+    onReady: () => services.courseStaticPages?.requestHomePageRefresh(),
+    logger: app.log,
+  });
+  void heroVideoReadyWatch.resume().catch((error: unknown) => {
+    app.log.warn(
+      { err: error, feature: "home-hero-video" },
+      "Could not resume watching the hero video",
+    );
+  });
+
   app.addHook("onClose", async () => {
+    heroVideoReadyWatch.stop();
     await paymentEventQueue.stop?.();
     // Awaited so an in-flight reconciliation cycle finishes before the
     // shared Kysely instance is destroyed right after these hooks.

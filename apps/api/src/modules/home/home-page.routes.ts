@@ -21,6 +21,7 @@ import {
   createThreadsService,
 } from "../learning/discussions/index.ts";
 import { createMediaService } from "../media/index.ts";
+import { getHeroVideoReadyWatch } from "./home-hero-video-ready.ts";
 import { createHomeHeroVideoService } from "./home-hero-video.service.ts";
 import { createHomePageController } from "./home-page.controller.ts";
 import { createHomePageService } from "./home-page.service.ts";
@@ -51,6 +52,13 @@ const homePageRoutes: RoutePlugin = async (app, options) => {
         services: options.services,
       }),
       storage: options.services.storage,
+    }),
+    staticPages: options.services.courseStaticPages,
+    heroVideoReadyWatch: getHeroVideoReadyWatch({
+      database: options.database,
+      onReady: () =>
+        options.services.courseStaticPages?.requestHomePageRefresh(),
+      logger: app.log,
     }),
   });
   const controller = createHomePageController({ service });
