@@ -98,6 +98,7 @@ import { ProfilePreviewHost } from "../profiles/ProfilePreviewHost";
 import {
   buildLoginDialogPath,
   buildLoginPath,
+  differOnlyByLoginDialog,
   isPublicProfilePath,
   LOGIN_PATH,
   readLoginPurpose,
@@ -624,11 +625,14 @@ export default function AcademyLayout() {
     const previousPath = renderedLocationPathRef.current;
     const pending = pendingScrollPositionRef.current;
     if (previousPath === currentLocationPath && !pending) return;
-    // The page only tidied its own address: the reader stays where they are.
+    // The page only tidied its own address, or the login pop-up came up over
+    // it or went away (however it was opened or closed, Back included): the
+    // reader stays where they are.
     if (
       previousPath !== currentLocationPath &&
       !pending &&
-      asksToKeepScroll(location.state)
+      (asksToKeepScroll(location.state) ||
+        differOnlyByLoginDialog(previousPath, currentLocationPath))
     ) {
       renderedLocationPathRef.current = currentLocationPath;
       return;
