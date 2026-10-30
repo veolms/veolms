@@ -1,4 +1,18 @@
 import { onShakaRuntimeLoaded } from "@veolms/video-player/shaka-runtime-hooks";
+import {
+  hasRoomForSegment,
+  noteSegmentKept,
+  resolveSegmentCacheBudget,
+} from "./segmentCacheBudget";
+import {
+  clearSegmentIndex,
+  listLessons,
+  openSegmentIndex,
+  parseSegmentAddress,
+  recordSegment,
+  removeLesson,
+  touchLesson,
+} from "./segmentCacheIndex";
 
 /**
  * Lesson video segments kept in the browser, so a reload (or a return to a
@@ -20,17 +34,21 @@ import { onShakaRuntimeLoaded } from "@veolms/video-player/shaka-runtime-hooks";
  * run.
  *
  * The segments are encrypted (the keys come only with a licence), and the
- * same for everyone, so they are not tied to an account. At most
- * `MAX_CACHED_BYTES` are kept; the least recently used go first.
+ * same for everyone, so they are not tied to an account. Which are kept is
+ * listed in IndexedDB by lesson (segmentCacheIndex.ts); past the device's
+ * budget (segmentCacheBudget.ts) whole lessons go, least recently opened
+ * first, never one in use.
  */
 
 const CACHE_NAME = "veolms-video-segments-v1";
-const INDEX_KEY = "veolms-video-segments-index";
-const MAX_CACHED_BYTES = 300 * 1024 * 1024;
 /** Query parameters that carry the playback token. */
 const TOKEN_PARAMETERS = ["t", "veo_token"];
 /** `shaka.net.NetworkingEngine.RequestType.SEGMENT`. */
 const SEGMENT_REQUEST = 1;
+/** The budget is checked at most this often while segments arrive. */
+const TRIM_INTERVAL_MS = 5_000;
+/** Tells other tabs the cache was emptied (their open `Cache` is stale). */
+const CHANNEL_NAME = "veolms-video-segments";
 
 const available = () =>
   typeof window !== "undefined" &&
@@ -53,57 +71,195 @@ function segmentCacheKey(uri: string): string | null {
   }
 }
 
-/** Which segments are kept, their sizes and when each was last used. */
-type SegmentIndex = Record<string, [bytes: number, usedAt: number]>;
-
-function readIndex(): SegmentIndex {
-  try {
-    const index: unknown = JSON.parse(
-      localStorage.getItem(INDEX_KEY) ?? "null",
-    );
-    return index && typeof index === "object" ? (index as SegmentIndex) : {};
-  } catch {
-    return {};
-  }
+/** What the cache did since the page loaded (see `getSegmentCacheStats`). */
+export interface SegmentCacheStats {
+  hits: number;
+  misses: number;
+  bytesFromCache: number;
+  bytesFromNetwork: number;
+  /** Segments not kept, to leave the free-space reserve. */
+  skippedForReserve: number;
+  lessonsEvicted: number;
 }
 
-function writeIndex(index: SegmentIndex) {
-  try {
-    localStorage.setItem(INDEX_KEY, JSON.stringify(index));
-  } catch {
-    // The cache is still used; only its size is not kept in check.
-  }
+const stats: SegmentCacheStats = {
+  hits: 0,
+  misses: 0,
+  bytesFromCache: 0,
+  bytesFromNetwork: 0,
+  skippedForReserve: 0,
+  lessonsEvicted: 0,
+};
+
+/** A copy of the counts so far, for the playback summary. */
+export function getSegmentCacheStats(): SegmentCacheStats {
+  return { ...stats };
 }
 
-/** Drops the least recently used segments past the budget. */
-async function trim(index: SegmentIndex) {
-  let total = 0;
-  for (const [bytes] of Object.values(index)) total += bytes;
-  if (total <= MAX_CACHED_BYTES) return;
+/** Lessons marked as opened during this page load. */
+const touchedLessons = new Set<string>();
+/**
+ * Lessons whose segments were read or kept lately, here or in another tab
+ * (which says so over the channel), and when: they are not evicted. More
+ * than one can be in use at once (a preload of the next lesson, a second
+ * tab), so it is not only the last one.
+ */
+const activeLessons = new Map<string, number>();
+/** A lesson stays protected this long after its last segment. */
+const ACTIVE_LESSON_MS = 5 * 60_000;
+/** Another tab is told again at most this often per lesson. */
+const ANNOUNCE_INTERVAL_MS = 60_000;
+const announcedAt = new Map<string, number>();
+
+function notePlaying(lessonKey: string) {
+  const now = Date.now();
+  activeLessons.set(lessonKey, now);
+  if (now - (announcedAt.get(lessonKey) ?? 0) < ANNOUNCE_INTERVAL_MS) return;
+  announcedAt.set(lessonKey, now);
+  openChannel()?.postMessage({ playing: lessonKey });
+}
+
+function noteLessonUsed(lessonKey: string) {
+  notePlaying(lessonKey);
+  if (touchedLessons.has(lessonKey)) return;
+  touchedLessons.add(lessonKey);
+  void touchLesson(lessonKey);
+}
+
+let channel: BroadcastChannel | null = null;
+
+function forgetOpenCache() {
+  cachePromise = null;
+  touchedLessons.clear();
+}
+
+function openChannel(): BroadcastChannel | null {
+  if (channel || typeof BroadcastChannel === "undefined") return channel;
+  channel = new BroadcastChannel(CHANNEL_NAME);
+  channel.onmessage = (event: MessageEvent<unknown>) => {
+    const data = event.data;
+    if (data === "cleared") forgetOpenCache();
+    else if (
+      data &&
+      typeof data === "object" &&
+      typeof (data as { playing?: unknown }).playing === "string"
+    ) {
+      activeLessons.set((data as { playing: string }).playing, Date.now());
+    }
+  };
+  return channel;
+}
+
+/**
+ * Deletes whole lessons, least recently opened first, until the cache holds
+ * at most `limit` bytes. Lessons in use, here or in another tab, are kept.
+ */
+async function evictTo(limit: number): Promise<void> {
+  const lessons = await listLessons();
+  let total = lessons.reduce((sum, lesson) => sum + (lesson.bytes || 0), 0);
+  if (total <= limit) return;
+  const now = Date.now();
+  const playing = (lessonKey: string) =>
+    now - (activeLessons.get(lessonKey) ?? 0) < ACTIVE_LESSON_MS;
+  const oldestFirst = lessons
+    .filter((lesson) => !playing(lesson.lessonKey))
+    .sort((left, right) => left.usedAt - right.usedAt);
   const cache = await openCache();
-  const oldestFirst = Object.entries(index).sort((a, b) => a[1][1] - b[1][1]);
-  for (const [key, [bytes]] of oldestFirst) {
-    if (total <= MAX_CACHED_BYTES) break;
-    delete index[key];
-    total -= bytes;
-    void cache.delete(key);
+  for (const lesson of oldestFirst) {
+    if (total <= limit) break;
+    const urls = await removeLesson(lesson.lessonKey);
+    total -= lesson.bytes || 0;
+    stats.lessonsEvicted += 1;
+    touchedLessons.delete(lesson.lessonKey);
+    await Promise.all(urls.map((url) => cache.delete(url).catch(() => false)));
   }
+}
+
+let trimRunning: Promise<void> | null = null;
+let trimScheduled = false;
+let lastTrimAt = 0;
+
+function trimToBudget(): Promise<void> {
+  trimRunning ??= resolveSegmentCacheBudget()
+    .then(evictTo)
+    .catch(() => undefined)
+    .finally(() => {
+      trimRunning = null;
+    });
+  return trimRunning;
+}
+
+/**
+ * Brings the cache under its budget when the page is idle, at most once
+ * every `TRIM_INTERVAL_MS`: never on the way of a segment.
+ */
+function scheduleTrim() {
+  if (trimScheduled) return;
+  trimScheduled = true;
+  const wait = Math.max(0, lastTrimAt + TRIM_INTERVAL_MS - Date.now());
+  setTimeout(() => {
+    const run = () => {
+      trimScheduled = false;
+      lastTrimAt = Date.now();
+      void trimToBudget();
+    };
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(run, { timeout: 10_000 });
+    } else {
+      run();
+    }
+  }, wait);
+}
+
+/**
+ * Makes the cache hold at most `bytes`, for a download that needs the room.
+ * Lessons in use are kept.
+ */
+export async function trimSegmentCacheTo(bytes: number): Promise<void> {
+  if (!available()) return;
+  await trimRunning;
+  await evictTo(Math.max(0, bytes)).catch(() => undefined);
+}
+
+/** Frees up to `bytesNeeded` of the cache (see `registerStorageReclaimer`). */
+export async function reclaimSegmentCache(bytesNeeded: number): Promise<void> {
+  const lessons = await listLessons();
+  const total = lessons.reduce((sum, lesson) => sum + (lesson.bytes || 0), 0);
+  await trimSegmentCacheTo(total - bytesNeeded);
+}
+
+/**
+ * Empties the cache. A lesson playing in another tab goes on from what it
+ * has buffered and fetches the rest.
+ */
+export async function clearSegmentCache(): Promise<void> {
+  if (!available()) return;
+  forgetOpenCache();
+  await Promise.all([
+    window.caches.delete(CACHE_NAME).catch(() => false),
+    clearSegmentIndex(),
+  ]);
+  openChannel()?.postMessage("cleared");
 }
 
 /** A kept segment's body, or null. */
 async function readSegment(key: string): Promise<ArrayBuffer | null> {
   try {
+    // Without the list, what is kept could not be kept in check.
+    if (!(await openSegmentIndex())) return null;
     const hit = await (await openCache()).match(key);
-    if (!hit) return null;
-    const data = await hit.arrayBuffer();
-    const index = readIndex();
-    const entry = index[key];
-    if (entry) {
-      entry[1] = Date.now();
-      writeIndex(index);
+    if (!hit) {
+      stats.misses += 1;
+      return null;
     }
+    const data = await hit.arrayBuffer();
+    stats.hits += 1;
+    stats.bytesFromCache += data.byteLength;
+    const address = parseSegmentAddress(key);
+    if (address) noteLessonUsed(address.lessonKey);
     return data;
   } catch {
+    stats.misses += 1;
     return null;
   }
 }
@@ -112,18 +268,31 @@ async function readSegment(key: string): Promise<ArrayBuffer | null> {
 function keepSegment(key: string, data: ArrayBuffer | ArrayBufferView) {
   const bytes = data.byteLength;
   if (!bytes) return;
+  stats.bytesFromNetwork += bytes;
+  // Only a lesson's segments are kept: they are listed, and go, by lesson.
+  const address = parseSegmentAddress(key);
+  if (!address) return;
+  notePlaying(address.lessonKey);
   // The body is copied here, before the player goes on with its own.
   const body = new Response(data as BodyInit, {
     headers: { "content-type": "application/octet-stream" },
   });
-  void openCache()
-    .then((cache) => cache.put(key, body))
-    .then(() => {
-      const index = readIndex();
-      index[key] = [bytes, Date.now()];
-      return trim(index).then(() => writeIndex(index));
-    })
-    .catch(() => undefined);
+  void (async () => {
+    if (!(await openSegmentIndex())) return;
+    if (!(await hasRoomForSegment(bytes))) {
+      stats.skippedForReserve += 1;
+      return;
+    }
+    const cache = await openCache();
+    await cache.put(key, body);
+    if (!(await recordSegment(key, bytes, address))) {
+      await cache.delete(key);
+      return;
+    }
+    noteSegmentKept(bytes);
+    noteLessonUsed(address.lessonKey);
+    scheduleTrim();
+  })().catch(() => undefined);
 }
 
 interface ShakaRequestLike {
@@ -250,6 +419,8 @@ let installed = false;
 export function installSegmentCache() {
   if (installed || !available()) return;
   installed = true;
+  openChannel();
+  void openSegmentIndex();
   onShakaRuntimeLoaded(
     (runtimeModule) => {
       const record = runtimeModule as { default?: unknown } | null;

@@ -7,6 +7,7 @@ import { AppSlider } from "../AppSlider";
 import { LaptopWallpaperSettingsCard } from "./LaptopWallpaperSettingsCard";
 import { LearningGoalSettingsCard } from "./LearningGoalSettingsCard";
 import { PlayerThemePicker } from "./PlayerThemePicker";
+import { StorageSettingsCard } from "./StorageSettingsCard";
 import { useAdminOnlySettings } from "./useAdminOnlySettings";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
 import "../styles/features/settings/learning.css";
@@ -371,6 +372,8 @@ export function LearningSettings({
             />
           </div>
         </section>
+
+        {isAuthenticated ? <StorageSettingsCard /> : null}
       </div>
     </div>
   );

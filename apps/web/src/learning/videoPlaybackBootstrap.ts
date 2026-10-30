@@ -23,6 +23,7 @@ import {
   takeHeadStartedPlaybackBootstrap,
 } from "./playbackBootstrapHeadStart";
 import { adoptAccountResumePosition } from "./player/lessonPlayerPersistence";
+import { prepareCachedStartHeight } from "./player/segmentCacheStart";
 
 const API_BASE_URL = getApiBaseUrl();
 const CDN_URL = import.meta.env.VITE_CDN_URL || "/cdn";
@@ -283,6 +284,8 @@ async function requestBootstrap(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackBootstrap> {
   const bootstrap = await answerBootstrap(options);
+  // The quality kept on this device, for the player to start at (a few ms).
+  await prepareCachedStartHeight(bootstrap.manifestUrl);
   // Where the learner left this lesson on any device, taken when it is
   // newer than what this browser has: the players start from what this
   // browser has (see `readStartPosition`), and this comes before them.
