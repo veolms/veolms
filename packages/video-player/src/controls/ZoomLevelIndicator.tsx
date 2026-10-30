@@ -24,20 +24,19 @@ export function ZoomLevelIndicator({
   const controlsRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const { controlsVisible, feedbackVisible, fillSnapped, scale } =
-    usePlayerState(
-      ({ ui }) => ({
-        controlsVisible: ui.controlsVisible,
-        feedbackVisible: ui.zoom.feedbackVisible,
-        fillSnapped: ui.zoom.fillSnapped,
-        scale: ui.zoom.scale,
-      }),
-      (left, right) =>
-        left.controlsVisible === right.controlsVisible &&
-        left.feedbackVisible === right.feedbackVisible &&
-        left.fillSnapped === right.fillSnapped &&
-        left.scale === right.scale,
-    );
+  const { controlsVisible, feedbackVisible, snap, scale } = usePlayerState(
+    ({ ui }) => ({
+      controlsVisible: ui.controlsVisible,
+      feedbackVisible: ui.zoom.feedbackVisible,
+      snap: ui.zoom.snap,
+      scale: ui.zoom.scale,
+    }),
+    (left, right) =>
+      left.controlsVisible === right.controlsVisible &&
+      left.feedbackVisible === right.feedbackVisible &&
+      left.snap === right.snap &&
+      left.scale === right.scale,
+  );
   const feedback = variant === "feedback";
   const visible = feedback
     ? feedbackVisible && !controlsVisible
@@ -91,14 +90,15 @@ export function ZoomLevelIndicator({
 
   return (
     <>
-      {fillSnapped ? (
-        // Said in the middle of the picture as it snaps to fill it.
+      {snap ? (
+        // Said near the top of the picture as it snaps, as YouTube's app
+        // does.
         <span
           role="status"
-          className="pointer-events-none absolute top-1/2 left-1/2 z-50 -translate-1/2 rounded-full bg-(--video-player-control-surface) px-4 py-2 text-sm font-semibold whitespace-nowrap text-(--video-player-control-text) shadow-(--video-player-control-shadow) motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95"
-          data-player-zoom-fill-label=""
+          className="pointer-events-none absolute top-[11%] left-1/2 z-50 -translate-x-1/2 rounded-lg bg-black/60 px-4 py-2.5 text-base leading-tight font-medium whitespace-nowrap text-white motion-safe:animate-in motion-safe:fade-in"
+          data-player-zoom-snap-label={snap}
         >
-          Zoom to fill
+          {snap === "fill" ? "Zoomed to fill" : "Original"}
         </span>
       ) : null}
       <button
