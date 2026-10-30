@@ -2,12 +2,12 @@ import { CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { UploadSimple } from "@phosphor-icons/react/UploadSimple";
 import { WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import { YoutubeLogo } from "@phosphor-icons/react/YoutubeLogo";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState } from "react";
 import {
   parseYoutubeVideoId,
   type YoutubeImportPreviewResponse,
 } from "@veolms/contracts";
-import { Checkbox } from "../../components/Checkbox";
+import { Checkbox } from "../Checkbox";
 import { getApiError } from "../../lib/api-error";
 import {
   usePreviewYoutubeImport,
@@ -68,17 +68,38 @@ export function VideoSourceTabs({
   );
 }
 
+/** What the imported video is for, which only changes the wording. */
+export type YoutubeImportContext = "lesson" | "home-page";
+
+const COPY: Record<
+  YoutubeImportContext,
+  { replacement: string; rights: string }
+> = {
+  lesson: {
+    replacement:
+      "The lesson keeps its current video until the imported one is ready.",
+    rights: "I own this video or have the rights to use it in this course.",
+  },
+  "home-page": {
+    replacement:
+      "The laptop plays the imported video once it is ready; until then the play button does nothing.",
+    rights:
+      "I own this video or have the rights to use it on this academy's home page.",
+  },
+};
+
 export interface YoutubeImportPanelProps {
-  /** Null while the course is not saved yet. */
+  /** Null while the course is not saved yet, and for a video of no course. */
   courseId: string | null;
   /** Null while the lesson is not saved yet: the editor attaches the video. */
   lessonId: string | null;
   isReplacement: boolean;
+  context?: YoutubeImportContext;
   disabled?: boolean;
   /** The import is queued: follow `mediaId` like an uploaded video. */
-  onImportStarted: (mediaId: string) => void;
+  onImportStarted: (mediaId: string, title: string) => void;
   /** This account already imported the video: use that copy. */
-  onReuseExisting: (mediaId: string) => void;
+  onReuseExisting: (mediaId: string, title: string) => void;
 }
 
 /**
@@ -90,10 +111,12 @@ export function YoutubeImportPanel({
   courseId,
   lessonId,
   isReplacement,
+  context = "lesson",
   disabled = false,
   onImportStarted,
   onReuseExisting,
 }: YoutubeImportPanelProps) {
+  const copy = COPY[context];
   const inputId = useId();
   const rightsId = useId();
   const [url, setUrl] = useState("");
@@ -104,8 +127,9 @@ export function YoutubeImportPanel({
   const linkIsValid = parseYoutubeVideoId(url) !== null;
   const busy = previewMutation.isPending || startMutation.isPending;
 
-  const fetchPreview = (event: FormEvent) => {
-    event.preventDefault();
+  // Not a <form>: the panel also sits inside other forms (the home page
+  // settings), where a nested form's submit would submit theirs instead.
+  const fetchPreview = () => {
     if (!linkIsValid || busy) return;
     startMutation.reset();
     previewMutation.mutate(url.trim());
@@ -120,7 +144,9 @@ export function YoutubeImportPanel({
         ...(courseId && lessonId ? { lessonId } : {}),
         rightsConfirmed: true,
       },
-      { onSuccess: (result) => onImportStarted(result.mediaId) },
+      {
+        onSuccess: (result) => onImportStarted(result.mediaId, preview.title),
+      },
     );
   };
 
@@ -128,7 +154,7 @@ export function YoutubeImportPanel({
 
   return (
     <div className="min-w-0 space-y-3.5">
-      <form onSubmit={fetchPreview} className="space-y-2">
+      <div className="space-y-2">
         <label
           htmlFor={inputId}
           className="block text-[0.8rem] font-semibold text-(--text-secondary)"
@@ -145,6 +171,12 @@ export function YoutubeImportPanel({
             placeholder="https://www.youtube.com/watch?v=…"
             value={url}
             disabled={disabled || busy}
+            onKeyDown={(event) => {
+              // Enter finds the video, and never submits a form around it.
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              fetchPreview();
+            }}
             onChange={(event) => {
               setUrl(event.target.value);
               if (previewMutation.data || previewMutation.error) {
@@ -155,7 +187,8 @@ export function YoutubeImportPanel({
             className="h-10 min-w-0 flex-1 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5 text-[0.86rem] text-(--text) outline-none transition-[border-color] duration-150 focus:border-(--accent) disabled:cursor-not-allowed disabled:opacity-60"
           />
           <button
-            type="submit"
+            type="button"
+            onClick={fetchPreview}
             disabled={disabled || busy || !linkIsValid}
             className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border-none bg-[color-mix(in_srgb,var(--text)_8%,var(--surface))] px-4 text-[0.8rem] font-semibold text-(--text) shadow-[var(--card-compact-shadow,0_2px_6px_color-mix(in_srgb,var(--text)_10%,transparent))] transition-all duration-150 hover:bg-[color-mix(in_srgb,var(--text)_13%,var(--surface))] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -169,10 +202,10 @@ export function YoutubeImportPanel({
           {url && !linkIsValid
             ? "Paste a link to a single video (watch, youtu.be or shorts link), not a playlist."
             : isReplacement
-              ? "The lesson keeps its current video until the imported one is ready."
+              ? copy.replacement
               : "The video is downloaded and prepared for streaming on the server; long videos take a while."}
         </p>
-      </form>
+      </div>
 
       {error ? (
         <div
@@ -197,8 +230,9 @@ export function YoutubeImportPanel({
           busy={busy}
           disabled={disabled}
           starting={startMutation.isPending}
+          rightsLabel={copy.rights}
           onImport={startImport}
-          onReuse={onReuseExisting}
+          onReuse={(mediaId) => onReuseExisting(mediaId, preview.title)}
         />
       ) : null}
     </div>
@@ -213,6 +247,7 @@ function YoutubeVideoPreview({
   busy,
   disabled,
   starting,
+  rightsLabel,
   onImport,
   onReuse,
 }: {
@@ -223,6 +258,7 @@ function YoutubeVideoPreview({
   busy: boolean;
   disabled: boolean;
   starting: boolean;
+  rightsLabel: string;
   onImport: () => void;
   onReuse: (mediaId: string) => void;
 }) {
@@ -280,7 +316,7 @@ function YoutubeVideoPreview({
         checked={rightsConfirmed}
         onCheckedChange={onRightsConfirmedChange}
         disabled={disabled || busy}
-        label="I own this video or have the rights to use it in this course."
+        label={rightsLabel}
         className="px-0"
       />
 

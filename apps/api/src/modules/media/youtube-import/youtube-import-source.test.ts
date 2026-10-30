@@ -79,6 +79,16 @@ await test("the title and channel are filled in without replacing ones already s
   ]);
 });
 
+await test("a video's source is read by its media id", async () => {
+  const { database, statements } = recordingDatabase();
+  await mediaRepo.findMediaSource(database, MEDIA);
+  assert.equal(
+    statements[0]?.sql,
+    'select "provider", "external_id", "source_url", "title", "channel" from "media_sources" where "media_id" = $1',
+  );
+  assert.deepEqual(statements[0]?.parameters, [MEDIA]);
+});
+
 await test("starting an import records the video's YouTube link with its media", async () => {
   const { database, statements } = recordingDatabase();
   const service = createYoutubeImportService({
