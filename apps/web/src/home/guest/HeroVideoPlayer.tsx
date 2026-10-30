@@ -3,6 +3,8 @@ import type { HeroVideoPlayback } from "@veolms/contracts";
 import {
   getPageFullscreenElement,
   ShakaVideoEngine,
+  usePlayerController,
+  usePlayerState,
   VideoPlayer,
   type VideoEngine,
   type VideoPlayerHandle,
@@ -299,10 +301,30 @@ export default function HeroVideoPlayer({
           />
         }
         overlays={
-          card ? <LessonAmbientProjection enabled={ambientEnabled} /> : null
+          <>
+            <ControlsWhenEnded />
+            {card ? <LessonAmbientProjection enabled={ambientEnabled} /> : null}
+          </>
         }
         bufferingIndicator={<LearningMiniPlayerBufferingIndicator />}
       />
     </div>
   );
+}
+
+/**
+ * Once the video has played to its end, its controls come up and stay up
+ * (the mouse leaving or a resting moment does not hide them) until it plays
+ * again.
+ */
+function ControlsWhenEnded() {
+  const controller = usePlayerController();
+  const ended = usePlayerState(({ media }) => media.ended);
+  useEffect(() => {
+    if (!ended) return undefined;
+    controller.setControlsLocked(true);
+    controller.setControlsVisible(true);
+    return () => controller.setControlsLocked(false);
+  }, [controller, ended]);
+  return null;
 }
