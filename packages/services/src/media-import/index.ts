@@ -4,7 +4,8 @@
  * turns that folder into the output folder that is uploaded as is to
  * `<visibility>/transcoded/<mediaId>/`.
  *
- * Core's default packager publishes the clear HLS ladder. A plugin (the
+ * Core's default packager publishes the clear HLS ladder, remuxed to
+ * fragmented MP4. A plugin (the
  * cloud DRM plugin) replaces it with `services.mediaImport.setPackager()`,
  * for example to write CENC-encrypted DASH. The worker reads the packager
  * when each job is packaged, so a plugin registered after the background
