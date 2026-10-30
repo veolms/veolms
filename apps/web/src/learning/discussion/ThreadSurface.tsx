@@ -93,6 +93,12 @@ interface ThreadSurfaceProps {
   highlightedThreadId?: string | null;
   onThreadHighlightShown?: () => void;
   discussionCount?: number;
+  /**
+   * Where the count comes from, "<course id>:<lesson id>:<field>", for the
+   * script that fills the number in from the browser's copy before the
+   * page is drawn (lessonPageEarlyState.ts).
+   */
+  discussionCountSource?: string;
   draftIsTooLong: boolean;
   draftAttachmentCount: number;
   canSubmitDraft: boolean;
@@ -281,6 +287,7 @@ export function ThreadSurface({
   highlightedThreadId = null,
   onThreadHighlightShown,
   discussionCount,
+  discussionCountSource,
   draftIsTooLong,
   draftAttachmentCount,
   canSubmitDraft,
@@ -945,18 +952,29 @@ export function ThreadSurface({
                 it move when it arrives. A single figure stands in its
                 middle, and the words follow closer than a space would put
                 them, so a short number does not stand apart from them. */}
-            <span className="mr-[0.22em] inline-block min-w-[2ch] text-center tabular-nums">
-              {discussionCount === undefined ? (
-                // Two unseen figures hold the line at the height the number
-                // will give it; the shimmer is laid over them, a little
-                // taller, without taking any room of its own.
-                <span aria-hidden="true" className="relative">
-                  <span className="invisible">00</span>
-                  <span className="absolute -inset-x-[0.06em] -inset-y-[0.1em] animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_14%,transparent)] motion-reduce:animate-none" />
-                </span>
-              ) : (
-                discussionCount
-              )}
+            {/* The number and its shimmer are both in the markup, the
+                slot's attribute choosing: a page drawn before its scripts
+                run fills the number in from the browser's copy and takes
+                the attribute off (lessonPageEarlyState.ts), and the first
+                render then agrees with it. */}
+            <span
+              className="mr-[0.22em] inline-block min-w-[2ch] text-center tabular-nums"
+              data-discussion-count={discussionCountSource ?? ""}
+              data-count-pending={discussionCount === undefined || undefined}
+            >
+              <span className="[[data-count-pending]_&]:hidden">
+                {discussionCount === undefined ? "" : discussionCount}
+              </span>
+              {/* Two unseen figures hold the line at the height the number
+                  will give it; the shimmer is laid over them, a little
+                  taller, without taking any room of its own. */}
+              <span
+                aria-hidden="true"
+                className="relative hidden [[data-count-pending]_&]:inline"
+              >
+                <span className="invisible">00</span>
+                <span className="absolute -inset-x-[0.06em] -inset-y-[0.1em] animate-pulse rounded-full bg-[color-mix(in_srgb,var(--text)_14%,transparent)] motion-reduce:animate-none" />
+              </span>
             </span>
             Discussions
           </>

@@ -102,6 +102,7 @@ export function LearningWorkspace({
     isAuthenticated,
     resolvedAuthUser,
     isAuthResolutionPending,
+    rememberedAccount,
     courseAccessQuery,
     isApiRoute,
     courseOverview,
@@ -370,9 +371,11 @@ export function LearningWorkspace({
   });
   // The course's progress in the lesson list waits for the learner's own
   // (a visitor has none to wait for): until then it shimmers, rather than
-  // saying 0% and then changing.
+  // saying 0% and then changing. A learner this tab remembers has theirs
+  // from the browser's copy at once, when it holds one.
   const progressPending =
-    isAuthResolutionPending || (isAuthenticated && !progressKnown);
+    (isAuthResolutionPending && !rememberedAccount) ||
+    ((isAuthenticated || rememberedAccount !== null) && !progressKnown);
 
   const {
     stickyPlayer,

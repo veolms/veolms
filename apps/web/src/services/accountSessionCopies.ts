@@ -6,6 +6,7 @@ import {
 import type {
   CourseAccessResponse,
   EnrolledCoursesResponse,
+  LessonDiscussionsListResponse,
   WishlistResponse,
 } from "@veolms/contracts";
 import {
@@ -17,15 +18,22 @@ import {
   COURSE_ACCESS_SESSION_KEY_PREFIX,
   ENROLLED_COURSES_SESSION_KEY_PREFIX,
   LEARNING_SUMMARY_SESSION_KEY_PREFIX,
+  LESSON_DISCUSSION_COUNTS_SESSION_KEY_PREFIX,
+  LESSON_DISCUSSIONS_SESSION_KEY_PREFIX,
   NOTIFICATION_SUMMARY_SESSION_KEY_PREFIX,
   RESUME_CONTEXT_SESSION_KEY_PREFIX,
   WISHLIST_SESSION_KEY_PREFIX,
 } from "../store/accountBrowserState";
 import { authStore } from "../store/auth.store";
+import {
+  clearLessonEarlyState,
+  readEarlySessionCopy,
+} from "../store/lessonEarlyState";
 import { authKeys } from "./auth/auth.keys";
 import { courseKeys } from "./courses/courses.keys";
 import { enrollmentKeys } from "./enrollments/enrollments.keys";
 import { learningGoalKeys } from "./learning-goals/learning-goals.keys";
+import { learningInteractionKeys } from "./learning-interactions/learning-interactions.keys";
 import { learningProgressKeys } from "./learning-progress/learning-progress.keys";
 import { notificationKeys } from "./notifications/notifications.keys";
 import { wishlistKeys } from "./wishlist/wishlist.keys";
@@ -59,6 +67,13 @@ import { wishlistKeys } from "./wishlist/wishlist.keys";
  *
  * The document's head reads the same copies before the first paint (see
  * `courses/courseCardEarlyState.ts`), so its first frame agrees with them.
+ *
+ * A lesson page goes one step further (see `learning/lessonPageEarlyState.ts`):
+ * the course's access answer and the lesson's discussion counts are read
+ * into the queries' initial data as the page hydrates (`readAccountCopy`),
+ * so that React's first render agrees with what the head drew from them,
+ * and the first page of the lesson's discussions is kept too, for the
+ * moment after.
  */
 
 /** How old a copy may be and still be shown while the answer is fetched. */
@@ -68,6 +83,17 @@ interface AccountCopy {
   /** The query this copy is of, for an account; null: not this kind. */
   storageKeyOf: (queryKey: QueryKey, userId: string) => string | null;
   isValid: (value: unknown) => boolean;
+  /**
+   * What is kept of the answer, when not all of it (an infinite query's
+   * first page), and the answer that is put back from what was kept.
+   */
+  keep?: (data: unknown) => unknown;
+  restore?: (kept: unknown) => unknown;
+  /**
+   * Copies of this kind for an account are kept this many at most, the
+   * oldest going first: there is one per lesson opened in the tab.
+   */
+  keepAtMost?: { prefix: string; count: number };
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -90,6 +116,42 @@ const resumeContextCourse = (queryKey: QueryKey): string | null => {
     ? courseKey
     : null;
 };
+
+/** The lesson a per-lesson query is for, or null: not one of those. */
+const lessonOf = (
+  queryKey: QueryKey,
+  keyOf: (courseId: string, lessonId: string) => QueryKey,
+): { courseId: string; lessonId: string } | null => {
+  const courseId = queryKey[2];
+  const lessonId = queryKey[3];
+  return typeof courseId === "string" &&
+    courseId &&
+    typeof lessonId === "string" &&
+    lessonId &&
+    hashKey(queryKey) === hashKey(keyOf(courseId, lessonId))
+    ? { courseId, lessonId }
+    : null;
+};
+
+export type LessonDiscussionsKind = "all" | "comment" | "note" | "question";
+
+/**
+ * The query the lesson page opens its discussions with: every kind the
+ * course allows (or the one kind it allows), the most liked first,
+ * everyone's, no search. Only that one is kept (see `Discussion.tsx`).
+ */
+export const openingLessonDiscussionsQuery = (kind: LessonDiscussionsKind) => ({
+  kind,
+  sort: "top" as const,
+});
+
+const isDiscussionsPage = (
+  value: unknown,
+): value is LessonDiscussionsListResponse =>
+  isObject(value) && Array.isArray(value.items);
+
+/** At most this many lessons' first pages are kept for an account. */
+const KEPT_LESSON_DISCUSSION_PAGES = 8;
 
 const COPIES: AccountCopy[] = [
   {
@@ -150,6 +212,52 @@ const COPIES: AccountCopy[] = [
     isValid: (value) =>
       isObject(value) && typeof value.todaySeconds === "number",
   },
+  {
+    // A lesson's discussion counts ("22 Discussions" under the video).
+    storageKeyOf: (queryKey, userId) => {
+      const lesson = lessonOf(
+        queryKey,
+        learningInteractionKeys.lessonInteractionCounts,
+      );
+      return lesson
+        ? `${LESSON_DISCUSSION_COUNTS_SESSION_KEY_PREFIX}${userId}:${lesson.courseId}:${lesson.lessonId}`
+        : null;
+    },
+    isValid: (value) => isObject(value) && typeof value.total === "number",
+  },
+  {
+    // The first page of a lesson's discussions, as the lesson page opens
+    // them. The query is infinite; only its first page is kept, under the
+    // kind it was asked for.
+    storageKeyOf: (queryKey, userId) => {
+      const kind = queryKey[5];
+      if (typeof kind !== "string") return null;
+      const lesson = lessonOf(queryKey, (courseId, lessonId) =>
+        learningInteractionKeys.lessonDiscussions(
+          courseId,
+          lessonId,
+          openingLessonDiscussionsQuery(kind as LessonDiscussionsKind),
+        ),
+      );
+      return lesson
+        ? `${LESSON_DISCUSSIONS_SESSION_KEY_PREFIX}${userId}:${lesson.courseId}:${lesson.lessonId}:${kind}`
+        : null;
+    },
+    isValid: (value) => isObject(value) && isDiscussionsPage(value.page),
+    keep: (data) => {
+      const pages = isObject(data) ? data.pages : undefined;
+      const page = Array.isArray(pages) ? pages[0] : undefined;
+      return isDiscussionsPage(page) ? { page } : undefined;
+    },
+    restore: (kept) =>
+      isObject(kept) && isDiscussionsPage(kept.page)
+        ? { pages: [kept.page], pageParams: [null] }
+        : undefined,
+    keepAtMost: {
+      prefix: LESSON_DISCUSSIONS_SESSION_KEY_PREFIX,
+      count: KEPT_LESSON_DISCUSSION_PAGES,
+    },
+  },
 ];
 
 /** The courses this tab kept a resume context for, for an account. */
@@ -179,6 +287,71 @@ function copyOf(queryKey: QueryKey, userId: string) {
     if (storageKey) return { copy, storageKey };
   }
   return null;
+}
+
+/**
+ * This tab's copy of a query's answer for the remembered account, with the
+ * time it was fetched, or undefined. For a query's initial data on a page
+ * whose document was filled in from the same copy before it was drawn (the
+ * lesson page, `learning/lessonPageEarlyState.ts`): read during the first
+ * render on purpose, so that render agrees with the document. Everywhere
+ * else the copies are put in place after hydration
+ * (`startAccountSessionCopies`): a page that was not filled in from them
+ * must not read them while it hydrates.
+ */
+export function readAccountCopy<T>(
+  queryKey: QueryKey,
+): { value: T; savedAt: number } | undefined {
+  const userId = currentUserId();
+  if (!userId) return undefined;
+  const found = copyOf(queryKey, userId);
+  if (!found) return undefined;
+  // As the document's head read it, when it did (store/lessonEarlyState.ts):
+  // the page was drawn from that reading, and storage may have moved on.
+  const early = readEarlySessionCopy(found.storageKey);
+  const saved =
+    early === undefined
+      ? readSessionCache(found.storageKey, KEPT_MS, (value): value is unknown =>
+          found.copy.isValid(value),
+        )
+      : early && found.copy.isValid(early.value)
+        ? early
+        : undefined;
+  if (!saved) return undefined;
+  const value = found.copy.restore
+    ? found.copy.restore(saved.value)
+    : saved.value;
+  return value === undefined
+    ? undefined
+    : { value: value as T, savedAt: saved.savedAt };
+}
+
+/**
+ * Drops the oldest copies under `prefix` beyond `count` (those of lessons
+ * opened long ago in this tab).
+ */
+function trimCopies(prefix: string, count: number) {
+  const kept: { key: string; savedAt: number }[] = [];
+  try {
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const key = sessionStorage.key(index);
+      if (!key?.startsWith(prefix)) continue;
+      let savedAt = -1;
+      try {
+        const saved: unknown = JSON.parse(sessionStorage.getItem(key) ?? "");
+        if (isObject(saved) && typeof saved.savedAt === "number") {
+          savedAt = saved.savedAt;
+        }
+      } catch {
+        // Unreadable: the first to go.
+      }
+      kept.push({ key, savedAt });
+    }
+    kept.sort((a, b) => b.savedAt - a.savedAt);
+    for (const { key } of kept.slice(count)) sessionStorage.removeItem(key);
+  } catch {
+    // Nothing kept, or nothing readable: nothing to trim.
+  }
 }
 
 /** The course whose page is open, read from the address. */
@@ -218,20 +391,42 @@ export function startAccountSessionCopies(queryClient: QueryClient) {
     ];
     for (const queryKey of queryKeys) {
       const found = copyOf(queryKey, userId);
-      if (!found || queryClient.getQueryData(queryKey) !== undefined) continue;
+      if (!found) continue;
       const saved = readSessionCache(
         found.storageKey,
         KEPT_MS,
         (value): value is unknown => found.copy.isValid(value),
       );
       if (!saved) continue;
-      queryClient.setQueryData(queryKey, saved.value, {
-        updatedAt: saved.savedAt,
-      });
+      const state = queryClient.getQueryState(queryKey);
+      if (state?.data !== undefined) {
+        // Already in the cache. Seeded from this copy as the page hydrated
+        // (`readAccountCopy`: the same time stamp, as storage or the head
+        // read it), it is the copy restored, and is dropped with the
+        // others below if the session check says the account is another.
+        const early = readEarlySessionCopy(found.storageKey);
+        if (
+          state.dataUpdatedAt !== saved.savedAt &&
+          state.dataUpdatedAt !== early?.savedAt
+        ) {
+          continue;
+        }
+      } else {
+        const value = found.copy.restore
+          ? found.copy.restore(saved.value)
+          : saved.value;
+        if (value === undefined) continue;
+        queryClient.setQueryData(queryKey, value, {
+          updatedAt: saved.savedAt,
+        });
+      }
       restored ??= { userId, keys: [] };
       restored.keys.push({ queryKey, storageKey: found.storageKey });
     }
   }
+  // The page has hydrated: what the head read is in the cache or has been
+  // read by the page's first render; storage is the truth from here.
+  clearLessonEarlyState();
 
   return queryClient.getQueryCache().subscribe((event) => {
     const { query } = event;
@@ -271,12 +466,20 @@ export function startAccountSessionCopies(queryClient: QueryClient) {
       return;
     }
     if (event.action.type === "success") {
-      const data: unknown = query.state.data;
-      if (!found.copy.isValid(data)) return;
+      const data: unknown = found.copy.keep
+        ? found.copy.keep(query.state.data)
+        : query.state.data;
+      if (data === undefined || !found.copy.isValid(data)) return;
       // Saved with the time it was fetched, not now: a restored copy is
       // written back unchanged, and a refetch that brings the same answer
       // (the cache keeps the old object then) still counts as new.
       writeSessionCache(found.storageKey, data, query.state.dataUpdatedAt);
+      if (found.copy.keepAtMost) {
+        trimCopies(
+          `${found.copy.keepAtMost.prefix}${owner}:`,
+          found.copy.keepAtMost.count,
+        );
+      }
     }
   });
 }
