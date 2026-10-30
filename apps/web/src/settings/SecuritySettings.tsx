@@ -1,0 +1,1046 @@
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
+import "../styles/features/workspace.css";
+// The authenticator and backup-code dialogs on this page are styled by this
+// sheet. It was only ever imported by the sign-in screens, so on a settings
+// page opened directly the dialog had no styles: it was added to the end of
+// the document, unpositioned, and "Set up" appeared to do nothing.
+import "../auth/mfa-setup.css";
+import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
+import { FingerprintIcon as Fingerprint } from "@phosphor-icons/react/Fingerprint";
+import { LaptopIcon as Laptop } from "@phosphor-icons/react/Laptop";
+import { LockKeyIcon as LockKey } from "@phosphor-icons/react/LockKey";
+import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
+import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
+import { TimerIcon as Timer } from "@phosphor-icons/react/Timer";
+import { XIcon as X } from "@phosphor-icons/react/X";
+import { RecommendedBadge, SettingRow, StatusNote } from "./SettingsControls";
+import { isStaffRole } from "../shell/workspaceRole";
+import {
+  CenteredLoadingSpinner,
+  LoadingSpinnerIcon,
+} from "../components/LoadingSpinner";
+import { MfaQrCode } from "../auth/MfaQrCode";
+import {
+  formatRelativeDate,
+  formatSessionDevice,
+  isMobileSession,
+} from "./sessionDisplay";
+import { MFA_CONFIG } from "../auth/mfa.config";
+import { OtpCodeInput } from "../auth/OtpCodeInput";
+import { validateOtpCode } from "../auth/authFlow";
+import { isPasskeySupported, startPasskeyRegistration } from "../auth/webauthn";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  authKeys,
+  useCurrentUser,
+  useSetupTotp,
+  useEnableTotp,
+  useDisableTotp,
+  usePasskeyRegisterOptions,
+  usePasskeyRegisterVerify,
+  useDeletePasskeys,
+  useRegenerateBackupCodes,
+  useSessions,
+  useRevokeSession,
+  useRevokeAllOtherSessions,
+} from "../services/auth";
+
+const subscribeToPasskeySupport = () => () => undefined;
+const getPasskeyServerSupport = () => false;
+
+function SettingsModalOverlay({
+  labelledBy,
+  children,
+}: {
+  labelledBy: string;
+  children: ReactNode;
+}) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="auth-mfa-setup__overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={labelledBy}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+import { downloadBackupCodesTxt } from "../auth/backupCodes.ts";
+
+interface BackupCodesModalProps {
+  codes: string[];
+  onClose: () => void;
+}
+
+function BackupCodesModal({ codes, onClose }: BackupCodesModalProps) {
+  const [copied, setCopied] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+
+  const copyAll = async () => {
+    try {
+      await navigator.clipboard.writeText(codes.join("\n"));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      /* clipboard write error */
+    }
+  };
+
+  const handleDownload = () => {
+    downloadBackupCodesTxt(codes);
+    setDownloaded(true);
+    setTimeout(() => setDownloaded(false), 2500);
+  };
+
+  return (
+    <SettingsModalOverlay labelledBy="backup-codes-title">
+      <div className="auth-mfa-setup__modal">
+        <div className="auth-mfa-setup__modal-header">
+          <h3 id="backup-codes-title">Save your backup codes</h3>
+          <button
+            aria-label="Close"
+            className="auth-mfa-setup__modal-close"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <p className="auth-mfa-setup__modal-body">
+          Store these codes somewhere safe. Each can be used once if you lose
+          access to your passkey or authenticator app.
+        </p>
+
+        <ul className="auth-mfa-setup__backup-codes" aria-label="Backup codes">
+          {codes.map((code) => (
+            <li key={code} className="auth-mfa-setup__backup-code">
+              <code>{code}</code>
+            </li>
+          ))}
+        </ul>
+
+        <div
+          className="auth-mfa-setup__modal-actions"
+          style={{ justifyContent: "space-between" }}
+        >
+          <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+            <button
+              className="auth-mfa-setup__copy-button"
+              onClick={copyAll}
+              type="button"
+            >
+              {copied ? "Copied!" : "Copy all codes"}
+            </button>
+            <button
+              className="auth-mfa-setup__copy-button"
+              onClick={handleDownload}
+              type="button"
+            >
+              {downloaded ? "Downloaded!" : "Download .txt"}
+            </button>
+          </div>
+          <button className="settings-action" onClick={onClose} type="button">
+            Done
+          </button>
+        </div>
+      </div>
+    </SettingsModalOverlay>
+  );
+}
+
+interface TotpSetupModalProps {
+  onSuccess: (backupCodes: string[]) => void;
+  onClose: () => void;
+}
+
+function TotpSetupModal({ onSuccess, onClose }: TotpSetupModalProps) {
+  const [step, setStep] = useState<"loading" | "error" | "qr" | "verify">(
+    "loading",
+  );
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [secret, setSecret] = useState("");
+  const [uri, setUri] = useState("");
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
+
+  const setupMutation = useSetupTotp();
+  const enableMutation = useEnableTotp();
+
+  const requestSetup = setupMutation.mutateAsync;
+  const startSetup = useCallback(async () => {
+    setSetupError(null);
+    setStep("loading");
+    try {
+      const data = await requestSetup();
+      setSecret(data.secret);
+      setUri(data.uri);
+      setStep("qr");
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setSetupError(
+        errorObj?.message || "Could not start authenticator setup.",
+      );
+      setStep("error");
+    }
+  }, [requestSetup]);
+
+  // Started once when the dialog opens. It used to be started from render
+  // whenever no request was in flight, so a failing request was sent again
+  // on every render, without pause, for as long as the dialog stayed open.
+  const setupStartedRef = useRef(false);
+  useEffect(() => {
+    if (setupStartedRef.current) return;
+    setupStartedRef.current = true;
+    void startSetup();
+  }, [startSetup]);
+
+  const queryClient = useQueryClient();
+
+  const submitCode = async (codeToVerify: string) => {
+    const validationError = validateOtpCode(codeToVerify);
+    if (validationError) {
+      setCodeError(validationError);
+      return;
+    }
+    setCodeError(null);
+    try {
+      const result = await enableMutation.mutateAsync({
+        code: codeToVerify,
+        secret,
+      });
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      await queryClient.invalidateQueries({ queryKey: authKeys.sessions() });
+      onSuccess(result.backupCodes);
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setCodeError(
+        errorObj?.message ||
+          "Invalid code. Check your authenticator app and try again.",
+      );
+    }
+  };
+
+  const handleVerify = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!enableMutation.isPending) {
+      void submitCode(code);
+    }
+  };
+
+  return (
+    <SettingsModalOverlay labelledBy="totp-modal-title">
+      <div className="auth-mfa-setup__modal">
+        <div className="auth-mfa-setup__modal-header">
+          <h3 id="totp-modal-title">
+            {step === "verify"
+              ? "Verify authenticator"
+              : "Set up authenticator"}
+          </h3>
+          <button
+            aria-label="Close"
+            className="auth-mfa-setup__modal-close"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {step === "loading" && (
+          <CenteredLoadingSpinner
+            label="Preparing authenticator setup"
+            className="min-h-24 w-full"
+          />
+        )}
+
+        {step === "error" && (
+          <>
+            <p className="auth-mfa-setup__modal-body" role="alert">
+              {setupError}
+            </p>
+            <div
+              className="auth-mfa-setup__modal-actions"
+              style={{ justifyContent: "flex-end", marginTop: "8px" }}
+            >
+              <button
+                className="settings-action settings-action--quiet"
+                onClick={onClose}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="settings-action"
+                onClick={() => void startSetup()}
+                type="button"
+              >
+                Try again
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === "qr" && (
+          <>
+            <p className="auth-mfa-setup__modal-body">
+              Scan this QR code with Google Authenticator, Authy, or any TOTP
+              app.
+            </p>
+
+            <div className="auth-mfa-setup__qr-wrapper" aria-hidden="true">
+              <MfaQrCode value={uri} size={160} />
+            </div>
+
+            <div className="auth-mfa-setup__secret">
+              <span className="auth-mfa-setup__inline-hint">
+                Or enter key manually:
+              </span>
+              <code className="auth-mfa-setup__secret-key">{secret}</code>
+            </div>
+
+            <div
+              className="auth-mfa-setup__modal-actions"
+              style={{ justifyContent: "flex-end", marginTop: "8px" }}
+            >
+              <button
+                className="settings-action settings-action--quiet"
+                onClick={onClose}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="settings-action"
+                onClick={() => setStep("verify")}
+                type="button"
+              >
+                Next: Enter code →
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === "verify" && (
+          <form
+            className="auth-mfa-setup__verify-form"
+            noValidate
+            onSubmit={handleVerify}
+          >
+            <p className="auth-mfa-setup__modal-body">
+              Enter the 6-digit code shown in your authenticator app to confirm
+              it is working.
+            </p>
+
+            <OtpCodeInput
+              describedBy={codeError ? "totp-setup-error" : undefined}
+              disabled={enableMutation.isPending}
+              invalid={codeError !== null}
+              label="Authentication code"
+              autoFocus
+              onChange={(v) => {
+                setCode(v);
+                setCodeError(null);
+                if (
+                  v.length === 6 &&
+                  !validateOtpCode(v) &&
+                  !enableMutation.isPending
+                ) {
+                  void submitCode(v);
+                }
+              }}
+              value={code}
+            />
+
+            {codeError ? (
+              <p
+                className={`${SETTINGS_ERROR_TEXT}`}
+                id="totp-setup-error"
+                role="alert"
+                style={{ textAlign: "center" }}
+              >
+                {codeError}
+              </p>
+            ) : null}
+
+            <div
+              className="auth-mfa-setup__modal-actions"
+              style={{ justifyContent: "space-between", marginTop: "8px" }}
+            >
+              <button
+                className="settings-action settings-action--quiet"
+                onClick={() => setStep("qr")}
+                type="button"
+              >
+                ← Back
+              </button>
+              <button
+                aria-busy={enableMutation.isPending}
+                className="settings-action"
+                disabled={enableMutation.isPending}
+                type="submit"
+              >
+                {enableMutation.isPending ? "Verifying…" : "Verify & Activate"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </SettingsModalOverlay>
+  );
+}
+
+/**
+ * Error text on this page. It used a class from the sign-in stylesheet,
+ * which this page does not load.
+ */
+const SETTINGS_ERROR_TEXT =
+  "m-0 text-[0.72rem] leading-[1.4] text-(--danger,#f27991)";
+
+const SECURITY_ROW_CLASS =
+  "max-[480px]:[grid-template-columns:2rem_minmax(0,1fr)] max-[480px]:[&_.settings-row__control]:col-start-2 max-[480px]:[&_.settings-row__control]:justify-stretch max-[480px]:[&_.settings-action]:w-full";
+
+export function SecuritySettings({
+  isAuthenticated = true,
+}: {
+  isAuthenticated?: boolean;
+}) {
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
+  const sessionQuery = useSessions({
+    enabled: isAuthenticated && Boolean(currentUser),
+  });
+  const revokeSession = useRevokeSession();
+  const revokeAll = useRevokeAllOtherSessions();
+  const passkeyOptionsMutation = usePasskeyRegisterOptions();
+  const passkeyVerifyMutation = usePasskeyRegisterVerify();
+  const disableTotpMutation = useDisableTotp();
+  const deletePasskeysMutation = useDeletePasskeys();
+
+  const [showTotpModal, setShowTotpModal] = useState(false);
+  const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const [passkeySuccess, setPasskeySuccess] = useState(false);
+  const [totpSuccess, setTotpSuccess] = useState(false);
+  const [totpError, setTotpError] = useState<string | null>(null);
+  const [backupCodesError, setBackupCodesError] = useState<string | null>(null);
+  const regenerateBackupCodes = useRegenerateBackupCodes();
+
+  const totpEnabled = currentUser?.totpEnabled ?? false;
+  const passkeyEnabled = currentUser?.passkeyEnabled ?? false;
+  // Two-factor sign-in is for the academy's team only: a student can
+  // neither add a factor nor be asked for one, so none of it is shown.
+  const offersTwoFactor = Boolean(
+    currentUser && isStaffRole(currentUser.roles),
+  );
+  const showEnrollmentSetup = Boolean(
+    isAuthenticated &&
+    currentUser &&
+    !userLoading &&
+    !totpEnabled &&
+    !passkeyEnabled,
+  );
+  const passkeyBrowserSupported = useSyncExternalStore(
+    subscribeToPasskeySupport,
+    isPasskeySupported,
+    getPasskeyServerSupport,
+  );
+
+  const handleRegisterPasskey = async () => {
+    if (!isAuthenticated) return;
+    setPasskeyError(null);
+    setPasskeySuccess(false);
+    try {
+      const serverOptions = await passkeyOptionsMutation.mutateAsync();
+      const credential = await startPasskeyRegistration(serverOptions);
+      const result = await passkeyVerifyMutation.mutateAsync(credential);
+      setPasskeySuccess(true);
+      // Returned when the account had no backup code left to fall back on.
+      if (result.backupCodes?.length) {
+        setBackupCodes(result.backupCodes);
+      }
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setPasskeyError(
+        errorObj?.message || "Passkey registration failed. Please try again.",
+      );
+    }
+  };
+
+  const handleRemovePasskey = async () => {
+    if (!isAuthenticated || deletePasskeysMutation.isPending) return;
+    setPasskeyError(null);
+    setPasskeySuccess(false);
+    try {
+      await deletePasskeysMutation.mutateAsync();
+      setPasskeySuccess(false);
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setPasskeyError(
+        errorObj?.message || "Failed to remove passkey. Please try again.",
+      );
+    }
+  };
+
+  const handleDisableTotp = async () => {
+    if (!isAuthenticated || disableTotpMutation.isPending) return;
+    setTotpError(null);
+    setTotpSuccess(false);
+    try {
+      await disableTotpMutation.mutateAsync();
+      setTotpSuccess(false);
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setTotpError(
+        errorObj?.message ||
+          "Failed to remove authenticator app. Please try again.",
+      );
+    }
+  };
+
+  const handleRegenerateBackupCodes = async () => {
+    if (!isAuthenticated || regenerateBackupCodes.isPending) return;
+    setBackupCodesError(null);
+    try {
+      const result = await regenerateBackupCodes.mutateAsync();
+      setBackupCodes(result.backupCodes);
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setBackupCodesError(
+        errorObj?.message ||
+          "Could not create new backup codes. Please try again.",
+      );
+    }
+  };
+
+  const handleTotpSuccess = (codes: string[]) => {
+    setShowTotpModal(false);
+    setTotpSuccess(true);
+    setBackupCodes(codes);
+  };
+
+  const handleRevokeSession = async (id: string) => {
+    if (!isAuthenticated) return;
+    try {
+      await revokeSession.mutateAsync(id);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleRevokeAll = async () => {
+    if (!isAuthenticated) return;
+    try {
+      await revokeAll.mutateAsync();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+    setShowTotpModal(false);
+    setBackupCodes(null);
+    setBackupCodesError(null);
+    setPasskeyError(null);
+    setPasskeySuccess(false);
+    setTotpSuccess(false);
+  }, [isAuthenticated]);
+
+  return (
+    <div className="settings-detail" aria-label="Privacy and security settings">
+      {isAuthenticated && showTotpModal && (
+        <TotpSetupModal
+          onSuccess={handleTotpSuccess}
+          onClose={() => setShowTotpModal(false)}
+        />
+      )}
+
+      {isAuthenticated && backupCodes && (
+        <BackupCodesModal
+          codes={backupCodes}
+          onClose={() => setBackupCodes(null)}
+        />
+      )}
+
+      <header className="settings-detail__header">
+        <div>
+          <h2>Privacy &amp; security</h2>
+          <p>Protect your account and control where it is active.</p>
+        </div>
+      </header>
+
+      {!offersTwoFactor ? null : showEnrollmentSetup ? (
+        <section
+          className="settings-section"
+          aria-labelledby="mfa-enrollment-heading"
+        >
+          <header className="settings-section__heading">
+            <ShieldCheck size={20} weight="duotone" />
+            <div>
+              <h3 id="mfa-enrollment-heading">Secure your account</h3>
+              <p>
+                Add one passkey or authenticator app to protect your sign-in.
+              </p>
+            </div>
+          </header>
+
+          <div className="settings-row-list">
+            {MFA_CONFIG.ALLOW_PASSKEY ? (
+              <SettingRow
+                className={SECURITY_ROW_CLASS}
+                icon={Fingerprint}
+                label="Passkey sign-in"
+                note={
+                  <span className="flex min-w-0 flex-col items-start gap-1">
+                    <RecommendedBadge />
+                    <span>
+                      Use your device fingerprint, face, or PIN — no code to
+                      type.
+                    </span>
+                  </span>
+                }
+              >
+                {passkeyBrowserSupported ? (
+                  <button
+                    aria-busy={
+                      passkeyOptionsMutation.isPending ||
+                      passkeyVerifyMutation.isPending
+                    }
+                    className="settings-action"
+                    disabled={
+                      !isAuthenticated ||
+                      passkeyOptionsMutation.isPending ||
+                      passkeyVerifyMutation.isPending
+                    }
+                    onClick={handleRegisterPasskey}
+                    type="button"
+                  >
+                    {passkeyOptionsMutation.isPending ||
+                    passkeyVerifyMutation.isPending
+                      ? "Registering…"
+                      : "Register passkey"}
+                  </button>
+                ) : (
+                  <StatusNote>Not supported in this browser</StatusNote>
+                )}
+              </SettingRow>
+            ) : null}
+
+            {MFA_CONFIG.ALLOW_TOTP ? (
+              <SettingRow
+                className={SECURITY_ROW_CLASS}
+                icon={LockKey}
+                label="Authenticator app"
+                note="Use Google Authenticator, Authy, or any TOTP app as a second factor."
+              >
+                <button
+                  className="settings-action settings-action--quiet"
+                  onClick={() => setShowTotpModal(true)}
+                  disabled={!isAuthenticated}
+                  type="button"
+                >
+                  Set up
+                </button>
+              </SettingRow>
+            ) : null}
+          </div>
+
+          {passkeySuccess ? (
+            <p className="auth-mfa-setup__success-note" role="status">
+              ✓ Passkey registered successfully.
+            </p>
+          ) : null}
+
+          {passkeyError ? (
+            <p className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`} role="alert">
+              {passkeyError}
+            </p>
+          ) : null}
+
+          {totpSuccess ? (
+            <p className="auth-mfa-setup__success-note" role="status">
+              ✓ Authenticator app activated successfully.
+            </p>
+          ) : null}
+        </section>
+      ) : (
+        <>
+          {MFA_CONFIG.ALLOW_PASSKEY && (
+            <section
+              className="settings-section"
+              aria-labelledby="passkey-heading"
+            >
+              <header className="settings-section__heading">
+                <Fingerprint size={20} weight="duotone" />
+                <div>
+                  <h3 id="passkey-heading">Passkeys</h3>
+                  <p>
+                    Sign in with your device biometrics or PIN — no code to
+                    type.
+                  </p>
+                </div>
+              </header>
+
+              <div className="settings-row-list">
+                <SettingRow
+                  className={SECURITY_ROW_CLASS}
+                  icon={LockKey}
+                  label="Passkey sign-in"
+                  note={
+                    userLoading ? (
+                      <span
+                        role="status"
+                        aria-label="Loading passkey status"
+                        className="inline-flex min-h-5 items-center"
+                      >
+                        <LoadingSpinnerIcon size={15} />
+                      </span>
+                    ) : passkeyEnabled ? (
+                      "A passkey is registered on this account."
+                    ) : (
+                      "No passkey registered yet."
+                    )
+                  }
+                >
+                  {passkeyBrowserSupported ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      {passkeyEnabled && (
+                        <button
+                          aria-busy={deletePasskeysMutation.isPending}
+                          className="settings-action settings-action--quiet"
+                          disabled={
+                            !isAuthenticated || deletePasskeysMutation.isPending
+                          }
+                          onClick={handleRemovePasskey}
+                          type="button"
+                        >
+                          {deletePasskeysMutation.isPending
+                            ? "Removing…"
+                            : "Remove"}
+                        </button>
+                      )}
+                      <button
+                        aria-busy={
+                          passkeyOptionsMutation.isPending ||
+                          passkeyVerifyMutation.isPending
+                        }
+                        className="settings-action"
+                        disabled={
+                          !isAuthenticated ||
+                          passkeyOptionsMutation.isPending ||
+                          passkeyVerifyMutation.isPending ||
+                          deletePasskeysMutation.isPending
+                        }
+                        onClick={handleRegisterPasskey}
+                        type="button"
+                      >
+                        {passkeyOptionsMutation.isPending ||
+                        passkeyVerifyMutation.isPending
+                          ? "Registering…"
+                          : passkeyEnabled
+                            ? "Replace"
+                            : "Register passkey"}
+                      </button>
+                    </div>
+                  ) : (
+                    <StatusNote>Not supported in this browser</StatusNote>
+                  )}
+                </SettingRow>
+
+                {passkeySuccess && (
+                  <p className="auth-mfa-setup__success-note" role="status">
+                    ✓ Passkey registered successfully.
+                  </p>
+                )}
+
+                {passkeyError && (
+                  <p
+                    className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`}
+                    role="alert"
+                  >
+                    {passkeyError}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {MFA_CONFIG.ALLOW_TOTP && (
+            <section
+              className="settings-section"
+              aria-labelledby="totp-heading"
+            >
+              <header className="settings-section__heading">
+                <ShieldCheck size={20} weight="duotone" />
+                <div>
+                  <h3 id="totp-heading">Authenticator app</h3>
+                  <p>
+                    Use Google Authenticator, Authy, or any TOTP app as a second
+                    factor.
+                  </p>
+                </div>
+              </header>
+
+              <div className="settings-row-list">
+                <SettingRow
+                  className={SECURITY_ROW_CLASS}
+                  icon={LockKey}
+                  label="Two-factor authentication"
+                  note={
+                    userLoading ? (
+                      <span
+                        role="status"
+                        aria-label="Loading authenticator status"
+                        className="inline-flex min-h-5 items-center"
+                      >
+                        <LoadingSpinnerIcon size={15} />
+                      </span>
+                    ) : totpEnabled ? (
+                      "Authenticator app is active on this account."
+                    ) : (
+                      "Add an extra layer of security to your sign-in."
+                    )
+                  }
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    {totpEnabled && (
+                      <button
+                        aria-busy={disableTotpMutation.isPending}
+                        className="settings-action settings-action--quiet"
+                        disabled={
+                          !isAuthenticated || disableTotpMutation.isPending
+                        }
+                        onClick={handleDisableTotp}
+                        type="button"
+                      >
+                        {disableTotpMutation.isPending ? "Removing…" : "Remove"}
+                      </button>
+                    )}
+                    <button
+                      className="settings-action"
+                      onClick={() => setShowTotpModal(true)}
+                      disabled={
+                        !isAuthenticated || disableTotpMutation.isPending
+                      }
+                      type="button"
+                    >
+                      {totpEnabled ? "Reconfigure" : "Set up"}
+                    </button>
+                  </div>
+                </SettingRow>
+
+                {totpSuccess && (
+                  <p className="auth-mfa-setup__success-note" role="status">
+                    ✓ Authenticator app activated successfully.
+                  </p>
+                )}
+
+                {totpError && (
+                  <p
+                    className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`}
+                    role="alert"
+                  >
+                    {totpError}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {(passkeyEnabled || totpEnabled) && (
+            <section
+              className="settings-section"
+              aria-labelledby="backup-codes-heading"
+            >
+              <header className="settings-section__heading">
+                <LockKey size={20} weight="duotone" />
+                <div>
+                  <h3 id="backup-codes-heading">Backup codes</h3>
+                  <p>
+                    Single-use codes for signing in when your passkey or
+                    authenticator app is not at hand.
+                  </p>
+                </div>
+              </header>
+
+              <div className="settings-row-list">
+                <SettingRow
+                  className={SECURITY_ROW_CLASS}
+                  icon={LockKey}
+                  label="Account recovery"
+                  note="Creating a new set replaces the codes you saved before."
+                >
+                  <button
+                    aria-busy={regenerateBackupCodes.isPending}
+                    className="settings-action settings-action--quiet"
+                    disabled={
+                      !isAuthenticated || regenerateBackupCodes.isPending
+                    }
+                    onClick={handleRegenerateBackupCodes}
+                    type="button"
+                  >
+                    {regenerateBackupCodes.isPending
+                      ? "Creating…"
+                      : "Create new codes"}
+                  </button>
+                </SettingRow>
+
+                {backupCodesError && (
+                  <p
+                    className={`${SETTINGS_ERROR_TEXT} px-3.5 py-1`}
+                    role="alert"
+                  >
+                    {backupCodesError}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      <section className="settings-section" aria-labelledby="sessions-heading">
+        <header className="settings-section__heading">
+          <Laptop size={20} weight="duotone" />
+          <div>
+            <h3 id="sessions-heading">Active sessions</h3>
+            <p>See and manage where your account is signed in.</p>
+          </div>
+        </header>
+
+        {!isAuthenticated && (
+          <p className="py-3 text-[0.84rem] text-(--muted)">
+            Sign in to manage active sessions.
+          </p>
+        )}
+
+        {isAuthenticated && sessionQuery.isLoading && (
+          <CenteredLoadingSpinner
+            label="Loading active sessions"
+            className="min-h-20 w-full"
+            size={22}
+          />
+        )}
+
+        {isAuthenticated && sessionQuery.isError && (
+          <p className={`${SETTINGS_ERROR_TEXT}`} role="alert">
+            Could not load sessions. Please refresh.
+          </p>
+        )}
+
+        {isAuthenticated &&
+          sessionQuery.data &&
+          sessionQuery.data.length > 0 && (
+            <>
+              <div className="settings-session-list">
+                {sessionQuery.data.map((session) => {
+                  const deviceLabel = session.isCurrent
+                    ? "This device"
+                    : formatSessionDevice(session.userAgent);
+
+                  return (
+                    <div className="settings-session" key={session.id}>
+                      <span className="settings-session__icon" aria-hidden>
+                        {isMobileSession(session.userAgent) ? (
+                          <DeviceMobile size={20} weight="duotone" />
+                        ) : (
+                          <Laptop size={20} weight="duotone" />
+                        )}
+                      </span>
+
+                      <span className="min-w-0 flex-1 overflow-hidden">
+                        <strong title={session.userAgent ?? undefined}>
+                          {deviceLabel}
+                        </strong>
+                        <small>
+                          <span className="truncate">
+                            {session.location ??
+                              session.ipAddress ??
+                              "Unknown IP"}
+                          </span>
+                          <span aria-hidden className="shrink-0">
+                            ·
+                          </span>
+                          <span className="inline-flex shrink-0 items-center gap-1">
+                            <Timer aria-hidden size={11} />
+                            {formatRelativeDate(session.lastUsedAt)}
+                          </span>
+                        </small>
+                      </span>
+
+                      {session.isCurrent ? (
+                        <em>Current</em>
+                      ) : (
+                        <button
+                          aria-busy={revokeSession.isPending}
+                          className="settings-action settings-action--quiet"
+                          disabled={!isAuthenticated || revokeSession.isPending}
+                          onClick={() => handleRevokeSession(session.id)}
+                          type="button"
+                        >
+                          <SignOut size={14} /> Sign out
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {sessionQuery.data.some((session) => !session.isCurrent) && (
+                <div className="mt-3">
+                  <button
+                    aria-busy={revokeAll.isPending}
+                    className="settings-action settings-action--quiet max-sm:w-full"
+                    disabled={!isAuthenticated || revokeAll.isPending}
+                    onClick={handleRevokeAll}
+                    type="button"
+                  >
+                    <X size={14} />{" "}
+                    {revokeAll.isPending
+                      ? "Signing out…"
+                      : "Sign out all other devices"}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+        {isAuthenticated &&
+          sessionQuery.data &&
+          sessionQuery.data.length === 0 && (
+            <p className="py-3 text-[0.84rem] text-(--muted)">
+              No other active sessions found.
+            </p>
+          )}
+      </section>
+    </div>
+  );
+}

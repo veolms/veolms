@@ -1,0 +1,24 @@
+{
+  "name": "@veolms/web-core",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@veolms/plugin-sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18.2 <20"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18"
+  }
+}

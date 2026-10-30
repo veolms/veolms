@@ -1,0 +1,378 @@
+import type { CSSProperties, ReactNode } from "react";
+import type { VideoQuality } from "../core/types";
+import { formatPlaybackRate } from "../playback/playbackRates";
+import { usePlayerController } from "../react/context";
+import { usePlayerState } from "../react/usePlayerState";
+import { usePlayerTheme } from "../themes/PlayerThemeContext";
+import {
+  PlayerMenuItem,
+  PopoverMenu,
+  type PopoverMenuMobilePresentation,
+  type PopoverMenuSide,
+} from "./menus";
+import { PlaybackRateSlider } from "./PlaybackRateSlider";
+import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
+
+const SETTINGS_OPEN_TURN_DEGREES = 30;
+/** From this height up a quality is marked HD, as YouTube marks it. */
+const HD_MIN_HEIGHT = 1080;
+
+const isHdQuality = (quality: VideoQuality | undefined) => {
+  if (!quality) return false;
+  const height =
+    quality.height ?? Number(/(\d+)p/u.exec(quality.label)?.[1] ?? 0);
+  return height >= HD_MIN_HEIGHT;
+};
+
+/** The raised "HD" after a quality's name, in the theme's colour. */
+function HdMark() {
+  return (
+    <sup className="ml-0.5 text-[0.5625rem] font-bold leading-none text-(--video-player-accent)">
+      HD
+    </sup>
+  );
+}
+
+/** A quality's name, marked HD when it is. */
+function QualityName({ quality }: { quality: VideoQuality }) {
+  return (
+    <>
+      {quality.label}
+      {isHdQuality(quality) ? <HdMark /> : null}
+    </>
+  );
+}
+
+export interface SettingsMenuProps {
+  includePictureInPicture?: boolean;
+  mobilePresentation?: PopoverMenuMobilePresentation;
+  /** Opens as the bottom sheet outside the phone layout too. */
+  forceSheet?: boolean;
+  mobileSheetPanelClassName?: string;
+  mobileSheetPortalTarget?: HTMLElement | null;
+  /** Inline styles for the sheet, such as where a forced one sits. */
+  mobileSheetStyle?: CSSProperties;
+  /** Application-specific settings appended to the main settings view. */
+  extraMainItems?: ReactNode;
+  triggerClassName?: string;
+  side?: PopoverMenuSide;
+  /** Called with the quality the viewer picks, or null for Auto. */
+  onQualityChange?: (quality: VideoQuality | null) => void;
+}
+
+export function SettingsMenu({
+  extraMainItems,
+  forceSheet = false,
+  includePictureInPicture = false,
+  mobilePresentation = "popover",
+  mobileSheetPanelClassName,
+  mobileSheetPortalTarget,
+  mobileSheetStyle,
+  triggerClassName,
+  side = "top",
+  onQualityChange,
+}: SettingsMenuProps = {}) {
+  const controller = usePlayerController();
+  const mobileInteraction = usePlayerMobileInteraction();
+  const theme = usePlayerTheme();
+  const {
+    audio: AudioIcon,
+    back: BackIcon,
+    captions: CaptionsIcon,
+    disclosure: DisclosureIcon,
+    pictureInPicture: PictureInPictureIcon,
+    playbackRate: PlaybackRateIcon,
+    quality: QualityIcon,
+    settings: SettingsIcon,
+  } = theme.icons;
+  const { media, pictureInPictureActive, pictureInPictureAvailable, view } =
+    usePlayerState(
+      (snapshot) => ({
+        media: snapshot.media,
+        pictureInPictureActive: snapshot.ui.pictureInPicture,
+        pictureInPictureAvailable: snapshot.capabilities.pictureInPicture,
+        view: snapshot.ui.settingsView,
+      }),
+      (left, right) =>
+        left.media === right.media &&
+        left.pictureInPictureActive === right.pictureInPictureActive &&
+        left.pictureInPictureAvailable === right.pictureInPictureAvailable &&
+        left.view === right.view,
+    );
+
+  const activeQuality =
+    media.qualities.find((item) => item.active) ??
+    media.qualities.find((item) => item.id === media.selectedQualityId);
+  const selectedQuality = media.qualities.find(
+    (item) => item.id === media.selectedQualityId,
+  );
+
+  const autoQualityLabel = activeQuality?.label ? (
+    <>
+      Auto (<QualityName quality={activeQuality} />)
+    </>
+  ) : (
+    "Auto"
+  );
+  const shownQuality = selectedQuality ?? activeQuality;
+  const qualityLabel = media.autoQuality ? (
+    autoQualityLabel
+  ) : shownQuality ? (
+    <QualityName quality={shownQuality} />
+  ) : (
+    "Auto"
+  );
+  // The picture now playing is HD, picked or chosen by Auto: the gear says
+  // so, as YouTube's does.
+  const playingHd = isHdQuality(activeQuality);
+  const audioLabel =
+    media.audioTracks.find((item) => item.id === media.selectedAudioTrackId)
+      ?.label ??
+    media.audioTracks[0]?.label ??
+    "Default";
+  const activeTextTrack =
+    media.textTracks.find((item) => item.id === media.selectedTextTrackId) ??
+    media.textTracks.find((item) => item.active);
+  const captionsLabel =
+    activeTextTrack?.label || activeTextTrack?.language || "Off";
+
+  const openView = (next: typeof view) => controller.setSettingsView(next);
+  const settingsOpen = view !== "closed";
+  const triggerAppearanceClass =
+    triggerClassName ?? "!h-9 !bg-transparent !px-3 hover:!bg-white/12";
+
+  return (
+    <PopoverMenu
+      label="Settings"
+      menuLabel="Video settings"
+      mobilePresentation={mobilePresentation}
+      forceSheet={forceSheet}
+      mobileSheetPanelClassName={mobileSheetPanelClassName}
+      mobileSheetPortalTarget={mobileSheetPortalTarget}
+      mobileSheetStyle={mobileSheetStyle}
+      align="end"
+      side={side}
+      panelClassName={
+        mobileInteraction ? undefined : side === "top" ? "!mb-8" : ""
+      }
+      closeOnItemSelect={
+        !(mobilePresentation === "sheet" && (mobileInteraction || forceSheet))
+      }
+      triggerClassName={`player-control !w-auto !min-h-0 !border-0 !py-0 ${triggerAppearanceClass}`}
+      open={settingsOpen}
+      onOpenChange={(open) => openView(open ? "main" : "closed")}
+      trigger={
+        <span className="relative inline-grid place-items-center">
+          <SettingsIcon
+            data-settings-icon={theme.id === "youtube" ? "gear-six" : theme.id}
+            data-settings-icon-state={settingsOpen ? "open" : "closed"}
+            size={22}
+            className={`origin-center transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:size-5 motion-reduce:transition-none ${mobileInteraction ? "size-5" : ""}`}
+            style={{
+              transform: `rotate(${theme.motion.settingsClosedRotation + (settingsOpen ? SETTINGS_OPEN_TURN_DEGREES : 0)}deg)`,
+            }}
+            active={settingsOpen}
+          />
+          {playingHd ? (
+            <span
+              className="pointer-events-none absolute -top-0.5 -right-1 rounded-[2px] bg-(--video-player-accent) px-[2px] text-[7px] font-bold leading-[9px] text-(--video-player-accent-contrast)"
+              aria-hidden="true"
+            >
+              HD
+            </span>
+          ) : null}
+        </span>
+      }
+    >
+      {() => (
+        <div
+          className={`[&_button]:min-h-11 sm:[&_button]:min-h-10 ${
+            mobileInteraction ? "[&_button]:!min-h-11" : ""
+          } ${view === "playback-rate" ? "min-w-72" : "min-w-60"}`}
+        >
+          {view !== "main" ? (
+            <button
+              type="button"
+              role="menuitem"
+              tabIndex={-1}
+              data-menu-keep-open=""
+              data-video-player-settings-back=""
+              className={`-mx-2 mb-1 flex min-h-10 w-[calc(100%+1rem)] items-center gap-2 rounded-none border-b border-[color-mix(in_srgb,var(--video-player-menu-text,#fff)_10%,transparent)] px-5 pb-2 text-left text-sm font-semibold text-(--video-player-menu-text) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--video-player-menu-text) sm:-mx-1.5 sm:w-[calc(100%+0.75rem)] sm:px-4.5 ${
+                mobileInteraction ? "!-mx-2 !w-[calc(100%+1rem)] !px-5" : ""
+              }`}
+              onClick={() => openView("main")}
+            >
+              <BackIcon size={18} />
+              {view === "playback-rate"
+                ? "Playback speed"
+                : view === "quality"
+                  ? "Quality"
+                  : view === "captions"
+                    ? "Captions"
+                    : "Audio"}
+            </button>
+          ) : null}
+
+          {view === "main" ? (
+            <>
+              <PlayerMenuItem
+                data-menu-keep-open=""
+                label="Quality"
+                description={qualityLabel}
+                leading={<QualityIcon size={19} />}
+                trailing={<DisclosureIcon size={17} />}
+                onClick={() => openView("quality")}
+              />
+              <PlayerMenuItem
+                data-menu-keep-open=""
+                label="Playback speed"
+                description={formatPlaybackRate(media.playbackRate)}
+                leading={<PlaybackRateIcon size={19} />}
+                trailing={<DisclosureIcon size={17} />}
+                onClick={() => openView("playback-rate")}
+              />
+              {media.textTracks.length > 0 ? (
+                <PlayerMenuItem
+                  data-menu-keep-open=""
+                  aria-label={`Captions ${captionsLabel}`}
+                  label="Captions"
+                  description={captionsLabel}
+                  leading={
+                    <CaptionsIcon
+                      data-caption-icon-state={
+                        activeTextTrack ? "filled" : "outline"
+                      }
+                      size={19}
+                      active={Boolean(activeTextTrack)}
+                    />
+                  }
+                  trailing={<DisclosureIcon size={17} />}
+                  onClick={() => openView("captions")}
+                />
+              ) : null}
+              {media.audioTracks.length > 1 ? (
+                <PlayerMenuItem
+                  data-menu-keep-open=""
+                  label="Audio"
+                  description={audioLabel}
+                  leading={<AudioIcon size={19} />}
+                  trailing={<DisclosureIcon size={17} />}
+                  onClick={() => openView("audio")}
+                />
+              ) : null}
+              {includePictureInPicture && pictureInPictureAvailable ? (
+                <PlayerMenuItem
+                  label={
+                    pictureInPictureActive
+                      ? "Exit picture in picture"
+                      : "Picture in picture"
+                  }
+                  description={
+                    pictureInPictureActive
+                      ? "Playing above other apps"
+                      : "Play above other apps"
+                  }
+                  leading={
+                    <PictureInPictureIcon
+                      size={19}
+                      active={pictureInPictureActive}
+                    />
+                  }
+                  onClick={() => {
+                    void controller.togglePictureInPicture();
+                  }}
+                />
+              ) : null}
+              {extraMainItems}
+            </>
+          ) : null}
+
+          {view === "quality" ? (
+            <>
+              <PlayerMenuItem
+                label={media.autoQuality ? autoQualityLabel : "Auto"}
+                selected={media.autoQuality}
+                onClick={() => {
+                  controller.selectQuality(null);
+                  onQualityChange?.(null);
+                }}
+              />
+              {media.qualities
+                .filter(
+                  (quality, index, qualities) =>
+                    qualities.findIndex(
+                      (candidate) => candidate.label === quality.label,
+                    ) === index,
+                )
+                .sort((left, right) => (right.height ?? 0) - (left.height ?? 0))
+                .map((quality) => (
+                  <PlayerMenuItem
+                    key={quality.id}
+                    label={<QualityName quality={quality} />}
+                    selected={
+                      !media.autoQuality &&
+                      (quality.id === media.selectedQualityId ||
+                        quality.label === selectedQuality?.label)
+                    }
+                    onClick={() => {
+                      controller.selectQuality(quality.id);
+                      onQualityChange?.(quality);
+                    }}
+                  />
+                ))}
+            </>
+          ) : null}
+
+          {view === "playback-rate" ? (
+            <PlaybackRateSlider
+              playbackRate={media.playbackRate}
+              onRateChange={(rate) => controller.setPlaybackRate(rate)}
+            />
+          ) : null}
+
+          {view === "captions" ? (
+            <>
+              <PlayerMenuItem
+                label="Off"
+                selected={!activeTextTrack}
+                onClick={() => {
+                  controller.selectTextTrack(null);
+                }}
+              />
+              {media.textTracks.map((track) => (
+                <PlayerMenuItem
+                  key={track.id}
+                  aria-label={
+                    track.language
+                      ? `${track.label || "Caption track"} ${track.language}`
+                      : track.label || "Caption track"
+                  }
+                  label={track.label || track.language || "Caption track"}
+                  description={track.language || undefined}
+                  selected={track.id === activeTextTrack?.id}
+                  onClick={() => {
+                    controller.selectTextTrack(track.id);
+                  }}
+                />
+              ))}
+            </>
+          ) : null}
+
+          {view === "audio"
+            ? media.audioTracks.map((track) => (
+                <PlayerMenuItem
+                  key={track.id}
+                  label={track.label || track.language}
+                  description={track.language}
+                  selected={track.id === media.selectedAudioTrackId}
+                  onClick={() => {
+                    controller.selectAudioTrack(track.id);
+                  }}
+                />
+              ))
+            : null}
+        </div>
+      )}
+    </PopoverMenu>
+  );
+}

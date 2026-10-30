@@ -1,0 +1,504 @@
+VeoLMS V1 Core Features
+Generated from the founder-approved PRD, technical architecture, developer architecture, current repo structure, and frontend review notes.
+
+V1 product goal
+----------------
+VeoLMS V1 should let one independent educator run one fully white-label academy, publish and sell recorded courses, accept Razorpay payments into the creator's own account, grant access exactly once, deliver secure adaptive video, and migrate ProCodrr without material loss.
+
+Core V1 principle
+-----------------
+Build the real product workflow first:
+
+Owner configures academy -> creates paid self-paced course -> student discovers course -> student authenticates -> student applies coupon and pays through Razorpay -> payment creates one purchase, one access grant, and one enrollment -> student learns with secure video, progress, notes, comments, Q&A, notifications, certificates -> owner manages refunds, moderation, analytics, export, and migration.
+
+
+1. Academy setup and white-label identity
+-----------------------------------------
+Core features:
+- Academy name, logo, description, colors, images, theme tokens, and navigation links.
+- No required VeoLMS branding in the public academy experience.
+- Creator-controlled custom domain support for production.
+- Homepage builder with reorderable blocks: text, image, CTA, and featured courses.
+- Public course catalogue with visual course cards and expandable curriculum previews.
+- Academy-local accounts and sessions; no global marketplace and no shared student identity.
+
+Why this is core:
+The first V1 promise is that every deployment feels like the creator's own independent academy.
+
+
+2. Authentication, owner MFA, and authorization
+-----------------------------------------------
+Core features:
+- Student sign-in with Google or single-use email code/link.
+- Student password setup after first sign-in.
+- Student email/password login and secure password reset.
+- Owner sign-in with Google or single-use email authentication.
+- Mandatory owner TOTP before owner privileges are issued.
+- Single-use owner recovery codes that cannot bypass two-step verification.
+- Secure, expiring, single-use auth tokens with rate limits.
+- Recent-authentication checks for high-risk actions.
+- Email and in-app notifications for security-sensitive auth and recovery events.
+- V1 roles: owner and student.
+- Capability-based authorization internally, so future roles do not require rewriting use cases.
+
+Why this is core:
+Payments, course access, private media, support access, and admin actions all depend on strong identity boundaries.
+
+
+3. Course catalogue, authoring, publishing, and revisions
+---------------------------------------------------------
+Core features:
+- Public homepage and course catalogue.
+- Course detail page with title, thumbnail, description, price, duration, sections, lecture list, and trailer.
+- Public trailer playback without login.
+- Creator-selected preview lectures that require login but not purchase.
+- Paid lecture URLs never exposed through discovery pages.
+- Course builder for ordered sections and ordered lectures.
+- V1 lecture types: video, rich text, simple quiz, text assignment.
+- Downloadable resources per lecture.
+- Draft, preview, publish, edit-after-publish, revision history, and rollback.
+- Access validity configuration.
+- Preview configuration.
+- Quiz passing threshold configuration.
+- Assignment completion condition configuration.
+- Completion certificates as downloadable PDF/image with public share link.
+
+Why this is core:
+V1 must support a complete paid recorded-course business, not just static course pages.
+
+
+4. Video upload, processing, secure playback, and learning player
+-----------------------------------------------------------------
+Core features:
+- Creator video upload through VeoLMS directly to configured private S3-compatible storage.
+- Private original and processed media.
+- Edge/CDN delivery for processed video.
+- Adaptive HLS with multiple quality levels and low-bandwidth-friendly startup.
+- Short-lived playback authorization using signed URLs, cookies, tokens, or equivalent.
+- Optional external commercial streaming DRM per course or video.
+- Mixed media support in one course: uploaded video, YouTube embeds, and Vimeo embeds.
+- Player controls: speed, manual/adaptive quality, captions, transcript, transcript search, picture-in-picture, keyboard controls, and resume.
+- Student lecture notes and bookmarks.
+- Timestamp links that seek to the referenced moment.
+- Creator-defined named video chapters.
+
+Should for V1 if it does not block launch:
+- Visible watermarking.
+
+Stretch:
+- Automatic transcripts and captions with creator review/correction.
+- Lecture summaries generated only from creator-approved transcripts.
+
+Why this is core:
+Recorded-course quality and media protection are the center of the product.
+
+
+5. Student learning workspace and progress
+------------------------------------------
+Core features:
+- Student Dashboard showing enrolled courses and progress.
+- Learning Workspace for lecture content, video player, notes, bookmarks, comments, and Q&A.
+- Video completion based on creator-configured watched percentage.
+- Students cannot manually mark videos complete.
+- Quiz completion based on configured passing condition.
+- Assignment completion based on configured condition.
+- Course and lecture progress sync across authenticated sessions.
+- Documented tolerance for temporary connectivity loss.
+- Responsive web app and installable PWA.
+- English interface, with product text structured for future localization.
+- Course content allowed in any language.
+
+Why this is core:
+V1 must prove students can reliably learn and resume, not only buy courses.
+
+
+6. Comments, Q&A, attachments, and moderation
+---------------------------------------------
+Core features:
+- Lecture comments with plain text, nested replies, safe mentions, and timestamp links.
+- Q&A attached to a lecture or assignment.
+- Q&A supports rich text or Markdown, images, links, screenshots, allowed code files, and timestamps.
+- Student Dashboard lists the student's comments and Q&A.
+- Reply, like, read, and interaction status where available.
+- Student content reporting.
+- Owner moderation: hide/delete content, lock Q&A, suspend commenting/Q&A participation.
+- Attachment type, size, and safety rules.
+- Rate limiting for interactions and mentions.
+- Moderation actions written to audit trail.
+
+Why this is core:
+Recorded courses still need an interaction layer, and moderation is required before launch.
+
+
+7. Commerce, checkout, access grants, refunds, and documents
+------------------------------------------------------------
+Core features:
+- Free course publishing.
+- One-time Razorpay payments for paid courses.
+- Creator connects their own Razorpay/gateway account.
+- Funds go directly to the creator.
+- Single-course payment creates at most one purchase, one access grant, and one enrollment.
+- Bundle purchase can create one access grant per course.
+- Owners can manually create and revoke access grants without creating fake gateway transactions.
+- Checkout supports coupon codes.
+- Checkout supports course bundles.
+- Full and partial refunds.
+- Refunds revoke related access grants by default.
+- Explicit preserve-access option on refund.
+- Authenticated, replay-safe, idempotent, reconciled gateway callbacks.
+- Downloadable invoices and receipts with seller, buyer, line items, currency, amount, discount, payment reference, date, and refund state.
+
+Should for V1 after accounting decisions:
+- GST fields and credit-note behavior.
+- Student refund-request action, while email requests remain possible.
+- Manual UPI/QR instructions where owner approval creates audited manual access, not verified gateway payment.
+
+Why this is core:
+The critical V1 business invariant is that payment, purchase, access grant, and enrollment are separate and cannot be duplicated.
+
+
+8. Notifications
+----------------
+Core features:
+- In-app notifications.
+- Email notifications.
+- Notifications link to the relevant course, lecture, question, or transaction.
+- Automatic purchase, enrollment, authentication, and security notifications.
+- Owner choice on whether course publication sends a notification.
+- Q&A replies create email and in-app notifications.
+- Comment replies and interactions create in-app notifications.
+
+Should for V1:
+- Student controls for non-critical notification preferences.
+
+Why this is core:
+Notifications close the loop on payments, enrollment, Q&A, and security events.
+
+
+9. Creator/admin dashboard
+--------------------------
+Core features:
+- Academy settings and branding management.
+- Homepage block editor.
+- Course management list.
+- Course creation and editing.
+- Curriculum builder.
+- Lecture editor for video, rich text, quiz, and assignment lessons.
+- Resource attachment management.
+- Preview and publish controls.
+- Student list and student detail view.
+- Enrollment and access grant management.
+- Coupon and bundle management.
+- Refund management.
+- Invoice/receipt access.
+- Comment and Q&A moderation tools.
+- Notification publishing choice for course publication.
+- Analytics dashboard.
+- Export/import tools.
+- Security and support-access visibility.
+
+Why this is core:
+The owner must operate the academy without developer involvement after deployment.
+
+
+10. Analytics and observability
+-------------------------------
+Creator analytics:
+- Revenue.
+- Sales.
+- Refunds.
+- Coupon usage.
+- Enrollments.
+- Manual access grants.
+- Daily/monthly active students.
+- Course and lecture completion.
+- Watch time.
+- Progress distribution.
+- Course-page-to-checkout conversion.
+- Checkout-to-purchase conversion.
+- Video startup time.
+- Playback errors.
+- Buffering.
+- Quality behavior where measurable.
+- Academy-isolated and owner-authorized analytics only.
+
+Operational observability:
+- Request rate, latency, errors, and saturation.
+- Database connections, slow queries, locks, storage, and backup status.
+- Job age, attempts, lease expiry, failure class, and dead-letter count.
+- Payment callback authentication, replay, state transition, and reconciliation status.
+- Playback authorization and playback quality signals.
+- Auth failure, MFA recovery, authorization denial, support use, and privileged change signals.
+- Deployment version and migration compatibility.
+
+Why this is core:
+Owners need business visibility, and operators need enough telemetry to keep a self-hosted product reliable.
+
+
+11. Support access, audit trail, and security controls
+------------------------------------------------------
+Core features:
+- Read-only diagnostics as the default support mode.
+- Interface access only with visible creator consent.
+- Support access expiry.
+- Support access audit trail.
+- Emergency access: tightly restricted, short-lived, audited, linked to an incident, followed by creator notification.
+- Audit events for identity, access, commerce, publication, deletion, export, support, moderation, migration, update, and rollback.
+- Deny-by-default server-side authorization.
+- Resource ownership checks.
+- Secure cookies and CSRF protection.
+- Account-enumeration resistance.
+- Attachment allowlists and malware-scanning boundary.
+- Safe Markdown/rich-text rendering.
+- Content Security Policy.
+- Encrypted secrets, TLS, rotation, and log redaction.
+- Dependency, container, license, and secret scanning in CI.
+- Restore, authorization, and payment-replay tests as release gates.
+
+Why this is core:
+V1 handles payments, private content, student data, and owner-controlled infrastructure, so support and privilege actions must be accountable.
+
+
+12. Data export, backups, retention, and deletion
+-------------------------------------------------
+Core features:
+- Export complete database.
+- Export configuration.
+- Export every creator-owned static asset.
+- Export users, identity data, offerings, course structure, access grants, enrollments, commerce records, invoices, progress, community data, videos, images, files, resources, configuration, and branding.
+- Backup and restore path tested before launch.
+- Soft deletion for comments, Q&A, and ordinary student data with 30-day recovery, subject to legal exceptions.
+- Soft deletion for courses, sections, lectures, assignments, and videos with 90-day recovery.
+- Payments, invoices, refunds, and access grants retained under approved accounting/legal policy.
+- Purge jobs that respect recovery windows, dependencies, legal holds, and backup propagation.
+
+Why this is core:
+Creator ownership and self-hosting are only credible if data can be exported, restored, and deleted predictably.
+
+
+13. Migration from current LMS / ProCodrr cutover
+-------------------------------------------------
+Core features:
+- Source adapter accepting authorized API token or JSON/static assets from the current LMS.
+- Canonical import model.
+- Dry run that writes no production records.
+- Dry-run report with source, imported, skipped, and failed counts.
+- Restartable and repeatable import.
+- No duplicated purchases, access grants, or enrollments.
+- Source identifiers or mapping references retained.
+- Commerce and access reconciliation separate from content counts.
+- Asset availability and integrity validation where practical.
+- Blocking failures visible and actionable.
+- Existing students verify email and create a VeoLMS password.
+- Source passwords are never imported.
+- Temporary tokens and sensitive migration files cleaned up safely.
+- Founder-approved reconciliation and exception list before production cutover.
+- Adapter reusable for other authorized migrations from the same LMS.
+
+Why this is core:
+V1 is not launch-ready until ProCodrr can replace its existing LMS without material loss.
+
+
+14. Installer, deployment, updates, and self-hosting
+----------------------------------------------------
+Core features:
+- One-command or one-click self-hosted setup target, roughly 10-15 minutes with cost-conscious defaults.
+- Local development profile: Web, API, Worker, PostgreSQL, mail catcher, development S3-compatible storage, fake payment/DRM adapters, deterministic media.
+- Simple Core profile: reverse proxy, Web, API, Worker, PostgreSQL, creator-supplied storage/domain/email/Razorpay/optional DRM through Docker Compose.
+- Advanced Core profile: external PostgreSQL, replicated applications, optional Redis/Valkey, selected providers, secret manager, monitoring.
+- Update prompts for self-hosters; no forced updates.
+- Documented rollback window and rollback path for supported updates.
+- Anonymous, transparent, easy-to-disable telemetry that excludes personal data and student content.
+
+Should for V1:
+- Advanced setup path for creator-selected infrastructure.
+- Deployment guidance explaining expected infrastructure costs and major cost drivers.
+
+Why this is core:
+The product promise is open-source self-hosted LMS software, so setup, update, rollback, and recovery are part of the product.
+
+
+15. AI boundaries without AI product scope
+------------------------------------------
+Core features:
+- Safe interfaces and data boundaries for future course-aware AI.
+- Creator controls whether questions, comments, replies, assignments, and learning activity may be used by AI.
+- Direct identifiers, authentication information, payment data, and unrelated private account data are never sent to AI providers.
+- Non-essential AI features can be disabled.
+- AI-related features disclose which academy data categories they use.
+
+Stretch:
+- Self-hosters can supply their own provider key for supported V1 AI features.
+
+Why this is core:
+V1 should be future-ready for AI without accidentally shipping unsafe or unclear AI data usage.
+
+
+Recommended implementation order
+--------------------------------
+1. Foundation slice
+- Keep the current Web/API/PostgreSQL course catalogue working.
+- Add domain package boundaries for academy, identity, content, offerings, commerce, access, learning, media, community, notifications, analytics, migration, audit, config, contracts, database, observability, and testing.
+- Add shared contracts, migrations, seed data, test setup, OpenAPI, and architecture tests.
+
+2. Identity and authorization
+- Implement academy-local users, sessions, student auth, owner auth, owner TOTP, recovery codes, capability checks, step-up auth, auth notifications, and audit events.
+
+3. Public academy and course authoring
+- Implement branding/settings, homepage blocks, catalogue, course pages, course editor, curriculum builder, lecture types, resources, draft/preview/publish, revision history, and rollback.
+
+4. Access model before payments
+- Implement Offering, AccessGrant, Enrollment, manual grants/revocation, access validity, active-grant checks, and paid-content authorization.
+
+5. Razorpay checkout and commerce documents
+- Implement coupons, bundles, Razorpay order/callback flow, callback inbox, idempotency, purchases, refunds, invoices, receipts, outbox notifications, and reconciliation tests.
+
+6. Media and learning workspace
+- Implement private upload sessions, storage adapter, worker video processing, HLS output, signed playback authorization, player, resume, progress, notes, bookmarks, chapters, captions/transcripts, and optional DRM adapter spike.
+
+7. Community, notifications, and moderation
+- Implement comments, Q&A, attachments, reports, moderation actions, mention/rate-limit rules, email/in-app delivery, and notification surfaces.
+
+8. Certificates and learner dashboard
+- Implement completion rules, certificate generation, public certificate links, dashboard progress, student comments/Q&A list, billing history, and notification list.
+
+9. Analytics and observability
+- Implement append-only events, daily aggregates, creator dashboard analytics, playback quality signals, logs, metrics, traces, job monitoring, and alert-worthy dead-letter handling.
+
+10. Export, migration, installer, and release gates
+- Implement data export, backup/restore verification, retention jobs, ProCodrr migration dry run/import/reconciliation, self-hosted installer, update/rollback docs, telemetry controls, and launch acceptance tests.
+
+
+V1 non-goals: do not implement unless founder explicitly reopens scope
+----------------------------------------------------------------------
+- Cross-creator marketplace.
+- Global student account.
+- Shared tenant database.
+- Multiple organizations.
+- Instructor/admin/teaching-assistant/finance/support-agent/moderator custom role UI.
+- Departments, campuses, enterprise SSO.
+- Native mobile apps.
+- Offline playback or offline DRM.
+- Live classes.
+- Chat rooms, direct messages, forums, or public feeds.
+- Cohorts, drip release, prerequisites, sequential completion, or scheduled publishing.
+- Subscriptions, installments, memberships, donations, regional pricing, or creator settlement.
+- Coding labs, automated code execution, peer review, plagiarism detection, or supervised mastery credentials.
+- Course-aware AI tutor, creator AI avatar, AI course/page builder, dubbing, or translation.
+- Third-party runtime plugins, plugin marketplace, theme packages, arbitrary JavaScript, or custom React components.
+- General public API.
+- General outbound webhooks.
+- Advanced enterprise analytics/admin.
+- Sellable offering types other than courses.
+- Standalone video-hosting API.
+
+
+Launch acceptance checklist
+---------------------------
+V1 is production-ready only when these are proven:
+- Owner configures an academy and publishes a paid course.
+- Student discovers the course, authenticates, applies coupon, pays via Razorpay, and receives exactly one purchase, one access grant, and one enrollment.
+- Signed adaptive playback, optional DRM, resume, progress, transcripts, video chapters, notes, bookmarks, comments, Q&A, notifications, certificates, and refunds work.
+- Callback replay cannot duplicate critical business records.
+- Refunds revoke access by default.
+- Owner MFA, authorization boundaries, support access, private media, and privileged auditing pass security tests.
+- ProCodrr migration reconciles critical data and has an approved exception list.
+- Self-hosting, update, rollback, backup restore, export, telemetry controls, PWA install, supported browsers, and performance monitoring are tested and documented.
+- ProCodrr operates on VeoLMS before the previous LMS is disabled.
+- All high-severity security findings are fixed or founder-accepted before production.
+
+
+Feature names 
+------------------
+- Academy setup
+- White-label branding
+- Custom domain support
+- Homepage builder
+- Public course catalogue
+- Course detail page
+- Student authentication
+- Owner authentication
+- Owner MFA
+- Recovery codes
+- Capability-based authorization
+- Course authoring
+- Curriculum builder
+- Lecture management
+- Course publishing
+- Draft and preview mode
+- Revision history
+- Course rollback
+- Downloadable resources
+- Quiz builder
+- Assignment builder
+- Certificate generation
+- Video upload
+- Private media storage
+- Video processing
+- Adaptive HLS streaming
+- Signed playback authorization
+- Optional DRM
+- YouTube and Vimeo embeds
+- Video player
+- Captions and transcripts
+- Transcript search
+- Video resume
+- Video chapters
+- Student notes
+- Student bookmarks
+- Learning workspace
+- Student dashboard
+- Progress tracking
+- PWA support
+- Lecture comments
+- Nested replies
+- Q&A
+- Attachments
+- Content reporting
+- Moderation tools
+- Free course publishing
+- Razorpay checkout
+- Creator-owned payment account
+- Coupons
+- Course bundles
+- Purchase records
+- Access grants
+- Enrollments
+- Manual access grants
+- Access revocation
+- Refunds
+- Invoices
+- Receipts
+- Payment callback inbox
+- Idempotent payment handling
+- In-app notifications
+- Email notifications
+- Security notifications
+- Q&A reply notifications
+- Admin dashboard
+- Student management
+- Enrollment management
+- Access grant management
+- Coupon management
+- Refund management
+- Commerce analytics
+- Learning analytics
+- Video analytics
+- Operational observability
+- Support diagnostics
+- Support access grants
+- Emergency access
+- Audit trail
+- Data export
+- Backup and restore
+- Retention rules
+- Soft deletion
+- Purge jobs
+- Migration dry run
+- Canonical import model
+- ProCodrr migration
+- Migration reconciliation
+- Self-hosted installer
+- Deployment profiles
+- Update prompts
+- Rollback path

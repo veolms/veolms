@@ -1,0 +1,384 @@
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
+import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
+import { SparkleIcon as Sparkle } from "@phosphor-icons/react/Sparkle";
+import { TrendUpIcon as TrendUp } from "@phosphor-icons/react/TrendUp";
+import { UsersIcon as Users } from "@phosphor-icons/react/Users";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import type { NavigateTo } from "../routing/navigation";
+import {
+  DEFAULT_DEBOUNCE_DELAY_MS,
+  useDebounceValue,
+} from "../hooks/useDebounce";
+import { usePageSearchShortcut } from "../hooks/usePageSearchShortcut";
+import { UserPlusIcon as UserPlus } from "@phosphor-icons/react/UserPlus";
+import { useCapabilities } from "../services/authorization";
+import { useCourseOptions } from "../services/courses";
+import { useStudents } from "../services/students";
+import { StudentsTable } from "./StudentsTable";
+import { StudentFiltersBar } from "./StudentFiltersBar";
+import { StudentsTableSkeleton } from "./StudentsTableSkeleton";
+import { ElevatedCard } from "../components/ElevatedCard";
+
+const AddStudentPanel = lazy(() =>
+  import("./AddStudentPanel").then((module) => ({
+    default: module.AddStudentPanel,
+  })),
+);
+
+export interface StudentsPageProps {
+  onNavigatePage?: NavigateTo;
+  setNotice?: (message: string) => void;
+}
+
+export function StudentsPage({ onNavigatePage, setNotice }: StudentsPageProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, searchControls] = useDebounceValue(
+    searchQuery.trim(),
+    DEFAULT_DEBOUNCE_DELAY_MS,
+  );
+  const [courseFilter, setCourseFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "completed" | "inactive"
+  >("all");
+  const [sortBy, setSortBy] = useState<
+    "recent" | "name" | "courses" | "progress"
+  >("recent");
+  const [isCourseFilterOpen, setIsCourseFilterOpen] = useState(false);
+  const [addingStudent, setAddingStudent] = useState(false);
+  const { can } = useCapabilities();
+  const canAddStudents = can("student.create");
+
+  // A course card's "Manage Students" link opens this page with ?course=<id>,
+  // which used to be ignored. It is read once and becomes the course filter
+  // only if it is one of the filter's own options.
+  const [searchParams] = useSearchParams();
+  const [requestedCourseId, setRequestedCourseId] = useState(
+    () => searchParams.get("course") || null,
+  );
+
+  // Load academy courses for the course filter dropdown
+  const { data: coursesData } = useCourseOptions({
+    enabled: isCourseFilterOpen || requestedCourseId !== null,
+  });
+  const courseRecords = coursesData?.courses;
+
+  useEffect(() => {
+    if (!requestedCourseId || !courseRecords) return;
+    setRequestedCourseId(null);
+    if (courseRecords.some((course) => course.id === requestedCourseId)) {
+      setCourseFilter(requestedCourseId);
+    }
+  }, [requestedCourseId, courseRecords]);
+
+  const changeCourseFilter = (course: string) => {
+    setRequestedCourseId(null);
+    setCourseFilter(course);
+  };
+  const availableCourses = useMemo(() => {
+    if (!courseRecords) return [];
+    return courseRecords.map(({ id, title }) => ({ id, title }));
+  }, [courseRecords]);
+
+  const cleanSearch = debouncedSearch.replace(/^@+/, "").trim();
+
+  // Infinite query for students
+  const queryFilter = useMemo(
+    () => ({
+      search: cleanSearch || undefined,
+      courseId: courseFilter !== "all" ? courseFilter : undefined,
+      status: statusFilter,
+      sortBy,
+      limit: 50,
+    }),
+    [cleanSearch, courseFilter, statusFilter, sortBy],
+  );
+
+  const {
+    data,
+    isLoading,
+    isError,
+    hasNextPage = false,
+    isFetchingNextPage,
+    isFetching,
+    isPlaceholderData,
+    fetchNextPage,
+    refetch,
+  } = useStudents(queryFilter);
+
+  usePageSearchShortcut("students-search-input");
+
+  const students = useMemo(() => {
+    return data?.pages.flatMap((page) => page.students) || [];
+  }, [data?.pages]);
+
+  const totalCount = data?.pages[0]?.totalCount ?? students.length;
+
+  // Compute aggregate metrics from loaded students
+  const metrics = useMemo(() => {
+    const activeLearnersCount = students.filter(
+      (s) => s.enrolledCoursesCount > 0,
+    ).length;
+    const totalEnrollmentsCount = students.reduce(
+      (acc, s) => acc + s.enrolledCoursesCount,
+      0,
+    );
+    const avgProgress =
+      students.length > 0
+        ? Math.round(
+            students.reduce((acc, s) => acc + s.averageProgressPercent, 0) /
+              students.length,
+          )
+        : 0;
+
+    return {
+      activeLearnersCount,
+      totalEnrollmentsCount,
+      avgProgress,
+    };
+  }, [students]);
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    searchControls.setValueImmediately("");
+    setRequestedCourseId(null);
+    setCourseFilter("all");
+    setStatusFilter("all");
+    setSortBy("recent");
+  };
+
+  return (
+    <div
+      className="w-full min-w-0 flex flex-col font-sans"
+      aria-labelledby="students-page-title"
+    >
+      {/* Top Header Row with Title, Description, and Header Icon Badge */}
+      <header className="flex items-start justify-between gap-5 mb-6">
+        <div>
+          <h1
+            id="students-page-title"
+            className="text-[clamp(1.8rem,2.4vw,2.15rem)] font-bold leading-tight tracking-[-0.035em] text-(--text)"
+          >
+            Students
+          </h1>
+          <p className="mt-1.5 text-[0.88rem] leading-6 text-(--muted)">
+            Review learners, access, and progress across your academy.
+          </p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-3">
+          {canAddStudents ? (
+            <button
+              type="button"
+              onClick={() => setAddingStudent(true)}
+              aria-haspopup="dialog"
+              className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl bg-(--accent) px-4 text-sm font-semibold text-white transition-[filter] hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+            >
+              <UserPlus size={18} weight="bold" className="shrink-0" />
+              <span>Add student</span>
+            </button>
+          ) : null}
+          <span
+            className="hidden sm:inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-(--accent)/12 text-(--accent)"
+            aria-hidden="true"
+          >
+            <Users size={26} weight="duotone" />
+          </span>
+        </div>
+      </header>
+
+      {addingStudent ? (
+        <Suspense fallback={null}>
+          <AddStudentPanel
+            canGrantCourses={can("student.access.manage")}
+            onClose={() => setAddingStudent(false)}
+            onCreated={(student) => {
+              setAddingStudent(false);
+              setNotice?.(
+                student.welcomeEmailSent
+                  ? `${student.displayName} was added. We emailed ${student.email} how to sign in.`
+                  : `${student.displayName} was added, but the welcome email could not be sent. They can still sign in with ${student.email}.`,
+              );
+            }}
+          />
+        </Suspense>
+      ) : null}
+
+      {/* Key Stats Summary Banner */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3.5 mb-6">
+        {/* Card 1: Total Learners */}
+        <ElevatedCard
+          as="div"
+          className="p-3 sm:p-5 transition-all duration-200"
+        >
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+            <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+              Total Learners
+            </p>
+            <span className="flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
+              <Users size={18} weight="duotone" />
+            </span>
+          </div>
+          <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+            {totalCount.toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs text-(--muted)">Academy learners</p>
+        </ElevatedCard>
+
+        {/* Card 2: Active Learners */}
+        <ElevatedCard
+          as="div"
+          className="p-3 sm:p-5 transition-all duration-200"
+        >
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+            <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+              Active Learners
+            </p>
+            <span className="flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-500">
+              <Sparkle size={18} weight="duotone" />
+            </span>
+          </div>
+          <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+            {metrics.activeLearnersCount.toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs text-(--muted)">Enrolled in courses</p>
+        </ElevatedCard>
+
+        {/* Card 3: Total Enrollments */}
+        <ElevatedCard
+          as="div"
+          className="p-3 sm:p-5 transition-all duration-200"
+        >
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+            <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+              Total Enrollments
+            </p>
+            <span className="flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent)">
+              <GraduationCap size={18} weight="duotone" />
+            </span>
+          </div>
+          <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+            {metrics.totalEnrollmentsCount.toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs text-(--muted)">Course enrollments</p>
+        </ElevatedCard>
+
+        {/* Card 4: Avg Completion */}
+        <ElevatedCard
+          as="div"
+          className="p-3 sm:p-5 transition-all duration-200"
+        >
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+            <p className="text-[0.7rem] sm:text-xs font-semibold text-(--muted) tracking-wide truncate">
+              Avg Completion
+            </p>
+            <span className="flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/12 text-amber-500">
+              <TrendUp size={18} weight="duotone" />
+            </span>
+          </div>
+          <p className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-(--text)">
+            {metrics.avgProgress}%
+          </p>
+          <p className="mt-1 text-xs text-(--muted)">Overall learning rate</p>
+        </ElevatedCard>
+      </div>
+
+      {/* Filter toolbar */}
+      <div className="mb-6">
+        <StudentFiltersBar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          courseFilter={courseFilter}
+          onCourseFilterChange={changeCourseFilter}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          sortBy={sortBy}
+          onSortByChange={setSortBy}
+          availableCourses={availableCourses}
+          onCourseFilterOpen={() => setIsCourseFilterOpen(true)}
+          onCourseFilterClose={() => setIsCourseFilterOpen(false)}
+          onResetFilters={resetFilters}
+        />
+      </div>
+
+      {/* Main Student List Area */}
+      <main className="w-full min-w-0" aria-label="Students List">
+        {isLoading ? (
+          <StudentsTableSkeleton />
+        ) : isError ? (
+          // Error State
+          <ElevatedCard
+            as="div"
+            className="flex flex-col items-center justify-center p-12 text-center"
+          >
+            <WarningCircle size={36} className="text-rose-400 mb-3" />
+            <h3 className="text-base font-semibold text-(--text)">
+              Unable to load students
+            </h3>
+            <p className="mt-1 text-xs text-(--muted) max-w-sm">
+              An error occurred while fetching the learners list. Please check
+              your connection and try again.
+            </p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
+            >
+              <ArrowCounterClockwise size={14} />
+              <span>Retry</span>
+            </button>
+          </ElevatedCard>
+        ) : students.length > 0 ? (
+          // Modern ProCodrr Students Table
+          <StudentsTable
+            students={students}
+            totalCount={totalCount}
+            isLoading={isLoading}
+            isTransitioning={
+              isPlaceholderData || (isFetching && !isFetchingNextPage)
+            }
+            hasNextPage={hasNextPage}
+            isFetchingNextPage={isFetchingNextPage}
+            fetchNextPage={fetchNextPage}
+            onNavigatePage={onNavigatePage}
+            setNotice={setNotice}
+          />
+        ) : (
+          // Empty State
+          <ElevatedCard
+            as="div"
+            className="flex flex-col items-center justify-center p-12 text-center"
+          >
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-(--hover) text-(--muted) mb-3">
+              <Users size={28} weight="duotone" />
+            </div>
+            <h3 className="text-base font-semibold text-(--text)">
+              No students found
+            </h3>
+            <p className="mt-1 max-w-sm text-xs md:text-sm text-(--muted) leading-relaxed">
+              {searchQuery || courseFilter !== "all" || statusFilter !== "all"
+                ? "No learners match your current search query or active filters. Try adjusting your filters or search terms."
+                : "There are no students registered in your academy yet."}
+            </p>
+            {(searchQuery ||
+              courseFilter !== "all" ||
+              statusFilter !== "all") && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-(--accent) px-4 py-2 text-xs font-semibold text-(--on-accent,#ffffff) shadow-sm hover:opacity-90 cursor-pointer"
+              >
+                <ArrowCounterClockwise size={14} />
+                <span>Reset filters</span>
+              </button>
+            )}
+          </ElevatedCard>
+        )}
+      </main>
+    </div>
+  );
+}

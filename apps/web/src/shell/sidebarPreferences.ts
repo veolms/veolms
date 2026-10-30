@@ -1,0 +1,358 @@
+import {
+  normalizeSidebarGlow,
+  normalizeSidebarGlowBlur,
+  normalizeSidebarGlowShape,
+  normalizeSidebarGlowShapeSize,
+  normalizeSidebarGlowIntensity,
+  SIDEBAR_DOCK_DEFAULT_ITEMS,
+  SIDEBAR_DOCK_DEFAULT_ORDER,
+  SIDEBAR_GLOW_BLUR_DEFAULT,
+  SIDEBAR_GLOW_DEFAULT,
+  SIDEBAR_GLOW_INTENSITY_DEFAULT,
+  SIDEBAR_GLOW_SHAPE_DEFAULT,
+  SIDEBAR_GLOW_SHAPE_SIZE_DEFAULT,
+  SIDEBAR_HEADER_DEFAULT_VERSION,
+} from "../settings/settingsPreferences";
+import type {
+  SidebarMode,
+  SidebarPreferences,
+} from "../settings/settingsPreferences";
+import {
+  COMPACT_NAVIGATION_QUERY,
+  getResponsiveSidebarMode,
+  SIDEBAR_RESPONSIVE_COLLAPSE_QUERY,
+} from "./sidebarVisibility";
+
+export const SIDEBAR_MIN_WIDTH = 200;
+const SIDEBAR_MAX_WIDTH = 300;
+const SIDEBAR_MAX_WIDTH_LIMIT = 520;
+export const SIDEBAR_DEFAULT_WIDTH = 220;
+const SIDEBAR_MAX_WIDTH_DEFAULT_VERSION = "300px-v1";
+const SIDEBAR_ICON_DEFAULT_VERSION = "monochrome-theme-v1";
+const SIDEBAR_DOCK_DEFAULT_VERSION = "fixed-three-controls-v4";
+
+export interface SidebarShellState {
+  mode: SidebarMode;
+  width: number;
+}
+
+export interface VeoBootstrapState {
+  sidebar?: SidebarShellState;
+  navigation?: {
+    compact: boolean;
+  };
+  learning?: {
+    curriculumCollapsed: boolean;
+    curriculumWidth: number;
+  };
+  player?: {
+    autoplay: boolean;
+    muted: boolean;
+    playbackRate: number;
+    volume: number;
+  };
+}
+
+declare global {
+  interface Window {
+    __VEO_BOOTSTRAP__?: VeoBootstrapState;
+  }
+}
+
+const isSidebarMode = (value: unknown): value is SidebarMode =>
+  value === "expanded" || value === "collapsed" || value === "hidden";
+
+export const clampSidebarMaxWidth = (value: unknown): number => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue)
+    ? Math.min(
+        SIDEBAR_MAX_WIDTH_LIMIT,
+        Math.max(SIDEBAR_MIN_WIDTH, numericValue),
+      )
+    : SIDEBAR_MAX_WIDTH;
+};
+
+export const clampSidebarWidth = (
+  value: number | string,
+  maxWidth: unknown = SIDEBAR_MAX_WIDTH,
+): number =>
+  Math.min(
+    clampSidebarMaxWidth(maxWidth),
+    Math.max(SIDEBAR_MIN_WIDTH, Number(value)),
+  );
+
+export const getInitialSidebarWidth = (
+  maxWidth: unknown = SIDEBAR_MAX_WIDTH,
+): number => {
+  if (typeof window === "undefined") return SIDEBAR_DEFAULT_WIDTH;
+
+  const rawSavedWidth = localStorage.getItem("veolms-sidebar-width");
+  if (rawSavedWidth === null || rawSavedWidth.trim() === "") {
+    return SIDEBAR_DEFAULT_WIDTH;
+  }
+
+  const savedWidth = Number(rawSavedWidth);
+  return Number.isFinite(savedWidth)
+    ? clampSidebarWidth(savedWidth, maxWidth)
+    : SIDEBAR_DEFAULT_WIDTH;
+};
+
+export const getInitialSidebarMode = (): SidebarMode => {
+  if (typeof window === "undefined") return "expanded";
+
+  const storedMode = localStorage.getItem("veolms-sidebar-mode");
+  if (isSidebarMode(storedMode)) return storedMode;
+
+  const legacyCollapsed = localStorage.getItem("veolms-sidebar-collapsed");
+  if (legacyCollapsed !== null) {
+    return legacyCollapsed === "true" ? "collapsed" : "expanded";
+  }
+
+  return getResponsiveSidebarMode(
+    "expanded",
+    window.matchMedia(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY).matches,
+  );
+};
+
+const getStoredSidebarMaxWidth = (): number => {
+  if (
+    localStorage.getItem("veolms-sidebar-max-width-default-version") !==
+    SIDEBAR_MAX_WIDTH_DEFAULT_VERSION
+  ) {
+    return SIDEBAR_MAX_WIDTH;
+  }
+
+  try {
+    const stored: unknown = JSON.parse(
+      localStorage.getItem("veolms-sidebar-preferences") || "{}",
+    );
+    return clampSidebarMaxWidth(
+      stored && typeof stored === "object"
+        ? (stored as Record<string, unknown>).sidebarMaxWidth
+        : SIDEBAR_MAX_WIDTH,
+    );
+  } catch {
+    return SIDEBAR_MAX_WIDTH;
+  }
+};
+
+export const applySidebarShellToDocument = (state: SidebarShellState) => {
+  const root = document.documentElement;
+  root.dataset.sidebarState = state.mode;
+  root.style.setProperty("--sidebar-width", `${state.width}px`);
+  root.style.setProperty("--sidebar-expanded-width", `${state.width}px`);
+  window.__VEO_BOOTSTRAP__ = {
+    ...window.__VEO_BOOTSTRAP__,
+    sidebar: state,
+  };
+};
+
+export const getInitialSidebarShellState = (): SidebarShellState => {
+  if (typeof window === "undefined") {
+    return { mode: "expanded", width: SIDEBAR_DEFAULT_WIDTH };
+  }
+
+  const bootstrapState = window.__VEO_BOOTSTRAP__?.sidebar;
+  if (bootstrapState && isSidebarMode(bootstrapState.mode)) {
+    return {
+      mode: bootstrapState.mode,
+      width: clampSidebarWidth(bootstrapState.width, SIDEBAR_MAX_WIDTH_LIMIT),
+    };
+  }
+
+  // The bootstrap object can be replaced while the SPA fallback is being
+  // swapped for a deep-link route in development. The head script has
+  // already applied the same value to the document, so preserve that geometry
+  // before consulting storage or falling back to the default width.
+  const root = document.documentElement;
+  const rootWidth = Number.parseFloat(
+    root.style.getPropertyValue("--sidebar-width"),
+  );
+  if (Number.isFinite(rootWidth) && isSidebarMode(root.dataset.sidebarState)) {
+    return {
+      mode: root.dataset.sidebarState,
+      width: clampSidebarWidth(rootWidth, SIDEBAR_MAX_WIDTH_LIMIT),
+    };
+  }
+
+  return {
+    mode: getInitialSidebarMode(),
+    width: getInitialSidebarWidth(getStoredSidebarMaxWidth()),
+  };
+};
+
+export const getSidebarShellBootstrapScript = () =>
+  `(()=>{const r=document.documentElement,d=${SIDEBAR_DEFAULT_WIDTH},n=${SIDEBAR_MIN_WIDTH},x=${SIDEBAR_MAX_WIDTH_LIMIT},q=matchMedia(${JSON.stringify(COMPACT_NAVIGATION_QUERY)}).matches;let m="expanded",w=d,a=${SIDEBAR_MAX_WIDTH};try{const s=localStorage.getItem("veolms-sidebar-mode"),l=localStorage.getItem("veolms-sidebar-collapsed");m=s==="expanded"||s==="collapsed"||s==="hidden"?s:l!==null?(l==="true"?"collapsed":"expanded"):(matchMedia(${JSON.stringify(SIDEBAR_RESPONSIVE_COLLAPSE_QUERY)}).matches?"collapsed":"expanded");if(localStorage.getItem("veolms-sidebar-max-width-default-version")===${JSON.stringify(SIDEBAR_MAX_WIDTH_DEFAULT_VERSION)}){const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}"),v=Number(p&&p.sidebarMaxWidth);if(Number.isFinite(v))a=Math.min(x,Math.max(n,v))}const v=Number(localStorage.getItem("veolms-sidebar-width"));if(Number.isFinite(v)&&String(localStorage.getItem("veolms-sidebar-width")||"").trim())w=Math.min(a,Math.max(n,v))}catch{}const s={mode:m,width:w};window.__VEO_BOOTSTRAP__={sidebar:s,navigation:{compact:q}};r.dataset.sidebarState=m;r.dataset.navigationLayout=q?"compact":"wide";r.style.setProperty("--sidebar-width",w+"px");r.style.setProperty("--sidebar-expanded-width",w+"px")})();`;
+
+// The prerendered document is always built for the expanded sidebar, and
+// hydration does not patch a mismatched className. When the stored mode is the
+// collapsed rail, apply the rail classes as the parser inserts the shell, so
+// the first paint already has the collapsed layout instead of jumping to it
+// once React hydrates. Must run after getSidebarShellBootstrapScript.
+export const getSidebarCollapsedMarkupBootstrapScript = () =>
+  `(()=>{const r=document.documentElement,c=()=>r.dataset.sidebarState==="collapsed"&&r.dataset.navigationLayout!=="compact";if(!c())return;const s=()=>{if(!c())return;const a=document.querySelector(".courses-app"),k=document.querySelector(".courses-app .sidebar-appearance--horizontal");if(a)a.classList.add("courses-app--collapsed");if(k)k.classList.replace("sidebar-appearance--horizontal","sidebar-appearance--vertical")},o=new MutationObserver(s);o.observe(r,{childList:true,subtree:true});addEventListener("DOMContentLoaded",()=>{s();o.disconnect()},{once:true})})();`;
+
+export const getSidebarPresentationBootstrapScript = () =>
+  `(()=>{const r=document.documentElement;try{const p=JSON.parse(localStorage.getItem("veolms-sidebar-preferences")||"{}");r.dataset.collapsedTooltips=String(p.showCollapsedLabels!==false);r.dataset.collapsedSidebarLogo=String(p.showCollapsedLogo!==false);r.dataset.activeFill=String(p.highlightActive!==false);r.dataset.sidebarMonochromeMode=p.monochromeMode==="neutral"||p.monochromeMode==="custom"?p.monochromeMode:"theme";r.style.setProperty("--sidebar-monochrome-color",typeof p.monochromeColor==="string"&&p.monochromeColor?p.monochromeColor:"#6c78ff")}catch{r.dataset.collapsedTooltips="true";r.dataset.collapsedSidebarLogo="true";r.dataset.activeFill="true";r.dataset.sidebarMonochromeMode="theme";r.style.setProperty("--sidebar-monochrome-color","#6c78ff")}})();`;
+
+export const getDefaultSidebarPreferences = (): SidebarPreferences => ({
+  iconStyle: "multicolor",
+  monochromeMode: "theme",
+  monochromeColor: "#6c78ff",
+  contentLayout: "framed",
+  sidebarMaxWidth: SIDEBAR_MAX_WIDTH,
+  headerLayout: "inline",
+  dockItems: [...SIDEBAR_DOCK_DEFAULT_ITEMS],
+  dockOrder: [...SIDEBAR_DOCK_DEFAULT_ORDER],
+  showKeyboardShortcuts: true,
+  showCollapsedLabels: true,
+  showCollapsedLogo: true,
+  showSidebarOnMobile: false,
+  showResizeDimensions: false,
+  glowPalette: SIDEBAR_GLOW_DEFAULT,
+  glowShape: SIDEBAR_GLOW_SHAPE_DEFAULT,
+  glowShapeSize: SIDEBAR_GLOW_SHAPE_SIZE_DEFAULT,
+  glowBlur: SIDEBAR_GLOW_BLUR_DEFAULT,
+  glowIntensity: SIDEBAR_GLOW_INTENSITY_DEFAULT,
+  highlightActive: true,
+  elevateMenus: true,
+});
+
+export const getInitialSidebarPreferences = (): SidebarPreferences => {
+  const fallback = getDefaultSidebarPreferences();
+  if (typeof window === "undefined") return fallback;
+
+  try {
+    const saved: unknown = JSON.parse(
+      localStorage.getItem("veolms-sidebar-preferences") || "{}",
+    );
+    const storedPreferences =
+      saved && typeof saved === "object"
+        ? (saved as Record<string, unknown>)
+        : {};
+    const preferences = {
+      ...fallback,
+      ...storedPreferences,
+    } as SidebarPreferences;
+    const hasCurrentHeaderDefault =
+      localStorage.getItem("veolms-sidebar-header-default-version") ===
+      SIDEBAR_HEADER_DEFAULT_VERSION;
+    // There was no header-layout version marker before the inline default was
+    // introduced, so an existing "fixed" value cannot be distinguished from a
+    // deliberate user choice. Preserve explicit values and migrate only a
+    // missing preference to the new fallback.
+    const needsHeaderDefaultMigration =
+      !hasCurrentHeaderDefault && storedPreferences.headerLayout === undefined;
+    // The "fixed" header layout no longer has a setting, so a stored value
+    // from before is reset.
+    preferences.headerLayout = "inline";
+    preferences.glowPalette = normalizeSidebarGlow(
+      storedPreferences.glowPalette,
+    );
+    preferences.glowShape = normalizeSidebarGlowShape(
+      storedPreferences.glowShape,
+    );
+    preferences.glowShapeSize = normalizeSidebarGlowShapeSize(
+      storedPreferences.glowShapeSize,
+    );
+    preferences.glowBlur = normalizeSidebarGlowBlur(storedPreferences.glowBlur);
+    preferences.glowIntensity = normalizeSidebarGlowIntensity(
+      storedPreferences.glowIntensity,
+    );
+    preferences.elevateMenus =
+      typeof storedPreferences.elevateMenus === "boolean"
+        ? storedPreferences.elevateMenus
+        : typeof storedPreferences.alwaysElevateMenus === "boolean"
+          ? storedPreferences.alwaysElevateMenus
+          : true;
+    preferences.showSidebarOnMobile =
+      storedPreferences.showSidebarOnMobile === true;
+    delete preferences.alwaysElevateMenus;
+    const hasCurrentDockDefault =
+      localStorage.getItem("veolms-sidebar-dock-default-version") ===
+      SIDEBAR_DOCK_DEFAULT_VERSION;
+    preferences.dockItems = [...SIDEBAR_DOCK_DEFAULT_ITEMS];
+    preferences.dockOrder = [...SIDEBAR_DOCK_DEFAULT_ORDER];
+    const needsStructureMigration =
+      storedPreferences.headerLayout !== preferences.headerLayout ||
+      JSON.stringify(storedPreferences.dockItems) !==
+        JSON.stringify(preferences.dockItems) ||
+      JSON.stringify(storedPreferences.dockOrder) !==
+        JSON.stringify(preferences.dockOrder) ||
+      Object.prototype.hasOwnProperty.call(
+        storedPreferences,
+        "showThemeIcon",
+      ) ||
+      Object.prototype.hasOwnProperty.call(
+        storedPreferences,
+        "alwaysElevateMenus",
+      ) ||
+      storedPreferences.showSidebarOnMobile !== preferences.showSidebarOnMobile;
+    delete preferences.showThemeIcon;
+    const hasCurrentMaxWidthDefault =
+      localStorage.getItem("veolms-sidebar-max-width-default-version") ===
+      SIDEBAR_MAX_WIDTH_DEFAULT_VERSION;
+
+    const needsMaxWidthMigration = !hasCurrentMaxWidthDefault;
+    if (needsMaxWidthMigration) {
+      preferences.sidebarMaxWidth = SIDEBAR_MAX_WIDTH;
+    }
+
+    const hasCurrentIconDefault =
+      localStorage.getItem("veolms-sidebar-icon-default-version") ===
+      SIDEBAR_ICON_DEFAULT_VERSION;
+    const needsIconMigration = !hasCurrentIconDefault;
+    // The marker's name dates from when monochrome was the default. A
+    // browser without it has never had the icon defaults applied, so it gets
+    // the current default; one that has it keeps whatever is stored.
+    if (needsIconMigration) {
+      preferences.iconStyle = "multicolor";
+      preferences.monochromeMode = "theme";
+    }
+
+    if (
+      needsMaxWidthMigration ||
+      needsIconMigration ||
+      needsStructureMigration ||
+      !hasCurrentDockDefault ||
+      !hasCurrentHeaderDefault
+    ) {
+      localStorage.setItem(
+        "veolms-sidebar-preferences",
+        JSON.stringify(preferences),
+      );
+
+      if (needsMaxWidthMigration) {
+        localStorage.setItem(
+          "veolms-sidebar-max-width-default-version",
+          SIDEBAR_MAX_WIDTH_DEFAULT_VERSION,
+        );
+      }
+
+      if (needsIconMigration) {
+        localStorage.setItem(
+          "veolms-sidebar-icon-default-version",
+          SIDEBAR_ICON_DEFAULT_VERSION,
+        );
+      }
+
+      if (!hasCurrentDockDefault) {
+        localStorage.setItem(
+          "veolms-sidebar-dock-default-version",
+          SIDEBAR_DOCK_DEFAULT_VERSION,
+        );
+      }
+
+      if (!hasCurrentHeaderDefault) {
+        localStorage.setItem(
+          "veolms-sidebar-header-default-version",
+          SIDEBAR_HEADER_DEFAULT_VERSION,
+        );
+      }
+    }
+
+    return preferences;
+  } catch {
+    return fallback;
+  }
+};

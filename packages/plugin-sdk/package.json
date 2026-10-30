@@ -1,0 +1,26 @@
+{
+  "name": "@veolms/plugin-sdk",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "fastify": "5.11.0",
+    "kysely": "catalog:"
+  },
+  "peerDependencies": {
+    "fastify": ">=5.0.0",
+    "kysely": ">=0.27.0"
+  },
+  "peerDependenciesMeta": {
+    "fastify": {
+      "optional": true
+    },
+    "kysely": {
+      "optional": false
+    }
+  }
+}

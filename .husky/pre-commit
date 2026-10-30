@@ -1,0 +1,7 @@
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$current_branch" = "development" ]; then
+  echo "Direct commits to the development branch are not allowed. Please switch to a feature/fix/chore branch."
+  exit 1
+fi
+
+pnpm exec lint-staged

@@ -1,0 +1,1 @@
+export const DISCUSSION_ATTACHMENTS_ENABLED = true;

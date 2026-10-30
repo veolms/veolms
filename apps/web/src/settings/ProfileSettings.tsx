@@ -1,0 +1,2188 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { ChangeEvent, Dispatch, ReactNode, SetStateAction } from "react";
+import { createPortal } from "react-dom";
+import { AtIcon as At } from "@phosphor-icons/react/At";
+import { CameraIcon as Camera } from "@phosphor-icons/react/Camera";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { EnvelopeSimpleIcon as EnvelopeSimple } from "@phosphor-icons/react/EnvelopeSimple";
+import { GithubLogoIcon as GithubLogo } from "@phosphor-icons/react/GithubLogo";
+import { GlobeIcon as Globe } from "@phosphor-icons/react/Globe";
+import { LinkedinLogoIcon as LinkedinLogo } from "@phosphor-icons/react/LinkedinLogo";
+import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
+import { MagicWandIcon as MagicWand } from "@phosphor-icons/react/MagicWand";
+import { PhoneIcon as Phone } from "@phosphor-icons/react/Phone";
+import { SealCheckIcon as SealCheck } from "@phosphor-icons/react/SealCheck";
+import { ShieldWarningIcon as ShieldWarning } from "@phosphor-icons/react/ShieldWarning";
+import { UserIcon as User } from "@phosphor-icons/react/User";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
+import { XIcon as X } from "@phosphor-icons/react/X";
+import {
+  CountryCodeSelect,
+  getDefaultCountry,
+} from "../auth/CountryCodeSelect";
+import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
+import { ToastNotification } from "../ToastNotification";
+import { PublicProfileCard } from "../components/PublicProfileCard";
+import "../styles/features/profile.css";
+import { OTP_CODE_FIELD_ID, OtpCodeInput } from "../auth/OtpCodeInput";
+import {
+  DEFAULT_COUNTRY_ID,
+  findCountry,
+  findCountryByPhoneNumber,
+  formatNationalPhoneNumber,
+  toInternationalPhoneNumber,
+  toNationalNumber,
+} from "../auth/identifier";
+import type { CountryOption } from "../auth/identifier";
+import { useBackDismiss } from "../navigation/useBackDismiss";
+import { AvatarCropDialog } from "./AvatarCropDialog";
+import { AvatarStylePicker } from "./AvatarStylePicker";
+import type {
+  ProfileIdentity,
+  ProfilePreferences,
+  ProfileRole,
+} from "./profileTypes";
+import { getDefaultProfileIdentity } from "./profileTypes";
+import { getShortUsernameHint } from "./usernameProfileHint";
+import {
+  useCurrentUser,
+  useSendEmailVerificationOtp,
+  useSendPhoneVerificationOtp,
+  useSelectAvatar,
+  useUserAvatars,
+  useVerifyEmail,
+  useVerifyPhoneNumber,
+  updatePublicProfileCacheFromUser,
+} from "../services/auth";
+import { authStore, useAuthStore, type AuthUser } from "../store/auth.store";
+import type { ProfileUpdateRequest } from "@veolms/contracts";
+import { CircularCheckbox } from "../components/CircularCheckbox";
+import { AutosaveStatus, useAutosync } from "../lib/autosync";
+import {
+  authKeys,
+  authService,
+  resolveAvatarUploadContentType,
+} from "../services/auth";
+import { useQueryClient } from "@tanstack/react-query";
+import { getRoleDisplayName, getUserRoles } from "../shell/workspaceRole";
+
+type EditableProfile = ProfilePreferences & {
+  bio: string;
+  emailPublic: boolean;
+  mobilePublic: boolean;
+  linkedinPublic: boolean;
+  githubPublic: boolean;
+  websitePublic: boolean;
+  websiteUrl: string;
+};
+
+type SocialVisibilityField = "linkedin" | "github" | "portfolio";
+const SIGN_IN_REQUIRED_MESSAGE = "Sign in to edit your profile.";
+
+const MAX_PROFILE_PHOTO_BYTES = 20 * 1024 * 1024;
+
+export interface ProfileSettingsProps {
+  role?: ProfileRole;
+  isAuthenticated?: boolean;
+  onProfileSaved?: (profile: ProfilePreferences) => void;
+}
+
+const toEditableProfile = (profile: ProfileIdentity): EditableProfile => ({
+  displayName: profile.displayName,
+  avatarDataUrl: profile.avatarDataUrl,
+  avatarSrcSet: profile.avatarSrcSet,
+  username: profile.username ?? "",
+  bio: profile.bio ?? "",
+  mobileNumber: profile.mobileNumber ?? "",
+  mobileVerified: profile.mobileVerified ?? false,
+  emailPublic: profile.emailPublic ?? false,
+  mobilePublic: profile.mobilePublic ?? false,
+  linkedinUrl: profile.linkedinUrl ?? "",
+  linkedinPublic: profile.linkedinPublic ?? false,
+  githubUrl: profile.githubUrl ?? "",
+  githubPublic: profile.githubPublic ?? false,
+  websitePublic: profile.websitePublic ?? false,
+  websiteUrl: profile.websiteUrl ?? "",
+});
+
+const profileIdentityFromUser = (
+  user: AuthUser | null | undefined,
+  role: ProfileRole,
+): ProfileIdentity => ({
+  displayName: user?.displayName ?? "",
+  avatarDataUrl: user?.avatarDataUrl ?? null,
+  avatarSrcSet: user?.avatarSrcSet ?? [],
+  username: user?.username ?? "",
+  bio: user?.bio ?? "",
+  email: user?.email ?? "",
+  mobileNumber: user?.phoneNo ?? "",
+  mobileVerified: user?.mobileVerified ?? false,
+  mobilePublic: Boolean(
+    user?.mobilePublic && user?.phoneNo && user?.mobileVerified,
+  ),
+  emailPublic: Boolean(user?.emailPublic && user?.email && user?.emailVerified),
+  linkedinUrl: user?.linkedinUrl ?? "",
+  linkedinPublic: Boolean(user?.linkedinPublic && user?.linkedinUrl),
+  githubUrl: user?.githubUrl ?? "",
+  githubPublic: Boolean(user?.githubPublic && user?.githubUrl),
+  websitePublic: Boolean(user?.websitePublic && user?.websiteUrl),
+  websiteUrl: user?.websiteUrl ?? "",
+  roleLabel: getRoleDisplayName(role, getUserRoles(user)),
+});
+
+const normalizedMobileNumber = (value: string | null | undefined) =>
+  (value ?? "").replace(/[^\d+]/g, "");
+
+const profilesMatch = (left: EditableProfile, right: EditableProfile) =>
+  left.displayName.trim() === right.displayName.trim() &&
+  left.avatarDataUrl === right.avatarDataUrl &&
+  (left.username ?? "").trim().toLowerCase() ===
+    (right.username ?? "").trim().toLowerCase() &&
+  left.bio.trim() === right.bio.trim() &&
+  normalizedMobileNumber(left.mobileNumber) ===
+    normalizedMobileNumber(right.mobileNumber) &&
+  Boolean(left.mobileVerified) === Boolean(right.mobileVerified) &&
+  Boolean(left.emailPublic) === Boolean(right.emailPublic) &&
+  Boolean(left.mobilePublic) === Boolean(right.mobilePublic) &&
+  (left.linkedinUrl ?? "").trim() === (right.linkedinUrl ?? "").trim() &&
+  Boolean(left.linkedinPublic) === Boolean(right.linkedinPublic) &&
+  (left.githubUrl ?? "").trim() === (right.githubUrl ?? "").trim() &&
+  Boolean(left.githubPublic) === Boolean(right.githubPublic) &&
+  Boolean(left.websitePublic) === Boolean(right.websitePublic) &&
+  (left.websiteUrl ?? "").trim() === (right.websiteUrl ?? "").trim();
+
+const buildProfileUpdatePayload = (
+  draft: EditableProfile,
+  saved: EditableProfile,
+): {
+  payload: ProfileUpdateRequest | null;
+  hasInvalidFields: boolean;
+  /** The only thing holding the save back is a number waiting to be verified. */
+  awaitingMobileVerification: boolean;
+} => {
+  const payload: ProfileUpdateRequest = {};
+  let hasInvalidFields = false;
+  const displayName = draft.displayName.trim();
+  const savedDisplayName = saved.displayName.trim();
+  if (displayName !== savedDisplayName) {
+    if (displayName) payload.displayName = displayName;
+    else hasInvalidFields = true;
+  }
+
+  const username = draft.username?.trim() ?? "";
+  const savedUsername = saved.username?.trim().toLowerCase() ?? "";
+  if (username.toLowerCase() !== savedUsername) {
+    if (/^[a-zA-Z0-9._-]+$/.test(username) && username.length >= 3) {
+      payload.username = username;
+    } else {
+      hasInvalidFields = true;
+    }
+  }
+
+  if (draft.avatarDataUrl !== saved.avatarDataUrl) {
+    payload.avatarDataUrl = draft.avatarDataUrl;
+  }
+
+  const bio = draft.bio.trim();
+  const savedBio = saved.bio.trim();
+  if (bio !== savedBio) payload.bio = bio || null;
+
+  if (Boolean(draft.emailPublic) !== Boolean(saved.emailPublic)) {
+    payload.emailPublic = draft.emailPublic;
+  }
+
+  if (Boolean(draft.mobilePublic) !== Boolean(saved.mobilePublic)) {
+    payload.mobilePublic = draft.mobilePublic;
+  }
+
+  const socialFields = [
+    ["linkedinUrl", "linkedinPublic"],
+    ["githubUrl", "githubPublic"],
+    ["websiteUrl", "websitePublic"],
+  ] as const;
+  for (const [urlField, visibilityField] of socialFields) {
+    const url = draft[urlField]?.trim() ?? "";
+    const savedUrl = saved[urlField]?.trim() ?? "";
+    if (url !== savedUrl) {
+      payload[urlField] = url || null;
+      if (!url) payload[visibilityField] = false;
+    }
+    if (
+      Boolean(draft[visibilityField]) !== Boolean(saved[visibilityField]) &&
+      url
+    ) {
+      payload[visibilityField] = draft[visibilityField];
+    }
+  }
+
+  const mobileNumberChanged =
+    normalizedMobileNumber(draft.mobileNumber) !==
+    normalizedMobileNumber(saved.mobileNumber);
+  const mobileUnverified = mobileNumberChanged && !draft.mobileVerified;
+  const awaitingMobileVerification = mobileUnverified && !hasInvalidFields;
+  if (mobileUnverified) hasInvalidFields = true;
+
+  return {
+    payload: Object.keys(payload).length ? payload : null,
+    hasInvalidFields,
+    awaitingMobileVerification,
+  };
+};
+
+const externalUrl = (value: string) =>
+  /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+interface PublicVisibilityCheckboxProps {
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  disabled?: boolean;
+}
+
+interface LockedProfileControlProps {
+  children: ReactNode;
+  label: string;
+  locked: boolean;
+  onBlocked: (label: string) => void;
+  className?: string;
+}
+
+interface LockedProfileControlContextValue {
+  activeControl: string | null;
+  setActiveControl: Dispatch<SetStateAction<string | null>>;
+}
+
+const LockedProfileControlContext =
+  createContext<LockedProfileControlContextValue | null>(null);
+
+function LockedProfileControl({
+  children,
+  label,
+  locked,
+  onBlocked,
+  className = "",
+}: LockedProfileControlProps) {
+  const tooltipId = `profile-auth-tooltip-${label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")}`;
+  const lockedControlContext = useContext(LockedProfileControlContext);
+  const [localTooltipActive, setLocalTooltipActive] = useState(false);
+  const isTooltipActive = lockedControlContext
+    ? lockedControlContext.activeControl === tooltipId
+    : localTooltipActive;
+
+  const activateTooltip = () => {
+    if (lockedControlContext) {
+      lockedControlContext.setActiveControl(tooltipId);
+      return;
+    }
+    setLocalTooltipActive(true);
+  };
+
+  const deactivateTooltip = () => {
+    if (lockedControlContext) {
+      lockedControlContext.setActiveControl((current) =>
+        current === tooltipId ? null : current,
+      );
+      return;
+    }
+    setLocalTooltipActive(false);
+  };
+
+  useEffect(() => {
+    if (!locked) {
+      if (lockedControlContext) {
+        lockedControlContext.setActiveControl((current) =>
+          current === tooltipId ? null : current,
+        );
+      } else {
+        setLocalTooltipActive(false);
+      }
+    }
+  }, [locked, lockedControlContext, tooltipId]);
+
+  if (!locked) return children;
+
+  return (
+    <span
+      className={`group relative ${className}`}
+      data-profile-control-locked
+      onClick={() => {
+        activateTooltip();
+        onBlocked(label);
+      }}
+      onMouseEnter={activateTooltip}
+      onMouseLeave={deactivateTooltip}
+      onFocus={activateTooltip}
+      onBlur={deactivateTooltip}
+    >
+      {children}
+      <button
+        type="button"
+        className="settings-profile__auth-lock-button"
+        aria-label={`Sign in to edit ${label}`}
+        aria-describedby={isTooltipActive ? tooltipId : undefined}
+        onClick={(event) => {
+          event.stopPropagation();
+          activateTooltip();
+          onBlocked(label);
+        }}
+      >
+        <WarningCircle
+          className={`settings-profile__auth-lock-icon${
+            isTooltipActive ? " is-visible" : ""
+          }`}
+          size={16}
+          weight="fill"
+          aria-hidden="true"
+        />
+        {isTooltipActive && (
+          <span
+            id={tooltipId}
+            className="settings-profile__auth-tooltip is-visible"
+            role="tooltip"
+          >
+            <span
+              className="settings-profile__auth-tooltip-icon"
+              aria-hidden="true"
+            >
+              <Lock size={14} weight="bold" />
+            </span>
+            <span className="settings-profile__auth-tooltip-copy">
+              <strong>Sign in required</strong>
+              <span>{SIGN_IN_REQUIRED_MESSAGE}</span>
+            </span>
+          </span>
+        )}
+      </button>
+    </span>
+  );
+}
+
+function PublicVisibilityCheckbox({
+  id,
+  checked,
+  onChange,
+  label,
+  disabled = false,
+}: PublicVisibilityCheckboxProps) {
+  return (
+    <CircularCheckbox
+      id={id}
+      checked={checked}
+      onCheckedChange={onChange}
+      label="Show publicly"
+      ariaLabel={label}
+      labelPosition="before"
+      className="settings-profile__visibility-checkbox"
+      indicatorClassName="settings-profile__visibility-checkbox-mark"
+      unstyled
+      disabled={disabled}
+    />
+  );
+}
+
+export function ProfileSettings({
+  role = "student",
+  isAuthenticated = true,
+  onProfileSaved,
+}: ProfileSettingsProps) {
+  const {
+    data: userProfile,
+    isError: userProfileError,
+    isFetched: userProfileFetched,
+  } = useCurrentUser();
+  const storeUser = useAuthStore((state) => state.user);
+  const activeUser =
+    userProfileFetched && !userProfileError ? userProfile : storeUser;
+  const canEdit = isAuthenticated && Boolean(activeUser);
+  const queryClient = useQueryClient();
+  const lastPublicProfileUsername = useRef(activeUser?.username ?? null);
+  useEffect(() => {
+    if (!activeUser) return;
+    updatePublicProfileCacheFromUser(
+      queryClient,
+      activeUser,
+      lastPublicProfileUsername.current,
+    );
+    lastPublicProfileUsername.current = activeUser.username;
+  }, [activeUser, queryClient]);
+  const {
+    data: storedAvatars = [],
+    isPending: storedAvatarsLoading,
+    isError: storedAvatarsError,
+  } = useUserAvatars({ enabled: canEdit });
+  const selectAvatarMutation = useSelectAvatar();
+  const sendPhoneVerificationMutation = useSendPhoneVerificationOtp();
+  const verifyPhoneNumberMutation = useVerifyPhoneNumber();
+  const sendEmailVerificationMutation = useSendEmailVerificationOtp();
+  const verifyEmailMutation = useVerifyEmail();
+
+  const initialIdentity = useMemo(
+    () => getDefaultProfileIdentity(role),
+    [role],
+  );
+  const serverProfile = useMemo(
+    () =>
+      toEditableProfile(
+        activeUser
+          ? profileIdentityFromUser(activeUser, role)
+          : initialIdentity,
+      ),
+    [activeUser, initialIdentity, role],
+  );
+  const autosyncKey = useMemo(
+    () => ({
+      entity: "profile",
+      entityId: activeUser?.id ?? "anonymous",
+      scope: "settings",
+    }),
+    [activeUser?.id],
+  );
+  const syncProfile = useCallback(
+    async (
+      draft: EditableProfile,
+      { previousValue }: { previousValue: EditableProfile },
+    ) => {
+      const { payload } = buildProfileUpdatePayload(draft, previousValue);
+      if (!payload) {
+        throw new Error("Complete the required profile fields before syncing.");
+      }
+      return authService.updateProfile(payload);
+    },
+    [],
+  );
+  const validateProfile = useCallback(
+    (
+      draft: EditableProfile,
+      { previousValue }: { previousValue: EditableProfile },
+    ) => {
+      const { payload, hasInvalidFields, awaitingMobileVerification } =
+        buildProfileUpdatePayload(draft, previousValue);
+      // The reason is shown under the form, so it says what to do next. A
+      // number that has been typed but not verified is the usual one, and
+      // it is a step to finish rather than a mistake.
+      return {
+        valid: Boolean(payload) && !hasInvalidFields,
+        message: awaitingMobileVerification
+          ? "Verify your mobile number to save your changes."
+          : hasInvalidFields
+            ? "Enter a display name and a valid username to save your changes."
+            : "No changes to save.",
+      };
+    },
+    [],
+  );
+  const [nameError, setNameError] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [mobileError, setMobileError] = useState("");
+  const [socialVisibilityErrors, setSocialVisibilityErrors] = useState<
+    Partial<Record<SocialVisibilityField, string>>
+  >({});
+  const [photoError, setPhotoError] = useState("");
+  const [photoSelectionError, setPhotoSelectionError] = useState<string | null>(
+    null,
+  );
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [optimisticAvatarUrl, setOptimisticAvatarUrl] = useState<string | null>(
+    null,
+  );
+  const [blockedControl, setBlockedControl] = useState("");
+  const [activeLockedControl, setActiveLockedControl] = useState<string | null>(
+    null,
+  );
+  const [verificationRequested, setVerificationRequested] = useState(false);
+  const [verificationPhone, setVerificationPhone] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [emailVerificationRequested, setEmailVerificationRequested] =
+    useState(false);
+  const [emailVerificationCode, setEmailVerificationCode] = useState("");
+  const [emailVerifiedLocally, setEmailVerifiedLocally] = useState(false);
+  const [mobileCountryId, setMobileCountryId] = useState(DEFAULT_COUNTRY_ID);
+  const [mobileVisibilityPromptOpen, setMobileVisibilityPromptOpen] =
+    useState(false);
+
+  const handleProfileSynced = useCallback(
+    (updatedUser: Awaited<ReturnType<typeof authService.updateProfile>>) => {
+      const nextProfile = toEditableProfile(
+        profileIdentityFromUser(updatedUser, role),
+      );
+      authStore.setUser(updatedUser);
+      queryClient.setQueryData(authKeys.me(), updatedUser);
+      queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
+      setMobileCountryId(
+        findCountryByPhoneNumber(nextProfile.mobileNumber ?? "")?.id ??
+          DEFAULT_COUNTRY_ID,
+      );
+      onProfileSaved?.(nextProfile);
+      return nextProfile;
+    },
+    [onProfileSaved, queryClient, role],
+  );
+  const {
+    value: draftProfile,
+    update,
+    mergeFromServer,
+    status: autosaveStatus,
+    error: autosaveError,
+  } = useAutosync<
+    EditableProfile,
+    Awaited<ReturnType<typeof authService.updateProfile>>
+  >({
+    key: autosyncKey,
+    initialValue: serverProfile,
+    enabled: canEdit,
+    sync: syncProfile,
+    validate: validateProfile,
+    isEqual: profilesMatch,
+    onSynced: handleProfileSynced,
+  });
+
+  const selectStoredAvatar = async (avatarId: string) => {
+    const updated = await selectAvatarMutation.mutateAsync(avatarId);
+    setAvatarFailed(false);
+    mergeFromServer({
+      avatarDataUrl: updated.avatarDataUrl,
+      avatarSrcSet: updated.avatarSrcSet,
+    });
+  };
+  const verificationModalOpen =
+    canEdit && (emailVerificationRequested || verificationRequested);
+  const verificationChannel = emailVerificationRequested
+    ? "email"
+    : verificationRequested
+      ? "mobile"
+      : null;
+  const verificationError =
+    verificationChannel === "email" ? emailError : mobileError;
+
+  const closeVerificationDialog = () => {
+    setEmailVerificationRequested(false);
+    setEmailVerificationCode("");
+    setVerificationRequested(false);
+    setVerificationPhone("");
+    setVerificationCode("");
+    setEmailError("");
+    setMobileError("");
+  };
+
+  useBackDismiss({
+    open: mobileVisibilityPromptOpen,
+    onDismiss: () => setMobileVisibilityPromptOpen(false),
+  });
+  const dismissVerificationThen = useBackDismiss({
+    open: verificationModalOpen,
+    onDismiss: closeVerificationDialog,
+  });
+  const dismissVerificationModal = useCallback(() => {
+    dismissVerificationThen(() => {});
+  }, [dismissVerificationThen]);
+  const [mobileVisibilityAcknowledged, setMobileVisibilityAcknowledged] =
+    useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [avatarCropOpen, setAvatarCropOpen] = useState(false);
+  const [avatarCropSource, setAvatarCropSource] = useState<string | null>(null);
+  const [avatarCropFileName, setAvatarCropFileName] =
+    useState("profile-photo.webp");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarCropSourceRef = useRef<string | null>(null);
+  const optimisticAvatarUrlRef = useRef<string | null>(null);
+  const avatarUploadGenerationRef = useRef(0);
+  const avatarUploadActiveRef = useRef(false);
+  const isMountedRef = useRef(false);
+  const mobileVisibilityDialogRef = useRef<HTMLDialogElement>(null);
+  const verificationDialogRef = useRef<HTMLDivElement>(null);
+  const verificationCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const verificationCancelButtonRef = useRef<HTMLButtonElement>(null);
+  const verificationSubmitButtonRef = useRef<HTMLButtonElement>(null);
+  const displayName = draftProfile.displayName.trim() || "Your name";
+  const username = draftProfile.username?.trim() || "username";
+  // From the saved username, not the one being typed: the profile page
+  // follows the saved name.
+  const shortUsernameHint = canEdit
+    ? getShortUsernameHint(activeUser?.username)
+    : null;
+  const avatarUrl = optimisticAvatarUrl ?? draftProfile.avatarDataUrl;
+  const avatarSrcSet = optimisticAvatarUrl ? [] : draftProfile.avatarSrcSet;
+  const showAvatar = Boolean(avatarUrl) && !avatarFailed;
+  const activeEmail = activeUser?.email || "";
+  const isEmailVerified =
+    Boolean(activeUser?.emailVerified) || emailVerifiedLocally;
+  const isMobileVerified = Boolean(draftProfile.mobileVerified);
+  const mobileCountry: CountryOption =
+    findCountry(mobileCountryId) ?? getDefaultCountry();
+  const formattedMobileNumber = formatNationalPhoneNumber(
+    draftProfile.mobileNumber ?? "",
+    mobileCountry,
+  );
+
+  const revokeAvatarCropSource = useCallback(() => {
+    const source = avatarCropSourceRef.current;
+    if (source) {
+      URL.revokeObjectURL(source);
+      avatarCropSourceRef.current = null;
+    }
+  }, []);
+
+  const revokeOptimisticAvatarPreview = useCallback(() => {
+    const previewUrl = optimisticAvatarUrlRef.current;
+    if (!previewUrl) return;
+    URL.revokeObjectURL(previewUrl);
+    optimisticAvatarUrlRef.current = null;
+  }, []);
+
+  const replaceOptimisticAvatarPreview = useCallback(
+    (previewUrl: string | null) => {
+      revokeOptimisticAvatarPreview();
+      optimisticAvatarUrlRef.current = previewUrl;
+      setOptimisticAvatarUrl(previewUrl);
+    },
+    [revokeOptimisticAvatarPreview],
+  );
+
+  const closeAvatarCropDialog = useCallback(() => {
+    setAvatarCropOpen(false);
+    setAvatarCropSource(null);
+    revokeAvatarCropSource();
+  }, [revokeAvatarCropSource]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      avatarUploadGenerationRef.current += 1;
+      avatarUploadActiveRef.current = false;
+      revokeAvatarCropSource();
+      revokeOptimisticAvatarPreview();
+    };
+  }, [revokeAvatarCropSource, revokeOptimisticAvatarPreview]);
+
+  useEffect(() => {
+    avatarUploadGenerationRef.current += 1;
+    avatarUploadActiveRef.current = false;
+    if (optimisticAvatarUrlRef.current) {
+      revokeOptimisticAvatarPreview();
+      setOptimisticAvatarUrl(null);
+    }
+    setPhotoUploading(false);
+  }, [activeUser?.id, revokeOptimisticAvatarPreview]);
+
+  useEffect(() => {
+    setNameError("");
+    setUsernameError("");
+    setEmailError("");
+    setMobileError("");
+    setSocialVisibilityErrors({});
+    setPhotoError("");
+    setPhotoSelectionError(null);
+    setPhotoUploading(false);
+    setBlockedControl("");
+    setActiveLockedControl(null);
+    setVerificationRequested(false);
+    setVerificationPhone("");
+    setVerificationCode("");
+    setEmailVerificationRequested(false);
+    setEmailVerificationCode("");
+    setEmailVerifiedLocally(false);
+    setMobileVisibilityPromptOpen(false);
+    setMobileVisibilityAcknowledged(false);
+    setAvatarPickerOpen(false);
+    closeAvatarCropDialog();
+  }, [activeUser, closeAvatarCropDialog, role]);
+
+  useEffect(() => {
+    setMobileCountryId(
+      findCountryByPhoneNumber(serverProfile.mobileNumber ?? "")?.id ??
+        DEFAULT_COUNTRY_ID,
+    );
+  }, [serverProfile.mobileNumber]);
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+    setEmailVerificationRequested(false);
+    setEmailVerificationCode("");
+    setVerificationRequested(false);
+    setVerificationPhone("");
+    setVerificationCode("");
+    setMobileVisibilityPromptOpen(false);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (canEdit) {
+      setBlockedControl("");
+      setActiveLockedControl(null);
+    }
+  }, [canEdit]);
+
+  useEffect(() => setAvatarFailed(false), [draftProfile.avatarDataUrl]);
+
+  useEffect(() => {
+    const dialog = mobileVisibilityDialogRef.current;
+    if (!dialog) return;
+    if (mobileVisibilityPromptOpen && !dialog.open) dialog.showModal();
+    if (!mobileVisibilityPromptOpen && dialog.open) dialog.close();
+  }, [mobileVisibilityPromptOpen]);
+
+  useEffect(() => {
+    if (!verificationModalOpen) return undefined;
+
+    const previousActiveElement =
+      typeof document !== "undefined"
+        ? (document.activeElement as HTMLElement | null)
+        : null;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dismissVerificationModal();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const dialog = verificationDialogRef.current;
+      if (!dialog) return;
+      const focusableElements = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), input:not([disabled])",
+        ),
+      );
+      if (!focusableElements.length) return;
+
+      const first = focusableElements[0]!;
+      const last = focusableElements[focusableElements.length - 1]!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    const focusTimer = window.setTimeout(() => {
+      verificationDialogRef.current
+        ?.querySelector<HTMLInputElement>(`#${OTP_CODE_FIELD_ID}`)
+        ?.focus();
+    }, 50);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.clearTimeout(focusTimer);
+      previousActiveElement?.focus();
+    };
+  }, [dismissVerificationModal, verificationModalOpen]);
+
+  const updateText = (field: keyof EditableProfile, value: string) => {
+    if (
+      field === "linkedinUrl" ||
+      field === "githubUrl" ||
+      field === "websiteUrl"
+    ) {
+      const socialField =
+        field === "linkedinUrl"
+          ? "linkedin"
+          : field === "githubUrl"
+            ? "github"
+            : "portfolio";
+      setSocialVisibilityErrors((current) => {
+        if (!current[socialField]) return current;
+        const next = { ...current };
+        delete next[socialField];
+        return next;
+      });
+    }
+    update((current) => {
+      const nextProfile = { ...current, [field]: value };
+      if (field === "linkedinUrl" && !value.trim()) {
+        nextProfile.linkedinPublic = false;
+      }
+      if (field === "githubUrl" && !value.trim()) {
+        nextProfile.githubPublic = false;
+      }
+      if (field === "websiteUrl" && !value.trim()) {
+        nextProfile.websitePublic = false;
+      }
+      return nextProfile;
+    });
+  };
+
+  const updateDisplayName = (value: string) => {
+    updateText("displayName", value);
+    if (value.trim()) setNameError("");
+  };
+
+  const updateUsername = (value: string) => {
+    updateText("username", value.replace(/^@/, ""));
+    setUsernameError("");
+  };
+
+  const updateMobileNumber = (value: string) => {
+    update((current) => ({
+      ...current,
+      mobileNumber: value,
+      mobileVerified:
+        current.mobileNumber === value ? current.mobileVerified : false,
+      mobilePublic:
+        current.mobileNumber === value ? current.mobilePublic : false,
+    }));
+    setVerificationRequested(false);
+    setVerificationPhone("");
+    setVerificationCode("");
+    setMobileError("");
+  };
+
+  const updateMobileCountry = (nextCountry: CountryOption) => {
+    const nationalNumber = toNationalNumber(
+      draftProfile.mobileNumber ?? "",
+      mobileCountry,
+    );
+    setMobileCountryId(nextCountry.id);
+    updateMobileNumber(
+      nationalNumber
+        ? toInternationalPhoneNumber(nationalNumber, nextCountry)
+        : "",
+    );
+  };
+
+  const updateVisibility = (
+    field:
+      | "emailPublic"
+      | "mobilePublic"
+      | "linkedinPublic"
+      | "githubPublic"
+      | "websitePublic",
+    value: boolean,
+  ) => {
+    update({ [field]: value } as Partial<EditableProfile>);
+  };
+
+  const requestEmailVisibilityChange = (value: boolean) => {
+    if (!value) {
+      updateVisibility("emailPublic", false);
+      return;
+    }
+    if (!isEmailVerified) {
+      setEmailError("Verify your email address before showing it publicly.");
+      return;
+    }
+    setEmailError("");
+    updateVisibility("emailPublic", true);
+  };
+
+  const requestSocialVisibilityChange = (
+    field: "linkedinPublic" | "githubPublic" | "websitePublic",
+    url: string,
+    label: string,
+    socialField: SocialVisibilityField,
+    value: boolean,
+  ) => {
+    if (!value) {
+      updateVisibility(field, false);
+      return;
+    }
+    if (!url.trim()) {
+      setSocialVisibilityErrors((current) => ({
+        ...current,
+        [socialField]: `Add your ${label} link before showing it publicly.`,
+      }));
+      return;
+    }
+    setSocialVisibilityErrors((current) => {
+      if (!current[socialField]) return current;
+      const next = { ...current };
+      delete next[socialField];
+      return next;
+    });
+    updateVisibility(field, true);
+  };
+
+  const showBlockedControlFeedback = (label: string) => {
+    setBlockedControl(label);
+  };
+
+  const closeMobileVisibilityPrompt = () => {
+    if (mobileVisibilityDialogRef.current?.open) {
+      mobileVisibilityDialogRef.current.close();
+    }
+    setMobileVisibilityPromptOpen(false);
+    setMobileVisibilityAcknowledged(false);
+  };
+
+  const requestMobileVisibilityChange = (value: boolean) => {
+    if (!value) {
+      updateVisibility("mobilePublic", false);
+      return;
+    }
+    if (!draftProfile.mobileVerified) {
+      setMobileError("Verify your mobile number before showing it publicly.");
+      return;
+    }
+    setMobileError("");
+    setMobileVisibilityAcknowledged(false);
+    setMobileVisibilityPromptOpen(true);
+  };
+
+  const confirmMobileVisibility = () => {
+    if (!mobileVisibilityAcknowledged) return;
+    updateVisibility("mobilePublic", true);
+    closeMobileVisibilityPrompt();
+  };
+
+  const requestMobileVerification = async () => {
+    const phoneNo = draftProfile.mobileNumber?.trim() ?? "";
+    if (!canEdit) {
+      setMobileError("Sign in before verifying a mobile number.");
+      return;
+    }
+    if (!phoneNo) {
+      setMobileError("Enter a mobile number first.");
+      return;
+    }
+
+    setMobileError("");
+    try {
+      await sendPhoneVerificationMutation.mutateAsync({ phoneNo });
+      setEmailVerificationRequested(false);
+      setEmailVerificationCode("");
+      setVerificationPhone(phoneNo);
+      setVerificationCode("");
+      setVerificationRequested(true);
+    } catch (error) {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
+          : "We couldn't send the verification code. Please try again.";
+      setMobileError(message);
+    }
+  };
+
+  const requestEmailVerification = async () => {
+    if (!canEdit) {
+      setEmailError("Sign in before verifying your email address.");
+      return;
+    }
+    if (!activeEmail) {
+      setEmailError("Add an email address before verifying it.");
+      return;
+    }
+
+    setEmailError("");
+    try {
+      await sendEmailVerificationMutation.mutateAsync({});
+      setVerificationRequested(false);
+      setVerificationPhone("");
+      setVerificationCode("");
+      setEmailVerificationCode("");
+      setEmailVerificationRequested(true);
+    } catch (error) {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
+          : "We couldn't send the verification code. Please try again.";
+      setEmailError(message);
+    }
+  };
+
+  const verifyMobileNumber = async () => {
+    const phoneNo = verificationPhone.trim();
+    const code = verificationCode.trim();
+    if (!phoneNo) {
+      setMobileError("Enter a mobile number first.");
+      return;
+    }
+    if (!/^\d{6}$/.test(code)) {
+      setMobileError("Enter the 6-digit code sent to your mobile number.");
+      return;
+    }
+
+    setMobileError("");
+    try {
+      await verifyPhoneNumberMutation.mutateAsync({ phoneNo, code });
+      mergeFromServer({
+        mobileNumber: phoneNo,
+        mobileVerified: true,
+        mobilePublic: false,
+      });
+      setMobileCountryId(
+        findCountryByPhoneNumber(phoneNo)?.id ?? mobileCountryId,
+      );
+      setVerificationRequested(false);
+      setVerificationPhone("");
+      setVerificationCode("");
+    } catch (error) {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
+          : "We couldn't verify that code. Please try again.";
+      setMobileError(message);
+    }
+  };
+
+  const verifyEmailAddress = async () => {
+    const code = emailVerificationCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      setEmailError("Enter the 6-digit code sent to your email address.");
+      return;
+    }
+
+    setEmailError("");
+    try {
+      await verifyEmailMutation.mutateAsync({ code });
+      setEmailVerifiedLocally(true);
+      setEmailVerificationRequested(false);
+      setEmailVerificationCode("");
+    } catch (error) {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
+          : "We couldn't verify that code. Please try again.";
+      setEmailError(message);
+    }
+  };
+
+  // The code is sent as soon as its sixth digit is entered. Each complete
+  // code is sent once: after a wrong one the boxes stay filled, and it is
+  // not sent again until it is changed.
+  const activeVerificationCode =
+    verificationChannel === "email"
+      ? emailVerificationCode
+      : verificationChannel === "mobile"
+        ? verificationCode
+        : "";
+  const autoSubmittedCodeRef = useRef("");
+  const submitVerificationCodeRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    submitVerificationCodeRef.current = () => {
+      if (verificationChannel === "email") {
+        if (!verifyEmailMutation.isPending) void verifyEmailAddress();
+      } else if (verificationChannel === "mobile") {
+        if (!verifyPhoneNumberMutation.isPending) void verifyMobileNumber();
+      }
+    };
+  });
+  useEffect(() => {
+    if (!/^\d{6}$/.test(activeVerificationCode)) {
+      autoSubmittedCodeRef.current = "";
+      return;
+    }
+    if (autoSubmittedCodeRef.current === activeVerificationCode) return;
+    autoSubmittedCodeRef.current = activeVerificationCode;
+    submitVerificationCodeRef.current();
+  }, [activeVerificationCode]);
+
+  const handlePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (photoUploading || avatarUploadActiveRef.current) return;
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!resolveAvatarUploadContentType(file)) {
+      setPhotoSelectionError("Choose an image file and try again.");
+      return;
+    }
+    if (file.size > MAX_PROFILE_PHOTO_BYTES) {
+      setPhotoSelectionError(
+        "Choose a profile photo that is 20 MB or smaller.",
+      );
+      return;
+    }
+
+    const activeUserId = authStore.getState().user?.id;
+    if (!activeUserId) return;
+
+    setPhotoSelectionError(null);
+    closeAvatarCropDialog();
+    setPhotoError("");
+    const source = URL.createObjectURL(file);
+    avatarCropSourceRef.current = source;
+    setAvatarCropFileName(file.name);
+    setAvatarCropSource(source);
+    setAvatarCropOpen(true);
+  };
+
+  const handleCroppedPhoto = (file: File) => {
+    const activeUserId = authStore.getState().user?.id;
+    if (
+      !activeUserId ||
+      photoUploading ||
+      avatarUploadActiveRef.current ||
+      !isMountedRef.current
+    ) {
+      return;
+    }
+
+    const previousAvatar = {
+      avatarDataUrl: draftProfile.avatarDataUrl,
+      avatarSrcSet: draftProfile.avatarSrcSet,
+    };
+    const previousAvatarFailed = avatarFailed;
+    const previewUrl = URL.createObjectURL(file);
+    const uploadGeneration = ++avatarUploadGenerationRef.current;
+    avatarUploadActiveRef.current = true;
+
+    setPhotoError("");
+    setAvatarFailed(false);
+    replaceOptimisticAvatarPreview(previewUrl);
+    setPhotoUploading(true);
+    closeAvatarCropDialog();
+
+    const canApplyUploadResult = () =>
+      isMountedRef.current &&
+      avatarUploadGenerationRef.current === uploadGeneration &&
+      authStore.getState().user?.id === activeUserId;
+
+    void (async () => {
+      try {
+        const updated = await authService.uploadAvatarPhoto(file);
+        if (!canApplyUploadResult()) return;
+        authStore.setUser(updated);
+        queryClient.setQueryData(authKeys.me(), updated);
+        setAvatarFailed(false);
+        mergeFromServer({
+          avatarDataUrl: updated.avatarDataUrl,
+          avatarSrcSet: updated.avatarSrcSet,
+        });
+        queryClient.invalidateQueries({ queryKey: authKeys.avatars() });
+      } catch (error: unknown) {
+        if (!canApplyUploadResult()) return;
+        mergeFromServer(previousAvatar);
+        setAvatarFailed(previousAvatarFailed);
+        const message =
+          error && typeof error === "object" && "message" in error
+            ? String((error as { message?: unknown }).message)
+            : "We couldn't upload that photo. Please try again.";
+        setPhotoError(message);
+      } finally {
+        if (!canApplyUploadResult()) return;
+        replaceOptimisticAvatarPreview(null);
+        avatarUploadActiveRef.current = false;
+        setPhotoUploading(false);
+      }
+    })();
+  };
+
+  const avatar = (className: string) => (
+    <span className={className} aria-hidden="true">
+      {showAvatar ? (
+        <ResponsiveAvatar
+          src={avatarUrl ?? undefined}
+          srcSet={avatarSrcSet}
+          sizes="116px"
+          alt=""
+          width={160}
+          height={160}
+          loading="eager"
+          fetchPriority="high"
+          onError={() => setAvatarFailed(true)}
+        />
+      ) : (
+        <User
+          className="settings-profile__avatar-fallback"
+          size={72}
+          weight="duotone"
+        />
+      )}
+    </span>
+  );
+
+  const publicSocialLinks = (
+    <div className="settings-profile__public-links">
+      {draftProfile.linkedinPublic && draftProfile.linkedinUrl && (
+        <a
+          href={externalUrl(draftProfile.linkedinUrl)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <LinkedinLogo size={16} weight="fill" /> LinkedIn
+        </a>
+      )}
+      {draftProfile.githubPublic && draftProfile.githubUrl && (
+        <a
+          href={externalUrl(draftProfile.githubUrl)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <GithubLogo size={16} weight="fill" /> GitHub
+        </a>
+      )}
+      {draftProfile.emailPublic && isEmailVerified && activeEmail && (
+        <a href={`mailto:${activeEmail}`}>
+          <EnvelopeSimple size={16} /> {activeEmail}
+        </a>
+      )}
+      {draftProfile.mobilePublic &&
+        draftProfile.mobileVerified &&
+        draftProfile.mobileNumber && (
+          <a href={`tel:${draftProfile.mobileNumber.replace(/\s/g, "")}`}>
+            <Phone size={16} /> {draftProfile.mobileNumber}
+          </a>
+        )}
+      {draftProfile.websitePublic && draftProfile.websiteUrl && (
+        <a
+          href={externalUrl(draftProfile.websiteUrl)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <Globe size={16} /> Portfolio
+        </a>
+      )}
+    </div>
+  );
+
+  return (
+    <LockedProfileControlContext.Provider
+      value={{
+        activeControl: activeLockedControl,
+        setActiveControl: setActiveLockedControl,
+      }}
+    >
+      <section className="settings-profile" aria-label="Profile settings">
+        <div className="settings-profile__layout">
+          <div className="settings-profile__preview-column">
+            <section
+              className="settings-profile__identity"
+              aria-labelledby="profile-photo-title"
+            >
+              <header className="settings-profile__identity-heading">
+                <div>
+                  <div className="settings-profile__title-line">
+                    <h2 id="profile-photo-title">Your public profile</h2>
+                    <span className="settings-profile__public-ready">
+                      <CheckCircle size={14} weight="fill" /> Public-ready
+                    </span>
+                  </div>
+                  <p>This is how others will see your profile.</p>
+                </div>
+              </header>
+
+              <PublicProfileCard
+                displayName={displayName}
+                username={username}
+                avatar={avatar(
+                  "settings-profile__avatar settings-profile__avatar--large",
+                )}
+                bio={
+                  draftProfile.bio ||
+                  "Add a short bio so people know what you are learning."
+                }
+                links={publicSocialLinks}
+                verifiedIcon={
+                  <SealCheck
+                    size={21}
+                    weight="fill"
+                    aria-label="Verified profile"
+                  />
+                }
+                photoAction={
+                  <LockedProfileControl
+                    label="profile photo"
+                    locked={!canEdit}
+                    onBlocked={showBlockedControlFeedback}
+                    className="settings-profile__camera-lock"
+                  >
+                    <button
+                      type="button"
+                      className="settings-profile__camera"
+                      aria-label="Choose a new profile photo"
+                      onClick={() => {
+                        if (canEdit) fileInputRef.current?.click();
+                      }}
+                      disabled={!canEdit || photoUploading}
+                    >
+                      <Camera size={17} weight="fill" />
+                    </button>
+                  </LockedProfileControl>
+                }
+                photoActions={
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      className="settings-profile__file-input"
+                      type="file"
+                      accept="image/*"
+                      aria-label="Profile photo file"
+                      tabIndex={-1}
+                      onChange={handlePhotoChange}
+                      disabled={!canEdit || photoUploading}
+                    />
+                    {canEdit && (
+                      <button
+                        type="button"
+                        className="settings-profile__generate-avatar"
+                        disabled={photoUploading}
+                        onClick={() => {
+                          if (!photoUploading) {
+                            setAvatarPickerOpen(true);
+                          }
+                        }}
+                      >
+                        {photoUploading ? (
+                          "Saving avatar…"
+                        ) : (
+                          <>
+                            <MagicWand
+                              size={14}
+                              weight="fill"
+                              aria-hidden="true"
+                            />
+                            Generate avatar
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </>
+                }
+              />
+              {photoError && (
+                <p className="settings-profile__error" role="alert">
+                  {photoError}
+                </p>
+              )}
+            </section>
+          </div>
+
+          <div className="settings-profile__form">
+            {!canEdit && blockedControl && (
+              <p
+                className="mx-0 mt-4 flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--danger)_28%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-3 py-2 text-xs font-semibold text-(--danger)"
+                role="alert"
+              >
+                <WarningCircle size={16} weight="fill" aria-hidden="true" />
+                <span>
+                  Sign in to edit your {blockedControl.toLowerCase()}.
+                </span>
+              </p>
+            )}
+            <section className="settings-profile__form-section">
+              <div className="settings-profile__section-heading">
+                <div>
+                  <h2>Personal details</h2>
+                  <p>Edit your basic identity and contact information.</p>
+                </div>
+              </div>
+              <div className="settings-profile__field-grid">
+                <div className="settings-profile__field">
+                  <label htmlFor="profile-display-name">Display name</label>
+                  <LockedProfileControl
+                    label="display name"
+                    locked={!canEdit}
+                    onBlocked={showBlockedControlFeedback}
+                    className="block w-full"
+                  >
+                    <input
+                      id="profile-display-name"
+                      name="displayName"
+                      value={draftProfile.displayName}
+                      autoComplete="name"
+                      aria-invalid={Boolean(nameError)}
+                      disabled={!canEdit}
+                      onChange={(event) =>
+                        updateDisplayName(event.target.value)
+                      }
+                    />
+                  </LockedProfileControl>
+                  {nameError && (
+                    <small className="settings-profile__error" role="alert">
+                      {nameError}
+                    </small>
+                  )}
+                </div>
+                <div className="settings-profile__field">
+                  <label htmlFor="profile-username">Username</label>
+                  <LockedProfileControl
+                    label="username"
+                    locked={!canEdit}
+                    onBlocked={showBlockedControlFeedback}
+                    className="block w-full"
+                  >
+                    <span className="settings-profile__input-shell">
+                      <At size={17} aria-hidden="true" />
+                      <input
+                        id="profile-username"
+                        name="username"
+                        value={draftProfile.username ?? ""}
+                        autoComplete="username"
+                        aria-describedby={
+                          shortUsernameHint
+                            ? "profile-username-hint"
+                            : undefined
+                        }
+                        disabled={!canEdit}
+                        onChange={(event) => updateUsername(event.target.value)}
+                      />
+                    </span>
+                  </LockedProfileControl>
+                  {usernameError && (
+                    <small className="settings-profile__error" role="alert">
+                      {usernameError}
+                    </small>
+                  )}
+                  {shortUsernameHint && (
+                    <small id="profile-username-hint">
+                      {shortUsernameHint}
+                    </small>
+                  )}
+                </div>
+              </div>
+              <div className="settings-profile__field settings-profile__field--bio">
+                <label htmlFor="profile-bio">Bio</label>
+                <LockedProfileControl
+                  label="bio"
+                  locked={!canEdit}
+                  onBlocked={showBlockedControlFeedback}
+                  className="block w-full"
+                >
+                  <textarea
+                    id="profile-bio"
+                    name="bio"
+                    className="[touch-action:pan-y_pinch-zoom] focus:touch-auto"
+                    value={draftProfile.bio}
+                    maxLength={160}
+                    rows={3}
+                    disabled={!canEdit}
+                    onChange={(event) => updateText("bio", event.target.value)}
+                  />
+                </LockedProfileControl>
+                <small className="settings-profile__character-count">
+                  {draftProfile.bio.length} / 160
+                </small>
+              </div>
+              <div className="settings-profile__field-grid settings-profile__field-grid--contact">
+                <div className="settings-profile__field">
+                  <div className="settings-profile__field-heading">
+                    <label htmlFor="profile-email">Email address</label>
+                    <LockedProfileControl
+                      label="email visibility"
+                      locked={!canEdit}
+                      onBlocked={showBlockedControlFeedback}
+                      className="inline-block"
+                    >
+                      <PublicVisibilityCheckbox
+                        id="profile-email-public"
+                        checked={draftProfile.emailPublic}
+                        onChange={requestEmailVisibilityChange}
+                        label="Show email address on your public profile"
+                        disabled={!canEdit}
+                      />
+                    </LockedProfileControl>
+                  </div>
+                  <LockedProfileControl
+                    label="email address"
+                    locked={!canEdit}
+                    onBlocked={showBlockedControlFeedback}
+                    className="block w-full"
+                  >
+                    <span className="settings-profile__input-shell settings-profile__input-shell--status">
+                      <EnvelopeSimple size={17} aria-hidden="true" />
+                      <input
+                        id="profile-email"
+                        value={activeEmail}
+                        autoComplete="email"
+                        readOnly
+                        aria-readonly="true"
+                        disabled={!canEdit}
+                      />
+                      {isEmailVerified ? (
+                        <span className="settings-profile__tag settings-profile__tag--success">
+                          <SealCheck size={14} weight="fill" /> Verified
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="settings-profile__inline-verify-action"
+                          onClick={() => void requestEmailVerification()}
+                          disabled={
+                            !activeUser ||
+                            !canEdit ||
+                            !activeEmail ||
+                            sendEmailVerificationMutation.isPending ||
+                            verifyEmailMutation.isPending
+                          }
+                          aria-expanded={emailVerificationRequested}
+                          aria-controls="profile-verification-dialog"
+                        >
+                          {sendEmailVerificationMutation.isPending
+                            ? "Sending..."
+                            : "Verify now"}
+                        </button>
+                      )}
+                    </span>
+                  </LockedProfileControl>
+                  {emailError && (
+                    <small className="settings-profile__error" role="alert">
+                      {emailError}
+                    </small>
+                  )}
+                </div>
+                <div className="settings-profile__field">
+                  <div className="settings-profile__field-heading">
+                    <label htmlFor="profile-mobile">Mobile number</label>
+                    <LockedProfileControl
+                      label="mobile visibility"
+                      locked={!canEdit}
+                      onBlocked={showBlockedControlFeedback}
+                      className="inline-block"
+                    >
+                      <PublicVisibilityCheckbox
+                        id="profile-mobile-public"
+                        checked={draftProfile.mobilePublic}
+                        onChange={requestMobileVisibilityChange}
+                        label="Show mobile number on your public profile"
+                        disabled={!canEdit}
+                      />
+                    </LockedProfileControl>
+                  </div>
+                  <LockedProfileControl
+                    label="mobile number"
+                    locked={!canEdit}
+                    onBlocked={showBlockedControlFeedback}
+                    className="block w-full"
+                  >
+                    <div className="settings-profile__phone-control">
+                      <span
+                        className={`settings-profile__input-shell settings-profile__input-shell--status settings-profile__input-shell--phone${isMobileVerified ? " settings-profile__input-shell--phone-verified" : ""}`}
+                      >
+                        <CountryCodeSelect
+                          disabled={!canEdit || isMobileVerified}
+                          onCountryChange={updateMobileCountry}
+                          triggerClassName="settings-profile__country-code"
+                          value={mobileCountry.id}
+                        />
+                        <input
+                          id="profile-mobile"
+                          name="mobileNumber"
+                          type="tel"
+                          inputMode="numeric"
+                          value={formattedMobileNumber}
+                          autoComplete="tel-national"
+                          readOnly={isMobileVerified}
+                          style={
+                            isMobileVerified
+                              ? {
+                                  width: `${formattedMobileNumber.length + 1}ch`,
+                                }
+                              : undefined
+                          }
+                          disabled={!canEdit}
+                          placeholder={
+                            isMobileVerified ? undefined : "98765 43210"
+                          }
+                          onChange={(event) =>
+                            updateMobileNumber(
+                              toInternationalPhoneNumber(
+                                event.target.value,
+                                mobileCountry,
+                              ),
+                            )
+                          }
+                        />
+                        {isMobileVerified && (
+                          <span
+                            className="settings-profile__locked-icon"
+                            title="Verified mobile numbers cannot be changed here"
+                            aria-label="Verified mobile number locked"
+                          >
+                            <Lock size={15} aria-hidden="true" />
+                          </span>
+                        )}
+                        {isMobileVerified ? (
+                          <span className="settings-profile__tag settings-profile__tag--success">
+                            <SealCheck size={14} weight="fill" /> Verified
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="settings-profile__inline-verify-action"
+                            onClick={() => void requestMobileVerification()}
+                            disabled={
+                              !canEdit ||
+                              !draftProfile.mobileNumber?.trim() ||
+                              sendPhoneVerificationMutation.isPending ||
+                              verifyPhoneNumberMutation.isPending
+                            }
+                            aria-expanded={verificationRequested}
+                            aria-controls="profile-verification-dialog"
+                          >
+                            {sendPhoneVerificationMutation.isPending
+                              ? "Sending..."
+                              : "Verify now"}
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  </LockedProfileControl>
+                  {mobileError && (
+                    <small className="settings-profile__error" role="alert">
+                      {mobileError}
+                    </small>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-profile__form-section">
+              <div className="settings-profile__section-heading">
+                <div>
+                  <h2>Social &amp; professional links</h2>
+                  <p>Add links to your professional profiles and portfolio.</p>
+                </div>
+              </div>
+              <div className="settings-profile__link-grid">
+                <div className="settings-profile__field">
+                  <div className="settings-profile__field-heading">
+                    <label htmlFor="profile-linkedin">LinkedIn URL</label>
+                    <LockedProfileControl
+                      label="LinkedIn visibility"
+                      locked={!canEdit}
+                      onBlocked={showBlockedControlFeedback}
+                      className="inline-block"
+                    >
+                      <PublicVisibilityCheckbox
+                        id="profile-linkedin-public"
+                        checked={draftProfile.linkedinPublic}
+                        onChange={(value) =>
+                          requestSocialVisibilityChange(
+                            "linkedinPublic",
+                            draftProfile.linkedinUrl ?? "",
+                            "LinkedIn",
+                            "linkedin",
+                            value,
+                          )
+                        }
+                        label="Show LinkedIn profile on your public profile"
+                        disabled={!canEdit}
+                      />
+                    </LockedProfileControl>
+                  </div>
+                  <LockedProfileControl
+                    label="LinkedIn URL"
+                    locked={!canEdit}
+                    onBlocked={showBlockedControlFeedback}
+                    className="block w-full"
+                  >
+                    <span className="settings-profile__input-shell">
+                      <LinkedinLogo size={17} aria-hidden="true" />
+                      <input
+                        id="profile-linkedin"
+                        name="linkedinUrl"
+                        value={draftProfile.linkedinUrl ?? ""}
+                        inputMode="url"
+                        autoComplete="off"
+                        disabled={!canEdit}
+                        aria-invalid={Boolean(socialVisibilityErrors.linkedin)}
+                        aria-describedby={
+                          socialVisibilityErrors.linkedin
+                            ? "profile-linkedin-error"
+                            : undefined
+                        }
+                        onChange={(event) =>
+                          updateText("linkedinUrl", event.target.value)
+                        }
+                      />
+                    </span>
+                  </LockedProfileControl>
+                  {socialVisibilityErrors.linkedin && (
+                    <small
+                      id="profile-linkedin-error"
+                      className="settings-profile__error"
+                      role="alert"
+                    >
+                      {socialVisibilityErrors.linkedin}
+                    </small>
+                  )}
+                </div>
+                <div className="settings-profile__field">
+                  <div className="settings-profile__field-heading">
+                    <label htmlFor="profile-github">GitHub URL</label>
+                    <LockedProfileControl
+                      label="GitHub visibility"
+                      locked={!canEdit}
+                      onBlocked={showBlockedControlFeedback}
+                      className="inline-block"
+                    >
+                      <PublicVisibilityCheckbox
+                        id="profile-github-public"
+                        checked={draftProfile.githubPublic}
+                        onChange={(value) =>
+                          requestSocialVisibilityChange(
+                            "githubPublic",
+                            draftProfile.githubUrl ?? "",
+                            "GitHub",
+                            "github",
+                            value,
+                          )
+                        }
+                        label="Show GitHub profile on your public profile"
+                        disabled={!canEdit}
+                      />
+                    </LockedProfileControl>
+                  </div>
+                  <LockedProfileControl
+                    label="GitHub URL"
+                    locked={!canEdit}
+                    onBlocked={showBlockedControlFeedback}
+                    className="block w-full"
+                  >
+                    <span className="settings-profile__input-shell">
+                      <GithubLogo size={17} aria-hidden="true" />
+                      <input
+                        id="profile-github"
+                        name="githubUrl"
+                        value={draftProfile.githubUrl ?? ""}
+                        inputMode="url"
+                        autoComplete="off"
+                        disabled={!canEdit}
+                        aria-invalid={Boolean(socialVisibilityErrors.github)}
+                        aria-describedby={
+                          socialVisibilityErrors.github
+                            ? "profile-github-error"
+                            : undefined
+                        }
+                        onChange={(event) =>
+                          updateText("githubUrl", event.target.value)
+                        }
+                      />
+                    </span>
+                  </LockedProfileControl>
+                  {socialVisibilityErrors.github && (
+                    <small
+                      id="profile-github-error"
+                      className="settings-profile__error"
+                      role="alert"
+                    >
+                      {socialVisibilityErrors.github}
+                    </small>
+                  )}
+                </div>
+                <div className="settings-profile__field">
+                  <div className="settings-profile__field-heading">
+                    <label htmlFor="profile-website">Portfolio</label>
+                    <LockedProfileControl
+                      label="portfolio visibility"
+                      locked={!canEdit}
+                      onBlocked={showBlockedControlFeedback}
+                      className="inline-block"
+                    >
+                      <PublicVisibilityCheckbox
+                        id="profile-website-public"
+                        checked={draftProfile.websitePublic}
+                        onChange={(value) =>
+                          requestSocialVisibilityChange(
+                            "websitePublic",
+                            draftProfile.websiteUrl,
+                            "portfolio",
+                            "portfolio",
+                            value,
+                          )
+                        }
+                        label="Show portfolio on your public profile"
+                        disabled={!canEdit}
+                      />
+                    </LockedProfileControl>
+                  </div>
+                  <LockedProfileControl
+                    label="portfolio URL"
+                    locked={!canEdit}
+                    onBlocked={showBlockedControlFeedback}
+                    className="block w-full"
+                  >
+                    <span className="settings-profile__input-shell">
+                      <Globe size={17} aria-hidden="true" />
+                      <input
+                        id="profile-website"
+                        name="websiteUrl"
+                        value={draftProfile.websiteUrl}
+                        inputMode="url"
+                        autoComplete="off"
+                        disabled={!canEdit}
+                        aria-invalid={Boolean(socialVisibilityErrors.portfolio)}
+                        aria-describedby={
+                          socialVisibilityErrors.portfolio
+                            ? "profile-portfolio-error"
+                            : undefined
+                        }
+                        onChange={(event) =>
+                          updateText("websiteUrl", event.target.value)
+                        }
+                      />
+                    </span>
+                  </LockedProfileControl>
+                  {socialVisibilityErrors.portfolio && (
+                    <small
+                      id="profile-portfolio-error"
+                      className="settings-profile__error"
+                      role="alert"
+                    >
+                      {socialVisibilityErrors.portfolio}
+                    </small>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <div className="settings-profile__form-footer">
+              {!activeUser ? (
+                <p role="status" aria-live="polite">
+                  Sign in to edit your profile.
+                </p>
+              ) : (
+                <AutosaveStatus status={autosaveStatus} error={autosaveError} />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {verificationModalOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                ref={verificationDialogRef}
+                id="profile-verification-dialog"
+                className="settings-profile__verification-dialog-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="profile-verification-dialog-title"
+                aria-describedby="profile-verification-dialog-description"
+              >
+                <div className="settings-profile__verification-dialog-card">
+                  <span
+                    className="settings-profile__verification-dialog-top-line"
+                    aria-hidden="true"
+                  />
+                  <button
+                    ref={verificationCloseButtonRef}
+                    type="button"
+                    className="settings-profile__verification-dialog-close"
+                    aria-label="Close verification dialog"
+                    onClick={dismissVerificationModal}
+                  >
+                    <X size={14} weight="bold" />
+                  </button>
+
+                  <div className="settings-profile__verification-dialog-content">
+                    <div
+                      className="settings-profile__verification-dialog-icon"
+                      aria-hidden="true"
+                    >
+                      {verificationChannel === "email" ? (
+                        <EnvelopeSimple size={26} />
+                      ) : (
+                        <Phone size={26} />
+                      )}
+                    </div>
+                    <h3 id="profile-verification-dialog-title">
+                      {verificationChannel === "email"
+                        ? "Verify your email"
+                        : "Verify your mobile number"}
+                    </h3>
+                    <p id="profile-verification-dialog-description">
+                      We sent a 6-digit code to{" "}
+                      <strong>
+                        {verificationChannel === "email"
+                          ? activeEmail
+                          : verificationPhone}
+                      </strong>
+                      .
+                    </p>
+                  </div>
+
+                  <div className="settings-profile__verification-dialog-field">
+                    <label
+                      className="settings-profile__verification-dialog-field-label"
+                      htmlFor={OTP_CODE_FIELD_ID}
+                    >
+                      Verification code
+                    </label>
+                    <OtpCodeInput
+                      describedBy={
+                        verificationError
+                          ? "profile-verification-dialog-error"
+                          : "profile-verification-dialog-hint"
+                      }
+                      disabled={
+                        verificationChannel === "email"
+                          ? verifyEmailMutation.isPending
+                          : verifyPhoneNumberMutation.isPending
+                      }
+                      invalid={Boolean(verificationError)}
+                      label="Verification code"
+                      value={
+                        verificationChannel === "email"
+                          ? emailVerificationCode
+                          : verificationCode
+                      }
+                      onChange={(code) => {
+                        if (verificationChannel === "email") {
+                          setEmailVerificationCode(code);
+                        } else {
+                          setVerificationCode(code);
+                        }
+                      }}
+                    />
+                    <small id="profile-verification-dialog-hint">
+                      Enter the code to finish verifying your account.
+                    </small>
+                  </div>
+
+                  {verificationError ? (
+                    <p
+                      id="profile-verification-dialog-error"
+                      className="settings-profile__verification-dialog-error"
+                      role="alert"
+                    >
+                      {verificationError}
+                    </p>
+                  ) : null}
+
+                  <div className="settings-profile__verification-dialog-resend-row">
+                    <p>Didn&apos;t receive the code?</p>
+                    <button
+                      type="button"
+                      className="settings-profile__verification-dialog-resend"
+                      onClick={() =>
+                        void (verificationChannel === "email"
+                          ? requestEmailVerification()
+                          : requestMobileVerification())
+                      }
+                      disabled={
+                        verificationChannel === "email"
+                          ? sendEmailVerificationMutation.isPending ||
+                            verifyEmailMutation.isPending
+                          : sendPhoneVerificationMutation.isPending ||
+                            verifyPhoneNumberMutation.isPending
+                      }
+                    >
+                      Resend code
+                    </button>
+                  </div>
+
+                  <div className="settings-profile__verification-dialog-actions">
+                    <button
+                      ref={verificationCancelButtonRef}
+                      type="button"
+                      className="settings-profile__verification-dialog-cancel"
+                      onClick={dismissVerificationModal}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      ref={verificationSubmitButtonRef}
+                      type="button"
+                      className="settings-profile__verification-dialog-submit"
+                      onClick={() =>
+                        void (verificationChannel === "email"
+                          ? verifyEmailAddress()
+                          : verifyMobileNumber())
+                      }
+                      disabled={
+                        verificationChannel === "email"
+                          ? verifyEmailMutation.isPending ||
+                            emailVerificationCode.length !== 6
+                          : verifyPhoneNumberMutation.isPending ||
+                            verificationCode.length !== 6
+                      }
+                    >
+                      {verificationChannel === "email"
+                        ? verifyEmailMutation.isPending
+                          ? "Verifying..."
+                          : "Verify OTP"
+                        : verifyPhoneNumberMutation.isPending
+                          ? "Verifying..."
+                          : "Verify OTP"}
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
+        {mobileVisibilityPromptOpen && (
+          <dialog
+            ref={mobileVisibilityDialogRef}
+            className="settings-profile__privacy-dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-visibility-dialog-title"
+            aria-describedby="mobile-visibility-dialog-description"
+            onCancel={(event) => {
+              event.preventDefault();
+              closeMobileVisibilityPrompt();
+            }}
+          >
+            <button
+              type="button"
+              className="settings-profile__privacy-dialog-close"
+              aria-label="Close mobile visibility confirmation"
+              onClick={closeMobileVisibilityPrompt}
+            >
+              <X size={18} />
+            </button>
+            <div
+              className="settings-profile__privacy-dialog-icon"
+              aria-hidden="true"
+            >
+              <ShieldWarning size={25} weight="fill" />
+            </div>
+            <div className="settings-profile__privacy-dialog-copy">
+              <h2 id="mobile-visibility-dialog-title">
+                Show your mobile number publicly?
+              </h2>
+              <p id="mobile-visibility-dialog-description">
+                Anyone who can view your profile will be able to see this
+                number. They may call you directly or message you on WhatsApp.
+                You can hide it again before saving your profile.
+              </p>
+            </div>
+            <label className="settings-profile__privacy-consent">
+              <input
+                type="checkbox"
+                checked={mobileVisibilityAcknowledged}
+                onChange={(event) =>
+                  setMobileVisibilityAcknowledged(event.target.checked)
+                }
+              />
+              <span
+                className="settings-profile__privacy-consent-mark"
+                aria-hidden="true"
+              >
+                <Check size={12} weight="bold" />
+              </span>
+              <span>
+                I understand that anyone can call or message me on WhatsApp
+                using this number.
+              </span>
+            </label>
+            <div className="settings-profile__privacy-dialog-actions">
+              <button type="button" onClick={closeMobileVisibilityPrompt}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!mobileVisibilityAcknowledged}
+                onClick={confirmMobileVisibility}
+              >
+                I understand, show publicly
+              </button>
+            </div>
+          </dialog>
+        )}
+
+        <AvatarCropDialog
+          open={avatarCropOpen && canEdit}
+          imageUrl={avatarCropSource}
+          fileName={avatarCropFileName}
+          error={photoError}
+          isSaving={photoUploading}
+          onClose={closeAvatarCropDialog}
+          onConfirm={handleCroppedPhoto}
+        />
+
+        <AvatarStylePicker
+          open={avatarPickerOpen && canEdit}
+          seed={activeUser?.id ?? ""}
+          avatars={storedAvatars}
+          currentAvatarUrl={draftProfile.avatarDataUrl}
+          isSaving={photoUploading}
+          onClose={() => setAvatarPickerOpen(false)}
+          onSelectSaved={async (avatarId) => {
+            if (photoUploading) return;
+            setPhotoError("");
+            setPhotoUploading(true);
+            try {
+              await selectStoredAvatar(avatarId);
+              setAvatarPickerOpen(false);
+            } catch (error: unknown) {
+              setPhotoError(
+                error && typeof error === "object" && "message" in error
+                  ? String((error as { message?: unknown }).message)
+                  : "We couldn't select that avatar. Please try again.",
+              );
+            } finally {
+              setPhotoUploading(false);
+            }
+          }}
+          onSelectGenerated={(avatarUrl) => {
+            if (photoUploading || !activeUser) return;
+
+            const previousAvatar = {
+              avatarDataUrl: draftProfile.avatarDataUrl,
+              avatarSrcSet: draftProfile.avatarSrcSet,
+            };
+            const optimisticUser = {
+              ...activeUser,
+              avatarDataUrl: avatarUrl,
+              avatarSrcSet: [],
+            };
+
+            setPhotoError("");
+            setAvatarFailed(false);
+            setPhotoUploading(true);
+            setAvatarPickerOpen(false);
+            authStore.setUser(optimisticUser);
+            queryClient.setQueryData(authKeys.me(), optimisticUser);
+            mergeFromServer({
+              avatarDataUrl: avatarUrl,
+              avatarSrcSet: [],
+            });
+
+            // Keep the existing R2/history upload, but don't make the user
+            // wait for its image download, presign, PUT, and completion calls.
+            void (async () => {
+              try {
+                const updated =
+                  await authService.uploadGeneratedAvatar(avatarUrl);
+                handleProfileSynced(updated);
+                mergeFromServer({
+                  avatarDataUrl: updated.avatarDataUrl,
+                  avatarSrcSet: updated.avatarSrcSet,
+                });
+              } catch {
+                try {
+                  // DiceBear URLs are valid profile avatars too. If storage
+                  // is unavailable, persist the already displayed selection
+                  // directly instead of reverting a successful user action.
+                  const updated = await authService.updateProfile({
+                    avatarDataUrl: avatarUrl,
+                  });
+                  handleProfileSynced(updated);
+                  mergeFromServer({
+                    avatarDataUrl: updated.avatarDataUrl,
+                    avatarSrcSet: updated.avatarSrcSet,
+                  });
+                } catch (error: unknown) {
+                  authStore.setUser(activeUser);
+                  queryClient.setQueryData(authKeys.me(), activeUser);
+                  mergeFromServer(previousAvatar);
+                  setPhotoError(
+                    error && typeof error === "object" && "message" in error
+                      ? String((error as { message?: unknown }).message)
+                      : "We couldn't save this avatar. Please try again.",
+                  );
+                }
+              } finally {
+                setPhotoUploading(false);
+              }
+            })();
+          }}
+        />
+      </section>
+      <ToastNotification
+        message={photoSelectionError}
+        type="error"
+        onDismiss={() => setPhotoSelectionError(null)}
+      />
+    </LockedProfileControlContext.Provider>
+  );
+}

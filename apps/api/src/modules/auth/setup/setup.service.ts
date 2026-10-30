@@ -1,0 +1,224 @@
+import crypto from "node:crypto";
+
+import type { AcademyRequest, CreatorRegisterRequest } from "@veolms/contracts";
+import type { Database } from "@veolms/database";
+import type { Kysely } from "kysely";
+import { z } from "zod";
+
+import { config } from "../../../config.ts";
+import { AppError } from "../../../lib/errors.ts";
+import { secureCompare } from "../../../lib/secure-compare.ts";
+import type { CreateUserInput } from "../authentication/authentication.types.ts";
+import * as academyRepository from "./setup.repository.ts";
+import { forgetAcademy, getAcademyRow } from "./academy-cache.ts";
+import type { AuthService } from "../authentication/authentication.service.ts";
+import type { SessionService } from "../session/session.service.ts";
+import { normalizePhoneIdentifier } from "../shared/auth.utils.ts";
+import type { SessionLocation } from "../shared/request-location.ts";
+
+const setupSessionSchema = z.object({ exp: z.number() });
+
+/**
+ * A normalised international number: "+", country code, subscriber number,
+ * 8 to 15 digits in total. This is the form sign-in looks numbers up by, so
+ * a number stored any other way could never be matched or confirmed.
+ */
+const SETUP_PHONE_PATTERN = /^\+[1-9]\d{7,14}$/u;
+
+export interface SetupServiceOptions {
+  database: Kysely<Database>;
+  authService: AuthService;
+  sessionService: SessionService;
+}
+
+export function createSetupService({
+  database,
+  authService,
+  sessionService,
+}: SetupServiceOptions) {
+  function isValidSetupToken(submitted: string): boolean {
+    // An empty configured token would match an empty submission.
+    if (!config.SETUP_TOKEN || !submitted) return false;
+    return secureCompare(submitted, config.SETUP_TOKEN);
+  }
+
+  async function assertSetupOpen(): Promise<void> {
+    const academy = await academyRepository.findAcademy(database);
+
+    if (academy?.setup_completed) {
+      throw new AppError(
+        403,
+        "SETUP_ALREADY_COMPLETED",
+        "The platform setup has already been finalized and locked.",
+      );
+    }
+  }
+
+  async function getAcademy() {
+    return await getAcademyRow(database);
+  }
+
+  function assertValidSetupSession(
+    signedCookie: { valid: boolean; value?: string | null } | undefined,
+  ): void {
+    if (!signedCookie) {
+      throw new AppError(
+        401,
+        "SETUP_TOKEN_REQUIRED",
+        "A valid setup session is required for this action.",
+      );
+    }
+
+    if (!signedCookie.valid || !signedCookie.value) {
+      throw new AppError(
+        401,
+        "SETUP_TOKEN_REQUIRED",
+        "Setup session is invalid. Please re-verify the setup token.",
+      );
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(signedCookie.value);
+    } catch {
+      throw new AppError(
+        401,
+        "SETUP_TOKEN_REQUIRED",
+        "Setup session is invalid. Please re-verify the setup token.",
+      );
+    }
+
+    const parsed = setupSessionSchema.safeParse(payload);
+    if (!parsed.success || parsed.data.exp < Date.now()) {
+      throw new AppError(
+        401,
+        "SETUP_TOKEN_REQUIRED",
+        "Setup session is missing or expired. Please re-verify the setup token.",
+      );
+    }
+  }
+
+  async function verifySetupToken(token: string): Promise<void> {
+    await assertSetupOpen();
+
+    if (!isValidSetupToken(token)) {
+      throw new AppError(
+        401,
+        "INVALID_SETUP_TOKEN",
+        "The setup token provided is incorrect.",
+      );
+    }
+  }
+
+  async function registerCreator(
+    input: CreatorRegisterRequest,
+    request: {
+      ip: string;
+      userAgent: string | null;
+      location?: SessionLocation | null;
+    },
+  ) {
+    await assertSetupOpen();
+
+    if (await authService.countUsers()) {
+      throw new AppError(
+        403,
+        "ADMIN_EXISTS",
+        "LMS platform has already been initialized. Administrator account exists.",
+      );
+    }
+
+    // Stored in the same form sign-in and profile verification use, so the
+    // number the administrator later confirms is this one. It stays
+    // unconfirmed here and cannot be used to sign in until it is.
+    const phoneNo = input.phoneNo
+      ? normalizePhoneIdentifier(input.phoneNo)
+      : null;
+    if (phoneNo && !SETUP_PHONE_PATTERN.test(phoneNo)) {
+      throw new AppError(
+        400,
+        "INVALID_PHONE_NUMBER",
+        "Enter a valid mobile number including its country code.",
+      );
+    }
+
+    const username = await authService.generateUniqueUsername(
+      input.email.split("@")[0] || "admin",
+    );
+
+    const createInput: CreateUserInput = {
+      email: input.email,
+      phoneNo,
+      username,
+      displayName: input.name,
+      emailVerified: true,
+      phoneVerified: false,
+      allowBootstrapAdmin: true,
+    };
+    const userId = await authService.createUser(createInput);
+    const user = await authService.requireUser(userId);
+    const session = await sessionService.establishSession(user, request);
+
+    return { user: { ...user, roles: session.roles }, session };
+  }
+
+  async function configureAcademy(input: AcademyRequest) {
+    await assertSetupOpen();
+
+    const existing = await academyRepository.findAcademy(database);
+    const academyId = existing?.id || crypto.randomUUID();
+
+    await academyRepository.upsertAcademy(database, {
+      id: academyId,
+      name: input.name,
+      logoUrl: input.logoUrl || null,
+      customDomain: input.customDomain || null,
+      exists: Boolean(existing),
+    });
+    forgetAcademy();
+
+    return {
+      id: academyId,
+      name: input.name,
+      logoUrl: input.logoUrl || null,
+      customDomain: input.customDomain || null,
+      setupCompleted: false,
+    };
+  }
+
+  async function finalizeSetup(): Promise<void> {
+    await assertSetupOpen();
+
+    const academy = await academyRepository.findAcademy(database);
+    if (!academy) {
+      throw new AppError(
+        400,
+        "ACADEMY_NOT_CONFIGURED",
+        "Configure academy details first.",
+      );
+    }
+
+    if (!(await authService.countUsers())) {
+      throw new AppError(
+        400,
+        "ADMIN_NOT_REGISTERED",
+        "Register the administrator account before finalizing setup.",
+      );
+    }
+
+    await academyRepository.markSetupCompleted(database, academy.id);
+    forgetAcademy();
+  }
+
+  return {
+    getAcademy,
+    assertSetupOpen,
+    assertValidSetupSession,
+    verifySetupToken,
+    registerCreator,
+    configureAcademy,
+    finalizeSetup,
+  };
+}
+
+export type SetupService = ReturnType<typeof createSetupService>;

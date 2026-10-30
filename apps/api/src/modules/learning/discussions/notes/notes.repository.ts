@@ -1,0 +1,658 @@
+import type {
+  Database,
+  DatabaseExecutor,
+  LearningNoteTable,
+} from "@veolms/database";
+import type {
+  AttachmentKind,
+  AttachmentStatus,
+  DiscussionVisibility,
+  ListLearningNotesQuery,
+  UpdateLearningNoteRequest,
+} from "@veolms/contracts";
+import type { ExpressionBuilder, SelectQueryBuilder, Updateable } from "kysely";
+import { sql } from "kysely";
+import { containsPattern } from "../shared/discussion.utils.ts";
+import { withWriteTransaction } from "../shared/discussion.mentions.ts";
+import {
+  createdAtIdDescSql,
+  type DiscussionListCursor,
+} from "../shared/discussion.utils.ts";
+import { fuzzyMatchesAny } from "../../../../lib/fuzzy-search.ts";
+
+export interface NoteRow {
+  id: string;
+  userId: string;
+  authorName?: string | null;
+  authorUsername?: string | null;
+  authorAvatarUrl?: string | null;
+  courseId: string;
+  lessonId: string;
+  timestampSeconds: number | null;
+  title: string | null;
+  content: string;
+  plainText: string;
+  visibility: DiscussionVisibility;
+  tags: string[];
+  likesCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * The few columns an access decision needs. Likes, bookmarks, reports,
+ * moderation and attachment downloads only ask "may this caller open the
+ * note", which does not need its content or its author's profile.
+ */
+export interface NoteAccessRow {
+  id: string;
+  userId: string;
+  courseId: string;
+  lessonId: string;
+  visibility: DiscussionVisibility;
+  /** A moderator made the note private; it cannot be shared again. */
+  heldPrivate: boolean;
+}
+
+export interface CourseSectionRow {
+  id: string;
+  title: string;
+  position: number;
+}
+
+export interface CourseLessonRow {
+  id: string;
+  sectionId: string | null;
+  title: string;
+  position: number;
+}
+
+export type NoteFilterOptions = ListLearningNotesQuery & {
+  pageCursor?: DiscussionListCursor;
+  accessibleCourseIds?: readonly string[];
+  ids?: readonly string[];
+};
+
+/** The attachment columns a note response is built from. */
+export interface NoteAttachmentRow {
+  id: string;
+  kind: AttachmentKind;
+  file_name: string;
+  storage_key: string;
+  file_url: string;
+  mime_type: string;
+  file_size: number;
+  metadata: unknown;
+}
+
+/** What decides whether an upload may be linked to a note. */
+export interface AttachmentLinkCandidateRow {
+  id: string;
+  owner_id: string;
+  status: AttachmentStatus;
+  target_id: string | null;
+}
+
+// Kysely represents a `"learning_notes as n"` aliased query with the alias
+// added as its own entry on the DB generic, not the bare table name.
+type NotesAliasedDB = Database & { n: LearningNoteTable };
+
+const noteSelect = [
+  "n.id",
+  "n.user_id as userId",
+  "u.display_name as authorName",
+  "u.username as authorUsername",
+  "u.avatar_data_url as authorAvatarUrl",
+  "n.course_id as courseId",
+  "n.lesson_id as lessonId",
+  "n.timestamp_seconds as timestampSeconds",
+  "n.title",
+  "n.content",
+  "n.plain_text as plainText",
+  "n.visibility as visibility",
+  "n.tags",
+  "n.likes_count as likesCount",
+  "n.created_at as createdAt",
+  "n.updated_at as updatedAt",
+] as const;
+
+export interface NotesRepository {
+  createNote(
+    db: DatabaseExecutor,
+    note: {
+      id: string;
+      academyId: string;
+      userId: string;
+      courseId: string;
+      lessonId: string;
+      timestampSeconds: number | null;
+      title: string | null;
+      content: string;
+      plainText: string;
+      tags: string[];
+      visibility: "public" | "unlisted" | "private";
+    },
+  ): Promise<void>;
+
+  findNoteById(db: DatabaseExecutor, noteId: string): Promise<NoteRow | null>;
+
+  /** Reads only what an ownership or course-access check needs. */
+  findNoteAccessTarget(
+    db: DatabaseExecutor,
+    noteId: string,
+  ): Promise<NoteAccessRow | null>;
+
+  listNotes(
+    db: DatabaseExecutor,
+    userId: string,
+    options: NoteFilterOptions,
+  ): Promise<NoteRow[]>;
+
+  /**
+   * The given notes of one lesson that `userId` may see (their own, plus
+   * public ones unless `mine`). No paging and no particular order: the
+   * caller already knows which ids it wants and in what order.
+   */
+  listNotesByIds(
+    db: DatabaseExecutor,
+    userId: string,
+    options: {
+      courseId: string;
+      lessonId: string;
+      ids: readonly string[];
+      mine?: boolean;
+    },
+  ): Promise<NoteRow[]>;
+
+  countNotes(
+    db: DatabaseExecutor,
+    userId: string,
+    options: NoteFilterOptions,
+  ): Promise<number>;
+
+  getCourseNotesOverview(
+    db: DatabaseExecutor,
+    courseId: string,
+    userId: string,
+  ): Promise<{
+    course: { id: string; title: string } | null;
+    sections: CourseSectionRow[];
+    lessons: CourseLessonRow[];
+    notes: NoteRow[];
+  }>;
+
+  incrementLikesCount(
+    db: DatabaseExecutor,
+    noteId: string,
+    delta: number,
+  ): Promise<void>;
+
+  updateNote(
+    db: DatabaseExecutor,
+    noteId: string,
+    updates: UpdateLearningNoteRequest & { plainText?: string },
+  ): Promise<void>;
+
+  deleteNote(db: DatabaseExecutor, noteId: string): Promise<void>;
+
+  /** Moderation: make the note private and stop it being shared again. */
+  holdPrivate(db: DatabaseExecutor, noteId: string): Promise<void>;
+
+  /** The uploads named by a note request, whoever owns them. */
+  listAttachmentLinkCandidates(
+    db: DatabaseExecutor,
+    attachmentIds: string[],
+  ): Promise<AttachmentLinkCandidateRow[]>;
+
+  /** Links the given uploads to the note if still ready and unattached. */
+  linkAttachmentsToNote(
+    db: DatabaseExecutor,
+    attachmentIds: string[],
+    noteId: string,
+  ): Promise<void>;
+
+  /** Ready attachments of one note, in upload order. */
+  listReadyNoteAttachments(
+    db: DatabaseExecutor,
+    noteId: string,
+  ): Promise<NoteAttachmentRow[]>;
+
+  /** Ready attachments of several notes, in upload order. */
+  listReadyAttachmentsOfNotes(
+    db: DatabaseExecutor,
+    noteIds: string[],
+  ): Promise<Array<NoteAttachmentRow & { target_id: string | null }>>;
+
+  findNoteLike(
+    db: DatabaseExecutor,
+    userId: string,
+    noteId: string,
+  ): Promise<{ id: string } | undefined>;
+
+  findNoteBookmark(
+    db: DatabaseExecutor,
+    userId: string,
+    noteId: string,
+  ): Promise<{ id: string } | undefined>;
+
+  listNoteLikes(
+    db: DatabaseExecutor,
+    userId: string,
+    noteIds: string[],
+  ): Promise<Array<{ target_id: string }>>;
+
+  listNoteBookmarks(
+    db: DatabaseExecutor,
+    userId: string,
+    noteIds: string[],
+  ): Promise<Array<{ note_id: string | null }>>;
+}
+
+function applyNoteFilters<O>(
+  query: SelectQueryBuilder<NotesAliasedDB, "n", O>,
+  userId: string,
+  options: NoteFilterOptions,
+): SelectQueryBuilder<NotesAliasedDB, "n", O> {
+  let q = query;
+
+  if (options.courseId) {
+    q = q.where("n.course_id", "=", options.courseId);
+  } else if (
+    options.accessibleCourseIds &&
+    options.accessibleCourseIds.length > 0
+  ) {
+    q = q.where("n.course_id", "in", [...options.accessibleCourseIds]);
+  }
+
+  if (options.lessonId) {
+    q = q.where("n.lesson_id", "=", options.lessonId);
+  }
+
+  if (options.ids) {
+    q = q.where("n.id", "in", [...options.ids]);
+  }
+
+  if (options.mine) {
+    q = q.where("n.user_id", "=", userId);
+    if (options.visibility) {
+      q = q.where("n.visibility", "=", options.visibility);
+    }
+  } else if (options.visibility === "private") {
+    q = q.where("n.visibility", "=", "private").where("n.user_id", "=", userId);
+  } else if (options.visibility === "unlisted") {
+    q = q
+      .where("n.visibility", "=", "unlisted")
+      .where("n.user_id", "=", userId);
+  } else if (options.visibility === "public") {
+    q = q.where("n.visibility", "=", "public");
+  } else {
+    // If no visibility is specified and mine is not explicitly set:
+    // If courseId or lessonId is specified, include public notes or user's own notes.
+    // Otherwise (general listing with no params), default to user's own notes.
+    if (options.courseId || options.lessonId) {
+      q = q.where((eb: ExpressionBuilder<NotesAliasedDB, "n">) =>
+        eb.or([
+          eb("n.visibility", "=", "public"),
+          eb("n.user_id", "=", userId),
+        ]),
+      );
+    } else {
+      q = q.where("n.user_id", "=", userId);
+    }
+  }
+
+  if (options.query) {
+    const searchPattern = containsPattern(options.query);
+    q = q.where((eb: ExpressionBuilder<NotesAliasedDB, "n">) =>
+      eb.or([
+        eb(sql`lower(n.title)`, "like", searchPattern),
+        eb(sql`lower(n.plain_text)`, "like", searchPattern),
+        fuzzyMatchesAny(options.query!, [sql.ref("n.title")]),
+      ]),
+    );
+  }
+
+  if (options.tag) {
+    q = q.where(sql<boolean>`${options.tag} = ANY(n.tags)`);
+  }
+
+  return q;
+}
+
+export function createNotesRepository(): NotesRepository {
+  return {
+    async createNote(db, note) {
+      await db
+        .insertInto("learning_notes")
+        .values({
+          id: note.id,
+          academy_id: note.academyId,
+          user_id: note.userId,
+          course_id: note.courseId,
+          lesson_id: note.lessonId,
+          timestamp_seconds: note.timestampSeconds,
+          title: note.title,
+          content: note.content,
+          plain_text: note.plainText,
+          tags: note.tags,
+          visibility: note.visibility,
+        })
+        .execute();
+    },
+
+    async findNoteById(db, noteId) {
+      const row = await db
+        .selectFrom("learning_notes as n")
+        .innerJoin("users as u", "u.id", "n.user_id")
+        .select([...noteSelect])
+        .where("n.id", "=", noteId)
+        .executeTakeFirst();
+
+      return (row as NoteRow | undefined) ?? null;
+    },
+
+    async findNoteAccessTarget(db, noteId) {
+      const row = await db
+        .selectFrom("learning_notes")
+        .select([
+          "id",
+          "user_id as userId",
+          "course_id as courseId",
+          "lesson_id as lessonId",
+          "visibility",
+          "moderated_private_at as moderatedPrivateAt",
+        ])
+        .where("id", "=", noteId)
+        .executeTakeFirst();
+
+      if (!row) return null;
+      return {
+        id: row.id,
+        userId: row.userId,
+        courseId: row.courseId,
+        lessonId: row.lessonId,
+        visibility: row.visibility,
+        heldPrivate: Boolean(row.moderatedPrivateAt),
+      };
+    },
+
+    async listNotes(db, userId, options) {
+      let filtered = db.selectFrom("learning_notes as n");
+      filtered = applyNoteFilters(filtered, userId, options);
+      if (options.pageCursor) {
+        filtered = filtered.where(
+          createdAtIdDescSql("n", options.pageCursor, "learning_notes"),
+        );
+      }
+
+      const rows = await filtered
+        .innerJoin("users as u", "u.id", "n.user_id")
+        .select([...noteSelect])
+        .orderBy("n.created_at", "desc")
+        .orderBy("n.id", "desc")
+        .limit(options.limit + 1)
+        .execute();
+
+      return rows as NoteRow[];
+    },
+
+    async listNotesByIds(db, userId, options) {
+      if (options.ids.length === 0) return [];
+
+      const filtered = applyNoteFilters(
+        db.selectFrom("learning_notes as n"),
+        userId,
+        {
+          courseId: options.courseId,
+          lessonId: options.lessonId,
+          ids: options.ids,
+          limit: options.ids.length,
+          ...(options.mine ? { mine: true } : {}),
+        },
+      );
+
+      const rows = await filtered
+        .innerJoin("users as u", "u.id", "n.user_id")
+        .select([...noteSelect])
+        .execute();
+
+      return rows as NoteRow[];
+    },
+
+    async countNotes(db, userId, options) {
+      let query = db.selectFrom("learning_notes as n");
+      query = applyNoteFilters(query, userId, options);
+
+      const row = await query
+        .select(sql<number>`count(*)::int`.as("count"))
+        .executeTakeFirst();
+      return Number(row?.count ?? 0);
+    },
+
+    async getCourseNotesOverview(db, courseId, userId) {
+      const course = await db
+        .selectFrom("courses")
+        .select(["id", "title"])
+        .where("id", "=", courseId)
+        .where("deleted_at", "is", null)
+        .executeTakeFirst();
+
+      if (!course) {
+        return { course: null, sections: [], lessons: [], notes: [] };
+      }
+
+      const [sections, lessons, notes] = await Promise.all([
+        db
+          .selectFrom("course_sections")
+          .select(["id", "title", "position"])
+          .where("course_id", "=", courseId)
+          .where("deleted_at", "is", null)
+          .orderBy("position", "asc")
+          .execute(),
+        db
+          .selectFrom("course_lessons")
+          .select(["id", "section_id as sectionId", "title", "position"])
+          .where("course_id", "=", courseId)
+          .where("deleted_at", "is", null)
+          .orderBy("position", "asc")
+          .execute(),
+        db
+          .selectFrom("learning_notes as n")
+          .innerJoin("users as u", "u.id", "n.user_id")
+          .select([...noteSelect])
+          .where("n.course_id", "=", courseId)
+          .where("n.user_id", "=", userId)
+          .orderBy("n.timestamp_seconds", "asc")
+          .orderBy("n.created_at", "asc")
+          .execute(),
+      ]);
+
+      return {
+        course,
+        sections: sections as CourseSectionRow[],
+        lessons: lessons as CourseLessonRow[],
+        notes: notes as NoteRow[],
+      };
+    },
+
+    async incrementLikesCount(db, noteId, delta) {
+      await db
+        .updateTable("learning_notes")
+        .set((eb) => ({
+          likes_count: sql<number>`GREATEST(0, ${eb.ref("likes_count")} + ${delta})`,
+          updated_at: new Date(),
+        }))
+        .where("id", "=", noteId)
+        .execute();
+    },
+
+    async updateNote(db, noteId, updates) {
+      const updateData: Updateable<LearningNoteTable> = {
+        updated_at: new Date(),
+      };
+      if (updates.title !== undefined) updateData.title = updates.title;
+      if (updates.content !== undefined) updateData.content = updates.content;
+      if (updates.plainText !== undefined)
+        updateData.plain_text = updates.plainText;
+      if (updates.timestampSeconds !== undefined)
+        updateData.timestamp_seconds = updates.timestampSeconds;
+      if (updates.tags !== undefined) updateData.tags = updates.tags;
+      if (updates.visibility !== undefined)
+        updateData.visibility = updates.visibility;
+
+      await db
+        .updateTable("learning_notes")
+        .set(updateData)
+        .where("id", "=", noteId)
+        .execute();
+    },
+
+    async holdPrivate(db, noteId) {
+      await db
+        .updateTable("learning_notes")
+        .set({
+          visibility: "private",
+          moderated_private_at: new Date(),
+          updated_at: new Date(),
+        })
+        .where("id", "=", noteId)
+        .execute();
+    },
+
+    async listAttachmentLinkCandidates(db, attachmentIds) {
+      return db
+        .selectFrom("learning_attachments")
+        .select(["id", "owner_id", "status", "target_id"])
+        .where("id", "in", attachmentIds)
+        .execute();
+    },
+
+    async linkAttachmentsToNote(db, attachmentIds, noteId) {
+      await db
+        .updateTable("learning_attachments")
+        .set({ target_type: "note", target_id: noteId })
+        .where("id", "in", attachmentIds)
+        // Held to the same conditions as the caller's check, so an upload
+        // removed or attached elsewhere in between is not attached here.
+        .where("status", "=", "ready")
+        .where("target_id", "is", null)
+        .execute();
+    },
+
+    async listReadyNoteAttachments(db, noteId) {
+      return db
+        .selectFrom("learning_attachments")
+        .select([
+          "id",
+          "kind",
+          "file_name",
+          "storage_key",
+          "file_url",
+          "mime_type",
+          "file_size",
+          "metadata",
+        ])
+        .where("target_type", "=", "note")
+        .where("target_id", "=", noteId)
+        .where("status", "=", "ready")
+        .orderBy("created_at", "asc")
+        .execute();
+    },
+
+    async listReadyAttachmentsOfNotes(db, noteIds) {
+      return db
+        .selectFrom("learning_attachments")
+        .select([
+          "id",
+          "target_id",
+          "kind",
+          "file_name",
+          "storage_key",
+          "file_url",
+          "mime_type",
+          "file_size",
+          "metadata",
+        ])
+        .where("target_type", "=", "note")
+        .where("target_id", "in", noteIds)
+        .where("status", "=", "ready")
+        .orderBy("created_at", "asc")
+        .execute();
+    },
+
+    async findNoteLike(db, userId, noteId) {
+      return db
+        .selectFrom("learning_likes")
+        .select("id")
+        .where("user_id", "=", userId)
+        .where("target_type", "=", "note")
+        .where("target_id", "=", noteId)
+        .executeTakeFirst();
+    },
+
+    async findNoteBookmark(db, userId, noteId) {
+      return db
+        .selectFrom("learning_bookmarks")
+        .select("id")
+        .where("user_id", "=", userId)
+        .where("note_id", "=", noteId)
+        .executeTakeFirst();
+    },
+
+    async listNoteLikes(db, userId, noteIds) {
+      return db
+        .selectFrom("learning_likes")
+        .select("target_id")
+        .where("user_id", "=", userId)
+        .where("target_type", "=", "note")
+        .where("target_id", "in", noteIds)
+        .execute();
+    },
+
+    async listNoteBookmarks(db, userId, noteIds) {
+      return db
+        .selectFrom("learning_bookmarks")
+        .select("note_id")
+        .where("user_id", "=", userId)
+        .where("note_id", "in", noteIds)
+        .execute();
+    },
+
+    async deleteNote(db, noteId) {
+      // Notes are hard-deleted (unlike threads/replies, which soft-delete),
+      // so the polymorphic learning_attachments/learning_likes rows pointing
+      // at this note (no DB-level FK is possible across target types) would
+      // otherwise be orphaned. Clean them up in the same transaction as the
+      // note row itself.
+      await withWriteTransaction(db, async (trx) => {
+        await trx
+          .deleteFrom("learning_attachments")
+          .where("target_type", "=", "note")
+          .where("target_id", "=", noteId)
+          .execute();
+
+        await trx
+          .deleteFrom("learning_likes")
+          .where("target_type", "=", "note")
+          .where("target_id", "=", noteId)
+          .execute();
+
+        await trx
+          .deleteFrom("learning_bookmarks")
+          .where("note_id", "=", noteId)
+          .execute();
+
+        await trx
+          .deleteFrom("learning_mentions")
+          .where("source_type", "=", "note")
+          .where("source_id", "=", noteId)
+          .execute();
+
+        await trx
+          .deleteFrom("learning_notes")
+          .where("id", "=", noteId)
+          .execute();
+      });
+    },
+  };
+}

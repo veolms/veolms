@@ -1,3 +1,9 @@
-export { createDatabase } from "./client.ts";
-export { findPublishedCourseBySlug, listPublishedCourses } from "./courses.ts";
-export type { CourseStatus, Database } from "./schema.ts";
+export {
+  createDatabase,
+  getDatabasePoolMetrics,
+  type DatabasePoolMetrics,
+} from "./client.ts";
+export { listPendingMigrations } from "./migrator.ts";
+export * from "./schema/index.ts";
+export * from "./image-jobs.ts";
+export * from "./role-grants.ts";

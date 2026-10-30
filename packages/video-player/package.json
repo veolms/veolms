@@ -1,0 +1,40 @@
+{
+  "name": "@veolms/video-player",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme-ids": "./src/themes/playerThemeIds.ts",
+    "./chapters": "./src/chapters/index.ts",
+    "./shaka": "./src/engines/shaka/index.ts",
+    "./shaka-preload": "./src/engines/shaka/shaka-early-preload.ts",
+    "./shaka-runtime-hooks": "./src/engines/shaka/shaka-runtime-hooks.ts",
+    "./preview-cache": "./src/storyboard/previewChunkCache.ts",
+    "./styles.css": "./src/styles/player.css"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "mdast-util-to-string": "4.0.0",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "shaka-player": "5.2.7",
+    "unified": "11.0.5"
+  },
+  "peerDependencies": {
+    "react": ">=18.2 <20",
+    "react-dom": ">=18.2 <20"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  }
+}

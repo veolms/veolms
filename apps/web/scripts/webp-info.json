@@ -1,0 +1,20 @@
+{
+  "size": 183966,
+  "chunks": [
+    {
+      "fourcc": "VP8X",
+      "size": 10,
+      "offset": 12
+    },
+    {
+      "fourcc": "ALPH",
+      "size": 83025,
+      "offset": 30
+    },
+    {
+      "fourcc": "VP8 ",
+      "size": 100894,
+      "offset": 83064
+    }
+  ]
+}

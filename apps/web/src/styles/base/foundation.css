@@ -1,0 +1,367 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  /* Android Chrome already excludes the system gesture area from its layout
+     viewport. Some OEM builds still expose that same area through env(), so
+     applying it again creates a large empty strip. Keep the real inset on
+     WebKit devices whose viewport-fit=cover layout needs it. */
+  --app-safe-area-bottom: 0px;
+
+  /* Chrome 135+ can extend the viewport behind Android's gesture area. Keep
+     these raw values separate from the layout-safe value above so fixed
+     bottom surfaces can bleed into that area without duplicating spacing. */
+  --app-viewport-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --app-viewport-safe-area-max-bottom: env(
+    safe-area-max-inset-bottom,
+    env(safe-area-inset-bottom, 0px)
+  );
+}
+
+@supports (-webkit-touch-callout: none) {
+  :root {
+    --app-safe-area-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+html {
+  background: var(--canvas);
+  scroll-behavior: smooth;
+}
+
+/* Native scrollbar chrome remains available by default. Users can opt out in
+   Appearance settings while retaining wheel, touch, keyboard, and script scrolling. */
+:root[data-hide-scrollbars="true"],
+:root[data-hide-scrollbars="true"] :where(*) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+:root[data-hide-scrollbars="true"]::-webkit-scrollbar,
+:root[data-hide-scrollbars="true"] *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+body {
+  position: relative;
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.native-search-clear-hidden::-webkit-search-cancel-button,
+.native-search-clear-hidden::-webkit-search-decoration {
+  display: none;
+  appearance: none;
+}
+
+.native-search-clear-hidden::-ms-clear {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.app-slider {
+  --app-slider-progress: 0%;
+  --app-slider-pill-radius: 9999px;
+  --app-slider-track-height: 10px;
+  --app-slider-thumb-size: 20px;
+  --app-slider-fill: var(--accent);
+  --app-slider-rest: color-mix(in srgb, var(--track) 74%, var(--muted));
+  --app-slider-thumb-accent: var(--app-slider-fill);
+  --app-slider-thumb: var(--app-slider-thumb-accent);
+  --app-slider-thumb-border: var(--app-slider-thumb-accent);
+  --app-slider-track-background: linear-gradient(
+    90deg,
+    var(--app-slider-fill) 0%,
+    var(--app-slider-fill) var(--app-slider-progress),
+    var(--app-slider-rest) var(--app-slider-progress),
+    var(--app-slider-rest) 100%
+  );
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  appearance: none;
+  border: 0;
+  border-radius: var(--app-slider-pill-radius);
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.app-slider::-webkit-slider-runnable-track {
+  height: var(--app-slider-track-height);
+  border-radius: var(--app-slider-pill-radius);
+  background: var(--app-slider-track-background);
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.app-slider::-moz-range-track,
+.app-slider::-moz-range-progress {
+  height: var(--app-slider-track-height);
+  border-radius: var(--app-slider-pill-radius);
+  background: var(--app-slider-track-background);
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.app-slider::-moz-range-progress {
+  background: transparent;
+}
+
+.app-slider::-webkit-slider-thumb {
+  width: var(--app-slider-thumb-size);
+  height: var(--app-slider-thumb-size);
+  margin-top: calc(
+    (var(--app-slider-track-height) - var(--app-slider-thumb-size)) / 2
+  );
+  appearance: none;
+  border: 3px solid var(--app-slider-thumb-border);
+  border-radius: 50%;
+  background: var(--app-slider-thumb);
+  box-shadow:
+    0 3px 10px rgb(0 0 0 / 34%),
+    0 0 0 1px
+      color-mix(in srgb, var(--app-slider-thumb-accent) 52%, transparent);
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-slider::-moz-range-thumb {
+  width: calc(var(--app-slider-thumb-size) - 6px);
+  height: calc(var(--app-slider-thumb-size) - 6px);
+  border: 3px solid var(--app-slider-thumb-border);
+  border-radius: 50%;
+  background: var(--app-slider-thumb);
+  box-shadow:
+    0 3px 10px rgb(0 0 0 / 34%),
+    0 0 0 1px
+      color-mix(in srgb, var(--app-slider-thumb-accent) 52%, transparent);
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-slider:hover:not(:disabled)::-webkit-slider-thumb {
+  box-shadow:
+    0 4px 12px rgb(0 0 0 / 38%),
+    0 0 0 5px
+      color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
+}
+
+.app-slider:hover:not(:disabled)::-moz-range-thumb {
+  box-shadow:
+    0 4px 12px rgb(0 0 0 / 38%),
+    0 0 0 5px
+      color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
+}
+
+.app-slider:active:not(:disabled)::-webkit-slider-thumb {
+  transform: scale(1.08);
+}
+
+.app-slider:active:not(:disabled)::-moz-range-thumb {
+  transform: scale(1.08);
+}
+
+.app-slider:focus-visible {
+  outline: none;
+}
+
+.app-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 3px 10px rgb(0 0 0 / 34%),
+    0 0 0 4px
+      color-mix(in srgb, var(--app-slider-thumb-accent) 42%, transparent),
+    0 0 0 7px
+      color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
+}
+
+.app-slider:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 3px 10px rgb(0 0 0 / 34%),
+    0 0 0 4px
+      color-mix(in srgb, var(--app-slider-thumb-accent) 42%, transparent),
+    0 0 0 7px
+      color-mix(in srgb, var(--app-slider-thumb-accent) 18%, transparent);
+}
+
+.app-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.app-slider--temperature {
+  --app-slider-fill: #80bfff;
+  --app-slider-track-background: linear-gradient(
+    90deg,
+    #80bfff 0%,
+    #dceaf0 50%,
+    #f2ad65 100%
+  );
+}
+
+.app-slider--player,
+.app-slider--volume {
+  --app-slider-rest: rgb(255 255 255 / 26%);
+  height: 20px;
+}
+
+.app-slider--player {
+  --app-slider-track-height: 5px;
+  --app-slider-thumb-size: 14px;
+}
+
+.app-slider--volume {
+  --app-slider-track-height: 3px;
+  --app-slider-thumb-size: 12px;
+  --app-slider-fill: rgb(255 255 255 / 92%);
+}
+
+.app-slider--player:is(:hover, :focus-visible, :active) {
+  --app-slider-track-height: 7px;
+}
+
+.app-slider--volume:is(:hover, :focus-visible, :active) {
+  --app-slider-track-height: 4px;
+}
+
+@media (max-width: 640px) {
+  .app-slider:not(.app-slider--player, .app-slider--volume) {
+    height: 44px;
+  }
+}
+
+@media (forced-colors: active) {
+  .app-slider {
+    --app-slider-fill: Highlight;
+    --app-slider-rest: GrayText;
+    --app-slider-thumb-accent: Highlight;
+    --app-slider-thumb: Highlight;
+    --app-slider-thumb-border: Canvas;
+  }
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Shared Page Tabs Contract
+   Used across Settings, Course Wizard, Discussions, and workspace tabs.
+   ───────────────────────────────────────────────────────────────────────────── */
+.page-tabs {
+  --page-tab-indicator-left: 0px;
+  --page-tab-indicator-width: 0px;
+  --page-tab-indicator-color: var(--accent);
+  position: relative;
+}
+
+.page-tabs [role="tab"] {
+  --page-tab-active-ink: var(--accent-ink, var(--accent));
+  --page-tab-active-indicator: var(--accent);
+}
+
+.page-tabs__indicator {
+  position: absolute;
+  z-index: 2;
+  bottom: 0;
+  left: 0;
+  width: var(--page-tab-indicator-width);
+  height: 2px;
+  border-radius: 999px 999px 0 0;
+  background: var(--page-tab-indicator-color, var(--accent));
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(var(--page-tab-indicator-left, 0px), 0, 0);
+  transition:
+    width 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 160ms ease-out;
+  will-change: width, transform;
+}
+
+.page-tabs [data-page-tab-tone="blue"] {
+  --page-tab-tone: #5da9ff;
+}
+.page-tabs [data-page-tab-tone="violet"] {
+  --page-tab-tone: #ad7cff;
+}
+.page-tabs [data-page-tab-tone="cyan"] {
+  --page-tab-tone: #63c8d5;
+}
+.page-tabs [data-page-tab-tone="green"] {
+  --page-tab-tone: #55d98b;
+}
+.page-tabs [data-page-tab-tone="gold"] {
+  --page-tab-tone: #f1be4b;
+}
+.page-tabs [data-page-tab-tone="orange"] {
+  --page-tab-tone: #f09c4e;
+}
+.page-tabs [data-page-tab-tone="rose"] {
+  --page-tab-tone: #ff6684;
+}
+
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="blue"] {
+  --page-tab-tone: #1769aa;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="violet"] {
+  --page-tab-tone: #6741b8;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="cyan"] {
+  --page-tab-tone: #0b6d79;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="green"] {
+  --page-tab-tone: #14763f;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="gold"] {
+  --page-tab-tone: #7b5b00;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="orange"] {
+  --page-tab-tone: #9a4d00;
+}
+:root[data-theme="light"] .page-tabs [data-page-tab-tone="rose"] {
+  --page-tab-tone: #b82b52;
+}
+
+:root[data-page-tab-colors="multicolor"]
+  .page-tabs
+  [role="tab"][data-page-tab-tone],
+:root[data-page-tab-colors="follow-sidebar"][data-sidebar-icon-style="multicolor"]
+  .page-tabs
+  [role="tab"][data-page-tab-tone] {
+  --page-tab-active-ink: var(--page-tab-tone);
+  --page-tab-active-indicator: var(--page-tab-tone);
+}

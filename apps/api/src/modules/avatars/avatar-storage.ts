@@ -1,0 +1,339 @@
+import type { AvatarImageVariant } from "@veolms/contracts";
+import type { S3StorageService } from "@veolms/storage";
+
+/** Cap on a manually uploaded photo, enforced server-side (mirrors the
+ * client-side check the settings page already does before it uploads). */
+export const AVATAR_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
+/** Looser cap on what we'll download from a provider's own CDN. */
+const PROVIDER_FETCH_MAX_BYTES = 5 * 1024 * 1024;
+const FETCH_TIMEOUT_MS = 4_000;
+export const AVATAR_IMAGE_WIDTHS = [45, 96, 160] as const;
+/**
+ * The widths a client is offered. The CDN's transform Worker serves 45 and
+ * 160 only and answers 400 ("The requested image width is not enabled") for
+ * 96, so offering it made every browser that picked it (a 43px avatar on a
+ * 1.25x or 2x screen) fail its first request and show nothing until it had
+ * fallen back to the original file. 96 stays in `AVATAR_IMAGE_WIDTHS` so
+ * that stored addresses and old variants are still recognised and removed.
+ */
+const AVATAR_OFFERED_WIDTHS = [45, 160] as const;
+const AVATAR_ORIGINAL_EXTENSIONS = ["jpg", "png", "webp", "gif"] as const;
+export const AVATAR_CONTENT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+
+/**
+ * A single namespace segment keeps the existing CDN transform Worker path
+ * contract intact while allowing every uploaded avatar to have immutable
+ * storage of its own.
+ */
+function avatarNamespace(userId: string, avatarId?: string): string {
+  return avatarId ? `${userId}--${avatarId}` : userId;
+}
+
+export function avatarStoragePrefix(userId: string, avatarId?: string): string {
+  return `public/avatars/${avatarNamespace(userId, avatarId)}`;
+}
+
+function avatarVariantKey(
+  userId: string,
+  width: number,
+  avatarId?: string,
+): string {
+  return `${avatarStoragePrefix(userId, avatarId)}/${width}.webp`;
+}
+
+export function avatarOriginalKey(
+  userId: string,
+  contentType: string,
+  avatarId?: string,
+): string {
+  const extension =
+    contentType === "image/jpeg"
+      ? "jpg"
+      : contentType === "image/png"
+        ? "png"
+        : contentType === "image/gif"
+          ? "gif"
+          : "webp";
+  return `${avatarStoragePrefix(userId, avatarId)}/original.${extension}`;
+}
+
+export function avatarCdnUrl(
+  storage: S3StorageService,
+  userId: string,
+  width: (typeof AVATAR_IMAGE_WIDTHS)[number] = 160,
+  avatarId?: string,
+): string | null {
+  return storage.getPublicObjectUrl(avatarVariantKey(userId, width, avatarId));
+}
+
+/** Keeps one current original when a user changes image file extensions. */
+export async function removeOtherAvatarOriginals(
+  storage: S3StorageService,
+  userId: string,
+  contentType: string,
+  avatarId?: string,
+): Promise<void> {
+  const currentKey = avatarOriginalKey(userId, contentType, avatarId);
+  await Promise.all(
+    AVATAR_ORIGINAL_EXTENSIONS.map((extension) => {
+      const key = `${avatarStoragePrefix(userId, avatarId)}/original.${extension}`;
+      return key === currentKey
+        ? Promise.resolve()
+        : storage.deleteObject(key).catch(() => undefined);
+    }),
+  );
+}
+
+/** Removes stable CDN variants before a replacement can be served. */
+export async function removeAvatarVariants(
+  storage: S3StorageService,
+  userId: string,
+  avatarId?: string,
+): Promise<void> {
+  await storage.deleteObjects(
+    AVATAR_IMAGE_WIDTHS.map((width) =>
+      avatarVariantKey(userId, width, avatarId),
+    ),
+  );
+}
+
+const AVATAR_VARIANT_URL_PATTERN =
+  /^(.*\/public\/avatars\/[A-Za-z0-9_-]{1,200})\/(?:45|96|160)\.webp([?#].*)?$/u;
+
+const AVATAR_STORED_URL_PATTERN =
+  /^(.*\/public\/avatars\/[A-Za-z0-9_-]{1,200})\/(?:(?:45|96|160)\.webp|original\.(?:jpg|jpeg|png|webp|gif))([?#].*)?$/u;
+
+export function isStoredAvatarUrl(value: string | null | undefined): boolean {
+  return Boolean(value && AVATAR_STORED_URL_PATTERN.test(value));
+}
+
+/**
+ * The URL a client is given for a stored avatar. A Google account photo is
+ * served from its stored original rather than the 160px variant.
+ */
+export function displayAvatarUrl<T extends string | null>(avatarUrl: T): T {
+  if (avatarUrl && avatarUrl.endsWith("--google/160.webp")) {
+    return avatarUrl.replace("/160.webp", "/original.jpg") as T;
+  }
+  return avatarUrl;
+}
+
+/** Builds the responsive source set for the canonical 160px CDN URL. */
+export function avatarSrcSetFromUrl(
+  value: string | null | undefined,
+): AvatarImageVariant[] {
+  if (!value) return [];
+  const match = AVATAR_VARIANT_URL_PATTERN.exec(value);
+  if (!match) return [];
+
+  const suffix = match[2] ?? "";
+  return AVATAR_OFFERED_WIDTHS.map((width) => ({
+    url: `${match[1]}/${width}.webp${suffix}`,
+    width,
+    height: width,
+  }));
+}
+
+/**
+ * Stores the uploaded original. The CDN/image-transform Worker creates and
+ * caches the requested WebP variants below this same user prefix:
+ *
+ * public/avatars/{userId--avatarId}/original.{extension}
+ * public/avatars/{userId--avatarId}/{width}.webp
+ *
+ * The database keeps the CDN URL for the original or 160px variant.
+ * Each upload owns its namespace, so avatar history remains stable.
+ */
+export async function storeAvatarBuffer(
+  storage: S3StorageService,
+  userId: string,
+  data: Buffer,
+  contentType: string,
+  avatarId?: string,
+): Promise<string> {
+  const originalKey = avatarOriginalKey(userId, contentType, avatarId);
+  await storage.putObject(originalKey, data, contentType, data.length);
+  await removeAvatarVariants(storage, userId, avatarId);
+  await removeOtherAvatarOriginals(storage, userId, contentType, avatarId);
+
+  const avatarUrl =
+    storage.getPublicObjectUrl(originalKey) ??
+    avatarCdnUrl(storage, userId, 160, avatarId);
+  if (!avatarUrl) {
+    await storage.deleteObject(originalKey).catch(() => undefined);
+    throw new Error("A public CDN URL is required to serve profile avatars.");
+  }
+
+  return avatarUrl;
+}
+
+export function detectImageContentType(
+  buffer: Buffer,
+): "image/jpeg" | "image/png" | "image/webp" | "image/gif" | null {
+  if (
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff
+  ) {
+    return "image/jpeg";
+  }
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  if (
+    buffer.length >= 6 &&
+    (buffer.subarray(0, 6).toString("ascii") === "GIF87a" ||
+      buffer.subarray(0, 6).toString("ascii") === "GIF89a")
+  ) {
+    return "image/gif";
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+    buffer.subarray(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
+const ALLOWED_AVATAR_HOST_SUFFIXES = [
+  "googleusercontent.com",
+  "githubusercontent.com",
+  "google.com",
+  "github.com",
+];
+
+export function isAllowedAvatarHost(urlString: string): boolean {
+  try {
+    const parsed = new URL(urlString);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return false;
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    return ALLOWED_AVATAR_HOST_SUFFIXES.some(
+      (allowed) => hostname === allowed || hostname.endsWith(`.${allowed}`),
+    );
+  } catch {
+    return false;
+  }
+}
+
+const MAX_REDIRECTS = 3;
+
+async function fetchWithRedirectValidation(
+  initialUrl: string,
+  signal: AbortSignal,
+): Promise<Response | null> {
+  let currentUrl = initialUrl;
+  for (let i = 0; i <= MAX_REDIRECTS; i++) {
+    if (!isAllowedAvatarHost(currentUrl)) {
+      return null;
+    }
+    const response = await fetch(currentUrl, {
+      signal,
+      redirect: "manual",
+    });
+
+    if (
+      response.status === 301 ||
+      response.status === 302 ||
+      response.status === 303 ||
+      response.status === 307 ||
+      response.status === 308
+    ) {
+      const location = response.headers.get("location");
+      if (!location) return null;
+      try {
+        currentUrl = new URL(location, currentUrl).href;
+      } catch {
+        return null;
+      }
+      continue;
+    }
+
+    return response;
+  }
+  return null;
+}
+
+/**
+ * Downloads a provider profile photo (Google/GitHub) and stores its original
+ * bytes for the CDN/image-transform Worker. Returns null on any failure — callers fall back to
+ * the DiceBear default rather than blocking login or signup on this.
+ */
+export async function storeAvatarFromUrl(
+  storage: S3StorageService,
+  userId: string,
+  sourceUrl: string,
+  avatarId?: string,
+): Promise<string | null> {
+  try {
+    const response = await fetchWithRedirectValidation(
+      sourceUrl,
+      AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    );
+    if (!response || !response.ok) return null;
+
+    const contentTypeHeader =
+      response.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
+    if (!AVATAR_CONTENT_TYPES.has(contentTypeHeader)) return null;
+
+    if (!response.body) return null;
+
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        totalBytes += value.length;
+        if (totalBytes > PROVIDER_FETCH_MAX_BYTES) {
+          await reader.cancel();
+          return null;
+        }
+        chunks.push(value);
+      }
+    }
+
+    const buffer = Buffer.concat(chunks);
+    if (buffer.length === 0) {
+      return null;
+    }
+
+    const detectedType = detectImageContentType(buffer);
+    if (!detectedType) {
+      return null;
+    }
+
+    return storeAvatarBuffer(storage, userId, buffer, detectedType, avatarId);
+  } catch {
+    return null;
+  }
+}
+
+/** Deletes one explicitly-owned avatar namespace. */
+export async function removeAvatarPrefix(
+  storage: S3StorageService,
+  prefix: string,
+): Promise<void> {
+  await storage.deletePrefix(`${prefix.replace(/\/+$/u, "")}/`);
+}

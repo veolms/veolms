@@ -1,0 +1,94 @@
+import type {
+  NotificationCategory,
+  NotificationChannel,
+} from "@veolms/contracts";
+import type { EmailAttachment } from "@veolms/services/email";
+
+export type NotificationTemplateKey =
+  | "course.published"
+  | "purchase.completed"
+  | "payment.failed"
+  | "refund.completed"
+  | "video.processing_completed"
+  | "video.processing_failed"
+  | "auth.mfa_enabled"
+  | "auth.passkey_added"
+  | "auth.session_revoked"
+  | "auth.account_deactivated"
+  | "user.mentioned"
+  | "certificate.generated"
+  | "discussion.reply_created"
+  | "discussion.answer_accepted"
+  | "moderation.content_moderated"
+  | "moderation.user_suspended"
+  | "moderation.user_unsuspended"
+  | "moderation.report_resolved"
+  | "quiz.attempt_passed"
+  | "quiz.attempt_failed_final"
+  | "quiz.assigned"
+  | "learning.goal_completed"
+  | "learning.streak_milestone"
+  | "learning.reminder";
+
+export type NotificationTemplateData = Record<
+  string,
+  string | number | readonly string[]
+>;
+
+/**
+ * A file to send with a notification's email, named by what it is rather
+ * than carried as bytes: the queued email stays small, and the file is
+ * fetched when the email goes out (see NotificationAttachmentResolver).
+ */
+export type NotificationEmailAttachment = {
+  kind: "order-invoice";
+  orderId: string;
+};
+
+export interface NotificationIntent {
+  recipientUserId: string;
+  type: string;
+  category: NotificationCategory;
+  templateKey: NotificationTemplateKey;
+  templateData: NotificationTemplateData;
+  channels: readonly NotificationChannel[];
+  mandatory: boolean;
+  deepLink: string | null;
+  /** Files sent with the email, if it is sent. */
+  emailAttachments?: readonly NotificationEmailAttachment[];
+}
+
+/**
+ * Turns an attachment reference into the file to send. Throws when the file
+ * cannot be had right now; the email is then tried again later.
+ */
+export interface NotificationAttachmentResolver {
+  resolve(attachment: NotificationEmailAttachment): Promise<EmailAttachment>;
+}
+
+export interface NotificationHandlerDependencies {
+  listActiveCourseRecipientUserIds(courseId: string): Promise<string[]>;
+  /** False keeps course-wide notifications in-app only (no email). */
+  courseWideEmail?: boolean;
+}
+
+export interface NotificationRecipient {
+  id: string;
+  email: string | null;
+  /**
+   * Deactivated accounts are still resolved (the deactivation notice itself
+   * must reach them) but receive nothing optional.
+   */
+  isDeleted?: boolean;
+}
+
+export interface NotificationRecipientDirectory {
+  findRecipient(userId: string): Promise<NotificationRecipient | undefined>;
+  /**
+   * Optional bulk variant — fan-out events resolve every recipient of a
+   * course; one-query-per-recipient dominates their processing time.
+   * Implementations may return fewer rows than requested ids (unknown ids
+   * are simply absent).
+   */
+  findRecipients?(userIds: readonly string[]): Promise<NotificationRecipient[]>;
+}

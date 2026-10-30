@@ -1,0 +1,21 @@
+/*
+ * Razorpay's checkout is drawn in a frame that the gateway's script adds to
+ * the page and that fills the window: the dimmed overlay and the payment
+ * window are both inside it, on a transparent ground, so that the page shows
+ * through around the window.
+ *
+ * A browser only keeps a frame's ground transparent while the frame and the
+ * page it is in use the same colour scheme. Razorpay's page is light; in a
+ * dark theme ours is dark, the schemes differ, and the browser gives the frame
+ * an opaque white ground: the whole screen went white behind the payment
+ * window instead of dimming. Telling the frame's element that what it holds
+ * is light makes the two agree again in every theme.
+ *
+ * Plain CSS because the element is created by Razorpay's script, with
+ * Razorpay's class name: there is nowhere to put a Tailwind class. Imported
+ * by the two screens that open the checkout.
+ */
+.razorpay-container,
+.razorpay-checkout-frame {
+  color-scheme: light;
+}

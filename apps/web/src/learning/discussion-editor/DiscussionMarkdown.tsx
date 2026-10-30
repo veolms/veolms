@@ -1,0 +1,1108 @@
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
+import type {
+  DynamicImportLanguageRegistration,
+  HighlighterCore,
+} from "@shikijs/core";
+import type { DescriptionChapterDeclaration } from "@veolms/video-player";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { DiscussionContent } from "./types";
+import {
+  formatInlineTimestampAriaLabel,
+  tokenizeInlineTimestamps,
+} from "./inlineTimestamp";
+import type { DiscussionAttachmentItem } from "../discussion-attachments";
+import { normalizePreviewUrl } from "@veolms/contracts";
+
+import { renderContentWithMentions } from "./MentionLink";
+import { tabSeparatedTablesToMarkdown } from "./tabSeparatedTables";
+import { textDiagramsToCodeBlocks } from "./textDiagrams";
+import { findSearchMatches } from "../../lib/fuzzySearch";
+import {
+  SEARCH_MATCH_CLASS,
+  useSearchHighlight,
+} from "../../lib/searchHighlight";
+
+export { renderContentWithMentions };
+
+export function highlightMentionsInNode(
+  node: React.ReactNode,
+): React.ReactNode {
+  if (typeof node === "string") {
+    return renderContentWithMentions(node);
+  }
+  if (Array.isArray(node)) {
+    return React.Children.map(node, (child) => highlightMentionsInNode(child));
+  }
+  if (React.isValidElement(node)) {
+    const props = node.props as {
+      children?: React.ReactNode;
+      node?: { tagName?: string };
+    };
+    const tagName = props?.node?.tagName?.toLowerCase();
+    if (
+      tagName === "code" ||
+      tagName === "pre" ||
+      tagName === "a" ||
+      tagName === "img" ||
+      tagName === "video" ||
+      node.type === "code" ||
+      node.type === "a" ||
+      node.type === "pre" ||
+      node.type === "img" ||
+      node.type === "video"
+    ) {
+      return node;
+    }
+    if (props && props.children) {
+      return React.cloneElement(
+        node as React.ReactElement<Record<string, unknown>>,
+        undefined,
+        highlightMentionsInNode(props.children),
+      );
+    }
+  }
+  return node;
+}
+
+interface InlineTimestampRenderOptions {
+  enableInlineTimestamps: boolean;
+  onSeekToTimestamp?: (seconds: number) => void;
+}
+
+const INLINE_TIMESTAMP_LINK_CLASS_NAME =
+  "inline cursor-pointer border-0 bg-transparent p-0 font-medium text-blue-400 no-underline transition-colors duration-150 hover:text-blue-300 active:text-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)";
+const INLINE_TIMESTAMP_TEXT_CLASS_NAME =
+  "inline font-medium text-blue-400 no-underline";
+
+interface InlineTimestampButtonProps {
+  value: string;
+  seconds: number;
+  ariaLabel: string;
+  onSeekToTimestamp?: (seconds: number) => void;
+  className?: string;
+}
+
+function InlineTimestampButton({
+  value,
+  seconds,
+  ariaLabel,
+  onSeekToTimestamp,
+  className,
+}: InlineTimestampButtonProps) {
+  if (!onSeekToTimestamp) {
+    return (
+      <span
+        data-inline-timestamp={value}
+        className={INLINE_TIMESTAMP_TEXT_CLASS_NAME}
+      >
+        {value}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      data-inline-timestamp={value}
+      aria-label={ariaLabel}
+      className={
+        className
+          ? `${INLINE_TIMESTAMP_LINK_CLASS_NAME} ${className}`
+          : INLINE_TIMESTAMP_LINK_CLASS_NAME
+      }
+      onClick={(event) => {
+        event.stopPropagation();
+        onSeekToTimestamp(seconds);
+      }}
+    >
+      {value}
+    </button>
+  );
+}
+
+function renderInlineTimestampsInNode(
+  node: React.ReactNode,
+  options: InlineTimestampRenderOptions,
+): React.ReactNode {
+  if (!options.enableInlineTimestamps) return node;
+
+  if (typeof node === "string") {
+    const parts = tokenizeInlineTimestamps(node);
+    if (parts.length === 1 && parts[0]?.type === "text") return node;
+
+    return parts.map((part, index) => {
+      if (part.type === "text") return part.value;
+      const ariaLabel = formatInlineTimestampAriaLabel(part);
+
+      return (
+        <InlineTimestampButton
+          key={`timestamp-${index}-${part.value}`}
+          value={part.value}
+          seconds={part.seconds}
+          ariaLabel={ariaLabel}
+          onSeekToTimestamp={options.onSeekToTimestamp}
+        />
+      );
+    });
+  }
+
+  if (Array.isArray(node)) {
+    return React.Children.map(node, (child) =>
+      renderInlineTimestampsInNode(child, options),
+    );
+  }
+
+  if (React.isValidElement(node)) {
+    const props = node.props as {
+      children?: React.ReactNode;
+      node?: { tagName?: string };
+      role?: string;
+      contentEditable?: boolean | "true" | "false";
+      "data-mention"?: string;
+    };
+    const tagName = props.node?.tagName?.toLowerCase();
+    const isExcludedElement =
+      tagName === "code" ||
+      tagName === "pre" ||
+      tagName === "a" ||
+      tagName === "img" ||
+      tagName === "video" ||
+      node.type === "button" ||
+      node.type === "a" ||
+      node.type === "input" ||
+      node.type === "textarea" ||
+      node.type === "select" ||
+      node.type === "img" ||
+      node.type === "video" ||
+      props.role === "button" ||
+      props.role === "link" ||
+      props.contentEditable === true ||
+      props.contentEditable === "true" ||
+      props["data-mention"] !== undefined;
+
+    if (isExcludedElement || props.children === undefined) return node;
+
+    return React.cloneElement(
+      node as React.ReactElement<Record<string, unknown>>,
+      undefined,
+      renderInlineTimestampsInNode(props.children, options),
+    );
+  }
+
+  return node;
+}
+
+function renderInlineContent(
+  children: React.ReactNode,
+  options: InlineTimestampRenderOptions,
+): React.ReactNode {
+  const withTimestamps = renderInlineTimestampsInNode(children, options);
+  return highlightMentionsInNode(withTimestamps);
+}
+
+interface DiscussionMarkdownProps {
+  content: DiscussionContent;
+  label: string;
+  /** Linked attachments allow safe suppression of legacy generated Markdown. */
+  linkedAttachments?: readonly DiscussionAttachmentItem[];
+  /** Enables Learning Space-only inline video timestamp controls. */
+  enableInlineTimestamps?: boolean;
+  /** Seeks the current lesson player when an inline timestamp is activated. */
+  onSeekToTimestamp?: (seconds: number) => void;
+  /** Accepted plain-text lesson-description chapters to render as seek buttons. */
+  chapterDeclarations?: readonly DescriptionChapterDeclaration[];
+  /** Render Markdown soft breaks as visible line breaks for lesson descriptions only. */
+  preserveSoftBreaks?: boolean;
+  className?: string;
+}
+
+type MarkdownNode = {
+  type: string;
+  value?: string;
+  url?: string;
+  children?: MarkdownNode[];
+  data?: { hName?: string; hProperties?: Record<string, string> };
+};
+
+interface HighlightDelimiter {
+  canOpen: boolean;
+  canClose: boolean;
+}
+
+const HIGHLIGHT_MARKER = "==";
+const HIGHLIGHT_PUNCTUATION = /[\p{S}\p{P}]/u;
+
+// Same flanking rules as the editor's `==` syntax, so a posted highlight is
+// exactly what the editor showed: `a == b` and `x===y` stay plain text.
+function highlightDelimiterFlags(
+  before: string,
+  after: string,
+): HighlightDelimiter {
+  const spacedBefore = /\s|^$/.test(before);
+  const spacedAfter = /\s|^$/.test(after);
+  const punctBefore = HIGHLIGHT_PUNCTUATION.test(before);
+  const punctAfter = HIGHLIGHT_PUNCTUATION.test(after);
+  return {
+    canOpen: !spacedAfter && (!punctAfter || spacedBefore || punctBefore),
+    canClose: !spacedBefore && (!punctBefore || spacedAfter || punctAfter),
+  };
+}
+
+// The character a marker touches across a node boundary. Inline markup
+// (bold, code, links) starts and ends with punctuation in the source.
+function highlightBoundaryCharacter(
+  sibling: MarkdownNode | undefined,
+  side: "before" | "after",
+) {
+  if (!sibling) return "";
+  if (sibling.type === "break") return "\n";
+  if (sibling.type !== "text") return "*";
+  const value = sibling.value ?? "";
+  return side === "before" ? value.slice(-1) : value.slice(0, 1);
+}
+
+function isHighlightDelimiter(
+  piece: MarkdownNode | HighlightDelimiter,
+): piece is HighlightDelimiter {
+  return "canOpen" in piece;
+}
+
+function mergeAdjacentTextNodes(nodes: MarkdownNode[]): MarkdownNode[] {
+  const merged: MarkdownNode[] = [];
+  for (const node of nodes) {
+    const previous = merged.at(-1);
+    if (node.type === "text" && previous?.type === "text") {
+      merged[merged.length - 1] = {
+        type: "text",
+        value: `${previous.value ?? ""}${node.value ?? ""}`,
+      };
+    } else {
+      merged.push(node);
+    }
+  }
+  return merged;
+}
+
+function wrapHighlightedChildren(children: MarkdownNode[]): MarkdownNode[] {
+  const pieces: (MarkdownNode | HighlightDelimiter)[] = [];
+  children.forEach((child, index) => {
+    const text = child.type === "text" ? (child.value ?? "") : "";
+    if (!text.includes(HIGHLIGHT_MARKER)) {
+      pieces.push(child);
+      return;
+    }
+
+    let textStart = 0;
+    for (const run of text.matchAll(/=+/g)) {
+      if (run[0].length !== HIGHLIGHT_MARKER.length) continue;
+      const start = run.index ?? 0;
+      const end = start + HIGHLIGHT_MARKER.length;
+      if (start > textStart) {
+        pieces.push({ type: "text", value: text.slice(textStart, start) });
+      }
+      pieces.push(
+        highlightDelimiterFlags(
+          start > 0
+            ? text.slice(start - 1, start)
+            : highlightBoundaryCharacter(children[index - 1], "before"),
+          end < text.length
+            ? text.slice(end, end + 1)
+            : highlightBoundaryCharacter(children[index + 1], "after"),
+        ),
+      );
+      textStart = end;
+    }
+    if (textStart < text.length) {
+      pieces.push({ type: "text", value: text.slice(textStart) });
+    }
+  });
+
+  const result: MarkdownNode[] = [];
+  const openers: number[] = [];
+  let wrapped = false;
+  for (const piece of pieces) {
+    if (!isHighlightDelimiter(piece)) {
+      result.push(piece);
+      continue;
+    }
+
+    const opener = openers.at(-1);
+    if (piece.canClose && opener !== undefined && opener < result.length - 1) {
+      openers.pop();
+      const content = result.splice(opener + 1);
+      result[opener] = {
+        type: "highlight",
+        data: { hName: "mark" },
+        children: mergeAdjacentTextNodes(content),
+      };
+      wrapped = true;
+      continue;
+    }
+
+    if (piece.canOpen) openers.push(result.length);
+    result.push({ type: "text", value: HIGHLIGHT_MARKER });
+  }
+
+  // Without a matched pair the block is returned untouched.
+  return wrapped ? mergeAdjacentTextNodes(result) : children;
+}
+
+// A bare URL becomes a link whose label is the URL itself; its text must
+// stay as written.
+function isBareUrlLink(node: MarkdownNode) {
+  const label = node.children?.length === 1 ? node.children[0] : undefined;
+  return (
+    node.type === "link" &&
+    label?.type === "text" &&
+    Boolean(label.value) &&
+    Boolean(node.url?.endsWith(label.value ?? ""))
+  );
+}
+
+/**
+ * The editor's Highlight button writes `==text==` and shows it highlighted,
+ * but Markdown has no such syntax, so posted content showed the raw markers.
+ * A matched pair inside one block becomes a `<mark>` through the syntax tree
+ * (raw HTML stays skipped). Inline code and code blocks are not text nodes,
+ * so markers inside them are left alone.
+ */
+function remarkHighlightMarks() {
+  return (tree: MarkdownNode) => {
+    const visit = (node: MarkdownNode) => {
+      if (!node.children || isBareUrlLink(node)) return;
+      node.children.forEach(visit);
+      node.children = wrapHighlightedChildren(node.children);
+    };
+
+    visit(tree);
+  };
+}
+
+/**
+ * The words the search a post was found with finds in it are highlighted
+ * (see findSearchMatches): text only, so code is left as it is, and not a
+ * word that is part of a mention ("@name"), which is drawn as a link.
+ */
+function remarkSearchMatches(query: string) {
+  return (tree: MarkdownNode) => {
+    const visit = (node: MarkdownNode) => {
+      if (!node.children) return;
+      node.children = node.children.flatMap((child) => {
+        visit(child);
+        if (child.type !== "text" || !child.value) return [child];
+        const text = child.value;
+        const ranges = findSearchMatches(query, text).filter(
+          ([start]) => text[start - 1] !== "@",
+        );
+        if (ranges.length === 0) return [child];
+        const pieces: MarkdownNode[] = [];
+        let index = 0;
+        for (const [start, end] of ranges) {
+          if (start > index) {
+            pieces.push({ type: "text", value: text.slice(index, start) });
+          }
+          pieces.push({
+            type: "searchMatch",
+            data: { hName: "mark", hProperties: { dataSearchMatch: "" } },
+            children: [{ type: "text", value: text.slice(start, end) }],
+          });
+          index = end;
+        }
+        if (index < text.length) {
+          pieces.push({ type: "text", value: text.slice(index) });
+        }
+        return pieces;
+      });
+    };
+    visit(tree);
+  };
+}
+
+function remarkLessonDescriptionSoftBreaks() {
+  return (tree: MarkdownNode) => {
+    const visit = (node: MarkdownNode) => {
+      if (!node.children) return;
+
+      const nextChildren: MarkdownNode[] = [];
+      for (const child of node.children) {
+        visit(child);
+        if (child.type !== "text" || !child.value?.includes("\n")) {
+          nextChildren.push(child);
+          continue;
+        }
+
+        const parts = child.value.split("\n");
+        parts.forEach((part, index) => {
+          if (part) nextChildren.push({ type: "text", value: part });
+          if (index < parts.length - 1) nextChildren.push({ type: "break" });
+        });
+      }
+
+      node.children = nextChildren;
+    };
+
+    visit(tree);
+  };
+}
+
+const CHAPTER_MARKER_PREFIX = "#__veolms-plain-chapter-";
+
+function chapterMarker(index: number) {
+  return `${CHAPTER_MARKER_PREFIX}${index}`;
+}
+
+function chapterMarkerIndex(href: string | undefined) {
+  if (!href?.startsWith(CHAPTER_MARKER_PREFIX)) return null;
+  const value = Number(href.slice(CHAPTER_MARKER_PREFIX.length));
+  return Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function preparePlainChapterMarkdown(
+  markdown: string,
+  declarations: readonly DescriptionChapterDeclaration[],
+) {
+  if (declarations.length === 0) return markdown;
+
+  const declarationByLine = new Map(
+    declarations.map((declaration, index) => [
+      declaration.lineStart,
+      { declaration, index },
+    ]),
+  );
+  const lines = markdown.split(/\r?\n/);
+  const output: string[] = [];
+  let sourceOffset = 0;
+
+  for (const [lineIndex, line] of lines.entries()) {
+    const entry = declarationByLine.get(lineIndex + 1);
+
+    if (entry) {
+      if (output.at(-1)?.trim()) output.push("");
+
+      const timestampStart = entry.declaration.timestampStart - sourceOffset;
+      const timestampEnd = entry.declaration.timestampEnd - sourceOffset;
+      const timestamp = line.slice(timestampStart, timestampEnd);
+      output.push(
+        timestampStart >= 0 && timestampEnd <= line.length && timestamp
+          ? `${line.slice(0, timestampStart)}[${timestamp}](${chapterMarker(entry.index)})${line.slice(timestampEnd)}`
+          : line,
+      );
+
+      const nextLine = lines[lineIndex + 1];
+      if (nextLine !== undefined && nextLine.trim()) output.push("");
+    } else {
+      output.push(line);
+    }
+
+    sourceOffset += line.length;
+    if (lineIndex < lines.length - 1) {
+      sourceOffset += markdown[sourceOffset] === "\r" ? 2 : 1;
+    }
+  }
+
+  return output.join("\n");
+}
+
+/** What differs from one piece of Markdown to the next. */
+interface MarkdownRenderOptions extends InlineTimestampRenderOptions {
+  linkedAttachments?: readonly DiscussionAttachmentItem[];
+  chapterDeclarations?: readonly DescriptionChapterDeclaration[];
+}
+
+const MarkdownRenderOptionsContext = createContext<MarkdownRenderOptions>({
+  enableInlineTimestamps: false,
+});
+
+function isGeneratedAttachmentMarkdown(
+  linkedAttachments: MarkdownRenderOptions["linkedAttachments"],
+  url: string | undefined,
+  label: string | undefined,
+) {
+  return Boolean(
+    url &&
+    label &&
+    linkedAttachments?.some(
+      (attachment) =>
+        attachment.fileUrl === url && attachment.fileName === label,
+    ),
+  );
+}
+
+/** The text of a Markdown element, with its timestamps and mentions live. */
+function MarkdownInlineContent({
+  children,
+  mentions = false,
+}: {
+  children: React.ReactNode;
+  mentions?: boolean;
+}) {
+  const options = useContext(MarkdownRenderOptionsContext);
+  return mentions
+    ? renderInlineContent(children, options)
+    : renderInlineTimestampsInNode(children, options);
+}
+
+function MarkdownLink({ href, children }: React.ComponentProps<"a">) {
+  const { chapterDeclarations, linkedAttachments, onSeekToTimestamp } =
+    useContext(MarkdownRenderOptionsContext);
+  const chapterIndex = chapterMarkerIndex(href);
+  const chapter =
+    chapterIndex === null ? undefined : chapterDeclarations?.[chapterIndex];
+  if (chapter) {
+    const value = flattenMarkdownText(children) ?? "";
+    return (
+      <InlineTimestampButton
+        value={value}
+        seconds={chapter.startTime}
+        ariaLabel={`Seek to ${value} — ${chapter.title}`}
+        onSeekToTimestamp={onSeekToTimestamp}
+      />
+    );
+  }
+
+  const linkLabel = flattenMarkdownText(children);
+  if (isGeneratedAttachmentMarkdown(linkedAttachments, href, linkLabel)) {
+    return null;
+  }
+  const isHashOrMailto =
+    href?.startsWith("#") || href?.toLowerCase().startsWith("mailto:");
+  const resolvedHref =
+    href && !isHashOrMailto ? normalizePreviewUrl(href) : href;
+  return (
+    <a
+      href={resolvedHref}
+      target={isHashOrMailto ? undefined : "_blank"}
+      rel={isHashOrMailto ? undefined : "noopener noreferrer"}
+      className="font-medium text-(--accent-ink,var(--accent)) underline decoration-[color-mix(in_srgb,var(--accent)_45%,transparent)] underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+    >
+      {children}
+    </a>
+  );
+}
+
+function MarkdownImage({ src, alt }: React.ComponentProps<"img">) {
+  const { linkedAttachments } = useContext(MarkdownRenderOptionsContext);
+  if (!src) return null;
+  const linkedImageAttachment = linkedAttachments?.find(
+    (attachment) =>
+      attachment.fileUrl === src &&
+      (attachment.mediaType === "image" ||
+        attachment.kind === "image" ||
+        attachment.kind === "screenshot" ||
+        attachment.mimeType.startsWith("image/")),
+  );
+  const imageWidth = linkedImageAttachment?.width;
+  const imageHeight = linkedImageAttachment?.height;
+  const hasTrustedDimensions =
+    typeof imageWidth === "number" &&
+    Number.isInteger(imageWidth) &&
+    imageWidth > 0 &&
+    typeof imageHeight === "number" &&
+    Number.isInteger(imageHeight) &&
+    imageHeight > 0;
+  const attachmentLabel = alt?.toLowerCase().startsWith("video:")
+    ? alt.slice(6).trim()
+    : alt;
+  if (isGeneratedAttachmentMarkdown(linkedAttachments, src, attachmentLabel)) {
+    return null;
+  }
+  if (alt?.toLowerCase().startsWith("video:")) {
+    return (
+      <video
+        src={src}
+        title={alt.slice(6).trim() || "Attached video"}
+        controls
+        playsInline
+        preload="metadata"
+        className="my-3 max-h-96 w-full rounded-xl bg-black object-contain"
+      />
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt ?? ""}
+      loading="lazy"
+      width={hasTrustedDimensions ? imageWidth : undefined}
+      height={hasTrustedDimensions ? imageHeight : undefined}
+      style={
+        hasTrustedDimensions
+          ? { aspectRatio: `${imageWidth} / ${imageHeight}` }
+          : undefined
+      }
+      className="my-3 max-h-96 max-w-full rounded-xl object-contain"
+    />
+  );
+}
+
+// How each Markdown element is drawn. These are made once, here, and not
+// inside `DiscussionMarkdown`: React treats a renderer that is a new function
+// as a different kind of element, so it threw away and rebuilt every
+// paragraph, link, image, video and code block of every comment each time
+// anything above them rendered. What differs per comment (its attachments,
+// chapters and timestamp handler) reaches the renderers through context.
+const MARKDOWN_COMPONENTS: Components = {
+  a: MarkdownLink,
+  blockquote: ({ children }) => (
+    <blockquote className="my-3 border-l-3 border-(--accent) pl-4 text-(--muted)">
+      <MarkdownInlineContent mentions>{children}</MarkdownInlineContent>
+    </blockquote>
+  ),
+  code: ({ className: codeClassName, children }) => {
+    const code = String(children).replace(/\n$/, "");
+    const language = /language-([^\s]+)/.exec(codeClassName ?? "")?.[1];
+    if (!language && !code.includes("\n")) {
+      return (
+        <code className="rounded bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-1.5 py-0.5 font-mono text-[0.9em] text-(--text)">
+          {children}
+        </code>
+      );
+    }
+    return <HighlightedCodeBlock code={code} language={language} />;
+  },
+  h1: ({ children }) => (
+    <h1 className="my-3 text-xl font-bold tracking-tight text-(--text) sm:text-2xl">
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="my-2.5 text-lg font-bold tracking-tight text-(--text) sm:text-xl">
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="my-2 text-base font-semibold text-(--text) sm:text-lg">
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </h3>
+  ),
+  hr: () => (
+    <hr className="my-4 border-t [border-color:color-mix(in_srgb,var(--text)_12%,transparent)]" />
+  ),
+  img: MarkdownImage,
+  li: ({ children }) => (
+    <li className="pl-1">
+      <MarkdownInlineContent mentions>{children}</MarkdownInlineContent>
+    </li>
+  ),
+  ol: ({ children }) => (
+    <ol className="my-2 list-decimal space-y-1 pl-6">{children}</ol>
+  ),
+  p: ({ children }) => (
+    <p className="my-1.5 first:mt-0 last:mb-0">
+      <MarkdownInlineContent mentions>{children}</MarkdownInlineContent>
+    </p>
+  ),
+  pre: ({ children }) => <>{children}</>,
+  table: ({ children }) => (
+    <div className="my-3 max-w-full overflow-x-auto rounded-lg shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_12%,transparent)]">
+      {/* Words keep whole in a cell: the text around it may break anywhere,
+          which let columns shrink to a letter instead of the box scrolling. */}
+      <table className="w-full border-collapse text-left text-sm wrap-normal">
+        {children}
+      </table>
+    </div>
+  ),
+  td: ({ children }) => (
+    <td className="border-t px-3 py-2 [border-color:color-mix(in_srgb,var(--text)_10%,transparent)]">
+      <MarkdownInlineContent mentions>{children}</MarkdownInlineContent>
+    </td>
+  ),
+  th: ({ children }) => (
+    <th className="border-b px-3 py-2 font-semibold text-(--text) [border-color:color-mix(in_srgb,var(--text)_14%,transparent)]">
+      <MarkdownInlineContent mentions>{children}</MarkdownInlineContent>
+    </th>
+  ),
+  strong: ({ children }) => (
+    <strong>
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </strong>
+  ),
+  em: ({ children }) => (
+    <em>
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </em>
+  ),
+  del: ({ children }) => (
+    <del>
+      <MarkdownInlineContent>{children}</MarkdownInlineContent>
+    </del>
+  ),
+  mark: ({ children, node }) =>
+    node?.properties?.dataSearchMatch !== undefined ||
+    node?.properties?.["data-search-match"] !== undefined ? (
+      // A word the search found (remarkSearchMatches).
+      <mark className={SEARCH_MATCH_CLASS} data-search-match="">
+        <MarkdownInlineContent>{children}</MarkdownInlineContent>
+      </mark>
+    ) : (
+      <mark className="rounded-[0.2em] bg-[color-mix(in_srgb,var(--accent)_22%,transparent)] box-decoration-clone px-0.5 text-inherit">
+        <MarkdownInlineContent>{children}</MarkdownInlineContent>
+      </mark>
+    ),
+  ul: ({ children }) => (
+    <ul className="my-2 list-disc space-y-1 pl-6">{children}</ul>
+  ),
+};
+
+/**
+ * A line of "=" or "-" under text is Markdown's underlined heading. Nobody
+ * writes headings that way in a comment, but plain text does it by chance:
+ * a comment brought over from the old platform listed "const", "age", ":",
+ * "number", "=" one per line, and the lone "=" turned the lines above it
+ * into a large heading. Headings are written with "#" only.
+ */
+function remarkNoUnderlinedHeadings(this: {
+  data(): { micromarkExtensions?: unknown[] };
+}) {
+  const data = this.data();
+  data.micromarkExtensions = [
+    ...(data.micromarkExtensions ?? []),
+    { disable: { null: ["setextUnderline"] } },
+  ];
+}
+
+const MARKDOWN_PLUGINS = [
+  remarkGfm,
+  remarkNoUnderlinedHeadings,
+  remarkHighlightMarks,
+];
+const MARKDOWN_SOFT_BREAK_PLUGINS = [
+  remarkGfm,
+  remarkNoUnderlinedHeadings,
+  remarkHighlightMarks,
+  remarkLessonDescriptionSoftBreaks,
+];
+
+export function DiscussionMarkdown({
+  content,
+  label,
+  linkedAttachments,
+  enableInlineTimestamps = false,
+  onSeekToTimestamp,
+  chapterDeclarations,
+  preserveSoftBreaks = false,
+  className = "",
+}: DiscussionMarkdownProps) {
+  const markdown = textDiagramsToCodeBlocks(
+    tabSeparatedTablesToMarkdown(
+      typeof content === "string" ? content : content.markdown || "",
+    ),
+  );
+  const chapterMarkdown = chapterDeclarations
+    ? preparePlainChapterMarkdown(markdown, chapterDeclarations)
+    : markdown;
+  const renderOptions = useMemo<MarkdownRenderOptions>(
+    () => ({
+      enableInlineTimestamps,
+      onSeekToTimestamp,
+      linkedAttachments,
+      chapterDeclarations,
+    }),
+    [
+      chapterDeclarations,
+      enableInlineTimestamps,
+      linkedAttachments,
+      onSeekToTimestamp,
+    ],
+  );
+  // A list of search results highlights the words its search found.
+  const searchQuery = useSearchHighlight().trim();
+  // The text is parsed again only when it (or the search) changes, not on
+  // every render of the comment around it.
+  const renderedMarkdown = useMemo(() => {
+    const plugins = preserveSoftBreaks
+      ? MARKDOWN_SOFT_BREAK_PLUGINS
+      : MARKDOWN_PLUGINS;
+    return (
+      <ReactMarkdown
+        remarkPlugins={
+          searchQuery
+            ? [...plugins, () => remarkSearchMatches(searchQuery)]
+            : plugins
+        }
+        skipHtml
+        urlTransform={safeMarkdownUrl}
+        components={MARKDOWN_COMPONENTS}
+      >
+        {chapterMarkdown}
+      </ReactMarkdown>
+    );
+  }, [chapterMarkdown, preserveSoftBreaks, searchQuery]);
+
+  return (
+    <div
+      role="document"
+      aria-label={label}
+      className={`max-w-[72ch] wrap-anywhere text-sm leading-6 text-(--text-secondary) sm:text-[15px] ${className}`}
+    >
+      <MarkdownRenderOptionsContext.Provider value={renderOptions}>
+        {renderedMarkdown}
+      </MarkdownRenderOptionsContext.Provider>
+    </div>
+  );
+}
+
+function flattenMarkdownText(node: React.ReactNode): string | undefined {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    const parts = node
+      .map(flattenMarkdownText)
+      .filter((part): part is string => part !== undefined);
+    return parts.length > 0 ? parts.join("") : undefined;
+  }
+  return undefined;
+}
+
+interface HighlightedCodeBlockProps {
+  code: string;
+  language?: string;
+}
+
+interface HighlightedToken {
+  content: string;
+  color?: string;
+  fontStyle?: number;
+}
+
+function HighlightedCodeBlock({ code, language }: HighlightedCodeBlockProps) {
+  const theme = useResolvedCodeTheme();
+  const [tokens, setTokens] = useState<HighlightedToken[][] | null>(null);
+  const [copied, setCopied] = useState(false);
+  const resolvedLanguage = resolveLanguage(language);
+
+  useEffect(() => {
+    let active = true;
+    if (!resolvedLanguage) {
+      setTokens(null);
+      return undefined;
+    }
+
+    void highlightCode(code, resolvedLanguage, theme).then((nextTokens) => {
+      if (active) setTokens(nextTokens);
+    });
+    return () => {
+      active = false;
+    };
+  }, [code, resolvedLanguage, theme]);
+
+  const copyCode = async () => {
+    await navigator.clipboard?.writeText(code);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="group/code relative my-3 overflow-hidden rounded-xl bg-[color-mix(in_srgb,var(--canvas)_82%,#111827)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent)]">
+      <div className="flex h-9 items-center justify-between border-b px-3 [border-color:color-mix(in_srgb,var(--text)_8%,transparent)]">
+        <span className="font-mono text-[11px] uppercase tracking-wide text-(--muted)">
+          {language || "text"}
+        </span>
+        <button
+          type="button"
+          onClick={copyCode}
+          className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent)"
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="max-w-full overflow-x-auto p-3 font-mono text-[13px] leading-6 [overflow-wrap:normal] [scrollbar-width:thin]">
+        <code>
+          {(tokens ?? fallbackTokens(code)).map((line, lineIndex) => (
+            <span key={lineIndex} className="block min-h-6">
+              {line.map((token, tokenIndex) => (
+                <span
+                  key={tokenIndex}
+                  style={{
+                    color: token.color,
+                    fontStyle: token.fontStyle === 1 ? "italic" : undefined,
+                    fontWeight: token.fontStyle === 2 ? 700 : undefined,
+                  }}
+                >
+                  {token.content}
+                </span>
+              ))}
+            </span>
+          ))}
+        </code>
+      </pre>
+    </div>
+  );
+}
+
+type DiscussionShikiLanguage = keyof typeof DISCUSSION_LANGUAGE_LOADERS;
+
+const SUPPORTED_LANGUAGES = new Map<string, DiscussionShikiLanguage>([
+  ["bash", "bash"],
+  ["c", "c"],
+  ["cpp", "cpp"],
+  ["c++", "cpp"],
+  ["csharp", "csharp"],
+  ["cs", "csharp"],
+  ["css", "css"],
+  ["dockerfile", "dockerfile"],
+  ["go", "go"],
+  ["html", "html"],
+  ["java", "java"],
+  ["javascript", "javascript"],
+  ["js", "javascript"],
+  ["jsx", "jsx"],
+  ["json", "json"],
+  ["markdown", "markdown"],
+  ["md", "markdown"],
+  ["php", "php"],
+  ["python", "python"],
+  ["py", "python"],
+  ["rust", "rust"],
+  ["rs", "rust"],
+  ["ruby", "ruby"],
+  ["rb", "ruby"],
+  ["scss", "scss"],
+  ["shell", "shellscript"],
+  ["sh", "shellscript"],
+  ["sql", "sql"],
+  ["tsx", "tsx"],
+  ["typescript", "typescript"],
+  ["ts", "typescript"],
+  ["swift", "swift"],
+  ["toml", "toml"],
+  ["xml", "xml"],
+  ["yaml", "yaml"],
+  ["yml", "yaml"],
+] as const);
+
+const DISCUSSION_LANGUAGE_LOADERS = {
+  bash: () => import("@shikijs/langs/bash"),
+  c: () => import("@shikijs/langs/c"),
+  cpp: () => import("@shikijs/langs/cpp"),
+  csharp: () => import("@shikijs/langs/csharp"),
+  css: () => import("@shikijs/langs/css"),
+  dockerfile: () => import("@shikijs/langs/dockerfile"),
+  go: () => import("@shikijs/langs/go"),
+  html: () => import("@shikijs/langs/html"),
+  java: () => import("@shikijs/langs/java"),
+  javascript: () => import("@shikijs/langs/javascript"),
+  json: () => import("@shikijs/langs/json"),
+  jsx: () => import("@shikijs/langs/jsx"),
+  markdown: () => import("@shikijs/langs/markdown"),
+  php: () => import("@shikijs/langs/php"),
+  python: () => import("@shikijs/langs/python"),
+  rust: () => import("@shikijs/langs/rust"),
+  ruby: () => import("@shikijs/langs/ruby"),
+  scss: () => import("@shikijs/langs/scss"),
+  shellscript: () => import("@shikijs/langs/shellscript"),
+  sql: () => import("@shikijs/langs/sql"),
+  tsx: () => import("@shikijs/langs/tsx"),
+  typescript: () => import("@shikijs/langs/typescript"),
+  swift: () => import("@shikijs/langs/swift"),
+  toml: () => import("@shikijs/langs/toml"),
+  xml: () => import("@shikijs/langs/xml"),
+  yaml: () => import("@shikijs/langs/yaml"),
+} satisfies Record<string, DynamicImportLanguageRegistration>;
+
+function resolveLanguage(language?: string) {
+  return language ? SUPPORTED_LANGUAGES.get(language.toLowerCase()) : undefined;
+}
+
+const tokenCache = new Map<string, HighlightedToken[][]>();
+const languageLoads = new Map<DiscussionShikiLanguage, Promise<void>>();
+let highlighterPromise: Promise<HighlighterCore> | null = null;
+
+async function highlightCode(
+  code: string,
+  language: DiscussionShikiLanguage,
+  theme: string,
+) {
+  const key = `${theme}\0${language}\0${code}`;
+  const cached = tokenCache.get(key);
+  if (cached) return cached;
+  try {
+    const highlighter = await getDiscussionHighlighter();
+    if (!highlighter.getLoadedLanguages().includes(language)) {
+      let load = languageLoads.get(language);
+      if (!load) {
+        load = DISCUSSION_LANGUAGE_LOADERS[language]().then(
+          ({ default: lang }) => highlighter.loadLanguage(lang),
+        );
+        languageLoads.set(language, load);
+      }
+      await load;
+    }
+    const result = highlighter.codeToTokens(code, {
+      lang: language,
+      theme,
+    });
+    const highlighted = result.tokens as HighlightedToken[][];
+    tokenCache.set(key, highlighted);
+    return highlighted;
+  } catch {
+    return code.split("\n").map((line) => [{ content: line }]);
+  }
+}
+
+function getDiscussionHighlighter() {
+  highlighterPromise ??= Promise.all([
+    import("@shikijs/core"),
+    import("@shikijs/engine-javascript"),
+    import("@shikijs/themes/github-dark"),
+    import("@shikijs/themes/github-light"),
+  ]).then(
+    ([
+      { createHighlighterCore },
+      { createJavaScriptRegexEngine },
+      dark,
+      light,
+    ]) =>
+      createHighlighterCore({
+        engine: createJavaScriptRegexEngine(),
+        langs: [],
+        themes: [dark.default, light.default],
+      }),
+  );
+  return highlighterPromise;
+}
+
+function fallbackTokens(code: string): HighlightedToken[][] {
+  return code
+    .split("\n")
+    .map((line) => [{ content: line, color: "currentColor" }]);
+}
+
+function useResolvedCodeTheme() {
+  const [theme, setTheme] = useState(() =>
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.theme === "light"
+      ? "github-light"
+      : "github-dark",
+  );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() =>
+      setTheme(root.dataset.theme === "light" ? "github-light" : "github-dark"),
+    );
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
+  return theme;
+}
+
+function safeMarkdownUrl(url: string) {
+  const trimmed = url.trim();
+  if (/^(https?:|mailto:|tel:|\/|#)/i.test(trimmed)) return trimmed;
+  return "";
+}

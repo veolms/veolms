@@ -1,0 +1,1967 @@
+/* Creator dashboard */
+.creator-dashboard {
+  min-width: 0;
+  padding: 0;
+  color: var(--text);
+}
+
+.creator-dashboard-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.creator-dashboard-heading h1 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: clamp(1.55rem, 2.2vw, 2rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.creator-dashboard-heading h1 > .creator-dashboard-greeting {
+  min-width: 0;
+}
+
+.creator-dashboard-greeting-name {
+  white-space: nowrap;
+}
+
+.creator-dashboard-greeting-emoji {
+  display: inline-block;
+  margin-left: 2px;
+  font-size: 0.86em;
+  line-height: 1;
+  vertical-align: 0.02em;
+}
+
+.creator-dashboard-heading p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.creator-dashboard-actions,
+.creator-dashboard-actions button {
+  display: inline-flex;
+  align-items: center;
+}
+
+.creator-dashboard-actions {
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.creator-dashboard-actions button {
+  min-height: 42px;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 0 15px;
+  font: inherit;
+  font-size: 0.79rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.creator-action-label--compact {
+  display: none;
+}
+
+.creator-dashboard-actions button:focus-visible,
+.creator-dashboard-panel button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 84%, white);
+  outline-offset: 2px;
+}
+
+.creator-primary-action {
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.creator-primary-action:hover {
+  background: var(--accent-hover);
+}
+
+.creator-outline-action {
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border-strong));
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.creator-outline-action:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.creator-dashboard-refresh-action:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.creator-dashboard-refresh-icon.is-refreshing {
+  animation: creator-dashboard-refresh-spin 720ms linear infinite;
+}
+
+@keyframes creator-dashboard-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.creator-kpi-grid {
+  display: grid;
+  grid-auto-rows: 90px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.creator-kpi-card {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--card-surface);
+  box-shadow: var(--card-shadow);
+}
+
+.creator-kpi-card > div {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+}
+
+.creator-kpi-card small,
+.creator-kpi-card strong,
+.creator-kpi-card > div > span {
+  display: block;
+}
+
+.creator-kpi-card small {
+  color: var(--text-secondary);
+  font-size: 0.71rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.creator-kpi-card strong {
+  margin: 3px 0 4px;
+  color: var(--text);
+  font-size: 1.35rem;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+
+.creator-kpi-card > div > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 15px;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.creator-kpi-card .creator-kpi-context {
+  color: var(--text-secondary);
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.creator-icon-circle {
+  display: inline-grid;
+  flex: 0 0 36px;
+  min-width: 36px;
+  min-height: 36px;
+  width: 36px;
+  height: 36px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 13%, var(--canvas));
+}
+
+.creator-icon-circle.tone-violet {
+  color: #be9cff;
+  background: color-mix(in srgb, #713dff 28%, var(--canvas));
+}
+.creator-icon-circle.tone-blue {
+  color: #6dafff;
+  background: color-mix(in srgb, #1877d4 28%, var(--canvas));
+}
+.creator-icon-circle.tone-green {
+  color: #5ae39a;
+  background: color-mix(in srgb, #20a464 28%, var(--canvas));
+}
+.creator-icon-circle.tone-gold {
+  color: #ffd26b;
+  background: color-mix(in srgb, #b97800 30%, var(--canvas));
+}
+.creator-icon-circle.tone-danger {
+  color: #ff8e9e;
+  background: color-mix(in srgb, #d12c54 34%, var(--canvas));
+}
+
+:root[data-theme="light"] .creator-icon-circle.tone-violet {
+  color: #7b55d4;
+}
+
+:root[data-theme="light"] .creator-icon-circle.tone-blue {
+  color: #2b75c6;
+}
+
+:root[data-theme="light"] .creator-icon-circle.tone-green {
+  color: #208a57;
+}
+
+:root[data-theme="light"] .creator-icon-circle.tone-gold {
+  color: #a96d05;
+}
+
+:root[data-theme="light"] .creator-icon-circle.tone-danger {
+  color: #c24b62;
+}
+
+.creator-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--success);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.creator-trend.is-negative {
+  color: var(--danger);
+}
+
+.creator-trend.is-neutral {
+  color: var(--muted);
+}
+
+/* Two equal columns with the cards' own gap between them, so each panel
+   stands exactly under the cards above it. The placeholder shown before the
+   dashboard arrives repeats these sizes (home/creator/
+   CreatorDashboardSkeleton.tsx): change both together. */
+.creator-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+  margin-top: 16px;
+}
+
+.creator-dashboard-panel {
+  position: relative;
+  min-width: 0;
+  padding: 15px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--card-surface);
+  box-shadow: var(--card-shadow);
+}
+
+.creator-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 26px;
+  margin-bottom: 13px;
+}
+
+.creator-panel-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.creator-panel-heading h2 > svg {
+  flex: 0 0 auto;
+  color: var(--accent-ink, var(--accent));
+}
+
+.creator-panel-heading h2 > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator-panel-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.creator-panel-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.creator-panel-link {
+  gap: 5px;
+  color: var(--accent-ink, var(--accent));
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.creator-panel-info {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.creator-panel-actions .creator-panel-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  box-sizing: border-box;
+  padding: 0;
+  line-height: 0;
+}
+
+.creator-panel-actions .creator-panel-info > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.creator-panel-info-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.creator-panel-info:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.creator-panel-info:focus-visible,
+.creator-panel-info[aria-expanded="true"] {
+  border-radius: 50%;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.creator-panel-info-popover {
+  position: absolute;
+  top: auto;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: min(330px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 24px));
+  overflow-y: auto;
+  padding: 12px 13px;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 66%, transparent);
+  border-radius: 7px;
+  background: var(--card-surface-raised, var(--surface-strong));
+  color: var(--text);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--canvas) 34%, transparent);
+}
+
+.creator-panel-info-popover[data-placement="left"] {
+  top: 0;
+  right: calc(100% + 8px);
+  bottom: auto;
+}
+
+.creator-panel-info-popover[data-placement="bottom"] {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+.creator-panel-info-popover--portal {
+  position: absolute;
+  right: auto;
+  bottom: auto;
+}
+
+.creator-panel-info-popover > strong {
+  display: block;
+  font-size: 0.69rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.creator-panel-info-content {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  line-height: 1.4;
+}
+
+.creator-panel-info-content p {
+  margin: 0;
+}
+
+.creator-panel-info-content ul {
+  display: grid;
+  gap: 6px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.creator-panel-info-content li {
+  position: relative;
+  padding-left: 10px;
+}
+
+.creator-panel-info-content li::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  content: "•";
+  color: var(--muted);
+}
+
+.creator-panel-info-content li strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.creator-panel-info-content .creator-panel-info-note {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+
+.creator-chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.creator-revenue-panel .creator-panel-heading {
+  margin-bottom: 10px;
+}
+
+.creator-revenue-panel .creator-chart-toolbar {
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.creator-revenue-panel .creator-chart-toolbar > span {
+  gap: 6px;
+  line-height: 1.2;
+}
+
+.creator-chart-toolbar > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.creator-chart-toolbar i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.creator-range-tabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(35px, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--canvas) 88%, transparent);
+}
+
+.creator-range-tabs-indicator {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  z-index: 0;
+  width: calc((100% - 15px) / 4);
+  border-radius: 5px;
+  background: var(--accent);
+  pointer-events: none;
+  transition: transform 210ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.creator-range-tabs[data-active-range="30d"] .creator-range-tabs-indicator {
+  transform: translateX(calc(100% + 3px));
+}
+
+.creator-range-tabs[data-active-range="3m"] .creator-range-tabs-indicator {
+  transform: translateX(calc(200% + 6px));
+}
+
+.creator-range-tabs[data-active-range="1y"] .creator-range-tabs-indicator {
+  transform: translateX(calc(300% + 9px));
+}
+
+.creator-range-tabs button {
+  position: relative;
+  z-index: 1;
+  min-width: 35px;
+  height: 27px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.creator-range-tabs button:hover:not(.is-active) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+}
+
+.creator-range-tabs button.is-active {
+  background: transparent;
+  color: var(--on-accent);
+}
+
+.creator-chart {
+  width: 100%;
+  min-width: 0;
+}
+
+.creator-chart--revenue {
+  height: 228px;
+  margin-bottom: 8px;
+}
+.creator-chart--activity {
+  height: 145px;
+  margin-top: 8px;
+}
+.creator-activity-toolbar {
+  align-items: flex-start;
+  gap: 8px 12px;
+  margin-top: 16px;
+}
+
+.creator-activity-toolbar > .creator-activity-comparison {
+  display: grid;
+  flex: 0 1 auto;
+  align-items: end;
+  justify-items: end;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: inherit;
+  line-height: 1.15;
+  text-align: right;
+}
+
+.creator-activity-comparison-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--success);
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.1;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.creator-activity-comparison.is-negative .creator-activity-comparison-value {
+  color: var(--danger);
+}
+
+.creator-activity-comparison.is-neutral .creator-activity-comparison-value {
+  color: var(--muted);
+}
+
+.creator-activity-comparison-context {
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 500;
+  line-height: 1.15;
+  white-space: normal;
+}
+.creator-activity-meta {
+  margin: 1px 0 0;
+  color: var(--muted);
+  font-size: 0.64rem;
+  text-align: right;
+}
+.creator-chart-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.creator-chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.creator-chart-canvas-wrap--revenue,
+.creator-chart-canvas-wrap--activity {
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+
+.creator-chart-tooltip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  max-width: calc(100% - 16px);
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 72%, transparent);
+  border-radius: 6px;
+  background: var(--card-surface, var(--surface));
+  color: var(--text);
+  box-shadow: var(--card-shadow);
+  font-size: 0.64rem;
+  line-height: 1.2;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.creator-chart-tooltip span {
+  color: var(--muted);
+}
+
+.creator-chart-tooltip strong {
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .creator-range-tabs-indicator,
+  .creator-dashboard-refresh-icon.is-refreshing {
+    transition: none;
+    animation: none;
+  }
+}
+
+.creator-revenue-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 10px 10px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--card-surface-soft);
+}
+
+:root[data-theme="light"] .creator-revenue-summary {
+  border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--card-surface-soft) 88%,
+    var(--surface-strong)
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--surface) 80%, transparent),
+    inset 0 -1px 2px color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.creator-revenue-summary > div {
+  display: grid;
+  align-content: start;
+  grid-template-columns: max-content;
+  justify-content: center;
+  justify-items: start;
+  min-width: 0;
+  padding: 0 5px;
+}
+
+.creator-revenue-summary > div + div {
+  border-left: 1px solid
+    color-mix(in srgb, var(--border-strong) 38%, transparent);
+}
+
+.creator-revenue-summary span,
+.creator-revenue-summary strong {
+  display: block;
+}
+
+.creator-revenue-summary span {
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  line-height: 1.2;
+}
+
+.creator-revenue-summary strong {
+  min-width: 0;
+  margin: 5px 0 6px;
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.creator-revenue-summary span.creator-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  /* As tall as the arrow a loaded figure has beside it, so the dash that
+     stands in while loading takes the same line and the panel does not grow
+     when the figures arrive. */
+  min-height: 14px;
+  color: var(--success);
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.creator-revenue-summary span.creator-trend.is-negative {
+  color: var(--danger);
+}
+
+.creator-revenue-summary span.creator-trend.is-neutral {
+  color: var(--text-secondary);
+}
+
+.creator-activity-list {
+  display: grid;
+  gap: 5px;
+}
+
+.creator-activity-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 43px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--card-surface-soft);
+}
+
+.creator-activity-row .creator-icon-circle {
+  min-width: 34px;
+  min-height: 34px;
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+}
+
+.creator-activity-row > span:nth-child(2) {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator-activity-row strong {
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.creator-activity-row .creator-trend {
+  font-size: 0.64rem;
+}
+
+.creator-courses-panel,
+.creator-enrollments-panel {
+  align-self: stretch;
+}
+
+.creator-discussions-panel {
+  align-self: stretch;
+}
+
+.creator-enrollments-panel {
+  grid-column: 1 / -1;
+}
+
+.creator-table {
+  overflow-x: auto;
+}
+
+.creator-courses-table {
+  box-sizing: border-box;
+  max-height: 294px;
+  overflow-y: auto;
+  padding-block-end: 10px;
+  scrollbar-gutter: stable;
+}
+
+.creator-table-head,
+.creator-table-row {
+  display: grid;
+  align-items: center;
+  column-gap: 10px;
+}
+
+.creator-courses-table .creator-table-head,
+.creator-courses-table .creator-table-row {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 60px 20px 52px 92px;
+  column-gap: 7px;
+}
+
+.creator-courses-table .creator-table-head > :nth-child(3),
+.creator-courses-table .creator-table-row > span:nth-child(3) {
+  grid-column: 4;
+}
+
+.creator-courses-table .creator-table-head > :nth-child(4),
+.creator-courses-table .creator-table-row > span:nth-child(4) {
+  grid-column: 5;
+}
+
+.creator-courses-table .creator-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 28px;
+  border-radius: 7px;
+  color: color-mix(in srgb, var(--text-secondary) 72%, var(--muted));
+  background: var(--card-surface-raised, var(--surface-strong));
+  font-weight: 600;
+}
+
+.creator-courses-panel .creator-panel-heading {
+  margin-bottom: 19px;
+}
+
+.creator-courses-table .creator-table-row {
+  min-height: 51px;
+  padding: 4px;
+  border-top-color: color-mix(in srgb, var(--border-strong) 42%, transparent);
+}
+
+.creator-enrollment-table .creator-table-head,
+.creator-enrollment-table .creator-table-row {
+  min-width: 0;
+  grid-template-columns:
+    minmax(140px, 0.9fr) minmax(220px, 2.15fr) minmax(82px, 0.55fr)
+    minmax(92px, 0.65fr);
+}
+
+.creator-table-head {
+  min-height: 30px;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.61rem;
+  line-height: 1.25;
+}
+
+.creator-table-head-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.creator-table-head-label > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator-table-info-wrap .creator-panel-info {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  border: 0;
+  padding: 0;
+  line-height: 0;
+}
+
+.creator-table-info-wrap .creator-panel-info > svg {
+  display: block;
+}
+
+.creator-courses-panel .creator-panel-link {
+  gap: 6px;
+  line-height: 1.2;
+  transition: color 150ms ease;
+}
+
+.creator-courses-panel .creator-panel-link:hover {
+  color: var(--text);
+}
+
+.creator-courses-panel .creator-panel-link:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 3px;
+}
+
+.creator-courses-panel .creator-panel-link > svg {
+  flex: 0 0 auto;
+  transition: transform 150ms ease;
+}
+
+.creator-courses-panel .creator-panel-link:hover > svg {
+  transform: translateX(2px);
+}
+
+.creator-panel-heading .creator-panel-link {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: color 150ms ease;
+}
+
+.creator-panel-heading .creator-panel-link:hover {
+  color: var(--text);
+}
+
+.creator-panel-heading .creator-panel-link:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 3px;
+}
+
+.creator-panel-heading .creator-panel-link > svg {
+  flex: 0 0 auto;
+  transition: transform 150ms ease;
+}
+
+.creator-panel-heading .creator-panel-link:hover > svg {
+  transform: translateX(2px);
+}
+
+.creator-courses-table .creator-course-row {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 51px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.creator-courses-table .creator-course-row + .creator-course-row::before {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  left: 4px;
+  height: 1px;
+  content: "";
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+.creator-courses-table .creator-course-row:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.creator-courses-table .creator-course-row:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: -2px;
+}
+
+.creator-courses-empty-state > span {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  padding-block: 6px;
+}
+
+.creator-courses-empty-state strong {
+  color: var(--text);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.creator-courses-empty-state small {
+  color: var(--muted);
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+.creator-courses-empty-state .creator-panel-link {
+  margin-top: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .creator-panel-heading .creator-panel-link,
+  .creator-panel-heading .creator-panel-link > svg,
+  .creator-courses-panel .creator-panel-link,
+  .creator-courses-panel .creator-panel-link > svg,
+  .creator-courses-table .creator-course-row {
+    transition: none;
+  }
+}
+
+.creator-table-row {
+  min-height: 54px;
+  padding: 5px 4px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--border-strong) 32%, transparent);
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+}
+
+.creator-table-row > span {
+  min-width: 0;
+}
+
+.creator-course-cell,
+.creator-student-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.creator-course-cell {
+  overflow: hidden;
+}
+
+.creator-courses-table .creator-course-cell {
+  gap: 6px;
+}
+
+.creator-course-cell img {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  aspect-ratio: 1;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.creator-course-thumbnail {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-strong) 78%, var(--canvas));
+}
+
+.creator-course-thumbnail img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.creator-student-cell img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.creator-student-avatar {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-strong) 78%, var(--canvas));
+  color: var(--muted);
+}
+
+.creator-student-avatar-icon {
+  width: 68%;
+  height: 68%;
+}
+
+.creator-course-cell strong,
+.creator-student-cell strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  font-weight: 650;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator-course-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--success) 17%, var(--canvas));
+  color: var(--success);
+  font-size: 0.59rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.creator-courses-table .creator-table-row > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.creator-courses-table .creator-table-row > span:nth-child(3) {
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  font-weight: 400;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.creator-course-students-label {
+  display: none;
+}
+
+.creator-course-students-icon {
+  display: none;
+  flex: 0 0 auto;
+}
+
+.creator-progress-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.2;
+}
+
+.creator-progress-cell > span {
+  flex: 0 0 4ch;
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  font-weight: 400;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.creator-progress-cell i {
+  display: block;
+  width: 58px;
+  min-width: 0;
+  flex: 0 0 58px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--progress-track, var(--track));
+}
+.creator-progress-cell b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.creator-progress-fill {
+  transition: width 480ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.creator-progress-fill--static {
+  transition: none;
+}
+
+.creator-course-skeleton-row {
+  pointer-events: none;
+}
+
+.creator-course-skeleton-row > span {
+  min-width: 0;
+}
+
+.creator-course-skeleton-thumbnail,
+.creator-course-skeleton-title,
+.creator-course-skeleton-status,
+.creator-course-skeleton-students,
+.creator-course-skeleton-percent {
+  display: block;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  animation: creator-course-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.creator-course-skeleton-thumbnail {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 5px;
+}
+
+.creator-course-skeleton-title {
+  width: min(68%, 210px);
+  height: 0.72rem;
+}
+
+.creator-course-skeleton-status {
+  width: 44px;
+  height: 21px;
+  border-radius: 5px;
+}
+
+.creator-course-skeleton-students {
+  width: 24px;
+  height: 0.7rem;
+}
+
+.creator-course-skeleton-percent {
+  width: 3ch;
+  height: 0.7rem;
+}
+
+.creator-course-skeleton-track {
+  background: color-mix(in srgb, var(--text) 8%, transparent) !important;
+}
+
+.creator-course-skeleton-track b {
+  width: 45%;
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+@keyframes creator-course-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .creator-progress-fill {
+    transition: none;
+  }
+
+  .creator-course-skeleton-row > span > *,
+  .creator-course-skeleton-track b,
+  .creator-enrollment-skeleton-row > span > *,
+  .creator-enrollment-skeleton-track,
+  .creator-enrollment-skeleton-track b,
+  .creator-enrollment-skeleton-time::after {
+    animation: none;
+  }
+}
+
+.creator-rating {
+  color: #f9cc4a;
+  font-weight: 700;
+}
+
+.creator-discussions-panel .creator-panel-heading {
+  margin-bottom: 19px;
+}
+
+/* The dashboard preview keeps desktop cards aligned, but becomes natural-height
+   on mobile so discussion rows are not forced into the course-table height. */
+@media (max-width: 640px) {
+  .creator-discussions-panel {
+    align-self: start;
+  }
+}
+
+.creator-enrollment-table .creator-table-row {
+  min-height: 43px;
+  padding-block: 4px;
+}
+
+.creator-enrollment-table .creator-table-row > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator-enrollment-table .creator-enrollment-row {
+  box-sizing: border-box;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.67rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.creator-enrollment-table .creator-enrollment-row:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.creator-enrollment-table .creator-enrollment-row:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: -2px;
+}
+
+.creator-enrollment-mobile-meta {
+  display: contents;
+}
+
+@media (min-width: 641px) {
+  .creator-enrollment-table {
+    max-height: 294px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-block-end: 10px;
+    scrollbar-gutter: stable;
+  }
+
+  .creator-enrollment-table .creator-table-head,
+  .creator-enrollment-table .creator-table-row {
+    grid-template-columns:
+      minmax(150px, 1fr) minmax(220px, 2.2fr) minmax(80px, 0.55fr)
+      minmax(92px, 0.65fr);
+  }
+
+  .creator-enrollment-table .creator-table-head {
+    min-height: 28px;
+    border-radius: 7px;
+    color: color-mix(in srgb, var(--text-secondary) 72%, var(--muted));
+    background: var(--card-surface-raised, var(--surface-strong));
+    font-weight: 600;
+  }
+
+  .creator-enrollment-table .creator-table-row {
+    position: relative;
+    border-top: 0;
+    transition: background-color 150ms ease;
+  }
+
+  .creator-enrollment-table .creator-table-row + .creator-table-row::before {
+    position: absolute;
+    top: 0;
+    right: 4px;
+    left: 4px;
+    height: 1px;
+    content: "";
+    background: color-mix(in srgb, var(--text) 12%, transparent);
+  }
+
+  .creator-enrollment-table .creator-table-row:hover {
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+  }
+
+  .creator-enrollment-table .creator-table-row time {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.66rem;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .creator-enrollment-table .creator-progress-cell {
+    min-width: 0;
+  }
+
+  .creator-enrollment-progress-unavailable {
+    color: var(--muted);
+    font-size: 0.67rem;
+    white-space: nowrap;
+  }
+}
+
+.creator-enrollment-skeleton-rows {
+  display: contents;
+}
+
+.creator-enrollment-skeleton-row {
+  pointer-events: none;
+}
+
+.creator-enrollment-skeleton-avatar,
+.creator-enrollment-skeleton-name,
+.creator-enrollment-skeleton-course,
+.creator-enrollment-skeleton-percent,
+.creator-enrollment-skeleton-track,
+.creator-enrollment-skeleton-track b,
+.creator-enrollment-skeleton-time {
+  display: block;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  animation: creator-course-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.creator-enrollment-skeleton-avatar {
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  border-radius: 50%;
+}
+
+.creator-enrollment-skeleton-name {
+  width: min(74%, 132px);
+  height: 0.68rem;
+}
+
+.creator-enrollment-skeleton-course {
+  width: min(82%, 210px);
+  height: 0.68rem;
+}
+
+.creator-enrollment-skeleton-percent {
+  width: 3ch;
+  height: 0.68rem;
+}
+
+.creator-enrollment-skeleton-row .creator-enrollment-skeleton-track {
+  width: 58px;
+  min-width: 0;
+  flex: 0 0 58px;
+  height: 4px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.creator-enrollment-skeleton-track b {
+  width: 45%;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+.creator-enrollment-skeleton-time {
+  width: 58px;
+  height: 0.64rem;
+}
+
+.creator-enrollment-table > .creator-table-state {
+  box-sizing: border-box;
+  min-height: 255px;
+}
+
+.creator-enrollment-table .creator-table-state > span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.creator-courses-table .creator-table-state > span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.creator-courses-table > .creator-table-state {
+  box-sizing: border-box;
+  min-height: 255px;
+}
+
+@media (max-width: 1180px) {
+  .creator-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .creator-dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .creator-dashboard {
+    padding: 0 0 16px;
+  }
+
+  .courses-app--dashboard > .courses-main-frame > .courses-main {
+    padding-bottom: calc(58px + var(--app-viewport-safe-area-max-bottom));
+  }
+
+  .creator-dashboard-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 13px;
+  }
+  .creator-dashboard-actions {
+    width: 100%;
+  }
+  .creator-dashboard-actions button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+  .creator-kpi-grid {
+    grid-auto-rows: 88px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .creator-kpi-card {
+    min-height: 0;
+    padding: 9px;
+    gap: 7px;
+  }
+  .creator-kpi-card .creator-icon-circle {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+  .creator-kpi-card small {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.15;
+    white-space: normal;
+  }
+  .creator-kpi-card strong {
+    font-size: 1.1rem;
+  }
+  .creator-kpi-card > div > span {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    white-space: normal;
+  }
+  .creator-kpi-card .creator-kpi-context {
+    white-space: normal;
+  }
+  .creator-dashboard-panel {
+    padding: 12px;
+  }
+  .creator-panel-heading {
+    gap: 8px;
+  }
+  .creator-panel-heading h2 {
+    gap: 6px;
+  }
+  .creator-revenue-panel .creator-chart-toolbar {
+    gap: 6px 8px;
+  }
+  .creator-revenue-panel .creator-chart--revenue {
+    height: 198px;
+  }
+  .creator-revenue-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 12px;
+    row-gap: 14px;
+    padding: 11px 10px 8px;
+  }
+  .creator-revenue-summary > div {
+    justify-content: start;
+  }
+  .creator-revenue-summary > div:nth-child(3) {
+    border-left: 0;
+  }
+  .creator-courses-table {
+    overflow-x: hidden;
+  }
+  .creator-courses-table .creator-table-head {
+    display: none;
+  }
+  .creator-courses-table .creator-table-row {
+    min-width: 0;
+  }
+  .creator-courses-table .creator-course-row,
+  .creator-courses-table .creator-course-skeleton-row {
+    grid-template-columns: 42px minmax(0, 1fr) auto auto;
+    grid-template-rows: 28px auto;
+    grid-template-areas:
+      "course course course course"
+      ". status progress students";
+    column-gap: 6px;
+    row-gap: 2px;
+    min-height: 51px;
+    padding: 6px 4px 7px;
+  }
+  .creator-courses-table .creator-course-row > span:nth-child(1),
+  .creator-courses-table .creator-course-skeleton-row > span:nth-child(1) {
+    grid-area: 1 / 1 / -1 / -1;
+  }
+  .creator-courses-table .creator-course-row > span:nth-child(2),
+  .creator-courses-table .creator-course-skeleton-row > span:nth-child(2) {
+    grid-area: 2 / 2 / 3 / 3;
+  }
+  .creator-courses-table .creator-course-row > span:nth-child(3),
+  .creator-courses-table .creator-course-skeleton-row > span:nth-child(3) {
+    grid-area: 2 / 4 / 3 / 5;
+    justify-self: end;
+  }
+  .creator-courses-table .creator-course-row > span:nth-child(4),
+  .creator-courses-table .creator-course-skeleton-row > span:nth-child(4) {
+    grid-area: 2 / 3 / 3 / 4;
+    justify-self: end;
+  }
+  .creator-courses-table .creator-course-cell {
+    width: 100%;
+    align-self: stretch;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .creator-courses-table .creator-course-thumbnail,
+  .creator-courses-table .creator-course-skeleton-thumbnail {
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    flex-basis: 42px;
+    align-self: center;
+    aspect-ratio: auto;
+  }
+  .creator-courses-table .creator-course-thumbnail-placeholder {
+    min-width: 0;
+    min-height: 0;
+  }
+  .creator-courses-table .creator-course-cell strong {
+    display: -webkit-box;
+    flex: 1 1 auto;
+    align-self: flex-start;
+    height: 2.6em;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
+  }
+  .creator-courses-table .creator-course-students {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .creator-courses-table .creator-course-students-icon {
+    display: block;
+    color: var(--muted);
+  }
+  .creator-courses-table .creator-course-students-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .creator-courses-table .creator-progress-cell {
+    width: auto;
+    justify-self: end;
+  }
+  .creator-courses-table .creator-course-row .creator-progress-cell i,
+  .creator-courses-table .creator-course-skeleton-row .creator-progress-cell i {
+    display: none;
+  }
+  .creator-courses-table
+    .creator-progress-cell[data-progress-unavailable]::before {
+    display: none;
+  }
+  .creator-courses-panel .creator-panel-link {
+    white-space: nowrap;
+  }
+
+  .creator-enrollment-table {
+    max-height: 320px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-block-end: 8px;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .creator-enrollment-table .creator-table-head {
+    display: none;
+  }
+
+  .creator-enrollment-table .creator-table-row {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-rows: 18px 2.5em 17px;
+    grid-template-areas:
+      "avatar name"
+      "avatar course"
+      "avatar meta";
+    column-gap: 8px;
+    row-gap: 3px;
+    padding: 7px 4px 8px;
+    border-top: 0;
+  }
+
+  .creator-enrollment-table .creator-table-row + .creator-table-row::before {
+    position: absolute;
+    top: 0;
+    right: 4px;
+    left: 4px;
+    height: 1px;
+    content: "";
+    background: color-mix(in srgb, var(--text) 9%, transparent);
+  }
+
+  .creator-enrollment-table .creator-table-row > span:nth-child(1) {
+    display: contents;
+  }
+
+  .creator-enrollment-table .creator-table-row > span:nth-child(2) {
+    grid-area: course;
+    display: -webkit-box;
+    min-width: 0;
+    align-self: start;
+    height: 2.5em;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 0.67rem;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+
+  .creator-enrollment-table .creator-table-row > span:nth-child(3) {
+    grid-area: meta;
+    min-width: 0;
+  }
+
+  .creator-enrollment-table .creator-enrollment-mobile-meta {
+    display: flex;
+    grid-area: meta;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .creator-enrollment-table .creator-enrollment-progress-slot {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    flex: 0 1 auto;
+  }
+
+  .creator-enrollment-table .creator-enrollment-mobile-meta > time {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    max-width: 100%;
+    flex: 0 1 auto;
+    justify-content: flex-end;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 0.66rem;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .creator-enrollment-table .creator-enrollment-mobile-meta > time::before {
+    display: none;
+  }
+
+  .creator-enrollment-table .creator-student-cell .creator-student-avatar,
+  .creator-enrollment-table .creator-enrollment-skeleton-avatar {
+    grid-area: avatar;
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    align-self: start;
+  }
+
+  .creator-enrollment-table .creator-student-cell strong,
+  .creator-enrollment-table .creator-enrollment-skeleton-name {
+    grid-area: name;
+    min-width: 0;
+    align-self: start;
+    display: block;
+    flex: 1 1 auto;
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .creator-enrollment-table .creator-progress-cell {
+    width: auto;
+    align-items: center;
+    gap: 0;
+  }
+
+  .creator-enrollment-table .creator-enrollment-progress-value {
+    display: inline-flex;
+    min-height: 17px;
+    align-items: center;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--success) 17%, var(--canvas));
+    color: var(--success);
+    font-size: 0.64rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .creator-enrollment-table .creator-progress-cell::before,
+  .creator-enrollment-table .creator-enrollment-progress-unavailable::before {
+    display: none;
+  }
+
+  .creator-enrollment-table .creator-progress-cell i,
+  .creator-enrollment-table .creator-enrollment-skeleton-track {
+    display: none;
+  }
+
+  .creator-enrollment-table .creator-enrollment-progress-unavailable {
+    display: flex;
+    width: auto;
+    align-items: center;
+    gap: 0;
+    color: var(--muted);
+    font-size: 0.67rem;
+    white-space: nowrap;
+  }
+
+  .creator-enrollment-table
+    .creator-enrollment-skeleton-row
+    .creator-enrollment-skeleton-course {
+    margin-inline-start: 0;
+  }
+
+  .creator-enrollment-table .creator-enrollment-skeleton-time {
+    display: flex;
+    min-width: 0;
+    height: 0.68rem;
+    align-items: center;
+    flex: 1 1 auto;
+    gap: 5px;
+    background: transparent;
+    animation: none;
+  }
+
+  .creator-enrollment-table .creator-enrollment-skeleton-time::before {
+    display: none;
+  }
+
+  .creator-enrollment-table .creator-enrollment-skeleton-time::after {
+    display: block;
+    width: 58px;
+    height: 0.64rem;
+    content: "";
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--text) 9%, transparent);
+    animation: creator-course-skeleton-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@media (max-width: 480px) {
+  .creator-dashboard-actions {
+    gap: 6px;
+  }
+  .creator-dashboard-actions button {
+    min-width: 0;
+    gap: 6px;
+    padding-inline: 8px;
+    font-size: 0.74rem;
+  }
+  .creator-action-label--full {
+    display: none;
+  }
+  .creator-action-label--compact {
+    display: inline;
+  }
+}
+
+@media (max-width: 420px) {
+  .creator-kpi-grid {
+    grid-auto-rows: 86px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .creator-kpi-card {
+    min-height: 0;
+    padding: 8px;
+    gap: 6px;
+    align-items: center;
+  }
+  .creator-kpi-card .creator-icon-circle {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+  }
+  .creator-kpi-card small {
+    font-size: 0.65rem;
+    line-height: 1.1;
+  }
+  .creator-kpi-card strong {
+    font-size: 1rem;
+  }
+  .creator-kpi-card > div > span {
+    gap: 3px;
+    row-gap: 2px;
+    font-size: 0.62rem;
+    line-height: 1.05;
+    white-space: normal;
+  }
+  .creator-kpi-card .creator-kpi-context {
+    white-space: normal;
+  }
+  .creator-chart--revenue {
+    height: 190px;
+  }
+  .creator-revenue-summary strong {
+    font-size: clamp(0.82rem, 4vw, 0.96rem);
+  }
+  .creator-chart--activity {
+    height: 125px;
+  }
+  .creator-activity-row {
+    grid-template-columns: 31px minmax(0, 1fr) auto;
+  }
+  .creator-activity-row .creator-trend {
+    grid-column: 2 / -1;
+    justify-self: end;
+  }
+}

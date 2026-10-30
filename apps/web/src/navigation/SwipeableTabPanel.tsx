@@ -1,0 +1,589 @@
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { Swiper, SwiperSlide } from "swiper/react";
+import type { Swiper as SwiperInstance } from "swiper/types";
+import "swiper/css";
+import "./SwipeableTabPanel.css";
+
+const TAB_VISIBILITY_INSET = 12;
+const TAB_SWIPE_MAX_COMPLETION_DISTANCE = 116;
+const TAB_SWIPE_MAX_COMPLETION_RATIO = 0.24;
+const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
+const COARSE_POINTER_QUERY = "(any-pointer: coarse)";
+
+const subscribeToFinePointer = (listener: () => void) => {
+  const queries = [
+    window.matchMedia(FINE_POINTER_QUERY),
+    window.matchMedia(COARSE_POINTER_QUERY),
+  ];
+  for (const query of queries) query.addEventListener("change", listener);
+  return () => {
+    for (const query of queries) query.removeEventListener("change", listener);
+  };
+};
+
+const getFinePointerSnapshot = () =>
+  navigator.maxTouchPoints === 0 &&
+  window.matchMedia(FINE_POINTER_QUERY).matches &&
+  !window.matchMedia(COARSE_POINTER_QUERY).matches;
+const getFinePointerServerSnapshot = () => true;
+
+const TAB_SWIPE_NO_SWIPING_SELECTOR = [
+  ".swiper-no-swiping",
+  ".app-slider",
+  'input[type="range"]',
+  '[role="slider"]',
+  "progress",
+  '[role="progressbar"]',
+  "video",
+  ".youtube-player",
+  "[data-tab-swipe-ignore]",
+  "[draggable='true']",
+  "[data-drag-handle]",
+  ".drag-handle",
+  ".curriculum-drag-handle",
+  ".ProseMirror",
+  ".tiptap",
+  ".rich-text-editor",
+].join(",");
+
+const TAB_SWIPE_EDITABLE_SELECTOR = [
+  'input:not([type="range"])',
+  "textarea",
+  "select",
+  '[role="textbox"]',
+  '[contenteditable]:not([contenteditable="false"])',
+].join(",");
+
+const getEditableTarget = (target: EventTarget | null) =>
+  target instanceof Element
+    ? target.closest<HTMLElement>(TAB_SWIPE_EDITABLE_SELECTOR)
+    : null;
+
+const syncAdjacentSlideSpacing = (
+  swiper: SwiperInstance,
+  customSpaceBetween?: number,
+  spaceBetweenOffset = 0,
+) => {
+  if (customSpaceBetween !== undefined) {
+    const effectiveSpaceBetween = customSpaceBetween + spaceBetweenOffset;
+    const changed = swiper.params.spaceBetween !== effectiveSpaceBetween;
+    swiper.params.spaceBetween = effectiveSpaceBetween;
+    return changed;
+  }
+  const slide = swiper.el.querySelector<HTMLElement>(".swiper-slide");
+  if (!slide) return false;
+
+  const style = getComputedStyle(slide);
+  const inlineStart = Math.max(
+    0,
+    Number.parseFloat(style.paddingInlineStart || style.paddingLeft) || 0,
+  );
+  const inlineEnd = Math.max(
+    0,
+    Number.parseFloat(style.paddingInlineEnd || style.paddingRight) || 0,
+  );
+  const spaceBetween = -Math.min(inlineStart, inlineEnd) + spaceBetweenOffset;
+  const changed = swiper.params.spaceBetween !== spaceBetween;
+
+  swiper.params.spaceBetween = spaceBetween;
+  return changed;
+};
+
+const syncSwipeCompletionRatio = (swiper: SwiperInstance) => {
+  const width = swiper.size || swiper.el.clientWidth;
+  const ratio =
+    width > 0
+      ? Math.min(
+          TAB_SWIPE_MAX_COMPLETION_RATIO,
+          TAB_SWIPE_MAX_COMPLETION_DISTANCE / width,
+        )
+      : TAB_SWIPE_MAX_COMPLETION_RATIO;
+  swiper.params.longSwipesRatio = ratio;
+};
+
+const isUsableSwiper = (
+  swiper: SwiperInstance | null,
+): swiper is SwiperInstance =>
+  Boolean(swiper && !swiper.destroyed && swiper.params && swiper.el);
+
+const updateSwiperAutoHeight = (swiper: SwiperInstance | null) => {
+  if (!isUsableSwiper(swiper)) return;
+  swiper.updateAutoHeight();
+};
+
+interface SwipeableTabPanelProps<T extends string> {
+  tabs: readonly T[];
+  activeTab: T;
+  onTabChange: (tab: T) => void;
+  tabListRef: RefObject<HTMLElement | null>;
+  id: string;
+  labelledBy: string;
+  className?: string;
+  slideClassName?: string;
+  stateAttribute?: `data-${string}`;
+  disabled?: boolean;
+  spaceBetween?: number;
+  spaceBetweenOffset?: number;
+  onSwipeStart?: () => void;
+  nativeOnFinePointer?: boolean;
+  focusable?: boolean;
+  children: (tab: T, preview: boolean) => ReactNode;
+}
+
+const getNearestTabScrollLeft = ({
+  scrollLeft,
+  scrollWidth,
+  clientWidth,
+  viewportLeft,
+  viewportRight,
+  tabLeft,
+  tabRight,
+  inset = TAB_VISIBILITY_INSET,
+}: {
+  scrollLeft: number;
+  scrollWidth: number;
+  clientWidth: number;
+  viewportLeft: number;
+  viewportRight: number;
+  tabLeft: number;
+  tabRight: number;
+  inset?: number;
+}) => {
+  const safeInset = Math.min(inset, clientWidth / 4);
+  const visibleLeft = viewportLeft + safeInset;
+  const visibleRight = viewportRight - safeInset;
+  let nextScrollLeft = scrollLeft;
+
+  if (tabLeft < visibleLeft) {
+    nextScrollLeft += tabLeft - visibleLeft;
+  } else if (tabRight > visibleRight) {
+    nextScrollLeft += tabRight - visibleRight;
+  }
+
+  return Math.max(
+    0,
+    Math.min(Math.max(0, scrollWidth - clientWidth), nextScrollLeft),
+  );
+};
+
+const scrollTabIntoView = (
+  tabList: HTMLElement,
+  tab: string,
+  behavior: ScrollBehavior,
+) => {
+  const button = Array.from(
+    tabList.querySelectorAll<HTMLElement>("[data-swipe-tab-id]"),
+  ).find((candidate) => candidate.dataset.swipeTabId === tab);
+  if (!button) return;
+
+  const listBounds = tabList.getBoundingClientRect();
+  const tabBounds = button.getBoundingClientRect();
+  const left = getNearestTabScrollLeft({
+    scrollLeft: tabList.scrollLeft,
+    scrollWidth: tabList.scrollWidth,
+    clientWidth: tabList.clientWidth,
+    viewportLeft: listBounds.left,
+    viewportRight: listBounds.right,
+    tabLeft: tabBounds.left,
+    tabRight: tabBounds.right,
+  });
+  if (Math.abs(left - tabList.scrollLeft) < 0.5) return;
+
+  if (typeof tabList.scrollTo === "function") {
+    tabList.scrollTo({ left, behavior });
+  } else {
+    tabList.scrollLeft = left;
+  }
+};
+
+const readTabGeometry = (tabList: HTMLElement, tab: string) => {
+  const button = Array.from(
+    tabList.querySelectorAll<HTMLElement>("[data-swipe-tab-id]"),
+  ).find((candidate) => candidate.dataset.swipeTabId === tab);
+  if (!button) return null;
+  const style = getComputedStyle(button);
+  const indicatorToken = style
+    .getPropertyValue("--page-tab-active-indicator")
+    .trim();
+  const color = indicatorToken.includes("--page-tab-tone")
+    ? style.getPropertyValue("--page-tab-tone").trim()
+    : indicatorToken.includes("--accent")
+      ? style.getPropertyValue("--accent").trim()
+      : indicatorToken;
+  return {
+    left: button.offsetLeft,
+    width: button.offsetWidth,
+    color: color || "var(--accent)",
+  };
+};
+
+const writeIndicatorGeometry = (
+  tabList: HTMLElement,
+  geometry: { left: number; width: number; color: string },
+) => {
+  tabList.style.setProperty("--page-tab-indicator-left", `${geometry.left}px`);
+  tabList.style.setProperty(
+    "--page-tab-indicator-width",
+    `${geometry.width}px`,
+  );
+  tabList.style.setProperty("--page-tab-indicator-color", geometry.color);
+};
+
+export function SwipeableTabPanel<T extends string>({
+  tabs,
+  activeTab,
+  onTabChange,
+  tabListRef,
+  id,
+  labelledBy,
+  className = "",
+  slideClassName = "",
+  stateAttribute,
+  disabled = false,
+  spaceBetween,
+  spaceBetweenOffset = 0,
+  onSwipeStart,
+  nativeOnFinePointer = false,
+  focusable = true,
+  children,
+}: SwipeableTabPanelProps<T>) {
+  const swiperRef = useRef<SwiperInstance | null>(null);
+  const onTabChangeRef = useRef(onTabChange);
+  const activeTabRef = useRef(activeTab);
+  const tabPointerTypeRef = useRef<string | null>(null);
+  const touchActiveRef = useRef(false);
+  const finePointer = useSyncExternalStore(
+    subscribeToFinePointer,
+    getFinePointerSnapshot,
+    getFinePointerServerSnapshot,
+  );
+  const useNativePanel = nativeOnFinePointer && finePointer;
+
+  onTabChangeRef.current = onTabChange;
+  activeTabRef.current = activeTab;
+
+  const updateIndicatorForTab = useCallback(
+    (tab: T) => {
+      const tabList = tabListRef.current;
+      if (!tabList) return;
+      const geometry = readTabGeometry(tabList, tab);
+      if (geometry) writeIndicatorGeometry(tabList, geometry);
+    },
+    [tabListRef],
+  );
+
+  const revealTab = useCallback(
+    (tab: T, behavior: ScrollBehavior) => {
+      const tabList = tabListRef.current;
+      if (tabList) scrollTabIntoView(tabList, tab, behavior);
+    },
+    [tabListRef],
+  );
+
+  const handleSwiperReady = useCallback(
+    (swiper: SwiperInstance) => {
+      const spacingChanged = syncAdjacentSlideSpacing(
+        swiper,
+        spaceBetween,
+        spaceBetweenOffset,
+      );
+      syncSwipeCompletionRatio(swiper);
+      swiperRef.current = swiper;
+      if (spacingChanged) swiper.updateSlides();
+      const activeIndex = tabs.indexOf(activeTabRef.current);
+      if (activeIndex >= 0 && swiper.activeIndex !== activeIndex) {
+        swiper.slideTo(activeIndex, 0, false);
+      }
+      swiper.el.dataset.slidesReady = "true";
+      updateIndicatorForTab(activeTabRef.current);
+    },
+    [spaceBetween, spaceBetweenOffset, tabs, updateIndicatorForTab],
+  );
+
+  const handleSlideChange = useCallback(
+    (swiper: SwiperInstance) => {
+      if (touchActiveRef.current) return;
+      const destination = tabs[swiper.activeIndex];
+      if (!destination) return;
+
+      if (destination === activeTabRef.current) {
+        updateIndicatorForTab(destination);
+        revealTab(destination, "smooth");
+        return;
+      }
+      onTabChangeRef.current(destination);
+
+      // Defensive snap-back was here, but it triggers too eagerly when
+      // routing is asynchronous, preventing users from swiping between screens.
+    },
+    [revealTab, tabs, updateIndicatorForTab],
+  );
+
+  const handleTouchStart = useCallback((swiper: SwiperInstance) => {
+    touchActiveRef.current = true;
+    syncSwipeCompletionRatio(swiper);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    // Swiper emits touchEnd before selecting the destination slide. The
+    // following slideChange can therefore commit without updating mid-drag.
+    touchActiveRef.current = false;
+  }, []);
+
+  useLayoutEffect(() => {
+    updateIndicatorForTab(activeTab);
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)")
+      .matches
+      ? "auto"
+      : "smooth";
+    const frame = window.requestAnimationFrame(() =>
+      revealTab(activeTab, behavior),
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeTab, revealTab, updateIndicatorForTab]);
+
+  useLayoutEffect(() => {
+    const swiper = swiperRef.current;
+    const targetIndex = tabs.indexOf(activeTab);
+    if (!isUsableSwiper(swiper) || targetIndex < 0) return;
+    if (swiper.activeIndex !== targetIndex) {
+      const pointerType = tabPointerTypeRef.current;
+      tabPointerTypeRef.current = null;
+      const animate = pointerType === "touch" || pointerType === "pen";
+      swiper.slideTo(targetIndex, animate ? swiper.params.speed : 0);
+    }
+    updateSwiperAutoHeight(swiper);
+    const frame = window.requestAnimationFrame(() => {
+      updateSwiperAutoHeight(swiperRef.current);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeTab, tabs]);
+
+  useEffect(() => {
+    const swiper = swiperRef.current;
+    if (!isUsableSwiper(swiper) || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+    let disposed = false;
+    const observer = new ResizeObserver(() => {
+      // ResizeObserver callbacks can be queued while a route transition is
+      // destroying the Swiper instance. Swiper clears params during destroy,
+      // so never update a disposed instance.
+      if (!disposed) updateSwiperAutoHeight(swiper);
+    });
+    const activeSlide = swiper.slides?.[swiper.activeIndex];
+    if (activeSlide) {
+      observer.observe(activeSlide);
+    }
+    return () => {
+      disposed = true;
+      observer.disconnect();
+    };
+  }, [activeTab]);
+
+  useEffect(() => {
+    const tabList = tabListRef.current;
+    if (!tabList) return undefined;
+
+    const handleTabPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        tabPointerTypeRef.current = null;
+        return;
+      }
+      const tabButton = target.closest<HTMLElement>("[data-swipe-tab-id]");
+      tabPointerTypeRef.current =
+        tabButton && tabList.contains(tabButton) ? event.pointerType : null;
+    };
+
+    const handleTabPointerCancel = () => {
+      tabPointerTypeRef.current = null;
+    };
+
+    tabList.addEventListener("pointerdown", handleTabPointerDown, true);
+    tabList.addEventListener("pointercancel", handleTabPointerCancel, true);
+    return () => {
+      tabList.removeEventListener("pointerdown", handleTabPointerDown, true);
+      tabList.removeEventListener(
+        "pointercancel",
+        handleTabPointerCancel,
+        true,
+      );
+    };
+  }, [tabListRef]);
+
+  useEffect(() => {
+    const tabList = tabListRef.current;
+    if (!tabList || typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(() => {
+      updateIndicatorForTab(activeTabRef.current);
+      revealTab(activeTabRef.current, "auto");
+    });
+    observer.observe(tabList);
+    return () => observer.disconnect();
+  }, [revealTab, tabListRef, updateIndicatorForTab]);
+
+  useEffect(() => {
+    const tabList = tabListRef.current;
+    const panel = document.getElementById(id);
+    if (!useNativePanel || !tabList || !panel) return undefined;
+
+    const showPreparedTab = (event: MouseEvent) => {
+      const button =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>("[data-swipe-tab-id]")
+          : null;
+      const tab = button?.dataset.swipeTabId as T | undefined;
+      if (!tab || !tabs.includes(tab)) return;
+
+      const slides = Array.from(
+        panel.querySelectorAll<HTMLElement>("[data-panel-tab]"),
+      );
+      const target = slides.find(
+        (slide) => slide.dataset.panelTab === tab && slide.firstElementChild,
+      );
+      if (!target) return;
+      const indicatorGeometry = readTabGeometry(tabList, tab);
+
+      for (const slide of slides) {
+        const selected = slide === target;
+        slide.hidden = !selected;
+        slide.inert = !selected;
+        if (selected) slide.removeAttribute("aria-hidden");
+        else slide.setAttribute("aria-hidden", "true");
+      }
+      for (const candidate of tabList.querySelectorAll<HTMLElement>(
+        "[data-swipe-tab-id]",
+      )) {
+        const selected = candidate.dataset.swipeTabId === tab;
+        candidate.setAttribute("aria-selected", String(selected));
+        candidate.tabIndex = selected ? 0 : -1;
+        candidate.classList.toggle("is-active", selected);
+      }
+      if (stateAttribute) panel.setAttribute(stateAttribute, tab);
+      if (indicatorGeometry) {
+        writeIndicatorGeometry(tabList, indicatorGeometry);
+      }
+    };
+
+    tabList.addEventListener("click", showPreparedTab, true);
+    return () => tabList.removeEventListener("click", showPreparedTab, true);
+  }, [id, stateAttribute, tabListRef, tabs, useNativePanel]);
+
+  useEffect(
+    () => () => {
+      swiperRef.current = null;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (isUsableSwiper(swiperRef.current)) {
+      swiperRef.current.allowTouchMove = !disabled;
+    }
+  }, [disabled]);
+
+  useEffect(() => {
+    if (isUsableSwiper(swiperRef.current) && spaceBetween !== undefined) {
+      swiperRef.current.params.spaceBetween = spaceBetween + spaceBetweenOffset;
+      swiperRef.current.update();
+    }
+  }, [spaceBetween, spaceBetweenOffset]);
+
+  const dataState = stateAttribute
+    ? ({ [stateAttribute]: activeTab } as Record<string, string>)
+    : {};
+  const initialSlide = Math.max(0, tabs.indexOf(activeTab));
+
+  return (
+    <div
+      id={id}
+      className={`swipeable-tab-panel${className ? ` ${className}` : ""}`}
+      role="tabpanel"
+      aria-labelledby={labelledBy}
+      tabIndex={focusable ? 0 : undefined}
+      data-sidebar-swipe-ignore
+      data-learning-swipe-ignore
+      onPointerDownCapture={(event) => {
+        const editable = getEditableTarget(event.target);
+        if (editable && document.activeElement === editable) {
+          editable.classList.add("swiper-no-swiping");
+        }
+      }}
+      onBlurCapture={(event) => {
+        getEditableTarget(event.target)?.classList.remove("swiper-no-swiping");
+      }}
+      {...dataState}
+    >
+      {useNativePanel ? (
+        <div className="swipeable-tab-panel__native" data-native-tab-panel>
+          {tabs.map((tab) => {
+            const content = children(tab, tab !== activeTab);
+            return content ? (
+              <div
+                key={tab}
+                className={`swipeable-tab-panel__native-slide${slideClassName ? ` ${slideClassName}` : ""}`}
+                data-panel-tab={tab}
+                hidden={tab !== activeTab}
+                aria-hidden={tab === activeTab ? undefined : true}
+                inert={tab === activeTab ? undefined : true}
+              >
+                {content}
+              </div>
+            ) : null;
+          })}
+        </div>
+      ) : (
+        <Swiper
+          className="swipeable-tab-panel__swiper"
+          style={
+            {
+              "--swipeable-tab-panel-initial-offset": `${initialSlide * -100}%`,
+            } as CSSProperties
+          }
+          slidesPerView={1}
+          spaceBetween={spaceBetween}
+          autoHeight
+          allowTouchMove={!disabled}
+          simulateTouch={false}
+          longSwipesRatio={TAB_SWIPE_MAX_COMPLETION_RATIO}
+          noSwiping
+          noSwipingSelector={TAB_SWIPE_NO_SWIPING_SELECTOR}
+          threshold={0}
+          initialSlide={initialSlide}
+          onBeforeInit={(swiper) => {
+            syncAdjacentSlideSpacing(swiper, spaceBetween, spaceBetweenOffset);
+          }}
+          onBeforeResize={(swiper) =>
+            syncAdjacentSlideSpacing(swiper, spaceBetween, spaceBetweenOffset)
+          }
+          onSwiper={handleSwiperReady}
+          onTouchStart={handleTouchStart}
+          onSliderFirstMove={onSwipeStart}
+          onTouchEnd={handleTouchEnd}
+          onSlideChange={handleSlideChange}
+        >
+          {tabs.map((tab) => (
+            <SwiperSlide
+              key={tab}
+              className={slideClassName}
+              aria-hidden={tab === activeTab ? undefined : true}
+              inert={tab === activeTab ? undefined : true}
+            >
+              {children(tab, tab !== activeTab)}
+            </SwiperSlide>
+          ))}
+        </Swiper>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,1767 @@
+.courses-sidebar__label {
+  margin: 12px 14px 10px;
+  opacity: 0.72;
+}
+
+.courses-nav {
+  gap: 4px;
+  /* 10px above the menu (5px more than it had, in every desktop state: see
+     the collapsed rail in courses.css and the drag in cards-responsive.css),
+     so its first item stands clear of the logo. */
+  margin: 10px -14px -5px;
+  padding: 5px 14px;
+  overflow-x: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.courses-nav::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* When the menu is taller than its list, two items' worth of blank room
+   (two 57px items and the 8px between them) follows the last one, so it can
+   be scrolled well clear of the profile button. A list that fits has none,
+   or the room alone would make it scroll. */
+.courses-nav__end-space {
+  display: none;
+  flex: none;
+  height: 122px;
+  pointer-events: none;
+}
+
+.courses-nav.has-overflow > .courses-nav__end-space {
+  display: block;
+}
+
+.courses-nav.has-scroll-top {
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    #000 26px,
+    #000 100%
+  );
+  mask-image: linear-gradient(180deg, transparent 0, #000 26px, #000 100%);
+}
+
+.courses-nav.has-scroll-bottom {
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    #000 0,
+    #000 calc(100% - 26px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    #000 0,
+    #000 calc(100% - 26px),
+    transparent 100%
+  );
+}
+
+.courses-nav.has-scroll-top.has-scroll-bottom {
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    #000 26px,
+    #000 calc(100% - 26px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    #000 26px,
+    #000 calc(100% - 26px),
+    transparent 100%
+  );
+}
+
+.courses-nav button {
+  min-height: 47px;
+  border-radius: 10px;
+  padding-inline: 14px;
+  box-shadow: none;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.courses-nav button:hover {
+  background: var(
+    --sidebar-menu-hover-background,
+    color-mix(in srgb, var(--surface) 72%, transparent)
+  );
+  box-shadow: none;
+}
+
+/* The lesson video projects its ambient glow under the whole sidebar. The
+   selected item is solid and sits on top of it, but idle and hovered items
+   are see-through, so the glow tinted them as if it lay over them. While the
+   glow shows, their fills are mixed into the shell colour instead of into
+   nothing: the same shade as before, now covering the glow. The floating
+   sidebar is left alone (its items lie on glass, not on the shell), and so
+   are narrow screens, where the projection is not drawn (see player.css). */
+@media (min-width: 821px) {
+  .courses-app:not(.courses-app--hidden):has(
+      > .ambient-canvas--shell.ambient-canvas--visible
+    )
+    .courses-nav {
+    --sidebar-menu-idle-background: color-mix(
+      in srgb,
+      var(--surface) 35%,
+      var(--app-shell, var(--canvas))
+    );
+    --sidebar-menu-hover-background: color-mix(
+      in srgb,
+      var(--surface) 72%,
+      var(--app-shell, var(--canvas))
+    );
+  }
+}
+
+/* In a light theme an idle item is a faint veil over the sidebar, not a pale
+   tile: close to the sidebar's own colour, still seen as an item, and well
+   apart from the selected one. The surface mixed into the shell colour (the
+   rule above) came out nearly white beside the darker sidebar of a lesson
+   page; seen through, the lesson's glow tints the item a little, as it does
+   the sidebar around it. */
+:root[data-theme="light"] .courses-app .courses-nav {
+  --sidebar-menu-idle-background: color-mix(
+    in srgb,
+    var(--surface) 22%,
+    transparent
+  );
+}
+
+@media (min-width: 821px) {
+  :root[data-theme="light"]
+    .courses-app:not(.courses-app--hidden):has(
+      > .ambient-canvas--shell.ambient-canvas--visible
+    )
+    .courses-nav {
+    --sidebar-menu-idle-background: color-mix(
+      in srgb,
+      var(--surface) 22%,
+      transparent
+    );
+  }
+}
+
+.courses-nav button.is-active {
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
+}
+
+/* The More drawer is the compact presentation of this same navigation, so
+   preserve the selected-surface treatment instead of substituting a second
+   mobile-only effect. Layout remains mobile-specific in home.css. */
+.mobile-menu-sheet__list > button {
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.mobile-menu-sheet__list > button:hover {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: none;
+}
+
+.mobile-menu-sheet__list > button.is-active {
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
+}
+
+.courses-nav button > svg {
+  color: var(--nav-icon-color);
+  filter: none;
+}
+
+.shortcut-keys,
+.shortcut-keys__part {
+  display: inline-flex;
+  align-items: center;
+}
+
+.shortcut-keys {
+  gap: 2px;
+  color: inherit;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.shortcut-keys__part {
+  gap: 2px;
+}
+
+.shortcut-keys__join {
+  opacity: 0.48;
+  font-size: 0.58rem;
+}
+
+.shortcut-keys kbd {
+  display: inline-grid;
+  min-width: 17px;
+  min-height: 18px;
+  place-items: center;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 5px;
+  padding: 2px 4px;
+  color: inherit;
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+  font: inherit;
+}
+
+.courses-nav__shortcut {
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin-left: auto;
+  min-width: 0;
+  min-height: 28px;
+  max-width: 0;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 0;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(4px);
+  transition:
+    max-width 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    min-width 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    padding 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 150ms ease,
+    background-color 150ms ease,
+    opacity 120ms ease,
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 150ms;
+}
+
+.courses-nav__shortcut kbd {
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+}
+
+.courses-nav button:hover .courses-nav__shortcut,
+.courses-nav button:focus-visible .courses-nav__shortcut {
+  min-width: 28px;
+  max-width: 96px;
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  padding-inline: 8px;
+  color: color-mix(in srgb, var(--text) 92%, var(--accent));
+  background: color-mix(in srgb, var(--surface-strong) 84%, var(--accent) 16%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent),
+    0 4px 12px color-mix(in srgb, var(--accent-shadow) 24%, transparent);
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(0);
+  transition-delay: 0s;
+}
+
+.courses-profile {
+  position: relative;
+  margin-top: 12px;
+  margin-inline: -4.5px;
+}
+
+.shell-profile-avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-strong) 88%, var(--canvas));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.shell-profile-avatar--fallback {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
+  color: var(--accent-ink, var(--accent));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
+}
+
+.shell-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.courses-profile__button {
+  position: relative;
+  /* Keep the profile trigger beneath both overlay menus when they overlap. */
+  z-index: 80;
+  height: 64px;
+  min-height: 64px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  padding-block: 4px;
+  padding-inline: 9px;
+  background: var(--surface-strong);
+  box-shadow:
+    var(--surface-depth-edge-shadow),
+    0 3px 7px color-mix(in srgb, var(--canvas) 35%, transparent);
+}
+
+.courses-profile__button:hover {
+  background: color-mix(in srgb, var(--surface-strong) 96%, var(--accent));
+}
+
+.courses-app--collapsed .courses-profile__button,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile__button {
+  border-color: transparent;
+}
+
+.courses-profile__avatar-wrap {
+  width: 54px;
+  height: 54px;
+  flex-basis: 54px;
+}
+
+.courses-profile__button strong {
+  font-size: 0.83rem;
+}
+
+.sidebar-palette-menu {
+  border: 0;
+  color: var(--text);
+  background: var(--surface-strong);
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.32);
+}
+
+.profile-menu {
+  z-index: 100;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  background: var(--surface-strong);
+  --profile-menu-cast-shadow: 0 1px 5px rgb(0 0 0 / 20%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+    var(--profile-menu-cast-shadow);
+}
+
+/* Keep the profile stack above the sidebar resize grip during its close motion. */
+.courses-profile:has(> .profile-menu--animated) {
+  z-index: 2;
+}
+
+.sidebar-appearance {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  border-radius: 12px;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
+  box-shadow: var(--sidebar-dock-depth-shadow);
+}
+
+.sidebar-appearance--mobile-dock {
+  gap: 5px;
+  border-radius: 13px;
+  padding: 5px;
+  background: var(--surface-strong);
+  box-shadow:
+    0 3px 8px color-mix(in srgb, var(--canvas) 42%, transparent),
+    0 -3px 8px color-mix(in srgb, var(--canvas) 24%, transparent),
+    3px 0 8px color-mix(in srgb, var(--canvas) 24%, transparent),
+    -3px 0 8px color-mix(in srgb, var(--canvas) 24%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+:is(
+    .sidebar-appearance,
+    .mobile-menu-sheet__appearance
+  ).sidebar-appearance--mobile-dock
+  > button {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  height: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 58%, transparent);
+  background: var(--hover);
+  box-shadow: none;
+}
+
+:root[data-theme="dark"]
+  :is(
+    .sidebar-appearance,
+    .mobile-menu-sheet__appearance
+  ).sidebar-appearance--mobile-dock
+  > button:not(.is-active) {
+  background: color-mix(in srgb, var(--canvas) 86%, black 14%);
+}
+
+:is(
+    .sidebar-appearance,
+    .mobile-menu-sheet__appearance
+  ).sidebar-appearance--mobile-dock
+  > button
+  > svg {
+  filter: none;
+}
+
+.sidebar-appearance > button,
+.sidebar-palette-trigger {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 58%, transparent);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: none;
+}
+
+.sidebar-appearance > button,
+.mobile-menu-sheet__appearance > button {
+  /* Keep vertical sheet dismissal native while reserving horizontal travel
+     for the appearance switch gesture. */
+  touch-action: pan-y;
+}
+
+.sidebar-appearance > button {
+  flex: 1;
+}
+
+.sidebar-appearance > button:hover:not(.is-active),
+.sidebar-palette-trigger:hover:not([aria-pressed="true"]) {
+  color: var(--text);
+  background: color-mix(in srgb, var(--hover) 76%, var(--surface));
+  border-color: color-mix(in srgb, var(--border-strong) 82%, var(--accent));
+}
+
+.sidebar-appearance > button.is-active,
+.sidebar-palette-trigger[aria-pressed="true"] {
+  color: var(--text);
+  border-color: transparent;
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
+}
+
+/* The reading-mode bootstrap updates the root before React hydrates. Keep the
+   dock's icon and active surface on that same persisted state immediately,
+   while React catches up with the interactive button state. */
+.sidebar-appearance__reading-mode > [data-reading-mode-icon] {
+  display: none;
+}
+
+.sidebar-appearance__reading-mode > [data-reading-mode-icon="off"] {
+  display: block;
+}
+
+:root[data-reading-mode="true"] .sidebar-appearance__reading-mode {
+  color: var(--text);
+  border-color: transparent;
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
+}
+
+:root[data-reading-mode="true"]
+  .sidebar-appearance__reading-mode
+  > [data-reading-mode-icon="off"] {
+  display: none;
+}
+
+:root[data-reading-mode="true"]
+  .sidebar-appearance__reading-mode
+  > [data-reading-mode-icon="on"] {
+  display: block;
+}
+
+.sidebar-appearance > button > svg,
+.sidebar-palette-trigger > svg,
+.mobile-menu-sheet__appearance > button > svg {
+  color: var(--accent-ink, var(--accent));
+  filter: drop-shadow(
+    0 2px 6px
+      color-mix(in srgb, var(--accent-ink, var(--accent)) 38%, transparent)
+  );
+  transition:
+    color 160ms ease,
+    filter 160ms ease;
+}
+
+.sidebar-appearance > button.sidebar-appearance__settings > svg,
+.mobile-menu-sheet__appearance > button[data-dock-item="settings"] > svg {
+  color: var(--nav-icon-color, var(--accent-ink, var(--accent)));
+}
+
+.sidebar-palette-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-appearance
+  > .sidebar-palette-menu--dock-attached:not(.sidebar-palette-menu--collapsed) {
+  /* Spans the profile button's edges (the dock shares them) and covers it:
+     the dock's 8px top margin puts both bottoms on the same line. */
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: auto;
+}
+
+.sidebar-palette-trigger {
+  width: 100%;
+}
+
+.sidebar-palette-trigger > i {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--surface);
+  border-radius: 50%;
+}
+
+.sidebar-palette-menu {
+  position: absolute;
+  right: auto;
+  bottom: calc(100% + 2px);
+  left: 0;
+  z-index: 130;
+  display: grid;
+  width: 216px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  overflow: visible;
+  border: 0;
+  border-radius: 13px;
+  padding: 8px;
+  background-color: color-mix(
+    in srgb,
+    var(--surface-strong) 94%,
+    var(--canvas)
+  );
+  background-image: none;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+    inset 1px 0 0 color-mix(in srgb, var(--text) 4%, transparent),
+    0 18px 42px color-mix(in srgb, var(--canvas) 62%, transparent),
+    0 4px 14px color-mix(in srgb, var(--accent-shadow) 22%, transparent);
+}
+
+.sidebar-palette-menu > button[data-theme-swatch] {
+  --palette-slot-surface: #171614;
+  --palette-slot-ring: linear-gradient(
+    145deg,
+    rgb(255 255 255 / 14%),
+    rgb(255 255 255 / 4%) 48%,
+    rgb(0 0 0 / 42%)
+  );
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 2px solid transparent;
+  /* The swatches grow and shrink with the sidebar's width. A fixed radius
+     turned the small ones into circles, so the corner keeps the proportion
+     it has at the default width (15px on 47px), never more than 15px. */
+  border-radius: min(15px, 32%);
+  padding: 3px;
+  color: white;
+  background:
+    linear-gradient(var(--palette-slot-surface), var(--palette-slot-surface))
+      padding-box,
+    var(--palette-slot-ring) border-box;
+  box-shadow:
+    inset 0 2px 5px rgb(0 0 0 / 64%),
+    inset 0 0 0 1px rgb(0 0 0 / 28%);
+  transition:
+    box-shadow 150ms ease,
+    filter 150ms ease,
+    transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.sidebar-palette-menu > button[data-theme-swatch]:hover:not(.is-selected) {
+  --palette-slot-surface: color-mix(in srgb, var(--theme-swatch) 8%, #171614);
+  --palette-slot-ring: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--theme-swatch) 58%, white 42%),
+    color-mix(in srgb, var(--theme-swatch) 42%, rgb(255 255 255 / 10%)) 48%,
+    color-mix(in srgb, var(--theme-swatch) 48%, black 52%)
+  );
+  box-shadow:
+    inset 0 2px 5px rgb(0 0 0 / 58%),
+    inset 0 0 0 1px color-mix(in srgb, var(--theme-swatch) 12%, transparent);
+}
+
+.sidebar-palette-menu > button[data-theme-swatch].is-selected {
+  --palette-slot-surface: color-mix(in srgb, var(--theme-swatch) 24%, #171614);
+  --palette-selected-border: color-mix(
+    in srgb,
+    var(--theme-swatch) 72%,
+    white 28%
+  );
+  border-width: 3px;
+  border-color: var(--palette-selected-border);
+  padding: 2px;
+  background: var(--palette-slot-surface);
+  box-shadow:
+    inset 0 2px 5px rgb(0 0 0 / 34%),
+    0 0 0 1px color-mix(in srgb, var(--theme-swatch) 38%, transparent),
+    0 0 6px color-mix(in srgb, var(--theme-swatch) 28%, transparent);
+}
+
+.sidebar-palette-menu > button[data-theme-swatch].is-selected:hover {
+  --palette-slot-surface: color-mix(in srgb, var(--theme-swatch) 30%, #171614);
+  border-color: color-mix(in srgb, var(--theme-swatch) 66%, white 34%);
+  box-shadow:
+    inset 0 2px 5px rgb(0 0 0 / 30%),
+    0 0 0 1px color-mix(in srgb, var(--theme-swatch) 44%, transparent),
+    0 0 7px color-mix(in srgb, var(--theme-swatch) 32%, transparent);
+}
+
+.sidebar-palette-menu > button[data-theme-swatch]:active {
+  transform: scale(0.985);
+  box-shadow:
+    inset 0 3px 7px rgb(0 0 0 / 42%),
+    0 1px 4px color-mix(in srgb, var(--theme-swatch) 22%, transparent);
+}
+
+.sidebar-palette-menu > button[data-theme-swatch]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--theme-swatch) 52%, var(--text));
+  outline-offset: 2px;
+}
+
+.sidebar-palette-menu > button[data-theme-swatch].is-selected:focus-visible {
+  outline: none;
+}
+
+.sidebar-palette-menu > button[data-theme-swatch] > i {
+  width: 100%;
+  height: 100%;
+  border: 1px solid color-mix(in srgb, var(--theme-swatch) 76%, white 24%);
+  border-radius: min(12px, 32%);
+  background: var(--theme-swatch);
+  filter: saturate(1.05);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 18%),
+    0 2px 5px rgb(0 0 0 / 36%);
+  transition:
+    filter 160ms ease,
+    border-color 160ms ease;
+}
+
+.sidebar-palette-menu > button[data-theme-swatch]:hover:not(.is-selected) > i {
+  border-color: color-mix(in srgb, var(--theme-swatch) 64%, white 36%);
+  filter: saturate(1.11) brightness(1.04);
+}
+
+.sidebar-palette-menu > button[data-theme-swatch].is-selected > i {
+  border-color: color-mix(in srgb, var(--theme-swatch) 86%, black 14%);
+  filter: saturate(1.14) brightness(1.05);
+}
+
+/* The sidebar's reading and settings menus share this light surface; the
+   settings menu also needs to outweigh the profile menu's light rule below. */
+:root[data-theme="light"] .sidebar-palette-menu,
+:root[data-theme="light"] .sidebar-appearance > .reading-mode-quick-menu,
+:root[data-theme="light"] .courses-profile > .profile-menu.settings-quick-menu {
+  background-color: color-mix(
+    in srgb,
+    var(--surface-strong) 94%,
+    var(--accent) 6%
+  );
+  background-image: none;
+  background-blend-mode: normal;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 96%),
+    inset 1px 0 0 rgb(255 255 255 / 68%),
+    var(--surface-depth-shadow);
+}
+
+/* The phone sheet lays the menu flat on its own surface: a shadow there
+   shows only as a line under the last item. */
+:root[data-theme="light"] .profile-menu:not(.mobile-menu-sheet__profile-menu) {
+  --profile-menu-cast-shadow: 0 1px 5px
+    color-mix(in srgb, var(--text) 12%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 96%),
+    inset 1px 0 0 rgb(255 255 255 / 68%),
+    var(--profile-menu-cast-shadow);
+}
+
+:root[data-elevated-surfaces="false"] .profile-menu {
+  --profile-menu-cast-shadow: none;
+}
+
+:root[data-theme="light"]
+  .sidebar-palette-menu
+  > button[data-theme-swatch]:not(.is-selected) {
+  --palette-slot-surface: color-mix(
+    in srgb,
+    var(--surface) 82%,
+    var(--surface-strong)
+  );
+  --palette-slot-ring: linear-gradient(
+    145deg,
+    color-mix(in srgb, white 82%, var(--theme-swatch) 18%),
+    color-mix(in srgb, var(--theme-swatch) 22%, var(--border-strong)) 52%,
+    color-mix(in srgb, var(--theme-swatch) 30%, var(--surface-strong))
+  );
+  box-shadow:
+    inset 0 2px 5px color-mix(in srgb, var(--text) 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, white 52%, transparent);
+}
+
+:root[data-theme="light"]
+  .sidebar-palette-menu
+  > button[data-theme-swatch]:hover:not(.is-selected) {
+  --palette-slot-surface: color-mix(
+    in srgb,
+    var(--theme-swatch) 10%,
+    var(--surface)
+  );
+  --palette-slot-ring: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--theme-swatch) 52%, white 48%),
+    color-mix(in srgb, var(--theme-swatch) 54%, var(--border-strong)) 52%,
+    color-mix(in srgb, var(--theme-swatch) 46%, var(--surface-strong))
+  );
+}
+
+:root[data-theme="light"]
+  .sidebar-palette-menu
+  > button[data-theme-swatch].is-selected {
+  --palette-slot-surface: color-mix(
+    in srgb,
+    var(--theme-swatch) 16%,
+    var(--surface)
+  );
+  --palette-selected-border: color-mix(
+    in srgb,
+    var(--theme-swatch) 72%,
+    var(--text) 28%
+  );
+  box-shadow:
+    inset 0 2px 5px color-mix(in srgb, var(--text) 10%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--theme-swatch) 34%, transparent),
+    0 0 6px color-mix(in srgb, var(--theme-swatch) 25%, transparent);
+}
+
+:root[data-theme="light"]
+  .sidebar-palette-menu
+  > button[data-theme-swatch].is-selected:hover {
+  --palette-slot-surface: color-mix(
+    in srgb,
+    var(--theme-swatch) 22%,
+    var(--surface)
+  );
+  border-color: color-mix(in srgb, var(--theme-swatch) 68%, var(--text) 32%);
+}
+
+/* Light shells keep the same spectrum navigation, but deepen its ink and
+   selection materials so the rail stays as crisp as the dark appearance. */
+:root[data-theme="light"] .sidebar-collapse {
+  color: var(--text-secondary);
+  background: transparent;
+  box-shadow: none;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    color 150ms ease;
+}
+
+:root[data-theme="light"] .sidebar-collapse:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--selected) 68%, var(--surface));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent),
+    0 8px 20px color-mix(in srgb, var(--accent-shadow) 34%, transparent);
+}
+
+:root[data-theme="light"] .courses-nav button {
+  color: var(--sidebar-nav-text);
+  font-weight: 560;
+}
+
+:root[data-theme="light"] .courses-nav button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--selected) 68%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+/* The selected item, and the profile and theme buttons raised like it, are
+   the brightest thing on a light sidebar: white, the accent only tinting
+   the far edge. Mixed with the stronger surface and more accent they read
+   as grey beside the faint idle items. */
+:root[data-theme="light"] .courses-sidebar {
+  --sidebar-menu-active-background: linear-gradient(
+    108deg,
+    var(--surface) 0%,
+    color-mix(in srgb, var(--surface) 94%, var(--accent) 6%) 100%
+  );
+}
+
+:root[data-theme="light"] .courses-nav button.is-active {
+  color: var(--text);
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
+}
+
+:root[data-theme="light"] .courses-nav button.is-active .courses-nav__text {
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+:root[data-theme="light"] .courses-nav button > svg {
+  /* Keep the per-item spectrum saturated on pale rails; the previous blend
+     with the rail ink washed the icons out in every light palette. */
+  color: color-mix(
+    in srgb,
+    var(--nav-icon-color) 88%,
+    var(--sidebar-icon-ink) 12%
+  );
+  filter: none;
+}
+
+:root[data-theme="light"] .courses-nav button.is-active > svg {
+  color: color-mix(
+    in srgb,
+    var(--nav-icon-color) 94%,
+    var(--sidebar-icon-ink) 6%
+  );
+  filter: none;
+}
+
+/* Raised exactly like the sidebar's selected menu item and its theme button:
+   the same tinted fill, the same shadow, and no outline of its own (the
+   shadow marks its edge). */
+:root[data-theme="light"] .courses-profile__button {
+  border-color: transparent;
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
+}
+
+:root[data-elevated-surfaces="false"] .courses-profile__button {
+  box-shadow: none;
+}
+
+:root[data-theme="light"] .courses-profile__button small,
+:root[data-theme="light"] .sidebar-palette-trigger {
+  color: var(--text-secondary);
+}
+
+:root[data-theme="light"] .sidebar-appearance > button.is-active,
+:root[data-theme="light"] .sidebar-palette-trigger[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--sidebar-menu-active-background);
+  box-shadow: var(--sidebar-menu-active-shadow);
+}
+
+.courses-app--collapsed .courses-sidebar {
+  padding-inline: 10px;
+  padding-bottom: 0;
+}
+
+.courses-app--collapsed .courses-sidebar__brand {
+  min-height: 36px;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0;
+  padding: 0;
+}
+
+.courses-app--collapsed .courses-logo-clip {
+  display: none;
+}
+
+/* In compact mode the optional brand mark occupies the rail by itself. The
+   expand affordance stays quiet until the rail is hovered or focused, keeping
+   the P readable without competing with the navigation icons. */
+:root[data-collapsed-sidebar-logo="true"]
+  .courses-app--collapsed
+  .courses-sidebar__brand {
+  position: relative;
+}
+
+:root[data-collapsed-sidebar-logo="false"]
+  .courses-app--collapsed
+  .courses-logo-clip {
+  display: none !important;
+}
+
+:root[data-collapsed-sidebar-logo="true"]
+  .courses-app--collapsed
+  .courses-logo-clip {
+  display: block;
+  position: absolute;
+  /* The visible P sits high and fractionally left inside the full wordmark's
+     viewBox. Offset the clipping window so the rendered glyph-not merely its
+     box-shares the expand button's optical center. */
+  top: 3px;
+  left: calc(50% + 3.4px);
+  width: 21px;
+  max-width: 21px;
+  height: 36px;
+  overflow: hidden;
+  opacity: 1;
+  clip-path: inset(0 0 0 0);
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: none;
+}
+
+:root[data-collapsed-sidebar-logo="true"]
+  .courses-app--collapsed
+  .courses-logo-clip
+  svg {
+  width: 156px;
+  max-width: none;
+  height: 38px;
+}
+
+:root[data-collapsed-sidebar-logo="true"]
+  .courses-app--collapsed
+  .sidebar-collapse {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  right: auto;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity 150ms ease;
+}
+
+:root[data-collapsed-sidebar-logo="true"]
+  .courses-app--collapsed
+  .courses-sidebar:hover
+  .sidebar-collapse,
+:root[data-collapsed-sidebar-logo="true"]
+  .courses-app--collapsed
+  .courses-sidebar:focus-within
+  .sidebar-collapse {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Treat the compact mark and expand control as one visual slot. Hovering or
+   keyboard focus swaps the P for the action instead of stacking both marks. */
+:root[data-collapsed-sidebar-logo="true"]
+  .courses-app--collapsed
+  .courses-sidebar:hover
+  .courses-logo-clip,
+:root[data-collapsed-sidebar-logo="true"]
+  .courses-app--collapsed
+  .courses-sidebar:focus-within
+  .courses-logo-clip {
+  opacity: 0;
+  clip-path: inset(0 50% 0 50%);
+}
+
+.courses-app--collapsed .courses-nav {
+  align-items: stretch;
+  /* The expanded brand is 38px tall while the compact brand slot is 36px.
+     This offset keeps the navigation's content box on the identical pixel row
+     in both states while preserving the permanent rail fade. */
+  margin: -4px -10px 0;
+  min-height: 0;
+  padding: 16px 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  ) !important;
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  ) !important;
+}
+
+.courses-app--collapsed .courses-nav button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 15px;
+  padding: 0 0 0 12.5px;
+  overflow: visible;
+}
+
+.courses-app--collapsed .courses-nav button > .courses-nav__text,
+.courses-app--collapsed .courses-nav button > b,
+.courses-app--collapsed .courses-nav button > .courses-nav__shortcut {
+  display: none;
+}
+
+.courses-app--collapsed .courses-profile > .courses-profile__button {
+  box-sizing: border-box;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1;
+  gap: 0;
+  justify-content: center;
+  padding: 0;
+}
+
+.courses-app--collapsed .courses-profile__avatar-wrap {
+  width: 54px;
+  height: 54px;
+  flex-basis: 54px;
+}
+
+.courses-app--collapsed .courses-profile {
+  margin-top: 6px;
+}
+
+.courses-app--collapsed .sidebar-appearance {
+  margin-top: 6px;
+  align-items: center;
+  flex-direction: column;
+  padding: 8px;
+}
+
+.courses-app--collapsed .sidebar-appearance--mobile-dock {
+  gap: 5px;
+  padding: 5px;
+}
+
+.courses-app--collapsed .sidebar-appearance > button {
+  display: inline-flex;
+  width: 42px;
+  flex: 0 0 38px;
+}
+
+.courses-app--collapsed .sidebar-appearance--mobile-dock > button {
+  height: 44px;
+  min-height: 44px;
+  flex-basis: 44px;
+}
+
+.courses-app--collapsed .sidebar-palette-wrap {
+  width: 42px;
+  flex: 0 0 38px;
+}
+
+/* Keep the compact profile and bottom dock on one squircle silhouette.
+   Override the structured radius locally because its global important rule
+   otherwise reduces these controls to 8px. */
+.courses-app--collapsed .courses-profile > .courses-profile__button,
+.courses-app--collapsed .sidebar-appearance > button,
+.courses-app--collapsed .sidebar-palette-trigger,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile
+  > .courses-profile__button,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-appearance
+  > button,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-palette-trigger {
+  --control-radius-structured: 30%;
+  border-radius: 30%;
+  corner-shape: squircle;
+}
+
+/* Switch the compact profile and dock to standard rounded corners on
+   pointer-down so their silhouettes follow the sidebar during resizing. */
+.courses-app--resizing.courses-app--collapsed
+  .courses-profile
+  > .courses-profile__button,
+:root[data-sidebar-state="collapsed"]
+  .courses-app.courses-app--resizing:not(.courses-app--collapsed)
+  .courses-profile
+  > .courses-profile__button,
+.courses-app--resizing.courses-app--collapsed .sidebar-appearance > button,
+:root[data-sidebar-state="collapsed"]
+  .courses-app.courses-app--resizing:not(.courses-app--collapsed)
+  .sidebar-appearance
+  > button,
+.courses-app--resizing.courses-app--collapsed .sidebar-palette-trigger,
+:root[data-sidebar-state="collapsed"]
+  .courses-app.courses-app--resizing:not(.courses-app--collapsed)
+  .sidebar-palette-trigger {
+  --control-radius-structured: 10px;
+  border-radius: 10px;
+  corner-shape: round;
+}
+
+.courses-app--collapsed .sidebar-palette-menu {
+  right: auto;
+  bottom: -9px;
+  left: calc(100% + 2px);
+}
+
+/* Beside the collapsed rail the menu sits on the sidebar's bottom edge, as
+   the reading and settings menus do. */
+.courses-app--collapsed
+  .sidebar-palette-menu--dock-attached.sidebar-palette-menu--collapsed {
+  top: auto;
+  bottom: 0;
+}
+
+/* Static documents receive the persisted sidebar state from the head
+   bootstrap before React can add courses-app--collapsed. Mirror the compact
+   shell here so the narrow rail never briefly uses the expanded brand and
+   toggle layout during hydration. */
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-sidebar {
+  padding-inline: 10px;
+  padding-bottom: 0;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-sidebar__brand {
+  min-height: 48px;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  padding-left: 0;
+  position: relative;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-logo-clip {
+  display: none !important;
+}
+
+:root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-logo-clip {
+  display: block !important;
+  position: absolute;
+  top: 3px;
+  left: calc(50% + 3.4px);
+  width: 21px;
+  max-width: 21px;
+  height: 36px;
+  overflow: hidden;
+  opacity: 1;
+  clip-path: inset(0 0 0 0);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+:root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-logo-clip
+  svg {
+  width: 156px;
+  max-width: none;
+  height: 38px;
+}
+
+@media (min-width: 641px) {
+  :root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+    .courses-app:not(.courses-app--collapsed)
+    .courses-logo-clip {
+    /* Match the settled desktop compact-logo slot before React adds its
+       collapsed class, so the mark does not jump down during hydration. */
+    top: 15px;
+    left: 19.375px;
+    transform: none;
+  }
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-collapse {
+  position: absolute;
+  top: 12px;
+  left: 10px;
+  right: auto;
+  z-index: 1;
+  transform: none;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-collapse__asset {
+  /* Keep the pre-hydration icon on the same optical axis as the settled rail. */
+  transform: translateX(1.5px);
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-collapse__asset
+  svg[data-sidebar-toggle-direction="left"]
+  > path:last-child,
+.courses-app--collapsed
+  .sidebar-collapse__asset
+  svg[data-sidebar-toggle-direction="left"]
+  > path:last-child {
+  /* The static pass still uses the expanded-side prop. Reorient only its
+     existing arrowhead; keep the shared SVG surface and icon geometry intact.
+     The second selector covers the same stale icon once the head bootstrap
+     script has added the collapsed class, until React remounts the button. */
+  transform-box: view-box;
+  transform-origin: 0 0;
+  transform: translateX(41px) scaleX(-1);
+}
+
+:root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-collapse {
+  opacity: 0;
+  pointer-events: none;
+}
+
+:root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-sidebar:hover
+  .sidebar-collapse,
+:root[data-sidebar-state="collapsed"][data-collapsed-sidebar-logo="true"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-sidebar:focus-within
+  .sidebar-collapse {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-nav {
+  align-items: stretch;
+  margin: -4px -10px 0;
+  min-height: 0;
+  padding: 16px 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-nav
+  button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 15px;
+  padding: 0 0 0 12.5px;
+  overflow: visible;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-nav
+  button
+  > .courses-nav__text,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-nav
+  button
+  > b,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-nav
+  button
+  > .courses-nav__shortcut,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile__button
+  > span,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile__button
+  > svg,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-appearance
+  > button
+  > span {
+  display: none;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile
+  > .courses-profile__button {
+  box-sizing: border-box;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1;
+  gap: 0;
+  justify-content: center;
+  padding: 0;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile__button
+  > .shell-profile-avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .courses-profile,
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-appearance {
+  margin-top: 6px;
+}
+
+@media (min-width: 641px) {
+  :root[data-sidebar-state="collapsed"]
+    .courses-app:not(.courses-app--collapsed)
+    .courses-profile {
+    /* Match the settled compact rail's narrower dock wrapper before
+       hydration, preventing the profile and appearance controls from
+       stretching into the sidebar edges. */
+    margin-inline: -0.5px;
+  }
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-appearance {
+  align-items: center;
+  flex-direction: column;
+  padding: 8px;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-appearance
+  > button {
+  display: inline-flex;
+  width: 42px;
+  flex: 0 0 38px;
+}
+
+:root[data-sidebar-state="collapsed"]
+  .courses-app:not(.courses-app--collapsed)
+  .sidebar-palette-wrap {
+  width: 42px;
+  flex: 0 0 38px;
+}
+
+/* The glow belongs to the outer application shell rather than the sidebar box.
+   Its own alpha controls the color strength while the navigation stays
+   genuinely transparent. The rounded main surface sits above it, so the glow
+   remains visible in the surrounding frame without entering the content area. */
+:root {
+  --sidebar-glow-primary: var(--accent);
+  --sidebar-glow-secondary: var(--accent-hover);
+  --sidebar-glow-intensity: 0.28;
+  --sidebar-glow-opacity: 0.32;
+  --sidebar-glow-field-width: 640px;
+  --sidebar-glow-field-top-height: 380px;
+  --sidebar-glow-field-bottom-height: 400px;
+  --sidebar-bokeh-top-size: 118px;
+  --sidebar-bokeh-top-half-size: 59px;
+  --sidebar-bokeh-center-size: 102px;
+  --sidebar-bokeh-center-half-size: 51px;
+  --sidebar-bokeh-bottom-size: 126px;
+  --sidebar-bokeh-bottom-half-size: 63px;
+  --sidebar-floating-base-blur: 6px;
+  --sidebar-backdrop-blur: 8px;
+  --sidebar-bokeh-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='47' fill='black'/%3E%3C/svg%3E");
+}
+
+:root[data-sidebar-glow="theme"] {
+  --sidebar-glow-primary: var(--accent);
+  --sidebar-glow-secondary: var(--accent-hover);
+}
+
+:root[data-sidebar-glow="blue-yellow"] {
+  --sidebar-glow-primary: #2397ff;
+  --sidebar-glow-secondary: #ffc724;
+}
+
+:root[data-sidebar-glow="green-cyan"] {
+  --sidebar-glow-primary: #35d77d;
+  --sidebar-glow-secondary: #2bc8e8;
+}
+
+:root[data-sidebar-glow="red-orange"] {
+  --sidebar-glow-primary: #ff5069;
+  --sidebar-glow-secondary: #ff9f32;
+}
+
+:root[data-sidebar-glow="purple-blue"] {
+  --sidebar-glow-primary: #9a6cff;
+  --sidebar-glow-secondary: #4d8fff;
+}
+
+:root[data-sidebar-glow="magenta-rose"] {
+  --sidebar-glow-primary: #f052d4;
+  --sidebar-glow-secondary: #ff718f;
+}
+
+:root[data-sidebar-glow-shape="circle"] {
+  --sidebar-bokeh-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='47' fill='black'/%3E%3C/svg%3E");
+}
+
+:root[data-sidebar-glow-shape="triangle"] {
+  --sidebar-bokeh-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,4 97,94 3,94' fill='black'/%3E%3C/svg%3E");
+}
+
+:root[data-sidebar-glow-shape="star"] {
+  --sidebar-bokeh-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,3 61,35 96,35 68,56 79,91 50,70 21,91 32,56 4,35 39,35' fill='black'/%3E%3C/svg%3E");
+}
+
+:root[data-sidebar-glow-shape="diamond"] {
+  --sidebar-bokeh-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,2 98,50 50,98 2,50' fill='black'/%3E%3C/svg%3E");
+}
+
+:root[data-sidebar-glow-shape="hexagon"] {
+  --sidebar-bokeh-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='25,4 75,4 98,50 75,96 25,96 2,50' fill='black'/%3E%3C/svg%3E");
+}
+
+:root[data-theme="light"] {
+  --sidebar-glow-opacity: 0.2;
+}
+
+:root[data-sidebar-glow="off"] {
+  --sidebar-glow-opacity: 0;
+}
+
+/* Drawn only beside the pinned or floating sidebar (see below). */
+.courses-sidebar__bokeh {
+  display: none;
+}
+
+@media (min-width: 641px) {
+  .courses-app {
+    isolation: isolate;
+  }
+
+  .courses-app::before {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(
+        ellipse var(--sidebar-glow-field-width)
+          var(--sidebar-glow-field-top-height) at 36px 24%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 18%, transparent) 0 6%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 11%, transparent) 24%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 5%, transparent) 48%,
+        transparent 76%
+      ),
+      radial-gradient(
+        ellipse var(--sidebar-glow-field-width)
+          var(--sidebar-glow-field-bottom-height) at 36px 75%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 16%, transparent) 0 7%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 10%, transparent) 25%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 4%, transparent) 49%,
+        transparent 77%
+      );
+    content: "";
+    filter: blur(28px) saturate(1.04);
+    opacity: calc(var(--sidebar-glow-opacity) * var(--sidebar-glow-intensity));
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  /* The framed shell fills the viewport and never scrolls, so laying the glow
+     out against the shell gives the same box as fixing it to the viewport.
+     It matters to the compositor, though: a fixed box cannot share the page's
+     own layer, and the main frame stacked above it then needs a layer of its
+     own too. Those two viewport-sized layers took a sidebar drag past
+     Chrome's tile memory limit on high-density Android tablets, which drew
+     frames with whole parts of the page missing.
+
+     Touch devices only. On a low-density desktop monitor those extra layers
+     are also what makes Chrome draw the page's text with greyscale rather
+     than subpixel antialiasing, so removing them there would change how
+     every line of text in the frame looks. */
+  @media (pointer: coarse) {
+    :root[data-content-layout="framed"] .courses-app::before {
+      position: absolute;
+    }
+  }
+
+  .courses-sidebar {
+    isolation: isolate;
+  }
+
+  /* The shapes are two boxes, one inside the other. The inner one draws the
+     shapes and cuts them out with a mask; the outer one blurs and fades the
+     result. On a single box the blur ran first and the mask then cut it
+     back to a crisp outline, so the blur setting never softened an edge. */
+  .courses-sidebar > .courses-sidebar__bokeh {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    display: block;
+    /* The setting is linear up to its default (25%) and steeper above it:
+       a plain multiple left the shapes barely visible at 100%, all the more
+       once they are blurred. The colours below are three times as strong as
+       they used to be and this factor a third (0.24 for 0.72), so the
+       default looks as it did while the top of the range has room to grow. */
+    opacity: min(
+      1,
+      calc(
+        var(--sidebar-glow-opacity) * var(--sidebar-glow-intensity) * 0.24 *
+          (1 + 10.8 * max(0, var(--sidebar-glow-intensity) - 0.25))
+      )
+    );
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  .courses-sidebar__bokeh > span {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(
+        circle var(--sidebar-bokeh-top-size) at 42px 17%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 36%, transparent) 0 32%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 15%, transparent) 58%,
+        transparent 76%
+      ),
+      radial-gradient(
+        circle var(--sidebar-bokeh-center-size) at 178px 50%,
+        color-mix(in srgb, var(--sidebar-glow-primary) 30%, transparent) 0 31%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 18%, transparent) 57%,
+        transparent 76%
+      ),
+      radial-gradient(
+        circle var(--sidebar-bokeh-bottom-size) at 58px 83%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 36%, transparent) 0 32%,
+        color-mix(in srgb, var(--sidebar-glow-secondary) 15%, transparent) 58%,
+        transparent 76%
+      );
+    -webkit-mask-image:
+      var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask),
+      var(--sidebar-bokeh-mask);
+    mask-image:
+      var(--sidebar-bokeh-mask), var(--sidebar-bokeh-mask),
+      var(--sidebar-bokeh-mask);
+    -webkit-mask-position:
+      calc(42px - var(--sidebar-bokeh-top-half-size))
+        calc(17% - var(--sidebar-bokeh-top-half-size)),
+      calc(178px - var(--sidebar-bokeh-center-half-size))
+        calc(50% - var(--sidebar-bokeh-center-half-size)),
+      calc(58px - var(--sidebar-bokeh-bottom-half-size))
+        calc(83% - var(--sidebar-bokeh-bottom-half-size));
+    mask-position:
+      calc(42px - var(--sidebar-bokeh-top-half-size))
+        calc(17% - var(--sidebar-bokeh-top-half-size)),
+      calc(178px - var(--sidebar-bokeh-center-half-size))
+        calc(50% - var(--sidebar-bokeh-center-half-size)),
+      calc(58px - var(--sidebar-bokeh-bottom-half-size))
+        calc(83% - var(--sidebar-bokeh-bottom-half-size));
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size:
+      var(--sidebar-bokeh-top-size) var(--sidebar-bokeh-top-size),
+      var(--sidebar-bokeh-center-size) var(--sidebar-bokeh-center-size),
+      var(--sidebar-bokeh-bottom-size) var(--sidebar-bokeh-bottom-size);
+    mask-size:
+      var(--sidebar-bokeh-top-size) var(--sidebar-bokeh-top-size),
+      var(--sidebar-bokeh-center-size) var(--sidebar-bokeh-center-size),
+      var(--sidebar-bokeh-bottom-size) var(--sidebar-bokeh-bottom-size);
+  }
+
+  /* Keep the adjustable glass layer above the bokeh and below the real
+     navigation. This softens the decorative shapes without blurring icons or
+     labels. */
+  .courses-sidebar::after {
+    position: absolute;
+    z-index: 0;
+    background: transparent;
+    -webkit-backdrop-filter: blur(var(--sidebar-backdrop-blur)) saturate(1.08);
+    backdrop-filter: blur(var(--sidebar-backdrop-blur)) saturate(1.08);
+    content: "";
+    pointer-events: none;
+  }
+
+  /* A full-height backdrop-filter surface exposes its rectangular compositor
+     boundary beside the main frame in Chromium at fractional display scales.
+     Blur the generated bokeh itself so the pinned sidebar has no raster edge. */
+  .courses-app:not(.courses-app--hidden)
+    .courses-sidebar
+    > .courses-sidebar__bokeh {
+    filter: blur(var(--sidebar-backdrop-blur));
+  }
+
+  .courses-app:not(.courses-app--hidden) .courses-sidebar::after {
+    content: none;
+  }
+
+  /* The floating sidebar needs an internal glass layer as well: applying
+     backdrop-filter only to the sidebar itself cannot blur its own bokeh. */
+  .courses-app--hidden .courses-sidebar::after {
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  /* Floating navigation uses two distinct glass layers. The sidebar itself
+     is the permanent 6px underlay; bokeh paints above it, and ::after applies
+     only the additional user-controlled blur. */
+  .courses-app--hidden .courses-sidebar > .courses-sidebar__bokeh {
+    z-index: 0;
+  }
+
+  :root[data-sidebar-backdrop-blur="off"] .courses-sidebar::after {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  :root[data-sidebar-backdrop-blur="off"]
+    .courses-app:not(.courses-app--hidden)
+    .courses-sidebar
+    > .courses-sidebar__bokeh {
+    filter: none;
+  }
+
+  .courses-sidebar > * {
+    z-index: 1;
+  }
+
+  .courses-app > .courses-sidebar {
+    z-index: 3;
+  }
+
+  .courses-app:not(.courses-app--hidden) > .courses-sidebar:has(.profile-menu) {
+    z-index: 81;
+  }
+
+  .courses-app > .courses-main-frame,
+  .courses-app > .courses-main {
+    z-index: 1;
+  }
+}
+
+:root .courses-app:not(.courses-app--hidden) .courses-sidebar {
+  border: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.courses-app--hidden .courses-sidebar {
+  top: 14px;
+  bottom: 14px;
+  left: 14px;
+  width: 252px;
+  height: auto;
+  border-radius: 14px;
+  padding-inline: 14px;
+  padding-bottom: 14px;
+  border: 0;
+  background: color-mix(in srgb, var(--app-shell) 74%, transparent);
+  -webkit-backdrop-filter: blur(var(--sidebar-floating-base-blur)) saturate(1.2);
+  backdrop-filter: blur(var(--sidebar-floating-base-blur)) saturate(1.2);
+}
+
+@media (min-width: 641px) {
+  :root[data-content-layout="framed"] .courses-app--hidden .courses-sidebar {
+    top: 11px;
+    bottom: 9px;
+    height: calc(100vh - 20px);
+    height: calc(100dvh - 20px);
+    /* The floating card intentionally overhangs the framed surface by 1px.
+       Its 3px inset combines that compensation with the shared 2px optical
+       drop, keeping the card fixed while matching the pinned content axis. */
+    padding-top: 3px;
+  }
+}
+
+:root .courses-app--hidden .courses-nav button.is-active {
+  background: color-mix(in srgb, var(--selected) 68%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  backdrop-filter: blur(12px) saturate(1.15);
+  box-shadow: var(--sidebar-menu-active-shadow);
+}
+
+@supports not (
+  (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+) {
+  .courses-app--hidden .courses-sidebar {
+    background: color-mix(in srgb, var(--app-shell) 94%, var(--surface));
+  }
+
+  :root .courses-app--hidden .courses-nav button.is-active {
+    background: color-mix(in srgb, var(--selected) 90%, var(--surface));
+  }
+}
+
+.courses-app--hidden.courses-app--edge-open .courses-sidebar {
+  touch-action: pan-y pinch-zoom;
+  box-shadow: var(--surface-depth-floating-shadow);
+}
+
+.courses-app--hidden.courses-app--overlay-swiping .courses-sidebar {
+  transform: translateX(var(--sidebar-overlay-swipe-offset, 0));
+  transition: none;
+}
+
+.courses-search,
+.course-select,
+.learning-search,
+.learning-select,
+.learning-filter-tabs button,
+.enrollment-tabs {
+  border-color: transparent;
+  background: var(--surface);
+}
+
+.courses-search:focus-within,
+.course-select:focus-within,
+.learning-search:focus-within,
+.learning-select:focus-within {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 10px 24px color-mix(in srgb, var(--accent-shadow) 42%, transparent);
+}

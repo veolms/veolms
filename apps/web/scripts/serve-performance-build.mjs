@@ -1,0 +1,203 @@
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+import { createServer, request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createBrotliCompress, createGzip, constants } from "node:zlib";
+import {
+  isLearningPrerenderArgument,
+  runPerformanceBuild,
+} from "./build-performance.mjs";
+
+const buildExitCode = await runPerformanceBuild(
+  process.argv.slice(2).filter(isLearningPrerenderArgument),
+  {
+    // A local preview must build its SSG catalogue from the local API too;
+    // never inherit a production STATIC_BUILD_API_URL from .env.production.
+    STATIC_BUILD_API_URL:
+      process.env.VEO_PREVIEW_API_TARGET || "http://127.0.0.1:4000/v1",
+    // Keep browser requests on the preview origin so proxied auth cookies work.
+    VITE_API_BASE_URL: "/v1",
+  },
+);
+if (buildExitCode !== 0) process.exit(buildExitCode);
+
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(scriptDirectory, "../../..");
+
+try {
+  process.loadEnvFile(path.join(workspaceRoot, ".env"));
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+}
+
+const root = path.resolve(scriptDirectory, "../build/client");
+const portArgumentIndex = process.argv.indexOf("--port");
+const commandLinePort =
+  portArgumentIndex >= 0 ? Number(process.argv[portArgumentIndex + 1]) : NaN;
+const port = Number.isFinite(commandLinePort)
+  ? commandLinePort
+  : Number(process.env.PORT || 4173);
+const hostArgumentIndex = process.argv.indexOf("--host");
+const host =
+  hostArgumentIndex >= 0 && process.argv[hostArgumentIndex + 1]
+    ? process.argv[hostArgumentIndex + 1]
+    : process.env.HOST || "127.0.0.1";
+const apiTargetArgumentIndex = process.argv.indexOf("--api-target");
+const apiTargetValue =
+  apiTargetArgumentIndex >= 0 && process.argv[apiTargetArgumentIndex + 1]
+    ? process.argv[apiTargetArgumentIndex + 1]
+    : process.env.VEO_PREVIEW_API_TARGET || "http://127.0.0.1:4000";
+const apiTarget = new URL(apiTargetValue);
+const apiOrigin = apiTarget.origin;
+const mimeTypes = new Map([
+  [".css", "text/css; charset=utf-8"],
+  [".html", "text/html; charset=utf-8"],
+  [".js", "text/javascript; charset=utf-8"],
+  [".json", "application/json; charset=utf-8"],
+  [".jpg", "image/jpeg"],
+  [".png", "image/png"],
+  [".svg", "image/svg+xml"],
+  [".webp", "image/webp"],
+  [".woff2", "font/woff2"],
+]);
+
+const resolveRequestPath = async (pathname) => {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const relative = decoded === "/" ? "index.html" : decoded.slice(1);
+  const candidate = path.resolve(root, relative);
+  if (!candidate.startsWith(`${root}${path.sep}`) && candidate !== root) {
+    return null;
+  }
+  try {
+    const details = await stat(candidate);
+    if (details.isFile()) return candidate;
+    if (details.isDirectory()) {
+      const routeIndex = path.join(candidate, "index.html");
+      const routeIndexDetails = await stat(routeIndex);
+      if (routeIndexDetails.isFile()) return routeIndex;
+    }
+  } catch {}
+  // Keep an unknown deep link on the neutral SPA shell. Serving the catalogue
+  // document here makes a direct learning URL visibly flash the wrong page
+  // while the client router is still loading.
+  const spaFallback = path.join(root, "__spa-fallback.html");
+  try {
+    const fallbackDetails = await stat(spaFallback);
+    if (fallbackDetails.isFile()) return spaFallback;
+  } catch {}
+  return path.join(root, "index.html");
+};
+
+const proxyRequestToOrigin = (
+  request,
+  response,
+  requestUrl,
+  targetOrigin,
+  unavailableError,
+) => {
+  const targetUrl = new URL(
+    `${requestUrl.pathname}${requestUrl.search}`,
+    targetOrigin,
+  );
+  const sendRequest =
+    targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
+  const proxyRequest = sendRequest(
+    targetUrl,
+    {
+      method: request.method,
+      headers: { ...request.headers, host: targetUrl.host },
+    },
+    (proxyResponse) => {
+      response.writeHead(
+        proxyResponse.statusCode || 502,
+        proxyResponse.headers,
+      );
+      proxyResponse.pipe(response);
+    },
+  );
+
+  proxyRequest.on("error", () => {
+    if (response.headersSent) {
+      response.destroy();
+      return;
+    }
+
+    response.writeHead(502, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    response.end(
+      JSON.stringify({
+        success: false,
+        statusCode: 502,
+        error: unavailableError,
+      }),
+    );
+  });
+
+  request.on("aborted", () => proxyRequest.destroy());
+  response.on("close", () => {
+    if (!response.writableEnded) proxyRequest.destroy();
+  });
+  request.pipe(proxyRequest);
+};
+
+createServer(async (request, response) => {
+  const requestUrl = new URL(request.url || "/", "http://localhost");
+  if (requestUrl.pathname === "/v1" || requestUrl.pathname.startsWith("/v1/")) {
+    proxyRequestToOrigin(request, response, requestUrl, apiOrigin, {
+      code: "API_UNAVAILABLE",
+      message: "The preview server could not reach the API.",
+    });
+    return;
+  }
+  const filePath = await resolveRequestPath(requestUrl.pathname);
+  if (!filePath) {
+    response.writeHead(400).end("Bad request");
+    return;
+  }
+
+  const extension = path.extname(filePath).toLowerCase();
+  const isHashedBuildAsset =
+    filePath.includes(`${path.sep}assets${path.sep}`) &&
+    /[-_.][A-Za-z0-9_-]{8,}(?=\.[^.]+$)/.test(path.basename(filePath));
+  const headers = {
+    "Content-Type": mimeTypes.get(extension) || "application/octet-stream",
+    "Cache-Control": isHashedBuildAsset
+      ? "public, max-age=31536000, immutable"
+      : "no-cache",
+    Vary: "Accept-Encoding",
+  };
+  const acceptedEncoding = request.headers["accept-encoding"] || "";
+  const source = createReadStream(filePath);
+
+  if (/\bbr\b/.test(acceptedEncoding)) {
+    response.writeHead(200, { ...headers, "Content-Encoding": "br" });
+    source
+      .pipe(
+        createBrotliCompress({
+          params: { [constants.BROTLI_PARAM_QUALITY]: 5 },
+        }),
+      )
+      .pipe(response);
+    return;
+  }
+  if (/\bgzip\b/.test(acceptedEncoding)) {
+    response.writeHead(200, { ...headers, "Content-Encoding": "gzip" });
+    source.pipe(createGzip({ level: 6 })).pipe(response);
+    return;
+  }
+
+  response.writeHead(200, headers);
+  source.pipe(response);
+}).listen(port, host, () => {
+  const displayHost = host === "0.0.0.0" ? "localhost" : host;
+  console.log(`Production-like preview: http://${displayHost}:${port}`);
+});

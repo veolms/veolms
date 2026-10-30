@@ -1,0 +1,330 @@
+import { z } from "zod";
+import { emailInput } from "./email-input.ts";
+import {
+  PUBLIC_PROFILE_USERNAME_MAX_LENGTH,
+  PUBLIC_PROFILE_USERNAME_MIN_LENGTH,
+  PUBLIC_PROFILE_USERNAME_PATTERN,
+} from "./username-rules.ts";
+
+export const otpSendRequestSchema = z
+  .object({
+    email: emailInput("Invalid email address")
+      .meta({ example: "ada@example.com" })
+      .optional(),
+    phoneNo: z
+      .string()
+      .min(8, "Phone number is too short")
+      .meta({ example: "+15551234567" })
+      .optional(),
+  })
+  .refine((data) => data.email || data.phoneNo, {
+    message: "Either email or phone number must be provided",
+    path: ["email"],
+  });
+
+export const otpVerifyRequestSchema = z
+  .object({
+    email: emailInput().meta({ example: "ada@example.com" }).optional(),
+    phoneNo: z.string().meta({ example: "+15551234567" }).optional(),
+    code: z
+      .string()
+      .length(6, "Code must be exactly 6 digits")
+      .regex(/^\d+$/, "Code must contain only digits")
+      .meta({ example: "123456" }),
+  })
+  .refine((data) => data.email || data.phoneNo, {
+    message: "Either email or phone number must be provided",
+    path: ["email"],
+  });
+
+// An international number is at most "+" and 15 digits: 16 characters. That
+// is what first-admin setup and the code service accept, and what the
+// responses allow for a stored number; capped at 15 here, a 15-digit number
+// entered at setup could never be confirmed from the profile.
+export const phoneNumberSchema = z
+  .string()
+  .trim()
+  .min(8, "Phone number is too short")
+  .max(16, "Phone number is too long")
+  .regex(
+    /^\+?[0-9\s().-]+$/,
+    "Phone number can contain digits, spaces, and + ( ) - only",
+  )
+  .meta({ example: "+15551234567" });
+
+export const phoneVerificationSendRequestSchema = z.object({
+  phoneNo: phoneNumberSchema,
+});
+
+export const phoneVerificationVerifyRequestSchema = z.object({
+  phoneNo: phoneNumberSchema,
+  code: z
+    .string()
+    .length(6, "Code must be exactly 6 digits")
+    .regex(/^\d+$/, "Code must contain only digits")
+    .meta({ example: "123456" }),
+});
+
+export const emailVerificationSendRequestSchema = z.strictObject({});
+
+export const emailVerificationVerifyRequestSchema = z.strictObject({
+  code: z
+    .string()
+    .length(6, "Code must be exactly 6 digits")
+    .regex(/^\d+$/, "Code must contain only digits")
+    .meta({ example: "123456" }),
+});
+
+export const registerRequestSchema = z
+  .object({
+    email: emailInput("Invalid email address")
+      .meta({ example: "ada@example.com" })
+      .optional(),
+    phoneNo: z
+      .string()
+      .min(8, "Phone number is too short")
+      .meta({ example: "+15551234567" })
+      .optional(),
+    code: z
+      .string()
+      .length(6, "Code must be exactly 6 digits")
+      .regex(/^\d+$/, "Code must contain only digits")
+      .meta({ example: "123456" })
+      .optional(),
+    emailCode: z
+      .string()
+      .length(6, "Code must be exactly 6 digits")
+      .regex(/^\d+$/, "Code must contain only digits")
+      .meta({ example: "123456" })
+      .optional(),
+    phoneCode: z
+      .string()
+      .length(6, "Code must be exactly 6 digits")
+      .regex(/^\d+$/, "Code must contain only digits")
+      .meta({ example: "123456" })
+      .optional(),
+    username: z
+      .string()
+      .min(3, "Username must be at least 3 characters")
+      .max(30, "Username is too long")
+      .regex(
+        /^[a-zA-Z0-9_]+$/,
+        "Username must contain only letters, numbers, and underscores",
+      )
+      .toLowerCase()
+      .meta({ example: "ada_lovelace" }),
+    displayName: z
+      .string()
+      .min(1, "Display name is required")
+      .max(100)
+      .meta({ example: "Ada Lovelace" }),
+  })
+  .refine((data) => data.email || data.phoneNo, {
+    message: "Either email or phone number must be provided",
+    path: ["email"],
+  })
+  .refine(
+    (data) =>
+      data.email && data.phoneNo
+        ? Boolean(data.emailCode && data.phoneCode)
+        : Boolean(data.code),
+    {
+      message:
+        "A code is required, or both emailCode and phoneCode are required when both channels are provided",
+      path: ["code"],
+    },
+  );
+
+export {
+  authMenuNodeSchema,
+  authMenuPermissionSchema,
+  type AuthMenuNode,
+  type AuthMenuPermission,
+} from "../navigation.ts";
+
+export const avatarImageVariantSchema = z.strictObject({
+  url: z.string().min(1).max(3_000),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+
+export type AvatarImageVariant = z.output<typeof avatarImageVariantSchema>;
+
+const profileFieldSchemas = {
+  avatarDataUrl: z.string().max(3_000_000).nullable().optional(),
+  bio: z.string().max(160).nullable().optional(),
+  emailPublic: z.boolean().optional(),
+  mobilePublic: z.boolean().optional(),
+  linkedinUrl: z.string().max(500).nullable().optional(),
+  linkedinPublic: z.boolean().optional(),
+  githubUrl: z.string().max(500).nullable().optional(),
+  githubPublic: z.boolean().optional(),
+  websiteUrl: z.string().max(500).nullable().optional(),
+  websitePublic: z.boolean().optional(),
+};
+
+const avatarResponseFields = {
+  avatarSrcSet: z.array(avatarImageVariantSchema).default([]),
+};
+
+export const authUserSchema = z.object({
+  id: z.uuid(),
+  username: z.string().max(30),
+  displayName: z.string().max(100),
+  email: z.email().max(255).nullable(),
+  phoneNo: z.string().max(16).nullable(),
+  emailVerified: z.boolean().default(false),
+  mobileVerified: z.boolean().default(false),
+  roles: z.array(z.string().max(50)).default([]),
+  /**
+   * A shared test account (TEST_LOGIN_ACCOUNTS): it may leave any course it
+   * is enrolled in, as an admin may.
+   */
+  isTestAccount: z.boolean().optional(),
+  ...avatarResponseFields,
+  ...profileFieldSchemas,
+});
+
+export const userProfileResponseSchema = z.object({
+  id: z.uuid(),
+  username: z.string().max(30),
+  displayName: z.string().max(100),
+  email: z.email().max(255).nullable(),
+  phoneNo: z.string().max(16).nullable(),
+  emailVerified: z.boolean(),
+  mobileVerified: z.boolean(),
+  roles: z.array(z.string().max(50)),
+  isTestAccount: z.boolean().optional(),
+  ...avatarResponseFields,
+  ...profileFieldSchemas,
+  mfaVerified: z.boolean(),
+  totpEnabled: z.boolean(),
+  passkeyEnabled: z.boolean(),
+  mfaMandatory: z.boolean(),
+});
+
+export const profileUpdateRequestSchema = z.strictObject({
+  username: z
+    .string()
+    .min(3, "Username must be at least 3 characters")
+    .max(30, "Username is too long")
+    .regex(
+      /^[a-zA-Z0-9._-]+$/,
+      "Username must contain only letters, numbers, dots, underscores, and hyphens",
+    )
+    .toLowerCase()
+    .optional(),
+  displayName: z
+    .string()
+    .min(1, "Display name is required")
+    .max(100)
+    .optional(),
+  ...profileFieldSchemas,
+});
+
+export const publicProfileUsernameParamsSchema = z.strictObject({
+  username: z
+    .string()
+    .min(PUBLIC_PROFILE_USERNAME_MIN_LENGTH)
+    .max(PUBLIC_PROFILE_USERNAME_MAX_LENGTH)
+    .regex(PUBLIC_PROFILE_USERNAME_PATTERN)
+    .toLowerCase(),
+});
+
+export const publicProfileResponseSchema = z.strictObject({
+  username: z.string().min(3).max(30),
+  displayName: z.string().min(1).max(100),
+  avatarDataUrl: z.string().max(3_000_000).nullable(),
+  avatarSrcSet: z.array(avatarImageVariantSchema),
+  bio: z.string().max(160).nullable(),
+  email: z.email().max(255).nullable(),
+  phoneNo: z.string().max(16).nullable(),
+  linkedinUrl: z.string().max(500).nullable(),
+  githubUrl: z.string().max(500).nullable(),
+  websiteUrl: z.string().max(500).nullable(),
+});
+
+/** The session may be absent when the client is visiting a public route. */
+export const currentUserResponseSchema = userProfileResponseSchema.nullable();
+
+export const creatorRegisterRequestSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Name is required")
+    .max(100)
+    .meta({ example: "Ada Lovelace" }),
+  email: emailInput("Invalid email address").meta({
+    example: "ada@example.com",
+  }),
+  phoneNo: z
+    .string()
+    .trim()
+    .min(8)
+    .max(32)
+    .regex(
+      /^\+?[0-9\s().-]+$/,
+      "Phone number can contain digits, spaces, and + ( ) - only",
+    )
+    .meta({ example: "+15551234567" })
+    .nullable()
+    .optional(),
+});
+
+export const academyRequestSchema = z.object({
+  name: z.string().min(1).max(255).meta({ example: "Acme Academy" }),
+  logoUrl: z
+    .url()
+    .meta({ example: "https://cdn.example.com/logo.png" })
+    .nullable()
+    .optional(),
+  customDomain: z
+    .string()
+    .max(255)
+    .meta({ example: "learn.example.com" })
+    .nullable()
+    .optional(),
+});
+
+export const academyResponseSchema = z.object({
+  id: z.uuid(),
+  name: z.string().max(255),
+  logoUrl: z.string().nullable(),
+  customDomain: z.string().nullable(),
+  setupCompleted: z.boolean(),
+});
+
+export const setupTokenRequestSchema = z.object({
+  token: z.string().meta({ example: "veo_setup_token_123" }),
+});
+
+export type OtpSendRequest = z.input<typeof otpSendRequestSchema>;
+export type OtpVerifyRequest = z.input<typeof otpVerifyRequestSchema>;
+export type PhoneVerificationSendRequest = z.input<
+  typeof phoneVerificationSendRequestSchema
+>;
+export type PhoneVerificationVerifyRequest = z.input<
+  typeof phoneVerificationVerifyRequestSchema
+>;
+export type EmailVerificationSendRequest = z.input<
+  typeof emailVerificationSendRequestSchema
+>;
+export type EmailVerificationVerifyRequest = z.input<
+  typeof emailVerificationVerifyRequestSchema
+>;
+export type RegisterRequest = z.input<typeof registerRequestSchema>;
+export type AuthUser = z.output<typeof authUserSchema>;
+export type UserProfileResponse = z.output<typeof userProfileResponseSchema>;
+export type ProfileUpdateRequest = z.input<typeof profileUpdateRequestSchema>;
+export type PublicProfileUsernameParams = z.input<
+  typeof publicProfileUsernameParamsSchema
+>;
+export type PublicProfileResponse = z.output<
+  typeof publicProfileResponseSchema
+>;
+export type CurrentUserResponse = z.output<typeof currentUserResponseSchema>;
+export type CreatorRegisterRequest = z.input<
+  typeof creatorRegisterRequestSchema
+>;
+export type AcademyRequest = z.input<typeof academyRequestSchema>;
+export type AcademyResponse = z.output<typeof academyResponseSchema>;
+export type SetupTokenRequest = z.input<typeof setupTokenRequestSchema>;

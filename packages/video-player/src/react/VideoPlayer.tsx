@@ -1,0 +1,476 @@
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type HTMLAttributes,
+  type ReactNode,
+  type VideoHTMLAttributes,
+} from "react";
+import type { ChapterInput } from "../chapters/chapterTypes";
+import { BufferingIndicator } from "../controls/BufferingIndicator";
+import { CentralPlayButton } from "../controls/CentralPlayButton";
+import { DefaultControls } from "../controls/DefaultControls";
+import { ErrorOverlay } from "../controls/ErrorOverlay";
+import { PlayerGestureSurface } from "../controls/PlayerGestureSurface";
+import { PlayerHud } from "../controls/PlayerHud";
+import { PlaybackFeedback } from "../controls/PlaybackFeedback";
+import { ZoomLevelIndicator } from "../controls/ZoomLevelIndicator";
+import type { VideoEngine } from "../core/VideoEngine";
+import type { VideoSource } from "../core/types";
+import { NativeVideoEngine } from "../engines/native/NativeVideoEngine";
+import { ShakaVideoEngine } from "../engines/shaka/ShakaVideoEngine";
+import { isEarlyShakaStandbyReady } from "../engines/shaka/shaka-early-preload";
+import type { PlayerShortcutOverrides } from "../keyboard";
+import type {
+  StoryboardLoader,
+  StoryboardSource,
+} from "./PlayerMetadataBridge";
+import { PlayerBehaviorBridge } from "./PlayerBehaviorBridge";
+import type { PlayerMediaProps } from "./PlayerMedia";
+import { PlayerMetadataBridge } from "./PlayerMetadataBridge";
+import { PlayerRoot, type VideoPlayerHandle } from "./PlayerRoot";
+import {
+  PlayerZoomMedia,
+  type PlayerZoomOverflowBoundary,
+} from "./PlayerZoomMedia";
+import type {
+  VideoPlayerEvent,
+  VideoPlayerEventListener,
+} from "./playerEvents";
+import { classNames } from "../utils/classNames";
+import type { TimelineMarker } from "../timeline/timelineMath";
+import {
+  getPlayerThemeStyle,
+  resolvePlayerTheme,
+  type PlayerTheme,
+} from "../themes/playerThemes";
+import { getPageFullscreenElement } from "./pageFullscreen";
+import type { PlayerInteractionMode } from "./PlayerInteractionMode";
+
+export interface VideoPlayerProgress {
+  currentTime: number;
+  duration: number;
+  progress: number;
+}
+
+export type VideoPlayerEngine = "shaka" | "native";
+export type VideoPlayerEmptyTapBehavior =
+  "responsive" | "toggle-controls" | "toggle-playback";
+
+export interface VideoPlayerProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  "children" | "onError" | "onProgress"
+> {
+  source: VideoSource;
+  engine?: VideoPlayerEngine;
+  engineFactory?: () => VideoEngine;
+  autoPlay?: boolean;
+  poster?: string;
+  mediaProps?: Omit<PlayerMediaProps, "poster">;
+  chapters?: readonly ChapterInput[];
+  manualChapters?: readonly ChapterInput[];
+  description?: string;
+  /** Thumbnails keyed by chapter start in whole seconds. */
+  chapterThumbnails?: Readonly<Record<number, string>>;
+  storyboard?: StoryboardSource;
+  storyboardLoader?: StoryboardLoader;
+  /**
+   * URL of a sprite storyboard index: seek previews on hover, and the
+   * picture drawn over the video while dragging across parts not
+   * downloaded yet. Ignored when `storyboard` is given.
+   */
+  spriteStoryboardUrl?: string;
+  markers?: readonly TimelineMarker[];
+  controls?: ReactNode | false;
+  /** Replaces the default central play affordance. Pass false to omit it. */
+  centralControl?: ReactNode | false;
+  /** Replaces the desktop transient play/pause feedback. Pass false to omit it. */
+  playbackFeedback?: ReactNode | false;
+  /** Replaces the default buffering indicator. Pass false to omit it. */
+  bufferingIndicator?: ReactNode | false;
+  overlays?: ReactNode;
+  keyboardEnabled?: boolean;
+  shortcuts?: PlayerShortcutOverrides;
+  /** Seconds used by Left/Right arrow keys and mobile double-tap seeking. */
+  seekIntervalSeconds?: number;
+  /** Action performed by a single pointer tap on empty video space. */
+  emptyTapBehavior?: VideoPlayerEmptyTapBehavior;
+  controlsIdleDelay?: number;
+  /** How long the controls stay after a touch (defaults to the idle delay). */
+  controlsTouchIdleDelay?: number;
+  /** Keeps controls pinned until the current source begins playback once. */
+  keepControlsVisibleUntilFirstPlay?: boolean;
+  /** Keeps a player-owned poster visible until the current source plays once. */
+  keepPosterVisibleUntilFirstPlay?: boolean;
+  theaterMode?: boolean;
+  onTheaterModeChange?: (active: boolean) => void;
+  onProgress?: (progress: VideoPlayerProgress) => void;
+  /** Compatibility callback for applications that persist a percentage. */
+  onProgressChange?: (progress: number) => void;
+  onReady?: (duration: number) => void;
+  onPlayerError?: (error: Error) => void;
+  /** Optional action shown in the error state, for example closing a mini-player. */
+  onErrorOverlayClose?: () => void;
+  /**
+   * Replaces the default error screen, which covers the controls. Pass false
+   * when the controls draw the error under their own buttons instead (see
+   * `PlayerErrorNotice`).
+   */
+  errorOverlay?: ReactNode | false;
+  onEvent?: VideoPlayerEventListener;
+  onStoryboardError?: (error: unknown) => void;
+  accentColor?: string;
+  /** Built-in theme id or a custom package-level theme definition. */
+  theme?: PlayerTheme;
+  playerClassName?: string;
+  mediaClassName?: string;
+  ariaLabel?: string;
+  lockLandscapeOnFullscreen?: boolean;
+  /** Enables pinch-to-zoom and panning of the video content. */
+  zoomEnabled?: boolean;
+  /** Chooses whether zoom remains clipped to the player or may fill its shell. */
+  zoomOverflowBoundary?: PlayerZoomOverflowBoundary;
+  /** Overrides the width-based responsive interaction model when needed. */
+  interactionMode?: PlayerInteractionMode;
+}
+
+interface ScreenOrientationWithLock {
+  lock?: (orientation: "landscape") => Promise<void>;
+  unlock?: () => void;
+}
+
+interface WebkitFullscreenDocument extends Document {
+  webkitFullscreenElement?: Element | null;
+}
+
+function currentFullscreenElement(): Element | null {
+  if (typeof document === "undefined") return null;
+  return (
+    document.fullscreenElement ??
+    (document as WebkitFullscreenDocument).webkitFullscreenElement ??
+    getPageFullscreenElement()
+  );
+}
+
+function createEngineFactory(engine: VideoPlayerEngine): () => VideoEngine {
+  return engine === "native"
+    ? () => new NativeVideoEngine()
+    : () => new ShakaVideoEngine();
+}
+
+export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
+  function VideoPlayer(
+    {
+      accentColor,
+      ariaLabel = "Video player",
+      autoPlay = false,
+      chapters,
+      chapterThumbnails,
+      centralControl,
+      className,
+      controls,
+      controlsIdleDelay,
+      controlsTouchIdleDelay,
+      description,
+      engine = "shaka",
+      engineFactory,
+      emptyTapBehavior = "toggle-playback",
+      errorOverlay,
+      keyboardEnabled = true,
+      lockLandscapeOnFullscreen = false,
+      interactionMode = "responsive",
+      keepControlsVisibleUntilFirstPlay = false,
+      keepPosterVisibleUntilFirstPlay = false,
+      manualChapters,
+      markers = [],
+      mediaClassName,
+      mediaProps,
+      onEvent,
+      onPlayerError,
+      onErrorOverlayClose,
+      onProgress,
+      onProgressChange,
+      onReady,
+      onStoryboardError,
+      onTheaterModeChange,
+      overlays,
+      bufferingIndicator,
+      playbackFeedback,
+      playerClassName,
+      poster,
+      seekIntervalSeconds = 10,
+      shortcuts,
+      source,
+      spriteStoryboardUrl,
+      storyboard,
+      storyboardLoader,
+      style,
+      theaterMode = false,
+      theme = "youtube",
+      zoomEnabled = true,
+      zoomOverflowBoundary = "player",
+      ...outerProps
+    },
+    ref,
+  ) {
+    const playerRootRef = useRef<HTMLDivElement | null>(null);
+    const presentationContainerRef = useRef<HTMLDivElement | null>(null);
+    const orientationLockGenerationRef = useRef(0);
+    const orientationLockOwnedRef = useRef(false);
+    const sourceIdentity = `${source.id ?? ""}\u0000${source.src}`;
+    const [playedSourceIdentity, setPlayedSourceIdentity] = useState<
+      string | null
+    >(null);
+    const resolvedEngineFactory = useMemo(
+      () => engineFactory ?? createEngineFactory(engine),
+      [engine, engineFactory],
+    );
+    const handleToggleTheater = useCallback(() => {
+      onTheaterModeChange?.(!theaterMode);
+    }, [onTheaterModeChange, theaterMode]);
+
+    const releaseOrientationLock = useCallback(() => {
+      orientationLockGenerationRef.current += 1;
+      if (!orientationLockOwnedRef.current || typeof screen === "undefined") {
+        return;
+      }
+      orientationLockOwnedRef.current = false;
+      (screen.orientation as unknown as ScreenOrientationWithLock).unlock?.();
+    }, []);
+
+    const syncOrientationForFullscreen = useCallback(
+      (active: boolean) => {
+        if (!lockLandscapeOnFullscreen || typeof screen === "undefined") return;
+        if (!active) {
+          releaseOrientationLock();
+          return;
+        }
+
+        const orientation =
+          screen.orientation as unknown as ScreenOrientationWithLock;
+        const portraitViewport =
+          typeof window !== "undefined" &&
+          window.innerHeight > window.innerWidth;
+        if (!portraitViewport || !orientation.lock) return;
+        const lockLandscape = orientation.lock.bind(orientation);
+
+        const generation = orientationLockGenerationRef.current + 1;
+        orientationLockGenerationRef.current = generation;
+        // Two frames: the screen turns once the video fills it, so the turn
+        // shows the video, not the page it left.
+        const lockOnceDrawn = () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
+        void lockOnceDrawn()
+          .then(() => {
+            if (
+              generation !== orientationLockGenerationRef.current ||
+              currentFullscreenElement() !== presentationContainerRef.current
+            ) {
+              return Promise.reject(new Error("full screen left"));
+            }
+            return lockLandscape("landscape");
+          })
+          .then(() => {
+            const stillOwnsRequest =
+              generation === orientationLockGenerationRef.current;
+            const stillFullscreen =
+              currentFullscreenElement() === presentationContainerRef.current;
+            if (stillOwnsRequest && stillFullscreen) {
+              orientationLockOwnedRef.current = true;
+              return;
+            }
+            orientation.unlock?.();
+          })
+          .catch(() => undefined);
+      },
+      [lockLandscapeOnFullscreen, releaseOrientationLock],
+    );
+
+    useEffect(() => releaseOrientationLock, [releaseOrientationLock]);
+
+    const handleEvent = useCallback(
+      (event: VideoPlayerEvent) => {
+        onEvent?.(event);
+        if (event.type === "playing") {
+          setPlayedSourceIdentity(sourceIdentity);
+        } else if (event.type === "timeupdate") {
+          const duration = event.detail.duration;
+          const progress =
+            duration > 0 ? (event.detail.currentTime / duration) * 100 : 0;
+          const detail = {
+            currentTime: event.detail.currentTime,
+            duration,
+            progress,
+          };
+          onProgress?.(detail);
+          onProgressChange?.(progress);
+        } else if (event.type === "loaded") {
+          onReady?.(event.detail.duration);
+        } else if (event.type === "error") {
+          onPlayerError?.(event.detail.error);
+        } else if (
+          event.type === "fullscreenchange" &&
+          lockLandscapeOnFullscreen
+        ) {
+          syncOrientationForFullscreen(event.detail.active);
+        }
+      },
+      [
+        lockLandscapeOnFullscreen,
+        onEvent,
+        onPlayerError,
+        onProgress,
+        onProgressChange,
+        onReady,
+        sourceIdentity,
+        syncOrientationForFullscreen,
+      ],
+    );
+
+    const resolvedTheme = resolvePlayerTheme(theme);
+    const rootStyle = {
+      ...getPlayerThemeStyle(resolvedTheme),
+      ...style,
+      ...(accentColor ? { "--video-player-accent": accentColor } : undefined),
+    } as CSSProperties;
+    const playerThemeStyle = accentColor
+      ? ({ "--video-player-accent": accentColor } as CSSProperties)
+      : undefined;
+    const resolvedPoster = poster ?? source.metadata?.poster;
+    // A video prepared in the standby element is switched to at once: the
+    // picture goes straight from one video to the other, with no poster.
+    const retainedPosterVisible =
+      keepPosterVisibleUntilFirstPlay &&
+      resolvedPoster !== undefined &&
+      playedSourceIdentity !== sourceIdentity &&
+      !(mediaProps?.withStandby && isEarlyShakaStandbyReady(source));
+
+    return (
+      <div
+        {...outerProps}
+        ref={presentationContainerRef}
+        className={classNames(
+          "video-shell relative isolate w-full overflow-visible",
+          theaterMode && "video-shell--theater",
+          className,
+        )}
+        style={rootStyle}
+        data-player-theme={resolvedTheme.id}
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0"
+          data-video-player-shell-overlay-host=""
+        />
+        <PlayerRoot
+          ref={ref}
+          containerRef={playerRootRef}
+          presentationContainerRef={presentationContainerRef}
+          source={source}
+          autoPlay={autoPlay}
+          engineFactory={resolvedEngineFactory}
+          markers={markers}
+          theaterMode={theaterMode}
+          onEvent={handleEvent}
+          theme={theme}
+          interactionMode={interactionMode}
+          zoomEnabled={zoomEnabled}
+          data-player-zoom-overflow-boundary={zoomOverflowBoundary}
+          style={playerThemeStyle}
+          role="region"
+          aria-label={ariaLabel}
+          tabIndex={0}
+          className={classNames(
+            "youtube-player group relative z-10 aspect-video w-full overflow-hidden rounded-xl bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--video-player-accent,#ff7a1a)]",
+            theaterMode &&
+              "lg:h-[calc(100vh-94px)] lg:min-h-105 lg:aspect-auto",
+            // A page full screen (pageFullscreen.ts) sizes the shell, which
+            // may be turned: the player fills it, edge to edge. The size is
+            // not important, as a browser full screen's is not (player.css),
+            // so a layout of its own (the lessons beside the video) still
+            // sets it.
+            "[[data-player-page-fullscreen]>&]:size-full [[data-player-page-fullscreen]>&]:max-h-none [[data-player-page-fullscreen]>&]:rounded-none! [[data-player-page-fullscreen]>&]:border-0! [[data-player-page-fullscreen]>&]:shadow-none! [[data-player-page-fullscreen]>&]:transition-none!",
+            playerClassName,
+          )}
+        >
+          <PlayerBehaviorBridge
+            rootRef={playerRootRef}
+            shortcuts={shortcuts}
+            keyboardEnabled={keyboardEnabled}
+            controlsIdleDelay={controlsIdleDelay}
+            controlsTouchIdleDelay={controlsTouchIdleDelay}
+            keepControlsVisibleUntilFirstPlay={
+              keepControlsVisibleUntilFirstPlay
+            }
+            seekIntervalSeconds={seekIntervalSeconds}
+            onToggleTheater={
+              onTheaterModeChange ? handleToggleTheater : undefined
+            }
+          />
+          <PlayerMetadataBridge
+            chapters={chapters}
+            chapterThumbnails={chapterThumbnails}
+            manualChapters={manualChapters}
+            description={description}
+            storyboard={storyboard}
+            storyboardLoader={storyboardLoader}
+            spriteStoryboardUrl={spriteStoryboardUrl}
+            onStoryboardError={onStoryboardError}
+          />
+          <PlayerZoomMedia
+            {...mediaProps}
+            overflowBoundary={zoomOverflowBoundary}
+            posterOverlaySrc={
+              retainedPosterVisible ? resolvedPoster : undefined
+            }
+            poster={
+              keepPosterVisibleUntilFirstPlay ? undefined : resolvedPoster
+            }
+            playsInline={mediaProps?.playsInline ?? true}
+            className={classNames(
+              "pointer-events-none size-full bg-black object-contain",
+              mediaProps?.className,
+              mediaClassName,
+            )}
+          />
+          <PlayerGestureSurface
+            emptyTapBehavior={emptyTapBehavior}
+            seekIntervalSeconds={seekIntervalSeconds}
+          />
+          {zoomEnabled ? <ZoomLevelIndicator variant="feedback" /> : null}
+          {overlays}
+          {centralControl === false
+            ? null
+            : (centralControl ?? <CentralPlayButton />)}
+          {playbackFeedback === false
+            ? null
+            : (playbackFeedback ?? <PlaybackFeedback />)}
+          {bufferingIndicator === false
+            ? null
+            : (bufferingIndicator ?? <BufferingIndicator />)}
+          <PlayerHud />
+          {errorOverlay === false
+            ? null
+            : (errorOverlay ?? (
+                <ErrorOverlay onClose={onErrorOverlayClose} source={source} />
+              ))}
+          {controls === false
+            ? null
+            : (controls ?? (
+                <DefaultControls
+                  onToggleTheater={
+                    onTheaterModeChange ? handleToggleTheater : undefined
+                  }
+                />
+              ))}
+        </PlayerRoot>
+      </div>
+    );
+  },
+);

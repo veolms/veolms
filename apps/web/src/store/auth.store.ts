@@ -1,0 +1,304 @@
+import { useSyncExternalStore } from "react";
+import {
+  claimLastOpenedLessons,
+  forgetAccountBrowserState,
+} from "./accountBrowserState";
+import { readSessionPresence, writeSessionPresence } from "./sessionPresence";
+import type { LoginResponse, UserProfileResponse } from "@veolms/contracts";
+
+export type AuthUser = UserProfileResponse | LoginResponse["user"];
+
+export interface AuthState {
+  user: AuthUser | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+
+export interface AuthIdentityHint {
+  // Identity hints are only for display and locating UI preferences. Roles
+  // and authenticated state still come from `/auth/me`.
+  displayName: string;
+  userId?: string;
+  username?: string;
+  /** A hosted picture address only; pictures embedded as data are skipped. */
+  avatarUrl?: string;
+}
+
+const MAX_HINT_AVATAR_URL_LENGTH = 2_000;
+
+function readOptionalText(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function readHostedAvatarUrl(value: unknown): string | undefined {
+  const url = readOptionalText(value);
+  return url &&
+    url.length <= MAX_HINT_AVATAR_URL_LENGTH &&
+    /^https?:\/\//i.test(url)
+    ? url
+    : undefined;
+}
+
+function createIdentityHint(source: {
+  displayName?: unknown;
+  userId?: unknown;
+  username?: unknown;
+  avatarUrl?: unknown;
+}): AuthIdentityHint | null {
+  const displayName = readOptionalText(source.displayName);
+  if (!displayName) return null;
+  const userId = readOptionalText(source.userId);
+  const username = readOptionalText(source.username);
+  const avatarUrl = readHostedAvatarUrl(source.avatarUrl);
+  return {
+    displayName,
+    ...(userId ? { userId } : {}),
+    ...(username ? { username } : {}),
+    ...(avatarUrl ? { avatarUrl } : {}),
+  };
+}
+
+function createIdentityHintFromUser(
+  user: AuthUser | null,
+): AuthIdentityHint | null {
+  if (!user) return null;
+  const fields = user as {
+    username?: unknown;
+    avatarDataUrl?: unknown;
+  };
+  return createIdentityHint({
+    displayName: user.displayName,
+    userId: user.id,
+    username: fields.username,
+    avatarUrl: fields.avatarDataUrl,
+  });
+}
+
+const AUTH_IDENTITY_HINT_KEY = "veolms-auth-identity";
+
+function readIdentityHint(): AuthIdentityHint | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const savedHint = window.sessionStorage.getItem(AUTH_IDENTITY_HINT_KEY);
+    if (!savedHint?.trim()) return null;
+
+    try {
+      const parsed: unknown = JSON.parse(savedHint);
+      if (parsed && typeof parsed === "object") {
+        const hint = createIdentityHint(parsed as Record<string, unknown>);
+        if (hint) return hint;
+      }
+    } catch {
+      // Support the display-name-only value written by older app versions.
+    }
+
+    return { displayName: savedHint.trim() };
+  } catch {
+    return null;
+  }
+}
+
+function writeIdentityHint(hint: AuthIdentityHint | null) {
+  if (typeof window === "undefined") return;
+  writeSessionPresence(hint !== null);
+  try {
+    if (hint) {
+      window.sessionStorage.setItem(
+        AUTH_IDENTITY_HINT_KEY,
+        JSON.stringify(hint),
+      );
+    } else {
+      window.sessionStorage.removeItem(AUTH_IDENTITY_HINT_KEY);
+    }
+  } catch {
+    // Session storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
+let identityHint = readIdentityHint();
+// The account this tab remembered when the page started (see
+// `useRememberedAccount`).
+const identityHintAtBoot = identityHint;
+// Captured once at startup: whether this browser looked signed in before the
+// session check ran.
+const sessionPresentAtBoot = readSessionPresence();
+
+let state: AuthState = {
+  // The session cookie and `/auth/me` are the source of truth. Persisting the
+  // complete user object here made stale RBAC menus survive a reload and could
+  // briefly render another account's sidebar before the session was checked.
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+};
+
+const serverState: AuthState = {
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+};
+
+let writeGeneration = 0;
+// The account last signed in on this page. Unlike `state.user` it survives
+// a session that ended, so the next sign-in can tell whether it is the
+// same person coming back or someone else.
+let lastSignedInUserId: string | null = null;
+
+const listeners = new Set<() => void>();
+
+function notify() {
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
+export const authStore = {
+  getState(): AuthState {
+    return state;
+  },
+
+  /**
+   * Changes on every auth write — sign-in, sign-out, step-up, a profile
+   * edit — so work started under one auth state can tell it is stale.
+   * A background refresh of the same account's profile is not such a
+   * write (see `setUser`).
+   */
+  getWriteGeneration(): number {
+    return writeGeneration;
+  },
+
+  getLastSignedInUserId(): string | null {
+    return lastSignedInUserId;
+  },
+
+  getIdentityHint(): AuthIdentityHint | null {
+    return identityHint;
+  },
+
+  hasSessionHint(): boolean {
+    return identityHint !== null;
+  },
+
+  /**
+   * `refresh` marks a re-read of the current session (`/auth/me`). When it
+   * returns the account already signed in, nothing about auth has changed
+   * and the generation is left alone: it used to move on every such fetch,
+   * which the discussion coordinators read as an account switch — and a
+   * comment delete waiting to be sent was silently dropped.
+   */
+  setUser(user: AuthUser | null, options?: { refresh?: boolean }) {
+    const sameAccount = (state.user?.id ?? null) === (user?.id ?? null);
+    if (!(options?.refresh && sameAccount)) writeGeneration += 1;
+    if (user) {
+      lastSignedInUserId = user.id;
+      // The lessons this browser remembers stay with the account that
+      // opened them; another account signing in does not inherit them.
+      claimLastOpenedLessons(user.id);
+    }
+    identityHint = createIdentityHintFromUser(user);
+    writeIdentityHint(identityHint);
+    state = {
+      ...state,
+      user,
+      isAuthenticated: Boolean(user),
+      isLoading: false,
+    };
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem("veolms-auth-user");
+      } catch {
+        // ignore storage errors
+      }
+    }
+    notify();
+  },
+
+  setLoading(isLoading: boolean) {
+    state = {
+      ...state,
+      isLoading,
+    };
+    notify();
+  },
+
+  clearAuth() {
+    // Every way out of a session ends here, so this is where the browser
+    // forgets what it kept for that account. A visitor who was never signed
+    // in also passes through (each `/auth/me` that finds no session) and
+    // has nothing to forget: their catalogue search is theirs to keep.
+    const hadAccount =
+      state.isAuthenticated || identityHint !== null || readSessionPresence();
+    writeGeneration += 1;
+    identityHint = null;
+    writeIdentityHint(null);
+    state = {
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+    };
+    if (hadAccount) forgetAccountBrowserState();
+    if (typeof window !== "undefined") {
+      try {
+        // Remove the legacy cache so older builds cannot reintroduce stale
+        // user/role/menu state if the account is opened again.
+        window.localStorage.removeItem("veolms-auth-user");
+      } catch {
+        // ignore storage errors
+      }
+    }
+    notify();
+  },
+
+  subscribe(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  },
+};
+
+export function useAuthStore<T = AuthState>(
+  selector: (s: AuthState) => T = (s) => s as unknown as T,
+): T {
+  return useSyncExternalStore(
+    authStore.subscribe,
+    () => selector(authStore.getState()),
+    () => selector(serverState),
+  );
+}
+
+/**
+ * Whether this browser looked signed in when the page started. False during
+ * hydration so the first client render matches the prerendered guest markup.
+ */
+export function useSessionPresentAtBoot(): boolean {
+  return useSyncExternalStore(
+    authStore.subscribe,
+    () => sessionPresentAtBoot,
+    () => false,
+  );
+}
+
+export function useAuthIdentityHint(): AuthIdentityHint | null {
+  return useSyncExternalStore(
+    authStore.subscribe,
+    () => authStore.getIdentityHint(),
+    () => null,
+  );
+}
+
+/**
+ * The account this tab remembers, for a page whose document was drawn for
+ * that account before its scripts ran (the lesson page, see
+ * `learning/lessonPageEarlyState.ts`): unlike `useAuthIdentityHint`, known
+ * during hydration too, so the first render agrees with the document.
+ * Null once the session check has found no session, or another account.
+ * What it says is for display only: nothing is sent or unlocked on its word.
+ */
+export function useRememberedAccount(): AuthIdentityHint | null {
+  return useSyncExternalStore(
+    authStore.subscribe,
+    () => authStore.getIdentityHint(),
+    () => identityHintAtBoot,
+  );
+}

@@ -1,8 +1,30 @@
 node_modules/
 .pnpm-store/
 .turbo/
+.tmp/
+.codex-qa/
+.data/
 build/
 .react-router/
 .env
 *.log
 .DS_Store
+s3-bucket/
+dist/
+scratch/
+
+# Local Impeccable hook manifests
+.codex/hooks.json
+.github/hooks/impeccable.json
+
+.wrangler/
+
+# Local agent skills (personal use)
+.claude/skills/
+skills-lock.json
+CLAUDE.md
+tasks/
+
+# Browser tests (apps/web/tests/journeys): what the last run left
+apps/web/test-results/
+apps/web/playwright-report/

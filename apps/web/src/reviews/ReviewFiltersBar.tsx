@@ -1,0 +1,194 @@
+import { useState } from "react";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { FunnelIcon as Funnel } from "@phosphor-icons/react/Funnel";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { XIcon as X } from "@phosphor-icons/react/X";
+import { ThemedSelect } from "../ThemedSelect";
+import {
+  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
+  SearchShortcutHint,
+} from "../searchShortcut";
+import type { RatingFilterOption, SortOption } from "./useReviewsFilter";
+
+import {
+  FilterBar,
+  filterButtonSizeClasses,
+  filterControlClasses,
+  filterSelectTriggerClasses,
+} from "../components/FilterBar";
+export interface ReviewFiltersBarProps {
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  ratingFilter: RatingFilterOption;
+  onRatingFilterChange: (rating: RatingFilterOption) => void;
+  sortBy: SortOption;
+  onSortByChange: (sort: SortOption) => void;
+  verifiedOnly: boolean;
+  onToggleVerified: () => void;
+  onOpenAdvancedFilters?: () => void;
+}
+
+const ratingOptions: readonly [RatingFilterOption, string][] = [
+  ["all", "All ratings"],
+  ["5", "5 stars only"],
+  ["4", "4 stars only"],
+  ["3", "3 stars only"],
+  ["2", "2 stars only"],
+  ["1", "1 star only"],
+];
+
+const sortOptions: readonly [SortOption, string][] = [
+  ["recent", "Most recent"],
+  ["highest", "Highest rated"],
+  ["lowest", "Lowest rated"],
+  ["helpful", "Most helpful"],
+];
+
+export function ReviewFiltersBar({
+  searchQuery,
+  onSearchChange,
+  ratingFilter,
+  onRatingFilterChange,
+  sortBy,
+  onSortByChange,
+  verifiedOnly,
+  onToggleVerified,
+  onOpenAdvancedFilters,
+}: ReviewFiltersBarProps) {
+  const [extraFiltersOpen, setExtraFiltersOpen] = useState(false);
+
+  const handleFilterClick = () => {
+    if (onOpenAdvancedFilters) {
+      onOpenAdvancedFilters();
+    } else {
+      setExtraFiltersOpen((prev) => !prev);
+    }
+  };
+
+  return (
+    <FilterBar className="gap-3">
+      <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+        {/* Search Input */}
+        <label
+          className={`${filterControlClasses} min-w-52.5 flex-1 gap-2.5 cursor-text`}
+        >
+          <MagnifyingGlass
+            size={17}
+            className="text-(--muted) shrink-0"
+            aria-hidden="true"
+          />
+          <input
+            id="reviews-search-input"
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search reviews..."
+            aria-label="Search reviews"
+            aria-keyshortcuts={SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS}
+            data-search-shortcut-target
+            className="w-full border-0 bg-transparent p-0 text-xs md:text-sm text-(--text-secondary) placeholder-(--muted) outline-none"
+          />
+          <SearchShortcutHint />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => onSearchChange("")}
+              aria-label="Clear search"
+              className="text-(--muted) hover:text-(--text) cursor-pointer"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </label>
+
+        {/* Rating Select Container */}
+        <div className={`${filterControlClasses} w-35`}>
+          <ThemedSelect
+            id="reviews-rating-filter"
+            value={ratingFilter}
+            onValueChange={onRatingFilterChange}
+            options={ratingOptions}
+            ariaLabel="Filter by rating"
+            triggerClassName={`${filterSelectTriggerClasses} w-full`}
+          />
+        </div>
+
+        {/* Sort Select Container */}
+        <div className={`${filterControlClasses} w-36.25`}>
+          <ThemedSelect
+            id="reviews-sort-filter"
+            value={sortBy}
+            onValueChange={onSortByChange}
+            options={sortOptions}
+            ariaLabel="Sort reviews by"
+            triggerClassName={`${filterSelectTriggerClasses} w-full`}
+          />
+        </div>
+
+        {/* Verified Learners Checkbox Chip */}
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={verifiedOnly}
+          onClick={onToggleVerified}
+          className={`flex min-h-11 items-center gap-2 rounded-xl px-3.5 text-xs md:text-sm font-medium transition-all cursor-pointer select-none ${
+            verifiedOnly
+              ? "bg-(--accent-soft) text-(--accent) shadow-[inset_0_0_0_1px_var(--accent)]"
+              : "bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] text-(--muted) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] hover:text-(--text)"
+          }`}
+        >
+          <span
+            className={`flex h-4 w-4 items-center justify-center rounded transition-colors ${
+              verifiedOnly
+                ? "bg-(--accent) text-white"
+                : "border border-(--border-strong,var(--border)) bg-transparent"
+            }`}
+          >
+            {verifiedOnly && <Check size={11} weight="bold" />}
+          </span>
+          <span>Verified learners</span>
+        </button>
+
+        {/* Filters Quick Button */}
+        <button
+          type="button"
+          onClick={handleFilterClick}
+          aria-label="Toggle filters"
+          aria-expanded={extraFiltersOpen}
+          className={`${filterButtonSizeClasses} flex items-center gap-1.5 bg-[color-mix(in_srgb,var(--surface-strong)_72%,var(--canvas))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_20%,transparent)] px-3.5 text-xs md:text-sm font-medium text-(--text) transition-all hover:bg-(--hover) cursor-pointer`}
+        >
+          <Funnel size={15} />
+          <span>Filters</span>
+        </button>
+      </div>
+
+      {/* Expandable Extra Filters Drawer if toggled */}
+      {extraFiltersOpen && (
+        <div className="flex flex-wrap items-center gap-2 rounded-[10px] bg-[color-mix(in_srgb,var(--surface-strong)_79%,var(--canvas))] p-2.5 text-xs text-(--text-secondary) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--text)_7%,transparent)] animate-in fade-in slide-in-from-top-1 duration-150">
+          <span className="font-semibold text-(--text)">Quick filters:</span>
+          <button
+            type="button"
+            onClick={() => onRatingFilterChange("5")}
+            className="rounded-lg bg-(--hover) px-2.5 py-1 text-xs hover:text-(--text) cursor-pointer"
+          >
+            ★ 5 Stars Only
+          </button>
+          <button
+            type="button"
+            onClick={() => onSortByChange("helpful")}
+            className="rounded-lg bg-(--hover) px-2.5 py-1 text-xs hover:text-(--text) cursor-pointer"
+          >
+            Most Helpful
+          </button>
+          <button
+            type="button"
+            onClick={() => onSortByChange("recent")}
+            className="rounded-lg bg-(--hover) px-2.5 py-1 text-xs hover:text-(--text) cursor-pointer"
+          >
+            Newest First
+          </button>
+        </div>
+      )}
+    </FilterBar>
+  );
+}

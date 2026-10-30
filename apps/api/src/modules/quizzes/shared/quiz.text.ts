@@ -1,0 +1,54 @@
+/**
+ * A typed quiz answer is free text: any language, any symbols, code, over
+ * as many lines as it takes.
+ *
+ * It is never refused for what it says. A course on HTML or SQL has answers
+ * that read like an attack, and a filter that turned those away would turn
+ * away the right answer. What keeps the platform safe is that the answer is
+ * only ever handled as text: stored through bound parameters, sent back as a
+ * JSON string, shown as text and never as markup.
+ *
+ * What is removed here is what is not text a person typed and can break or
+ * mislead a layer that handles it.
+ */
+
+/**
+ * Every way a line can end, so an answer written on Windows, pasted from a
+ * document or typed on a phone is stored with one kind of line break.
+ */
+const LINE_BREAKS = /\r\n|[\r\u0085\u2028\u2029]/g;
+
+/**
+ * NUL and the other control characters, except the tab and the line break a
+ * written answer is made of. PostgreSQL refuses NUL in `text` and `jsonb`:
+ * one in an answer failed the save of every answer sent with it.
+ */
+const CONTROL_CHARACTERS = /[^\P{Cc}\t\n]/gu;
+
+/** A run of blank lines longer than this is padding, not writing. */
+const EXCESS_BLANK_LINES = /\n{4,}/g;
+
+/** Half of a surrogate pair: not a character, and refused by `jsonb` too. */
+const LONE_SURROGATES = /\p{Cs}/gu;
+
+/**
+ * Characters that are invisible and change how the text around them is
+ * drawn: direction overrides and isolates, the zero-width space, the word
+ * joiner, the byte-order mark. They let an answer be shown as something
+ * other than what was stored. The joiners that Indic scripts and emoji
+ * need (U+200C, U+200D) are not among them.
+ */
+const DISPLAY_SPOOFING_CHARACTERS =
+  /[\u200B\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/g;
+
+/** A typed answer as it is stored. */
+export function cleanQuizTextAnswer(value: string): string {
+  return value
+    .replace(LINE_BREAKS, "\n")
+    .replace(CONTROL_CHARACTERS, "")
+    .replace(LONE_SURROGATES, "")
+    .replace(DISPLAY_SPOOFING_CHARACTERS, "")
+    .normalize("NFC")
+    .replace(EXCESS_BLANK_LINES, "\n\n\n")
+    .trim();
+}

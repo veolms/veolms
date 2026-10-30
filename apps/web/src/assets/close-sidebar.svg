@@ -1,0 +1,6 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Close sidebar">
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="var(--sidebar-toggle-surface, #878D9A)"/>
+  <rect x="34" y="10" width="22" height="44" rx="7" fill="var(--sidebar-toggle-ink, white)"/>
+  <path d="M13 32H28" stroke="var(--sidebar-toggle-ink, white)" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M18 27L13 32L18 37" stroke="var(--sidebar-toggle-ink, white)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

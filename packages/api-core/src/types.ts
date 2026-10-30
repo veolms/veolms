@@ -1,0 +1,99 @@
+import type { ServerConfig } from "@veolms/config";
+import type { ErrorResponse, ValidationIssue } from "@veolms/contracts";
+import type { Database } from "@veolms/database";
+import type { FastifyInstance, FastifyServerOptions } from "fastify";
+import type { Kysely } from "kysely";
+import type { ApiPlugin } from "@veolms/plugin-sdk";
+
+declare module "fastify" {
+  interface FastifyContextConfig {
+    rawResponse?: boolean;
+  }
+}
+
+export type { ApiPlugin, WebExtension } from "@veolms/plugin-sdk";
+export type { ErrorResponse, ValidationIssue };
+
+/**
+ * Minimal structural type for AppServices that api-core references.
+ * The full concrete type lives in apps/api/src/services/index.ts.
+ * Cloud apps that need concrete types should import @veolms/api directly
+ * or depend on @veolms/api-core's AppServices export.
+ */
+export interface CoreAppServices {
+  email: { close(): Promise<void> };
+  courseStaticPages?: {
+    requestRefresh(opts: { courseId: string; courseSlug?: string }): {
+      status: string;
+    };
+  };
+}
+
+export interface PendingCourseStaticRefresh {
+  courseId: string;
+  courseSlug?: string;
+}
+
+export interface CreateVeoLMSApiOptions<
+  TServices extends CoreAppServices = CoreAppServices,
+  TDatabase extends Database = Database,
+  TPaymentEventQueue = unknown,
+> {
+  /** Kysely database instance. Generic so cloud can pass Kysely<CloudDatabase extends Database>. */
+  database: Kysely<TDatabase>;
+  /** Pino/Fastify logger config (defaults to `true`). */
+  logger?: FastifyServerOptions["logger"];
+  /**
+   * Pre-built services or a factory function receiving the created FastifyInstance.
+   */
+  services?: TServices | ((app: FastifyInstance) => TServices);
+  /**
+   * Adds hooks that must apply to every route, before any route is
+   * registered: core's are loaded with `loadCoreAppHooks()`. An app that
+   * composes the factory itself and leaves this out runs core's routes
+   * without them (the cloud API once did, and a student at the device limit
+   * was never given the cookie that lets them choose a device to sign out).
+   */
+  registerHooks?: (app: FastifyInstance) => void;
+  /**
+   * Absolute path to the `modules/` directory containing route plugins.
+   * Pass `fileURLToPath(new URL("./modules", import.meta.url))` from the
+   * calling app's `app.ts`. Optional if the app only registers plugins.
+   */
+  modulesDir?: string;
+  /**
+   * Parsed server config. Passed down to OpenAPI registration and CORS logic.
+   */
+  config: ServerConfig;
+  /**
+   * Registers the background jobs (payment queue, fulfillment scheduler, etc.)
+   * and returns the payment event queue so it can be passed to routes via
+   * autoload options. This is a callback so api-core doesn't need to import
+   * the concrete job implementations.
+   */
+  registerJobs?: (
+    app: FastifyInstance,
+    opts: { database: Kysely<TDatabase>; services: TServices },
+  ) => TPaymentEventQueue;
+  /**
+   * Options object merged into `@fastify/autoload`'s `options` — these are
+   * handed to every route plugin. Must include at minimum the fields declared
+   * by `RoutePluginOptions` in `apps/api`.
+   */
+  routePluginOptions?: (
+    paymentEventQueue: TPaymentEventQueue,
+    services: TServices,
+  ) => Record<string, unknown>;
+  /**
+   * Module folder names to skip during autoloading.
+   * Each name matches the folder immediately containing the `*.routes.ts` file.
+   *
+   * @example Disable the payments and webhooks modules:
+   * ```ts
+   * createVeoLMSApi({ excludeModules: ["payments", "webhooks"], ... })
+   * ```
+   */
+  excludeModules?: string[];
+  /** Cloud-only ApiPlugins to register after all core setup. */
+  plugins?: ApiPlugin<TDatabase>[];
+}

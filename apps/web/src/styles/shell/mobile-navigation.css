@@ -1,0 +1,522 @@
+/* Responsive navigation and its More sheet belong to the shared academy shell. */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .mobile-bottom-nav {
+    --mobile-nav-inset: env(safe-area-inset-bottom, 0px);
+    --mobile-nav-max-inset: var(--app-viewport-safe-area-max-bottom);
+    --mobile-nav-offset: calc(
+      var(--mobile-nav-inset) - var(--mobile-nav-max-inset)
+    );
+
+    position: fixed;
+    right: 0;
+    /* Chrome's optimized edge-to-edge pattern: the surface grows once using
+       the maximum inset, then follows the dynamic chin using only `bottom`.
+       This avoids layout thrashing and removes the empty gesture-area band. */
+    bottom: var(--mobile-nav-offset);
+    left: 0;
+    z-index: 140;
+    display: flex;
+    min-height: calc(58px + var(--app-viewport-safe-area-max-bottom));
+    align-items: stretch;
+    border: 0;
+    border-radius: 0;
+    padding: 2px 2px calc(2px + var(--app-viewport-safe-area-max-bottom));
+    background: rgba(15, 15, 15, 0.7);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    box-shadow: none;
+    isolation: isolate;
+    visibility: visible;
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition:
+      transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 150ms ease-out,
+      visibility 0s linear 0s;
+    will-change: transform;
+  }
+
+  .mobile-bottom-nav.is-scroll-hidden {
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transform: translate3d(0, calc(100% + 4px), 0);
+    transition:
+      transform 180ms cubic-bezier(0.4, 0, 1, 1),
+      opacity 110ms ease-in,
+      visibility 0s linear 180ms;
+  }
+
+  body:has([role="dialog"][aria-modal="true"]) .mobile-bottom-nav,
+  body:has([data-modal-open]) .mobile-bottom-nav,
+  body:has([data-lesson-video-modal]) .mobile-bottom-nav,
+  body.modal-open .mobile-bottom-nav,
+  body[data-modal-open="true"] .mobile-bottom-nav {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+  }
+
+  :root[data-theme="light"] .mobile-bottom-nav {
+    background: color-mix(in srgb, var(--app-shell) 72%, transparent);
+  }
+
+  @supports not (
+    (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+  ) {
+    .mobile-bottom-nav {
+      background: color-mix(in srgb, var(--app-shell) 94%, var(--surface));
+    }
+  }
+
+  .mobile-bottom-nav > button {
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 54px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 2px;
+    border-radius: 0;
+    color: var(--muted);
+  }
+
+  .mobile-bottom-nav > button > span {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-bottom-nav__profile-avatar {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    overflow: visible;
+    border-radius: 50%;
+  }
+
+  .mobile-bottom-nav__profile-avatar .shell-profile-avatar {
+    width: 100%;
+    height: 100%;
+  }
+
+  .mobile-bottom-nav__profile-avatar > .courses-profile__presence {
+    top: 0;
+    right: 0;
+    bottom: auto;
+    z-index: 1;
+    width: 7px;
+    height: 7px;
+    border-width: 1px;
+  }
+
+  .mobile-bottom-nav > button svg {
+    color: var(--nav-icon-color, var(--muted));
+  }
+
+  .mobile-bottom-nav > button small {
+    max-width: 100%;
+    overflow: hidden;
+    color: inherit;
+    font-size: 0.61rem;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-bottom-nav > button b {
+    position: absolute;
+    top: -7px;
+    right: -10px;
+    display: inline-flex;
+    min-width: 17px;
+    height: 17px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 0 4px;
+    color: var(--on-accent);
+    background: var(--accent);
+    font-size: 0.56rem;
+  }
+
+  .mobile-bottom-nav > button.is-active {
+    color: var(--nav-icon-color, var(--accent));
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .mobile-bottom-nav > button.is-active svg {
+    color: currentColor;
+  }
+
+  .mobile-menu-sheet {
+    --mobile-menu-sheet-vertical-chrome: calc(
+      var(--mobile-menu-sheet-top-space) +
+        max(14px, var(--app-safe-area-bottom))
+    );
+    --mobile-menu-sheet-inline-inset: 0.75rem;
+    /* Base UI registers its drawer variables with `inherits: false`, so the
+       resting snap offset is copied here for the body to read. */
+    --mobile-menu-sheet-rest-offset: var(
+      --drawer-snap-point-offset,
+      var(--translate-y, 0px)
+    );
+
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  /* The drawer registers `--translate-y` as non-inherited so a drag does not
+     restyle the whole sheet every frame (components/ui/drawer.tsx). The body's
+     height and the floating menus below read it, so they inherit it on purpose. */
+  #mobile-navigation-sheet [data-slot="drawer-content"],
+  .mobile-menu-sheet__body,
+  #mobile-navigation-sheet > .mobile-palette-menu,
+  #mobile-navigation-sheet > .settings-quick-menu--mobile,
+  #mobile-navigation-sheet > .reading-mode-quick-menu--mobile {
+    --translate-y: inherit;
+  }
+
+  #mobile-navigation-sheet [data-slot="drawer-content"] {
+    margin-inline: calc(-1 * var(--mobile-menu-sheet-inline-inset));
+    padding-inline: var(--mobile-menu-sheet-inline-inset);
+  }
+
+  .mobile-menu-sheet__body {
+    display: flex;
+    min-height: 0;
+    /* A downward drag must not shrink the body: the shorter scroll lane
+       would start to overflow mid-drag and Base UI would hand the gesture to
+       it, freezing the sheet under the thumb. So the height never drops below
+       the resting snap point's, while an upward drag still grows it. */
+    height: clamp(
+      0px,
+      calc(
+        100dvh -
+          max(
+            0px,
+            min(
+              var(--translate-y, 0px),
+              var(--mobile-menu-sheet-rest-offset, var(--translate-y, 0px))
+            )
+          ) -
+          var(--mobile-menu-sheet-vertical-chrome)
+      ),
+      100dvh
+    );
+    flex: 0 0 auto;
+    flex-direction: column;
+    margin-inline: calc(-1 * var(--mobile-menu-sheet-inline-inset));
+    padding-inline: var(--mobile-menu-sheet-inline-inset);
+    /* The drawer content owns the rounded outer clip. Keeping this inner
+       layout visible lets the navigation scroll lane use its negative margin
+       to reach both drawer edges without cutting selected-item shadows at the
+       content gutter. */
+    overflow: visible;
+  }
+
+  .mobile-menu-sheet__heading {
+    display: flex;
+    min-height: 55px;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 16px;
+    padding: 3px 5px 10px;
+  }
+
+  .mobile-menu-sheet__heading h2 {
+    color: var(--text);
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+
+  .mobile-menu-sheet__heading p {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 0.7rem;
+  }
+
+  .mobile-menu-sheet__profile-wrap {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+  }
+
+  .mobile-menu-sheet__profile-wrap > .profile-menu__identity {
+    width: 100%;
+    margin-inline: 0;
+  }
+
+  .mobile-menu-sheet__profile {
+    display: flex;
+    width: 100%;
+    min-height: 64px;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 11px;
+    border: 1px solid var(--border-strong);
+    border-radius: 13px;
+    padding: 10px 12px;
+    color: var(--text);
+    background: var(--surface-strong);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .mobile-menu-sheet__profile:hover,
+  .mobile-menu-sheet__profile[aria-expanded="true"] {
+    background: color-mix(
+      in srgb,
+      var(--surface-strong) 88%,
+      var(--accent) 12%
+    );
+  }
+
+  .mobile-menu-sheet__profile:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .mobile-menu-sheet__profile > .shell-profile-avatar,
+  .mobile-menu-sheet__profile img {
+    flex: 0 0 auto;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .mobile-menu-sheet__profile > .courses-profile__avatar-wrap {
+    width: 52px;
+    height: 52px;
+    flex-basis: 52px;
+  }
+
+  .mobile-menu-sheet__profile > span:not(.courses-profile__avatar-wrap) {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .mobile-menu-sheet__profile strong {
+    font-size: 0.84rem;
+    font-weight: 650;
+  }
+
+  .mobile-menu-sheet__profile small {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 0.69rem;
+  }
+
+  .mobile-menu-sheet__profile > svg {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: var(--muted);
+  }
+
+  .mobile-menu-sheet .mobile-menu-sheet__profile-menu {
+    position: static;
+    z-index: auto;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    padding: 6px 0 0;
+    background: transparent;
+    box-shadow: none;
+    --profile-menu-cast-shadow: none;
+  }
+
+  .mobile-menu-sheet .profile-menu__group--roles > .profile-menu__section {
+    margin: 16px 0 2px;
+    padding: 2px 10px 4px 14px;
+  }
+
+  .mobile-menu-sheet__scroll {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .mobile-menu-sheet__list {
+    flex: 0 0 auto;
+    display: grid;
+    align-content: start;
+    gap: 3px;
+    margin-top: 4px;
+    margin-inline: calc(-1 * var(--mobile-menu-sheet-inline-inset));
+    padding-block: 6px 18px;
+    padding-inline: var(--mobile-menu-sheet-inline-inset);
+    overflow: visible;
+  }
+
+  .mobile-menu-sheet__profile-navigation {
+    padding-bottom: 0;
+  }
+
+  .mobile-menu-sheet .profile-menu__item-icon--profile {
+    color: #5da9ff;
+  }
+
+  .mobile-menu-sheet .profile-menu__item-icon--notifications {
+    color: #f1be4b;
+  }
+
+  .mobile-menu-sheet .profile-menu__item-icon--orders {
+    color: #d68eea;
+  }
+
+  .mobile-menu-sheet .profile-menu__item {
+    border-radius: 10px !important;
+  }
+
+  .mobile-menu-sheet__list > button {
+    position: relative;
+    display: grid;
+    min-height: 50px;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    border-radius: 11px;
+    padding: 0 13px;
+    color: var(--text-secondary);
+    text-align: left;
+    touch-action: pan-y;
+  }
+
+  .mobile-menu-sheet__list > button svg {
+    color: var(--nav-icon-color, var(--muted));
+  }
+
+  .mobile-menu-sheet__list > button span {
+    overflow: hidden;
+    font-size: 0.83rem;
+    font-weight: 550;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-menu-sheet__list > button b {
+    display: inline-flex;
+    min-width: 21px;
+    height: 21px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: var(--on-accent);
+    background: var(--accent);
+    font-size: 0.63rem;
+  }
+
+  .mobile-menu-sheet__list > button.is-active {
+    color: var(--text);
+    background: linear-gradient(
+      96deg,
+      color-mix(in srgb, var(--accent) 19%, var(--surface-strong)),
+      color-mix(in srgb, var(--surface-strong) 88%, transparent)
+    );
+    box-shadow: 0 8px 24px
+      color-mix(in srgb, var(--accent-shadow) 34%, transparent);
+  }
+
+  .mobile-menu-sheet__appearance {
+    position: relative;
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+    gap: 5px;
+    margin: 10px 0 12px;
+    overflow: hidden;
+  }
+
+  .mobile-menu-sheet__appearance--palette-open > button.is-active {
+    box-shadow: none;
+  }
+
+  .mobile-menu-sheet__appearance > button {
+    min-height: 44px;
+  }
+
+  .mobile-menu-sheet__appearance > button.is-active {
+    color: var(--text);
+    border-color: transparent;
+    background: var(--sidebar-menu-active-background);
+    box-shadow: var(--sidebar-menu-active-shadow);
+  }
+
+  :root[data-reading-mode="true"]
+    .mobile-menu-sheet__appearance
+    > .sidebar-appearance__reading-mode {
+    border-color: transparent;
+    background: var(--sidebar-menu-active-background);
+    box-shadow: var(--sidebar-menu-active-shadow);
+  }
+
+  .mobile-menu-sheet__appearance > button > i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  /* The floating menus are children of the translated drawer popup. Add its
+     current swipe offset so their viewport-based dock anchor stays in place. */
+  #mobile-navigation-sheet > .mobile-palette-menu,
+  #mobile-navigation-sheet > .settings-quick-menu--mobile,
+  #mobile-navigation-sheet > .reading-mode-quick-menu--mobile {
+    top: auto;
+    bottom: calc(
+      71px + var(--app-viewport-safe-area-bottom, 0px) + var(--translate-y, 0px)
+    );
+    max-height: calc(100dvh - 92px - env(safe-area-inset-top, 0px));
+  }
+
+  #mobile-navigation-sheet > .mobile-palette-menu {
+    right: auto;
+    left: calc(var(--mobile-menu-sheet-inline-inset) + 5px);
+    width: min(216px, calc(100vw - 24px));
+  }
+
+  #mobile-navigation-sheet > .settings-quick-menu--mobile {
+    right: calc(var(--mobile-menu-sheet-inline-inset) + 5px);
+    left: auto;
+    width: min(250px, calc(100vw - 24px));
+    min-width: min(200px, calc(100vw - 24px));
+    max-width: min(250px, calc(100vw - 24px));
+  }
+
+  #mobile-navigation-sheet > .reading-mode-quick-menu--mobile {
+    right: auto;
+    left: 50%;
+    translate: -50% 0;
+    width: min(264px, calc(100vw - 24px));
+  }
+}
+
+@media (max-width: 440px) {
+  .mobile-bottom-nav > button small {
+    font-size: 0.58rem;
+  }
+
+  .mobile-menu-sheet {
+    width: 100%;
+  }
+}

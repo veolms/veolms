@@ -1,0 +1,313 @@
+import { useRef } from "react";
+import type {
+  ComponentType,
+  HTMLAttributes,
+  KeyboardEvent,
+  MouseEvent,
+  ReactNode,
+} from "react";
+import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { StarIcon as Star } from "@phosphor-icons/react/Star";
+import { ThemedSelect } from "../ThemedSelect";
+import type { ThemedSelectOption } from "../ThemedSelect";
+
+type SettingsIcon = ComponentType<{
+  size?: number;
+  weight?: "bold" | "duotone" | "fill" | "regular";
+}>;
+
+/** Marks the option the app recommends, and uses by default. */
+export function RecommendedBadge() {
+  return (
+    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--success)_16%,transparent)] px-1.5 py-px text-[0.62rem] font-semibold text-(--success)">
+      <Star aria-hidden size={10} weight="fill" />
+      Recommended
+    </span>
+  );
+}
+
+/** A short state in place of a control, such as "Not supported". */
+export function StatusNote({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 text-[0.72rem] font-semibold whitespace-nowrap text-(--muted)">
+      {children}
+    </span>
+  );
+}
+
+export interface ChoiceCardProps {
+  checked: boolean;
+  // Receives the click event so callers can derive a pointer reveal origin;
+  // keyboard and programmatic clicks report the viewport origin (0, 0).
+  onChange: (event: MouseEvent<HTMLButtonElement>) => void;
+  label: string;
+  note?: string;
+  icon?: SettingsIcon;
+  preview?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+  disabled?: boolean;
+}
+
+export function ChoiceCard({
+  checked,
+  onChange,
+  label,
+  note,
+  icon: Icon,
+  preview,
+  children,
+  className = "",
+  disabled = false,
+}: ChoiceCardProps) {
+  return (
+    <button
+      type="button"
+      className={`settings-choice-card ${checked ? "is-selected" : ""} ${className}`}
+      role="radio"
+      aria-checked={checked}
+      tabIndex={checked ? 0 : -1}
+      disabled={disabled}
+      onClick={onChange}
+    >
+      {preview}
+      <span className="settings-choice-card__copy">
+        <span className="settings-choice-card__label">
+          <span className="settings-radio" aria-hidden="true">
+            {checked && <Check size={11} weight="bold" />}
+          </span>
+          {Icon && <Icon size={19} weight="duotone" />}
+          <strong>{label}</strong>
+        </span>
+        {note && <small>{note}</small>}
+        {children}
+      </span>
+    </button>
+  );
+}
+
+export interface RadioGroupProps {
+  children: ReactNode;
+  label: string;
+  className?: string;
+}
+
+export function RadioGroup({
+  children,
+  label,
+  className = "",
+}: RadioGroupProps) {
+  const groupRef = useRef<HTMLDivElement>(null);
+
+  const moveFocus = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!event.key.startsWith("Arrow")) return;
+    const options = [
+      ...(groupRef.current?.querySelectorAll<HTMLElement>('[role="radio"]') ??
+        []),
+    ];
+    const activeElement = document.activeElement;
+    if (!(activeElement instanceof HTMLElement)) return;
+    const currentIndex = options.indexOf(activeElement);
+    if (currentIndex < 0) return;
+    event.preventDefault();
+    const direction =
+      event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+    const next =
+      options[(currentIndex + direction + options.length) % options.length];
+    next?.focus();
+    next?.click();
+  };
+
+  return (
+    <div
+      ref={groupRef}
+      className={className}
+      role="radiogroup"
+      aria-label={label}
+      onKeyDown={moveFocus}
+    >
+      {children}
+    </div>
+  );
+}
+
+export interface SettingsToggleProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  disabled?: boolean;
+}
+
+export function SettingsToggle({
+  checked,
+  onChange,
+  label,
+  disabled = false,
+}: SettingsToggleProps) {
+  return (
+    <button
+      type="button"
+      className={`settings-toggle shrink-0 ${checked ? "is-on" : ""}`}
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    >
+      <span aria-hidden="true" />
+    </button>
+  );
+}
+
+export interface SettingsResetButtonProps {
+  onReset: () => void;
+  // Names what is reset, for assistive technology; the button reads "Reset".
+  label: string;
+  disabled?: boolean;
+}
+
+/** Returns one settings section to its defaults, from the section heading. */
+export function SettingsResetButton({
+  onReset,
+  label,
+  disabled = false,
+}: SettingsResetButtonProps) {
+  return (
+    <button
+      type="button"
+      className="settings-section__reset"
+      disabled={disabled}
+      onClick={onReset}
+      aria-label={label}
+    >
+      <ArrowCounterClockwise size={16} weight="bold" />
+      Reset
+    </button>
+  );
+}
+
+const INTERACTIVE_ROW_TARGETS =
+  "button, a, input, select, textarea, [role='button'], [role='link'], [role='radio'], [role='slider'], [contenteditable='true']";
+
+export function clickContainedSettingsToggle(event: MouseEvent<HTMLElement>) {
+  const target = event.target;
+  if (!(target instanceof Element) || target.closest(INTERACTIVE_ROW_TARGETS)) {
+    return;
+  }
+
+  event.currentTarget
+    .querySelector<HTMLButtonElement>(".settings-toggle:not(:disabled)")
+    ?.click();
+}
+
+export interface SettingRowProps extends HTMLAttributes<HTMLDivElement> {
+  icon: SettingsIcon;
+  label: string;
+  note: ReactNode;
+  children: ReactNode;
+  className?: string;
+}
+
+export function SettingRow({
+  icon: Icon,
+  label,
+  note,
+  children,
+  className = "",
+  onClick,
+  ...rowProps
+}: SettingRowProps) {
+  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
+    onClick?.(event);
+    if (!event.defaultPrevented) clickContainedSettingsToggle(event);
+  };
+
+  return (
+    <div
+      {...rowProps}
+      className={`settings-row ${className}`}
+      onClick={handleClick}
+    >
+      <span className="settings-row__icon" aria-hidden="true">
+        <Icon size={20} weight="duotone" />
+      </span>
+      <span className="settings-row__copy">
+        <strong>{label}</strong>
+        <small>{note}</small>
+      </span>
+      <div className="settings-row__control">{children}</div>
+    </div>
+  );
+}
+
+export interface LearningSelectRowProps {
+  id: string;
+  label: string;
+  note: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly ThemedSelectOption[];
+  disabled?: boolean;
+}
+
+export function LearningSelectRow({
+  id,
+  label,
+  note,
+  value,
+  onChange,
+  options,
+  disabled = false,
+}: LearningSelectRowProps) {
+  return (
+    <div className="settings-learning-select-row">
+      <span className="settings-learning-select-row__copy">
+        <strong>{label}</strong>
+        <small>{note}</small>
+      </span>
+      <ThemedSelect
+        id={id}
+        value={value}
+        onValueChange={onChange}
+        options={options}
+        disabled={disabled}
+        ariaLabel={label}
+      />
+    </div>
+  );
+}
+
+export interface LearningToggleRowProps {
+  label: string;
+  note: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+}
+
+export function LearningToggleRow({
+  label,
+  note,
+  checked,
+  onChange,
+  disabled = false,
+}: LearningToggleRowProps) {
+  return (
+    <div
+      className="settings-learning-toggle-row"
+      onClick={clickContainedSettingsToggle}
+    >
+      <span className="settings-learning-toggle-row__copy">
+        <strong>{label}</strong>
+        <small>{note}</small>
+      </span>
+      <SettingsToggle
+        checked={checked}
+        onChange={onChange}
+        label={label}
+        disabled={disabled}
+      />
+    </div>
+  );
+}

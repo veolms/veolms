@@ -1,0 +1,264 @@
+/* The desktop lesson page's own parts of its two-card layout. The cards
+   themselves, the gutter between them and the course content's width are
+   SplitFramePane's (components/split-frame-pane.css explains how they work);
+   this file adds what only the lesson has: the page's width source, the
+   player's minimize and expand motions, and the lesson column's sizing.
+
+   Plain CSS because Tailwind cannot reasonably express it: the shell frame
+   has to react to the player's motion states deep inside it, the widths are
+   registered properties that are not inherited, and the rules replace legacy
+   unlayered declarations on the same elements. The split rules are keyed on
+   SplitFramePane's marks, so nothing here applies without the pane.
+
+   While the player is minimizing, the frame goes back to its full width
+   (the page behind the lesson is laid out in it) and the lesson reserves the
+   pane's space instead, so nothing inside the lesson moves. An expanding
+   player needs no such step: the stand-in page it travels with already has
+   this shape and covers the frame until the real page is in place. */
+
+/* The width the course content's own contents are laid out at during a drag:
+   the last width at or over its minimum, so that it slides shut instead of
+   being squeezed (curriculumDragWidth.ts). No initial value, so that `var()`
+   falls back to the page's value whenever no drag has set it. */
+@property --learning-curriculum-drag-content-width {
+  syntax: "*";
+  inherits: false;
+}
+
+/* The lesson grid's own copy of the course content's width outside the
+   framed layout (edge to edge), where the content is a grid column
+   (learning.css). `none` so that it does not slide from a length as the page
+   arrives. */
+@property --learning-split-width {
+  syntax: "<length> | none";
+  inherits: false;
+  initial-value: none;
+}
+
+@property --learning-split-lesson-reserve {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* While the lesson's video is being minimized, the application frame already
+   has the shape of the page that is coming. Its surface comes in with that
+   page rather than at once: as far as the page behind the video has been
+   revealed (set by the layout, see setLearningFrameReveal), so far the
+   frame's surface is mixed in. Until then what the shrinking lesson
+   uncovers is the shell behind the frame, as it is between the lesson's own
+   two frames. */
+@media (min-width: 641px) {
+  :root[data-content-layout="framed"]
+    .courses-main-frame[data-learning-frame-reveal] {
+    background: color-mix(
+      in srgb,
+      var(--main-surface) calc(var(--learning-frame-reveal, 1) * 100%),
+      transparent
+    );
+    /* The outline of the wide frame would give its shape away at once. Its
+       drop shadow is left off until the page settles in for good (the timed
+       settle to the mini player, `data-learning-frame-revealed`) and then
+       fades in with the surface; put back only when the page took over, it
+       darkened everything around the frame in one frame. Its edge highlight
+       (drawn by ::after with a mouse, by FrameEdge's strips on a touch
+       screen) fades in with the surface. */
+    transition: background-color var(--learning-frame-reveal-duration, 0ms)
+      cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  :root[data-content-layout="framed"]
+    .courses-main-frame[data-learning-frame-reveal]:not(
+      [data-learning-frame-revealed]
+    ) {
+    box-shadow: none;
+  }
+
+  :root[data-content-layout="framed"]
+    .courses-main-frame[data-learning-frame-reveal][data-learning-frame-revealed] {
+    animation: learning-frame-shadow-in
+      var(--learning-frame-reveal-duration, 0ms) cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes learning-frame-shadow-in {
+    from {
+      box-shadow: none;
+    }
+  }
+
+  /* The lesson's own frame (the card the video and its page sit in) is not
+     lost the moment the motion begins, nor put back the moment a swipe is
+     let go. For as long as the motion lasts it is drawn here, where the
+     lesson card lies (the frame's box, less the room the course content
+     takes where that is a card of its own, see below), and it gives way to
+     the coming page's frame at the same rate:
+     whole until that page starts to show, gone when it has. Swiped back up
+     it returns the same way, so by the time the finger is lifted it is
+     already in place. */
+  :root[data-content-layout="framed"]
+    .courses-main-frame[data-learning-frame-reveal] {
+    position: relative;
+  }
+
+  /* The window being minimized flies over the sidebar to a corner of the
+     screen, so for as long as the motion lasts the frame is no layer of its
+     own: the shell's `z-index: 1` on it would keep the window, which is
+     inside it, under the sidebar (the window leaves the frame's clip by
+     being fixed while it moves, see PersistentLearningPlayerHost). Nothing
+     else in the frame changes its place against the sidebar: everything in
+     it stays under the sidebar's z-index. The lesson card's stand-in below
+     needs no layer either: it is drawn first among the frame's positioned
+     boxes, and the page's scroller, positioned too, is drawn over it. */
+  :root[data-content-layout="framed"]
+    .courses-main-frame[data-learning-frame-reveal] {
+    z-index: auto;
+  }
+
+  :root[data-content-layout="framed"]
+    .courses-main-frame[data-learning-frame-reveal]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--main-surface);
+    box-shadow: var(
+      --application-frame-edge-shadow,
+      var(--surface-depth-edge-shadow, none)
+    );
+    opacity: calc(1 - var(--learning-frame-reveal, 1));
+    pointer-events: none;
+    transition: opacity var(--learning-frame-reveal-duration, 0ms)
+      cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* The strips are named rather than matched with `*`: a rule ending in
+     `*` makes the browser re-style everything in the frame each time the
+     motion marks or unmarks it, about 20ms at both ends of a minimize. */
+  :root[data-content-layout="framed"]
+    .courses-main-frame[data-learning-frame-reveal]::after,
+  :root[data-content-layout="framed"]
+    .courses-main-frame[data-learning-frame-reveal]
+    > [data-frame-edge="lesson"]
+    > [data-frame-edge-strip] {
+    opacity: var(--learning-frame-reveal, 1);
+    transition: opacity var(--learning-frame-reveal-duration, 0ms)
+      cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@media (min-width: 1081px) {
+  /* The course content's width is the page's: set on the document before
+     first paint (and zero while the content is collapsed), so the cards
+     have their shape from the first frame. */
+  :root[data-content-layout="framed"]
+    .courses-app:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered]
+        :has(> .courses-main-frame [data-split-frame-pane])
+    ) {
+    --split-frame-page-width: var(--learning-curriculum-width, 400px);
+  }
+
+  /* The lesson card's stand-in during a minimize (above) stops where the
+     course content's room begins. That room is not inherited, so the
+     stand-in asks for the frame's. */
+  :root[data-content-layout="framed"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    )[data-learning-frame-reveal]::before {
+    --split-frame-space: inherit;
+    right: var(--split-frame-space);
+  }
+
+  /* The shell's overlay (the course content's shadow) belongs to the shell,
+     so it does not go with the course content when the lesson is swiped
+     away with its video: the content shrank and left, and its outline stayed
+     standing where it had been. It is let go as the motion begins (the frame
+     is marked for as long as the motion lasts, see setLearningFrameReveal)
+     and comes back with the lesson. */
+  :root[data-content-layout="framed"]
+    .courses-app:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered]
+        :has(> .courses-main-frame [data-split-frame-pane])
+    ):has(> .courses-main-frame[data-learning-frame-reveal])::after {
+    opacity: 0;
+    transition: opacity 90ms ease-out;
+  }
+
+  /* The stand-in for the lesson page draws its own two cards over the page
+     being left. The shell's edge highlight still outlines that page's
+     full-width frame and would run across the gutter. */
+  :root[data-content-layout="framed"]
+    .courses-app:has([data-learning-expand-sheet-active]):not(
+      :is(
+        [data-split-frame],
+        :root[data-split-frame-prerendered]
+          :has(> .courses-main-frame [data-split-frame-pane])
+      )
+    )::after {
+    content: none;
+  }
+
+  :root[data-content-layout="framed"]
+    .courses-app:has([data-learning-expand-sheet-active]):not(
+      :is(
+        [data-split-frame],
+        :root[data-split-frame-prerendered]
+          :has(> .courses-main-frame [data-split-frame-pane])
+      )
+    )
+    > [data-frame-edge="shell"] {
+    display: none;
+  }
+
+  :root[data-content-layout="framed"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    ) {
+    & [data-learning-split-lesson] {
+      box-sizing: border-box;
+      grid-template-columns: minmax(0, 1fr);
+      column-gap: 0;
+      width: min(
+        100%,
+        calc(
+          1840px - var(--split-frame-space) +
+            var(--learning-split-lesson-reserve)
+        )
+      );
+      padding-right: var(--learning-split-lesson-reserve);
+    }
+
+    & [data-learning-split-lesson] > .learning-workspace__lesson-column {
+      width: auto;
+    }
+
+    & .learning-curriculum__viewport {
+      border-radius: inherit;
+    }
+  }
+
+  /* While the player is minimizing, the frame keeps its full width (the page
+     behind the lesson is laid out in it) and the lesson reserves the course
+     content's room itself. */
+  :root[data-content-layout="framed"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    ):has(
+      [data-learning-player-motion]:not(
+        [data-learning-player-motion="restoring"]
+      ),
+      [data-learning-player-motion-phase],
+      [data-learning-player-window-motion]
+    ) {
+    margin-right: 0;
+
+    & [data-learning-split-lesson] {
+      --learning-split-lesson-reserve: var(--split-frame-space);
+    }
+  }
+}

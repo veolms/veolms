@@ -1,0 +1,265 @@
+/* Atomic/CodeMirror owns these internals, so the feature-local overrides below
+ * cannot be expressed reliably with Tailwind utilities on React-owned nodes. */
+.learning-discussion-atomic-editor {
+  --atomic-editor-bg: transparent;
+  --atomic-editor-fg: var(--text);
+  --atomic-editor-muted: var(--muted);
+  --atomic-editor-link: var(--accent-ink, var(--accent));
+  --atomic-editor-measure: none;
+  /* A real font list, never `inherit`: on a custom property that keyword
+   * makes the property itself inherit (here, nothing), and the editor then
+   * falls back to its own system-ui default. */
+  --atomic-editor-font: var(--app-font-family);
+  --atomic-editor-body-size: 0.9375rem;
+  --atomic-editor-body-leading: 1.6;
+
+  height: 100%;
+}
+
+.learning-discussion-atomic-editor .atomic-cm-editor,
+.learning-discussion-atomic-editor .cm-editor {
+  min-height: 100%;
+  max-height: var(--atomic-editor-max-height, 50vh);
+  background: transparent;
+}
+
+.learning-discussion-atomic-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+.learning-discussion-atomic-editor .cm-scroller {
+  min-height: 100%;
+  max-height: var(--atomic-editor-max-height, 50vh);
+  overflow: auto;
+  /* Keep native scroll chaining: the editor consumes wheel input while it
+   * can scroll, then the page takes over at either vertical boundary. */
+  overscroll-behavior: auto;
+  scrollbar-width: none;
+}
+
+.learning-discussion-atomic-editor .cm-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.learning-discussion-atomic-editor .cm-content {
+  min-height: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 1rem;
+  caret-color: var(--text);
+}
+
+@media (max-width: 640px) {
+  .learning-comment-editor[data-editor-presentation="drawer"]
+    .learning-discussion-atomic-editor
+    .cm-content {
+    font-size: 1rem;
+  }
+}
+
+.learning-discussion-atomic-editor .cm-line {
+  padding-inline: 0;
+}
+
+.learning-discussion-atomic-editor .cm-placeholder {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.learning-discussion-atomic-editor .cm-selectionBackground,
+.learning-discussion-atomic-editor .cm-content ::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+
+/* The reply composer starts at one text line, grows with its document, and
+ * becomes internally scrollable after roughly eight body lines. These nodes
+ * are owned by Atomic Editor/CodeMirror, so this behavior cannot be applied
+ * from the React wrapper with Tailwind utilities alone. */
+.learning-discussion-atomic-editor[data-auto-grow="true"] {
+  --discussion-editor-auto-grow-min-height: 2.75rem;
+  --discussion-editor-auto-grow-max-height: 13.25rem;
+
+  height: auto;
+  min-height: var(--discussion-editor-auto-grow-min-height);
+  max-height: var(
+    --atomic-editor-max-height,
+    var(--discussion-editor-auto-grow-max-height)
+  );
+}
+
+.learning-discussion-atomic-editor[data-auto-grow="true"] .atomic-cm-editor,
+.learning-discussion-atomic-editor[data-auto-grow="true"] .cm-editor {
+  height: auto;
+  min-height: var(--discussion-editor-auto-grow-min-height);
+  max-height: var(
+    --atomic-editor-max-height,
+    var(--discussion-editor-auto-grow-max-height)
+  );
+}
+
+.learning-discussion-atomic-editor[data-auto-grow="true"] .cm-scroller {
+  min-height: var(--discussion-editor-auto-grow-min-height);
+  max-height: var(
+    --atomic-editor-max-height,
+    var(--discussion-editor-auto-grow-max-height)
+  );
+  overflow-y: auto;
+}
+
+.learning-discussion-atomic-editor[data-auto-grow="true"] .cm-content {
+  min-height: var(--discussion-editor-auto-grow-min-height);
+  padding-block: 0.625rem;
+}
+
+/* Mention autocomplete dropdown styling */
+.cm-tooltip-autocomplete {
+  box-sizing: border-box !important;
+  background: var(--surface) !important;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent) !important;
+  border-radius: 0.75rem !important;
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.25),
+    0 8px 10px -6px rgba(0, 0, 0, 0.25) !important;
+  padding: 0.25rem !important;
+  width: min(18rem, calc(100vw - 1rem)) !important;
+  min-width: min(15rem, calc(100vw - 1rem)) !important;
+  max-width: 18rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  z-index: 190 !important;
+}
+
+/* Obsolete standalone loader instances must never remain visible. */
+.cm-tooltip-autocomplete.cm-mention-loading {
+  display: none !important;
+}
+
+.cm-tooltip-autocomplete.cm-mention-loading-source {
+  display: none !important;
+}
+
+.cm-tooltip-autocomplete.cm-mention-loading-panel {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+.cm-mention-loading-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.5rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.cm-mention-loading-spinner {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid color-mix(in srgb, var(--text) 24%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 9999px;
+  animation: cm-mention-loading-spin 0.7s linear infinite;
+}
+
+@keyframes cm-mention-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cm-tooltip-autocomplete > ul {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: 6.75rem !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  font-family: inherit !important;
+  font-size: 0.875rem !important;
+  list-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.cm-tooltip-autocomplete > ul::-webkit-scrollbar {
+  display: none;
+}
+
+.cm-tooltip-autocomplete > ul > li {
+  display: grid !important;
+  grid-template-columns: 1.75rem minmax(0, 1fr) minmax(0, 7rem);
+  align-items: center !important;
+  min-height: 2.25rem !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 0.5rem !important;
+  color: var(--text) !important;
+  cursor: pointer !important;
+  gap: 0.5rem !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  transition: background-color 0.1s ease !important;
+}
+
+.cm-tooltip-autocomplete > ul > li[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 15%, transparent) !important;
+  color: var(--text) !important;
+}
+
+.cm-tooltip-autocomplete .cm-completionIcon {
+  display: none !important;
+}
+
+.cm-mention-avatar {
+  display: inline-grid;
+  flex: 0 0 1.75rem;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--surface-strong) 78%, var(--canvas));
+  color: var(--muted);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.cm-mention-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cm-completionLabel {
+  display: block !important;
+  font-weight: 500 !important;
+  color: inherit !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.cm-completionDetail {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-size: 0.75rem !important;
+  color: var(--muted) !important;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-style: normal !important;
+}

@@ -1,0 +1,94 @@
+/* Accent fills and accent-colored copy have different contrast needs on the
+   deepest palettes. Keep the brand fill intact while giving small text a
+   foreground value that clears WCAG AA on its card surface. */
+:root[data-palette] {
+  --accent-ink: var(--accent);
+}
+
+:root[data-theme="light"][data-palette="brainwave"] {
+  --accent-ink: #0060b8;
+}
+
+:root[data-theme="dark"][data-palette="midnight"] {
+  --accent-ink: #7590e8;
+}
+
+:root[data-theme="dark"][data-palette="graphite"] {
+  --accent-ink: #b198ff;
+}
+
+:root[data-theme="dark"][data-palette="signal"] {
+  --accent-ink: #ee667d;
+}
+
+:root[data-theme="dark"][data-palette="live"] {
+  --accent-ink: #ff5c77;
+}
+
+:root[data-theme="dark"][data-palette="barbie"] {
+  --accent-ink: #f071b4;
+}
+
+:root[data-theme="dark"][data-palette="brainwave"] {
+  --accent-ink: #6cbbff;
+}
+
+:root[data-theme="dark"][data-palette="violet"] {
+  --accent-ink: #f0a27a;
+}
+
+:root[data-theme="light"][data-palette="lime"] {
+  --accent-ink: #3d6604;
+}
+
+:root[data-theme="light"][data-palette="violet"] {
+  --accent-ink: #914525;
+}
+
+:root[data-theme="light"][data-palette="aurora"] {
+  --accent-ink: #077067;
+}
+
+:root[data-theme="light"][data-palette="barbie"] {
+  --accent-ink: #b41f67;
+}
+
+:root[data-theme="light"][data-palette="ember"] {
+  --accent-ink: #ab3e07;
+}
+
+:root[data-theme="dark"][data-palette="ember"] {
+  --accent-ink: #ff903e;
+}
+
+:root[data-theme="light"][data-palette="graphite"] {
+  --accent-ink: #6946dd;
+}
+
+:root[data-theme="light"][data-palette="grove"] {
+  --accent-ink: #167142;
+}
+
+:root[data-theme="light"][data-palette="lilac"] {
+  --accent-ink: #7e40b6;
+}
+
+:root[data-theme="dark"][data-palette="lilac"] {
+  --accent-ink: #c899ff;
+}
+
+:root[data-theme="dark"][data-palette="ocean"] {
+  --accent-ink: #92acff;
+}
+
+:root[data-theme="dark"][data-palette="rose"] {
+  --accent-ink: #fc87a4;
+}
+
+:root[data-theme="light"][data-palette="signal"] {
+  --accent-ink: #b81c3c;
+}
+
+:root[data-theme="light"][data-palette="live"] {
+  --accent-ink: #c00027;
+}

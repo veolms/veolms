@@ -74,17 +74,122 @@ wsl --shutdown
 
 ## Run the applications
 
-The Web application runs at `http://localhost:3000` and proxies `/api` requests to the API at `http://localhost:4000`. Set `WEB_PORT` in `.env` to override the frontend port. `pnpm dev` starts only Web and API; the fleet manager and media worker remain inactive shells.
+The Web application currently runs independently of the API and database. Start only the frontend with:
 
+```bash
+pnpm dev:web
+```
+
+It is available at `http://localhost:3000`. Set `WEB_PORT` in `.env` to override the frontend port. Use `pnpm dev` only when developing the Web and API applications together;
 API logs are formatted for readability in development by default. Set `API_DEV_PRETTY_LOGS=false` in `.env` to keep the original JSON log format. This setting is development-only; production logs always remain structured JSON.
+
+## API documentation
+
+Interactive OpenAPI documentation is served at `http://localhost:4000/docs`, with the raw document at `/docs/json` and `/docs/yaml`. It is generated from the Zod schemas each route uses to validate and serialise traffic, so it cannot drift from the running code and there is nothing to regenerate. Set `API_DOCS_ENABLED=false` in `.env` to run the API without exposing it.
+
+Adding a file to `apps/api/src/routes` is all it takes for an endpoint and its documentation to exist — see [apps/api/README.md](../apps/api/README.md).
+
+The document lists `/` as its server, which resolves against whatever origin served the page, so "Try it out" works unchanged through a reverse proxy or TLS terminator. Set `API_PUBLIC_URL` only when a relative base cannot describe the deployment — docs served from a different origin than the API, or a proxy that mounts the API beneath a path prefix.
 
 ## Static Web build
 
-The static build requires PostgreSQL to be healthy, migrations and seed data to be present, and the API to be running:
+The static Web build does not require PostgreSQL or the API. A normal build
+prerenders every learning lecture. Preview builds the same output before it
+starts the local server:
 
 ```bash
-pnpm dev:api
 pnpm build:web
+pnpm --filter @veolms/web preview
 ```
 
-During the build, React Router uses `STATIC_BUILD_API_URL` to discover published course slugs and fetch their content. It writes deployable static files, including one HTML page per course, to `apps/web/build/client`. Browser navigation continues to use the relative `VITE_API_BASE_URL` path.
+For a faster test build that prerenders only the first section of each course,
+pass `--first-section` to either command:
+
+```bash
+pnpm build:web -- --first-section
+pnpm --filter @veolms/web preview -- --first-section
+```
+
+To skip lesson pages entirely and prerender only the application pages (home,
+courses, course overviews, settings, auth), pass `--no-lessons` instead:
+
+```bash
+pnpm build:web -- --no-lessons
+pnpm --filter @veolms/web preview -- --no-lessons
+```
+
+React Router writes the deployable client-only application to `apps/web/build/client`. `VITE_CDN_URL` is the browser-facing CDN value and accepts either a full CDN/Worker domain (for example `https://media.veolms.org`) or a same-origin path such as `/cdn`. `VITE_COURSE_MEDIA_BASE_URL`, when set, overrides `VITE_CDN_URL` for the built-in course HLS/video and thumbnail assets. This is useful when local development reads those assets from a public R2 origin. `CDN_URL` is the corresponding API/Worker value; keep both values equal for API-delivered protected media. The Vite development server uses `VITE_CDN_URL` (falling back to `CDN_URL`) to provide the `/cdn/*` proxy when it is an absolute URL. With `/cdn` in deployment, the host must route `/cdn/*` to the Worker; media bytes never pass through the API.
+
+## Direct media CDN Worker
+
+The Cloudflare Worker lives in the single source file
+`scripts/cdn-worker.js`. `wrangler.cdn.jsonc` is the deployment configuration
+that binds the private R2 bucket to `env.MEDIA_BUCKET`.
+
+Set `CDN_SIGNING_SECRET` to the same value in the API environment and Worker
+secret, then deploy with:
+
+```bash
+pnpm dlx wrangler@4 secret put CDN_SIGNING_SECRET --config wrangler.cdn.jsonc
+pnpm dlx wrangler@4 deploy --dry-run --config wrangler.cdn.jsonc
+pnpm dlx wrangler@4 deploy --config wrangler.cdn.jsonc
+```
+
+Keep the R2 bucket private. Configure the Worker route as `/cdn/*` when
+`CDN_URL=/cdn`, or attach a custom domain and set `CDN_URL` to that full
+domain. `.m3u8` files are public, while non-manifest objects in
+`CDN_PUBLIC_FOLDERS` are served without a token and
+`CDN_PRIVATE_FOLDERS` require the short-lived `veo_token` issued by the API.
+`CDN_TOKEN_TTL_SECONDS` controls normal protected-media URLs and
+`CDN_HLS_TOKEN_TTL_SECONDS` controls protected HLS segment URLs.
+New direct uploads use `public/...` or `protected/...` keys. Course thumbnail
+assets use a flat per-asset layout:
+
+```text
+public/thumbnails/<mediaId>/original.<extension>
+public/thumbnails/<mediaId>/full.webp
+public/thumbnails/<mediaId>/<width>.webp
+```
+
+Protected thumbnails use the same layout below `protected/`. Existing legacy
+`thumbnails/...`, `media/...`, and `transcoded/...` keys remain supported by
+the Worker defaults. Newly generated HLS output uses
+`public/transcoded/<mediaId>/` or `protected/transcoded/<mediaId>/`; the
+manifest is `master.m3u8` inside that prefix.
+Profile avatars use CDN-served flat per-user keys:
+
+```text
+public/avatars/<userId>/original.<extension>
+public/avatars/<userId>/<width>.webp
+```
+
+The API stores the 160px CDN URL and returns the 45px, 96px, and 160px source
+set. The CDN/image-transform Worker creates missing WebP variants. Manual
+avatar uploads use `POST /auth/me/avatar/presign`, a browser `PUT` to the
+returned storage URL, and `POST /auth/me/avatar/complete`. Authenticated
+discussion attachments use `protected/discussion-uploads/<fileName>`.
+
+## Web deployment
+
+Cloudflare Workers Builds builds and deploys the web app on dev.veolms.org from
+the `dev` branch, with `wrangler.jsonc`, on every push. No GitHub workflow
+builds or deploys it. A failed build shows only as the "Workers Builds: dev"
+check on the commit (its log is in the Cloudflare dashboard) and leaves the
+site on the previous version.
+
+## Development API deployment
+
+Every push to `development` also runs `.github/workflows/deploy-development-api.yml`. It validates the API and database migrations, connects to the existing Linux server over SSH, updates the server checkout to the exact Git commit that triggered the workflow, installs the frozen lockfile, applies pending migrations, type-checks the API, restarts the systemd service, and checks the API liveness endpoint.
+
+The server must have Node.js 24, pnpm 11, Git, PostgreSQL access, `curl`, and a systemd unit for the API. Keep the production `.env` on the server in the repository's expected location; the workflow never transfers or replaces it. The deploy user needs read/write access to the application directory and passwordless permission to restart only the API service, for example:
+
+```sudoers
+veolms-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart veolms-api.service
+```
+
+Configure these values on the GitHub `development` environment:
+
+- Variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` (optional; defaults to `22`), `DEPLOY_APP_DIR`, `DEPLOY_SERVICE_NAME`, and `API_HEALTHCHECK_URL` (for example, `http://127.0.0.1:4000/v1/health`).
+- Secrets: `DEPLOY_SSH_PRIVATE_KEY` and `DEPLOY_KNOWN_HOSTS`.
+
+The server checkout's `origin` must point to the repository and the deploy key must be able to fetch the `development` branch. `DEPLOY_KNOWN_HOSTS` should contain the server's verified `known_hosts` entry; do not use `ssh-keyscan` inside the workflow or disable host-key checking.

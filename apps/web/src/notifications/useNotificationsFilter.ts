@@ -1,0 +1,202 @@
+import type { NotificationCategory } from "@veolms/contracts";
+import { useMemo, useState } from "react";
+
+import {
+  DEFAULT_DEBOUNCE_DELAY_MS,
+  useDebounceValue,
+} from "../hooks/useDebounce";
+
+import {
+  useArchiveNotification,
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+  useMarkNotificationUnread,
+  useNotificationSummary,
+  useNotifications,
+} from "../services/notifications";
+import {
+  toNotificationItem,
+  toRecentMention,
+  type NotificationDateGroup,
+  type NotificationItem,
+  type NotificationTabId,
+  type RecentMentionItem,
+} from "./notificationsData";
+
+export interface UseNotificationsFilterReturn {
+  notifications: readonly NotificationItem[];
+  groupedNotifications: Record<
+    NotificationDateGroup,
+    readonly NotificationItem[]
+  >;
+  recentMentions: readonly RecentMentionItem[];
+  totalFilteredCount: number;
+  activeTab: NotificationTabId;
+  setActiveTab: (tab: NotificationTabId) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  categoryFilter: string;
+  setCategoryFilter: (category: string) => void;
+  statusFilter: string;
+  setStatusFilter: (status: string) => void;
+  sortBy: string;
+  setSortBy: (sort: string) => void;
+  tabCounts: Record<NotificationTabId, number>;
+  markAllAsRead: () => void;
+  markAsRead: (id: string) => void;
+  markAsUnread: (id: string) => void;
+  archiveNotification: (id: string) => void;
+  resetFilters: () => void;
+  isLoading: boolean;
+  isError: boolean;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  loadMore: () => void;
+  refetch: () => void;
+}
+
+export function useNotificationsFilter(
+  setNotice?: (message: string) => void,
+): UseNotificationsFilterReturn {
+  const [activeTab, setActiveTab] = useState<NotificationTabId>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("latest");
+  const [debouncedSearch, setDebouncedSearchImmediately] = useDebounceValue(
+    searchQuery.trim(),
+    DEFAULT_DEBOUNCE_DELAY_MS,
+  );
+
+  const filters = useMemo(() => {
+    const next: {
+      type?: string;
+      category?: NotificationCategory;
+      unread?: boolean;
+      search?: string;
+      limit: number;
+    } = { limit: 25 };
+    if (activeTab === "unread") next.unread = true;
+    if (activeTab === "mentions") next.type = "user.mentioned";
+    if (activeTab === "course-activity") next.category = "learning";
+    if (activeTab === "announcements") next.category = "system";
+    if (categoryFilter !== "all") {
+      next.category = categoryFilter as NotificationCategory;
+    }
+    if (statusFilter === "unread") next.unread = true;
+    if (statusFilter === "read") next.unread = false;
+    if (debouncedSearch) next.search = debouncedSearch;
+    return next;
+  }, [activeTab, categoryFilter, debouncedSearch, statusFilter]);
+
+  const feed = useNotifications(filters);
+  const mentions = useNotifications({ type: "user.mentioned", limit: 3 });
+  const summary = useNotificationSummary();
+  const markReadMutation = useMarkNotificationRead();
+  const markUnreadMutation = useMarkNotificationUnread();
+  const markAllReadMutation = useMarkAllNotificationsRead();
+  const archiveMutation = useArchiveNotification();
+
+  const notifications = useMemo(() => {
+    const items =
+      feed.data?.pages
+        .flatMap((page) => page.items)
+        .map((item) => toNotificationItem(item)) ?? [];
+    if (sortBy === "oldest") return [...items].reverse();
+    if (sortBy === "unread") {
+      return [...items].sort((left, right) =>
+        left.isRead === right.isRead ? 0 : left.isRead ? 1 : -1,
+      );
+    }
+    return items;
+  }, [feed.data, sortBy]);
+
+  const recentMentions = useMemo(
+    () =>
+      mentions.data?.pages
+        .flatMap((page) => page.items)
+        .slice(0, 3)
+        .map((item) => toRecentMention(toNotificationItem(item))) ?? [],
+    [mentions.data],
+  );
+
+  const groupedNotifications = useMemo(() => {
+    const groups: Record<NotificationDateGroup, NotificationItem[]> = {
+      today: [],
+      yesterday: [],
+      earlier: [],
+    };
+    for (const item of notifications) groups[item.dateGroup].push(item);
+    return groups;
+  }, [notifications]);
+
+  const tabCounts = useMemo<Record<NotificationTabId, number>>(
+    () => ({
+      all: summary.data?.totalCount ?? 0,
+      unread: summary.data?.unreadCount ?? 0,
+      mentions: summary.data?.mentionCount ?? 0,
+      "course-activity": summary.data?.learningCount ?? 0,
+      announcements: summary.data?.announcementCount ?? 0,
+    }),
+    [summary.data],
+  );
+
+  const resetFilters = () => {
+    setActiveTab("all");
+    setSearchQuery("");
+    setDebouncedSearchImmediately("");
+    setCategoryFilter("all");
+    setStatusFilter("all");
+    setSortBy("latest");
+  };
+
+  return {
+    notifications,
+    groupedNotifications,
+    recentMentions,
+    totalFilteredCount: notifications.length,
+    activeTab,
+    setActiveTab,
+    searchQuery,
+    setSearchQuery,
+    categoryFilter,
+    setCategoryFilter,
+    statusFilter,
+    setStatusFilter,
+    sortBy,
+    setSortBy,
+    tabCounts,
+    // A failed action used to show nothing at all: the notification simply
+    // stayed as it was, with no hint that the request had been refused.
+    markAllAsRead: () =>
+      markAllReadMutation.mutate(undefined, {
+        onSuccess: () => setNotice?.("All notifications marked as read."),
+        onError: () =>
+          setNotice?.("Couldn't mark notifications as read. Please try again."),
+      }),
+    markAsRead: (id) =>
+      markReadMutation.mutate(id, {
+        onError: () =>
+          setNotice?.("Couldn't mark this as read. Please try again."),
+      }),
+    markAsUnread: (id) =>
+      markUnreadMutation.mutate(id, {
+        onSuccess: () => setNotice?.("Notification marked as unread."),
+        onError: () =>
+          setNotice?.("Couldn't mark this as unread. Please try again."),
+      }),
+    archiveNotification: (id) =>
+      archiveMutation.mutate(id, {
+        onSuccess: () => setNotice?.("Notification archived."),
+        onError: () =>
+          setNotice?.("Couldn't archive this notification. Please try again."),
+      }),
+    resetFilters,
+    isLoading: feed.isPending,
+    isError: feed.isError,
+    hasNextPage: Boolean(feed.hasNextPage),
+    isFetchingNextPage: feed.isFetchingNextPage,
+    loadMore: () => void feed.fetchNextPage(),
+    refetch: () => void feed.refetch(),
+  };
+}

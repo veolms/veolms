@@ -1,0 +1,285 @@
+import { z } from "zod";
+import {
+  createCourseSectionRequestSchema,
+  updateCourseSectionRequestSchema,
+  reorderSectionsRequestSchema,
+  createCourseLessonRequestSchema,
+  updateCourseLessonRequestSchema,
+  reorderLessonsRequestSchema,
+  createLessonResourceRequestSchema,
+  lessonResourceSchema,
+  type Permission,
+  type UpdateCourseLessonRequest,
+} from "@veolms/contracts";
+import type { FastifyRequest } from "fastify";
+
+import { errorResponse } from "../../../lib/errors.ts";
+import { jsonResponse } from "../../../lib/responses.ts";
+import type { RoutePlugin } from "../../../lib/route-plugin.ts";
+
+import { createCoursesContext } from "../shared/courses.context.ts";
+import { createCurriculumController } from "./curriculum.controller.ts";
+import { createCurriculumService } from "./curriculum.service.ts";
+
+/**
+ * A lesson's PATCH changes up to three things, each its own permission:
+ * its details, its content, and whether learners see it.
+ */
+function lessonUpdatePermissions(request: FastifyRequest): Permission[] {
+  const body = (request.body ?? {}) as UpdateCourseLessonRequest;
+  const keys: Permission[] = [];
+  if (
+    body.title !== undefined ||
+    body.description !== undefined ||
+    body.isPreview !== undefined
+  ) {
+    keys.push("lesson.details.update");
+  }
+  if (body.contentType !== undefined || body.contentMediaId !== undefined) {
+    keys.push("lesson.content.update");
+  }
+  if (body.isPublished !== undefined) keys.push("lesson.publish");
+  return keys.length > 0 ? keys : ["lesson.details.update"];
+}
+
+const curriculumRoutes: RoutePlugin = async (app, options) => {
+  const ctx = createCoursesContext(options);
+  const service = createCurriculumService({
+    database: options.database,
+    services: options.services,
+  });
+  const controller = createCurriculumController({ service });
+
+  app.post(
+    "/courses/:id/sections",
+    {
+      schema: {
+        operationId: "createCourseSection",
+        tags: ["Course Curriculum"],
+        summary: "Create a new curriculum section",
+        params: z.object({ id: z.uuid() }),
+        body: createCourseSectionRequestSchema,
+        response: {
+          201: jsonResponse(
+            "Section created",
+            z.object({ id: z.uuid(), title: z.string() }),
+          ),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Course not found"),
+        },
+      },
+      preHandler: ctx.authorize("course.curriculum.update", "course"),
+    },
+    controller.createCourseSection,
+  );
+
+  app.patch(
+    "/courses/:id/sections/:sectionId",
+    {
+      schema: {
+        operationId: "updateCourseSection",
+        tags: ["Course Curriculum"],
+        summary: "Update curriculum section fields",
+        params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
+        body: updateCourseSectionRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Section updated",
+            z.object({ success: z.boolean() }),
+          ),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Section not found"),
+        },
+      },
+      preHandler: ctx.authorize("course.curriculum.update", "course"),
+    },
+    controller.updateCourseSection,
+  );
+
+  app.delete(
+    "/courses/:id/sections/:sectionId",
+    {
+      schema: {
+        operationId: "deleteCourseSection",
+        tags: ["Course Curriculum"],
+        summary: "Soft delete a section and all its lessons/resources",
+        params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Section deleted",
+            z.object({ success: z.boolean() }),
+          ),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Section not found"),
+        },
+      },
+      preHandler: ctx.authorize("course.curriculum.update", "course"),
+    },
+    controller.deleteCourseSection,
+  );
+
+  app.post(
+    "/courses/:id/sections/reorder",
+    {
+      schema: {
+        operationId: "reorderCourseSections",
+        tags: ["Course Curriculum"],
+        summary: "Update order of sections",
+        params: z.object({ id: z.uuid() }),
+        body: reorderSectionsRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Sections reordered",
+            z.object({ success: z.boolean() }),
+          ),
+          400: errorResponse("Invalid section list"),
+          403: errorResponse("Forbidden - not permitted"),
+          409: errorResponse("Optimistic lock conflict"),
+        },
+      },
+      preHandler: ctx.authorize("course.curriculum.update", "course"),
+    },
+    controller.reorderCourseSections,
+  );
+
+  app.post(
+    "/courses/:id/sections/:sectionId/lessons",
+    {
+      schema: {
+        operationId: "createCourseLesson",
+        tags: ["Course Curriculum"],
+        summary: "Create a new curriculum lesson",
+        params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
+        body: createCourseLessonRequestSchema,
+        response: {
+          201: jsonResponse("Lesson created", z.object({ id: z.uuid() })),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Section not found"),
+        },
+      },
+      preHandler: ctx.authorize("lesson.create", "course"),
+    },
+    controller.createCourseLesson,
+  );
+
+  app.patch(
+    "/courses/:id/lessons/:lessonId",
+    {
+      schema: {
+        operationId: "updateCourseLesson",
+        tags: ["Course Curriculum"],
+        summary: "Update curriculum lesson fields",
+        params: z.object({ id: z.uuid(), lessonId: z.uuid() }),
+        body: updateCourseLessonRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Lesson details updated",
+            z.object({ success: z.boolean() }),
+          ),
+          202: jsonResponse(
+            "Video processing accepted",
+            z.object({ success: z.boolean() }),
+          ),
+          400: errorResponse("Invalid media asset or type mismatch"),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Lesson not found"),
+        },
+      },
+      preHandler: ctx.authorizeEach(lessonUpdatePermissions, "lesson"),
+    },
+    controller.updateCourseLesson,
+  );
+
+  app.delete(
+    "/courses/:id/lessons/:lessonId",
+    {
+      schema: {
+        operationId: "deleteCourseLesson",
+        tags: ["Course Curriculum"],
+        summary: "Soft delete a lesson",
+        params: z.object({ id: z.uuid(), lessonId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Lesson deleted",
+            z.object({ success: z.boolean() }),
+          ),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Lesson not found"),
+        },
+      },
+      preHandler: ctx.authorize("lesson.delete", "lesson"),
+    },
+    controller.deleteCourseLesson,
+  );
+
+  app.post(
+    "/courses/:id/sections/:sectionId/lessons/reorder",
+    {
+      schema: {
+        operationId: "reorderSectionLessons",
+        tags: ["Course Curriculum"],
+        summary: "Update position of lessons inside a section",
+        params: z.object({ id: z.uuid(), sectionId: z.uuid() }),
+        body: reorderLessonsRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Lessons reordered",
+            z.object({ success: z.boolean() }),
+          ),
+          400: errorResponse("Invalid lesson list"),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Section not found"),
+          409: errorResponse("Optimistic lock conflict"),
+        },
+      },
+      preHandler: ctx.authorize("lesson.reorder", "course"),
+    },
+    controller.reorderSectionLessons,
+  );
+
+  app.post(
+    "/courses/:id/lessons/:lessonId/resources",
+    {
+      schema: {
+        operationId: "addLessonResource",
+        tags: ["Course Curriculum"],
+        summary: "Attach resource to lesson",
+        params: z.object({ id: z.uuid(), lessonId: z.uuid() }),
+        body: createLessonResourceRequestSchema,
+        response: {
+          201: jsonResponse("Resource added", lessonResourceSchema),
+          400: errorResponse("Invalid media asset"),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Lesson not found"),
+          409: errorResponse("Media asset is not ready"),
+        },
+      },
+      preHandler: ctx.authorize("course.curriculum.update", "course"),
+    },
+    controller.addLessonResource,
+  );
+
+  app.delete(
+    "/courses/:id/resources/:resourceId",
+    {
+      schema: {
+        operationId: "removeLessonResource",
+        tags: ["Course Curriculum"],
+        summary: "Remove resource from lesson",
+        params: z.object({ id: z.uuid(), resourceId: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Resource removed",
+            z.object({ success: z.boolean() }),
+          ),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Resource not found"),
+        },
+      },
+      preHandler: ctx.authorize("course.curriculum.update", "course"),
+    },
+    controller.removeLessonResource,
+  );
+};
+
+export default curriculumRoutes;

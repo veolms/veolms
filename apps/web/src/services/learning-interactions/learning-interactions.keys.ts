@@ -1,0 +1,100 @@
+export const learningInteractionKeys = {
+  all: ["learning-interactions"] as const,
+  lessonThreads: (
+    courseId: string,
+    lessonId: string,
+    filters?: Record<string, unknown>,
+  ) =>
+    [
+      ...learningInteractionKeys.all,
+      "lesson-threads",
+      courseId,
+      lessonId,
+      "infinite",
+      filters,
+    ] as const,
+  lessonDiscussionsRoot: (courseId?: string, lessonId?: string) =>
+    courseId && lessonId
+      ? ([
+          ...learningInteractionKeys.all,
+          "lesson-discussions",
+          courseId,
+          lessonId,
+        ] as const)
+      : ([...learningInteractionKeys.all, "lesson-discussions"] as const),
+  lessonDiscussions: (
+    courseId: string,
+    lessonId: string,
+    filters?: {
+      kind?: string;
+      sort?: string;
+      mine?: boolean;
+      search?: string;
+    },
+  ) =>
+    [
+      ...learningInteractionKeys.lessonDiscussionsRoot(courseId, lessonId),
+      "infinite",
+      filters?.kind ?? "all",
+      filters?.sort ?? "newest",
+      Boolean(filters?.mine),
+      filters?.search ?? "",
+    ] as const,
+  lessonInteractionCountsRoot: (courseId?: string, lessonId?: string) =>
+    courseId && lessonId
+      ? ([
+          ...learningInteractionKeys.all,
+          "lesson-interaction-counts",
+          courseId,
+          lessonId,
+        ] as const)
+      : ([
+          ...learningInteractionKeys.all,
+          "lesson-interaction-counts",
+        ] as const),
+  lessonInteractionCounts: (courseId: string, lessonId: string) =>
+    [
+      ...learningInteractionKeys.lessonInteractionCountsRoot(
+        courseId,
+        lessonId,
+      ),
+    ] as const,
+  hubThreads: (filters?: Record<string, unknown>) =>
+    [
+      ...learningInteractionKeys.all,
+      "hub-threads",
+      "infinite",
+      filters,
+    ] as const,
+  discussionsWorkspace: (filters?: Record<string, unknown>) =>
+    [
+      ...learningInteractionKeys.all,
+      "discussions-workspace",
+      "infinite",
+      filters,
+    ] as const,
+  dashboardRecentDiscussions: (scope: "all" | "mine" = "all") =>
+    scope === "mine"
+      ? ([
+          ...learningInteractionKeys.all,
+          "dashboard-recent-discussions",
+          "mine",
+        ] as const)
+      : ([
+          ...learningInteractionKeys.all,
+          "dashboard-recent-discussions",
+        ] as const),
+  popularDiscussions: () =>
+    [...learningInteractionKeys.all, "popular-discussions"] as const,
+  threadDetails: (threadId: string) =>
+    [...learningInteractionKeys.all, "thread", threadId] as const,
+  threadRepliesRoot: (threadId: string) =>
+    [...learningInteractionKeys.all, "replies", threadId] as const,
+  threadReplies: (threadId: string, _query?: Record<string, unknown>) =>
+    [...learningInteractionKeys.threadRepliesRoot(threadId)] as const,
+  notesRoot: () => [...learningInteractionKeys.all, "notes"] as const,
+  notes: (filters?: Record<string, unknown>) =>
+    [...learningInteractionKeys.notesRoot(), "infinite", filters] as const,
+  noteDetails: (noteId: string) =>
+    [...learningInteractionKeys.all, "note", noteId] as const,
+};

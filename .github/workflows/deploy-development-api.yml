@@ -1,0 +1,285 @@
+name: Deploy development API
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - "apps/api/**"
+      - "packages/api-core/**"
+      - "packages/services/**"
+      - "packages/plugin-sdk/**"
+      - "packages/video-player/**"
+      - "packages/contracts/**"
+      - "packages/database/**"
+      - "packages/config/**"
+      - "packages/storage/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".github/workflows/deploy-development-api.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-development-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Validate, build, and deploy API
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: development
+      url: ${{ vars.API_HEALTHCHECK_URL }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.18.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check contracts and database
+        run: |
+          pnpm --filter @veolms/contracts typecheck
+          pnpm --filter @veolms/database typecheck
+
+      - name: Type-check API
+        run: pnpm --filter @veolms/api typecheck
+
+      - name: Test API
+        run: pnpm --filter @veolms/api test
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+
+          test -n "${DEPLOY_SSH_PRIVATE_KEY}" || {
+            echo "::error::DEPLOY_SSH_PRIVATE_KEY secret is missing"
+            exit 1
+          }
+
+          test -n "${DEPLOY_KNOWN_HOSTS}" || {
+            echo "::error::DEPLOY_KNOWN_HOSTS secret is missing"
+            exit 1
+          }
+
+          install -m 700 -d "${HOME}/.ssh"
+
+          printf '%s\n' "${DEPLOY_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/deploy_key"
+          chmod 600 "${HOME}/.ssh/deploy_key"
+
+          printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+          chmod 644 "${HOME}/.ssh/known_hosts"
+
+      - name: Deploy API and run migrations
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR }}
+          DEPLOY_SERVICE_NAME: ${{ vars.DEPLOY_SERVICE_NAME }}
+          API_HEALTHCHECK_URL: ${{ vars.API_HEALTHCHECK_URL }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+
+          test -n "${DEPLOY_HOST}" || { echo "::error::DEPLOY_HOST variable is missing"; exit 1; }
+          test -n "${DEPLOY_USER}" || { echo "::error::DEPLOY_USER variable is missing"; exit 1; }
+          test -n "${DEPLOY_APP_DIR}" || { echo "::error::DEPLOY_APP_DIR variable is missing"; exit 1; }
+          test -n "${DEPLOY_SERVICE_NAME}" || { echo "::error::DEPLOY_SERVICE_NAME variable is missing"; exit 1; }
+          test -n "${API_HEALTHCHECK_URL}" || { echo "::error::API_HEALTHCHECK_URL variable is missing"; exit 1; }
+
+          echo "Connecting to ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PORT:-22}..."
+
+          ssh \
+            -i "${HOME}/.ssh/deploy_key" \
+            -p "${DEPLOY_PORT:-22}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            bash -s -- "${DEPLOY_APP_DIR}" "${DEPLOY_SHA}" "${DEPLOY_SERVICE_NAME}" "${API_HEALTHCHECK_URL}" <<'REMOTE'
+          set -Eeuo pipefail
+
+          app_dir="$1"
+          deploy_sha="$2"
+          service_name="$3"
+          healthcheck_url="$4"
+
+          # Ensure Node/pnpm/pm2 are on PATH for non-interactive SSH shells
+          export PATH="${HOME}/.local/share/pnpm:${HOME}/.nvm/versions/node/$(ls -1 "${HOME}/.nvm/versions/node" 2>/dev/null | tail -n 1)/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
+
+          # Add safe.directory to avoid dubious ownership errors
+          git config --global --add safe.directory "${app_dir}" || true
+
+          echo "==> Navigating to application directory: ${app_dir}"
+          cd "${app_dir}"
+
+          if [ ! -f ".env" ]; then
+            echo "::warning::.env file not found in ${app_dir}. Verify your server environment configuration."
+          fi
+
+          previous_sha="$(git rev-parse HEAD)"
+
+          echo "==> Fetching latest commit (${deploy_sha})..."
+          git fetch --prune origin dev
+          if ! git cat-file -e "${deploy_sha}^{commit}"; then
+            git fetch origin "${deploy_sha}"
+          fi
+
+          echo "==> Checking out target commit..."
+          git checkout --force -B dev "${deploy_sha}"
+          test "$(git rev-parse HEAD)" = "${deploy_sha}"
+
+          echo "==> Installing dependencies..."
+          CI=true pnpm install --frozen-lockfile
+
+          echo "==> Running database migrations..."
+          pnpm db:migrate
+
+          echo "==> Building API..."
+          pnpm --filter @veolms/api build
+
+          # One value from .env, without surrounding quotes.
+          env_value() {
+            local value
+            value="$(grep -E "^$1=" .env 2>/dev/null | tail -n 1 | cut -d= -f2- || true)"
+            value="${value%\"}"; value="${value#\"}"
+            value="${value%\'}"; value="${value#\'}"
+            printf '%s' "${value}"
+          }
+          api_port="$(env_value API_PORT)"
+          api_port="${api_port:-4000}"
+
+          # `pm2 reload` (below) stops each old process once its replacement
+          # is ready or listen_timeout runs out, whichever comes first, so a
+          # build that cannot start would take the API down. It is started
+          # first on a spare port, on 127.0.0.1 only, and must answer
+          # /v1/ready there. Its background jobs are safe beside the live
+          # ones (database locks). If it fails, the previous code is put back
+          # on disk and nothing is restarted.
+          boot_check() {
+            local port=$(( api_port + 100 ))
+            local url="http://127.0.0.1:${port}/v1/ready"
+            local boot_log="${HOME}/deploy-boot-check.log"
+            if curl --silent --max-time 2 "${url}" >/dev/null 2>&1; then
+              echo "::error::Port ${port} is in use; it is needed to check the new build."
+              return 1
+            fi
+            echo "==> Checking that the new build starts (port ${port})..."
+            (cd apps/api && API_HOST=127.0.0.1 API_PORT="${port}" \
+              exec node --env-file-if-exists=../../.env src/index.ts) >"${boot_log}" 2>&1 &
+            local pid=$!
+            local ok=0
+            curl --fail --silent --show-error --retry 30 --retry-delay 2 \
+              --retry-connrefused --retry-all-errors "${url}" >/dev/null || ok=$?
+            # Its graceful shutdown, or SIGKILL after 15 s.
+            kill -INT "${pid}" 2>/dev/null || true
+            for _ in $(seq 1 60); do
+              kill -0 "${pid}" 2>/dev/null || break
+              sleep 0.25
+            done
+            kill -KILL "${pid}" 2>/dev/null || true
+            wait "${pid}" 2>/dev/null || true
+            if [ "${ok}" -ne 0 ]; then
+              echo "::error::The new build did not become ready on port ${port}. Its output:"
+              tail -n 60 "${boot_log}" || true
+              return 1
+            fi
+            echo "==> The new build starts and is ready."
+          }
+
+          if ! boot_check; then
+            echo "==> Putting ${previous_sha} back on disk; the running API was not touched."
+            git checkout --force -B dev "${previous_sha}"
+            CI=true pnpm install --frozen-lockfile
+            exit 1
+          fi
+
+          # Zero-downtime deploys under pm2: the API runs in cluster mode
+          # (ecosystem.config.cjs), and `pm2 reload` replaces its processes
+          # one at a time, each new one reporting ready before the old one
+          # stops. A fork-mode process is moved to cluster mode once (a short
+          # restart). systemd services are restarted as before.
+          pm2_exec_mode() {
+            ${pm2_cmd} jlist | node -e '
+              const name = process.argv[1];
+              let input = "";
+              process.stdin.on("data", (chunk) => (input += chunk));
+              process.stdin.on("end", () => {
+                const app = JSON.parse(input).find((p) => p.name === name);
+                process.stdout.write(app?.pm2_env?.exec_mode ?? "");
+              });
+            ' "${service_name}"
+          }
+          pm2_deploy() {
+            local mode
+            mode="$(pm2_exec_mode)"
+            if [ "${mode}" = "cluster_mode" ] && [ -f ecosystem.config.cjs ]; then
+              echo "--> Reloading ${service_name} one process at a time..."
+              ${pm2_cmd} reload ecosystem.config.cjs --only "${service_name}" --update-env
+            elif [ "${mode}" = "cluster_mode" ]; then
+              echo "--> Reloading ${service_name} one process at a time..."
+              ${pm2_cmd} reload "${service_name}" --update-env
+            elif [ -f ecosystem.config.cjs ]; then
+              echo "--> Moving ${service_name} to pm2 cluster mode (one-time restart)..."
+              ${pm2_cmd} delete "${service_name}"
+              ${pm2_cmd} start ecosystem.config.cjs --only "${service_name}"
+            else
+              echo "--> Restarting ${service_name}..."
+              ${pm2_cmd} restart "${service_name}" --update-env
+            fi
+            # What pm2 starts again after a reboot.
+            ${pm2_cmd} save
+          }
+
+          echo "==> Deploying service: ${service_name}..."
+          if command -v systemctl >/dev/null 2>&1 && sudo systemctl list-unit-files "${service_name}*" 2>/dev/null | grep -q "${service_name}"; then
+            echo "--> Restarting via systemctl..."
+            sudo systemctl restart "${service_name}"
+          elif sudo pm2 describe "${service_name}" >/dev/null 2>&1; then
+            echo "--> Via sudo PM2..."
+            pm2_cmd="sudo pm2"
+            pm2_deploy
+          elif pm2 describe "${service_name}" >/dev/null 2>&1; then
+            echo "--> Via user PM2..."
+            pm2_cmd="pm2"
+            pm2_deploy
+          else
+            echo "--> Fallback: Restarting via sudo systemctl..."
+            sudo systemctl restart "${service_name}"
+          fi
+
+          echo "==> Performing health check at: ${healthcheck_url}"
+          curl --fail --silent --show-error \
+            --retry 30 \
+            --retry-delay 2 \
+            --retry-connrefused \
+            "${healthcheck_url}"
+
+          echo ""
+          echo "==> API deployment completed successfully for commit ${deploy_sha}!"
+          REMOTE

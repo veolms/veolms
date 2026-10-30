@@ -1,0 +1,251 @@
+import fastifyMultipart from "@fastify/multipart";
+import type { FastifyReply } from "fastify";
+import { z } from "zod";
+import type { DatabaseExecutor } from "@veolms/database";
+import { discussionUploadResponseSchema } from "@veolms/contracts";
+import { AppError, errorResponse, httpError } from "../../lib/errors.ts";
+import { jsonResponse } from "../../lib/responses.ts";
+import type { RoutePlugin } from "../../lib/route-plugin.ts";
+import { DISCUSSION_UPLOAD_RATE_LIMIT } from "../learning/discussions/shared/discussion.constants.ts";
+import { createDiscussionPermissions } from "../learning/discussions/shared/discussion.permissions.ts";
+import {
+  createDiscussionAccess,
+  discussionActor,
+  type DiscussionActor,
+} from "../learning/discussions/shared/discussion.access.ts";
+import {
+  createAttachmentsRepository,
+  type AttachmentRecord,
+} from "../learning/discussions/attachments/attachments.repository.ts";
+import { createAttachmentsService } from "../learning/discussions/attachments/attachments.service.ts";
+import { readDiscussionAttachmentUploadContext } from "../learning/discussions/attachments/attachment-upload-context.ts";
+import { createNotesRepository } from "../learning/discussions/notes/notes.repository.ts";
+import { createRepliesRepository } from "../learning/discussions/replies/replies.repository.ts";
+import { createThreadsRepository } from "../learning/discussions/threads/threads.repository.ts";
+import {
+  createDiscussionUploadStore,
+  getDiscussionAttachmentDisposition,
+} from "./discussion-upload.storage.ts";
+
+const fileNameSchema = z.string().regex(/^[0-9a-f-]{36}\.[A-Za-z0-9]{1,16}$/i);
+
+const discussionUploadRoutes: RoutePlugin = async (app, options) => {
+  await app.register(fastifyMultipart, {
+    limits: { files: 1, fileSize: 50_000_000 },
+  });
+
+  const permissions = createDiscussionPermissions(options);
+  const store = createDiscussionUploadStore(options.services.storage);
+  const attachmentsRepo = createAttachmentsRepository();
+  const attachmentsService = createAttachmentsService(
+    attachmentsRepo,
+    store,
+    options.services.storage,
+  );
+  const threadsRepo = createThreadsRepository();
+  const repliesRepo = createRepliesRepository();
+  const notesRepo = createNotesRepository();
+  const discussionAccess = createDiscussionAccess();
+
+  async function isAuthorizedToReadAttachment(
+    db: DatabaseExecutor,
+    actor: DiscussionActor,
+    attachment: AttachmentRecord,
+  ): Promise<boolean> {
+    // Only finished uploads are served. An attachment removed together with
+    // its post is marked deleted and stops being readable, for its owner too.
+    if (attachment.status !== "ready") return false;
+    if (attachment.ownerId === actor.userId) return true;
+    if (!attachment.targetId) return false;
+
+    try {
+      if (attachment.targetType === "thread") {
+        const thread = await threadsRepo.findThreadById(
+          db,
+          attachment.targetId,
+        );
+        if (!thread) return false;
+        await discussionAccess.assertCanAccessThread(db, actor, thread);
+        return true;
+      }
+
+      if (attachment.targetType === "reply") {
+        const reply = await repliesRepo.findReplyById(db, attachment.targetId);
+        if (!reply) return false;
+        const thread = await threadsRepo.findThreadById(db, reply.threadId);
+        if (!thread) return false;
+        await discussionAccess.assertCanAccessThread(db, actor, thread);
+        // A hidden or removed reply keeps its attachment row, so the reply's
+        // own state decides: only course staff still see it.
+        if (reply.status !== "active") {
+          return discussionAccess.canModerateCourse(db, actor, thread.courseId);
+        }
+        return true;
+      }
+
+      if (attachment.targetType === "note") {
+        const note = await notesRepo.findNoteAccessTarget(
+          db,
+          attachment.targetId,
+        );
+        if (!note) return false;
+        if (note.userId === actor.userId) return true;
+        if (note.visibility === "private") return false;
+        await discussionAccess.assertCanAccessCourse(db, actor, note.courseId);
+        return true;
+      }
+    } catch {
+      return false;
+    }
+
+    return false;
+  }
+
+  const uploadResponse = {
+    200: jsonResponse(
+      "Discussion attachment stored",
+      discussionUploadResponseSchema,
+    ),
+    400: errorResponse("A file is required"),
+    401: errorResponse("Unauthorized"),
+    413: errorResponse("The file is too large"),
+    415: errorResponse("The file type is not supported"),
+  };
+
+  const readResponse = {
+    401: errorResponse("Unauthorized"),
+    404: errorResponse("Discussion attachment not found"),
+  };
+
+  app.post(
+    "/discussion-uploads",
+    {
+      config: { rateLimit: DISCUSSION_UPLOAD_RATE_LIMIT },
+      // A list of its own: the limiter is appended to the list it is given,
+      // and the shared one is used by every route in this file.
+      preHandler: [...permissions.requireAuthenticated],
+      schema: {
+        operationId: "uploadDiscussionAttachment",
+        tags: ["Learning Attachments"],
+        summary: "Upload an image or video for discussion markdown",
+        consumes: ["multipart/form-data"],
+        response: uploadResponse,
+      },
+    },
+    async (request, reply) => {
+      const user = request.user!;
+      const file = await request.file();
+      if (!file) {
+        throw httpError(400, "FILE_REQUIRED", "Choose an image or video file.");
+      }
+
+      try {
+        const context = readDiscussionAttachmentUploadContext(file.fields);
+        const result = await attachmentsService.processUpload(
+          options.database,
+          discussionActor(user),
+          context,
+          {
+            filename: file.filename,
+            mimetype: file.mimetype,
+            // Streamed to storage — the buffered path held up to 50MB of
+            // heap per concurrent upload.
+            stream: file.file,
+            isTruncated: () => file.file.truncated,
+          },
+        );
+
+        return reply.code(200).send({
+          url: result.url,
+          fileName: result.fileName,
+          mediaType: result.mediaType === "video" ? "video" : "image",
+          mimeType: result.mimeType,
+          size: result.size,
+        });
+      } catch (error) {
+        // If the service rejected before consuming the stream, drain it so
+        // busboy can finish parsing the request.
+        file.file.resume();
+        if (error instanceof AppError) throw error;
+        const message =
+          error instanceof Error ? error.message : "DISCUSSION_UPLOAD_FAILED";
+        if (message === "DISCUSSION_UPLOAD_TOO_LARGE") {
+          throw httpError(
+            413,
+            "PAYLOAD_TOO_LARGE",
+            "The selected file is too large.",
+          );
+        }
+        throw httpError(
+          415,
+          "UNSUPPORTED_MEDIA_TYPE",
+          "Choose a supported image or video file.",
+        );
+      }
+    },
+  );
+
+  app.get(
+    "/discussion-uploads/:fileName",
+    {
+      preHandler: permissions.requireAuthenticated,
+      schema: {
+        operationId: "getDiscussionAttachment",
+        tags: ["Learning Attachments"],
+        summary: "Read a stored discussion attachment",
+        params: z.object({ fileName: fileNameSchema }),
+        response: readResponse,
+      },
+    },
+    async (request, reply) => {
+      // One answer for "no such file" and "not yours to read".
+      const notFound = () =>
+        httpError(
+          404,
+          "ATTACHMENT_NOT_FOUND",
+          "Discussion attachment not found.",
+        );
+
+      const user = request.user!;
+      const { fileName } = request.params;
+      const attachmentId = fileName.slice(0, fileName.lastIndexOf("."));
+      const attachment = await attachmentsRepo.findAttachmentById(
+        options.database,
+        attachmentId,
+      );
+      if (!attachment) {
+        throw notFound();
+      }
+
+      const authorized = await isAuthorizedToReadAttachment(
+        options.database,
+        discussionActor(user),
+        attachment,
+      );
+      if (!authorized) {
+        throw notFound();
+      }
+
+      const file = await store.get(fileName);
+      if (!file) {
+        throw notFound();
+      }
+
+      return (reply as FastifyReply)
+        .header("Content-Type", file.mimeType)
+        .header("Content-Length", file.size)
+        .header(
+          "Content-Disposition",
+          getDiscussionAttachmentDisposition(
+            file.mimeType,
+            attachment.fileName,
+          ),
+        )
+        .header("X-Content-Type-Options", "nosniff")
+        .header("Cache-Control", "no-store")
+        .send(file.stream);
+    },
+  );
+};
+
+export default discussionUploadRoutes;

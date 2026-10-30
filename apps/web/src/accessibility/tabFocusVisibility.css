@@ -1,0 +1,6 @@
+/* Browsers may retain :focus-visible after shortcuts or fullscreen changes.
+   A root-level input-modality gate cannot be expressed by descendant Tailwind
+   utilities without duplicating it across every interactive component. */
+:root:not([data-tab-navigation="true"]) :focus-visible {
+  outline: none !important;
+}

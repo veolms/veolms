@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:web:lan"],
+      "port": 3000
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:api"],
+      "port": 4000
+    },
+    {
+      "name": "web-preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["preview:web", "--", "--no-lessons"],
+      "port": 4173
+    },
+    {
+      "name": "web-preview-lessons",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["preview:web", "--", "--first-section"],
+      "port": 4173
+    }
+  ]
+}

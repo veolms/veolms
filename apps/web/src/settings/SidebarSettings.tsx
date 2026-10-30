@@ -1,0 +1,852 @@
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { CircleHalfIcon as CircleHalf } from "@phosphor-icons/react/CircleHalf";
+import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
+import { InfoIcon as Info } from "@phosphor-icons/react/Info";
+import { KeyboardIcon as Keyboard } from "@phosphor-icons/react/Keyboard";
+import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { RulerIcon as Ruler } from "@phosphor-icons/react/Ruler";
+import { SidebarSimpleIcon as SidebarSimple } from "@phosphor-icons/react/SidebarSimple";
+import { StackIcon as Stack } from "@phosphor-icons/react/Stack";
+import { TextTIcon as TextT } from "@phosphor-icons/react/TextT";
+import { useEffect, useRef, useState } from "react";
+import { AppSlider } from "../AppSlider";
+import { academyThemes } from "../themes";
+import type { AcademyTheme } from "../themes";
+import { useShortcutPlatform } from "../useShortcutPlatform";
+import {
+  ChoiceCard,
+  RadioGroup,
+  RecommendedBadge,
+  SettingRow,
+  SettingsResetButton,
+  SettingsToggle,
+} from "./SettingsControls";
+import { MiniSurface, SidebarIconPreview } from "./SettingsPreviews";
+import { useAdminOnlySettings } from "./useAdminOnlySettings";
+import {
+  normalizeSidebarMaxWidth,
+  normalizeSidebarGlow,
+  normalizeSidebarGlowBlur,
+  normalizeSidebarGlowShape,
+  normalizeSidebarGlowShapeSize,
+  normalizeSidebarGlowIntensity,
+  SIDEBAR_GLOW_BLUR_MAX,
+  SIDEBAR_GLOW_BLUR_MIN,
+  SIDEBAR_GLOW_BLUR_DEFAULT,
+  SIDEBAR_GLOW_DEFAULT,
+  SIDEBAR_GLOW_INTENSITY_MAX,
+  SIDEBAR_GLOW_INTENSITY_MIN,
+  SIDEBAR_GLOW_INTENSITY_DEFAULT,
+  SIDEBAR_GLOW_SHAPE_DEFAULT,
+  SIDEBAR_GLOW_SHAPE_SIZE_DEFAULT,
+  SIDEBAR_GLOW_SHAPE_SIZE_MAX,
+  SIDEBAR_GLOW_SHAPE_SIZE_MIN,
+  SIDEBAR_MAX_WIDTH_DEFAULT,
+  SIDEBAR_MAX_WIDTH_LIMIT,
+  SIDEBAR_MAX_WIDTH_MIN,
+} from "./settingsPreferences";
+import type {
+  SidebarGlow,
+  SidebarGlowShape,
+  SidebarMode,
+  SidebarPreferences,
+} from "./settingsPreferences";
+
+// Keep Settings in lockstep with the sidebar and mobile palette menus. This is
+// deliberately the shared registry rather than a display-only subset.
+const COLOR_THEMES = academyThemes;
+
+interface SidebarIconColor {
+  id: string;
+  label: string;
+  color: string;
+}
+
+const SIDEBAR_ICON_COLORS: readonly SidebarIconColor[] = [
+  { id: "indigo", label: "Indigo", color: "#6366f1" },
+  { id: "blue", label: "Blue", color: "#1683e3" },
+  { id: "green", label: "Green", color: "#2fb665" },
+  { id: "red", label: "Red", color: "#cc3364" },
+  { id: "orange", label: "Orange", color: "#ed8c00" },
+  { id: "cyan", label: "Cyan", color: "#1bb4c7" },
+];
+
+interface SidebarGlowOption {
+  id: SidebarGlow;
+  label: string;
+  colors?: readonly [string, string];
+}
+
+const SIDEBAR_GLOW_OPTIONS: readonly SidebarGlowOption[] = [
+  {
+    id: "theme",
+    label: "Follow theme",
+    colors: ["var(--accent)", "var(--accent-hover)"],
+  },
+  {
+    id: "blue-yellow",
+    label: "Blue + yellow",
+    colors: ["#2397ff", "#ffc724"],
+  },
+  {
+    id: "green-cyan",
+    label: "Green + cyan",
+    colors: ["#35d77d", "#2bc8e8"],
+  },
+  {
+    id: "red-orange",
+    label: "Red + orange",
+    colors: ["#ff5069", "#ff9f32"],
+  },
+  {
+    id: "purple-blue",
+    label: "Purple + blue",
+    colors: ["#9a6cff", "#4d8fff"],
+  },
+  {
+    id: "magenta-rose",
+    label: "Magenta + rose",
+    colors: ["#f052d4", "#ff718f"],
+  },
+  {
+    id: "off",
+    label: "Off",
+  },
+];
+
+const SIDEBAR_GLOW_SHAPE_OPTIONS: readonly {
+  id: SidebarGlowShape;
+  label: string;
+}[] = [
+  { id: "circle", label: "Circle" },
+  { id: "triangle", label: "Triangle" },
+  { id: "star", label: "Star" },
+  { id: "diamond", label: "Diamond" },
+  { id: "hexagon", label: "Hexagon" },
+];
+
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+export interface SidebarSettingsProps {
+  sidebarPreferences?: SidebarPreferences;
+  onSidebarPreferencesChange?: (preferences: SidebarPreferences) => void;
+  academyTheme: AcademyTheme["id"];
+  sidebarMode: SidebarMode;
+  onSidebarModeChange?: (mode: SidebarMode) => void;
+  // The width the sidebar was dragged to is shell state, kept outside the
+  // preferences, so its reset is handed down separately.
+  sidebarWidthIsDefault?: boolean;
+  onSidebarWidthReset?: () => void;
+}
+
+export function SidebarSettings({
+  sidebarPreferences,
+  onSidebarPreferencesChange,
+  academyTheme,
+  sidebarMode,
+  onSidebarModeChange,
+  sidebarWidthIsDefault = true,
+  onSidebarWidthReset,
+}: SidebarSettingsProps) {
+  const preferences = sidebarPreferences || {};
+  const iconStyle = preferences.iconStyle || "multicolor";
+  const colorMode = preferences.monochromeMode || "theme";
+  const customColor = HEX_COLOR_PATTERN.test(preferences.monochromeColor || "")
+    ? (preferences.monochromeColor ?? "#6366f1")
+    : "#6366f1";
+  const themeColor =
+    COLOR_THEMES.find((item) => item.id === academyTheme)?.preview || "#6366f1";
+  const displayColor =
+    colorMode === "theme"
+      ? themeColor
+      : colorMode === "neutral"
+        ? "#9eacc0"
+        : customColor;
+  const layout = preferences.contentLayout || "framed";
+  const sidebarMaxWidth = normalizeSidebarMaxWidth(preferences.sidebarMaxWidth);
+  const showKeyboardShortcuts = preferences.showKeyboardShortcuts !== false;
+  const showLabels = preferences.showCollapsedLabels !== false;
+  const showCollapsedLogo = preferences.showCollapsedLogo !== false;
+  const showSidebarOnMobile = preferences.showSidebarOnMobile === true;
+  const showResizeDimensions = preferences.showResizeDimensions === true;
+  const highlightActive = preferences.highlightActive !== false;
+  const elevateMenus = preferences.elevateMenus !== false;
+  const glowPalette = normalizeSidebarGlow(preferences.glowPalette);
+  const glowShape = normalizeSidebarGlowShape(preferences.glowShape);
+  const glowShapeSize = normalizeSidebarGlowShapeSize(
+    preferences.glowShapeSize,
+  );
+  const glowBlur = normalizeSidebarGlowBlur(preferences.glowBlur);
+  const glowIntensity = normalizeSidebarGlowIntensity(
+    preferences.glowIntensity,
+  );
+  const glowIsDefault =
+    glowPalette === SIDEBAR_GLOW_DEFAULT &&
+    glowShape === SIDEBAR_GLOW_SHAPE_DEFAULT &&
+    glowShapeSize === SIDEBAR_GLOW_SHAPE_SIZE_DEFAULT &&
+    glowBlur === SIDEBAR_GLOW_BLUR_DEFAULT &&
+    glowIntensity === SIDEBAR_GLOW_INTENSITY_DEFAULT;
+  const widthSettingsAreDefault =
+    sidebarMaxWidth === SIDEBAR_MAX_WIDTH_DEFAULT &&
+    !showResizeDimensions &&
+    sidebarWidthIsDefault;
+  const shortcutPlatform = useShortcutPlatform();
+  // Shown to admins alone (see `useAdminOnlySettings`): the resize
+  // measurements, a tool for building the layout, and two switches whose
+  // rules are only loaded on the settings pages, so they did nothing
+  // anywhere else.
+  const showAdminSettings = useAdminOnlySettings();
+  const sidebarHidden = sidebarMode === "hidden";
+  const [colorDraft, setColorDraft] = useState(displayColor);
+  const [sidebarWidthDraft, setSidebarWidthDraft] = useState(
+    String(sidebarMaxWidth),
+  );
+  const selectedPreset =
+    SIDEBAR_ICON_COLORS.find(
+      (item) => item.color.toLowerCase() === displayColor.toLowerCase(),
+    )?.id || (colorMode === "theme" ? "indigo" : "custom");
+  const update = (next: SidebarPreferences) =>
+    onSidebarPreferencesChange?.({ ...preferences, ...next });
+
+  useEffect(() => {
+    setColorDraft(displayColor);
+  }, [displayColor]);
+
+  useEffect(() => {
+    setSidebarWidthDraft(String(sidebarMaxWidth));
+  }, [sidebarMaxWidth]);
+
+  const commitColorDraft = () => {
+    if (!HEX_COLOR_PATTERN.test(colorDraft)) return;
+    update({
+      monochromeMode: "custom",
+      monochromeColor: colorDraft,
+    });
+  };
+
+  const commitSidebarWidthDraft = () => {
+    const normalizedWidth = normalizeSidebarMaxWidth(sidebarWidthDraft);
+    setSidebarWidthDraft(String(normalizedWidth));
+    update({ sidebarMaxWidth: normalizedWidth });
+  };
+
+  const resetWidthSettings = () => {
+    update({
+      sidebarMaxWidth: SIDEBAR_MAX_WIDTH_DEFAULT,
+      showResizeDimensions: false,
+    });
+    onSidebarWidthReset?.();
+  };
+
+  return (
+    <div className="settings-content settings-sidebar-settings">
+      <section className="settings-section settings-sidebar-header-section">
+        <div className="settings-section__heading-row">
+          <div>
+            <h2>Header behavior</h2>
+            <p>Choose what the sidebar header shows.</p>
+          </div>
+        </div>
+        <div className="settings-row-list settings-sidebar-header-options__rows">
+          <SettingRow
+            icon={SidebarSimple}
+            label="Show logo when collapsed"
+            note="Keep the ProCodrr P visible in the compact rail"
+          >
+            <SettingsToggle
+              checked={showCollapsedLogo}
+              onChange={(value) => update({ showCollapsedLogo: value })}
+              label="Show logo when collapsed"
+            />
+          </SettingRow>
+        </div>
+      </section>
+
+      <div className="settings-sidebar-category-heading">
+        <span aria-hidden="true">
+          <TextT size={21} weight="regular" />
+        </span>
+        <div>
+          <h2>Sidebar menus</h2>
+          <p>
+            Menu items follow your workspace role and stay in a fixed order.
+          </p>
+        </div>
+      </div>
+
+      <>
+        <section className="settings-section">
+          <div className="settings-section__heading-row">
+            <div>
+              <h2>Icon style</h2>
+              <p>Choose how icons are displayed in the sidebar.</p>
+            </div>
+          </div>
+          <RadioGroup
+            label="Sidebar icon style"
+            className="settings-choice-grid settings-choice-grid--two settings-choice-grid--sidebar-style-options"
+          >
+            <ChoiceCard
+              checked={iconStyle === "multicolor"}
+              onChange={() => update({ iconStyle: "multicolor" })}
+              label="Multicolor"
+              note="Each icon is displayed with its own color"
+              className="settings-choice-card--horizontal settings-choice-card--sidebar-style"
+              preview={<SidebarIconPreview />}
+            >
+              <RecommendedBadge />
+            </ChoiceCard>
+            <ChoiceCard
+              checked={iconStyle === "monochrome"}
+              onChange={() => update({ iconStyle: "monochrome" })}
+              label="Monochrome"
+              note="All icons use a single color"
+              className="settings-choice-card--horizontal settings-choice-card--sidebar-style"
+              preview={
+                <SidebarIconPreview monochrome monoColor={displayColor} />
+              }
+            />
+          </RadioGroup>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-section__heading-row">
+            <div>
+              <h2>Icon color</h2>
+              <p>
+                Choose the color used for sidebar icons when Monochrome style is
+                selected.
+              </p>
+            </div>
+            <span className="settings-section__hint">
+              <Info size={16} weight="bold" /> This setting won&apos;t affect
+              Multicolor style
+            </span>
+          </div>
+          <RadioGroup
+            label="Sidebar icon color mode"
+            className="settings-icon-color-options"
+          >
+            {(
+              [
+                ["theme", "Follow color theme"],
+                ["neutral", "Adaptive neutral"],
+                ["custom", "Custom"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={colorMode === id}
+                tabIndex={colorMode === id ? 0 : -1}
+                className={`settings-icon-color-option ${colorMode === id ? "is-selected" : ""}`}
+                onClick={() => update({ monochromeMode: id })}
+              >
+                <span className="settings-radio" aria-hidden="true">
+                  {colorMode === id && <Check size={11} weight="bold" />}
+                </span>
+                <span>
+                  <strong>{label}</strong>
+                  <small>
+                    {id === "theme"
+                      ? "Icons match the current theme color"
+                      : id === "neutral"
+                        ? "Icons adapt to light or dark mode"
+                        : "Choose any color you prefer"}
+                  </small>
+                </span>
+              </button>
+            ))}
+          </RadioGroup>
+          <div className="settings-color-tools settings-color-tools--redesign">
+            <div className="settings-color-tools__quick">
+              <span className="settings-color-tools__label">Quick colors</span>
+              <div
+                className="settings-preset-list"
+                aria-label="Monochrome color presets"
+              >
+                {SIDEBAR_ICON_COLORS.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={`settings-color-swatch ${selectedPreset === item.id ? "is-selected" : ""}`}
+                    aria-label={`${item.label} icon color`}
+                    aria-pressed={selectedPreset === item.id}
+                    onClick={() =>
+                      update({
+                        monochromeMode: "custom",
+                        monochromeColor: item.color,
+                      })
+                    }
+                  >
+                    <i style={{ background: item.color }} />
+                  </button>
+                ))}
+                <span
+                  className="settings-color-swatch-divider"
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  className={`settings-color-swatch settings-color-swatch--custom ${selectedPreset === "custom" ? "is-selected" : ""}`}
+                  aria-label="Custom icon color"
+                  aria-pressed={selectedPreset === "custom"}
+                  onClick={() => update({ monochromeMode: "custom" })}
+                >
+                  <Plus size={18} weight="bold" />
+                  <span>Custom</span>
+                </button>
+              </div>
+            </div>
+            <label className="settings-color-tools__value">
+              <span className="settings-color-tools__label">Color value</span>
+              <span className="settings-hex-input">
+                <span className="sr-only">Custom monochrome icon color</span>
+                <input
+                  type="color"
+                  value={displayColor}
+                  onChange={(event) => {
+                    setColorDraft(event.target.value);
+                    update({
+                      monochromeMode: "custom",
+                      monochromeColor: event.target.value,
+                    });
+                  }}
+                />
+                <input
+                  value={colorDraft}
+                  onChange={(event) => setColorDraft(event.target.value)}
+                  onBlur={commitColorDraft}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    commitColorDraft();
+                  }}
+                  pattern="^#[0-9a-fA-F]{6}$"
+                  aria-invalid={!HEX_COLOR_PATTERN.test(colorDraft)}
+                  aria-label="Custom monochrome icon color hex value"
+                />
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <section className="settings-section settings-sidebar-glow-section">
+          <div className="settings-section__heading-row">
+            <div>
+              <h2>Sidebar glow</h2>
+              <p>
+                Follow the active theme or choose a separate color atmosphere.
+              </p>
+            </div>
+            <SettingsResetButton
+              disabled={glowIsDefault}
+              onReset={() =>
+                update({
+                  glowPalette: SIDEBAR_GLOW_DEFAULT,
+                  glowShape: SIDEBAR_GLOW_SHAPE_DEFAULT,
+                  glowShapeSize: SIDEBAR_GLOW_SHAPE_SIZE_DEFAULT,
+                  glowBlur: SIDEBAR_GLOW_BLUR_DEFAULT,
+                  glowIntensity: SIDEBAR_GLOW_INTENSITY_DEFAULT,
+                })
+              }
+              label="Reset sidebar glow to defaults"
+            />
+          </div>
+          <RadioGroup
+            label="Sidebar glow colors"
+            className="settings-sidebar-glow-options"
+          >
+            {SIDEBAR_GLOW_OPTIONS.map((option) => {
+              const selected = glowPalette === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  tabIndex={selected ? 0 : -1}
+                  className={`settings-sidebar-glow-option${selected ? " is-selected" : ""}`}
+                  onClick={() => update({ glowPalette: option.id })}
+                >
+                  <span
+                    className={`settings-sidebar-glow-option__preview${option.colors ? "" : " is-off"}${glowBlur === 0 ? " is-clear" : ""}`}
+                    style={
+                      option.colors
+                        ? ({
+                            "--settings-sidebar-glow-a": option.colors[0],
+                            "--settings-sidebar-glow-b": option.colors[1],
+                            "--settings-sidebar-preview-blur": `${glowBlur}px`,
+                            "--settings-sidebar-preview-intensity": String(
+                              glowIntensity / 100,
+                            ),
+                          } as React.CSSProperties)
+                        : undefined
+                    }
+                    aria-hidden="true"
+                  />
+                  <span className="settings-sidebar-glow-option__copy">
+                    <strong>{option.label}</strong>
+                  </span>
+                  <span className="settings-radio" aria-hidden="true">
+                    {selected && <Check size={11} weight="bold" />}
+                  </span>
+                </button>
+              );
+            })}
+          </RadioGroup>
+          <div className="settings-sidebar-glow-shape">
+            <h3>Bokeh shape</h3>
+            <RadioGroup
+              label="Bokeh shape"
+              className="settings-sidebar-glow-shape-options"
+            >
+              {SIDEBAR_GLOW_SHAPE_OPTIONS.map((option) => {
+                const selected = glowShape === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    tabIndex={selected ? 0 : -1}
+                    className={`settings-sidebar-glow-shape-option${selected ? " is-selected" : ""}`}
+                    onClick={() => update({ glowShape: option.id })}
+                  >
+                    <span
+                      className={`settings-sidebar-glow-shape-option__preview is-${option.id}`}
+                      aria-hidden="true"
+                    />
+                    <strong>{option.label}</strong>
+                    <span className="settings-radio" aria-hidden="true">
+                      {selected && <Check size={11} weight="bold" />}
+                    </span>
+                  </button>
+                );
+              })}
+            </RadioGroup>
+          </div>
+          <div className="settings-sidebar-glow-size">
+            <div className="settings-sidebar-glow-size__heading">
+              <div>
+                <h3>Size</h3>
+                <p>Scale the bokeh shapes and their ambient glow area.</p>
+              </div>
+              <output
+                className="settings-sidebar-glow-size__value"
+                htmlFor="sidebar-glow-shape-size-range"
+              >
+                {glowShapeSize}%
+              </output>
+            </div>
+            <label
+              className="settings-sidebar-glow-size__range"
+              htmlFor="sidebar-glow-shape-size-range"
+            >
+              <AppSlider
+                id="sidebar-glow-shape-size-range"
+                min={SIDEBAR_GLOW_SHAPE_SIZE_MIN}
+                max={SIDEBAR_GLOW_SHAPE_SIZE_MAX}
+                step="1"
+                value={glowShapeSize}
+                onChange={(event) =>
+                  update({
+                    glowShapeSize: normalizeSidebarGlowShapeSize(
+                      event.target.value,
+                    ),
+                  })
+                }
+                aria-label="Sidebar glow shape size"
+                aria-valuetext={`${glowShapeSize} percent`}
+              />
+              <span
+                className="settings-sidebar-glow-size__labels"
+                aria-hidden="true"
+              >
+                <span>Smaller</span>
+                <span>Default</span>
+                <span>Larger</span>
+              </span>
+            </label>
+          </div>
+          <div className="settings-sidebar-glow-blur">
+            <div className="settings-sidebar-glow-blur__heading">
+              <div>
+                <h3>Bokeh blur</h3>
+                <p>
+                  Add blur above the shapes. The floating sidebar always keeps a
+                  6px base blur.
+                </p>
+              </div>
+              <output
+                className="settings-sidebar-glow-blur__value"
+                htmlFor="sidebar-background-blur-range"
+              >
+                {glowBlur}px
+              </output>
+            </div>
+            <label
+              className="settings-sidebar-glow-blur__range"
+              htmlFor="sidebar-background-blur-range"
+            >
+              <AppSlider
+                id="sidebar-background-blur-range"
+                min={SIDEBAR_GLOW_BLUR_MIN}
+                max={SIDEBAR_GLOW_BLUR_MAX}
+                step="1"
+                value={glowBlur}
+                onChange={(event) =>
+                  update({
+                    glowBlur: normalizeSidebarGlowBlur(event.target.value),
+                  })
+                }
+                aria-label="Additional sidebar bokeh blur"
+                aria-valuetext={`${glowBlur} pixels`}
+              />
+              <span
+                className="settings-sidebar-glow-blur__labels"
+                aria-hidden="true"
+              >
+                <span>{SIDEBAR_GLOW_BLUR_MIN}px</span>
+                <span>{SIDEBAR_GLOW_BLUR_MAX}px</span>
+              </span>
+            </label>
+          </div>
+          <div className="settings-sidebar-glow-intensity">
+            <div className="settings-sidebar-glow-intensity__heading">
+              <div>
+                <h3>Glow intensity</h3>
+                <p>Control the strength of the sidebar atmosphere.</p>
+              </div>
+              <output
+                className="settings-sidebar-glow-intensity__value"
+                htmlFor="sidebar-glow-intensity-range"
+              >
+                {glowIntensity}%
+              </output>
+            </div>
+            <label
+              className="settings-sidebar-glow-intensity__range"
+              htmlFor="sidebar-glow-intensity-range"
+            >
+              <AppSlider
+                id="sidebar-glow-intensity-range"
+                min={SIDEBAR_GLOW_INTENSITY_MIN}
+                max={SIDEBAR_GLOW_INTENSITY_MAX}
+                step="1"
+                value={glowIntensity}
+                onChange={(event) =>
+                  update({
+                    glowIntensity: normalizeSidebarGlowIntensity(
+                      event.target.value,
+                    ),
+                  })
+                }
+                aria-label="Sidebar glow intensity"
+                aria-valuetext={`${glowIntensity} percent`}
+              />
+              <span
+                className="settings-sidebar-glow-intensity__labels"
+                aria-hidden="true"
+              >
+                <span>{SIDEBAR_GLOW_INTENSITY_MIN}%</span>
+                <span>{SIDEBAR_GLOW_INTENSITY_MAX}%</span>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <h2>Main content layout</h2>
+          <RadioGroup
+            label="Main content layout"
+            className="settings-choice-grid settings-choice-grid--two"
+          >
+            <ChoiceCard
+              checked={layout === "framed"}
+              onChange={() => update({ contentLayout: "framed" })}
+              label="Framed"
+              note="Content sits within a framed container with side padding"
+              className="settings-choice-card--horizontal settings-choice-card--layout"
+              preview={<MiniSurface variant="blue" layout="framed" />}
+            />
+            <ChoiceCard
+              checked={layout === "edge-to-edge"}
+              onChange={() => update({ contentLayout: "edge-to-edge" })}
+              label="Edge-to-edge"
+              note="Content spans the full width of the screen"
+              className="settings-choice-card--horizontal settings-choice-card--layout"
+              preview={<MiniSurface variant="blue" layout="edge" />}
+            />
+          </RadioGroup>
+        </section>
+
+        <section className="settings-section settings-sidebar-width-section">
+          <div className="settings-section__heading-row">
+            <div>
+              <h2>Sidebar max width</h2>
+              <p>Set the widest size available when the sidebar is expanded.</p>
+            </div>
+            <SettingsResetButton
+              disabled={widthSettingsAreDefault}
+              onReset={resetWidthSettings}
+              label="Reset sidebar width settings to defaults"
+            />
+          </div>
+          <div className="settings-sidebar-width__controls">
+            <label
+              className="settings-sidebar-width__range"
+              htmlFor="sidebar-max-width-range"
+            >
+              <span>Drag to adjust the maximum width</span>
+              <AppSlider
+                id="sidebar-max-width-range"
+                min={SIDEBAR_MAX_WIDTH_MIN}
+                max={SIDEBAR_MAX_WIDTH_LIMIT}
+                step="1"
+                value={sidebarMaxWidth}
+                onChange={(event) =>
+                  update({
+                    sidebarMaxWidth: normalizeSidebarMaxWidth(
+                      event.target.value,
+                    ),
+                  })
+                }
+                aria-label="Sidebar max width"
+                aria-valuetext={`${sidebarMaxWidth} pixels`}
+              />
+              <span
+                className="settings-sidebar-width__range-labels"
+                aria-hidden="true"
+              >
+                <span>{SIDEBAR_MAX_WIDTH_MIN}px</span>
+                <span>{SIDEBAR_MAX_WIDTH_LIMIT}px</span>
+              </span>
+            </label>
+            <label className="settings-sidebar-width__number">
+              <span>Pixels</span>
+              <input
+                type="number"
+                min={SIDEBAR_MAX_WIDTH_MIN}
+                max={SIDEBAR_MAX_WIDTH_LIMIT}
+                step="1"
+                value={sidebarWidthDraft}
+                onChange={(event) => setSidebarWidthDraft(event.target.value)}
+                onBlur={commitSidebarWidthDraft}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  commitSidebarWidthDraft();
+                }}
+                aria-label="Sidebar max width in pixels"
+              />
+            </label>
+          </div>
+          {showAdminSettings ? (
+            <div className="settings-row-list mt-4">
+              <SettingRow
+                icon={Ruler}
+                label="Show sizes while resizing"
+                note="Display the sidebar width and the main content width in the sidebar's empty space while you drag to resize"
+              >
+                <SettingsToggle
+                  checked={showResizeDimensions}
+                  onChange={(value) => update({ showResizeDimensions: value })}
+                  label="Show sizes while resizing"
+                />
+              </SettingRow>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="settings-section">
+          <h2>Menu behavior</h2>
+          <div className="settings-row-list">
+            <SettingRow
+              icon={Keyboard}
+              label="Show keyboard shortcuts"
+              note="Display shortcut hints when hovering or focusing menu items"
+            >
+              <SettingsToggle
+                checked={showKeyboardShortcuts}
+                onChange={(value) => update({ showKeyboardShortcuts: value })}
+                label="Show keyboard shortcuts"
+              />
+            </SettingRow>
+            {showAdminSettings ? (
+              <>
+                <SettingRow
+                  icon={TextT}
+                  label="Show labels in collapsed mode"
+                  note="Display text labels on hover in collapsed state"
+                >
+                  <SettingsToggle
+                    checked={showLabels}
+                    onChange={(value) => update({ showCollapsedLabels: value })}
+                    label="Show labels in collapsed mode"
+                  />
+                </SettingRow>
+                <SettingRow
+                  icon={CircleHalf}
+                  label="Highlight active item with filled background"
+                  note="Use a filled background for the active menu item"
+                >
+                  <SettingsToggle
+                    checked={highlightActive}
+                    onChange={(value) => update({ highlightActive: value })}
+                    label="Highlight active item with filled background"
+                  />
+                </SettingRow>
+              </>
+            ) : null}
+            <SettingRow
+              icon={Stack}
+              label="Elevate sidebar menus"
+              note="Add subtle edge light and depth to sidebar menu items"
+            >
+              <SettingsToggle
+                checked={elevateMenus}
+                onChange={(value) => update({ elevateMenus: value })}
+                label="Elevate sidebar menus"
+              />
+            </SettingRow>
+            <SettingRow
+              icon={DeviceMobile}
+              label="Show sidebar on mobile"
+              note="Hides the bottom navigation. Swipe right from the left edge to open the sidebar."
+            >
+              <SettingsToggle
+                checked={showSidebarOnMobile}
+                onChange={(value) => update({ showSidebarOnMobile: value })}
+                label="Show sidebar on mobile"
+              />
+            </SettingRow>
+            <SettingRow
+              icon={SidebarSimple}
+              label="Hide sidebar"
+              note={
+                <>
+                  Bring it back with{" "}
+                  <kbd>{shortcutPlatform === "mac" ? "⌘+B" : "Ctrl+B"}</kbd>, or
+                  use the left screen edge. On touch screens, swipe right from
+                  the left side to preview it, then use the expand control to
+                  pin it.
+                </>
+              }
+            >
+              <SettingsToggle
+                checked={sidebarHidden}
+                onChange={(value) =>
+                  onSidebarModeChange?.(value ? "hidden" : "expanded")
+                }
+                label="Hide sidebar"
+              />
+            </SettingRow>
+          </div>
+        </section>
+      </>
+    </div>
+  );
+}

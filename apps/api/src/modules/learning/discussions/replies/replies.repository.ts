@@ -1,0 +1,348 @@
+import type { DatabaseExecutor } from "@veolms/database";
+import type {
+  InteractionStatus,
+  ListLearningRepliesQuery,
+  UpdateLearningReplyRequest,
+} from "@veolms/contracts";
+import { sql } from "kysely";
+import {
+  authorRoleSql,
+  type DiscussionListCursor,
+} from "../shared/discussion.utils.ts";
+import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
+
+export interface ReplyRowWithAuthor {
+  id: string;
+  threadId: string;
+  parentReplyId: string | null;
+  replyToReplyId: string | null;
+  replyToUserId: string | null;
+  userId: string;
+  content: string;
+  plainText: string;
+  timestampSeconds: number | null;
+  isAccepted: boolean;
+  status: InteractionStatus;
+  likesCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  authorName: string | null;
+  authorUsername: string | null;
+  authorAvatarUrl: string | null;
+  authorRole: string | null;
+}
+
+export interface RepliesRepository {
+  createReply(
+    db: DatabaseExecutor,
+    reply: {
+      id: string;
+      threadId: string;
+      parentReplyId: string | null;
+      replyToReplyId?: string | null;
+      replyToUserId?: string | null;
+      userId: string;
+      content: string;
+      plainText: string;
+      timestampSeconds: number | null;
+    },
+  ): Promise<void>;
+
+  findReplyById(
+    db: DatabaseExecutor,
+    replyId: string,
+  ): Promise<ReplyRowWithAuthor | null>;
+
+  listRepliesByThreadId(
+    db: DatabaseExecutor,
+    threadId: string,
+    options: ListLearningRepliesQuery & { pageCursor?: DiscussionListCursor },
+  ): Promise<ReplyRowWithAuthor[]>;
+
+  countRepliesByThreadId(
+    db: DatabaseExecutor,
+    threadId: string,
+  ): Promise<number>;
+
+  updateReply(
+    db: DatabaseExecutor,
+    replyId: string,
+    updates: UpdateLearningReplyRequest & { plainText?: string },
+  ): Promise<void>;
+
+  deleteReply(db: DatabaseExecutor, replyId: string): Promise<boolean>;
+
+  setStatus(
+    db: DatabaseExecutor,
+    replyId: string,
+    status: InteractionStatus,
+  ): Promise<void>;
+
+  setAcceptedStatus(
+    db: DatabaseExecutor,
+    replyId: string,
+    isAccepted: boolean,
+  ): Promise<void>;
+
+  incrementLikesCount(
+    db: DatabaseExecutor,
+    replyId: string,
+    delta: number,
+  ): Promise<void>;
+
+  /**
+   * Attaches the owner's own ready, still-unattached uploads to the reply
+   * in one statement and returns the ids that were attached.
+   */
+  attachOwnedUploads(
+    db: DatabaseExecutor,
+    input: { attachmentIds: string[]; ownerId: string; replyId: string },
+  ): Promise<Array<{ id: string }>>;
+
+  /** Marks every attachment of the reply as deleted. */
+  markAttachmentsDeleted(db: DatabaseExecutor, replyId: string): Promise<void>;
+
+  /** Which of the given replies the user has liked. */
+  listReplyLikes(
+    db: DatabaseExecutor,
+    userId: string,
+    replyIds: string[],
+  ): Promise<Array<{ target_id: string }>>;
+}
+
+export function createRepliesRepository(): RepliesRepository {
+  return {
+    async createReply(db, reply) {
+      await db
+        .insertInto("learning_replies")
+        .values({
+          id: reply.id,
+          thread_id: reply.threadId,
+          parent_reply_id: reply.parentReplyId,
+          reply_to_reply_id: reply.replyToReplyId || null,
+          reply_to_user_id: reply.replyToUserId || null,
+          user_id: reply.userId,
+          content: reply.content,
+          plain_text: reply.plainText,
+          timestamp_seconds: reply.timestampSeconds,
+          is_accepted: false,
+          status: "active",
+          likes_count: 0,
+        })
+        .execute();
+    },
+
+    async findReplyById(db, replyId) {
+      const row = await db
+        .selectFrom("learning_replies as r")
+        // Active accounts only: a reply by a deactivated account stays in
+        // the thread and is presented without an author.
+        .leftJoin("users as u", (join) =>
+          join.onRef("u.id", "=", "r.user_id").on("u.is_deleted", "=", false),
+        )
+        .select([
+          "r.id as id",
+          "r.thread_id as threadId",
+          "r.parent_reply_id as parentReplyId",
+          "r.reply_to_reply_id as replyToReplyId",
+          "r.reply_to_user_id as replyToUserId",
+          "r.user_id as userId",
+          "r.content as content",
+          "r.plain_text as plainText",
+          "r.timestamp_seconds as timestampSeconds",
+          "r.is_accepted as isAccepted",
+          "r.status as status",
+          "r.likes_count as likesCount",
+          "r.created_at as createdAt",
+          "r.updated_at as updatedAt",
+          "u.display_name as authorName",
+          "u.username as authorUsername",
+          "u.avatar_data_url as authorAvatarUrl",
+          authorRoleSql("r.user_id"),
+        ])
+        .where("r.id", "=", replyId)
+        .executeTakeFirst();
+
+      return (row as ReplyRowWithAuthor | undefined) ?? null;
+    },
+
+    async listRepliesByThreadId(db, threadId, options) {
+      let query = db
+        .selectFrom("learning_replies as r")
+        // Active accounts only: a reply by a deactivated account stays in
+        // the thread and is presented without an author.
+        .leftJoin("users as u", (join) =>
+          join.onRef("u.id", "=", "r.user_id").on("u.is_deleted", "=", false),
+        )
+        .select([
+          "r.id as id",
+          "r.thread_id as threadId",
+          "r.parent_reply_id as parentReplyId",
+          "r.reply_to_reply_id as replyToReplyId",
+          "r.reply_to_user_id as replyToUserId",
+          "r.user_id as userId",
+          "r.content as content",
+          "r.plain_text as plainText",
+          "r.timestamp_seconds as timestampSeconds",
+          "r.is_accepted as isAccepted",
+          "r.status as status",
+          "r.likes_count as likesCount",
+          "r.created_at as createdAt",
+          "r.updated_at as updatedAt",
+          "u.display_name as authorName",
+          "u.username as authorUsername",
+          "u.avatar_data_url as authorAvatarUrl",
+          authorRoleSql("r.user_id"),
+        ])
+        .where("r.thread_id", "=", threadId)
+        .where("r.status", "=", "active");
+
+      if (options.pageCursor) {
+        const cursor = options.pageCursor;
+        const accepted = cursor.isAccepted === true;
+        const createdAt = exactCursorTimestamp(
+          ["learning_replies"],
+          "created_at",
+          cursor.id,
+          cursor.createdAt,
+        );
+        query = query.where(
+          sql<boolean>`(
+            (
+              r.is_accepted = ${accepted}
+              and (
+                r.created_at > ${createdAt}
+                or (
+                  r.created_at = ${createdAt}
+                  and r.id > ${cursor.id}::uuid
+                )
+              )
+            )
+            or r.is_accepted < ${accepted}
+          )`,
+        );
+      }
+
+      // The accepted answer first, then the conversation as it happened:
+      // the oldest reply first, the newest last.
+      const rows = await query
+        .orderBy("r.is_accepted", "desc")
+        .orderBy("r.created_at", "asc")
+        .orderBy("r.id", "asc")
+        .limit(options.limit + 1)
+        .execute();
+
+      return rows as ReplyRowWithAuthor[];
+    },
+
+    async countRepliesByThreadId(db, threadId) {
+      const row = await db
+        .selectFrom("learning_replies")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .where("thread_id", "=", threadId)
+        .where("status", "=", "active")
+        .executeTakeFirst();
+      return Number(row?.count ?? 0);
+    },
+
+    async updateReply(db, replyId, updates) {
+      const updateData: {
+        updated_at: Date;
+        content?: string;
+        plain_text?: string;
+        timestamp_seconds?: number | null;
+      } = {
+        updated_at: new Date(),
+      };
+      if (updates.content !== undefined) updateData.content = updates.content;
+      if (updates.plainText !== undefined)
+        updateData.plain_text = updates.plainText;
+      if (updates.timestampSeconds !== undefined)
+        updateData.timestamp_seconds = updates.timestampSeconds;
+
+      await db
+        .updateTable("learning_replies")
+        .set(updateData)
+        .where("id", "=", replyId)
+        .execute();
+    },
+
+    async deleteReply(db, replyId) {
+      const result = await db
+        .updateTable("learning_replies")
+        .set({
+          status: "deleted",
+          updated_at: new Date(),
+        })
+        .where("id", "=", replyId)
+        .where("status", "!=", "deleted")
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows) > 0;
+    },
+
+    async setStatus(db, replyId, status) {
+      await db
+        .updateTable("learning_replies")
+        .set({
+          status,
+          updated_at: new Date(),
+        })
+        .where("id", "=", replyId)
+        .execute();
+    },
+
+    async setAcceptedStatus(db, replyId, isAccepted) {
+      await db
+        .updateTable("learning_replies")
+        .set({
+          is_accepted: isAccepted,
+        })
+        .where("id", "=", replyId)
+        .execute();
+    },
+
+    async incrementLikesCount(db, replyId, delta) {
+      await db
+        .updateTable("learning_replies")
+        .set((eb) => ({
+          likes_count: sql`GREATEST(0, ${eb.ref("likes_count")} + ${delta})`,
+        }))
+        .where("id", "=", replyId)
+        .execute();
+    },
+
+    async attachOwnedUploads(db, { attachmentIds, ownerId, replyId }) {
+      return db
+        .updateTable("learning_attachments")
+        .set({
+          target_type: "reply",
+          target_id: replyId,
+        })
+        .where("id", "in", attachmentIds)
+        .where("owner_id", "=", ownerId)
+        .where("status", "=", "ready")
+        .where("target_id", "is", null)
+        .returning("id")
+        .execute();
+    },
+
+    async markAttachmentsDeleted(db, replyId) {
+      await db
+        .updateTable("learning_attachments")
+        .set({ status: "deleted" })
+        .where("target_type", "=", "reply")
+        .where("target_id", "=", replyId)
+        .execute();
+    },
+
+    async listReplyLikes(db, userId, replyIds) {
+      return db
+        .selectFrom("learning_likes")
+        .select("target_id")
+        .where("user_id", "=", userId)
+        .where("target_type", "=", "reply")
+        .where("target_id", "in", replyIds)
+        .execute();
+    },
+  };
+}

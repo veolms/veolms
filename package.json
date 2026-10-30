@@ -9,11 +9,22 @@
   },
   "scripts": {
     "dev": "turbo run dev --filter=@veolms/api --filter=@veolms/web",
+    "dev:lan": "turbo run dev:lan --filter=@veolms/api --filter=@veolms/web",
     "dev:web": "pnpm --filter @veolms/web dev",
+    "dev:web:lan": "pnpm --filter @veolms/web dev --host",
+    "preview:web": "pnpm --filter @veolms/web preview -- --port 4173",
+    "preview:web:lan": "pnpm --filter @veolms/web preview -- --host 0.0.0.0 --port 4173",
     "dev:api": "pnpm --filter @veolms/api dev",
+    "start:api": "pnpm --filter @veolms/api start",
+    "purge:course-deletions": "pnpm --filter @veolms/api purge:course-deletions",
+    "notifications:process": "pnpm --filter @veolms/api notifications:process",
+    "notifications:watch": "pnpm --filter @veolms/api notifications:watch",
+    "user:cli": "pnpm --filter @veolms/api user:cli",
+    "import:youtube": "pnpm --filter @veolms/api import:youtube",
     "build": "turbo run build",
     "build:web": "pnpm --filter @veolms/web build",
     "build:api": "pnpm --filter @veolms/api build",
+    "deploy:web": "pnpm build:web && wrangler deploy",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -21,21 +32,31 @@
     "db:migrate": "pnpm --filter @veolms/database migrate",
     "db:seed": "pnpm --filter @veolms/database seed",
     "db:reset": "pnpm --filter @veolms/database reset",
-    "compose:up": "docker compose up -d",
-    "compose:down": "docker compose down",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
+    "test:api": "pnpm --filter @veolms/api test",
+    "test:flows": "pnpm --filter @veolms/api test:flows",
+    "test:browser": "pnpm --filter @veolms/web test:browser",
+    "test:all": "pnpm test:api && pnpm test:flows && pnpm test:browser",
+    "migration:create": "pnpm --filter @veolms/database migration:create",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@typescript/native": "npm:typescript@^7.0.2",
     "@types/node": "^24.10.13",
+    "@typescript/native": "catalog:",
     "eslint": "^9.39.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^17.3.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "prettier": "^3.9.6",
     "turbo": "^2.10.8",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.65.0",
+    "wrangler": "^4.131.2"
+  },
+  "lint-staged": {
+    "*": "node ./node_modules/prettier/bin/prettier.cjs --write --ignore-unknown"
   }
 }

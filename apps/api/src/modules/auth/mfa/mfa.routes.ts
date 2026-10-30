@@ -1,0 +1,290 @@
+import {
+  authMessageResponseSchema,
+  backupCodesResponseSchema,
+  passkeyAuthenticationOptionsResponseSchema,
+  passkeyLoginVerifyRequestSchema,
+  passkeyRegisterVerifyRequestSchema,
+  passkeyRegisterVerifyResponseSchema,
+  passkeyRegistrationOptionsResponseSchema,
+  totpEnableRequestSchema,
+  totpEnableResponseSchema,
+  totpSetupResponseSchema,
+  totpVerifyRequestSchema,
+} from "@veolms/contracts";
+
+import { errorResponse } from "../../../lib/errors.ts";
+import { jsonResponse } from "../../../lib/responses.ts";
+import type { RoutePlugin } from "../../../lib/route-plugin.ts";
+import { createAuthContext } from "../shared/auth.context.ts";
+import { createMfaController } from "./mfa.controller.ts";
+
+const mfaRoutes: RoutePlugin = async (app, options) => {
+  const context = createAuthContext(options);
+  const controller = createMfaController(context);
+
+  app.post(
+    "/auth/totp/setup",
+    {
+      schema: {
+        operationId: "setupTotp",
+        tags: ["Auth"],
+        summary: "Generate TOTP Secret",
+        description:
+          "Generates a dynamic base32 MFA secret and provisioning URL challenge.",
+        response: {
+          200: jsonResponse("MFA secret metadata.", totpSetupResponseSchema),
+          401: errorResponse("Unauthorized."),
+          403: errorResponse(
+            "Two-factor sign-in is turned off for students on this academy.",
+          ),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.setupTotp,
+  );
+
+  app.post(
+    "/auth/totp/enable",
+    {
+      schema: {
+        operationId: "enableTotp",
+        tags: ["Auth"],
+        summary: "Activate TOTP Authenticator",
+        description:
+          "Validates verification code and registers authenticator. Outputs 10 backup recovery codes.",
+        body: totpEnableRequestSchema,
+        response: {
+          200: jsonResponse(
+            "TOTP enabled successfully. Recovery backup codes returned.",
+            totpEnableResponseSchema,
+          ),
+          400: errorResponse("Verification failed."),
+          401: errorResponse("Unauthorized."),
+          403: errorResponse(
+            "Step-up MFA required to replace existing factor.",
+          ),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.enableTotp,
+  );
+
+  app.post(
+    "/auth/backup-codes",
+    {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 minute",
+        },
+      },
+      schema: {
+        operationId: "regenerateBackupCodes",
+        tags: ["Auth"],
+        summary: "Regenerate Backup Codes",
+        description:
+          "Replaces the account's single-use backup codes and returns the new set once. The previous codes stop working.",
+        response: {
+          200: jsonResponse(
+            "New backup recovery codes.",
+            backupCodesResponseSchema,
+          ),
+          400: errorResponse("No MFA factor is enrolled."),
+          401: errorResponse("Unauthorized."),
+          403: errorResponse("Step-up MFA required."),
+        },
+      },
+      preHandler: context.mfaVerified,
+    },
+    controller.regenerateBackupCodes,
+  );
+
+  app.delete(
+    "/auth/totp",
+    {
+      schema: {
+        operationId: "disableTotp",
+        tags: ["Auth"],
+        summary: "Disable TOTP Authenticator",
+        description:
+          "Removes TOTP authenticator credentials and associated backup recovery codes.",
+        response: {
+          200: jsonResponse(
+            "TOTP disabled successfully.",
+            authMessageResponseSchema,
+          ),
+          400: errorResponse("Cannot disable mandatory MFA."),
+          401: errorResponse("Unauthorized."),
+          403: errorResponse("Step-up MFA required."),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.disableTotp,
+  );
+
+  app.delete(
+    "/auth/passkey",
+    {
+      schema: {
+        operationId: "deletePasskeys",
+        tags: ["Auth"],
+        summary: "Delete All Passkeys",
+        description:
+          "Removes all registered WebAuthn passkey credentials for the user.",
+        response: {
+          200: jsonResponse(
+            "Passkeys removed successfully.",
+            authMessageResponseSchema,
+          ),
+          400: errorResponse("Cannot disable mandatory MFA."),
+          401: errorResponse("Unauthorized."),
+          403: errorResponse("Step-up MFA required."),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.deletePasskeys,
+  );
+
+  app.post(
+    "/auth/totp/verify",
+    {
+      // Six-digit code space: without a per-IP cap this is brute-forceable
+      // at wire speed (the TOTP step counter alone does not bound tries).
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
+      },
+      schema: {
+        operationId: "verifyTotpCode",
+        tags: ["Auth"],
+        summary: "Verify TOTP Authenticator Code",
+        description:
+          "Validates a 6-digit TOTP code or 8-digit backup code to complete step-up MFA login.",
+        body: totpVerifyRequestSchema,
+        response: {
+          200: jsonResponse("MFA verified.", authMessageResponseSchema),
+          400: errorResponse("TOTP is not enabled."),
+          401: errorResponse("Incorrect code or unauthorized."),
+          429: errorResponse("Too many failed attempts."),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.verifyTotp,
+  );
+
+  app.post(
+    "/auth/passkey/register/options",
+    {
+      schema: {
+        operationId: "getPasskeyRegisterOptions",
+        tags: ["Auth"],
+        summary: "Generate Passkey Registration Options",
+        description:
+          "Creates options challenge payload to register a new WebAuthn credential.",
+        response: {
+          200: jsonResponse(
+            "Passkey options challenge.",
+            passkeyRegistrationOptionsResponseSchema,
+          ),
+          401: errorResponse("Unauthorized."),
+          403: errorResponse(
+            "Step-up MFA required to replace existing factor, or two-factor sign-in is turned off for students.",
+          ),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.registerOptions,
+  );
+
+  app.post(
+    "/auth/passkey/register/verify",
+    {
+      schema: {
+        operationId: "verifyPasskeyRegister",
+        tags: ["Auth"],
+        summary: "Verify Passkey Registration Response",
+        description:
+          "Verifies the browser WebAuthn response signature and saves credential to user keys. Returns backup recovery codes when the account has none.",
+        body: passkeyRegisterVerifyRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Passkey registered successfully.",
+            passkeyRegisterVerifyResponseSchema,
+          ),
+          400: errorResponse(
+            "Verification challenge expired or validation failed.",
+          ),
+          401: errorResponse("Unauthorized."),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.registerVerify,
+  );
+
+  app.post(
+    "/auth/passkey/login/options",
+    {
+      schema: {
+        operationId: "getPasskeyLoginOptions",
+        tags: ["Auth"],
+        summary: "Generate Passkey Login Options",
+        description:
+          "Creates options challenge payload to complete WebAuthn login assertion.",
+        response: {
+          200: jsonResponse(
+            "Passkey options challenge.",
+            passkeyAuthenticationOptionsResponseSchema,
+          ),
+          401: errorResponse("Unauthorized."),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.loginOptions,
+  );
+
+  app.post(
+    "/auth/passkey/login/verify",
+    {
+      // Step-up verification for a session that has only passed its first
+      // factor — cap per-IP like the other login verifiers.
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
+      },
+      schema: {
+        operationId: "verifyPasskeyLogin",
+        tags: ["Auth"],
+        summary: "Verify Passkey Login Response",
+        description:
+          "Verifies browser WebAuthn assertion signature, completing step-up MFA login.",
+        body: passkeyLoginVerifyRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Passkey verified successfully.",
+            authMessageResponseSchema,
+          ),
+          400: errorResponse(
+            "Challenge expired or passkey credential missing.",
+          ),
+          401: errorResponse("Incorrect code or signature validation failed."),
+        },
+      },
+      preHandler: context.authenticated,
+    },
+    controller.loginVerify,
+  );
+};
+
+export default mfaRoutes;

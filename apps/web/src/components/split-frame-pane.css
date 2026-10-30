@@ -1,0 +1,292 @@
+/* SplitFramePane: the shell's frame split into two cards, the page and a
+   pane beside it, with a 12px gutter between them that resizes the pane. The
+   desktop lesson page (its course content) and the Discussions page (the
+   open discussion) are built on it.
+
+   Plain CSS because Tailwind cannot reasonably express it: the shell and its
+   frame (ancestors of the page) have to change shape, their pseudo-elements
+   change role, the width is held in registered properties that are not
+   inherited, and the rules replace legacy unlayered declarations on the same
+   elements.
+
+   How it works: the frame is the only box that can clip both the page
+   scroller and the lesson's persistent player, so the frame itself becomes
+   the page's card and narrows to make room. The pane is a fixed card in the
+   space that frees up. Each keeps its own scroller.
+
+   When it applies. SplitFramePane marks the shell and the frame
+   (`data-split-frame`) while a pane is open and its `media` matches. Before
+   any script has run, a prerendered page's pane (the lesson page's) is found
+   by searching the frame for it instead, for as long as the document says
+   the window is wide enough for it (`data-split-frame-prerendered`, set by
+   the head bootstrap script, see splitFrame.ts). The mark comes first in
+   each pair, so a marked shell is never searched; the search is costly
+   because the shell and the frame are re-styled on every frame of a drag.
+
+   The width, and why none of the properties below is inherited. A width
+   that changes on every frame of a drag cannot be inherited: each change
+   would re-style the whole page. So each element sized from the width (the
+   shell's overlay, the frame, the pane, and the page's own elements marked
+   `data-split-frame-sized`) works out its own copy, `--split-frame-width`,
+   and animates that copy when the width at rest changes. The copy comes
+   from, in order:
+   - `--split-frame-drag-width`: the width a drag has reached, written on
+     those elements while the gutter is held (splitFrame.ts);
+   - `--split-frame-target-width`: the width at rest, written on the shell,
+     the frame and the pane by SplitFramePane when the page passes one;
+   - `--split-frame-page-width`: an inherited width the page sets for itself
+     in its own stylesheet, for a width that must be right at first paint
+     (the lesson page takes it from the document's
+     `--learning-curriculum-width`, set by a head script).
+   The two written ones are registered without an initial value, so that
+   `var()` falls through them whenever they are not set.
+
+   A width of 0 is a closed pane. Over its last 12px the gutter's share is
+   given back too, so the page's card ends up at its full width; the gutter
+   itself does not shrink: the pane keeps its 12px distance from the page's
+   card and slides out past the window's edge instead (its `right`). */
+@property --split-frame-drag-width {
+  syntax: "*";
+  inherits: false;
+}
+
+@property --split-frame-target-width {
+  syntax: "*";
+  inherits: false;
+}
+
+/* `none` until an element is given a width, and a width cannot be animated
+   from `none`. The shell and its frame are on screen before a page's pane
+   is; with a length here they would slide from it to the real width as the
+   pane arrives, instead of starting there. */
+@property --split-frame-width {
+  syntax: "<length> | none";
+  inherits: false;
+  initial-value: none;
+}
+
+@property --split-frame-gap {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 12px;
+}
+
+/* The room the pane takes from the page's card: its width and the gutter. */
+@property --split-frame-space {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@media (min-width: 1024px) {
+  /* Everything sized from the width takes its own copy of it and animates
+     that copy, all with the same timing, so they move as one. Not the shell
+     itself: it has a transition of its own (the sidebar's), which this
+     would replace; its overlay asks for the widths written on the shell. */
+  :root[data-content-layout="framed"]
+    .courses-app:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered]
+        :has(> .courses-main-frame [data-split-frame-pane])
+    )::after,
+  :root[data-content-layout="framed"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    ),
+  :root[data-content-layout="framed"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    )
+    :is([data-split-frame-pane], [data-split-frame-sized]) {
+    --split-frame-width: var(
+      --split-frame-drag-width,
+      var(--split-frame-target-width, var(--split-frame-page-width, 0px))
+    );
+    --split-frame-gap: min(12px, var(--split-frame-width));
+    --split-frame-space: calc(
+      var(--split-frame-width) + var(--split-frame-gap)
+    );
+    transition: --split-frame-width 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Keep the width a head script set on first paint, and follow the pointer
+     exactly while the gutter is dragged. */
+  :root[data-content-layout="framed"][data-app-hydrated="false"]
+    .courses-app:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered]
+        :has(> .courses-main-frame [data-split-frame-pane])
+    )::after,
+  :root[data-content-layout="framed"]
+    .courses-app:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered]
+        :has(> .courses-main-frame [data-split-frame-pane])
+    )[data-split-frame-resizing]::after,
+  :root[data-content-layout="framed"][data-app-hydrated="false"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    ),
+  :root[data-content-layout="framed"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    )[data-split-frame-resizing],
+  :root[data-content-layout="framed"][data-app-hydrated="false"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    )
+    :is([data-split-frame-pane], [data-split-frame-sized]),
+  :root[data-content-layout="framed"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    )[data-split-frame-resizing]
+    :is([data-split-frame-pane], [data-split-frame-sized]) {
+    transition: none;
+  }
+
+  /* The shell normally draws the edge highlight of the full-width frame (its
+     overlay with a mouse, FrameEdge on touch devices); here the frame draws
+     its own below, at whatever width it has, and the shell's is not drawn. */
+  :root[data-content-layout="framed"]
+    .courses-app:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered]
+        :has(> .courses-main-frame [data-split-frame-pane])
+    )
+    > [data-frame-edge="shell"] {
+    display: none;
+  }
+
+  /* The shell's overlay box becomes the pane's shadow instead. It has to sit
+     at shell level, above the lesson player's ambient glow and under the
+     page's card: a shadow on the pane itself is painted over the page's
+     card, and cutting it off at the gutter leaves a hard edge in the glow. */
+  :root[data-content-layout="framed"]
+    .courses-app:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered]
+        :has(> .courses-main-frame [data-split-frame-pane])
+    )::after {
+    --split-frame-drag-width: inherit;
+    --split-frame-target-width: inherit;
+    z-index: 0;
+    left: auto;
+    width: var(--split-frame-width);
+    box-shadow: var(--application-frame-shadow, var(--card-shadow));
+  }
+
+  /* The frame, now the page's card, makes room for the pane and the gutter. */
+  :root[data-content-layout="framed"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    ) {
+    position: relative;
+    margin-right: var(--split-frame-space);
+  }
+
+  /* The page card's own edge highlight, above the page: an overlay with a
+     mouse or trackpad, FrameEdge's strips on touch devices (FrameEdge
+     explains the split, and why its group has no box). */
+  @media not (pointer: coarse) {
+    :root[data-content-layout="framed"]
+      .courses-main-frame:is(
+        [data-split-frame],
+        :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+      )::after {
+      content: "";
+      position: absolute;
+      z-index: 46;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: var(
+        --application-frame-edge-shadow,
+        var(--surface-depth-edge-shadow, none)
+      );
+    }
+  }
+
+  @media (pointer: coarse) {
+    :root[data-content-layout="framed"]
+      .courses-main-frame:is(
+        [data-split-frame],
+        :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+      )
+      > [data-frame-edge="lesson"] {
+      display: contents;
+    }
+  }
+
+  :root[data-content-layout="framed"]
+    .courses-main-frame:is(
+      [data-split-frame],
+      :root[data-split-frame-prerendered] :has([data-split-frame-pane])
+    ) {
+    /* Matches the frame: 12px from the top and right of the shell, and the
+       frame's height. */
+    & [data-split-frame-pane] {
+      position: fixed;
+      z-index: 40;
+      top: 12px;
+      right: var(--split-frame-gap);
+      width: var(--split-frame-width);
+      height: calc(100dvh - var(--shell-frame-block-space, 22px));
+      border-radius: 18px;
+    }
+
+    /* The card is the pane itself, or an element inside it that moves on
+       its own (the lesson page's course content, which the player's
+       minimize and expand motions carry). */
+    & [data-split-frame-card] {
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--surface) 91%, var(--canvas));
+    }
+
+    & [data-split-frame-card]:not([data-split-frame-pane]) {
+      position: relative;
+      top: auto;
+      height: 100%;
+    }
+
+    /* The card's shadow is painted by the shell overlay above. */
+    & [data-split-frame-card]::after {
+      content: "";
+      position: absolute;
+      z-index: 13;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: var(
+        --application-frame-edge-shadow,
+        var(--surface-depth-edge-shadow, none)
+      );
+    }
+
+    /* The whole gutter resizes, not only the grip in its middle, and the
+       rail reaches 2px over the card on either side of it so it is easier
+       to catch. The gutter is always the 12px before the pane's edge,
+       whether the pane is open, closing or closed (when the gutter is the
+       page's own margin beside its card), so this one rule serves every
+       state. */
+    & [data-split-frame-pane] [data-split-frame-gutter] {
+      position: absolute;
+      z-index: 12;
+      top: 0;
+      bottom: 0;
+      left: -14px;
+      display: flex;
+      width: 16px;
+      align-items: center;
+      justify-content: center;
+      cursor: e-resize;
+      touch-action: none;
+    }
+  }
+}

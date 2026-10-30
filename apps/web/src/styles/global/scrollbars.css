@@ -1,0 +1,127 @@
+/* Use the same quiet, trackless scrollbar treatment for the document and
+   nested scrollports. The transparent channel leaves only a mobile-like thumb
+   visible, while component-level scrollbar-none rules remain authoritative. */
+:root {
+  --scrollbar-thumb-size: 6px;
+  --scrollbar-firefox-width: thin;
+  --scrollbar-track-block-inset: 8px;
+  --scrollbar-track-color: transparent;
+  --scrollbar-thumb-color: color-mix(in srgb, var(--accent) 96%, transparent);
+  --scrollbar-thumb-hover-color: color-mix(
+    in srgb,
+    var(--accent-hover, var(--accent)) 100%,
+    transparent
+  );
+}
+
+:where(
+  html:not([data-scrollbar-style="default"]),
+  html:not([data-scrollbar-style="default"]) *
+) {
+  scrollbar-width: var(--scrollbar-firefox-width);
+  scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
+}
+
+/* Keep the native browser/OS treatment for Default. */
+:where(
+  html[data-scrollbar-style="default"],
+  html[data-scrollbar-style="default"] *
+) {
+  scrollbar-width: thin;
+}
+
+:where(
+  html:not([data-scrollbar-style="default"]),
+  html:not([data-scrollbar-style="default"]) *
+)::-webkit-scrollbar {
+  display: block;
+  width: var(--scrollbar-thumb-size);
+  height: var(--scrollbar-thumb-size);
+  background: transparent;
+}
+
+:where(
+  html:not([data-scrollbar-style="default"]),
+  html:not([data-scrollbar-style="default"]) *
+)::-webkit-scrollbar-track,
+:where(
+  html:not([data-scrollbar-style="default"]),
+  html:not([data-scrollbar-style="default"]) *
+)::-webkit-scrollbar-track-piece,
+:where(
+  html:not([data-scrollbar-style="default"]),
+  html:not([data-scrollbar-style="default"]) *
+)::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track-color);
+}
+
+:where(
+    html:not([data-scrollbar-style="default"]),
+    html:not([data-scrollbar-style="default"]) *
+  )::-webkit-scrollbar-track:vertical {
+  margin-block: var(--scrollbar-track-block-inset);
+}
+
+:where(
+    html:not([data-scrollbar-style="default"]),
+    html:not([data-scrollbar-style="default"]) *
+  )::-webkit-scrollbar-track:horizontal {
+  margin-inline: var(--scrollbar-track-block-inset);
+}
+
+:where(
+  html:not([data-scrollbar-style="default"]),
+  html:not([data-scrollbar-style="default"]) *
+)::-webkit-scrollbar-thumb {
+  min-height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb-color);
+}
+
+:where(
+    html:not([data-scrollbar-style="default"]),
+    html:not([data-scrollbar-style="default"]) *
+  )::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover-color);
+}
+
+:where(
+  html:not([data-scrollbar-style="default"]),
+  html:not([data-scrollbar-style="default"]) *
+)::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  border: 0;
+  background: transparent;
+  -webkit-appearance: none;
+}
+
+/* Tab navigation stays swipeable on narrow surfaces without introducing a
+   second scrollbar affordance inside the page chrome. */
+:where([role="tablist"]) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+:where([role="tablist"])::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* The Appearance setting hides the scrollbar affordance without disabling
+   scrolling. Keep this global so nested panels and the document behave alike. */
+html[data-hide-scrollbars="true"],
+html[data-hide-scrollbars="true"] * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+html[data-hide-scrollbars="true"]::-webkit-scrollbar,
+html[data-hide-scrollbars="true"] *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}

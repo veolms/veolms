@@ -1,0 +1,59 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="264"
+  height="184"
+  viewBox="0 0 264 184"
+  fill="none"
+  color="#ffffff"
+  role="img"
+  aria-labelledby="ambientModeTitle ambientModeDescription"
+>
+  <title id="ambientModeTitle">Ambient mode</title>
+  <desc id="ambientModeDescription">
+    A rounded video-screen outline with a soft adjustable glow.
+  </desc>
+
+  <defs>
+    <filter
+      id="ambientGlowFilter"
+      x="0"
+      y="0"
+      width="264"
+      height="184"
+      filterUnits="userSpaceOnUse"
+      color-interpolation-filters="sRGB"
+    >
+      <feGaussianBlur in="SourceAlpha" stdDeviation="22.6" result="wideBlurOne" />
+      <feComposite in="wideBlurOne" in2="SourceAlpha" operator="out" result="wideOuterOne" />
+      <feFlood flood-color="#ffffff" flood-opacity="0.38" result="wideColorOne" />
+      <feComposite in="wideColorOne" in2="wideOuterOne" operator="in" result="wideGlowOne" />
+      <feGaussianBlur in="SourceAlpha" stdDeviation="22.6" result="wideBlurTwo" />
+      <feComposite in="wideBlurTwo" in2="SourceAlpha" operator="out" result="wideOuterTwo" />
+      <feFlood flood-color="#ffffff" flood-opacity="0.38" result="wideColorTwo" />
+      <feComposite in="wideColorTwo" in2="wideOuterTwo" operator="in" result="wideGlowTwo" />
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.35" result="tightBlur" />
+      <feComposite in="tightBlur" in2="SourceAlpha" operator="out" result="tightOuter" />
+      <feFlood flood-color="#ffffff" flood-opacity="1" result="tightColor" />
+      <feComposite in="tightColor" in2="tightOuter" operator="in" result="tightGlow" />
+      <feMerge>
+        <feMergeNode in="wideGlowOne" />
+        <feMergeNode in="wideGlowTwo" />
+        <feMergeNode in="tightGlow" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g id="glow" opacity="0.92" filter="url(#ambientGlowFilter)">
+    <rect x="67.5" y="43.5" width="128" height="90" rx="12" fill="#ffffff" />
+  </g>
+  <rect
+    x="71"
+    y="47"
+    width="122"
+    height="83"
+    rx="8.5"
+    stroke="currentColor"
+    stroke-width="5.2"
+    stroke-linejoin="round"
+  />
+</svg>

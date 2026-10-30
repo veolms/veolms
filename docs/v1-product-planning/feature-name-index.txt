@@ -1,0 +1,81 @@
+
+Feature names
+------------------
+- Academy setup
+- Homepage builder                // later
+- Public course catalogue
+- Course detail page
+- Student authentication
+- Owner authentication
+- Owner MFA
+- Recovery codes
+- Capability-based authorization
+- Course authoring
+- Curriculum builder
+- Lecture management
+- Course publishing
+- Draft and preview mode
+- Revision history
+- Course rollback
+- Downloadable resources
+- Quiz builder
+- Assignment builder
+- Certificate generation
+- Video upload
+- Private media storage
+- Video processing
+- Adaptive HLS streaming
+- Signed playback authorization
+- Optional DRM
+- YouTube and Vimeo embeds
+- Video player
+- Captions and transcripts
+- Video resume
+- Video chapters
+- Student notes
+- Student bookmarks
+- Learning workspace
+- Student dashboard
+- Progress tracking
+- PWA support
+- Lecture comments
+- Nested replies
+- Q&A
+- Attachments
+- Razorpay checkout
+- Creator-owned payment account
+- Coupons
+- Course bundles
+- Purchase records
+- Access grants
+- Enrollments
+- Manual access grants
+- Access revocation
+- Refunds
+- Invoices
+- Receipts
+- Payment callback inbox
+- Idempotent payment handling
+- In-app notifications
+- Email notifications
+- Security notifications
+- Q&A reply notifications
+- Announcement
+- Admin dashboard
+- Student management
+- Enrollment management
+- Access grant management
+- Coupon management
+- Refund management
+- Learning analytics
+- Video analytics
+- Support access grants
+- Data export
+- Backup and restore
+- Retention rules
+- Soft deletion
+- Purge jobs
+- Migration dry run
+- ProCodrr migration
+- Migration reconciliation
+- Deployment

@@ -1,0 +1,144 @@
+import { z } from "zod";
+
+export const MAX_DISCUSSION_ATTACHMENT_DIMENSION = 16_384;
+
+const optionalAttachmentDimensionSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(MAX_DISCUSSION_ATTACHMENT_DIMENSION)
+  .nullable()
+  .optional();
+
+export const attachmentDimensionsSchema = z
+  .object({
+    width: optionalAttachmentDimensionSchema,
+    height: optionalAttachmentDimensionSchema,
+  })
+  .superRefine((value, context) => {
+    const hasWidth = value.width !== undefined && value.width !== null;
+    const hasHeight = value.height !== undefined && value.height !== null;
+    if (hasWidth !== hasHeight) {
+      context.addIssue({
+        code: "custom",
+        message: "Width and height must be supplied together.",
+        path: [hasWidth ? "height" : "width"],
+      });
+    }
+  });
+export type AttachmentDimensions = z.infer<typeof attachmentDimensionsSchema>;
+
+export const attachmentKindSchema = z.enum([
+  "image",
+  "screenshot",
+  "code",
+  "document",
+]);
+export type AttachmentKind = z.infer<typeof attachmentKindSchema>;
+
+export const attachmentTargetTypeSchema = z.enum(["thread", "reply", "note"]);
+export type AttachmentTargetType = z.infer<typeof attachmentTargetTypeSchema>;
+
+export const attachmentStatusSchema = z.enum([
+  "uploading",
+  "ready",
+  "rejected",
+  "deleted",
+]);
+export type AttachmentStatus = z.infer<typeof attachmentStatusSchema>;
+
+/**
+ * What the uploader gets back once a file is stored: enough to render the
+ * attachment and to link it to a thread, reply or note by id. Storage keys,
+ * ownership and link targets stay server-side.
+ */
+export const uploadedAttachmentSchema = z.object({
+  id: z.uuid(),
+  kind: attachmentKindSchema,
+  fileName: z.string().min(1),
+  fileUrl: z.string().min(1),
+  mimeType: z.string().min(1),
+  fileSize: z.number().int().nonnegative(),
+  width: optionalAttachmentDimensionSchema,
+  height: optionalAttachmentDimensionSchema,
+});
+export type UploadedAttachment = z.infer<typeof uploadedAttachmentSchema>;
+
+export const initiateAttachmentUploadRequestSchema = z
+  .object({
+    courseId: z.uuid(),
+    lessonId: z.uuid(),
+    fileName: z.string().min(1).max(255),
+    mimeType: z.string().min(1).max(120),
+    fileSize: z.number().int().positive().max(50_000_000),
+    kind: attachmentKindSchema.optional(),
+    width: optionalAttachmentDimensionSchema,
+    height: optionalAttachmentDimensionSchema,
+  })
+  .superRefine((value, context) => {
+    const result = attachmentDimensionsSchema.safeParse(value);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          code: "custom",
+          message: issue.message,
+          path: issue.path,
+        });
+      }
+    }
+  });
+export type InitiateAttachmentUploadRequest = z.infer<
+  typeof initiateAttachmentUploadRequestSchema
+>;
+
+export const initiateAttachmentUploadResponseSchema = z.object({
+  attachmentId: z.uuid(),
+  uploadUrl: z.url(),
+});
+export type InitiateAttachmentUploadResponse = z.infer<
+  typeof initiateAttachmentUploadResponseSchema
+>;
+
+export const completeAttachmentUploadRequestSchema = z.object({
+  attachmentId: z.uuid(),
+});
+export type CompleteAttachmentUploadRequest = z.infer<
+  typeof completeAttachmentUploadRequestSchema
+>;
+
+export const learningUploadResponseSchema = z.object({
+  id: z.uuid(),
+  url: z.string().min(1),
+  fileName: z.string().min(1),
+  kind: attachmentKindSchema,
+  mediaType: z.enum(["image", "video", "code", "document"]),
+  mimeType: z.string().min(1),
+  size: z.number().int().nonnegative(),
+  status: attachmentStatusSchema,
+  width: optionalAttachmentDimensionSchema,
+  height: optionalAttachmentDimensionSchema,
+});
+export type LearningUploadResponse = z.infer<
+  typeof learningUploadResponseSchema
+>;
+
+/**
+ * Normalizes a URL input string by prepending https:// if it lacks a protocol.
+ */
+export function normalizePreviewUrl(urlString: string): string {
+  if (!urlString || typeof urlString !== "string") return "";
+  const trimmed = urlString.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  if (
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed) ||
+    /^(mailto|javascript|data):/i.test(trimmed)
+  ) {
+    return trimmed;
+  }
+  if (/^\/\//.test(trimmed)) {
+    return `https:${trimmed}`;
+  }
+  return `https://${trimmed}`;
+}

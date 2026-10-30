@@ -2,4 +2,16 @@ packages:
   - "apps/*"
   - "packages/*"
 
-onlyBuiltDependencies: []
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
+
+catalog:
+  zod: "^4.4.3"
+  kysely: "^0.29.4"
+  "@typescript/native": "npm:typescript@^7.0.2"
+
+# Turbo starts persistent workspace scripts concurrently. Keep dependency
+# installation explicit so parallel dev tasks cannot race while relinking.
+verifyDepsBeforeRun: false

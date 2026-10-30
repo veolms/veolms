@@ -1,0 +1,11 @@
+/* Keep the player package, player chrome, and learning workspace cascade in
+   their established order; these styles load with the learning feature. */
+/* No Tailwind utilities are generated here on purpose. This sheet loads after
+   the app stylesheet and stays in the document once the learner leaves, so a
+   second utilities build in the same cascade layer made its base utilities
+   (`flex-col`, `hidden`, ...) override the app's responsive variants
+   (`lg:flex-row`) on every later page. The app stylesheet scans the player
+   package instead (see the @source in src/styles.css). */
+@import "@veolms/video-player/styles.css";
+@import "../styles/features/player.css";
+@import "../styles/features/learning.css";

@@ -3,14 +3,22 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@veolms/video-player/shaka-preload": [
+        "../../packages/video-player/src/engines/shaka/shaka-early-preload.ts"
+      ]
+    },
     "types": ["node", "vite/client"],
     "rootDirs": [".", "./.react-router/types"]
   },
   "include": [
-    "app/**/*.ts",
-    "app/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     ".react-router/types/**/*.ts",
     "react-router.config.ts",
-    "vite.config.ts"
+    "vite.config.ts",
+    "playwright.config.ts",
+    "tests/**/*.ts"
   ]
 }

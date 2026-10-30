@@ -1,0 +1,292 @@
+import { sql } from "kysely";
+
+import { OTP_MAX_ATTEMPTS } from "../shared/auth.constants.ts";
+import type { IdentifierType } from "../shared/auth.types.ts";
+import type { Executor } from "../shared/repository.types.ts";
+
+export function findMatchingActiveOtp(
+  database: Executor,
+  input: {
+    identifier: string;
+    identifierType: IdentifierType;
+    purpose: string;
+    codeHash: string;
+    now: Date;
+  },
+) {
+  return database
+    .selectFrom("otp_codes")
+    .select(["id", "attempts"])
+    .where("identifier", "=", input.identifier)
+    .where("identifier_type", "=", input.identifierType)
+    .where("purpose", "=", input.purpose)
+    .where("code_hash", "=", input.codeHash)
+    .where("consumed_at", "is", null)
+    .where("expires_at", ">", input.now)
+    .executeTakeFirst();
+}
+
+export function findOutstandingOtp(
+  database: Executor,
+  input: {
+    identifier: string;
+    identifierType: IdentifierType;
+    purpose: string;
+    now: Date;
+  },
+) {
+  return database
+    .selectFrom("otp_codes")
+    .select(["id", "attempts", "code_hash"])
+    .where("identifier", "=", input.identifier)
+    .where("identifier_type", "=", input.identifierType)
+    .where("purpose", "=", input.purpose)
+    .where("consumed_at", "is", null)
+    .where("expires_at", ">", input.now)
+    .executeTakeFirst();
+}
+
+export async function recordOtpAttempt(
+  database: Executor,
+  otpId: string,
+  now: Date,
+): Promise<void> {
+  await sql`
+    update otp_codes
+    set attempts = attempts + 1,
+        consumed_at = case
+          when attempts + 1 >= ${OTP_MAX_ATTEMPTS} then ${now}
+          else consumed_at
+        end
+    where id = ${otpId}
+      and consumed_at is null
+  `.execute(database);
+}
+
+export async function consumeOtp(
+  database: Executor,
+  otpId: string,
+  now: Date,
+): Promise<boolean> {
+  const result = await database
+    .updateTable("otp_codes")
+    .set({ consumed_at: now })
+    .where("id", "=", otpId)
+    .where("consumed_at", "is", null)
+    .where("expires_at", ">", now)
+    .where("attempts", "<", OTP_MAX_ATTEMPTS)
+    .executeTakeFirst();
+
+  return Number(result.numUpdatedRows) > 0;
+}
+
+/**
+ * Matches and consumes a valid code in one statement — the success path of
+ * findMatchingActiveOtp + consumeOtp without the second round trip. Returns
+ * false whenever the code cannot be consumed (wrong code, expired, attempts
+ * exhausted, lost a race); the caller then runs the two-step path, which
+ * owns attempt accounting and the exact failure responses.
+ */
+export async function consumeMatchingActiveOtp(
+  database: Executor,
+  input: {
+    identifier: string;
+    identifierType: IdentifierType;
+    purpose: string;
+    codeHash: string;
+    now: Date;
+  },
+): Promise<boolean> {
+  const result = await database
+    .updateTable("otp_codes")
+    .set({ consumed_at: input.now })
+    .where("id", "=", (eb) =>
+      eb
+        .selectFrom("otp_codes")
+        .select("id")
+        .where("identifier", "=", input.identifier)
+        .where("identifier_type", "=", input.identifierType)
+        .where("purpose", "=", input.purpose)
+        .where("code_hash", "=", input.codeHash)
+        .where("consumed_at", "is", null)
+        .where("expires_at", ">", input.now)
+        .limit(1),
+    )
+    .where("consumed_at", "is", null)
+    .where("expires_at", ">", input.now)
+    .where("attempts", "<", OTP_MAX_ATTEMPTS)
+    .executeTakeFirst();
+
+  return Number(result.numUpdatedRows) > 0;
+}
+
+export async function retireOutstandingOtps(
+  database: Executor,
+  input: {
+    identifier: string;
+    identifierType: IdentifierType;
+    purpose: string;
+    now: Date;
+  },
+): Promise<void> {
+  await database
+    .updateTable("otp_codes")
+    .set({ consumed_at: input.now })
+    .where("identifier", "=", input.identifier)
+    .where("identifier_type", "=", input.identifierType)
+    .where("purpose", "=", input.purpose)
+    .where("consumed_at", "is", null)
+    .execute();
+}
+
+/** Removes an OTP that was never delivered so it does not count toward send limits. */
+export async function deleteOtp(
+  database: Executor,
+  otpId: string,
+): Promise<void> {
+  await database.deleteFrom("otp_codes").where("id", "=", otpId).execute();
+}
+
+export async function hasOtpSince(
+  database: Executor,
+  input: {
+    identifier: string;
+    identifierType: IdentifierType;
+    purpose: string;
+    since: Date;
+  },
+): Promise<boolean> {
+  const row = await database
+    .selectFrom("otp_codes")
+    .select("id")
+    .where("identifier", "=", input.identifier)
+    .where("identifier_type", "=", input.identifierType)
+    .where("purpose", "=", input.purpose)
+    .where("created_at", ">", input.since)
+    .executeTakeFirst();
+
+  return Boolean(row);
+}
+
+export async function countOtpsSince(
+  database: Executor,
+  input: {
+    identifier: string;
+    identifierType: IdentifierType;
+    purpose: string;
+    since: Date;
+    /** Count only sends requested from this address. */
+    requesterIp?: string | undefined;
+  },
+): Promise<number> {
+  let query = database
+    .selectFrom("otp_codes")
+    .select((eb) => eb.fn.count<string>("id").as("count"))
+    .where("identifier", "=", input.identifier)
+    .where("identifier_type", "=", input.identifierType)
+    .where("purpose", "=", input.purpose)
+    .where("created_at", ">", input.since);
+
+  if (input.requesterIp) {
+    query = query.where("requester_ip", "=", input.requesterIp);
+  }
+
+  const row = await query.executeTakeFirst();
+  return Number(row?.count ?? 0);
+}
+
+/** Codes requested from one network address, across every destination. */
+export async function countOtpsRequestedFromIpSince(
+  database: Executor,
+  input: { requesterIp: string; since: Date },
+): Promise<number> {
+  const row = await database
+    .selectFrom("otp_codes")
+    .select((eb) => eb.fn.count<string>("id").as("count"))
+    .where("requester_ip", "=", input.requesterIp)
+    .where("created_at", ">", input.since)
+    .executeTakeFirst();
+
+  return Number(row?.count ?? 0);
+}
+
+/**
+ * How many different destinations one network address asked a sign-up code
+ * for, not counting `excluding` (the one being requested now).
+ */
+export async function countSignupDestinationsFromIpSince(
+  database: Executor,
+  input: {
+    requesterIp: string;
+    since: Date;
+    excluding: { identifier: string; identifierType: IdentifierType };
+  },
+): Promise<number> {
+  const row = await database
+    .selectFrom("otp_codes")
+    .select(
+      sql<string>`count(distinct (identifier_type || ':' || identifier))`.as(
+        "count",
+      ),
+    )
+    .where("requester_ip", "=", input.requesterIp)
+    .where("purpose", "in", ["email_verification", "phone_verification"])
+    .where("requester_user_id", "is", null)
+    .where("created_at", ">", input.since)
+    .where((eb) =>
+      eb.not(
+        eb.and([
+          eb("identifier", "=", input.excluding.identifier),
+          eb("identifier_type", "=", input.excluding.identifierType),
+        ]),
+      ),
+    )
+    .executeTakeFirst();
+
+  return Number(row?.count ?? 0);
+}
+
+/** Sends a signed-in user has requested, across every destination. */
+export async function countOtpsRequestedByUserSince(
+  database: Executor,
+  input: { userId: string; since: Date },
+): Promise<number> {
+  const row = await database
+    .selectFrom("otp_codes")
+    .select((eb) => eb.fn.count<string>("id").as("count"))
+    .where("requester_user_id", "=", input.userId)
+    .where("created_at", ">", input.since)
+    .executeTakeFirst();
+
+  return Number(row?.count ?? 0);
+}
+
+export async function insertOtp(
+  database: Executor,
+  input: {
+    id: string;
+    identifier: string;
+    identifierType: IdentifierType;
+    purpose: string;
+    codeHash: string;
+    expiresAt: Date;
+    requesterIp?: string | null | undefined;
+    requesterUserId?: string | null | undefined;
+  },
+): Promise<void> {
+  await database
+    .insertInto("otp_codes")
+    .values({
+      id: input.id,
+      identifier: input.identifier,
+      identifier_type: input.identifierType,
+      purpose: input.purpose,
+      code_hash: input.codeHash,
+      attempts: 0,
+      expires_at: input.expiresAt,
+      consumed_at: null,
+      requester_ip: input.requesterIp ?? null,
+      requester_user_id: input.requesterUserId ?? null,
+    })
+    .execute();
+}

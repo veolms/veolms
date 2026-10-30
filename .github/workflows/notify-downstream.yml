@@ -1,0 +1,56 @@
+name: Notify downstream repository
+
+# A repository that builds on this one (it holds VeoLMS as a git
+# submodule) can ask to hear when `dev` moves, so that it updates its pin
+# and deploys without someone doing it by hand. This workflow only sends a
+# `core-updated` repository_dispatch event; what happens next is up to the
+# downstream repository.
+#
+# It does nothing unless both are set (so forks are unaffected):
+# - repository variable DOWNSTREAM_REPOSITORY: "owner/name" to notify
+# - repository secret DOWNSTREAM_DISPATCH_TOKEN: a fine-grained token with
+#   Contents: read and write on that repository only
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions: {}
+
+jobs:
+  notify:
+    name: Send core-updated
+    if: ${{ vars.DOWNSTREAM_REPOSITORY != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Send repository_dispatch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_TOKEN }}
+          DOWNSTREAM_REPOSITORY: ${{ vars.DOWNSTREAM_REPOSITORY }}
+          CORE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::warning::DOWNSTREAM_DISPATCH_TOKEN secret is missing; ${DOWNSTREAM_REPOSITORY} was not notified."
+            exit 0
+          fi
+
+          payload="$(jq -n --arg sha "${CORE_SHA}" --arg ref "${GITHUB_REF_NAME}" \
+            '{event_type: "core-updated", client_payload: {sha: $sha, ref: $ref}}')"
+
+          for attempt in 1 2 3; do
+            if printf '%s' "${payload}" |
+              gh api --method POST "repos/${DOWNSTREAM_REPOSITORY}/dispatches" --input - >/dev/null; then
+              echo "Notified ${DOWNSTREAM_REPOSITORY} of ${CORE_SHA:0:7}." | tee -a "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+
+          echo "::error::Could not notify ${DOWNSTREAM_REPOSITORY}. Check that DOWNSTREAM_DISPATCH_TOKEN has not expired and has Contents: read and write on it."
+          exit 1
