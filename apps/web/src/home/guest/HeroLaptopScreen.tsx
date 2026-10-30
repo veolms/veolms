@@ -15,9 +15,9 @@ import {
  * `heroLaptopDrawnSizeClasses`).
  *
  * To sit in the picture rather than on it, the content is lit like the
- * scene: softened a touch to the photograph's focus, dimmed by night (more
- * with the lamp off), washed out by day, with the glass's sheen and the
- * darkening towards its edges laid over it.
+ * scene: by night softened a touch to the photograph's focus and dimmed
+ * (more with the lamp off). Over it lies the room's light on the glass and
+ * the lamp's, each faint enough that what is on the screen stays clear.
  */
 export function HeroLaptopScreen({
   transform,
@@ -43,8 +43,8 @@ export function HeroLaptopScreen({
           "--hero-laptop-screen-scale": drawnScale,
         } as CSSProperties
       }
-      // Under the fades that lie over the picture, so they dim the screen
-      // with the rest of the laptop.
+      // Over the fades that lie over the picture: they deepen the picture
+      // behind the copy, and the screen stays clear of them.
       //
       // Safari (the only engine that knows `font: -apple-system-body`)
       // paints the page picture a theme change animates without the
@@ -54,14 +54,25 @@ export function HeroLaptopScreen({
       // whole, as it is drawn the rest of the time.
       // While a menu is open on it (the video's settings) the screen is not
       // lit like the scene: no softening, dimming or sheen over the menu.
-      className="absolute top-0 left-0 -z-12 origin-top-left overflow-hidden rounded-2xl bg-black transition-opacity duration-300 motion-reduce:transition-none starting:opacity-0 supports-[font:-apple-system-body]:[view-transition-name:hero-laptop-screen] [&:has([role=menu])>div]:filter-none! [&:has([role=menu])>span]:opacity-0"
+      className="absolute top-0 left-0 -z-9 origin-top-left overflow-hidden rounded-2xl bg-black transition-opacity duration-300 motion-reduce:transition-none starting:opacity-0 supports-[font:-apple-system-body]:[view-transition-name:hero-laptop-screen] [&:has([role=menu])>div]:filter-none! [&:has([role=menu])>span]:opacity-0!"
     >
-      <div className="size-full blur-[0.5px] brightness-90 saturate-[0.92] transition-[filter] duration-300 motion-reduce:transition-none [:root[data-theme=light]_&]:brightness-105 [:root[data-theme=light]_&]:contrast-[0.86] [:root[data-theme=light]_&]:saturate-[0.82] [:root:not([data-theme=light])_[data-lamp=off]_&]:brightness-[0.8]">
+      <div className="size-full blur-[0.5px] brightness-90 saturate-[0.92] transition-[filter] duration-300 motion-reduce:transition-none [:root[data-theme=light]_&]:filter-none [:root:not([data-theme=light])_[data-lamp=off]_&]:brightness-[0.8]">
         {children}
       </div>
+      {/* The room's light on the glass. By night a faint sheen, the screen
+          darkening towards its edges. By day the window's light, which comes
+          from the top left, falls across its top left corner and down its
+          left side, reaching faintly past the middle. */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,rgb(255_255_255/0.1)_0%,rgb(255_255_255/0.03)_30%,transparent_52%)] shadow-[inset_0_0_60px_rgb(0_0_0/0.4)] [:root[data-theme=light]_&]:bg-[linear-gradient(118deg,rgb(255_255_255/0.3)_0%,rgb(255_255_255/0.12)_40%,rgb(255_255_255/0.06)_100%)] [:root[data-theme=light]_&]:shadow-[inset_0_0_60px_rgb(0_0_0/0.18)]"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,rgb(255_255_255/0.1)_0%,rgb(255_255_255/0.03)_30%,transparent_52%)] shadow-[inset_0_0_60px_rgb(0_0_0/0.4)] [:root[data-theme=light]_&]:bg-[radial-gradient(120%_175%_at_0%_0%,rgb(255_255_255/0.27)_0%,rgb(255_255_255/0.16)_20%,rgb(255_255_255/0.08)_40%,rgb(255_255_255/0.035)_58%,rgb(255_255_255/0.01)_74%,transparent_86%)] [:root[data-theme=light]_&]:shadow-[inset_0_0_48px_rgb(30_24_16/0.16)]"
+      />
+      {/* The lamp's light, falling on the screen's top right corner, frosted
+          and warm: on by night unless it is switched off, and fainter by day
+          when it is switched on. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_90%_at_100%_0%,rgb(255_212_164/0.34),rgb(255_218_176/0.13)_36%,rgb(255_226_192/0.035)_58%,transparent_74%)] opacity-0 mix-blend-screen transition-opacity duration-300 motion-reduce:transition-none [:root:not([data-theme=light])_&]:opacity-100 [:root[data-theme=light]_[data-lamp=on]_&]:opacity-70 [[data-lamp=off]_&]:opacity-0!"
       />
     </div>
   );
