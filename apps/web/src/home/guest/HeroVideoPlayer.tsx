@@ -298,6 +298,8 @@ export default function HeroVideoPlayer({
         engineFactory={engineFactory}
         autoPlay={autoPlay}
         interactionMode={desktopFullscreen ? "desktop" : "mobile"}
+        // A vertical swipe on the hero's video scrolls the page.
+        fullscreenSwipe={false}
         keyboardEnabled={active && inView}
         shortcuts={SHORTCUTS}
         emptyTapBehavior="responsive"
