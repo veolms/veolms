@@ -24,6 +24,8 @@ export interface PlayerZoomState {
   gestureActive: boolean;
   feedbackVisible: boolean;
   transitioning: boolean;
+  /** The last gesture snapped the picture to fill the player. */
+  fillSnapped: boolean;
 }
 
 export interface PlayerUiState {
@@ -81,5 +83,6 @@ export function createInitialPlayerZoomState(): PlayerZoomState {
     gestureActive: false,
     feedbackVisible: false,
     transitioning: false,
+    fillSnapped: false,
   };
 }

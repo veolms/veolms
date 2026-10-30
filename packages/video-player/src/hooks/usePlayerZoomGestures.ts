@@ -18,6 +18,9 @@ import {
 const PAN_START_DISTANCE_PX = 6;
 const QUICK_FILL_DURATION_MS = 400;
 const QUICK_FILL_SCALE_DELTA = 0.08;
+/** A pinch let go this close to the fill zoom snaps to it. */
+const FILL_SNAP_DISTANCE = 0.06;
+const FILL_SNAP_VIBRATION_MS = 12;
 const ZOOM_FEEDBACK_DURATION_MS = 1_800;
 const ZOOM_TRANSITION_DURATION_MS = 220;
 const POINTER_TOUCH_DEDUPE_MS = 90;
@@ -215,6 +218,7 @@ export function usePlayerZoomGestures(
     controller.setControlsVisible(false);
     controller.setZoomState({
       feedbackVisible: true,
+      fillSnapped: false,
       gestureActive: true,
       transitioning: false,
     });
@@ -328,19 +332,28 @@ export function usePlayerZoomGestures(
     let panX = zoom.panX;
     let panY = zoom.panY;
     let transitioning = false;
+    let fillSnapped = false;
 
-    if (
-      pinch &&
+    // A quick pinch out (from below the fill zoom), or one let go close to
+    // it, snaps the picture to fill the player edge to edge, centred, with
+    // a tap of the vibration motor, as YouTube's app does.
+    const quickPinchOut =
+      pinch !== null &&
       Date.now() - pinch.startedAt <= QUICK_FILL_DURATION_MS &&
       pinch.maxScale - pinch.startScale >= QUICK_FILL_SCALE_DELTA &&
       pinch.startScale < pinch.fillScale - 0.01 &&
-      scale < pinch.fillScale
-    ) {
+      scale < pinch.fillScale;
+    const nearFill =
+      pinch !== null &&
+      pinch.fillScale > 1.01 &&
+      Math.abs(scale - pinch.fillScale) <= FILL_SNAP_DISTANCE;
+    if (pinch && (quickPinchOut || nearFill)) {
       scale = pinch.fillScale;
-      const pan = clampPlayerPan({ x: panX, y: panY }, scale, pinch.geometry);
-      panX = pan.x;
-      panY = pan.y;
+      panX = 0;
+      panY = 0;
       transitioning = true;
+      fillSnapped = true;
+      navigator.vibrate?.(FILL_SNAP_VIBRATION_MS);
     } else if (scale <= 1.01) {
       scale = 1;
       panX = 0;
@@ -352,6 +365,7 @@ export function usePlayerZoomGestures(
     panRef.current = null;
     controller.setZoomState({
       feedbackVisible: true,
+      fillSnapped,
       gestureActive: false,
       panX,
       panY,

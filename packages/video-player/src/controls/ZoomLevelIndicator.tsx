@@ -24,17 +24,20 @@ export function ZoomLevelIndicator({
   const controlsRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const { controlsVisible, feedbackVisible, scale } = usePlayerState(
-    ({ ui }) => ({
-      controlsVisible: ui.controlsVisible,
-      feedbackVisible: ui.zoom.feedbackVisible,
-      scale: ui.zoom.scale,
-    }),
-    (left, right) =>
-      left.controlsVisible === right.controlsVisible &&
-      left.feedbackVisible === right.feedbackVisible &&
-      left.scale === right.scale,
-  );
+  const { controlsVisible, feedbackVisible, fillSnapped, scale } =
+    usePlayerState(
+      ({ ui }) => ({
+        controlsVisible: ui.controlsVisible,
+        feedbackVisible: ui.zoom.feedbackVisible,
+        fillSnapped: ui.zoom.fillSnapped,
+        scale: ui.zoom.scale,
+      }),
+      (left, right) =>
+        left.controlsVisible === right.controlsVisible &&
+        left.feedbackVisible === right.feedbackVisible &&
+        left.fillSnapped === right.fillSnapped &&
+        left.scale === right.scale,
+    );
   const feedback = variant === "feedback";
   const visible = feedback
     ? feedbackVisible && !controlsVisible
@@ -87,19 +90,31 @@ export function ZoomLevelIndicator({
   }
 
   return (
-    <button
-      type="button"
-      className={classNames(
-        "pointer-events-auto absolute right-2 top-2 z-50 grid size-10 touch-manipulation place-items-center rounded-full bg-(--video-player-control-surface) text-[13px] leading-none font-medium tabular-nums text-(--video-player-control-text) shadow-(--video-player-control-shadow) transition-colors before:absolute before:-inset-0.5 before:rounded-full hover:bg-(--video-player-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) motion-reduce:transition-none",
-        className,
-      )}
-      aria-label={`Reset video zoom from ${label} to 1×`}
-      data-player-controls-reveal="delayed"
-      data-player-zoom-indicator="feedback"
-      data-player-zoom-reset=""
-      onClick={resetZoom}
-    >
-      {label}
-    </button>
+    <>
+      {fillSnapped ? (
+        // Said in the middle of the picture as it snaps to fill it.
+        <span
+          role="status"
+          className="pointer-events-none absolute top-1/2 left-1/2 z-50 -translate-1/2 rounded-full bg-(--video-player-control-surface) px-4 py-2 text-sm font-semibold whitespace-nowrap text-(--video-player-control-text) shadow-(--video-player-control-shadow) motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95"
+          data-player-zoom-fill-label=""
+        >
+          Zoom to fill
+        </span>
+      ) : null}
+      <button
+        type="button"
+        className={classNames(
+          "pointer-events-auto absolute right-2 top-2 z-50 grid size-10 touch-manipulation place-items-center rounded-full bg-(--video-player-control-surface) text-[13px] leading-none font-medium tabular-nums text-(--video-player-control-text) shadow-(--video-player-control-shadow) transition-colors before:absolute before:-inset-0.5 before:rounded-full hover:bg-(--video-player-control-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--video-player-control-text) motion-reduce:transition-none",
+          className,
+        )}
+        aria-label={`Reset video zoom from ${label} to 1×`}
+        data-player-controls-reveal="delayed"
+        data-player-zoom-indicator="feedback"
+        data-player-zoom-reset=""
+        onClick={resetZoom}
+      >
+        {label}
+      </button>
+    </>
   );
 }
