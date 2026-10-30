@@ -52,7 +52,9 @@ export function HeroLaptopScreen({
       // screen sat smaller and up and to the left of the laptop. Named, it
       // is captured as a picture of its own and laid on with its transform
       // whole, as it is drawn the rest of the time.
-      className="absolute top-0 left-0 -z-12 origin-top-left overflow-hidden rounded-2xl bg-black transition-opacity duration-300 motion-reduce:transition-none starting:opacity-0 supports-[font:-apple-system-body]:[view-transition-name:hero-laptop-screen]"
+      // While a menu is open on it (the video's settings) the screen is not
+      // lit like the scene: no softening, dimming or sheen over the menu.
+      className="absolute top-0 left-0 -z-12 origin-top-left overflow-hidden rounded-2xl bg-black transition-opacity duration-300 motion-reduce:transition-none starting:opacity-0 supports-[font:-apple-system-body]:[view-transition-name:hero-laptop-screen] [&:has([role=menu])>div]:filter-none! [&:has([role=menu])>span]:opacity-0"
     >
       <div className="size-full blur-[0.5px] brightness-90 saturate-[0.92] transition-[filter] duration-300 motion-reduce:transition-none [:root[data-theme=light]_&]:brightness-105 [:root[data-theme=light]_&]:contrast-[0.86] [:root[data-theme=light]_&]:saturate-[0.82] [:root:not([data-theme=light])_[data-lamp=off]_&]:brightness-[0.8]">
         {children}
