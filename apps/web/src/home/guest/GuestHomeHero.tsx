@@ -102,13 +102,13 @@ const picturePosition = `object-[72%_center] xl:object-center ${homeHeroPictureB
  * The supporting text, set as a quote: Lora italic, a little larger than
  * body text and with room between its lines.
  */
-// Beside the picture the quote is kept to about 26 of its letters' widths
-// (in its own size, set on the box too), so that it and its author end
-// before the mug on the desk.
+// Beside the picture the quote is kept to about 23 of its letters' widths
+// (in its own size, set on the box too): just room for it in two even
+// lines.
 const descriptionBoxClasses =
-  "mt-4 w-fit max-w-xl text-[clamp(1.0625rem,2.4cqw,1.25rem)] @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(26em,52cqw)] @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
+  "mt-4 w-fit max-w-xl text-[clamp(1.0625rem,2.4cqw,1.25rem)] @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(23em,52cqw)] @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
 const descriptionTextClasses =
-  "font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-pretty text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
+  "font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-balance text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
 const descriptionClasses = `${descriptionBoxClasses} ${descriptionTextClasses}`;
 
 function HeroHeadline({
