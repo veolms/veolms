@@ -58,6 +58,10 @@ export const SESSION_IP_ADDRESS_MAX_LENGTH = 45;
  */
 export const SESSION_TOUCH_INTERVAL_MS = 15 * MINUTE_MS;
 
+/** A playback claim not refreshed for this long no longer counts (the page
+ *  reports every 15 s; this allows two missed reports plus jitter). */
+export const PLAYBACK_CLAIM_STALE_MS = 40_000;
+
 // --- Multi-factor -----------------------------------------------------------
 
 export const TOTP_MAX_FAILED_ATTEMPTS = 5;

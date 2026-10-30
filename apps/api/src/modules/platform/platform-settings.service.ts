@@ -1,5 +1,6 @@
 import {
   DEFAULT_MAX_DEVICES_PER_STUDENT,
+  DEFAULT_MAX_SIMULTANEOUS_STREAMS,
   DEFAULT_PLATFORM_APPEARANCE_SETTINGS,
   DEFAULT_PLATFORM_INVOICE_SETTINGS,
   platformAppearanceSettingsSchema,
@@ -123,6 +124,12 @@ function resolveSettings(document: StoredDocument): PlatformSettings {
           : (platformSecuritySettingsSchema.shape.maxDevicesPerStudent.safeParse(
               security.maxDevicesPerStudent,
             ).data ?? DEFAULT_MAX_DEVICES_PER_STUDENT),
+      maxSimultaneousStreams:
+        security.maxSimultaneousStreams === null
+          ? null
+          : (platformSecuritySettingsSchema.shape.maxSimultaneousStreams.safeParse(
+              security.maxSimultaneousStreams,
+            ).data ?? DEFAULT_MAX_SIMULTANEOUS_STREAMS),
     },
     invoice: resolveInvoiceSettings(document.invoice ?? {}),
   };
@@ -158,6 +165,8 @@ export interface PlatformSettingsService {
   requiresVerifiedPhoneForEnrollment(userId?: string): Promise<boolean>;
   /** How many devices a student may be signed in on at once; null for any. */
   maxDevicesPerStudent(): Promise<number | null>;
+  /** How many devices a student may play video on at once; null for no limit. */
+  maxSimultaneousStreams(): Promise<number | null>;
 }
 
 export function createPlatformSettingsService({
@@ -265,6 +274,8 @@ export function createPlatformSettingsService({
     updateSettings,
     maxDevicesPerStudent: async () =>
       (await readSettings()).settings.security.maxDevicesPerStudent,
+    maxSimultaneousStreams: async () =>
+      (await readSettings()).settings.security.maxSimultaneousStreams,
     requiresVerifiedPhoneForEnrollment: async (userId?: string) => {
       const required = (await readSettings()).settings.security
         .requireVerifiedPhoneForEnrollment;

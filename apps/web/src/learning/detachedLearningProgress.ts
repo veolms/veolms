@@ -21,6 +21,11 @@ import {
   takeLessonPositions,
   withLessonPositions,
 } from "./lessonPositionOutbox";
+import {
+  markNotPlaying,
+  notifyPlaybackConflict,
+  takePlayingReport,
+} from "./playbackClaim";
 import { getApiError } from "../lib/api-client";
 import { queryClient } from "../lib/query-client";
 import { markCourseResumeStale } from "./courseResumeCache";
@@ -63,7 +68,7 @@ const getProgressRevision = () => progressRevision;
 const getServerProgressRevision = () => 0;
 const syncingCourses = new Set<string>();
 
-async function syncDetachedLearningProgress(
+export async function syncDetachedLearningProgress(
   { userId, courseKey, lessonIdsByNumber }: DetachedProgressTarget,
   force: boolean,
 ): Promise<void> {
@@ -75,10 +80,13 @@ async function syncDetachedLearningProgress(
   const pending = getPendingLearningProgress(
     readLearningProgress(userId, courseKey),
   );
+  const playing = takePlayingReport(courseKey);
+
   if (
     pending.length === 0 &&
     peekWatchedSeconds(courseKey) < 1 &&
-    !hasLessonPositions(courseKey)
+    !hasLessonPositions(courseKey) &&
+    !playing
   ) {
     return;
   }
@@ -105,6 +113,7 @@ async function syncDetachedLearningProgress(
       items,
       watchedSeconds,
       timeZone: getDeviceTimeZone(),
+      playing,
     });
     if (response.synced) {
       writeLearningProgress(
@@ -118,6 +127,10 @@ async function syncDetachedLearningProgress(
       if (items.some((item) => item.positionSeconds !== undefined)) {
         markCourseResumeStale(queryClient, courseKey);
       }
+    }
+    if (response.playback && response.playback.allowed === false) {
+      notifyPlaybackConflict(courseKey, response.playback.playingOn);
+      markNotPlaying(courseKey);
     }
   } catch (error) {
     // The items stay pending in storage; the next update or the lesson page

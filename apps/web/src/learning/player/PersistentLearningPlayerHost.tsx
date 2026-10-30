@@ -836,6 +836,14 @@ export function PersistentLearningPlayerHost({
       <LessonVideoPlayer
         {...lessonVideoPlayerProps}
         watchTimeCourseKey={player.progressTarget?.courseKey}
+        lessonId={
+          player.playerProps.lessonId ??
+          (player.selectedLesson !== undefined
+            ? player.progressTarget?.lessonIdsByNumber?.get(
+                player.selectedLesson,
+              )
+            : undefined)
+        }
         minimizeMotionTarget={resolveMinimizeMotionTarget}
         onMinimizeGestureStart={finishRestoreBeforeMinimize}
         onMinimizeTriggerReady={setMinimizeTrigger}

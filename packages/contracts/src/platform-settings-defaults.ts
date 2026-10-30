@@ -30,6 +30,12 @@ export interface PlatformSecuritySettings {
    * first. Staff are not limited.
    */
   maxDevicesPerStudent: number | null;
+  /**
+   * How many devices a student may play video on at once; null for no limit.
+   * The most recent play wins; the others pause within 15 seconds and show a
+   * notice. Staff are never limited.
+   */
+  maxSimultaneousStreams: number | null;
 }
 
 /** What a student's device limit is until an admin changes it. */
@@ -37,6 +43,12 @@ export const DEFAULT_MAX_DEVICES_PER_STUDENT = 3;
 /** The device limits an admin may set. */
 export const MIN_MAX_DEVICES_PER_STUDENT = 1;
 export const MAX_MAX_DEVICES_PER_STUDENT = 20;
+
+/** How many simultaneous streams a student may have until an admin changes it. */
+export const DEFAULT_MAX_SIMULTANEOUS_STREAMS = 1;
+/** The stream limits an admin may set. */
+export const MIN_MAX_SIMULTANEOUS_STREAMS = 1;
+export const MAX_MAX_SIMULTANEOUS_STREAMS = 5;
 
 /**
  * What the academy prints on the invoices its students download. Empty text

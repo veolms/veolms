@@ -7,6 +7,7 @@ import type { Kysely } from "kysely";
 import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
 import {
+  PLAYBACK_CLAIM_STALE_MS,
   SESSION_TTL_MS,
   SESSION_USER_AGENT_MAX_LENGTH,
 } from "../shared/auth.constants.ts";
@@ -38,8 +39,15 @@ import {
 import { createOutboxService } from "../../../events/outbox.service.ts";
 import type { Executor } from "../shared/repository.types.ts";
 import { runSignInClaim } from "../shared/sign-in-claim.ts";
-import { type SessionLocation } from "../shared/request-location.ts";
+import {
+  formatSessionLocation,
+  type SessionLocation,
+} from "../shared/request-location.ts";
 import { createPlatformSettingsService } from "../../platform/platform-settings.service.ts";
+import type {
+  LearningProgressPlayback,
+  LearningProgressPlaying,
+} from "@veolms/contracts";
 
 /** How long a sign-in may wait for its student to sign another device out. */
 export const PENDING_DEVICE_SIGN_IN_TTL_MS = 10 * 60_000;
@@ -533,6 +541,86 @@ export function createSessionService({ database }: SessionServiceOptions) {
     return context;
   }
 
+  async function reportPlayback(
+    user: { id: string; roles: readonly string[]; email?: string | null },
+    sessionId: string,
+    playing: LearningProgressPlaying | undefined,
+  ): Promise<LearningProgressPlayback> {
+    const limit =
+      isStaffAccount(user.roles) || isTestLoginAccount(user.email)
+        ? null
+        : await platformSettings.maxSimultaneousStreams();
+
+    if (limit === null) {
+      return { allowed: true };
+    }
+
+    if (!playing) {
+      await sessionRepository.clearPlaybackClaim(database, sessionId);
+      return { allowed: true };
+    }
+
+    return await database.transaction().execute(async (trx) => {
+      await sessionRepository.lockUserForSignIn(trx, user.id);
+      const now = new Date();
+      const since = new Date(now.getTime() - PLAYBACK_CLAIM_STALE_MS);
+      const live = await sessionRepository.listLivePlaybackClaims(
+        trx,
+        user.id,
+        since,
+        now,
+      );
+
+      const mine = live.find((s) => s.id === sessionId);
+      const claimedAt =
+        playing.event === "play" || !mine ? now : mine.playing_claimed_at;
+      const others = live.filter((s) => s.id !== sessionId);
+
+      const allClaims: Array<{
+        id: string;
+        claimedAt: Date;
+        claim?: sessionRepository.LivePlaybackClaim;
+      }> = [
+        ...others.map((o) => ({
+          id: o.id,
+          claimedAt: o.playing_claimed_at,
+          claim: o,
+        })),
+        { id: sessionId, claimedAt },
+      ];
+
+      allClaims.sort((a, b) => {
+        const diff = b.claimedAt.getTime() - a.claimedAt.getTime();
+        if (diff !== 0) return diff;
+        return a.id.localeCompare(b.id);
+      });
+
+      const allowed =
+        allClaims.findIndex((item) => item.id === sessionId) < limit;
+
+      if (allowed) {
+        await sessionRepository.setPlaybackClaim(trx, sessionId, {
+          lessonId: playing.lessonId,
+          claimedAt,
+          at: now,
+        });
+        return { allowed: true };
+      }
+
+      await sessionRepository.clearPlaybackClaim(trx, sessionId);
+      const newest = allClaims[0]?.claim;
+      return {
+        allowed: false,
+        playingOn: {
+          userAgent: newest?.user_agent ?? null,
+          location: newest ? formatSessionLocation(newest) : null,
+          lessonTitle: newest?.lesson_title ?? null,
+          since: (newest?.playing_claimed_at ?? now).toISOString(),
+        },
+      };
+    });
+  }
+
   return {
     resolveMfaState,
     userHasAnyMfaFactor,
@@ -553,6 +641,7 @@ export function createSessionService({ database }: SessionServiceOptions) {
     revokeAllSessions,
     purgeOldSessions,
     authenticate,
+    reportPlayback,
   };
 }
 
