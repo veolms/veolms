@@ -55,8 +55,9 @@ const forReturningLearner =
  * - From 50rem, the copy lies over the empty left side of the desk picture,
  *   with the laptop playing the hero video on the right.
  * - Narrower (phones, and tablets up to about an iPad mini held upright),
- *   there is no picture: the copy stands on the page itself, followed by the
- *   video in a card of its own and the actions. A desk cropped to that width
+ *   there is no picture: the headline stands on the page itself, followed by
+ *   the video in a card of its own and the actions (the quote is left out:
+ *   the video speaks for it there). A desk cropped to that width
  *   showed little more than the laptop, and left the copy cramped above it.
  *
  * Both are in the page from the first paint and the page's width picks one
@@ -311,9 +312,10 @@ export function GuestHomeHero({
             )}
           </h1>
           {!hero || hero.description ? (
-            // A quote, signed as the signed-in learner's is.
+            // A quote, signed as the signed-in learner's is. Only beside the
+            // picture: narrower, the video card follows the headline.
             <figure
-              className={`${descriptionBoxClasses} ${returningLearnerHero ? forGuest : ""}`}
+              className={`${descriptionBoxClasses} @max-[50rem]/home:hidden ${returningLearnerHero ? forGuest : ""}`}
             >
               <blockquote ref={quoteRef} className={descriptionTextClasses}>
                 {hero?.description}

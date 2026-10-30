@@ -136,15 +136,11 @@ export default function HeroVideoPlayer({
   const playerRef = useRef<VideoPlayerHandle>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const playerTheme = useLearningPlayerTheme();
-  // On unless the visitor has switched it off (or asks for less motion):
-  // the lesson player keeps it off on touch screens by default, the hero's
-  // card glows there too. The laptop draws no glow, so it changes nothing
-  // on a wide page.
+  // Off unless the visitor has switched it on (here or in a lesson, which
+  // share the choice). The laptop draws no glow, so it changes nothing on a
+  // wide page.
   const [ambientEnabled, setAmbientEnabled] = useState(() =>
-    readAmbientPreference(
-      undefined,
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
-    ),
+    readAmbientPreference(undefined, true),
   );
   const [inView, setInView] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
