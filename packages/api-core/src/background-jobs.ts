@@ -46,3 +46,27 @@ export async function loadCoreBackgroundJobs(): Promise<CoreBackgroundJobs> {
   const module = (await import(url.href)) as CoreBackgroundJobsModule;
   return module.registerBackgroundJobs;
 }
+
+/** Adds core's app-wide hooks to `app`. Fits `registerHooks`. */
+export type CoreAppHooks = (app: FastifyInstance) => void;
+
+interface CoreAppHooksModule {
+  registerAppHooks: CoreAppHooks;
+}
+
+/**
+ * Loads the hooks core's routes rely on, for an app that composes
+ * `createVeoLMSApi` itself, such as the cloud API:
+ *
+ *   createVeoLMSApi({ registerHooks: await loadCoreAppHooks(), ... })
+ *
+ * Without them, a signed-out caller is told what is wrong with a request
+ * field by field instead of 401, and a student at the device limit is never
+ * given the cookie the device list is read with, so the list always says
+ * the sign-in has expired. Loaded from the core app by path, like the jobs.
+ */
+export async function loadCoreAppHooks(): Promise<CoreAppHooks> {
+  const url = new URL("../../../apps/api/src/app-hooks.ts", import.meta.url);
+  const module = (await import(url.href)) as CoreAppHooksModule;
+  return module.registerAppHooks;
+}

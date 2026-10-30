@@ -26,6 +26,21 @@ export function useVideoJobProgress(mediaAssetId: string | null) {
 }
 
 /**
+ * Where a video came from (the YouTube video it was imported from), for
+ * the people who manage it. Its link never changes; its title and channel
+ * are filled in once the import has read the video.
+ */
+export function useMediaSource(mediaAssetId: string | null) {
+  return useQuery({
+    queryKey: mediaKeys.source(mediaAssetId ?? ""),
+    queryFn: () => mediaService.getMediaSource(mediaAssetId!),
+    enabled: Boolean(mediaAssetId),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
  * Whether this account may import lesson videos from YouTube: the academy
  * turned it on and the account holds the permission. Any error (403 for
  * everyone without the permission) reads as "not available".

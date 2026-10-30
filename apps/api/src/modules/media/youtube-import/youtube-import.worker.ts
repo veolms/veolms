@@ -20,6 +20,7 @@ import { createChapterSyncService } from "../../courses/chapters/chapters.servic
 import { createCurriculumService } from "../../courses/index.ts";
 import * as mediaRepo from "../media.repository.ts";
 import { clearHlsPackager } from "./clear-hls.packager.ts";
+import { capturePosterFrame, posterKeyFor } from "./poster.ts";
 import { outputPrefixFor } from "./youtube-import.cancel.ts";
 import {
   downloadHlsLadder,
@@ -242,6 +243,7 @@ export function startYoutubeImportWorker({
     const workDir = path.join(scratchDir, "out");
     const resultFile = path.join(scratchDir, "package-result.json");
     const uploadedLog = path.join(scratchDir, "uploaded.txt");
+    const posterFile = path.join(scratchDir, "poster.webp");
     const outputPrefix = outputPrefixFor(job.media_id);
 
     try {
@@ -361,6 +363,17 @@ export function startYoutubeImportWorker({
           stage_detail: "Preparing the video for streaming",
         });
         const ladder = await readLocalLadder(hlsDir);
+        // From the clear source, before a packager may encrypt it. A video
+        // without a poster still plays, so a failure here is only logged.
+        await capturePosterFrame(
+          await tools.getFfmpeg(),
+          ladder,
+          posterFile,
+          signal,
+        ).catch((error: unknown) => {
+          throwIfStopped();
+          jobLog.warn({ err: error }, "YouTube import poster not captured");
+        });
         const packager = services.mediaImport.getPackager() ?? clearHlsPackager;
         await fs.rm(workDir, { recursive: true, force: true });
         await fs.mkdir(workDir, { recursive: true });
@@ -446,6 +459,19 @@ export function startYoutubeImportWorker({
           },
         });
         await noteWrites;
+        if (await exists(posterFile)) {
+          await services.storage.uploadFiles(
+            [
+              {
+                localFilePath: posterFile,
+                key: posterKeyFor(job.media_id),
+                contentType: "image/webp",
+              },
+            ],
+            1,
+            { signal },
+          );
+        }
         // The manifest goes last: it only ever points at uploaded segments.
         await services.storage.uploadFiles([toItem(manifestLocal)], 1, {
           signal,

@@ -98,6 +98,16 @@ export function createMediaController({ service }: { service: MediaService }) {
     return { status: result.status };
   }
 
+  async function getMediaSource(
+    request: FastifyRequest<{ Params: { mediaId: string } }>,
+  ) {
+    return await service.getMediaSource(
+      request.params.mediaId,
+      request.user!.id,
+      request.user?.roles,
+    );
+  }
+
   async function getVideoJobProgress(
     request: FastifyRequest<{ Params: { mediaId: string } }>,
   ) {
@@ -402,6 +412,7 @@ export function createMediaController({ service }: { service: MediaService }) {
     completeMultipartUpload,
     abortMultipartUpload,
     confirmMediaUpload,
+    getMediaSource,
     getVideoJobProgress,
     getPlaybackBootstrap,
     getPlaybackToken,

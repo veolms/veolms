@@ -1,8 +1,20 @@
+import { ArrowSquareOutIcon as ArrowSquareOut } from "@phosphor-icons/react/ArrowSquareOut";
 import { UploadSimpleIcon as UploadSimple } from "@phosphor-icons/react/UploadSimple";
+import { YoutubeLogoIcon as YoutubeLogo } from "@phosphor-icons/react/YoutubeLogo";
 import { MEDIA_MAX_SIZES } from "@veolms/contracts";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  VideoSourceTabs,
+  YoutubeImportPanel,
+  type VideoSource,
+} from "../components/youtube-import/YoutubeImportPanel";
 import { useBeforeUnloadWarning } from "../hooks/useBeforeUnloadWarning";
-import { useUploadVideo, useVideoJobProgress } from "../services/media";
+import {
+  useMediaSource,
+  useUploadVideo,
+  useVideoJobProgress,
+  useYoutubeImportAvailability,
+} from "../services/media";
 import { insetRowClass } from "./homePageSettingsControls";
 
 const trackClass =
@@ -37,6 +49,29 @@ function validateVideo(file: File): string | null {
   return null;
 }
 
+/** The YouTube video an imported hero video came from, with a link to it. */
+function YoutubeSource({ mediaId }: { mediaId: string }) {
+  const source = useMediaSource(mediaId).data?.source;
+  if (source?.provider !== "youtube") return null;
+  return (
+    <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-(--muted)">
+      <YoutubeLogo size={14} weight="fill" className="shrink-0" />
+      <span className="min-w-0 truncate">
+        From YouTube{source.channel ? ` · ${source.channel}` : ""}
+      </span>
+      <a
+        href={source.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-(--text) underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-(--accent)"
+      >
+        Open on YouTube
+        <ArrowSquareOut size={12} weight="bold" />
+      </a>
+    </p>
+  );
+}
+
 /** Where an uploaded hero video's processing has got to. */
 function ProcessingStatus({ mediaId }: { mediaId: string }) {
   const progress = useVideoJobProgress(mediaId);
@@ -56,7 +91,7 @@ function ProcessingStatus({ mediaId }: { mediaId: string }) {
     return (
       <p className="text-xs text-rose-500">
         {progress.data?.error ??
-          "The video could not be processed. Upload it again."}
+          "The video could not be processed. Upload or import it again."}
       </p>
     );
   }
@@ -73,9 +108,10 @@ function ProcessingStatus({ mediaId }: { mediaId: string }) {
 }
 
 /**
- * Uploads a video for the hero alone. It goes through the same processing
- * as a lesson's video; the upload is chosen as soon as it has been sent,
- * and can be saved while it is still being processed.
+ * Uploads a video for the hero alone, or imports one from YouTube. It goes
+ * through the same processing as a lesson's video; it is chosen as soon as
+ * it has been sent (or its import queued), and can be saved while it is
+ * still being processed.
  */
 export function HeroVideoUpload({
   uploaded,
@@ -91,6 +127,11 @@ export function HeroVideoUpload({
   const [percent, setPercent] = useState(0);
   const [fileName, setFileName] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [source, setSource] = useState<VideoSource>("upload");
+  // A new key empties the import panel once its import has been queued.
+  const [importPanelKey, setImportPanelKey] = useState(0);
+  const canImportFromYoutube = useYoutubeImportAvailability(true);
+  const importing = canImportFromYoutube && source === "youtube";
 
   useBeforeUnloadWarning(upload.isPending);
   // Leaving the page stops an upload that is still being sent.
@@ -132,11 +173,39 @@ export function HeroVideoUpload({
           <p className="truncate text-sm font-medium text-(--text)">
             {uploaded.fileName}
           </p>
+          <YoutubeSource mediaId={uploaded.mediaId} />
           <ProcessingStatus mediaId={uploaded.mediaId} />
         </div>
       ) : null}
 
-      {upload.isPending ? (
+      {canImportFromYoutube ? (
+        <VideoSourceTabs
+          value={source}
+          onChange={(next) => {
+            setSource(next);
+            setProblem(null);
+          }}
+          disabled={upload.isPending}
+        />
+      ) : null}
+
+      {importing ? (
+        <YoutubeImportPanel
+          key={importPanelKey}
+          courseId={null}
+          lessonId={null}
+          isReplacement={uploaded !== null}
+          context="home-page"
+          onImportStarted={(mediaId, title) => {
+            onUploaded(mediaId, title);
+            setImportPanelKey((key) => key + 1);
+          }}
+          onReuseExisting={(mediaId, title) => {
+            onUploaded(mediaId, title);
+            setImportPanelKey((key) => key + 1);
+          }}
+        />
+      ) : upload.isPending ? (
         <div className={`grid gap-2 p-3 ${insetRowClass}`}>
           <div className="flex min-w-0 items-baseline justify-between gap-3">
             <p className="min-w-0 truncate text-sm font-medium text-(--text)">
