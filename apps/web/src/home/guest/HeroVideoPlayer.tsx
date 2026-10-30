@@ -48,13 +48,16 @@ const FULLSCREEN_SETTLE_MS = 1_500;
  * does not grow wider).
  */
 /**
- * A swipe over the hero's video scrolls the page (the phone layout keeps
- * vertical swipes for itself otherwise), and the timeline runs between the
+ * On the page, a vertical swipe over the hero's video scrolls the page (the
+ * phone layout keeps vertical swipes for itself otherwise, and swipes up
+ * into full screen); a pinch still zooms the picture. In full screen every
+ * gesture is the lesson's, swiping down out of it among them. The timeline
+ * runs between the
  * same margins as the time and full screen buttons below it, not from edge
  * to edge.
  */
 const heroSharedClasses =
-  "[&_[data-video-player-root]]:touch-pan-y! [&_[data-player-zoom-surface]]:touch-pan-y! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:inset-x-2!";
+  "[&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-root]]:touch-pan-y! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-zoom-surface]]:touch-pan-y! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:inset-x-2!";
 
 const cardClasses =
   // The card keeps its rounded corners, so the timeline runs a little above
@@ -80,7 +83,7 @@ const cardClasses =
  */
 const laptopClasses =
   `${heroSharedClasses} ` +
-  "h-full [&_[data-video-player-poster-overlay]]:object-cover! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:bottom-0! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:translate-y-[calc(50%-12px)]! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-mobile-player-corner]]:bottom-4! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-mobile-player-corner]]:scale-85 [&_[data-mobile-player-corner=time]]:origin-bottom-left [&_[data-mobile-player-corner=fullscreen]]:origin-bottom-right [&:not(:fullscreen):not([data-player-page-fullscreen])_[role=menu]]:origin-top-right [&:not(:fullscreen):not([data-player-page-fullscreen])_[role=menu]]:scale-70 [&:not(:fullscreen):not([data-player-page-fullscreen])_[role=menu]]:max-h-none! " +
+  "h-full [&_[data-video-player-poster-overlay]]:object-cover! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:bottom-0! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-player-timeline-wrap]]:translate-y-[calc(50%-12px)]! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-mobile-player-corner]]:bottom-4! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-mobile-player-corner]]:scale-85 [&_[data-mobile-player-corner=time]]:origin-bottom-left [&_[data-mobile-player-corner=fullscreen]]:origin-bottom-right [&:not(:fullscreen):not([data-player-page-fullscreen])_[role=menu]]:origin-top-right [&:not(:fullscreen):not([data-player-page-fullscreen])_[role=menu]]:scale-70 [&:not(:fullscreen):not([data-player-page-fullscreen])_[role=menu]]:max-h-none! [&:not(:fullscreen):not([data-player-page-fullscreen])_[role=menu]]:bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface)_88%,transparent)]! " +
   // The seek preview, its time and the timeline's thumb are drawn smaller
   // too, and the preview lower, so it leaves most of the screen showing.
   "[&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=frame]]:mb-2! [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=frame]]:origin-bottom [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=frame]]:scale-70 [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=time]>span]:scale-80 [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=pill]]:origin-bottom [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-video-player-preview-mode=pill]]:scale-80 [&:not(:fullscreen):not([data-player-page-fullscreen])_[data-timeline-thumb]]:size-2.5!";
@@ -236,9 +239,6 @@ export default function HeroVideoPlayer({
         keepControlsVisibleUntilFirstPlay
         keepPosterVisibleUntilFirstPlay
         lockLandscapeOnFullscreen
-        // A swipe over the video scrolls the page, as anywhere else on it: no
-        // swipe up into full screen, no pinch to zoom.
-        zoomEnabled={false}
         ariaLabel={playback.title ? `Video: ${playback.title}` : "Video"}
         onEvent={(event) => {
           if (event.type === "loaded" && !activeRef.current) {
