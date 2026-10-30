@@ -5,6 +5,7 @@ import {
   useImperativeHandle,
   useLayoutEffect,
   useRef,
+  useSyncExternalStore,
   type HTMLAttributes,
   type Ref,
   type RefObject,
@@ -93,6 +94,11 @@ export interface PlayerRootProps extends Omit<
   theme?: PlayerTheme;
   /** Enables pinch-to-zoom and one-finger panning of the video content. */
   zoomEnabled?: boolean;
+  /**
+   * A vertical swipe on the picture enters full screen (up) and leaves it
+   * (down), on any touch screen. Needs `zoomEnabled`. Defaults to true.
+   */
+  fullscreenSwipe?: boolean;
   /** Selects controls by windowed width and keeps that choice stable in fullscreen. */
   interactionMode?: PlayerInteractionMode;
 }
@@ -103,6 +109,24 @@ function assignRef<Value>(
 ): void {
   if (typeof ref === "function") ref(value);
   else if (ref) ref.current = value;
+}
+
+const TOUCH_SCREEN_QUERY = "(any-pointer: coarse)";
+
+function readTouchScreen(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(TOUCH_SCREEN_QUERY).matches
+  );
+}
+
+function subscribeToTouchScreen(onChange: () => void): () => void {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function")
+    return () => undefined;
+  const query = window.matchMedia(TOUCH_SCREEN_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
 }
 
 export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
@@ -132,6 +156,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
       theaterMode = false,
       theme = "youtube",
       zoomEnabled = true,
+      fullscreenSwipe: fullscreenSwipeEnabled = true,
       className,
       style,
       ...containerProps
@@ -155,9 +180,18 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
     const controller = controllerRef.current;
     const mobileInteraction =
       useResolvedPlayerMobileInteraction(interactionMode);
+    const touchScreen = useSyncExternalStore(
+      subscribeToTouchScreen,
+      readTouchScreen,
+      () => false,
+    );
     const fullscreenSwipe = usePlayerFullscreenSwipe(
       controller,
-      mobileInteraction && zoomEnabled,
+      zoomEnabled &&
+        fullscreenSwipeEnabled &&
+        // The phone layout, or any touch screen (a tablet in the desktop
+        // layout).
+        (mobileInteraction || touchScreen),
     );
     const zoomGestures = usePlayerZoomGestures(controller);
     const controlsHiddenAtPointerDownRef = useRef(false);
