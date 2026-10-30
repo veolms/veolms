@@ -102,8 +102,11 @@ const picturePosition = `object-[72%_center] xl:object-center ${homeHeroPictureB
  * The supporting text, set as a quote: Lora italic, a little larger than
  * body text and with room between its lines.
  */
-const descriptionClasses =
-  "mt-4 max-w-xl font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-pretty text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(34rem,54cqw)] @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
+const descriptionBoxClasses =
+  "mt-4 w-fit max-w-xl @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(34rem,54cqw)]";
+const descriptionTextClasses =
+  "font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-pretty text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
+const descriptionClasses = `${descriptionBoxClasses} ${descriptionTextClasses}`;
 
 function HeroHeadline({
   hero,
@@ -218,7 +221,7 @@ export function GuestHomeHero({
           ) : null}
           <h1
             id="guest-home-hero-title"
-            className="text-[clamp(1.875rem,8cqw,2.75rem)] leading-[1.06] font-extrabold tracking-[-0.03em] @[50rem]/home:text-[clamp(2.25rem,4.4vw,3.5rem)]"
+            className="text-[clamp(1.875rem,8cqw,2.75rem)] leading-[1.14] font-extrabold tracking-[-0.03em] @[50rem]/home:text-[clamp(2.25rem,4.4vw,3.5rem)] @[50rem]/home:leading-[1.1]"
           >
             {hero ? (
               <>
@@ -243,11 +246,20 @@ export function GuestHomeHero({
             )}
           </h1>
           {!hero || hero.description ? (
-            <p
-              className={`${descriptionClasses} ${returningLearnerHero ? forGuest : ""}`}
+            // A quote, signed as the signed-in learner's is.
+            <figure
+              className={`${descriptionBoxClasses} ${returningLearnerHero ? forGuest : ""}`}
             >
-              {hero?.description}
-            </p>
+              <blockquote className={descriptionTextClasses}>
+                {hero?.description}
+              </blockquote>
+              {hero ? (
+                <figcaption className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600">
+                  <span aria-hidden="true" className="h-px w-6 bg-current/60" />
+                  ProCodrr
+                </figcaption>
+              ) : null}
+            </figure>
           ) : null}
           {returningLearnerHero?.description ? (
             <p className={`${descriptionClasses} ${forReturningLearner}`}>
