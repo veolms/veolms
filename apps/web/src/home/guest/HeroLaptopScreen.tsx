@@ -61,11 +61,11 @@ export function HeroLaptopScreen({
       </div>
       {/* The room's light on the glass. By night a faint sheen, the screen
           darkening towards its edges. By day the window's light, which comes
-          from the left, falls across it, with a soft streak where the glass
-          reflects it. */}
+          from the top left, falls across its top left corner and down its
+          left side, fading smoothly. */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,rgb(255_255_255/0.1)_0%,rgb(255_255_255/0.03)_30%,transparent_52%)] shadow-[inset_0_0_60px_rgb(0_0_0/0.4)] [:root[data-theme=light]_&]:bg-[linear-gradient(98deg,rgb(255_255_255/0.3)_0%,rgb(255_255_255/0.14)_20%,rgb(255_255_255/0.05)_42%,transparent_64%),linear-gradient(114deg,transparent_26%,rgb(255_255_255/0.09)_35%,rgb(255_255_255/0.03)_44%,transparent_51%)] [:root[data-theme=light]_&]:shadow-[inset_0_0_48px_rgb(30_24_16/0.16)]"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,rgb(255_255_255/0.1)_0%,rgb(255_255_255/0.03)_30%,transparent_52%)] shadow-[inset_0_0_60px_rgb(0_0_0/0.4)] [:root[data-theme=light]_&]:bg-[radial-gradient(95%_150%_at_0%_0%,rgb(255_255_255/0.28)_0%,rgb(255_255_255/0.16)_22%,rgb(255_255_255/0.07)_44%,rgb(255_255_255/0.02)_64%,transparent_80%)] [:root[data-theme=light]_&]:shadow-[inset_0_0_48px_rgb(30_24_16/0.16)]"
       />
       {/* The lamp's light, falling on the screen's top right corner, frosted
           and warm: on by night unless it is switched off, and fainter by day
