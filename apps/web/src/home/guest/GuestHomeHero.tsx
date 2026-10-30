@@ -257,9 +257,9 @@ export function GuestHomeHero({
                 {hero?.description}
               </blockquote>
               {hero ? (
-                // Under the quote's right end, or its start beside a picture
-                // narrow enough to bring the mug on the desk up to its end.
-                <figcaption className="mt-1.5 flex items-center justify-end gap-2.5 @[50rem]/home:@max-[64rem]/home:justify-start text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600">
+                // At the quote box's right edge, which is at or past the end of
+                // its longest line.
+                <figcaption className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600">
                   <span aria-hidden="true" className="h-px w-6 bg-current/60" />
                   ProCodrr
                 </figcaption>
