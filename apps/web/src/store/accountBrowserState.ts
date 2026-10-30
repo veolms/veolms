@@ -43,6 +43,13 @@ export const COURSE_CATALOGUE_SEARCH_SESSION_KEY =
 export const ENROLLED_COURSES_SESSION_KEY_PREFIX = "veolms-enrolled-courses:";
 export const WISHLIST_SESSION_KEY_PREFIX = "veolms-wishlist:";
 export const COURSE_ACCESS_SESSION_KEY_PREFIX = "veolms-course-access:";
+/**
+ * What a course page's "Your enrollment" last said, for the next load's
+ * first paint (`<prefix><user id>:<course slug>`, see
+ * `courses/overview/enrolmentWordsCopy.ts`).
+ */
+export const COURSE_ENROLMENT_WORDS_SESSION_KEY_PREFIX =
+  "veolms-course-enrolment-words:";
 export const NOTIFICATION_SUMMARY_SESSION_KEY_PREFIX =
   "veolms-notification-summary:";
 /** Where in a course to carry on (`<prefix><user id>:<course key>`). */
@@ -56,6 +63,19 @@ export const LEARNING_SUMMARY_SESSION_KEY_PREFIX = "veolms-learning-summary:";
  */
 export const PLAYBACK_BOOTSTRAP_SESSION_KEY_PREFIX =
   "veolms-playback-bootstrap:";
+/**
+ * A lesson's discussion counts and the first page of its discussions as
+ * last fetched in this tab (`<prefix><user id>:<course id>:<lesson id>`),
+ * for the next load's first paint of the lesson page (see
+ * `learning/lessonPageEarlyState.ts`). The counts are the same for every
+ * reader, but a copy of one is kept under the account it was fetched for,
+ * like the rest, so it goes with the session and is never shown to a
+ * guest or to another account.
+ */
+export const LESSON_DISCUSSION_COUNTS_SESSION_KEY_PREFIX =
+  "veolms-lesson-discussion-counts:";
+export const LESSON_DISCUSSIONS_SESSION_KEY_PREFIX =
+  "veolms-lesson-discussions:";
 /**
  * The learner's home as it was last drawn in this tab, for the next load's
  * first paint (see `home/learner/learnerHomeSnapshot.ts`).
@@ -81,9 +101,12 @@ export function isAccountSessionStorageKey(key: string): boolean {
     key.startsWith(ENROLLED_COURSES_SESSION_KEY_PREFIX) ||
     key.startsWith(WISHLIST_SESSION_KEY_PREFIX) ||
     key.startsWith(COURSE_ACCESS_SESSION_KEY_PREFIX) ||
+    key.startsWith(COURSE_ENROLMENT_WORDS_SESSION_KEY_PREFIX) ||
     key.startsWith(NOTIFICATION_SUMMARY_SESSION_KEY_PREFIX) ||
     key.startsWith(RESUME_CONTEXT_SESSION_KEY_PREFIX) ||
     key.startsWith(LEARNING_SUMMARY_SESSION_KEY_PREFIX) ||
+    key.startsWith(LESSON_DISCUSSION_COUNTS_SESSION_KEY_PREFIX) ||
+    key.startsWith(LESSON_DISCUSSIONS_SESSION_KEY_PREFIX) ||
     key.startsWith(LEARNER_HOME_SNAPSHOT_SESSION_KEY_PREFIX) ||
     key.startsWith(PLAYBACK_BOOTSTRAP_SESSION_KEY_PREFIX) ||
     key === PROFILE_CHIP_SESSION_KEY ||

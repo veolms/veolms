@@ -109,6 +109,7 @@ export async function createVeoLMSApi<
     database,
     logger = true,
     services: rawServices,
+    registerHooks,
     modulesDir,
     config,
     registerJobs,
@@ -124,6 +125,10 @@ export async function createVeoLMSApi<
     trustProxy: config.TRUST_PROXY,
     routerOptions: { maxParamLength: MAX_PARAM_LENGTH },
   });
+
+  // Before any route exists: an `onRoute` hook only sees the routes added
+  // after it.
+  registerHooks?.(app);
 
   const appServices =
     typeof rawServices === "function"

@@ -417,6 +417,13 @@ const serverConfigSchema = z.object({
     .int()
     .min(1)
     .default(30),
+  /**
+   * Emails notifications that go to everyone in a course (a course published,
+   * a quiz assigned). Off, they still appear in-app but send no email: one
+   * such event mails thousands of people at once, and a burst like that gets
+   * the sending domain rate-limited by Gmail, delaying sign-in codes too.
+   */
+  NOTIFICATION_COURSE_WIDE_EMAIL: booleanEnvironmentValueSchema.default(true),
 
   // SMS Delivery
   /**

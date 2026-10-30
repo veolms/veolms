@@ -32,6 +32,7 @@ const SERVER_CONTRIBUTIONS: WebContributions = {
   profileMenuLinks: [],
   analyticsTabs: [],
   courseEditorSections: [],
+  settingsRows: [],
 };
 
 function getServerWebContributions(): WebContributions {

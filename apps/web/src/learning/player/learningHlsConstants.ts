@@ -1,5 +1,6 @@
 import type { VideoNetworkRequest } from "@veolms/video-player";
 import { installSegmentCache } from "./segmentCache";
+import { cachedStartHeight } from "./segmentCacheStart";
 
 export const LEARNING_HLS_MIME_TYPE = "application/x-mpegurl";
 
@@ -260,15 +261,35 @@ export function readPreferredVideoHeight(): number | undefined {
  * downloaded for nothing when a learner skips or leaves. Played video is
  * kept as above. The buffer sits in MSE SourceBuffers, which the page
  * cannot read back. A video starts at the quality the learner picked, if
- * any (else ABR starts low and climbs). Read per source, and the live and
+ * any (else ABR starts low and climbs); a lesson the device keeps at a
+ * taller rendition plays that rendition. Read per source, and the live and
  * preload sources share it, so a preload is made at the quality playback
- * starts at and is not cleared by a config mismatch.
+ * starts at and is not cleared by a config mismatch. On auto, a lesson
+ * the device keeps at some quality plays at that one for as long as its
+ * segments come from the device (segmentCacheStart.ts): a replay fetches
+ * nothing. The first video segment from the network hands over to ABR.
  */
-export function learningHlsStreaming() {
-  const preferredVideoHeight = readPreferredVideoHeight();
+export function learningHlsStreaming(manifestUrl?: string) {
+  const chosenVideoHeight = readPreferredVideoHeight();
+  const cachedVideoHeight = manifestUrl
+    ? cachedStartHeight(manifestUrl)
+    : undefined;
+  // A chosen quality applies to every lesson on this device. One the
+  // device keeps at a taller rendition plays that one (there is nothing to
+  // fetch for it; the quality menu shows what plays); the chosen quality
+  // stays what the next lessons start at. A shorter kept rendition does not
+  // lower the chosen quality.
+  const preferredVideoHeight =
+    chosenVideoHeight &&
+    cachedVideoHeight &&
+    cachedVideoHeight > chosenVideoHeight
+      ? cachedVideoHeight
+      : chosenVideoHeight;
+  const holdVideoHeight = chosenVideoHeight ? undefined : cachedVideoHeight;
   return {
     abrEnabled: true,
     ...(preferredVideoHeight ? { preferredVideoHeight } : {}),
+    ...(holdVideoHeight ? { holdVideoHeight } : {}),
     rebufferingGoal: 1.5,
     bufferingGoal: 60,
     bufferBehind: learningBufferBehindSeconds(),

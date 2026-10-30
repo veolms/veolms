@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { Play } from "@phosphor-icons/react/Play";
 import { PlayCircle } from "@phosphor-icons/react/PlayCircle";
@@ -13,6 +14,8 @@ import type {
   CourseAccessResume,
 } from "@veolms/contracts";
 import { CourseEnrolmentDetails } from "./CourseEnrolmentDetails";
+import { describeEnrolmentWords } from "./enrolmentDetails";
+import { useKeptEnrolmentWords } from "./enrolmentWordsCopy";
 import { useLearningProgressResumeContext } from "../../services/learning-progress";
 import { useCurriculumIntent } from "./curriculumIntent";
 import {
@@ -58,6 +61,16 @@ interface CourseLearnerProgressBarProps {
   openIntent?: LessonOpenIntent;
 }
 
+/**
+ * The "Up next" line under the button, but for its display (flex), which
+ * its early copy takes from the head's style.
+ */
+export const upNextClasses =
+  "min-w-0 items-center gap-1.5 text-[0.8rem] text-(--muted)";
+/** The column of the button and the line under it. */
+export const progressActionColumnClasses =
+  "flex min-w-0 flex-col gap-2 @2xl/price:w-auto @2xl/price:min-w-60";
+
 const placeholder =
   "animate-pulse rounded-md bg-[color-mix(in_srgb,var(--text)_10%,transparent)]";
 
@@ -86,6 +99,15 @@ export function CourseLearnerProgressBar({
   });
   const place = resume ?? resumeQuery.data;
   const curriculumIntent = useCurriculumIntent();
+  // Kept for the next load's first paint (see `enrolmentWordsCopy`).
+  const enrollment = enrolment?.enrollment ?? null;
+  const accessExpiresAt = enrolment?.accessExpiresAt ?? null;
+  const enrolmentWords = useMemo(
+    () =>
+      enrollment ? describeEnrolmentWords(enrollment, accessExpiresAt) : null,
+    [enrollment, accessExpiresAt],
+  );
+  useKeptEnrolmentWords(courseKey, enrolmentWords);
   const percent = roundCourseProgress(progress);
   const lessonCount = place?.totalLessons ?? totalLessons;
   const isComplete = percent >= 100;
@@ -188,7 +210,7 @@ export function CourseLearnerProgressBar({
 
         {/* The way on, as wide as its words need, and the lesson it
             opens under it. */}
-        <div className="flex min-w-0 flex-col gap-2 @2xl/price:w-auto @2xl/price:min-w-60">
+        <div className={progressActionColumnClasses}>
           <Button
             motion="static"
             className={`${priceBarActionClasses} w-full`}
@@ -204,7 +226,7 @@ export function CourseLearnerProgressBar({
             <span className="truncate">{actionLabel}</span>
           </Button>
           {lesson && hasStarted ? (
-            <p className="flex min-w-0 items-center gap-1.5 text-[0.8rem] text-(--muted)">
+            <p className={`flex ${upNextClasses}`}>
               <PlayCircle size={14} className="shrink-0" aria-hidden="true" />
               <span className="shrink-0">Up next</span>
               <span className="truncate font-medium text-(--text)">

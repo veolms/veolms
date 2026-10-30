@@ -10,4 +10,6 @@ export const mediaKeys = {
     [...mediaKeys.all, "attached-video-status", mediaAssetId] as const,
   lessonYoutubeImport: (lessonId: string) =>
     [...mediaKeys.all, "lesson-youtube-import", lessonId] as const,
+  source: (mediaAssetId: string) =>
+    [...mediaKeys.all, "source", mediaAssetId] as const,
 };

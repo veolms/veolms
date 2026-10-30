@@ -9,6 +9,7 @@ import {
 } from "react";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { ArrowElbowDownLeftIcon as ArrowElbowDownLeft } from "@phosphor-icons/react/ArrowElbowDownLeft";
+import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { usePlayerMobileInteraction } from "@veolms/video-player";
 
@@ -32,6 +33,12 @@ export interface LessonEndScreenOverlayProps {
   onCancelAutoplay: () => void;
   onClose?: () => void;
   countdownSeconds?: number;
+  /**
+   * The lesson has a quiz. The screen offers it instead of counting down to
+   * the next lesson: Attempt Quiz (Enter) opens it, Skip Quiz (Esc) goes on
+   * to the next lesson, or closes the screen after the last one.
+   */
+  quiz?: { onAttempt: () => void };
   /** The player's timeline and bottom row are shown over the end screen. */
   controlsInset?: boolean;
   /**
@@ -99,6 +106,7 @@ export function LessonEndScreenOverlay({
   onCancelAutoplay,
   onClose,
   countdownSeconds = 5,
+  quiz,
   controlsInset = false,
   minimized = false,
 }: LessonEndScreenOverlayProps) {
@@ -111,10 +119,13 @@ export function LessonEndScreenOverlay({
   // Still counting down at zero: the next lesson is opened right after that
   // render, and the screen stays as it was until then. Ending the countdown
   // at zero drew the Replay screen for a frame on the way to the next lesson.
-  const isCountdownActive = autoplayEnabled && hasNextLesson;
+  // A lesson with a quiz has no countdown: the learner attempts the quiz
+  // or skips it.
+  const isCountdownActive = autoplayEnabled && hasNextLesson && !quiz;
+  const skipQuiz = hasNextLesson ? onGoNext : (onClose ?? onCancelAutoplay);
 
   useEffect(() => {
-    if (!autoplayEnabled || !hasNextLesson || countdownHeld || minimized) {
+    if (!isCountdownActive || countdownHeld || minimized) {
       return;
     }
 
@@ -128,14 +139,7 @@ export function LessonEndScreenOverlay({
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [
-    autoplayEnabled,
-    countdownHeld,
-    hasNextLesson,
-    minimized,
-    onGoNext,
-    secondsRemaining,
-  ]);
+  }, [countdownHeld, isCountdownActive, minimized, onGoNext, secondsRemaining]);
 
   // Enter goes on to the next lesson, Esc cancels the countdown (or, with
   // none running, closes the end screen), as the two keycaps say.
@@ -144,8 +148,17 @@ export function LessonEndScreenOverlay({
     isCountdownActive,
     minimized,
     onGoNext,
+    quiz,
+    skipQuiz,
   });
-  keysRef.current = { hasNextLesson, isCountdownActive, minimized, onGoNext };
+  keysRef.current = {
+    hasNextLesson,
+    isCountdownActive,
+    minimized,
+    onGoNext,
+    quiz,
+    skipQuiz,
+  };
   const cancelKeyRef = useRef(onCancelAutoplay);
   cancelKeyRef.current = onCancelAutoplay;
   const closeKeyRef = useRef(onClose);
@@ -165,6 +178,16 @@ export function LessonEndScreenOverlay({
       }
       const keys = keysRef.current;
       if (keys.minimized) return;
+      if (keys.quiz) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          keys.quiz.onAttempt();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          keys.skipQuiz();
+        }
+        return;
+      }
       if (event.key === "Enter" && keys.hasNextLesson) {
         event.preventDefault();
         keys.onGoNext();
@@ -184,7 +207,11 @@ export function LessonEndScreenOverlay({
   const screenProps = {
     "data-lesson-end-screen": "",
     role: "dialog",
-    "aria-label": nextLesson ? "Up next" : "Lesson finished",
+    "aria-label": quiz
+      ? "Lesson quiz"
+      : nextLesson
+        ? "Up next"
+        : "Lesson finished",
     "data-countdown-held": countdownHeld ? "" : undefined,
     // The screen keeps its clicks: one that reached the video beneath
     // would play it, and playing closes the end screen. The mini window
@@ -233,10 +260,45 @@ export function LessonEndScreenOverlay({
         courseComplete={courseComplete}
         isCountdownActive={isCountdownActive}
         secondsRemaining={secondsRemaining}
+        quiz={
+          quiz ? { onAttempt: quiz.onAttempt, onSkip: skipQuiz } : undefined
+        }
         onGoNext={onGoNext}
         onRestart={onRestart}
         onCancelAutoplay={onCancelAutoplay}
       />
+    );
+  }
+
+  if (quiz) {
+    return (
+      <div
+        {...screenProps}
+        className={`${screenClass} grid place-items-center ${
+          controlsInset ? "pb-14 @lg:pb-16" : ""
+        }`}
+      >
+        <div className="flex w-full max-w-2xl min-w-0 flex-col items-center px-6 text-center @4xl:max-w-3xl">
+          <Brain
+            weight="fill"
+            aria-hidden="true"
+            className="mb-3 hidden size-11 text-(--accent) [@container_(min-height:15rem)]:block @4xl:size-16"
+          />
+          <p className="text-sm font-medium text-white/65 @4xl:text-base">
+            {QUIZ_LABEL}
+          </p>
+          <h2 className="mt-1 line-clamp-2 max-w-full text-base leading-snug font-semibold text-balance [@container_(max-height:11rem)]:line-clamp-1 @lg:text-xl @4xl:text-3xl">
+            {QUIZ_TITLE}
+          </h2>
+          <p className="mt-1 hidden max-w-full text-xs text-balance text-white/60 [@container_(min-height:11rem)]:block @lg:text-sm @4xl:text-base">
+            {quizMessage(nextLesson)}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2 @lg:mt-5 @lg:gap-3 @4xl:mt-7">
+            <SkipQuizKeycap onSkip={skipQuiz} />
+            <AttemptQuizKeycap onAttempt={quiz.onAttempt} />
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -407,6 +469,7 @@ function LessonEndScreenAroundCentralControls({
   courseComplete,
   isCountdownActive,
   secondsRemaining,
+  quiz,
   onGoNext,
   onRestart,
   onCancelAutoplay,
@@ -417,23 +480,40 @@ function LessonEndScreenAroundCentralControls({
   courseComplete: boolean;
   isCountdownActive: boolean;
   secondsRemaining: number;
+  /** The lesson's quiz, offered in place of the next lesson. */
+  quiz?: { onAttempt: () => void; onSkip: () => void };
   onGoNext: () => void;
   onRestart: () => void;
   onCancelAutoplay: () => void;
 }) {
-  const label = nextLesson
-    ? `Up next${isCountdownActive ? ` in ${secondsRemaining}s` : ""}`
-    : courseComplete
-      ? "Course complete"
-      : "You've reached the last lesson";
-  const title = nextLesson
-    ? nextLesson.title
-    : courseComplete
-      ? "You've finished every lesson in this course."
-      : "Some earlier lessons are still unfinished.";
-  const firstAction = isCountdownActive
-    ? { label: "Cancel", onClick: onCancelAutoplay }
-    : { label: "Replay", onClick: onRestart };
+  const label = quiz
+    ? QUIZ_LABEL
+    : nextLesson
+      ? `Up next${isCountdownActive ? ` in ${secondsRemaining}s` : ""}`
+      : courseComplete
+        ? "Course complete"
+        : "You've reached the last lesson";
+  const title = quiz
+    ? QUIZ_TITLE
+    : nextLesson
+      ? nextLesson.title
+      : courseComplete
+        ? "You've finished every lesson in this course."
+        : "Some earlier lessons are still unfinished.";
+  const firstAction = quiz
+    ? { label: "Skip Quiz", onClick: quiz.onSkip }
+    : isCountdownActive
+      ? { label: "Cancel", onClick: onCancelAutoplay }
+      : { label: "Replay", onClick: onRestart };
+  const secondAction = quiz
+    ? {
+        label: "Attempt Quiz",
+        ariaLabel: "Attempt quiz",
+        onClick: quiz.onAttempt,
+      }
+    : nextLesson
+      ? { label: "Next", ariaLabel: "Next lesson", onClick: onGoNext }
+      : null;
 
   return (
     <div
@@ -464,20 +544,25 @@ function LessonEndScreenAroundCentralControls({
         </div>
         <div aria-hidden="true" className={centralBandClass} />
         <div className="flex w-0 grow justify-start">
-          {nextLesson ? (
+          {secondAction ? (
             <button
               type="button"
-              onClick={onGoNext}
+              onClick={secondAction.onClick}
               className={`${sideButtonClass} bg-white text-black hover:bg-white/85 [@container_(min-height:16.5rem)]:hidden`}
-              aria-label="Next lesson"
+              aria-label={secondAction.ariaLabel}
             >
-              Next
+              {secondAction.label}
             </button>
           ) : null}
         </div>
       </div>
       <div className="hidden items-start justify-center gap-2 pt-2 [@container_(min-height:16.5rem)]:flex">
-        {isCountdownActive ? (
+        {quiz ? (
+          <>
+            <SkipQuizKeycap onSkip={quiz.onSkip} />
+            <AttemptQuizKeycap onAttempt={quiz.onAttempt} />
+          </>
+        ) : isCountdownActive ? (
           <button
             type="button"
             onClick={onCancelAutoplay}
@@ -503,7 +588,7 @@ function LessonEndScreenAroundCentralControls({
             Replay
           </button>
         )}
-        {nextLesson ? (
+        {nextLesson && !quiz ? (
           <button
             type="button"
             onClick={onGoNext}
@@ -522,6 +607,56 @@ function LessonEndScreenAroundCentralControls({
         ) : null}
       </div>
     </div>
+  );
+}
+
+const QUIZ_LABEL = "Quiz time";
+const QUIZ_TITLE = "Check what you just learned";
+
+function quizMessage(nextLesson: NextLessonInfo | undefined) {
+  return nextLesson
+    ? "Attempt this lesson's quiz, or skip it and go on to the next lesson."
+    : "Attempt this lesson's quiz, or skip it.";
+}
+
+/** Skip Quiz, in Cancel's place and drawn as its key, Esc. */
+function SkipQuizKeycap({ onSkip }: { onSkip: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSkip}
+      className={escKeycapClass}
+      aria-keyshortcuts="Escape"
+      title="Skip quiz (Esc)"
+    >
+      <span
+        aria-hidden="true"
+        className={`${keyLabelClass} bg-white/14 text-white/80`}
+      >
+        Esc
+      </span>
+      Skip Quiz
+    </button>
+  );
+}
+
+/** Attempt Quiz, in Next's place and drawn as its key, Enter. */
+function AttemptQuizKeycap({ onAttempt }: { onAttempt: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onAttempt}
+      className={enterKeycapClass}
+      aria-keyshortcuts="Enter"
+      title="Attempt quiz (Enter)"
+    >
+      Attempt Quiz
+      <ArrowElbowDownLeft
+        weight="bold"
+        aria-hidden="true"
+        className={buttonIconClass}
+      />
+    </button>
   );
 }
 

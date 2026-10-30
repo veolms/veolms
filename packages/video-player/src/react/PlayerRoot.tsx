@@ -46,6 +46,8 @@ export interface VideoPlayerHandle {
   pause(): void;
   togglePlayback(): Promise<void>;
   reload(): Promise<void>;
+  /** Stops the video outright; see `PlayerController.stop`. */
+  stop(): Promise<void>;
   seekTo(time: number): void;
   seekBy(delta: number): void;
   setVolume(volume: number): void;
@@ -226,6 +228,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
         pause: () => controller.pause(),
         togglePlayback: () => controller.togglePlayback(),
         reload: () => controller.reload(),
+        stop: () => controller.stop(),
         seekTo: (time) => controller.seekTo(time),
         seekBy: (delta) => controller.seekBy(delta),
         setVolume: (volume) => controller.setVolume(volume),

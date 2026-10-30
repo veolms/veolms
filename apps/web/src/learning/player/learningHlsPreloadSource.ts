@@ -57,7 +57,7 @@ export function createLearningHlsPreloadSource(options: {
     kind: isDash ? ("dash" as const) : ("hls" as const),
     startTime,
     streaming: {
-      ...learningHlsStreaming(),
+      ...learningHlsStreaming(options.manifestUrl),
       segmentPrefetchLimit:
         options.segmentPrefetchLimit ?? PRELOAD_SEGMENT_PREFETCH_LIMIT,
     },

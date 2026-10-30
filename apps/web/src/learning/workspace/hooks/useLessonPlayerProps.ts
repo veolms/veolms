@@ -78,6 +78,8 @@ export interface UseLessonPlayerPropsArgs {
   goToNextLesson: () => void;
   updateSelectedLessonProgress: (progress: number) => void;
   handleLessonEnded: () => void;
+  /** Opens the selected lesson's quiz; left out when it has none. */
+  openSelectedLessonQuiz: (() => void) | undefined;
   toggleTheaterMode: () => void;
   toggleLessonDrawerFromPlayer: (presentation: "drawer" | "side") => void;
   handleMobileLandscapeFullscreenChange: (active: boolean) => void;
@@ -143,6 +145,7 @@ export function useLessonPlayerProps({
   goToNextLesson,
   updateSelectedLessonProgress,
   handleLessonEnded,
+  openSelectedLessonQuiz,
   toggleTheaterMode,
   toggleLessonDrawerFromPlayer,
   handleMobileLandscapeFullscreenChange,
@@ -279,6 +282,7 @@ export function useLessonPlayerProps({
       onGoNext: goToNextLesson,
       onGoPrevious: goToPreviousLesson,
       onLessonEnded: handleLessonEnded,
+      onAttemptQuiz: openSelectedLessonQuiz,
       onMinimize: onMinimizePlayer
         ? (request) => {
             onMinimizePlayer({
@@ -317,6 +321,7 @@ export function useLessonPlayerProps({
       goToNextLesson,
       goToPreviousLesson,
       handleLessonEnded,
+      openSelectedLessonQuiz,
       handleMobileLandscapeFullscreenChange,
       lessonDrawer,
       lessonSequence.length,

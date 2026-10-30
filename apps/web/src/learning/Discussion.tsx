@@ -14,6 +14,10 @@ import type {
 } from "@veolms/contracts";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
+  openingLessonDiscussionsQuery,
+  readAccountCopy,
+} from "../services/accountSessionCopies";
+import {
   useInRouterContext,
   useRouteLoaderData,
   useSearchParams,
@@ -307,11 +311,26 @@ function DiscussionInner({
         lessonContentAccess === "granted" &&
         !isInteractionCapabilitiesLoading &&
         enabledKinds.length > 0,
+      // The lesson page shows the count from this tab's copy before its
+      // scripts run (lessonPageEarlyState.ts); the first render agrees.
+      fromTabCopy: true,
     },
   );
   const discussionCount = interactionCounts
     ? getDiscussionCountForFilter(interactionCounts, entryFilter)
     : undefined;
+  const discussionCountSource =
+    courseId && lessonId
+      ? `${courseId}:${lessonId}:${
+          entryFilter === "comment"
+            ? "comments"
+            : entryFilter === "question"
+              ? "qna"
+              : entryFilter === "note"
+                ? "notes"
+                : "total"
+        }`
+      : undefined;
 
   const threadQuery = useMemo(
     () => ({
@@ -417,6 +436,29 @@ function DiscussionInner({
       ),
     },
   );
+  // The first page this tab last fetched for the lesson, put in place of
+  // the one the page was built with as soon as the page has hydrated (the
+  // built one is what the document shows, so the first render keeps it),
+  // then asked again in the background as usual. Only the opening query
+  // is kept (see services/accountSessionCopies.ts).
+  const openingKind = unifiedDiscussionQuery.kind;
+  const isOpeningQuery =
+    unifiedDiscussionQuery.sort === "top" && !feedMine && !feedSearch;
+  useEffect(() => {
+    if (!queryClient || !courseId || !lessonId || !isOpeningQuery) return;
+    const queryKey = learningInteractionKeys.lessonDiscussions(
+      courseId,
+      lessonId,
+      openingLessonDiscussionsQuery(openingKind),
+    );
+    const copy = readAccountCopy<unknown>(queryKey);
+    if (!copy) return;
+    const state = queryClient.getQueryState(queryKey);
+    if (state && state.dataUpdatedAt >= copy.savedAt) return;
+    queryClient.setQueryData(queryKey, copy.value, {
+      updatedAt: copy.savedAt,
+    });
+  }, [courseId, isOpeningQuery, lessonId, openingKind, queryClient]);
   const unifiedDiscussionItems = useMemo<LessonDiscussionItem[]>(
     () => unifiedDiscussions.data?.pages.flatMap((page) => page.items) ?? [],
     [unifiedDiscussions.data],
@@ -2504,6 +2546,7 @@ function DiscussionInner({
           highlightedThreadId={highlightedThreadId}
           onThreadHighlightShown={clearHighlightedThread}
           discussionCount={discussionCount}
+          discussionCountSource={discussionCountSource}
           draftIsTooLong={draftIsTooLong}
           draftAttachmentCount={draftAttachmentCount}
           canSubmitDraft={canSubmitDraft}

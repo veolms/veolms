@@ -1,5 +1,6 @@
 import {
   COURSE_ACCESS_SESSION_KEY_PREFIX,
+  COURSE_ENROLMENT_WORDS_SESSION_KEY_PREFIX,
   ENROLLED_COURSES_SESSION_KEY_PREFIX,
   WISHLIST_SESSION_KEY_PREFIX,
 } from "../store/accountBrowserState";
@@ -16,6 +17,7 @@ interface EarlyStateKeys {
   enrolledPrefix: string;
   wishlistPrefix: string;
   accessPrefix: string;
+  enrolmentWordsPrefix: string;
   attribute: string;
   styleId: string;
 }
@@ -34,7 +36,9 @@ interface EarlyStateKeys {
  *   style turns each course the learner holds (`data-course-card-id`) to its
  *   progress, with its figure and its button's words, and fills the heart
  *   of each course on their wishlist. On a course page the course's own
- *   access answer, when this tab has it, adds the lessons done;
+ *   access answer, when this tab has it, adds the lessons done, the lesson
+ *   up next and, with the words the page last showed for it
+ *   (`overview/enrolmentWordsCopy.ts`), "Your enrollment";
  * - signed in without copies (a new tab): the placeholders stay until the
  *   page knows;
  * - in a creator's own view, nothing: their pages are not the learner's.
@@ -62,10 +66,10 @@ function applyEarlyCourseState(keys: EarlyStateKeys) {
     // A course page: its own access answer, if this tab has it, is the
     // latest word on this course, and enough to draw it without the list.
     const page = /^\/courses\/([^/]+)\/overview\/?$/.exec(location.pathname);
-    const access =
-      page && page[1]
-        ? read(keys.accessPrefix + userId + ":" + decodeURIComponent(page[1]))
-        : null;
+    const pageSlug = page && page[1] ? decodeURIComponent(page[1]) : null;
+    const access = pageSlug
+      ? read(keys.accessPrefix + userId + ":" + pageSlug)
+      : null;
     // Without the list, nothing is known of any other course: leave them
     // to their placeholders.
     if (!enrolledCourses && !access) return;
@@ -172,13 +176,87 @@ function applyEarlyCourseState(keys: EarlyStateKeys) {
               " lesson" +
               (resume.totalLessons === 1 ? "" : "s")
             : null;
-        held(
-          access.courseId,
-          Number(access.progress.percent) || 0,
+        const percent = Number(access.progress.percent) || 0;
+        const started =
           Boolean(access.progress.started) ||
-            (resume && resume.completedLessons > 0),
-          lessons,
-        );
+          (resume && resume.completedLessons > 0);
+        held(access.courseId, percent, started, lessons);
+
+        // The rest of the learner's band, by the same rules as
+        // `CourseLearnerProgressBar`: the lesson up next once they have
+        // started and while the course is not done, and their enrolment.
+        const text = (value: unknown) =>
+          '"' +
+          String(value == null ? "" : value)
+            .replace(/\\/g, "\\\\")
+            .replace(/"/g, '\\"')
+            .replace(/[\r\n]+/g, " ") +
+          '"';
+        const lesson = resume && percent < 100 ? resume.resumeLesson : null;
+        let words = "";
+        if (
+          lesson &&
+          (started || percent > 0 || Number(lesson.progressPercent) > 0)
+        ) {
+          words +=
+            "--course-early-up-next:" +
+            text("Lesson " + lesson.lessonNumber + " · " + lesson.title) +
+            ";";
+          rules += show(access.courseId, "[data-course-early-up-next]", "flex");
+        }
+        const enrolment = access.enrollment
+          ? read(keys.enrolmentWordsPrefix + userId + ":" + pageSlug)
+          : null;
+        const tones = ["lifetime", "active", "ending", "ended"];
+        if (
+          enrolment &&
+          enrolment.access &&
+          tones.indexOf(enrolment.access.tone) !== -1 &&
+          enrolment.pace
+        ) {
+          const tone = enrolment.access.tone;
+          words +=
+            "--course-early-enrolled-on:" +
+            text(enrolment.enrolledOn) +
+            ";--course-early-enrolled-ago:" +
+            text(enrolment.enrolledAgo) +
+            ";--course-early-order:" +
+            text(enrolment.order) +
+            ";--course-early-access-label:" +
+            text(enrolment.accessLabel) +
+            ";--course-early-access-value:" +
+            text(enrolment.access.value) +
+            ";--course-early-access-remaining:" +
+            text("(" + enrolment.access.remaining + ")") +
+            ";--course-early-access-note:" +
+            text(enrolment.accessNote) +
+            ";--course-early-pace:" +
+            text(enrolment.pace.value) +
+            ";--course-early-pace-note:" +
+            text(enrolment.pace.note) +
+            ";";
+          rules +=
+            show(access.courseId, "[data-course-early-enrolment]", "block") +
+            root +
+            card(access.courseId) +
+            " [data-course-early-tone]:not([data-course-early-tone~=" +
+            tone +
+            "]){display:none!important}" +
+            (enrolment.hasInvoice
+              ? show(access.courseId, "[data-course-early-invoice]", "inline")
+              : "") +
+            (enrolment.accessNote
+              ? show(
+                  access.courseId,
+                  "[data-course-early-access-note]",
+                  "block",
+                )
+              : "") +
+            (enrolment.pace.note
+              ? show(access.courseId, "[data-course-early-pace-note]", "block")
+              : "");
+        }
+        if (words) rules += card(access.courseId) + "{" + words + "}";
       } else if (!access.enrolled) {
         rules += offered(access.courseId);
       }
@@ -200,6 +278,7 @@ export const getCourseCardsEarlyStateBootstrapScript = () =>
     enrolledPrefix: ENROLLED_COURSES_SESSION_KEY_PREFIX,
     wishlistPrefix: WISHLIST_SESSION_KEY_PREFIX,
     accessPrefix: COURSE_ACCESS_SESSION_KEY_PREFIX,
+    enrolmentWordsPrefix: COURSE_ENROLMENT_WORDS_SESSION_KEY_PREFIX,
     attribute: COURSE_CARDS_EARLY_ATTRIBUTE,
     styleId: "course-cards-early-state",
   } satisfies EarlyStateKeys)});`;

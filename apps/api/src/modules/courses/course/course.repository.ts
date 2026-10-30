@@ -449,9 +449,13 @@ export async function listHomeDiscoveryCourses(
     .where("courses.deleted_at", "is", null);
 
   if (options.freeOnly) {
-    query = query.where(
-      sql<boolean>`coalesce(course_pricing.pricing_type, 'free') = 'free'`,
-    );
+    // A linked-only course costs nothing but is had only with the course
+    // it comes with, so it is not one anyone can start for free.
+    query = query
+      .where(
+        sql<boolean>`coalesce(course_pricing.pricing_type, 'free') = 'free'`,
+      )
+      .where(sql<boolean>`coalesce(course_pricing.linked_only, false) = false`);
   }
 
   if (options.courseIds) {

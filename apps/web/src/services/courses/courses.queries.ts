@@ -24,6 +24,7 @@ import { courseKeys } from "./courses.keys";
 import { coursesService } from "./courses.service";
 import { withOfflineFallback } from "../../lib/offline-data";
 import { readSessionCache, writeSessionCache } from "../../lib/session-cache";
+import { readAccountCopy } from "../accountSessionCopies";
 
 /**
  * The published courses as last fetched in this tab, for a page that is
@@ -118,14 +119,29 @@ export function useCourseOverview(
  */
 export function useCourseAccess(
   idOrSlug: string | null | undefined,
-  options?: { enabled?: boolean },
+  options?: {
+    enabled?: boolean;
+    /**
+     * Start from this tab's copy of the answer for the remembered account
+     * (see `readAccountCopy`), for a page whose document was drawn from
+     * that copy before its scripts ran: the lesson page. A copy older than
+     * the query's `staleTime` is asked again in the background.
+     */
+    fromTabCopy?: boolean;
+  },
 ) {
+  const queryKey = idOrSlug
+    ? courseKeys.access(idOrSlug)
+    : (["courses", "overview", null, "access"] as const);
+  const copy = options?.fromTabCopy
+    ? () => readAccountCopy<CourseAccessResponse>(queryKey)
+    : undefined;
   return useQuery<CourseAccessResponse, ApiError>({
-    queryKey: idOrSlug
-      ? courseKeys.access(idOrSlug)
-      : ["courses", "overview", null, "access"],
+    queryKey,
     queryFn: () => coursesService.getAccess(idOrSlug!),
     enabled: Boolean(idOrSlug && (options?.enabled ?? true)),
+    initialData: copy ? () => copy()?.value : undefined,
+    initialDataUpdatedAt: copy ? () => copy()?.savedAt : undefined,
     staleTime: 60 * 1000,
     retry: false,
   });

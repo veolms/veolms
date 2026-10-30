@@ -209,6 +209,12 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         "Open the Students list and each student's details.",
       ),
       entry(
+        "student.create",
+        "Add students",
+        "Create a student account by name and email; they sign in with a code.",
+        ["student.read"],
+      ),
+      entry(
         "student.contact.update",
         "Edit student contact details",
         "Change a student's email or phone.",
