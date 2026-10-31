@@ -772,6 +772,10 @@ export async function getSectionScopedProgress(
       .where("lp.user_id", "=", userId)
       .where("lp.course_id", "=", courseId)
       .where("l.section_id", "in", [...sectionIds])
+      // The lessons counted above: a hidden or deleted lesson's progress
+      // would let the completed count pass the total.
+      .where("l.is_published", "=", true)
+      .where("l.deleted_at", "is", null)
       .executeTakeFirst(),
   ]);
   return {

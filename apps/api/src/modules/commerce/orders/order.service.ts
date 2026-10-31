@@ -116,9 +116,14 @@ export function createOrderService({
       ),
     ];
     if (!courseCards || courseIds.length === 0) return orders;
-    const cards = new Map(
-      (await courseCards(courseIds)).map((card) => [card.id, card]),
-    );
+    let found: Awaited<ReturnType<typeof courseCards>>;
+    try {
+      found = await courseCards(courseIds);
+    } catch {
+      // Pictures only dress the list: without them it is still the list.
+      return orders;
+    }
+    const cards = new Map(found.map((card) => [card.id, card]));
     return orders.map((order) => ({
       ...order,
       items: order.items.map((item) => {

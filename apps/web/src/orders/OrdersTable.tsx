@@ -394,9 +394,13 @@ const OrderRow = memo(function OrderRow({
             Icon={GraduationCap}
             label="View enrollment"
             onClick={() => {
-              if (firstItem?.courseId) {
+              // The course page, not the lesson player; for part of a
+              // course, the course it opens (an unlisted one has no page).
+              const openCourseId =
+                firstItem?.opensCourseId ?? firstItem?.courseId;
+              if (openCourseId) {
                 onNavigatePage?.(
-                  `/courses/${encodeURIComponent(firstItem.courseId)}`,
+                  `/courses/${encodeURIComponent(openCourseId)}/overview`,
                 );
               } else {
                 setNotice?.("Course enrollment page not available.");

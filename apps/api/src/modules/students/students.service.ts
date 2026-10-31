@@ -427,18 +427,32 @@ export function createStudentsService({
     // course, kept for its order. Staff see the course it opens instead,
     // as partial access, with the part's order behind it (to refund it),
     // and the progress counted over the sections it opens.
+    // A part is left out only where the course it opens is listed in its
+    // place; otherwise it stays, with its order.
     const parts = enrolledCourses.filter((c) => c.course_unlisted);
+    const shownCourseIds = new Set(
+      enrolledCourses.filter((c) => !c.course_unlisted).map((c) => c.course_id),
+    );
     const partByCourse = new Map<string, (typeof parts)[number]>();
     for (const target of await studentsRepo.listPartialAccessTargets(
       database,
       parts.map((c) => c.course_id),
     )) {
       const part = parts.find((c) => c.course_id === target.course_id);
-      if (part && !partByCourse.has(target.linked_course_id)) {
+      if (
+        part &&
+        shownCourseIds.has(target.linked_course_id) &&
+        !partByCourse.has(target.linked_course_id)
+      ) {
         partByCourse.set(target.linked_course_id, part);
       }
     }
-    const listedCourses = enrolledCourses.filter((c) => !c.course_unlisted);
+    const replacedPartIds = new Set(
+      [...partByCourse.values()].map((part) => part.course_id),
+    );
+    const listedCourses = enrolledCourses.filter(
+      (c) => !replacedPartIds.has(c.course_id),
+    );
     const partialCourses = listedCourses.filter(
       (c) =>
         c.enrollment_source === "linked_course" &&
@@ -477,10 +491,9 @@ export function createStudentsService({
     const progressByCourse = new Map(
       progressSummaries.map((summary) => [summary.course_id, summary]),
     );
-    const hiddenCourseIds = new Set(parts.map((c) => c.course_id));
     const totalLessonsCompleted = progressSummaries.reduce(
       (sum, summary) =>
-        hiddenCourseIds.has(summary.course_id)
+        replacedPartIds.has(summary.course_id)
           ? sum
           : sum +
             (scopedProgress.get(summary.course_id)?.completed_lessons ??
