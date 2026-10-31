@@ -32,12 +32,9 @@ body:
       label: Issue Type
       description: What kind of problem is this?
       options:
-        - label: "UI / Visual glitch"
-          value: "UI / Visual glitch"
-        - label: "API / Backend error"
-          value: "API / Backend error"
-        - label: "Other"
-          value: "Other"
+        - "UI / Visual glitch"
+        - "API / Backend error"
+        - "Other"
     validations:
       required: true
 
@@ -80,7 +77,7 @@ body:
       description: |
         Tell us step-by-step how to reproduce the issue.
         💡 **Recommendation:** You can also attach or drag & drop a video or image/screenshot below to demonstrate the problem.
-      value: |
+      placeholder: |
         1. Go to '...'
         2. Click on '...'
         3. See error '...'

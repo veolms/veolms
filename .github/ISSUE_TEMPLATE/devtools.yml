@@ -16,13 +16,13 @@ body:
     attributes:
       label: Which setup / tool is having issues?
       options:
-        - label: "Getting started / First-time setup"
-        - label: "Docker / PostgreSQL database"
-        - label: "Running dev servers (pnpm dev)"
-        - label: "Database migrations / seed (pnpm db:migrate, pnpm db:seed)"
-        - label: "CLI tools (user:cli, import:youtube)"
-        - label: "Building or testing (pnpm build, pnpm test)"
-        - label: "Other"
+        - "Getting started / First-time setup"
+        - "Docker / PostgreSQL database"
+        - "Running dev servers (pnpm dev)"
+        - "Database migrations / seed (pnpm db:migrate, pnpm db:seed)"
+        - "CLI tools (user:cli, import:youtube)"
+        - "Building or testing (pnpm build, pnpm test)"
+        - "Other"
     validations:
       required: true
 

@@ -1,7 +1,7 @@
 name: "💡 Feature Request"
 description: "Suggest an idea, enhancement, or new feature for VeoLMS."
 title: "[Feature]: "
-labels: ["enhancement", "Feature Request", "needs-triage"]
+labels: ["enhancement", "feature request", "needs-triage"]
 body:
   - type: checkboxes
     id: duplicate-check
@@ -17,10 +17,8 @@ body:
       label: Issue Type
       description: Is this a brand-new feature or an enhancement to an existing one?
       options:
-        - label: "Feature"
-          value: "Feature"
-        - label: "Enhancement / Improvement"
-          value: "Enhancement / Improvement"
+        - "Feature"
+        - "Enhancement / Improvement"
     validations:
       required: true
 

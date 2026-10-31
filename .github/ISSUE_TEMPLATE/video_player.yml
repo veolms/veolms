@@ -1,7 +1,7 @@
 name: "🎬 Video Player Issue / Feedback"
 description: "Report playback, buffering, audio, video quality, or subtitle issues in the video player."
 title: "[Video Player]: "
-labels: ["package:video-player", "media", "bug"]
+labels: ["video-player", "media", "bug"]
 body:
   - type: checkboxes
     id: duplicate-check
@@ -39,6 +39,7 @@ body:
         - label: Subtitles / captions are missing or wrong
         - label: Speed controls (1.5x, 2x) or seek bar not working
         - label: Playback error message appears on screen
+        - label: Other
     validations:
       required: true
 
