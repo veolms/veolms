@@ -1,4 +1,6 @@
 import type {
+  LearnerOrder,
+  OrderItemSummary,
   OrderResponse,
   OrdersListResponse,
   OrdersListQuery,
@@ -80,10 +82,62 @@ const orderStats = createCache<OrderStatsResponse>({
 export function createOrderService({
   database,
   studentsService = createStudentsService({ database }),
+  courseCards,
 }: {
   database: Executor;
   studentsService?: Pick<StudentsService, "resolveStudentAvatars">;
+  /**
+   * The courses' pictures (the course module's `listCourseCardsByIds`),
+   * for purchase history. Passed in by the routes: the course module
+   * itself depends on commerce. Without it, orders carry no pictures.
+   */
+  courseCards?: (courseIds: readonly string[]) => Promise<
+    ReadonlyArray<{
+      id: string;
+      thumbnailUrl: string | null;
+      thumbnailSrcSet: ReadonlyArray<{ url: string; width: number }>;
+    }>
+  >;
 }): OrderService {
+  /**
+   * A learner's orders with each item's course picture: the course it
+   * opens, for part of a course. One lookup for the whole page.
+   */
+  async function withThumbnails(
+    orders: LearnerOrder[],
+  ): Promise<LearnerOrder[]> {
+    const courseOf = (item: OrderItemSummary) =>
+      item.opensCourseId ?? item.courseId;
+    const courseIds = [
+      ...new Set(
+        orders.flatMap((order) =>
+          order.items.flatMap((item) => courseOf(item) ?? []),
+        ),
+      ),
+    ];
+    if (!courseCards || courseIds.length === 0) return orders;
+    const cards = new Map(
+      (await courseCards(courseIds)).map((card) => [card.id, card]),
+    );
+    return orders.map((order) => ({
+      ...order,
+      items: order.items.map((item) => {
+        const card = cards.get(courseOf(item) ?? "");
+        if (!card?.thumbnailUrl) return item;
+        return {
+          ...item,
+          thumbnail: {
+            url: card.thumbnailUrl,
+            srcSet: card.thumbnailSrcSet.map(({ url, width }) => ({
+              url,
+              width,
+            })),
+          },
+        };
+      }),
+    }));
+  }
+
   async function getOrderById(
     scope: OrderScope,
     orderId: string,
@@ -110,7 +164,10 @@ export function createOrderService({
     ]);
 
     if (scope.type === "user") {
-      return toLearnerOrder(order, items, payments[0]);
+      const [learnerOrder] = await withThumbnails([
+        toLearnerOrder(order, items, payments[0]),
+      ]);
+      return learnerOrder!;
     }
 
     const avatarUrls = await resolveAvatarUrls(users);
@@ -221,11 +278,13 @@ export function createOrderService({
 
     if (scope.type === "user") {
       return {
-        orders: pageRows.map((order) =>
-          toLearnerOrder(
-            order,
-            itemsByOrderId.get(order.id) ?? [],
-            paymentsByOrderId.get(order.id),
+        orders: await withThumbnails(
+          pageRows.map((order) =>
+            toLearnerOrder(
+              order,
+              itemsByOrderId.get(order.id) ?? [],
+              paymentsByOrderId.get(order.id),
+            ),
           ),
         ),
         nextCursor,

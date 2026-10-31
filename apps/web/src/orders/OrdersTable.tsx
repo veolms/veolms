@@ -36,6 +36,7 @@ import {
   formatOrderDate,
   getCourseBrandBadge,
   getOrderStatusStyle,
+  orderItemLabel,
 } from "./orderHelpers";
 import { StudentAvatar } from "./StudentAvatar";
 import { ElevatedCard } from "../components/ElevatedCard";
@@ -173,8 +174,10 @@ const OrderRow = memo(function OrderRow({
 
   // Course info
   const firstItem = order.items?.[0];
+  // Part of a course is named by the course, with a note saying so.
+  const firstLabel = firstItem ? orderItemLabel(firstItem) : null;
   const courseTitle =
-    firstItem?.titleSnapshot ||
+    firstLabel?.title ||
     (order.items && order.items.length > 1
       ? `${order.items[0]?.titleSnapshot} + ${order.items.length - 1} more`
       : "Course Order");
@@ -273,8 +276,15 @@ const OrderRow = memo(function OrderRow({
           >
             {brand.label}
           </span>
-          <span className="truncate text-sm font-semibold text-(--text)">
-            {courseTitle}
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-(--text)">
+              {courseTitle}
+            </span>
+            {firstLabel?.note && (
+              <span className="block truncate text-xs text-(--muted)">
+                {firstLabel.note}
+              </span>
+            )}
           </span>
         </div>
         {/* Amount on mobile only */}

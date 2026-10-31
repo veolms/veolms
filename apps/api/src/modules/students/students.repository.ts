@@ -697,6 +697,7 @@ export async function getStudentEnrolledCourses(
       "c.short_description as course_description",
       "c.thumbnail_url as course_thumbnail_url",
       "c.difficulty",
+      "c.unlisted as course_unlisted",
     ])
     .where("e.user_id", "=", userId)
     .where("c.deleted_at", "is", null);
@@ -705,6 +706,81 @@ export async function getStudentEnrolledCourses(
     query = query.where("c.creator_id", "=", creatorId);
   }
   return await query.orderBy("e.created_at", "desc").execute();
+}
+
+/**
+ * The course each of these unlisted courses sells part of (a partial access:
+ * a link that names sections), first link first.
+ */
+export async function listPartialAccessTargets(
+  database: StudentsExecutor,
+  partCourseIds: readonly string[],
+) {
+  if (partCourseIds.length === 0) return [];
+  return await database
+    .selectFrom("course_links")
+    .select(["course_id", "linked_course_id"])
+    .where("course_id", "in", [...partCourseIds])
+    .where("section_ids", "is not", null)
+    .orderBy("position", "asc")
+    .orderBy("created_at", "asc")
+    .execute();
+}
+
+/**
+ * A learner's progress in a course counted over some of its sections only:
+ * the part of it they hold. The same measures as
+ * `listProgressSummariesForUserIds` and `listCourseLessonCounts`.
+ */
+export async function getSectionScopedProgress(
+  database: StudentsExecutor,
+  userId: string,
+  courseId: string,
+  sectionIds: readonly string[],
+) {
+  if (sectionIds.length === 0) {
+    return {
+      total_lessons: 0,
+      progress_rows: 0,
+      completed_lessons: 0,
+      avg_progress: 0,
+      last_activity_at: null,
+    };
+  }
+  const [lessons, progress] = await Promise.all([
+    database
+      .selectFrom("course_lessons")
+      .select((eb) => eb.fn.count<number>("id").as("n"))
+      .where("course_id", "=", courseId)
+      .where("section_id", "in", [...sectionIds])
+      .where("is_published", "=", true)
+      .where("deleted_at", "is", null)
+      .executeTakeFirst(),
+    database
+      .selectFrom("learning_progress as lp")
+      .innerJoin("course_lessons as l", "l.id", "lp.lesson_id")
+      .select([
+        sql<number>`count(*)::int`.as("progress_rows"),
+        sql<number>`(count(*) filter (where lp.progress_percent >= 90))::int`.as(
+          "completed_lessons",
+        ),
+        sql<number>`coalesce(avg(lp.progress_percent), 0)::float`.as(
+          "avg_progress",
+        ),
+        sql<Date | null>`max(lp.updated_at)`.as("last_activity_at"),
+      ])
+      .where("lp.user_id", "=", userId)
+      .where("lp.course_id", "=", courseId)
+      .where("l.section_id", "in", [...sectionIds])
+      .executeTakeFirst(),
+  ]);
+  return {
+    total_lessons: Number(lessons?.n ?? 0),
+    progress_rows: progress?.progress_rows ?? 0,
+    completed_lessons: progress?.completed_lessons ?? 0,
+    avg_progress: progress?.avg_progress ?? 0,
+    last_activity_at: progress?.last_activity_at ?? null,
+  };
 }
 
 /**
