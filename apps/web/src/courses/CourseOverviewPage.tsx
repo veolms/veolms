@@ -1878,7 +1878,11 @@ export function CourseOverviewPage(props: CourseOverviewPageProps) {
     : offerQuery.data
       ? { status: "ready", offer: offerQuery.data }
       : offerQuery.isError
-        ? { status: "missing" }
+        ? // Only a link the server does not know is dead; any other failure
+          // is asked again, and the whole course is not offered meanwhile.
+          offerQuery.error.status === 404
+          ? { status: "missing" }
+          : { status: "failed", retry: () => void offerQuery.refetch() }
         : { status: "loading" };
   const serverCategories = props.categories ?? [];
   const authUser = useAuthStore((s) => s.user);
@@ -2063,6 +2067,7 @@ type PartialOfferState =
   | null
   | { status: "loading" }
   | { status: "missing" }
+  | { status: "failed"; retry: () => void }
   | { status: "ready"; offer: PartialAccessOffer };
 
 type CourseOverviewContentProps = CourseOverviewPageProps & {
@@ -2549,6 +2554,11 @@ function CourseOverviewContent({
               offer={offer}
               courseTitle={title}
               totalSections={totalSections ?? courseSections.length}
+              onRetry={
+                partialOffer.status === "failed"
+                  ? partialOffer.retry
+                  : undefined
+              }
             />
           ) : null}
           <div
@@ -2576,10 +2586,11 @@ function CourseOverviewContent({
                 openIntent={learnerPlays ? learnerIntent : undefined}
               />
             ) : partialOffer?.status === "loading" ||
+              partialOffer?.status === "failed" ||
               (offer && !offer.onSale) ? (
               // The part's price is not known yet, or it is not sold: the
               // course's own price must not stand in for it.
-              offer ? null : (
+              offer || partialOffer?.status === "failed" ? null : (
                 <CourseViewerBandPlaceholder />
               )
             ) : (
@@ -2590,7 +2601,10 @@ function CourseOverviewContent({
                 onNavigatePage={onNavigatePage}
                 isReadOnlyPreview={isReadOnlyPreview}
                 isCreator={isCreator}
-                canSelfEnroll={adaptedFromPreview?.canSelfEnroll}
+                // A part on sale is bought on its own terms; the course's
+                // restriction (a free course entered by invitation) is not
+                // its own.
+                canSelfEnroll={offer ? true : adaptedFromPreview?.canSelfEnroll}
                 includedWith={adaptedFromPreview?.includedWith}
                 includedCourses={adaptedFromPreview?.includedCourses}
                 viewerKnown={viewer === "known"}

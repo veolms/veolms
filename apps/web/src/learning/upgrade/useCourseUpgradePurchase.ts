@@ -44,14 +44,17 @@ export function useCourseUpgradePurchase({
   const idempotencyKeyRef = useRef<string | null>(null);
   const stopGatewayRef = useRef<StopGatewayCheckout | null>(null);
   const confirmationRef = useRef<AbortController | null>(null);
+  // The pop-up has gone, so a payment window still on its way is not wanted.
+  const unmountedRef = useRef(false);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
       stopGatewayRef.current?.();
       confirmationRef.current?.abort();
-    },
-    [],
-  );
+    };
+  }, []);
 
   /** Waits for an order the gateway charged to be marked paid. */
   async function waitUntilPaid(orderId: string, message: string | null) {
@@ -113,8 +116,13 @@ export function useCourseUpgradePurchase({
 
       const user = currentUser.data;
       stopGatewayRef.current?.();
-      setGatewayOpen(true);
-      stopGatewayRef.current = await openGatewayCheckout(
+      // Set once the window has ended in any way.
+      let windowEnded = false;
+      const endWindow = () => {
+        windowEnded = true;
+        setGatewayOpen(false);
+      };
+      const stopGateway = await openGatewayCheckout(
         {
           gateway: order.gateway,
           name: productName,
@@ -126,7 +134,7 @@ export function useCourseUpgradePurchase({
         },
         {
           onPaid: async (proof) => {
-            setGatewayOpen(false);
+            endWindow();
             try {
               await verify.mutateAsync({ orderId: order.order.id, ...proof });
               setBusy(false);
@@ -138,7 +146,7 @@ export function useCourseUpgradePurchase({
             }
           },
           onDismissed: () => {
-            setGatewayOpen(false);
+            endWindow();
             const confirmation = confirmationRef.current;
             if (confirmation && !confirmation.signal.aborted) return;
             setError(
@@ -147,12 +155,12 @@ export function useCourseUpgradePurchase({
             releaseThisOrder();
           },
           onBlocked: (message) => {
-            setGatewayOpen(false);
+            endWindow();
             setError(message);
             releaseThisOrder();
           },
           onClosedUnanswered: () => {
-            setGatewayOpen(false);
+            endWindow();
             void waitUntilPaid(
               order.order.id,
               "The payment window closed before we heard back from it. If your payment went through, the course unlocks by itself within a few minutes, so please check Purchase History before paying again.",
@@ -160,6 +168,14 @@ export function useCourseUpgradePurchase({
           },
         },
       );
+      if (unmountedRef.current) {
+        stopGateway();
+        return;
+      }
+      stopGatewayRef.current = stopGateway;
+      // The window is on its way: the pop-up steps aside for it. Until now
+      // the pop-up stayed, saying the payment is being processed.
+      if (!windowEnded) setGatewayOpen(true);
     } catch (failure) {
       setBusy(false);
       setGatewayOpen(false);

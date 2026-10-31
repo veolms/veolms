@@ -1,5 +1,6 @@
 import { PuzzlePieceIcon as PuzzlePiece } from "@phosphor-icons/react/PuzzlePiece";
 import type { PartialAccessOffer } from "@veolms/contracts";
+import { Button } from "../../components/Button";
 
 export interface PartialAccessNoticeProps {
   /** The part sold from this page's link; null when the link is unknown. */
@@ -7,6 +8,11 @@ export interface PartialAccessNoticeProps {
   courseTitle: string;
   /** How many sections the course has. */
   totalSections: number;
+  /**
+   * Set when the link could not be checked (the request failed, which says
+   * nothing about the link): asks for it again.
+   */
+  onRetry?: () => void;
 }
 
 /**
@@ -19,7 +25,21 @@ export function PartialAccessNotice({
   offer,
   courseTitle,
   totalSections,
+  onRetry,
 }: PartialAccessNoticeProps) {
+  if (!offer && onRetry) {
+    return (
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_3%,transparent)] p-4 text-sm text-(--text-secondary)">
+        <span>
+          This partial access could not be loaded. Check your connection and try
+          again.
+        </span>
+        <Button type="button" variant="quiet" onClick={onRetry}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
   if (!offer) {
     return (
       <div className="mb-4 rounded-2xl border border-[color-mix(in_srgb,var(--text)_10%,transparent)] bg-[color-mix(in_srgb,var(--text)_3%,transparent)] p-4 text-sm text-(--text-secondary)">
