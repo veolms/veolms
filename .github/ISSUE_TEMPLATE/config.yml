@@ -1,3 +1,5 @@
+# Disables blank issues for external/public contributors, while GitHub
+# automatically keeps the blank issue option visible for repo members/maintainers.
 blank_issues_enabled: false
 contact_links:
   - name: "💬 Community & Questions (Discord)"
