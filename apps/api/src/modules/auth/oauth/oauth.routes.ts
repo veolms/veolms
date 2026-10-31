@@ -58,13 +58,15 @@ const oauthRoutes: RoutePlugin = async (app, options) => {
     controller.login,
   );
 
-  app.get(
+  app.post(
     "/auth/oauth/google/nonce",
     {
-      // Unauthenticated; each call writes one row to the DB, so cap per IP.
+      // Unauthenticated; each call writes one row to the DB. Cached per
+      // tab on the client with in-flight deduplication; rate-limited to 60
+      // per minute per IP for shared networks.
       config: {
         rateLimit: {
-          max: 10,
+          max: 60,
           timeWindow: "1 minute",
         },
       },

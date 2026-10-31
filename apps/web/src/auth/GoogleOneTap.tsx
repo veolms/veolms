@@ -203,6 +203,7 @@ export function GoogleOneTap({
             callback: (response) => {
               if (!active || !response.credential) return;
 
+              authService.clearGoogleOneTapNonce();
               onPendingChangeRef.current?.(true);
               loginRef.current(
                 { credential: response.credential },
@@ -358,6 +359,7 @@ export function GlobalGoogleOneTap() {
             callback: (response) => {
               if (!active || !response.credential) return;
 
+              authService.clearGoogleOneTapNonce();
               setVerifyingDone(false);
               setVerifyingAccount(readCredentialAccount(response.credential));
               loginRef.current(

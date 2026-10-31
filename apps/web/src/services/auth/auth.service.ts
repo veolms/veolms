@@ -132,6 +132,58 @@ async function generatedAvatarFile(previewUrl: string): Promise<File> {
   return new File([blob], "generated-avatar.png", { type: "image/png" });
 }
 
+const GOOGLE_ONE_TAP_NONCE_STORAGE_KEY = "veolms:google_one_tap_nonce";
+const NONCE_REUSE_SAFETY_MARGIN_MS = 5 * 60 * 1000; // 5 minutes
+
+let inFlightNoncePromise: Promise<GoogleOneTapNonceResponse> | null = null;
+
+function readCachedNonce(): GoogleOneTapNonceResponse | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(GOOGLE_ONE_TAP_NONCE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as GoogleOneTapNonceResponse;
+    if (
+      typeof parsed?.nonce === "string" &&
+      typeof parsed?.expiresAt === "string"
+    ) {
+      const expiresAtMs = Date.parse(parsed.expiresAt);
+      if (
+        !Number.isNaN(expiresAtMs) &&
+        expiresAtMs - Date.now() > NONCE_REUSE_SAFETY_MARGIN_MS
+      ) {
+        return parsed;
+      }
+    }
+    window.sessionStorage.removeItem(GOOGLE_ONE_TAP_NONCE_STORAGE_KEY);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedNonce(data: GoogleOneTapNonceResponse): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      GOOGLE_ONE_TAP_NONCE_STORAGE_KEY,
+      JSON.stringify(data),
+    );
+  } catch {
+    // Storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
+export function clearGoogleOneTapNonce(): void {
+  inFlightNoncePromise = null;
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(GOOGLE_ONE_TAP_NONCE_STORAGE_KEY);
+  } catch {
+    // Storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
 export const authService = {
   sendOtp: (payload: OtpSendRequest): Promise<OtpSendResponse> => {
     return api.post<OtpSendResponse>("/auth/otp/send", payload);
@@ -184,6 +236,7 @@ export const authService = {
   googleOneTapLogin: (
     payload: GoogleOneTapLoginRequest,
   ): Promise<LoginResponse> => {
+    clearGoogleOneTapNonce();
     // The client has no global timeout; without one a hung request leaves the
     // One Tap UI stuck on "Verifying…" with the login buttons locked.
     return api.post<LoginResponse>("/auth/oauth/google/one-tap", payload, {
@@ -191,9 +244,31 @@ export const authService = {
     });
   },
   getGoogleOneTapNonce: (): Promise<GoogleOneTapNonceResponse> => {
-    return api.get<GoogleOneTapNonceResponse>("/auth/oauth/google/nonce", {
-      timeout: 20_000,
-    });
+    const cached = readCachedNonce();
+    if (cached) {
+      return Promise.resolve(cached);
+    }
+    if (inFlightNoncePromise) {
+      return inFlightNoncePromise;
+    }
+    const fetchPromise = api
+      .post<GoogleOneTapNonceResponse>("/auth/oauth/google/nonce", undefined, {
+        timeout: 20_000,
+      })
+      .then((data) => {
+        writeCachedNonce(data);
+        return data;
+      })
+      .finally(() => {
+        if (inFlightNoncePromise === fetchPromise) {
+          inFlightNoncePromise = null;
+        }
+      });
+    inFlightNoncePromise = fetchPromise;
+    return fetchPromise;
+  },
+  clearGoogleOneTapNonce: (): void => {
+    clearGoogleOneTapNonce();
   },
 
   setupTotp: (): Promise<TotpSetupResponse> => {
