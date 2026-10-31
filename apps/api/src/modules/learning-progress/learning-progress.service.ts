@@ -15,7 +15,7 @@ import {
   DEFAULT_DAILY_GOAL_MINUTES,
   LEARNING_REMINDER_DAY_IDS,
 } from "@veolms/contracts";
-import type { Database } from "@veolms/database";
+import { withLocalCommit, type Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 
 import { ADMIN_ROLE } from "../auth/index.ts";
@@ -692,15 +692,17 @@ export function createLearningProgressService({
 
     // One statement: progress, the day's activity, and — when this batch
     // takes the day across the learner's goal — the goal-completed event.
-    const accrual =
-      await learningProgressRepository.upsertProgressAndAccrueActivity(
-        database,
+    // A heartbeat, so it does not wait for the replica (`withLocalCommit`).
+    const accrual = await withLocalCommit(database, (executor) =>
+      learningProgressRepository.upsertProgressAndAccrueActivity(
+        executor,
         user.id,
         course.id,
         DEFAULT_DAILY_GOAL_MINUTES,
         rowsToUpsert,
         watchedSeconds,
-      );
+      ),
+    );
 
     if (accrual) {
       // A failed notification must never fail the heartbeat. A milestone
