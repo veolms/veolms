@@ -163,7 +163,7 @@ export async function createVeoLMSApi<
   if (config.CACHE_ENABLED && config.CACHE_BUS_ENABLED) {
     app.addHook("onListen", async () => {
       cacheBus ??= startCacheBus({
-        connectionString: config.DATABASE_URL,
+        connectionString: config.CACHE_BUS_DATABASE_URL ?? config.DATABASE_URL,
         database,
         logger: app.log,
       });

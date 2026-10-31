@@ -236,6 +236,12 @@ const serverConfigSchema = z.object({
    */
   CACHE_BUS_ENABLED: booleanEnvironmentValueSchema.default(true),
   /**
+   * Where the cache bus listens, when not `DATABASE_URL`. A process that
+   * reads from a streaming replica points this at the primary: LISTEN does
+   * not run on a replica, and NOTIFY is only delivered on the primary.
+   */
+  CACHE_BUS_DATABASE_URL: z.string().min(1).optional(),
+  /**
    * Runs the notification outbox/email processor inside the API process.
    * Nothing in the repository schedules the standalone worker scripts, so
    * without this, notifications and emails are only delivered if ops runs
