@@ -21,6 +21,8 @@ export interface AccessDecision {
   access: CourseAccessLevel;
   firstLessonOpen: boolean;
   lockedLessonsNeed: CourseLockedLessonsNeed | null;
+  /** With `limited` access, the sections the learner's grant opens. */
+  openSectionIds?: string[];
 }
 
 /**
@@ -32,7 +34,9 @@ export interface AccessDecision {
  *   view too;
  * - anyone signed in opens every lesson of a free course that is not
  *   restricted, and a visitor who is not signed in its first lesson;
- * - anyone else opens every lesson only while holding a grant for it;
+ * - anyone else opens every lesson only while holding a grant for it, or
+ *   the lessons of some sections when the grant opens only those
+ *   (`openSectionIds`, see `getAccessScope`);
  * - preview lessons open for everyone (the page knows which they are).
  */
 export function decideCourseAccess(input: {
@@ -44,8 +48,14 @@ export function decideCourseAccess(input: {
   };
   viewer: AccessViewer | undefined;
   holdsGrant: boolean;
+  /**
+   * The sections the grant opens when it opens only some; null or absent
+   * when it opens the whole course.
+   */
+  grantSectionIds?: readonly string[] | null;
 }): AccessDecision {
-  const { course, viewer, holdsGrant } = input;
+  const { course, viewer, holdsGrant, grantSectionIds } = input;
+  const holdsPart = holdsGrant && Boolean(grantSectionIds);
   const openFree = isOpenFreeCourse({
     pricing_type: course.storedPricingType,
     access_type: course.accessType,
@@ -72,7 +82,7 @@ export function decideCourseAccess(input: {
     isAdmin ||
     viewer.previewsEveryCourse ||
     openFree ||
-    holdsGrant;
+    (holdsGrant && !holdsPart);
   if (full) {
     return {
       viewer: role,
@@ -86,6 +96,7 @@ export function decideCourseAccess(input: {
     access: "limited",
     firstLessonOpen: false,
     lockedLessonsNeed: course.canSelfEnroll ? "purchase" : "grant",
+    ...(holdsPart ? { openSectionIds: [...grantSectionIds!] } : {}),
   };
 }
 

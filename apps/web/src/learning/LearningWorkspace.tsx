@@ -1,6 +1,6 @@
 import "./learning-feature.css";
 import "./learning-split-layout.css";
-import { useMemo } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import type { MyQuizAssignment } from "@veolms/contracts";
 import { FloatingScrollbar } from "../shell/FloatingScrollbar";
 import type {
@@ -13,6 +13,9 @@ import { Drawer } from "@/components/ui/drawer";
 import { LessonPlayerSlot } from "./workspace/LessonPlayerSlot";
 import { LessonContentPanel } from "./workspace/LessonContentPanel";
 import { CurriculumColumn } from "./workspace/CurriculumColumn";
+
+// Fetched, with the payment code it brings, only when it is opened.
+const UpgradeCourseDialog = lazy(() => import("./upgrade/UpgradeCourseDialog"));
 import { CourseLessonsDrawerContent } from "./workspace/CourseLessonsDrawerContent";
 import { useLearningCourseData } from "./workspace/hooks/useLearningCourseData";
 import { useLessonSelectionState } from "./workspace/hooks/useLessonSelectionState";
@@ -118,6 +121,17 @@ export function LearningWorkspace({
   } = useLearningCourseData({
     courseSlug,
   });
+  // A learner holding part of the course (some of its sections) unlocks
+  // the rest here, from the upgrade pop-up, instead of on the course page,
+  // which they are already enrolled on.
+  const holdsPartOfCourse = Boolean(
+    courseAccessQuery.data?.openSectionIds?.length,
+  );
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  // Stable: the locked lesson's prompt is built from it and handed up to
+  // the page header, which a new function every render kept updating.
+  const openUpgrade = useCallback(() => setUpgradeOpen(true), []);
+  const unlockCourse = holdsPartOfCourse ? openUpgrade : onUnlockCourse;
   const {
     shortcutPlatform,
     selectedLesson,
@@ -302,7 +316,7 @@ export function LearningWorkspace({
     playbackBootstrapPending,
   } = useLessonStagePlan({
     courseSlug,
-    onUnlockCourse,
+    onUnlockCourse: unlockCourse,
     onOpenLogin,
     isAuthenticated,
     resolvedAuthUser,
@@ -964,6 +978,19 @@ export function LearningWorkspace({
         className="floating-scrollbar--curriculum floating-scrollbar--drawer"
         disabled={!lessonDrawer}
       />
+      {upgradeOpen && courseOverview ? (
+        <Suspense fallback={null}>
+          <UpgradeCourseDialog
+            courseId={courseOverview.course.id}
+            courseTitle={courseOverview.course.title}
+            onClose={() => setUpgradeOpen(false)}
+            onUnlocked={() => {
+              setUpgradeOpen(false);
+              retryPlaybackBootstrap();
+            }}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

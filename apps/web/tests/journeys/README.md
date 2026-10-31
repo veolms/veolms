@@ -4,13 +4,13 @@ Real Chrome, using the real web app against the real API, the way a learner
 or an administrator does: signing in with the emailed code, opening lessons,
 watching the video, paying, and checking what is saved.
 
-| File                           | What it covers                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------------ |
-| `01-sign-in.spec.ts`           | Sign-up and sign-in by code, wrong and replaced codes, signing out             |
-| `02-watching-lessons.spec.ts`  | Who can watch which lesson: preview, locked, bought, given, taken away, drafts |
-| `03-buying-a-course.spec.ts`   | Paying, cancelling the payment, free courses, invitation-only courses          |
-| `04-learning-progress.spec.ts` | Completed lessons, course progress, resuming on another device                 |
-| `05-staff-area.spec.ts`        | The staff pages: closed to learners and visitors, open to the administrator    |
+| File                           | What it covers                                                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `01-sign-in.spec.ts`           | Sign-up and sign-in by code, wrong and replaced codes, signing out                                                        |
+| `02-watching-lessons.spec.ts`  | Who can watch which lesson: preview, locked, bought, given, taken away, drafts; opening one from the home page on a phone |
+| `03-buying-a-course.spec.ts`   | Paying, cancelling the payment, free courses, invitation-only courses                                                     |
+| `04-learning-progress.spec.ts` | Completed lessons, course progress, resuming on another device                                                            |
+| `05-staff-area.spec.ts`        | The staff pages: closed to learners and visitors, open to the administrator                                               |
 
 ## Running them
 

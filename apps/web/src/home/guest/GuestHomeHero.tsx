@@ -1,4 +1,8 @@
 import { LearnerPhoneBackdrop } from "../learner/LearnerPhoneBackdrop";
+import {
+  heroQuoteClasses,
+  heroQuoteSizeClasses,
+} from "../learner/learnerHeroLayout";
 import { guestHomeGutter, guestHomeGutterBleed } from "./guestHomeSpacing";
 import {
   homeHeroHeightClasses,
@@ -9,12 +13,7 @@ import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import type { HomePageHero } from "@veolms/contracts/home-page-defaults";
 import type { NavigateTo } from "../../routing/navigation";
 import { GuestHomeLink } from "./GuestHomeLink";
-import {
-  useLayoutEffect,
-  useRef,
-  type MouseEvent,
-  type ReactNode,
-} from "react";
+import { type MouseEvent, type ReactNode } from "react";
 import { HeroDesk } from "./HeroDesk";
 import { guestHeroCopyWhenComplete, HeroCopyEnd } from "./HeroPicture";
 import { glassActionClasses, primaryActionClasses } from "./heroActionClasses";
@@ -135,6 +134,23 @@ const descriptionTextClasses =
   "font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-balance text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
 const descriptionClasses = `${descriptionBoxClasses} ${descriptionTextClasses}`;
 
+/**
+ * The quote is set as the signed-in learner's quote of the day is: its
+ * letters, its sizes and its box, as wide as its longest line up to 28 of
+ * its letters and never past the laptop (see `heroQuoteBoxClasses`).
+ */
+const quoteBoxClasses = `mt-4 w-max min-w-0 max-w-[28em] ${heroQuoteSizeClasses} @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(28em,calc(100cqw_-_var(--picture-h)_*_1.05_+_var(--picture-shift)_-_clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)_-_1.5rem))]`;
+const quoteTextClasses = `${heroQuoteClasses} text-slate-200 [:root[data-theme=light]_&]:text-slate-700`;
+
+/**
+ * The quote's first sentence and the rest of it, which is set on a line of
+ * its own below.
+ */
+function splitFirstSentence(text: string): [string, string] {
+  const match = /^(.+?[.!?])\s+(\S.*)$/su.exec(text);
+  return match ? [match[1] ?? text, match[2] ?? ""] : [text, ""];
+}
+
 function HeroHeadline({
   hero,
   className,
@@ -155,41 +171,11 @@ function HeroHeadline({
 }
 
 /**
- * The quote's author ends where the quote's longest line ends. Its lines
- * are balanced, so they stop short of the box's edge by an amount CSS
- * cannot know; it is measured, again whenever the quote changes size (the
- * page resized, the serif font arriving).
+ * The quote's text without quotation marks at its ends, which the hero sets
+ * itself; an admin may have typed them into the copy.
  */
-function useAuthorAtQuoteEnd(text: string | undefined) {
-  const quoteRef = useRef<HTMLQuoteElement>(null);
-  const captionRef = useRef<HTMLElement>(null);
-
-  useLayoutEffect(() => {
-    const quote = quoteRef.current;
-    const caption = captionRef.current;
-    if (!quote || !caption) return undefined;
-
-    const place = () => {
-      const lines = document.createRange();
-      lines.selectNodeContents(quote);
-      const left = caption.getBoundingClientRect().left;
-      let quoteEnd = 0;
-      for (const line of lines.getClientRects()) {
-        quoteEnd = Math.max(quoteEnd, line.right - left);
-      }
-      const spare = caption.clientWidth - quoteEnd;
-      caption.style.paddingRight =
-        quoteEnd > 0 && spare > 0 ? `${Math.floor(spare)}px` : "";
-    };
-
-    place();
-    const observer = new ResizeObserver(place);
-    observer.observe(quote);
-    void document.fonts.ready.then(place);
-    return () => observer.disconnect();
-  }, [text]);
-
-  return { quoteRef, captionRef };
+function unquoted(text: string): string {
+  return text.trim().replace(/^["“]|["”]$/gu, "");
 }
 
 /**
@@ -226,7 +212,9 @@ export function GuestHomeHero({
   /** The same video for the narrow form, drawn in a card of its own. */
   introVideo?: ReactNode;
 }) {
-  const { quoteRef, captionRef } = useAuthorAtQuoteEnd(hero?.description);
+  const [firstSentence, restOfQuote] = splitFirstSentence(
+    hero?.description ? unquoted(hero.description) : "",
+  );
   const spacing =
     hero && greeting
       ? greetedSpacing
@@ -312,20 +300,30 @@ export function GuestHomeHero({
             )}
           </h1>
           {!hero || hero.description ? (
-            // A quote, signed as the signed-in learner's is. Only beside the
+            // A quote, set, marked and signed as the signed-in learner's is,
+            // its first sentence on a line of its own. Only beside the
             // picture: narrower, the video card follows the headline.
             <figure
-              className={`${descriptionBoxClasses} @max-[50rem]/home:hidden ${returningLearnerHero ? forGuest : ""}`}
+              className={`${quoteBoxClasses} @max-[50rem]/home:hidden ${returningLearnerHero ? forGuest : ""}`}
             >
-              <blockquote ref={quoteRef} className={descriptionTextClasses}>
-                {hero?.description}
+              <blockquote className={quoteTextClasses}>
+                {firstSentence ? (
+                  <>
+                    “{firstSentence}
+                    {restOfQuote ? (
+                      <>
+                        <br />
+                        {restOfQuote}
+                      </>
+                    ) : null}
+                    ”
+                  </>
+                ) : null}
               </blockquote>
               {hero ? (
-                // Ending where the quote's longest line ends.
-                <figcaption
-                  ref={captionRef}
-                  className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600"
-                >
+                // At the right of the quote's box, which is as wide as its
+                // longest line.
+                <figcaption className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600">
                   <span aria-hidden="true" className="h-px w-6 bg-current/60" />
                   ProCodrr
                 </figcaption>
