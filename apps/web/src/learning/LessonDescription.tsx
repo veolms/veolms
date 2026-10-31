@@ -6,7 +6,7 @@ import {
 import { DiscussionMarkdown } from "./discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "./discussion-editor/types";
 import { SurfaceTopRightAccentGlow } from "./SurfaceTopRightAccentGlow";
-import { endsTextSelection } from "./textSelectionClick";
+import { endsTextSelection, notePress } from "./textSelectionClick";
 
 export const DESCRIPTION_SURFACE_BASE =
   "bg-[color-mix(in_srgb,var(--surface)_94%,var(--canvas))] shadow-[0_14px_38px_color-mix(in_srgb,var(--canvas)_34%,transparent),0_1px_0_color-mix(in_srgb,var(--text)_6%,transparent)]";
@@ -156,8 +156,9 @@ export function LessonDescription({
       aria-expanded={expanded}
       role={expanded || isLoading || !hasDescription ? undefined : "button"}
       tabIndex={expanded || isLoading || !hasDescription ? -1 : 0}
-      // Its text can be selected; a click that only selected some of it
-      // does not open it.
+      // Its text can be selected; a drag, or a click that only lets go of
+      // a selection, does not open it.
+      onPointerDownCapture={notePress}
       onClick={
         expanded || isLoading || !hasDescription
           ? undefined

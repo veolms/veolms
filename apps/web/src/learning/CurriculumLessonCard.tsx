@@ -10,10 +10,7 @@ import type { Lesson } from "./courseContent";
 import { LessonResourcesMenu } from "./LessonResourcesMenu";
 import { LESSON_CARD_ACTION_CLASS } from "./lessonCardAction";
 import { NON_VIDEO_LESSON_LABELS } from "./lessonWithoutVideo";
-import {
-  endsTextSelection,
-  releaseEarlierSelection,
-} from "./textSelectionClick";
+import { endsTextSelection, notePress } from "./textSelectionClick";
 import { useLessonHoverPreload } from "./useLessonHoverPreload";
 import { useWebContributions } from "../lib/web-contributions";
 import "./curriculum-lesson-card.css";
@@ -241,10 +238,10 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
         onPointerLeave={hoverPreload?.onPointerLeave}
         onFocus={hoverPreload?.onFocus}
         onBlur={hoverPreload?.onBlur}
-        onMouseDown={releaseEarlierSelection}
+        onPointerDownCapture={notePress}
         onClick={(event) => {
-          // The card's text can be selected like any text; a click that
-          // only selected some of it does not open the lesson.
+          // The card's text can be selected like any text; a drag, or a
+          // click that only lets go of a selection, does not open the lesson.
           if (!isAvailable || endsTextSelection(event)) return;
           hoverPreload?.cancel();
           onSelectLesson(number);
@@ -255,73 +252,78 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
         // adds arrive once the page is running, and the card used to grow
         // then. A card is as tall before as after; only a title on two
         // lines makes it taller.
-        className="block w-full cursor-pointer px-3 pt-3 pb-2.5 text-left select-text focus-visible:-outline-offset-2! [[data-unavailable]_&]:cursor-not-allowed"
+        className="block w-full cursor-pointer text-left select-text focus-visible:-outline-offset-2! [[data-unavailable]_&]:cursor-not-allowed"
       >
-        {/* Whole-pixel line heights here and in the meta line below: the
+        {/* The card's padding is on this, not on the button, so that a drag
+            begun anywhere on the card starts in its text and selects it
+            (one begun on the button's own box would not). */}
+        <span className="block px-3 pt-3 pb-2.5">
+          {/* Whole-pixel line heights here and in the meta line below: the
             cards stack, so a line box a fraction of a pixel tall would put
             every card after it on a fractional position, where a later
             paint (hydration's) snaps the text a pixel away from where the
             first paint had it. */}
-        <span
-          className="line-clamp-2 text-[0.875rem]/5 font-semibold text-(--text) [[data-completed]:not([data-active])_&]:text-[color-mix(in_srgb,var(--text)_72%,transparent)]"
-          // A title longer than two lines is cut off; hovering shows all of it.
-          title={isAvailable ? title : undefined}
-        >
-          {displayNumber}. {title}
-        </span>
-        <span className="mt-1.5 flex min-h-8 items-center gap-1.5 text-[0.8125rem]/5 font-medium tabular-nums text-(--muted)">
-          <LockSimple
-            size={13}
-            weight="fill"
-            className={WHEN_UNAVAILABLE}
-            aria-hidden="true"
-          />
-          {isActive ? (
-            // Nothing is open on a locked lesson, so no mark. A lesson
-            // already finished keeps its tick beside the mark.
-            <NowPlayingGlyph
-              contentType={contentType ?? "video"}
-              className={UNLESS_LOCKED}
-            />
-          ) : null}
-          <CheckCircle
-            size={17}
-            weight="fill"
-            className={`text-(--success) ${WHEN_COMPLETED}`}
-            aria-hidden="true"
-          />
-          <span>{lengthLabel}</span>
-          {/* A drawn dot: the middle-dot character sits below the centre
-              of these digits. */}
           <span
-            className={`size-[3px] shrink-0 rounded-full bg-current ${WHEN_IN_PROGRESS}`}
-            aria-hidden="true"
-          />
-          <span className={WHEN_IN_PROGRESS} data-lesson-watched="">
-            {`${Math.round(watched)}% complete`}
-          </span>
-          {/* Said after the lesson's length to a screen reader, each part
-              only while the card is in that state. */}
-          <span className={`sr-only ${WHEN_UNAVAILABLE}`}>
-            , log in to watch
-          </span>
-          {isActive ? (
-            <span
-              className={`sr-only hidden [[data-curriculum-lesson-card]:not([data-unavailable]):not([data-locked])_&]:block`}
-            >
-              {contentType === "document"
-                ? ", now reading"
-                : contentType === "quiz"
-                  ? ", now open"
-                  : ", now playing"}
-            </span>
-          ) : null}
-          <span
-            className={`sr-only hidden [[data-completed]:not([data-unavailable])_&]:block`}
+            className="line-clamp-2 text-[0.875rem]/5 font-semibold text-(--text) [[data-completed]:not([data-active])_&]:text-[color-mix(in_srgb,var(--text)_72%,transparent)]"
+            // A title longer than two lines is cut off; hovering shows all of it.
+            title={isAvailable ? title : undefined}
           >
-            , completed
+            {displayNumber}. {title}
           </span>
-          <span className={`sr-only ${WHEN_LOCKED}`}>, locked</span>
+          <span className="mt-1.5 flex min-h-8 items-center gap-1.5 text-[0.8125rem]/5 font-medium tabular-nums text-(--muted)">
+            <LockSimple
+              size={13}
+              weight="fill"
+              className={WHEN_UNAVAILABLE}
+              aria-hidden="true"
+            />
+            {isActive ? (
+              // Nothing is open on a locked lesson, so no mark. A lesson
+              // already finished keeps its tick beside the mark.
+              <NowPlayingGlyph
+                contentType={contentType ?? "video"}
+                className={UNLESS_LOCKED}
+              />
+            ) : null}
+            <CheckCircle
+              size={17}
+              weight="fill"
+              className={`text-(--success) ${WHEN_COMPLETED}`}
+              aria-hidden="true"
+            />
+            <span>{lengthLabel}</span>
+            {/* A drawn dot: the middle-dot character sits below the centre
+              of these digits. */}
+            <span
+              className={`size-[3px] shrink-0 rounded-full bg-current ${WHEN_IN_PROGRESS}`}
+              aria-hidden="true"
+            />
+            <span className={WHEN_IN_PROGRESS} data-lesson-watched="">
+              {`${Math.round(watched)}% complete`}
+            </span>
+            {/* Said after the lesson's length to a screen reader, each part
+              only while the card is in that state. */}
+            <span className={`sr-only ${WHEN_UNAVAILABLE}`}>
+              , log in to watch
+            </span>
+            {isActive ? (
+              <span
+                className={`sr-only hidden [[data-curriculum-lesson-card]:not([data-unavailable]):not([data-locked])_&]:block`}
+              >
+                {contentType === "document"
+                  ? ", now reading"
+                  : contentType === "quiz"
+                    ? ", now open"
+                    : ", now playing"}
+              </span>
+            ) : null}
+            <span
+              className={`sr-only hidden [[data-completed]:not([data-unavailable])_&]:block`}
+            >
+              , completed
+            </span>
+            <span className={`sr-only ${WHEN_LOCKED}`}>, locked</span>
+          </span>
         </span>
       </button>
       {hasActions ? (
