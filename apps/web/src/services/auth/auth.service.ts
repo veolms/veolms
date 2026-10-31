@@ -191,7 +191,9 @@ export const authService = {
     });
   },
   getGoogleOneTapNonce: (): Promise<GoogleOneTapNonceResponse> => {
-    return api.get<GoogleOneTapNonceResponse>("/auth/oauth/google/nonce");
+    return api.get<GoogleOneTapNonceResponse>("/auth/oauth/google/nonce", {
+      timeout: 20_000,
+    });
   },
 
   setupTotp: (): Promise<TotpSetupResponse> => {
