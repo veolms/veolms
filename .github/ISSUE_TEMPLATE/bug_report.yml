@@ -1,0 +1,114 @@
+name: "🐛 Bug Report"
+description: "Report a bug or something broken on VeoLMS."
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+
+  - type: checkboxes
+    id: platform
+    attributes:
+      label: Where did this happen? (Device / Platform)
+      description: Select all platforms where you experienced or reproduced this issue.
+      options:
+        - label: Web (Desktop browser)
+        - label: Android Web Browser (Chrome)
+        - label: Android App
+        - label: iOS App
+        - label: Safari
+        - label: Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What kind of problem is this?
+      options:
+        - "UI / Visual glitch"
+        - "API / Backend error"
+        - "Other"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Which area or page of the platform?
+      description: Select the parts of VeoLMS affected.
+      options:
+        - label: Admin side / Dashboard
+        - label: Staff portal
+        - label: Student area
+        - label: Learning / Lesson page
+        - label: Course catalog / Browse page
+        - label: Login / Signup / Account settings
+        - label: Other page (please specify below)
+    validations:
+      required: true
+
+  - type: input
+    id: page-url
+    attributes:
+      label: Page name / URL
+      description: If applicable, provide the path or URL (e.g. `/courses/web-development` or `dev.veolms.org/admin`).
+      placeholder: "e.g. https://dev.veolms.org/courses/... or /admin"
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What went wrong?
+      description: Explain the problem clearly in simple everyday words.
+      placeholder: "Tell us what happened..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: How can we see this happen? (Steps to reproduce)
+      description: |
+        Tell us step-by-step how to reproduce the issue.
+        💡 **Recommendation:** You can also attach or drag & drop a video or image/screenshot below to demonstrate the problem.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error '...'
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: What did you expect to happen?
+      description: What should have happened instead?
+      placeholder: "e.g. The course page should open and allow me to enroll"
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or Screen Recording
+      description: Drag and drop any screenshots or screen recordings showing the problem.
+
+  - type: input
+    id: device-details
+    attributes:
+      label: Device, Browser & System details
+      description: What device, operating system, or browser were you using?
+      placeholder: "e.g. Chrome 130 on Windows 11, Safari on iPhone 15, Android 14"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages or console logs
+      description: Paste any error messages, terminal logs, or browser developer console errors.
+      render: shell

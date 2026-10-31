@@ -1,0 +1,66 @@
+name: "🎬 Video Player Issue / Feedback"
+description: "Report playback, buffering, audio, video quality, or subtitle issues in the video player."
+title: "[Video Player]: "
+labels: ["video-player", "media", "bug"]
+body:
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+
+  - type: checkboxes
+    id: platform
+    attributes:
+      label: Where did the video problem happen? (Device / Platform)
+      description: Select all platforms where you experienced the video problem.
+      options:
+        - label: Web (Desktop browser)
+        - label: Android Web Browser (Chrome)
+        - label: Android App
+        - label: iOS App
+        - label: Safari
+        - label: Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: problem-type
+    attributes:
+      label: What is the problem with the video?
+      description: Select all symptoms that describe the video issue.
+      options:
+        - label: Video does not start / black screen
+        - label: Video keeps buffering or freezing
+        - label: Audio plays but no picture (or picture with no audio)
+        - label: Video quality is blurry or cannot change quality
+        - label: Subtitles / captions are missing or wrong
+        - label: Speed controls (1.5x, 2x) or seek bar not working
+        - label: Playback error message appears on screen
+        - label: Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Tell us what happened
+      description: Describe what you were watching, which lesson/course, and what went wrong.
+      placeholder: "e.g. In Lesson 3 of Course X, when I clicked play..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or Screen Recording
+      description: Drag and drop a screenshot or screen recording of the player showing the issue or error.
+
+  - type: input
+    id: device-connection
+    attributes:
+      label: Internet connection & extra details
+      description: What device and network were you using?
+      placeholder: "e.g. Mac on Home Wi-Fi, Android phone on 5G, Chrome 130"
