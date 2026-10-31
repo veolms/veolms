@@ -30,6 +30,7 @@ import {
 import { requestLessonAutoplay } from "./lessonAutoplayRequest";
 import { persistentLearningPlayerHostBody } from "../routing/prerenderedBodies";
 import { peekLastPlayedLesson } from "./lessonPositionOutbox";
+import { beginLessonOpening } from "./lessonOpeningState";
 
 /**
  * Which lesson a press on a course's play button (its picture, "Continue
@@ -213,6 +214,9 @@ function useIntentCore(
       cancel();
       const target = targetRef.current;
       if (!target) return;
+      // Answered at once, before the wait below for the lesson's number and
+      // the lesson page's code.
+      beginLessonOpening();
       const proceed = (lessonNumber: number) => {
         // Pressed to watch: it opens playing (the press lets it play with
         // sound), whether or not the readied video is in yet.

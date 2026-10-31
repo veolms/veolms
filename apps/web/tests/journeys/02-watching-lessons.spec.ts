@@ -196,3 +196,58 @@ test("a draft course is not found by learners, neither its page nor its lessons"
   await expectNoVideo(page);
   expect(await academy.videoFilesRequested(course, 1)).toEqual([]);
 });
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test("a learner who taps their course on the home page sees the lesson opening at once, then watches it", async ({
+    page,
+    academy,
+  }) => {
+    // Its own name: other tests' courses are on the home page too, under
+    // "Explore More Courses".
+    const course = await academy.createCourse();
+    const learner = await academy.signedInLearner("on_a_phone");
+    await academy.giveCourse(learner, course);
+
+    // A slow phone on a slow network: the lesson page's code has not
+    // arrived yet when the learner taps. It is held back until the test has
+    // seen what the tap shows in the meantime.
+    let releaseLessonCode = () => {};
+    const lessonCodeHeld = new Promise<void>((resolve) => {
+      releaseLessonCode = resolve;
+    });
+    await page.route(/\/src\/routes\/learning\.tsx/u, async (route) => {
+      await lessonCodeHeld;
+      await route.continue();
+    });
+
+    await page.goto("/");
+    // On a phone the whole course card on the home page is one way into
+    // the lesson; the course's name is where a finger lands on it.
+    const courseName = page.getByRole("heading", {
+      name: course.title,
+      level: 2,
+    });
+    await expect(courseName).toBeVisible();
+    const box = await courseName.boundingBox();
+    if (!box) throw new Error("The course's name has no place on the screen");
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+
+    // The tap is answered at once, before the lesson page is there.
+    const opening = page.getByRole("status", { name: "Opening lesson" });
+    await expect(opening).toBeVisible({ timeout: 2_000 });
+
+    releaseLessonCode();
+    await expect(page).toHaveURL(
+      new RegExp(`/learn/${course.slug}/lecture-\\d+$`, "u"),
+    );
+    await expect(opening).toHaveCount(0);
+    // A tap on the course means "watch it": the lesson opens playing, with
+    // no Play to press.
+    await expect(
+      page.getByRole("button", { name: "Pause", exact: true }),
+    ).toBeVisible();
+    await expectVideoToPlay(page);
+  });
+});
