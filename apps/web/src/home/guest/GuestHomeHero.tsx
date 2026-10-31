@@ -155,6 +155,14 @@ function HeroHeadline({
   );
 }
 
+/**
+ * The quote's text without quotation marks at its ends, which the hero sets
+ * itself; an admin may have typed them into the copy.
+ */
+function unquoted(text: string): string {
+  return text.trim().replace(/^["“]|["”]$/gu, "");
+}
+
 /** How far the author's dash reaches back under the quote's end, in rem. */
 const AUTHOR_DASH_OVERLAP_REM = 0.5;
 /** The least room left between the author and the desk's mug, in rem. */
@@ -355,13 +363,14 @@ export function GuestHomeHero({
             )}
           </h1>
           {!hero || hero.description ? (
-            // A quote, signed as the signed-in learner's is. Only beside the
-            // picture: narrower, the video card follows the headline.
+            // A quote, in quotation marks and signed as the signed-in
+            // learner's is. Only beside the picture: narrower, the video card
+            // follows the headline.
             <figure
               className={`${descriptionBoxClasses} @max-[50rem]/home:hidden ${returningLearnerHero ? forGuest : ""}`}
             >
               <blockquote ref={quoteRef} className={descriptionTextClasses}>
-                {hero?.description}
+                {hero?.description ? `“${unquoted(hero.description)}”` : null}
               </blockquote>
               {hero ? (
                 // Following the quote's last line (see useAuthorAtQuoteEnd).
