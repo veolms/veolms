@@ -6,8 +6,9 @@ interface SidebarToggleIconProps {
 }
 
 /**
- * A rounded tile with the sidebar cut out of its left side: the cut is a
- * real hole, so whatever lies behind the button shows through it.
+ * A rounded tile with the sidebar drawn into its left side as a fainter
+ * panel of the tile's own colour (a third of it). It used to be a real
+ * hole, which showed the dark sidebar behind it as a black patch.
  *
  * The cut narrows with the sidebar: 26 units wide on a sidebar of 220px or
  * more, 17 on the collapsed rail (`direction` "right": the button would
@@ -59,6 +60,7 @@ export function SidebarToggleIcon({
           height="46"
           rx="8"
           fill="black"
+          fillOpacity={0.66}
           className="[--sidebar-resize-preview-width:inherit] [.courses-app--resizing_&]:[width:clamp(17px,calc(17px_+_(var(--sidebar-resize-preview-width)_-_76px)_/_16),26px)]"
         />
       </mask>

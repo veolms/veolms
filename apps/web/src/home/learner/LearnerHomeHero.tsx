@@ -31,12 +31,18 @@ const fallbackQuote = {
   author: "B.B. King",
 };
 
+/** How far past the quote's longest line its author ends, in rem. */
+const AUTHOR_OVERHANG_REM = 2;
+
 /**
  * The author stands at the right end of the column, which is where a quote
  * that fills its lines ends. A short quote is set in balanced lines that end
  * well short of that, and the author would be left out on its own; so it is
  * drawn in until its dash starts where the longest line of the quote ends.
- * CSS cannot size anything to lines set that way, hence the measuring.
+ * Either way it then sits `AUTHOR_OVERHANG_REM` further right (past the
+ * column if need be), except on a phone, where the column is the screen's
+ * width. CSS cannot size anything to lines set that way, hence the
+ * measuring.
  */
 function useAuthorBesideQuote(text: string) {
   const quoteRef = useRef<HTMLQuoteElement>(null);
@@ -48,6 +54,8 @@ function useAuthorBesideQuote(text: string) {
     if (!quote || !caption) return;
 
     const place = () => {
+      caption.style.paddingRight = "";
+      caption.style.marginRight = "";
       const lines = document.createRange();
       lines.selectNodeContents(quote);
       const left = quote.getBoundingClientRect().left;
@@ -57,10 +65,21 @@ function useAuthorBesideQuote(text: string) {
       }
       const author = document.createRange();
       author.selectNodeContents(caption);
-      const spare =
-        caption.clientWidth - quoteEnd - author.getBoundingClientRect().width;
-      caption.style.paddingRight =
-        quoteEnd > 0 && spare > 0 ? `${Math.floor(spare)}px` : "";
+      const rem = parseFloat(
+        getComputedStyle(document.documentElement).fontSize,
+      );
+      const overhang = window.matchMedia("(min-width: 40rem)").matches
+        ? AUTHOR_OVERHANG_REM * rem
+        : 0;
+      const spare = Math.max(
+        0,
+        caption.clientWidth - quoteEnd - author.getBoundingClientRect().width,
+      );
+      if (quoteEnd > 0) {
+        const room = spare - overhang;
+        if (room > 0) caption.style.paddingRight = `${Math.floor(room)}px`;
+        else if (room < 0) caption.style.marginRight = `${Math.floor(room)}px`;
+      }
       // A quote that fits on one line is a thin thing; its author stands a
       // little further under it than under a quote of several lines.
       const lineHeight = parseFloat(getComputedStyle(quote).lineHeight);
