@@ -103,6 +103,13 @@ import {
 } from "../learningWatchTime";
 import { createPlaybackTelemetry } from "./playbackTelemetry";
 import { trackAnalyticsEvent } from "../../lib/analytics-track";
+import {
+  markPlaying,
+  markNotPlaying,
+  subscribeToPlaybackConflict,
+  type PlaybackDeniedPlayingOn,
+} from "../playbackClaim";
+import { formatSessionDevice } from "../../settings/sessionDisplay";
 
 // Where the learner is, kept this often while the video plays: a reload
 // then starts within half a second of where it was (it is also kept the
@@ -159,6 +166,7 @@ export interface LessonVideoPlayerProps {
   media: CourseVideo;
   description?: string | null;
   lessonTitle: string;
+  lessonId?: string | number;
   courseTitle?: string;
   lessonIndex?: number;
   totalLessons?: number;
@@ -448,6 +456,7 @@ export function LessonVideoPlayer({
   description,
   lessonIndex,
   lessonTitle,
+  lessonId,
   media,
   totalLessons,
   onProgressChange,
@@ -852,6 +861,32 @@ export function LessonVideoPlayer({
   useEffect(() => {
     watchTimeCourseKeyRef.current = watchTimeCourseKey;
   }, [watchTimeCourseKey]);
+
+  const [streamConflict, setStreamConflict] =
+    useState<PlaybackDeniedPlayingOn | null>(null);
+  const effectiveLessonId = lessonId ?? playbackBootstrap?.lessonId ?? null;
+  const effectiveLessonIdRef = useRef(effectiveLessonId);
+  useEffect(() => {
+    effectiveLessonIdRef.current = effectiveLessonId;
+  }, [effectiveLessonId]);
+
+  useEffect(() => {
+    const courseKey = watchTimeCourseKey;
+    if (!courseKey) return undefined;
+    return subscribeToPlaybackConflict(courseKey, (conflict) => {
+      playerRef.current?.pause();
+      setStreamConflict(conflict);
+    });
+  }, [watchTimeCourseKey]);
+
+  useEffect(() => {
+    return () => {
+      const courseKey = watchTimeCourseKeyRef.current;
+      if (courseKey) {
+        markNotPlaying(courseKey);
+      }
+    };
+  }, []);
   const [trackWatchTime] = useState(() =>
     createWatchTimeTracker((seconds) => {
       const courseKey = watchTimeCourseKeyRef.current;
@@ -885,6 +920,27 @@ export function LessonVideoPlayer({
       playbackTelemetry.handle(event);
       if (event.type === "fullscreenchange") {
         setPlayerFullscreen(event.detail.active);
+      }
+      if (event.type === "play" || event.type === "playing") {
+        setStreamConflict(null);
+        const courseKey = watchTimeCourseKeyRef.current;
+        const currentLessonId = effectiveLessonIdRef.current;
+        if (
+          courseKey &&
+          currentLessonId !== null &&
+          currentLessonId !== undefined
+        ) {
+          markPlaying(courseKey, String(currentLessonId));
+        }
+      } else if (
+        event.type === "pause" ||
+        event.type === "ended" ||
+        event.type === "unloaded"
+      ) {
+        const courseKey = watchTimeCourseKeyRef.current;
+        if (courseKey) {
+          markNotPlaying(courseKey);
+        }
       }
       if (playbackSuspended || holdingPlaybackRef.current) {
         if (
@@ -2101,6 +2157,27 @@ export function LessonVideoPlayer({
       }
       overlays={
         <>
+          {streamConflict ? (
+            <VideoPlayerNotice
+              className="z-35"
+              title={
+                presentation === "mini"
+                  ? `Playing on ${formatSessionDevice(streamConflict.userAgent)}`
+                  : `You started playing on ${formatSessionDevice(streamConflict.userAgent)}${streamConflict.location ? ` in ${streamConflict.location}` : ""}. Play here instead?`
+              }
+              background={
+                <div className="size-full bg-black/85 backdrop-blur-xs" />
+              }
+              action={{
+                label: "Play here instead",
+                prominent: true,
+                onSelect: () => {
+                  setStreamConflict(null);
+                  void playerRef.current?.play();
+                },
+              }}
+            />
+          ) : null}
           {holdingPreviousLesson ? (
             // The same waiting surface the player used to be replaced with:
             // black over the held lesson, with the loader, above the controls.
