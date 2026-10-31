@@ -21,7 +21,7 @@ export async function listLinkedCourses(
  * The published courses that link this one, oldest link first: the courses
  * that give it to whoever holds them. A linked-only course is left out: it
  * is not sold, and access that came from a link does not pass on links of
- * its own.
+ * its own. An unlisted course is left out too: it is not shown anywhere.
  */
 export async function listPublishedCoursesLinking(
   database: DatabaseExecutor,
@@ -34,6 +34,7 @@ export async function listPublishedCoursesLinking(
     .select(["c.id", "c.title", "c.slug"])
     .where("cl.linked_course_id", "=", linkedCourseId)
     .where("c.status", "=", "published")
+    .where("c.unlisted", "=", false)
     .where("c.deleted_at", "is", null)
     .where(sql<boolean>`coalesce(p.linked_only, false) = false`)
     .orderBy("cl.created_at", "asc")

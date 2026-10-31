@@ -777,9 +777,33 @@ export async function listOrderItemSummariesByOrderIds(
   if (orderIds.length === 0) return [];
   return await database
     .selectFrom("order_items")
-    .select(["order_id", "title_snapshot", "course_id"])
-    .where("order_id", "in", orderIds)
-    .orderBy("created_at", "asc")
+    .leftJoin("courses", "courses.id", "order_items.course_id")
+    .select([
+      "order_items.order_id",
+      "order_items.title_snapshot",
+      "order_items.course_id",
+    ])
+    // An unlisted course has no page of its own: the course it unlocks
+    // (its first link) is the one to open.
+    .select((eb) =>
+      eb
+        .selectFrom("course_links")
+        .innerJoin(
+          "courses as linked",
+          "linked.id",
+          "course_links.linked_course_id",
+        )
+        .select("course_links.linked_course_id")
+        .whereRef("course_links.course_id", "=", "order_items.course_id")
+        .where("courses.unlisted", "=", true)
+        .where("linked.deleted_at", "is", null)
+        .orderBy("course_links.position", "asc")
+        .orderBy("course_links.created_at", "asc")
+        .limit(1)
+        .as("opens_course_id"),
+    )
+    .where("order_items.order_id", "in", orderIds)
+    .orderBy("order_items.created_at", "asc")
     .execute();
 }
 

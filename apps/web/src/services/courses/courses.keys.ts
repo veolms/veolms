@@ -40,4 +40,10 @@ export const courseKeys = {
   bin: () => [...courseKeys.all, "bin"] as const,
   linkedCourses: (id: string) =>
     [...courseKeys.all, "linked-courses", id] as const,
+  partialAccess: (id: string) =>
+    [...courseKeys.all, "partial-access", id] as const,
+  partialAccessOptions: () =>
+    [...courseKeys.all, "partial-access-options"] as const,
+  offer: (idOrSlug: string, offerSlug: string) =>
+    [...courseKeys.all, "offer", idOrSlug, offerSlug] as const,
 };

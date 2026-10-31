@@ -22,7 +22,9 @@ export function adaptOrderToOrderHistoryItem(
     (order.items.length > 1
       ? `${order.items[0]?.titleSnapshot} + ${order.items.length - 1} more`
       : "Course Order");
-  const courseId = firstItem?.courseId || "";
+  // An unlisted course (part of another course, sold on its own) has no
+  // page: the course it unlocks is the one to view.
+  const courseId = firstItem?.opensCourseId || firstItem?.courseId || "";
 
   let status: OrderHistoryStatus = "processing";
   let statusLabel = "Processing";
@@ -66,6 +68,12 @@ export function adaptOrderToOrderHistoryItem(
   const amount = toMajorUnits(order.totalAmount, currency);
   const subtotal = toMajorUnits(order.subtotalAmount, currency);
   const tax = toMajorUnits(order.taxAmount, currency);
+  // What a coupon took off: the learner's order carries the subtotal, the
+  // tax and what was paid.
+  const discount = toMajorUnits(
+    Math.max(0, order.subtotalAmount + order.taxAmount - order.totalAmount),
+    currency,
+  );
   const formattedAmount = formatMoney(order.totalAmount, { currency });
 
   const cleanOrderNumber = order.orderNumber.startsWith("#")
@@ -158,6 +166,7 @@ export function adaptOrderToOrderHistoryItem(
     status,
     statusLabel,
     subtotal,
+    discount,
     tax,
     transactionId: null,
   };

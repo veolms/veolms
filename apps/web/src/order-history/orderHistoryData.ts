@@ -36,6 +36,8 @@ export interface OrderHistoryItem {
   status: OrderHistoryStatus;
   statusLabel: string;
   subtotal: number;
+  /** What a coupon took off the subtotal; 0 when nothing was. */
+  discount?: number;
   tax: number;
   /** ISO 4217 code of the order; defaults to INR when absent. */
   currency?: string;

@@ -15,6 +15,7 @@ export async function findEnrollmentOrder(
     .leftJoin("orders as o", "o.id", "e.order_id")
     .select([
       "e.access_starts_at",
+      "e.source",
       "o.id as order_id",
       "o.order_number",
       "o.total_amount",
@@ -42,6 +43,56 @@ export async function findEnrollmentOrder(
         eb("e.access_expires_at", ">", new Date()),
       ]),
     )
+    .executeTakeFirst();
+}
+
+/**
+ * For a course a link gave the learner, the course that gave it (the
+ * longest-held live one, when several do) and the order that paid for that
+ * course; undefined when none is live.
+ */
+export async function findLinkingCourseOrder(
+  database: Kysely<Database>,
+  userId: string,
+  courseId: string,
+) {
+  return await database
+    .selectFrom("access_grants as g")
+    .innerJoin("course_links as cl", "cl.course_id", "g.course_id")
+    .innerJoin("courses as c", "c.id", "g.course_id")
+    .leftJoin("orders as o", "o.id", "g.order_id")
+    .select([
+      "c.title as course_title",
+      "g.valid_from",
+      "o.id as order_id",
+      "o.order_number",
+      "o.total_amount",
+      "o.currency",
+      "o.paid_at",
+      "o.invoice_number",
+    ])
+    .select((eb) =>
+      eb
+        .selectFrom("payments as p")
+        .select("p.payment_method")
+        .whereRef("p.order_id", "=", "o.id")
+        .where("p.status", "in", ["captured", "refunded"])
+        .orderBy("p.created_at", "desc")
+        .limit(1)
+        .as("payment_method"),
+    )
+    .where("g.user_id", "=", userId)
+    .where("cl.linked_course_id", "=", courseId)
+    .where("g.status", "=", "active")
+    .where("g.source", "<>", "linked_course")
+    .where((eb) =>
+      eb.or([
+        eb("g.valid_until", "is", null),
+        eb("g.valid_until", ">", new Date()),
+      ]),
+    )
+    .orderBy("g.valid_from", "asc")
+    .limit(1)
     .executeTakeFirst();
 }
 

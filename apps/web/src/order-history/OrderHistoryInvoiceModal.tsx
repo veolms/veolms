@@ -136,6 +136,18 @@ export function OrderHistoryInvoiceModal({
               })}
             </span>
           </div>
+          {order.discount ? (
+            <div className="flex justify-between py-1 text-(--text-secondary)">
+              <span>Discount</span>
+              <span>
+                −
+                {formatMoney(order.discount, {
+                  currency: order.currency,
+                  unit: "major",
+                })}
+              </span>
+            </div>
+          ) : null}
           <div className="flex justify-between py-1 text-(--muted)">
             <span>Taxes</span>
             <span>

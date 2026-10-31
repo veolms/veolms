@@ -41,6 +41,7 @@ interface AdminOrderRowLike extends OrderRowLike {
 interface OrderItemRowLike {
   title_snapshot: string;
   course_id: string | null;
+  opens_course_id?: string | null;
 }
 
 /** The payment that represents an order — see `listPaymentsForOrders`. */
@@ -54,6 +55,7 @@ function toOrderItemSummary(row: OrderItemRowLike): OrderItemSummary {
   return {
     titleSnapshot: row.title_snapshot,
     courseId: row.course_id,
+    ...(row.opens_course_id ? { opensCourseId: row.opens_course_id } : {}),
   };
 }
 

@@ -234,6 +234,11 @@ export interface AccessGrantTable {
     | "linked_course";
   valid_from: Generated<Date>;
   valid_until: Date | null;
+  /**
+   * On a `linked_course` grant, the sections it opens; null for every
+   * section. Ignored on a grant of any other source.
+   */
+  section_ids: string[] | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
