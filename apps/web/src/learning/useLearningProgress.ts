@@ -43,6 +43,18 @@ import {
 } from "./syncedLearningProgress";
 
 const MAX_BATCH_ITEMS = 100;
+/**
+ * While a video plays, progress goes to the server at most this often. Every
+ * watching learner sends one batch per interval, and the batches are most of
+ * the API's writes: at 15 s, 8,000 learners sent ~530 a second.
+ */
+const SYNC_INTERVAL_MS = 60_000;
+/**
+ * The player reports progress several times a second while it plays. Once
+ * the reports stop for this long (paused, ended, or the lesson left), what
+ * was watched goes out at once instead of waiting for the interval.
+ */
+const IDLE_FLUSH_MS = 4_000;
 
 interface UseLearningProgressOptions {
   courseKey?: string;
@@ -103,6 +115,10 @@ export function useLearningProgress({
   const isFlushingRef = useRef(false);
   const retryDelayRef = useRef(0);
   const retryAtRef = useRef(0);
+  // Armed by every progress report, it flushes once the reports stop (see
+  // `IDLE_FLUSH_MS`). The flush it calls is the latest one.
+  const idleFlushTimerRef = useRef<number | undefined>(undefined);
+  const flushRef = useRef<() => void>(() => undefined);
 
   // When progress the server had already accepted was last taken into the
   // local copy (what storage held on load, what this page or another tab
@@ -232,6 +248,11 @@ export function useLearningProgress({
         }
         return result;
       });
+      window.clearTimeout(idleFlushTimerRef.current);
+      idleFlushTimerRef.current = window.setTimeout(
+        () => flushRef.current(),
+        IDLE_FLUSH_MS,
+      );
     },
     [lessonIdsByNumber],
   );
@@ -349,11 +370,14 @@ export function useLearningProgress({
       void flushProgress({ keepalive: true });
     };
 
-    const interval = window.setInterval(flush, 15_000);
+    flushRef.current = flush;
+    const interval = window.setInterval(flush, SYNC_INTERVAL_MS);
     window.addEventListener("online", flush);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", handlePageHide);
     return () => {
+      flushRef.current = () => undefined;
+      window.clearTimeout(idleFlushTimerRef.current);
       window.clearInterval(interval);
       window.removeEventListener("online", flush);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
