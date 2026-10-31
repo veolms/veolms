@@ -129,8 +129,10 @@ export const learningThreadSchema = z.object({
   author: discussionAuthorSchema,
   kind: discussionEntryKindSchema,
   title: z.string().max(255).nullable().optional(),
-  content: z.string().min(1).max(20000),
-  plainText: z.string().max(20000),
+  // No length cap on what is sent back: a stored entry may be longer than
+  // the 20,000 characters a request may carry (it once failed a whole list).
+  content: z.string().min(1),
+  plainText: z.string(),
   timestampSeconds: z.number().int().nonnegative().nullable().optional(),
   visibility: discussionVisibilitySchema,
   isLocked: z.boolean().default(false),
@@ -152,8 +154,8 @@ export type LearningThread = z.infer<typeof learningThreadSchema>;
 export const learningThreadEditResponseSchema = z.object({
   id: z.uuid(),
   title: z.string().max(255).nullable(),
-  content: z.string().min(1).max(20000),
-  plainText: z.string().max(20000),
+  content: z.string().min(1),
+  plainText: z.string(),
   timestampSeconds: z.number().int().nonnegative().nullable(),
   visibility: discussionVisibilitySchema,
   updatedAt: z.string(),
