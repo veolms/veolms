@@ -38,6 +38,8 @@ export function useCourseUpgradePurchase({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [needsPhone, setNeedsPhone] = useState(false);
+  // The gateway's own payment window is on screen.
+  const [gatewayOpen, setGatewayOpen] = useState(false);
   // One key for this purchase, so a second press reaches the same order.
   const idempotencyKeyRef = useRef<string | null>(null);
   const stopGatewayRef = useRef<StopGatewayCheckout | null>(null);
@@ -111,6 +113,7 @@ export function useCourseUpgradePurchase({
 
       const user = currentUser.data;
       stopGatewayRef.current?.();
+      setGatewayOpen(true);
       stopGatewayRef.current = await openGatewayCheckout(
         {
           gateway: order.gateway,
@@ -123,6 +126,7 @@ export function useCourseUpgradePurchase({
         },
         {
           onPaid: async (proof) => {
+            setGatewayOpen(false);
             try {
               await verify.mutateAsync({ orderId: order.order.id, ...proof });
               setBusy(false);
@@ -134,6 +138,7 @@ export function useCourseUpgradePurchase({
             }
           },
           onDismissed: () => {
+            setGatewayOpen(false);
             const confirmation = confirmationRef.current;
             if (confirmation && !confirmation.signal.aborted) return;
             setError(
@@ -142,18 +147,22 @@ export function useCourseUpgradePurchase({
             releaseThisOrder();
           },
           onBlocked: (message) => {
+            setGatewayOpen(false);
             setError(message);
             releaseThisOrder();
           },
-          onClosedUnanswered: () =>
+          onClosedUnanswered: () => {
+            setGatewayOpen(false);
             void waitUntilPaid(
               order.order.id,
               "The payment window closed before we heard back from it. If your payment went through, the course unlocks by itself within a few minutes, so please check Purchase History before paying again.",
-            ),
+            );
+          },
         },
       );
     } catch (failure) {
       setBusy(false);
+      setGatewayOpen(false);
       if (
         (failure as { code?: string } | null)?.code ===
         "PHONE_VERIFICATION_REQUIRED"
@@ -173,6 +182,7 @@ export function useCourseUpgradePurchase({
   return {
     pay,
     busy,
+    gatewayOpen,
     error,
     notice,
     needsPhone,

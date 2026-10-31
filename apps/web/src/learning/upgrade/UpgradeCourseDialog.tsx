@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import { LockOpenIcon as LockOpen } from "@phosphor-icons/react/LockOpen";
 import { formatMoney } from "@veolms/contracts/commerce/money";
 import { Button } from "../../components/Button";
@@ -35,24 +35,49 @@ export default function UpgradeCourseDialog({
     courseTitle,
     onUnlocked,
   });
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const payRef = useRef<HTMLButtonElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  const busyRef = useRef(purchase.busy);
-  busyRef.current = purchase.busy;
+  // Set when the dialog is closed from here (put away for the payment
+  // window, or taken down), so that is not read as the learner closing it.
+  const closedHereRef = useRef(false);
   const requestPreview = preview.mutate;
 
   useEffect(() => {
     requestPreview({ items: [{ itemType: "course", courseId }] });
   }, [courseId, requestPreview]);
 
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busyRef.current) onCloseRef.current();
+  // A modal dialog: focus stays in it and the lesson behind is inert. When
+  // it goes, focus goes back to what opened it ("Get the full course").
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return undefined;
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    closedHereRef.current = false;
+    if (!dialog.open) dialog.showModal();
+    return () => {
+      closedHereRef.current = true;
+      dialog.close();
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
   }, []);
+
+  // The gateway draws its payment window in the page, under the top layer:
+  // a modal dialog would cover it and make it inert. The dialog steps aside
+  // while the window is open and comes back when it ends.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (purchase.gatewayOpen) {
+      closedHereRef.current = true;
+      if (dialog.open) dialog.close();
+    } else if (!dialog.open) {
+      closedHereRef.current = false;
+      dialog.showModal();
+    }
+  }, [purchase.gatewayOpen]);
 
   const pricing = preview.data?.pricing;
   useEffect(() => {
@@ -67,20 +92,27 @@ export default function UpgradeCourseDialog({
     (pricing ? pricing.totalAmount + pricing.discountAmount : 0);
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-xs p-4"
-      role="presentation"
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="upgrade-course-title"
+      aria-describedby="upgrade-course-description"
+      // Escape asks to close; not while a payment is under way.
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!purchase.busy) onClose();
+      }}
+      // The browser closes it by itself on a second Escape.
+      onClose={(event) => {
+        if (!closedHereRef.current && !event.currentTarget.open) onClose();
+      }}
+      // The dialog covers the screen with the card in its middle: a click on
+      // the dialog itself is a click on the backdrop around the card.
       onClick={(event) => {
         if (event.target === event.currentTarget && !purchase.busy) onClose();
       }}
+      className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none place-items-center overflow-y-auto border-0 bg-transparent p-4 text-(--text) open:grid backdrop:bg-black/60 backdrop:backdrop-blur-xs"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="upgrade-course-title"
-        aria-describedby="upgrade-course-description"
-        className="w-full max-w-md rounded-[20px] bg-(--card-surface,var(--surface)) p-5 text-(--text) shadow-[var(--surface-frame-edge-shadow),var(--card-floating-shadow)] sm:rounded-3xl sm:p-6"
-      >
+      <div className="w-full max-w-md rounded-[20px] bg-(--card-surface,var(--surface)) p-5 text-(--text) shadow-[var(--surface-frame-edge-shadow),var(--card-floating-shadow)] sm:rounded-3xl sm:p-6">
         <div className="grid size-11 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent-ink,var(--accent))">
           <LockOpen size={24} weight="duotone" aria-hidden="true" />
         </div>
@@ -192,6 +224,6 @@ export default function UpgradeCourseDialog({
           />
         </Suspense>
       )}
-    </div>
+    </dialog>
   );
 }

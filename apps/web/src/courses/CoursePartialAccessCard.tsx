@@ -12,6 +12,10 @@ import { Checkbox } from "../components/Checkbox";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { Switch } from "../home-page-settings/homePageSettingsControls";
 import { usePartialAccess, useSavePartialAccess } from "../services/courses";
+import {
+  formatPriceWithCurrency,
+  getCurrencySymbol,
+} from "./overview/coursePriceFormat";
 
 export interface CoursePartialAccessCardProps {
   courseId: string | null;
@@ -26,12 +30,6 @@ const linkButtonClass =
   "cursor-pointer border-none bg-transparent p-0 text-[0.78rem] font-bold hover:underline disabled:cursor-not-allowed disabled:opacity-50";
 /** A row's own actions (Copy link, Edit, Delete): small buttons. */
 const rowActionClass = "h-8 gap-1.5 px-3 text-[0.8rem]";
-
-const rupees = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
-  maximumFractionDigits: 0,
-});
 
 interface Draft {
   title: string;
@@ -79,6 +77,7 @@ export function CoursePartialAccessCard({
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const coursePrice = query.data?.coursePrice ?? 0;
+  const courseCurrency = query.data?.courseCurrency ?? "INR";
   const sections = useMemo(() => query.data?.sections ?? [], [query.data]);
 
   function remove(partialCourseId: string) {
@@ -133,6 +132,7 @@ export function CoursePartialAccessCard({
                       item={item}
                       sections={sections}
                       coursePrice={coursePrice}
+                      courseCurrency={courseCurrency}
                       onDone={() => setEditing(null)}
                     />
                   </li>
@@ -153,7 +153,7 @@ export function CoursePartialAccessCard({
                       <span className="block text-[0.76rem] text-(--muted)">
                         {item.sectionIds.length} of {sections.length} sections
                         {" · "}
-                        {rupees.format(item.salePrice)}
+                        {formatPriceWithCurrency(item.salePrice, item.currency)}
                         {" · "}
                         {item.learnerCount === 1
                           ? "1 student"
@@ -226,6 +226,7 @@ export function CoursePartialAccessCard({
               item={null}
               sections={sections}
               coursePrice={coursePrice}
+              courseCurrency={courseCurrency}
               onDone={() => setEditing(null)}
             />
           ) : (
@@ -324,6 +325,7 @@ function PartialAccessForm({
   item,
   sections,
   coursePrice,
+  courseCurrency,
   onDone,
 }: {
   courseId: string;
@@ -331,6 +333,8 @@ function PartialAccessForm({
   sections: readonly { id: string; title: string }[];
   /** What the whole course sells for: the part is shown against it. */
   coursePrice: number;
+  /** The whole course's currency, which the part is sold in too. */
+  courseCurrency: string;
   onDone: () => void;
 }) {
   const save = useSavePartialAccess();
@@ -418,7 +422,7 @@ function PartialAccessForm({
 
       <div className="flex flex-col gap-2">
         <label htmlFor={`partial-sale-${formId}`} className={labelClass}>
-          Selling price (₹)
+          Selling price ({getCurrencySymbol(courseCurrency).trim()})
         </label>
         <input
           id={`partial-sale-${formId}`}
@@ -437,8 +441,8 @@ function PartialAccessForm({
         {coursePrice > 0 && (
           <p className="m-0 text-(--muted) text-[0.78rem]">
             Shown against the full course&apos;s price,{" "}
-            {rupees.format(coursePrice)}, with the difference as a partial
-            access discount.
+            {formatPriceWithCurrency(coursePrice, courseCurrency)}, with the
+            difference as a partial access discount.
           </p>
         )}
       </div>

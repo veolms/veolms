@@ -443,8 +443,9 @@ export const partialAccessCourseSchema = z.object({
 
 export const partialAccessListResponseSchema = z.object({
   items: z.array(partialAccessCourseSchema),
-  /** What the whole course sells for now. */
+  /** What the whole course sells for now, and in what currency. */
   coursePrice: z.number().nonnegative(),
+  courseCurrency: z.string(),
   /** The course's sections, in order, to choose from. */
   sections: z.array(z.object({ id: z.uuid(), title: z.string() })),
 });

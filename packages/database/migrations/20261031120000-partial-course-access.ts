@@ -56,6 +56,13 @@ export async function down(database: Kysely<unknown>): Promise<void> {
   await sql`
     alter table course_links drop column if exists section_ids
   `.execute(database);
+  // Without the flag an unlisted course on sale would be listed like any
+  // other, so it is taken off sale first. Learners who hold it keep it, as
+  // they keep any archived course.
+  await sql`
+    update courses set status = 'archived'
+    where unlisted and status = 'published'
+  `.execute(database);
   await sql`
     alter table courses drop column if exists unlisted
   `.execute(database);

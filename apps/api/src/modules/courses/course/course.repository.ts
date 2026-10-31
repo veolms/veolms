@@ -124,7 +124,8 @@ export async function findCourseAccessByIdOrSlug(
 
 /**
  * Id and slug of the published courses among those named, each by its id or
- * its slug. Drafts, archived courses and courses in the bin are left out.
+ * its slug. Drafts, archived courses, unlisted ones and courses in the bin
+ * are left out.
  */
 export async function findPublishedCourseRefs(
   database: DatabaseExecutor,
@@ -143,6 +144,7 @@ export async function findPublishedCourseRefs(
     .select(["id", "slug"])
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
+    .where("unlisted", "=", false)
     .where((eb) =>
       eb.or([
         ...(courseIds.length > 0 ? [eb("id", "in", courseIds)] : []),
@@ -496,6 +498,7 @@ export async function listPublishedCourseOptions(database: Kysely<Database>) {
     .select(["id", "title"])
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
+    .where("unlisted", "=", false)
     .orderBy("created_at", "asc")
     .orderBy("id", "asc")
     .execute();
@@ -629,6 +632,7 @@ export async function listAvailableCoursesByCreator(
     .where("creator_id", "=", creatorId)
     .where("status", "=", "published")
     .where("deleted_at", "is", null)
+    .where("unlisted", "=", false)
     .orderBy("created_at", "desc")
     .execute();
 }

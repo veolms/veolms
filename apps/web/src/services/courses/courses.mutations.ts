@@ -776,6 +776,13 @@ export function useSavePartialAccess() {
         courseKeys.partialAccess(variables.courseId),
         data,
       );
+      // The coupon builder's list and the link pages show them too.
+      void queryClient.invalidateQueries({
+        queryKey: courseKeys.partialAccessOptions(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: [...courseKeys.all, "offer"],
+      });
     },
   });
 }

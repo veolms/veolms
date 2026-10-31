@@ -106,7 +106,7 @@ import { CourseLoadError } from "./overview/CourseLoadError";
 import { CourseManagerBar } from "./overview/CourseManagerBar";
 import { CourseViewerBandPlaceholder } from "./overview/CourseViewerBandPlaceholder";
 import { PartialAccessNotice } from "./overview/PartialAccessNotice";
-import { usePartialAccessOffer } from "../services/courses/courses.queries";
+import { usePartialAccessOffer } from "../services/courses";
 import {
   coursePurchaseCheckoutNote,
   coursePurchaseGuarantee,

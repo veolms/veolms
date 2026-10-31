@@ -77,12 +77,14 @@ export function createPartialAccessService({
 
   /**
    * Stores the part's selling price. It has no marked price of its own:
-   * pages show it against the whole course's price (see `findSellingPrice`).
+   * pages show it against the whole course's price (see `findSellingPrice`),
+   * so it is sold in the whole course's currency.
    */
   async function writePricing(
     database_: Kysely<Database>,
     courseId: string,
     salePrice: number,
+    currency: string,
   ) {
     const now = new Date();
     await upsertPricing(database_, {
@@ -91,7 +93,7 @@ export function createPartialAccessService({
       // Free exactly when it sells for nothing, as every course's pricing.
       pricing_type: salePrice === 0 ? "free" : "paid",
       price: salePrice,
-      currency: "INR",
+      currency,
       sale_price: salePrice,
       created_at: now,
       updated_at: now,
@@ -127,7 +129,12 @@ export function createPartialAccessService({
         orderCount: Number(row.order_count ?? 0),
       };
     });
-    return { items, sections, coursePrice: whole.amount };
+    return {
+      items,
+      sections,
+      coursePrice: whole.amount,
+      courseCurrency: whole.currency,
+    };
   }
 
   async function createPartialAccess(
@@ -148,7 +155,8 @@ export function createPartialAccessService({
         creator_id: course.creator_id ?? actor.id,
         created_at: new Date(),
       });
-      await writePricing(trx, partialCourseId, input.salePrice);
+      const { currency } = await partialRepo.findSellingPrice(trx, courseId);
+      await writePricing(trx, partialCourseId, input.salePrice, currency);
       await partialRepo.insertPartialAccessLink(
         trx,
         partialCourseId,
@@ -197,7 +205,8 @@ export function createPartialAccessService({
         await partialRepo.updateCourseTitle(trx, partialCourseId, input.title);
       }
       if (input.salePrice !== undefined) {
-        await writePricing(trx, partialCourseId, input.salePrice);
+        const { currency } = await partialRepo.findSellingPrice(trx, courseId);
+        await writePricing(trx, partialCourseId, input.salePrice, currency);
       }
       if (input.onSale !== undefined) {
         await partialRepo.setOnSale(trx, partialCourseId, input.onSale);
