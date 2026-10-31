@@ -8,8 +8,8 @@ export const learningReplySchema = z.object({
   id: z.uuid(),
   threadId: z.uuid(),
   author: discussionAuthorSchema,
-  content: z.string().min(1).max(20000),
-  plainText: z.string().max(20000),
+  content: z.string().min(1),
+  plainText: z.string(),
   isAccepted: z.boolean().default(false),
   likesCount: z.number().int().nonnegative().default(0),
   attachments: z.array(learningThreadAttachmentSummarySchema).optional(),
@@ -22,8 +22,8 @@ export type LearningReply = z.infer<typeof learningReplySchema>;
 /** What an edit returns: the fields an edit can change, and nothing else. */
 export const learningReplyEditResponseSchema = z.object({
   id: z.uuid(),
-  content: z.string().min(1).max(20000),
-  plainText: z.string().max(20000),
+  content: z.string().min(1),
+  plainText: z.string(),
   updatedAt: z.string(),
 });
 export type LearningReplyEditResponse = z.infer<
