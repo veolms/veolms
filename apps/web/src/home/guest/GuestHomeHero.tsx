@@ -13,14 +13,8 @@ import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import type { HomePageHero } from "@veolms/contracts/home-page-defaults";
 import type { NavigateTo } from "../../routing/navigation";
 import { GuestHomeLink } from "./GuestHomeLink";
-import {
-  useLayoutEffect,
-  useRef,
-  type MouseEvent,
-  type ReactNode,
-} from "react";
+import { type MouseEvent, type ReactNode } from "react";
 import { HeroDesk } from "./HeroDesk";
-import { heroMugOnPage } from "./heroPictureGeometry";
 import { guestHeroCopyWhenComplete, HeroCopyEnd } from "./HeroPicture";
 import { glassActionClasses, primaryActionClasses } from "./heroActionClasses";
 
@@ -184,86 +178,6 @@ function unquoted(text: string): string {
   return text.trim().replace(/^["“]|["”]$/gu, "");
 }
 
-/** How far the author's dash reaches back under the quote's end, in rem. */
-const AUTHOR_DASH_OVERLAP_REM = 0.5;
-/** The least room left between the author and the desk's mug, in rem. */
-const AUTHOR_MUG_CLEARANCE_REM = 0.75;
-
-/**
- * The quote's author follows the quote: its dash starts where the quote's
- * last line ends, reaching back under it a little (`AUTHOR_DASH_OVERLAP_REM`),
- * and the name runs on to the right, out of the box if need be, though never
- * onto the mug in the picture (on narrower pages it is drawn back short of
- * it). The lines are balanced, so where they end is something CSS cannot
- * know; it is measured, again whenever the quote or the picture changes
- * size (the page resized, the serif font arriving).
- */
-function useAuthorAtQuoteEnd(text: string | undefined) {
-  const quoteRef = useRef<HTMLQuoteElement>(null);
-  const captionRef = useRef<HTMLElement>(null);
-
-  useLayoutEffect(() => {
-    const quote = quoteRef.current;
-    const caption = captionRef.current;
-    if (!quote || !caption) return undefined;
-    // The desk picture's layers behind the copy, which share one box.
-    const pictures = [
-      ...(caption
-        .closest("section")
-        ?.querySelectorAll<HTMLImageElement>("picture > img") ?? []),
-    ];
-
-    const place = () => {
-      caption.style.paddingRight = "";
-      caption.style.marginRight = "";
-      const lines = document.createRange();
-      lines.selectNodeContents(quote);
-      const rects = [...lines.getClientRects()];
-      if (rects.length === 0) return;
-      // The quote ends where its last (lowest) line does.
-      const lastLineTop = Math.max(...rects.map((line) => line.top));
-      const quoteEnd = Math.max(
-        ...rects
-          .filter((line) => line.top > lastLineTop - 1)
-          .map((line) => line.right),
-      );
-      const author = document.createRange();
-      author.selectNodeContents(caption);
-      const authorBox = author.getBoundingClientRect();
-      const rem = parseFloat(
-        getComputedStyle(document.documentElement).fontSize,
-      );
-      let authorEnd =
-        quoteEnd - AUTHOR_DASH_OVERLAP_REM * rem + authorBox.width;
-      const picture = pictures.find((image) => image.clientWidth > 0);
-      const mug = picture ? heroMugOnPage(picture) : null;
-      if (
-        mug &&
-        authorBox.bottom > mug.top - 0.25 * rem &&
-        authorBox.top < mug.bottom
-      ) {
-        authorEnd = Math.min(
-          authorEnd,
-          mug.left - AUTHOR_MUG_CLEARANCE_REM * rem,
-        );
-      }
-      const spare = caption.getBoundingClientRect().right - authorEnd;
-      if (spare > 0) caption.style.paddingRight = `${Math.floor(spare)}px`;
-      else caption.style.marginRight = `${Math.floor(spare)}px`;
-    };
-
-    place();
-    const observer = new ResizeObserver(place);
-    observer.observe(quote);
-    // The mug moves with the picture where the quote keeps its size.
-    for (const image of pictures) observer.observe(image);
-    void document.fonts.ready.then(place);
-    return () => observer.disconnect();
-  }, [text]);
-
-  return { quoteRef, captionRef };
-}
-
 /**
  * Where the copy lies beside it, the hero is a picture of a desk with the
  * copy laid over its empty side. By night (dark theme) the copy is light on
@@ -298,7 +212,6 @@ export function GuestHomeHero({
   /** The same video for the narrow form, drawn in a card of its own. */
   introVideo?: ReactNode;
 }) {
-  const { quoteRef, captionRef } = useAuthorAtQuoteEnd(hero?.description);
   const [firstSentence, restOfQuote] = splitFirstSentence(
     hero?.description ? unquoted(hero.description) : "",
   );
@@ -393,7 +306,7 @@ export function GuestHomeHero({
             <figure
               className={`${quoteBoxClasses} @max-[50rem]/home:hidden ${returningLearnerHero ? forGuest : ""}`}
             >
-              <blockquote ref={quoteRef} className={quoteTextClasses}>
+              <blockquote className={quoteTextClasses}>
                 {firstSentence ? (
                   <>
                     “{firstSentence}
@@ -408,11 +321,9 @@ export function GuestHomeHero({
                 ) : null}
               </blockquote>
               {hero ? (
-                // Following the quote's last line (see useAuthorAtQuoteEnd).
-                <figcaption
-                  ref={captionRef}
-                  className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600"
-                >
+                // At the right of the quote's box, which is as wide as its
+                // longest line.
+                <figcaption className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600">
                   <span aria-hidden="true" className="h-px w-6 bg-current/60" />
                   ProCodrr
                 </figcaption>
