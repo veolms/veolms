@@ -8,7 +8,11 @@ import type { Database } from "@veolms/database";
 import type { Kysely } from "kysely";
 import { AppError } from "../../lib/errors.ts";
 import * as accessRepo from "./access.repository.ts";
-import { learnerCourseGate } from "./course-openness.ts";
+import {
+  grantSectionIds,
+  learnerCourseGate,
+  type CourseAccessScope,
+} from "./course-openness.ts";
 import { syncLinkedCourseAccess } from "./linked-course-access.ts";
 // access.repository.ts is the module's canonical source for this type — see
 // the comment there for the full history of it having been separately (and,
@@ -66,6 +70,25 @@ export interface AccessService {
     userId: string,
     courseId: string,
   ): Promise<boolean>;
+
+  /**
+   * What the learner holds of a course right now: every section, or only
+   * some when a link gave them part of it. Null when they hold no live
+   * grant. Holding part of a course is holding it (`hasActiveAccess`):
+   * it is in their My Courses and they take part in its discussions; only
+   * lessons outside their sections stay locked.
+   */
+  getAccessScope(
+    database: Executor,
+    userId: string,
+    courseId: string,
+  ): Promise<CourseAccessScope | null>;
+
+  /** `getAccessScope` for every course the learner holds now. */
+  listAccessScopes(
+    database: Executor,
+    userId: string,
+  ): Promise<Map<string, CourseAccessScope>>;
 
   /**
    * Whether someone who does not manage a course may be shown it, given its
@@ -366,17 +389,46 @@ export function createAccessService(): AccessService {
     }));
   }
 
+  function isLive(grant: {
+    status: string;
+    valid_until: Date | null;
+  }): boolean {
+    if (grant.status !== "active") return false;
+    return !grant.valid_until || new Date() <= new Date(grant.valid_until);
+  }
+
   async function hasActiveAccess(
     database: Executor,
     userId: string,
     courseId: string,
   ): Promise<boolean> {
     const grant = await accessRepo.findAccessGrant(database, userId, courseId);
-    if (!grant) return false;
-    if (grant.status !== "active") return false;
-    if (grant.valid_until && new Date() > new Date(grant.valid_until))
-      return false;
-    return true;
+    return Boolean(grant && isLive(grant));
+  }
+
+  async function getAccessScope(
+    database: Executor,
+    userId: string,
+    courseId: string,
+  ): Promise<CourseAccessScope | null> {
+    const grant = await accessRepo.findAccessGrant(database, userId, courseId);
+    if (!grant || !isLive(grant)) return null;
+    return { sectionIds: grantSectionIds(grant) };
+  }
+
+  async function listAccessScopes(
+    database: Executor,
+    userId: string,
+  ): Promise<Map<string, CourseAccessScope>> {
+    const rows = await accessRepo.listUserAccessGrants(database, userId);
+    return new Map(
+      rows
+        .filter(isLive)
+        .map((grant) => [
+          grant.course_id,
+          { sectionIds: grantSectionIds(grant) },
+        ]),
+    );
   }
 
   async function isCourseOpenToLearner(
@@ -450,6 +502,8 @@ export function createAccessService(): AccessService {
     restoreCourseAccess,
     listUserGrants,
     hasActiveAccess,
+    getAccessScope,
+    listAccessScopes,
     isCourseOpenToLearner,
     listActiveUserIdsForCourse,
     revokeAccessForOrder,
