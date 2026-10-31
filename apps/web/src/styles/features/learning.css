@@ -454,6 +454,10 @@ html[data-app-hydrated="false"] .learning-workspace__main {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  /* The title is selected and copied like any text; a click that only
+     selected some of it does not open the lessons (useLessonHeader). */
+  -webkit-user-select: text;
+  user-select: text;
   transition:
     background-color 150ms ease,
     color 150ms ease,
@@ -1304,9 +1308,16 @@ html[data-app-hydrated="false"] .learning-workspace__main {
     border-radius: 0;
   }
 
+  /* The title is pressed anywhere between the video and the description,
+     out to the screen's edges, and lights up all of that. The button takes
+     in the 10px its header stands below the video (the discussion area's
+     top padding, or the header's own until the page knows it is on a
+     phone), so the title itself stays where it was. Square corners. */
   .learning-workspace__lesson-heading {
+    margin-top: -10px;
     padding-block: 16px;
-    padding-top: 4px;
+    padding-top: 22px;
+    border-radius: 0;
   }
 
   .learning-workspace__lesson-heading h1 {

@@ -10,6 +10,10 @@ import type { Lesson } from "./courseContent";
 import { LessonResourcesMenu } from "./LessonResourcesMenu";
 import { LESSON_CARD_ACTION_CLASS } from "./lessonCardAction";
 import { NON_VIDEO_LESSON_LABELS } from "./lessonWithoutVideo";
+import {
+  endsTextSelection,
+  releaseEarlierSelection,
+} from "./textSelectionClick";
 import { useLessonHoverPreload } from "./useLessonHoverPreload";
 import { useWebContributions } from "../lib/web-contributions";
 import "./curriculum-lesson-card.css";
@@ -237,8 +241,11 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
         onPointerLeave={hoverPreload?.onPointerLeave}
         onFocus={hoverPreload?.onFocus}
         onBlur={hoverPreload?.onBlur}
-        onClick={() => {
-          if (!isAvailable) return;
+        onMouseDown={releaseEarlierSelection}
+        onClick={(event) => {
+          // The card's text can be selected like any text; a click that
+          // only selected some of it does not open the lesson.
+          if (!isAvailable || endsTextSelection(event)) return;
           hoverPreload?.cancel();
           onSelectLesson(number);
           onClose?.();
@@ -248,7 +255,7 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
         // adds arrive once the page is running, and the card used to grow
         // then. A card is as tall before as after; only a title on two
         // lines makes it taller.
-        className="block w-full cursor-pointer px-3 pt-3 pb-2.5 text-left focus-visible:-outline-offset-2! [[data-unavailable]_&]:cursor-not-allowed"
+        className="block w-full cursor-pointer px-3 pt-3 pb-2.5 text-left select-text focus-visible:-outline-offset-2! [[data-unavailable]_&]:cursor-not-allowed"
       >
         {/* Whole-pixel line heights here and in the meta line below: the
             cards stack, so a line box a fraction of a pixel tall would put

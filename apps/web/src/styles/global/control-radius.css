@@ -284,7 +284,9 @@
     var(--control-radius-learning-panel) 0 0 !important;
 }
 
-@media (min-width: 1081px) {
+/* Square beside the curriculum on a wide screen, and on a phone, where it
+   runs out to the screen's edges. */
+@media (min-width: 1081px), (max-width: 640px) {
   :root[data-control-radius] .courses-app .learning-workspace__lesson-heading {
     border-radius: 0 !important;
   }

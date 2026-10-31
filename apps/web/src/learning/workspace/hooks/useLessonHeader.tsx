@@ -15,6 +15,10 @@ import type { Lesson } from "../../courseContent";
 import type { AdaptedCurriculumSection } from "../../courseCurriculumAdapter";
 import type { useLessonTitleHeightSwipe } from "../../player/LessonPlayerHeightHandle";
 import type { LiveLessonProgress } from "../../player/liveLessonProgress";
+import {
+  endsTextSelection,
+  releaseEarlierSelection,
+} from "../../textSelectionClick";
 
 export interface UseLessonHeaderArgs {
   courseSlug: string | undefined;
@@ -164,19 +168,15 @@ export function useLessonHeader({
         type="button"
         className={`learning-workspace__lesson-heading ${appliedPlayerHeight === null && !readingGrowable ? "touch-pan-up" : "touch-none"}`}
         {...(stickyPlayer ? titleSwipeHandlers : undefined)}
-        style={
-          contained
-            ? {
-                width: "100%",
-                minWidth: 0,
-                marginInline: 0,
-                paddingInline: 0,
-              }
-            : undefined
-        }
         aria-label={`Open course lessons for ${currentLesson[1]}`}
         aria-expanded={lessonDrawer}
-        onClick={openLessonDrawerInPlace}
+        // The title can be selected like any text (learning.css); a click
+        // that only selected some of it does not open the lessons.
+        onMouseDown={releaseEarlierSelection}
+        onClick={(event) => {
+          if (endsTextSelection(event)) return;
+          openLessonDrawerInPlace();
+        }}
       >
         <div className="min-w-0">
           {titleLoading ? (
