@@ -177,6 +177,21 @@ function markPlayback(name: string, detail?: Record<string, unknown>): void {
   }
 }
 
+/**
+ * The player's subtitle layer (see `SubtitleLayer`): subtitles drawn there
+ * stay out of the picture's zoom and can be moved and resized on their own.
+ * Without one Shaka draws them in the media element. Shaka makes its
+ * subtitle renderer as media is attached, so it is handed over before every
+ * attach.
+ */
+function subtitleLayerFor(media: HTMLMediaElement): HTMLElement | null {
+  return (
+    media
+      .closest("[data-video-player-root]")
+      ?.querySelector<HTMLElement>("[data-video-player-subtitles]") ?? null
+  );
+}
+
 function preloadSessionMatchesSource(
   session: EarlyShakaPreloadSession,
   source: VideoSource,
@@ -639,6 +654,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       media.removeAttribute("src");
       media.load();
     }
+    next.setVideoContainer?.(subtitleLayerFor(media));
     await next.attach(media);
     this.revealVideo();
     this.clearTrackMaps();
@@ -836,6 +852,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#player = new runtime.Player();
       this.bindShakaEvents(this.#player);
     }
+    this.#player.setVideoContainer?.(subtitleLayerFor(media));
     await this.#player.attach(media);
   }
 
@@ -1355,6 +1372,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         streaming: { bufferingGoal: STANDBY_BUFFERING_GOAL_SECONDS },
       });
       standby.muted = true;
+      player.setVideoContainer?.(subtitleLayerFor(standby));
       await player.attach(standby);
       await player.load(manager, session.startTime ?? 0);
       if (!this.isStandbyCurrent(session, standby)) {
@@ -1582,6 +1600,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
     this.bindShakaEvents(preloadedPlayer);
     try {
+      preloadedPlayer.setVideoContainer?.(subtitleLayerFor(media));
       await preloadedPlayer.attach(media);
     } catch (error) {
       await discardEarlyShakaPreloadManager(session);

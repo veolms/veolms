@@ -24,6 +24,12 @@ export interface PlayerZoomState {
   gestureActive: boolean;
   feedbackVisible: boolean;
   transitioning: boolean;
+  /**
+   * Where the last gesture snapped the picture: to fill the player, or back
+   * to its original size. Said over the picture while the zoom feedback is
+   * shown.
+   */
+  snap: "fill" | "original" | null;
 }
 
 export interface PlayerUiState {
@@ -81,5 +87,6 @@ export function createInitialPlayerZoomState(): PlayerZoomState {
     gestureActive: false,
     feedbackVisible: false,
     transitioning: false,
+    snap: null,
   };
 }

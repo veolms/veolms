@@ -375,6 +375,19 @@ export function stripLoginDialogParams(search: string): string {
 }
 
 /**
+ * Whether two addresses show the same page and differ only by the login
+ * pop-up over it: it came up, went away or was asked for differently.
+ */
+export function differOnlyByLoginDialog(a: string, b: string): boolean {
+  const pageBehind = (path: string) => {
+    const url = new URL(path, "https://procodrr.local");
+    const search = new URLSearchParams(stripLoginDialogParams(url.search));
+    return `${url.pathname}?${search.toString()}${url.hash}`;
+  };
+  return a !== b && pageBehind(a) === pageBehind(b);
+}
+
+/**
  * Carries an open login pop-up over to an address a page rewrites itself to
  * (a lesson settling on its canonical address, for instance), so tidying the
  * address does not close the pop-up.

@@ -7,12 +7,18 @@ import {
   useCallback,
   useEffect,
   useState,
+  useSyncExternalStore,
   type Ref,
 } from "react";
-import { LoadingSpinnerIcon } from "../../components/LoadingSpinner";
 import { prefersReducedData } from "../../lib/reduced-data";
 import { homeService } from "../../services/home";
 import { heroLaptopDrawnSizeClasses } from "./HeroLaptopScreen";
+import {
+  heroVideoSync,
+  isHeroVideoStarted,
+  markHeroVideoStarted,
+  subscribeToHeroVideoStarted,
+} from "./heroVideoSync";
 
 const loadHeroVideoPlayer = () => import("./HeroVideoPlayer");
 const HeroVideoPlayer = lazy(loadHeroVideoPlayer);
@@ -127,7 +133,15 @@ export function HeroVideo({
   frame: HeroVideoFrame;
 }) {
   const [playback, setPlayback] = useState<HeroVideoPlayback | null>(null);
-  const [pressed, setPressed] = useState(false);
+  const [ownPress, setPressed] = useState(false);
+  // Started in the hero's other frame (before the window was resized across
+  // the switch) counts as started here: this one carries on from it.
+  const startedElsewhere = useSyncExternalStore(
+    subscribeToHeroVideoStarted,
+    isHeroVideoStarted,
+    () => false,
+  );
+  const pressed = ownPress || startedElsewhere;
   const [loading, setLoading] = useState(false);
   const [player, setPlayer] = useState<VideoPlayerHandle | null>(null);
   const [posterElement, setPosterElement] = useState<HTMLDivElement | null>(
@@ -140,6 +154,7 @@ export function HeroVideo({
 
   const start = () => {
     setPressed(true);
+    markHeroVideoStarted();
     if (player) {
       void player.play().catch(() => undefined);
       return;
@@ -177,7 +192,7 @@ export function HeroVideo({
               frame={frame}
               // Played by the press when it is up by then (the usual case),
               // or as soon as it is loaded after a press.
-              autoPlay={pressed}
+              autoPlay={ownPress || (pressed && heroVideoSync.playing)}
               active={pressed}
               onPlayer={setPlayer}
             />
@@ -236,17 +251,16 @@ function HeroVideoPoster({
           className="size-full object-cover"
         />
       ) : null}
+      {/* Pressed, it steps aside: the player's own loader shows while the
+          video gets ready. */}
       <button
         type="button"
         aria-label={loading ? "Loading video" : "Play video"}
+        aria-busy={loading || undefined}
         onClick={onPlay}
-        className="absolute top-1/2 left-1/2 grid size-15.5 -translate-1/2 cursor-pointer place-items-center rounded-full bg-[rgb(5_7_11/0.5)] text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className={`absolute top-1/2 left-1/2 grid size-15.5 -translate-1/2 cursor-pointer place-items-center rounded-full bg-[rgb(5_7_11/0.5)] text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${loading ? "opacity-0" : ""}`}
       >
-        {loading ? (
-          <LoadingSpinnerIcon size={29} />
-        ) : (
-          <Play weight="fill" size={29} />
-        )}
+        <Play weight="fill" size={29} />
       </button>
     </div>
   );

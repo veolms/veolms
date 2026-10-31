@@ -175,6 +175,55 @@
   z-index: 10 !important;
 }
 
+/* Subtitles drawn by Shaka in the player's subtitle layer (SubtitleLayer),
+   out of the picture's zoom; placed and sized as the viewer left them. */
+[data-video-player-subtitles] > .shaka-text-container {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: 0 4% 5%;
+  pointer-events: none;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: calc(
+    clamp(14px, 2.2vw, 22px) * var(--video-player-subtitle-scale, 1)
+  );
+  line-height: 1.4;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  translate: calc(var(--video-player-subtitle-x, 0) * 100%)
+    calc(var(--video-player-subtitle-y, 0) * 100%);
+  transition: padding-bottom 150ms ease;
+}
+
+/* Above the control bar while the controls are up. */
+[data-video-player-subtitles][data-controls-visible] > .shaka-text-container {
+  padding-bottom: max(5%, 4.5rem);
+}
+
+[data-video-player-subtitles] > .shaka-text-container span {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+[data-video-player-subtitles] > .shaka-text-container span:not(:has(span)) {
+  background-color: rgba(0, 0, 0, 0.75);
+  padding: 0 0.25em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+[data-video-player-subtitles][data-subtitle-gesture]
+  > .shaka-text-container
+  span {
+  cursor: grabbing;
+  outline: 1px dashed rgb(255 255 255 / 0.6);
+  outline-offset: 2px;
+}
+
 [data-video-player-root] video::cue {
   background-color: rgba(0, 0, 0, 0.75);
   color: #ffffff;

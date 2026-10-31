@@ -988,7 +988,8 @@ export class PlayerController {
       zoom.panY === current.panY &&
       zoom.gestureActive === current.gestureActive &&
       zoom.feedbackVisible === current.feedbackVisible &&
-      zoom.transitioning === current.transitioning
+      zoom.transitioning === current.transitioning &&
+      zoom.snap === current.snap
     ) {
       return;
     }
