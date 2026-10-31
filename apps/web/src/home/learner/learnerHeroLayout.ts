@@ -240,7 +240,7 @@ export const phoneBackdropClasses = [
  * that its two lines still hold. A phone sets it smaller for the same
  * reason, though there the longest quotes take a third line.
  */
-const heroQuoteSizeClasses =
+export const heroQuoteSizeClasses =
   "text-lg @max-[30rem]/home:text-base @[50rem]/home:text-[0.9375rem] @[56rem]/home:text-base @[62rem]/home:text-lg @[72rem]/home:text-xl @[90rem]/home:text-[1.375rem]";
 
 /**
