@@ -19,6 +19,11 @@ import {
 } from "./pricing.amount.ts";
 import { resolveQuizCharge } from "./quiz-pricing.amount.ts";
 import { courseSaleState, resolveCoursePricing } from "./purchasable.ts";
+import {
+  listCoursesOpenedBy,
+  listPartialHoldings,
+  type PartialHolding,
+} from "./upgrade-credit.ts";
 
 export interface CalculatePricingParams {
   userId?: string | null;
@@ -156,12 +161,18 @@ export function createPricingService({
       seenItems.add(key);
     }
 
-    // 1. Fetch user enrollments if authenticated to prevent duplicate ownership
-    const enrolledCourseIds = userId
-      ? new Set(
-          await enrollmentRepo.listUserEnrolledCourseIds(database, userId),
-        )
-      : new Set<string>();
+    // 1. Fetch user enrollments if authenticated to prevent duplicate
+    // ownership, and the courses they hold only part of, whose whole is an
+    // upgrade with what they paid for the parts taken off.
+    const [enrolledCourseIds, partialHoldings] = userId
+      ? await Promise.all([
+          enrollmentRepo
+            .listUserEnrolledCourseIds(database, userId)
+            .then((ids) => new Set(ids)),
+          listPartialHoldings(database, userId),
+        ])
+      : [new Set<string>(), new Map<string, PartialHolding>()];
+    let upgradeCredit: { amount: number; from: string[] } | undefined;
 
     const calculatedItems: Array<{
       itemType: "course" | "bundle" | "quiz";
@@ -261,6 +272,17 @@ export function createPricingService({
         if (enrolledCourseIds.has(courseId)) {
           throw CommerceErrors.COURSE_ALREADY_OWNED(course.title);
         }
+        // Part of a course (an unlisted course, sold from its link) is no
+        // use to someone who has the whole course already.
+        if (course.unlisted && userId) {
+          const opened = await listCoursesOpenedBy(database, courseId);
+          if (
+            opened.length > 0 &&
+            opened.every((whole) => enrolledCourseIds.has(whole.id))
+          ) {
+            throw CommerceErrors.COURSE_ALREADY_OWNED(opened[0]!.title);
+          }
+        }
 
         const pricing = pricingByCourseId.get(courseId);
         // A restricted course with no price is entered by a grant from
@@ -300,6 +322,33 @@ export function createPricingService({
           throw CommerceErrors.PRICE_CALCULATION_FAILED(
             `Cart contains items with mixed currencies (${detectedCurrency} and ${itemCurrency}).`,
           );
+        }
+
+        // An upgrade from part of the course: what was paid for the part
+        // comes off, never below nothing, and no coupon is taken on top.
+        const holding = partialHoldings.get(courseId);
+        if (holding && isPaidCourse) {
+          const credit =
+            holding.currency === itemCurrency
+              ? Math.min(unitPrice, holding.credit)
+              : 0;
+          calculatedItems.push({
+            itemType: "course",
+            itemId: courseId,
+            title: `${course.title} (upgrade from ${holding.fromTitles.join(", ")})`,
+            unitPrice,
+            couponBase: 0,
+            discountAmount: credit,
+            taxAmount: 0,
+            finalAmount: unitPrice - credit,
+          });
+          subtotalAmount += unitPrice;
+          itemCourseMap.set(courseId, [courseId]);
+          upgradeCredit = {
+            amount: (upgradeCredit?.amount ?? 0) + credit,
+            from: [...(upgradeCredit?.from ?? []), ...holding.fromTitles],
+          };
+          continue;
         }
 
         calculatedItems.push({
@@ -621,12 +670,15 @@ export function createPricingService({
       };
     }
 
+    // An upgrade's credit comes off with any coupon on the other items.
+    totalDiscount += upgradeCredit?.amount ?? 0;
     const totalTax = 0; // Configurable tax if needed in future
     const totalAmount = Math.max(0, subtotalAmount - totalDiscount + totalTax);
 
     const pricing: PricingCalculation = {
       subtotalAmount,
       discountAmount: totalDiscount,
+      ...(upgradeCredit ? { upgradeCredit } : {}),
       taxAmount: totalTax,
       totalAmount,
       currency: detectedCurrency,

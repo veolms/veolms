@@ -203,7 +203,9 @@ export async function listCourseAccessFacts(
     if (filter.courseIds.length === 0) return [];
     query = query.where("courses.id", "in", [...filter.courseIds]);
   } else {
-    query = query.where("courses.status", "=", "published");
+    query = query
+      .where("courses.status", "=", "published")
+      .where("courses.unlisted", "=", false);
   }
   return await query
     .orderBy("courses.created_at", "asc")
@@ -303,6 +305,8 @@ export async function listPublishedCourses(
         .as("lesson_duration_seconds"),
     ])
     .where("courses.status", "=", "published")
+    // Bought from its own link only, never listed.
+    .where("courses.unlisted", "=", false)
     .where("courses.deleted_at", "is", null);
 
   if (filters?.creatorId) {
@@ -446,6 +450,7 @@ export async function listHomeDiscoveryCourses(
         .as("lesson_duration_seconds"),
     ])
     .where("courses.status", "=", "published")
+    .where("courses.unlisted", "=", false)
     .where("courses.deleted_at", "is", null);
 
   if (options.freeOnly) {
@@ -590,7 +595,9 @@ export async function listManagedCourses(
         .where("course_lessons.deleted_at", "is", null)
         .as("lesson_duration_seconds"),
     ])
-    .where("courses.deleted_at", "is", null);
+    .where("courses.deleted_at", "is", null)
+    // Managed from the course it unlocks ("Partial access"), not listed.
+    .where("courses.unlisted", "=", false);
 
   if (creatorId) {
     query = query.where("courses.creator_id", "=", creatorId);

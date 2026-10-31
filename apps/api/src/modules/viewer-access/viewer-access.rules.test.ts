@@ -69,7 +69,8 @@ await test("a lesson shown unlocked is one whose text the server hands out", asy
             course: { creator_id: OWNER },
             pricingType: storedPricingType,
             accessType,
-            holdsCourse: () => Promise.resolve(holdsGrant),
+            accessScope: () =>
+              Promise.resolve(holdsGrant ? { sectionIds: null } : null),
           });
           const label = `${name} ${storedPricingType}/${accessType} grant=${holdsGrant}`;
 

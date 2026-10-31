@@ -117,8 +117,10 @@ export function useLessonStagePlan({
     const course = courseOverview?.course;
     // The server's answer: whether every lesson opens to the viewer.
     const courseAccess = courseAccessQuery.data;
+    // Part of a course is held too: its sections play and record progress.
     const holdsCourse = courseAccess
-      ? courseAccess.access === "full"
+      ? courseAccess.access === "full" ||
+        Boolean(courseAccess.openSectionIds?.length)
       : undefined;
     return planLessonStage({
       lesson: adaptedCurriculum?.lessonsByNumber.get(selectedLesson),
@@ -283,10 +285,15 @@ export function useLessonStagePlan({
       actionLabel: "Log in",
       onAction: onOpenLogin,
     } as const;
+    // A learner holding part of the course is told this lesson is in the
+    // rest of it.
+    const holdsPart = Boolean(courseAccessQuery.data?.openSectionIds?.length);
     const accessPrompt = {
       kind: "access",
-      message: "Join the course to unlock this lesson and all the rest.",
-      actionLabel: "Unlock the course",
+      message: holdsPart
+        ? "This lesson isn't part of your plan. Get the full course to unlock it and the rest."
+        : "Join the course to unlock this lesson and all the rest.",
+      actionLabel: holdsPart ? "Get the full course" : "Unlock the course",
       onAction: onUnlockCourse,
     } as const;
 
@@ -344,6 +351,7 @@ export function useLessonStagePlan({
       onAction: retryPlaybackBootstrap,
     };
   }, [
+    courseAccessQuery.data?.openSectionIds,
     courseUnavailable,
     lessonDescriptionState,
     onUnlockCourse,

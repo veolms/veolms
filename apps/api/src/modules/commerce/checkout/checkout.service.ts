@@ -164,9 +164,13 @@ export function createCheckoutService({
     // and the coupon's id are for order creation and stay here.
     return {
       pricing: {
+        subtotalAmount: pricing.subtotalAmount,
         discountAmount: pricing.discountAmount,
         totalAmount: pricing.totalAmount,
         currency: pricing.currency,
+        ...(pricing.upgradeCredit
+          ? { upgradeCredit: pricing.upgradeCredit }
+          : {}),
       },
       couponValidation: couponValidation && {
         valid: couponValidation.valid,

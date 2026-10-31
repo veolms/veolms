@@ -15,6 +15,9 @@ import type {
   CourseStatusResponse,
   CourseIncludeItem,
   LinkedCoursesListResponse,
+  PartialAccessListResponse,
+  CreatePartialAccessRequest,
+  UpdatePartialAccessRequest,
   CreateCategoryRequest,
   CreateCourseIncludeRequest,
   CreateCourseLessonRequest,
@@ -729,6 +732,54 @@ export function useReorderCourseIncludes() {
 }
 
 /** Links or unlinks a course; the response is the course's new list. */
+/**
+ * Creates, changes or deletes a part of a course sold on its own. A change
+ * of sections reaches its learners straight away.
+ */
+export function useSavePartialAccess() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    PartialAccessListResponse,
+    ApiError,
+    | {
+        courseId: string;
+        action: "create";
+        payload: CreatePartialAccessRequest;
+      }
+    | {
+        courseId: string;
+        action: "update";
+        partialCourseId: string;
+        payload: UpdatePartialAccessRequest;
+      }
+    | { courseId: string; action: "delete"; partialCourseId: string }
+  >({
+    mutationFn: (variables) =>
+      variables.action === "create"
+        ? coursesService.createPartialAccess(
+            variables.courseId,
+            variables.payload,
+          )
+        : variables.action === "update"
+          ? coursesService.updatePartialAccess(
+              variables.courseId,
+              variables.partialCourseId,
+              variables.payload,
+            )
+          : coursesService.deletePartialAccess(
+              variables.courseId,
+              variables.partialCourseId,
+            ),
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(
+        courseKeys.partialAccess(variables.courseId),
+        data,
+      );
+    },
+  });
+}
+
 export function useSetLinkedCourse() {
   const queryClient = useQueryClient();
 

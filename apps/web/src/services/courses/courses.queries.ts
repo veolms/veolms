@@ -16,6 +16,9 @@ import type {
   DeletedCoursesQuery,
   LessonDescriptionResponse,
   LinkedCoursesListResponse,
+  PartialAccessListResponse,
+  PartialAccessOffer,
+  PartialAccessOptionsResponse,
   MyCoursesListResponse,
   PublicCourse,
 } from "@veolms/contracts";
@@ -232,6 +235,41 @@ export function useLinkedCourses(courseId: string | null) {
   return useQuery<LinkedCoursesListResponse, ApiError>({
     queryKey: courseKeys.linkedCourses(courseId ?? ""),
     queryFn: () => coursesService.listLinkedCourses(courseId!),
+    enabled: Boolean(courseId),
+  });
+}
+
+/**
+ * The part of a course a partial access link sells (`?access=` on the
+ * course page): its price and sections. Read live, never from a copy.
+ */
+export function usePartialAccessOffer(
+  idOrSlug: string | null | undefined,
+  offerSlug: string | null | undefined,
+) {
+  return useQuery<PartialAccessOffer, ApiError>({
+    queryKey: courseKeys.offer(idOrSlug ?? "", offerSlug ?? ""),
+    queryFn: () => coursesService.getPartialAccessOffer(idOrSlug!, offerSlug!),
+    enabled: Boolean(idOrSlug && offerSlug),
+    retry: (failureCount, error) =>
+      failureCount < 2 && !(error.status >= 400 && error.status < 500),
+  });
+}
+
+/** Every partial access, for limiting a coupon to one (coupon builder). */
+export function usePartialAccessOptions() {
+  return useQuery<PartialAccessOptionsResponse, ApiError>({
+    queryKey: courseKeys.partialAccessOptions(),
+    queryFn: () => coursesService.listPartialAccessOptions(),
+    staleTime: 60 * 1000,
+  });
+}
+
+/** The parts of a course sold on their own (editor only). */
+export function usePartialAccess(courseId: string | null) {
+  return useQuery<PartialAccessListResponse, ApiError>({
+    queryKey: courseKeys.partialAccess(courseId ?? ""),
+    queryFn: () => coursesService.listPartialAccess(courseId!),
     enabled: Boolean(courseId),
   });
 }

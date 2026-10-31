@@ -24,9 +24,9 @@ function accessFor(input: {
     course,
     pricingType: input.pricingType ?? "paid",
     accessType: input.accessType ?? "open",
-    holdsCourse: () => {
+    accessScope: () => {
       lookups += 1;
-      return Promise.resolve(input.holds ?? false);
+      return Promise.resolve(input.holds ? { sectionIds: null } : null);
     },
   });
   return { decide, lookups: () => lookups };

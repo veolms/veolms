@@ -405,6 +405,117 @@ export type AddLinkedCourseRequest = z.infer<
   typeof addLinkedCourseRequestSchema
 >;
 
+/**
+ * Part of a course, sold on its own: an unlisted course that opens only the
+ * chosen sections of the course it belongs to, to whoever buys it or is
+ * given it. It is kept off every list (the catalogue, the admin's course
+ * list, My Courses); its learners see the course it belongs to, with the
+ * other sections locked. Its orders and invoices name it. Prices are in
+ * major units, as course pricing is.
+ */
+export const partialAccessCourseSchema = z.object({
+  courseId: z.uuid(),
+  title: z.string(),
+  slug: z.string(),
+  status: z.string(),
+  /**
+   * What the whole course sells for now: the part's price is shown against
+   * it, struck through, with the difference as its discount.
+   */
+  price: z.number().nonnegative(),
+  /** What a learner pays for the part. */
+  salePrice: z.number().nonnegative(),
+  currency: z.string(),
+  /** The sections of the course it opens, in the course's order. */
+  sectionIds: z.array(z.uuid()),
+  /** Sold from its link (its page is `offerPath`); a draft is not. */
+  onSale: z.boolean(),
+  /**
+   * Where it is sold: the course's page, showing which sections it opens.
+   * Relative to the site.
+   */
+  offerPath: z.string(),
+  /** Learners who hold it now. */
+  learnerCount: z.number().int().nonnegative(),
+  /** Orders that name it, of any status: it is kept while any exist. */
+  orderCount: z.number().int().nonnegative(),
+});
+
+export const partialAccessListResponseSchema = z.object({
+  items: z.array(partialAccessCourseSchema),
+  /** What the whole course sells for now. */
+  coursePrice: z.number().nonnegative(),
+  /** The course's sections, in order, to choose from. */
+  sections: z.array(z.object({ id: z.uuid(), title: z.string() })),
+});
+
+/**
+ * Only the part's own selling price is set: what it is shown against is
+ * the whole course's price.
+ */
+export const createPartialAccessRequestSchema = z.strictObject({
+  title: z.string().trim().min(1).max(200),
+  salePrice: z.number().int().nonnegative(),
+  /** At least one section of the course. */
+  sectionIds: z.array(z.uuid()).min(1),
+  /** Sell it from its link straight away. */
+  onSale: z.boolean().optional(),
+});
+
+/** The same fields; what is left out stays as it is. */
+export const updatePartialAccessRequestSchema = z.strictObject({
+  title: z.string().trim().min(1).max(200).optional(),
+  salePrice: z.number().int().nonnegative().optional(),
+  sectionIds: z.array(z.uuid()).min(1).optional(),
+  onSale: z.boolean().optional(),
+});
+
+/**
+ * `GET /course-offers/:idOrSlug/:offerSlug`: a part of a course as its
+ * link's page shows it to anyone. `courseId` is what checkout sells.
+ */
+export const partialAccessOfferSchema = z.object({
+  courseId: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  /** What the whole course sells for now, struck through beside `salePrice`. */
+  price: z.number().nonnegative(),
+  salePrice: z.number().nonnegative(),
+  currency: z.string(),
+  /** The sections of the course it opens; the others stay locked. */
+  sectionIds: z.array(z.uuid()),
+  /** Whether it can be bought now. */
+  onSale: z.boolean(),
+});
+
+export type PartialAccessOffer = z.infer<typeof partialAccessOfferSchema>;
+
+/** `GET /course-offers`: every partial access, for choosing in a coupon. */
+export const partialAccessOptionsResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      /** The partial access (an unlisted course): what a coupon names. */
+      courseId: z.uuid(),
+      title: z.string(),
+      /** The course it opens part of. */
+      courseTitle: z.string(),
+    }),
+  ),
+});
+export type PartialAccessOptionsResponse = z.infer<
+  typeof partialAccessOptionsResponseSchema
+>;
+export type PartialAccessCourse = z.infer<typeof partialAccessCourseSchema>;
+export type PartialAccessListResponse = z.infer<
+  typeof partialAccessListResponseSchema
+>;
+export type CreatePartialAccessRequest = z.infer<
+  typeof createPartialAccessRequestSchema
+>;
+export type UpdatePartialAccessRequest = z.infer<
+  typeof updatePartialAccessRequestSchema
+>;
+
 export const createLessonResourceRequestSchema = z.object({
   mediaAssetId: z.uuid(),
   title: z.string().min(1).max(100),

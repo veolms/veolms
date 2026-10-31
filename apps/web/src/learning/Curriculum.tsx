@@ -1467,6 +1467,9 @@ export const Curriculum = memo(function Curriculum({
                       : undefined
                   }
                   data-section-complete={sectionComplete || undefined}
+                  // For the lessons a learner holding part of the course
+                  // opens (`lessonPageEarlyState`).
+                  data-section-id={section.sectionId}
                   data-expanded={isOpen}
                 >
                   <button
