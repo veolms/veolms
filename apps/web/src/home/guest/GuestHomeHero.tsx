@@ -1,4 +1,8 @@
 import { LearnerPhoneBackdrop } from "../learner/LearnerPhoneBackdrop";
+import {
+  heroQuoteClasses,
+  heroQuoteSizeClasses,
+} from "../learner/learnerHeroLayout";
 import { guestHomeGutter, guestHomeGutterBleed } from "./guestHomeSpacing";
 import {
   homeHeroHeightClasses,
@@ -16,6 +20,7 @@ import {
   type ReactNode,
 } from "react";
 import { HeroDesk } from "./HeroDesk";
+import { heroMugOnPage } from "./heroPictureGeometry";
 import { guestHeroCopyWhenComplete, HeroCopyEnd } from "./HeroPicture";
 import { glassActionClasses, primaryActionClasses } from "./heroActionClasses";
 
@@ -135,6 +140,23 @@ const descriptionTextClasses =
   "font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-balance text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
 const descriptionClasses = `${descriptionBoxClasses} ${descriptionTextClasses}`;
 
+/**
+ * The quote is set as the signed-in learner's quote of the day is: its
+ * letters, its sizes and its box, as wide as its longest line up to 28 of
+ * its letters and never past the laptop (see `heroQuoteBoxClasses`).
+ */
+const quoteBoxClasses = `mt-4 w-max min-w-0 max-w-[28em] ${heroQuoteSizeClasses} @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(28em,calc(100cqw_-_var(--picture-h)_*_1.05_+_var(--picture-shift)_-_clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)_-_1.5rem))]`;
+const quoteTextClasses = `${heroQuoteClasses} text-slate-200 [:root[data-theme=light]_&]:text-slate-700`;
+
+/**
+ * The quote's first sentence and the rest of it, which is set on a line of
+ * its own below.
+ */
+function splitFirstSentence(text: string): [string, string] {
+  const match = /^(.+?[.!?])\s+(\S.*)$/su.exec(text);
+  return match ? [match[1] ?? text, match[2] ?? ""] : [text, ""];
+}
+
 function HeroHeadline({
   hero,
   className,
@@ -154,15 +176,27 @@ function HeroHeadline({
   );
 }
 
-/** How far past the quote's longest line its author ends, in rem. */
-const AUTHOR_OVERHANG_REM = 2;
+/**
+ * The quote's text without quotation marks at its ends, which the hero sets
+ * itself; an admin may have typed them into the copy.
+ */
+function unquoted(text: string): string {
+  return text.trim().replace(/^["“]|["”]$/gu, "");
+}
+
+/** How far the author's dash reaches back under the quote's end, in rem. */
+const AUTHOR_DASH_OVERLAP_REM = 0.5;
+/** The least room left between the author and the desk's mug, in rem. */
+const AUTHOR_MUG_CLEARANCE_REM = 0.75;
 
 /**
- * The quote's author ends a little past where the quote's longest line
- * ends (`AUTHOR_OVERHANG_REM`), out to the right of the box if need be.
- * Its lines are balanced, so they stop short of the box's edge by an amount
- * CSS cannot know; it is measured, again whenever the quote changes size
- * (the page resized, the serif font arriving).
+ * The quote's author follows the quote: its dash starts where the quote's
+ * last line ends, reaching back under it a little (`AUTHOR_DASH_OVERLAP_REM`),
+ * and the name runs on to the right, out of the box if need be, though never
+ * onto the mug in the picture (on narrower pages it is drawn back short of
+ * it). The lines are balanced, so where they end is something CSS cannot
+ * know; it is measured, again whenever the quote or the picture changes
+ * size (the page resized, the serif font arriving).
  */
 function useAuthorAtQuoteEnd(text: string | undefined) {
   const quoteRef = useRef<HTMLQuoteElement>(null);
@@ -172,22 +206,48 @@ function useAuthorAtQuoteEnd(text: string | undefined) {
     const quote = quoteRef.current;
     const caption = captionRef.current;
     if (!quote || !caption) return undefined;
+    // The desk picture's layers behind the copy, which share one box.
+    const pictures = [
+      ...(caption
+        .closest("section")
+        ?.querySelectorAll<HTMLImageElement>("picture > img") ?? []),
+    ];
 
     const place = () => {
       caption.style.paddingRight = "";
       caption.style.marginRight = "";
       const lines = document.createRange();
       lines.selectNodeContents(quote);
-      const left = caption.getBoundingClientRect().left;
-      let quoteEnd = 0;
-      for (const line of lines.getClientRects()) {
-        quoteEnd = Math.max(quoteEnd, line.right - left);
-      }
-      if (quoteEnd <= 0) return;
+      const rects = [...lines.getClientRects()];
+      if (rects.length === 0) return;
+      // The quote ends where its last (lowest) line does.
+      const lastLineTop = Math.max(...rects.map((line) => line.top));
+      const quoteEnd = Math.max(
+        ...rects
+          .filter((line) => line.top > lastLineTop - 1)
+          .map((line) => line.right),
+      );
+      const author = document.createRange();
+      author.selectNodeContents(caption);
+      const authorBox = author.getBoundingClientRect();
       const rem = parseFloat(
         getComputedStyle(document.documentElement).fontSize,
       );
-      const spare = caption.clientWidth - quoteEnd - AUTHOR_OVERHANG_REM * rem;
+      let authorEnd =
+        quoteEnd - AUTHOR_DASH_OVERLAP_REM * rem + authorBox.width;
+      const picture = pictures.find((image) => image.clientWidth > 0);
+      const mug = picture ? heroMugOnPage(picture) : null;
+      if (
+        mug &&
+        authorBox.bottom > mug.top - 0.25 * rem &&
+        authorBox.top < mug.bottom
+      ) {
+        authorEnd = Math.min(
+          authorEnd,
+          mug.left - AUTHOR_MUG_CLEARANCE_REM * rem,
+        );
+      }
+      const spare = caption.getBoundingClientRect().right - authorEnd;
       if (spare > 0) caption.style.paddingRight = `${Math.floor(spare)}px`;
       else caption.style.marginRight = `${Math.floor(spare)}px`;
     };
@@ -195,6 +255,8 @@ function useAuthorAtQuoteEnd(text: string | undefined) {
     place();
     const observer = new ResizeObserver(place);
     observer.observe(quote);
+    // The mug moves with the picture where the quote keeps its size.
+    for (const image of pictures) observer.observe(image);
     void document.fonts.ready.then(place);
     return () => observer.disconnect();
   }, [text]);
@@ -237,6 +299,9 @@ export function GuestHomeHero({
   introVideo?: ReactNode;
 }) {
   const { quoteRef, captionRef } = useAuthorAtQuoteEnd(hero?.description);
+  const [firstSentence, restOfQuote] = splitFirstSentence(
+    hero?.description ? unquoted(hero.description) : "",
+  );
   const spacing =
     hero && greeting
       ? greetedSpacing
@@ -322,16 +387,28 @@ export function GuestHomeHero({
             )}
           </h1>
           {!hero || hero.description ? (
-            // A quote, signed as the signed-in learner's is. Only beside the
+            // A quote, set, marked and signed as the signed-in learner's is,
+            // its first sentence on a line of its own. Only beside the
             // picture: narrower, the video card follows the headline.
             <figure
-              className={`${descriptionBoxClasses} @max-[50rem]/home:hidden ${returningLearnerHero ? forGuest : ""}`}
+              className={`${quoteBoxClasses} @max-[50rem]/home:hidden ${returningLearnerHero ? forGuest : ""}`}
             >
-              <blockquote ref={quoteRef} className={descriptionTextClasses}>
-                {hero?.description}
+              <blockquote ref={quoteRef} className={quoteTextClasses}>
+                {firstSentence ? (
+                  <>
+                    “{firstSentence}
+                    {restOfQuote ? (
+                      <>
+                        <br />
+                        {restOfQuote}
+                      </>
+                    ) : null}
+                    ”
+                  </>
+                ) : null}
               </blockquote>
               {hero ? (
-                // Ending where the quote's longest line ends.
+                // Following the quote's last line (see useAuthorAtQuoteEnd).
                 <figcaption
                   ref={captionRef}
                   className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600"

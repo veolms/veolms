@@ -97,7 +97,7 @@ export const DEFAULT_HOME_PAGE_SETTINGS: HomePageSettings = {
     headline: "Learn In Depth.",
     highlightedHeadline: "Build With Confidence.",
     description:
-      "Deep understanding and practical foundations give you the confidence to build beyond tutorials.",
+      "Go deep enough and you stop chasing possibilities. You create them.",
     primaryActionLabel: "Explore Courses",
     secondaryActionLabel: "Watch Free Courses",
   },
