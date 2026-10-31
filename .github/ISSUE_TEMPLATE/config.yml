@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "💬 Community & Questions (Discord)"
+    url: "https://discord.com/invite/P2qXqXgrzb"
+    about: "Join the VeoLMS Discord community to ask questions, discuss features, get help, or share feedback."
+  - name: "🌐 Live Preview & Dev Environment"
+    url: "https://dev.veolms.org"
+    about: "Explore the live VeoLMS development environment and demo instance."
+  - name: "🔒 Security Vulnerabilities"
+    url: "https://github.com/veolms/veolms/security/advisories/new"
+    about: "Please report sensitive security vulnerabilities privately here instead of opening a public issue."
