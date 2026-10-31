@@ -20,6 +20,8 @@ export interface OauthProfile {
   providerUserId: string;
   /** The provider's profile photo URL, when it exposes one. */
   pictureUrl?: string | undefined;
+  /** Cryptographic nonce embedded in the Google ID token, when present. */
+  nonce?: string | undefined;
 }
 
 export interface OauthProviderCredentials {
@@ -306,6 +308,7 @@ export interface GoogleIdTokenClaims {
   picture?: string | undefined;
   aud?: string | string[] | undefined;
   iss?: string | undefined;
+  nonce?: string | undefined;
 }
 
 function audienceMatches(
@@ -357,6 +360,7 @@ export function googleIdTokenToProfile(
     username: localPart,
     providerUserId: claims.sub,
     pictureUrl,
+    nonce: claims.nonce,
   });
 }
 

@@ -16,6 +16,7 @@ import {
   readLastGoogleAccount,
   rememberGoogleSignIn,
 } from "./lastGoogleAccount";
+import { authService } from "../services/auth/auth.service";
 
 const GOOGLE_IDENTITY_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -31,6 +32,7 @@ interface GoogleIdentity {
     cancel_on_tap_outside: boolean;
     use_fedcm_for_prompt: boolean;
     itp_support: boolean;
+    nonce?: string;
   }): void;
   prompt(): void;
   cancel(): void;
@@ -182,13 +184,18 @@ export function GoogleOneTap({
     let active = true;
 
     const cancelIdleLoad = scheduleIdleWork(() => {
-      void loadGoogleIdentityServices()
-        .then(() => {
+      void Promise.all([
+        loadGoogleIdentityServices(),
+        authService.getGoogleOneTapNonce().catch(() => null),
+      ])
+        .then(([, nonceData]) => {
           const googleIdentity = window.google?.accounts?.id;
-          if (!active || !googleIdentity) return;
+          // Fail safe: if nonce fetch failed, do not show the prompt.
+          if (!active || !googleIdentity || !nonceData?.nonce) return;
 
           googleIdentity.initialize({
             client_id: clientId,
+            nonce: nonceData.nonce,
             auto_select: false,
             cancel_on_tap_outside: true,
             use_fedcm_for_prompt: true,
@@ -332,13 +339,18 @@ export function GlobalGoogleOneTap() {
     let active = true;
 
     const cancelScheduledLoad = scheduleAfterFirstInteraction(() => {
-      void loadGoogleIdentityServices()
-        .then(() => {
+      void Promise.all([
+        loadGoogleIdentityServices(),
+        authService.getGoogleOneTapNonce().catch(() => null),
+      ])
+        .then(([, nonceData]) => {
           const googleIdentity = window.google?.accounts?.id;
-          if (!active || !googleIdentity) return;
+          // Fail safe: if nonce fetch failed, do not show the prompt.
+          if (!active || !googleIdentity || !nonceData?.nonce) return;
 
           googleIdentity.initialize({
             client_id: clientId,
+            nonce: nonceData.nonce,
             auto_select: false,
             cancel_on_tap_outside: true,
             use_fedcm_for_prompt: true,

@@ -97,7 +97,21 @@ export function createOauthController(context: AuthContext) {
     return presentLogin(result.user, result.session.mfa);
   }
 
-  return { getUrl, login, loginWithGoogleOneTap, register };
+  async function getGoogleOneTapNonce(
+    _request: FastifyRequest,
+    _reply: FastifyReply,
+  ) {
+    const result = await oauthService.createGoogleOneTapNonce();
+    return { nonce: result.nonce, expiresAt: result.expiresAt.toISOString() };
+  }
+
+  return {
+    getUrl,
+    login,
+    loginWithGoogleOneTap,
+    register,
+    getGoogleOneTapNonce,
+  };
 }
 
 export type OauthController = ReturnType<typeof createOauthController>;

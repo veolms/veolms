@@ -10,6 +10,7 @@ import type {
   EmailVerificationVerifyRequest,
   AuthConfigResponse,
   GoogleOneTapLoginRequest,
+  GoogleOneTapNonceResponse,
   LoginRequest,
   LoginResponse,
   OauthLoginRequest,
@@ -188,6 +189,9 @@ export const authService = {
     return api.post<LoginResponse>("/auth/oauth/google/one-tap", payload, {
       timeout: 20_000,
     });
+  },
+  getGoogleOneTapNonce: (): Promise<GoogleOneTapNonceResponse> => {
+    return api.get<GoogleOneTapNonceResponse>("/auth/oauth/google/nonce");
   },
 
   setupTotp: (): Promise<TotpSetupResponse> => {
