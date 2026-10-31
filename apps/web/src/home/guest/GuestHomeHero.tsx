@@ -154,11 +154,15 @@ function HeroHeadline({
   );
 }
 
+/** How far past the quote's longest line its author ends, in rem. */
+const AUTHOR_OVERHANG_REM = 2;
+
 /**
- * The quote's author ends where the quote's longest line ends. Its lines
- * are balanced, so they stop short of the box's edge by an amount CSS
- * cannot know; it is measured, again whenever the quote changes size (the
- * page resized, the serif font arriving).
+ * The quote's author ends a little past where the quote's longest line
+ * ends (`AUTHOR_OVERHANG_REM`), out to the right of the box if need be.
+ * Its lines are balanced, so they stop short of the box's edge by an amount
+ * CSS cannot know; it is measured, again whenever the quote changes size
+ * (the page resized, the serif font arriving).
  */
 function useAuthorAtQuoteEnd(text: string | undefined) {
   const quoteRef = useRef<HTMLQuoteElement>(null);
@@ -170,6 +174,8 @@ function useAuthorAtQuoteEnd(text: string | undefined) {
     if (!quote || !caption) return undefined;
 
     const place = () => {
+      caption.style.paddingRight = "";
+      caption.style.marginRight = "";
       const lines = document.createRange();
       lines.selectNodeContents(quote);
       const left = caption.getBoundingClientRect().left;
@@ -177,9 +183,13 @@ function useAuthorAtQuoteEnd(text: string | undefined) {
       for (const line of lines.getClientRects()) {
         quoteEnd = Math.max(quoteEnd, line.right - left);
       }
-      const spare = caption.clientWidth - quoteEnd;
-      caption.style.paddingRight =
-        quoteEnd > 0 && spare > 0 ? `${Math.floor(spare)}px` : "";
+      if (quoteEnd <= 0) return;
+      const rem = parseFloat(
+        getComputedStyle(document.documentElement).fontSize,
+      );
+      const spare = caption.clientWidth - quoteEnd - AUTHOR_OVERHANG_REM * rem;
+      if (spare > 0) caption.style.paddingRight = `${Math.floor(spare)}px`;
+      else caption.style.marginRight = `${Math.floor(spare)}px`;
     };
 
     place();
