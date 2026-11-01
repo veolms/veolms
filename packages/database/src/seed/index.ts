@@ -266,6 +266,7 @@ try {
           thumbnail_url: thumbnailUrl,
         })
         .where("id", "=", courseId)
+        .where("thumbnail_media_id", "is", null)
         .execute();
       const pricingConfig = coursePrices[courseIndex % coursePrices.length]!;
       await insertRows(tx, "course_pricing", [
@@ -280,18 +281,6 @@ try {
           linked_only: false,
         },
       ]);
-      await tx
-        .updateTable("course_pricing")
-        .set({
-          pricing_type: pricingConfig.type,
-          price: pricingConfig.price,
-          sale_price: pricingConfig.salePrice,
-          currency: "INR",
-          show_discount_badge: pricingConfig.badge,
-          linked_only: false,
-        })
-        .where("course_id", "=", courseId)
-        .execute();
       await insertRows(tx, "course_access_rules", [
         {
           id: id(`access:${courseIndex}`),
@@ -415,192 +404,209 @@ try {
     }
 
     if (options.orders > 0 && options.students > 0 && options.courses > 0) {
-      const orders: Insertable<Database["orders"]>[] = [];
-      const orderItems: Insertable<Database["order_items"]>[] = [];
-      const orderItemCourses: Insertable<Database["order_item_courses"]>[] = [];
-      const payments: Insertable<Database["payments"]>[] = [];
-      const refunds: Insertable<Database["refunds"]>[] = [];
-      const paidOrderLinks: Array<{
-        userId: string;
-        courseId: string;
-        orderId: string;
-        status: "active" | "revoked";
-      }> = [];
-
       const paidCourseIndices = coursePrices
         .map((p, idx) => ({ ...p, idx }))
         .filter((p) => p.idx < options.courses && p.type === "paid")
         .map((p) => p.idx);
-      const eligibleCourseIndices =
-        paidCourseIndices.length > 0
-          ? paidCourseIndices
-          : Array.from({ length: options.courses }, (_, i) => i);
 
-      for (let orderIndex = 0; orderIndex < options.orders; orderIndex++) {
-        const studentNum = (orderIndex % options.students) + 1;
-        const buyerId = studentId(studentNum);
-        const courseIdx =
-          eligibleCourseIndices[orderIndex % eligibleCourseIndices.length]!;
-        const courseId = id(`course:${courseIdx}`);
-        const courseTitle =
-          titles[courseIdx] ?? `Developer Learning Course ${courseIdx + 1}`;
-        const pricing = coursePrices[courseIdx % coursePrices.length]!;
-        const priceMajor = pricing.salePrice || pricing.price || 499;
-        const amountPaise = priceMajor * 100;
-
-        const isRefunded = orderIndex === 3;
-        const isPending = orderIndex === 7;
-        const status = isRefunded
-          ? ("refunded" as const)
-          : isPending
-            ? ("pending" as const)
-            : ("paid" as const);
-
-        const orderId = id(`order:${orderIndex}`);
-        const orderNumber = `ORD-2026-${String(orderIndex + 1).padStart(4, "0")}`;
-        const invoiceNumber =
-          status === "paid" || status === "refunded"
-            ? `INV/2026/${String(orderIndex + 1).padStart(5, "0")}`
-            : null;
-
-        const orderDate = new Date(
-          date.getTime() + (orderIndex * 2 + 1) * 24 * 60 * 60 * 1000,
+      if (paidCourseIndices.length > 0) {
+        const orderIds = Array.from({ length: options.orders }, (_, i) =>
+          id(`order:${i}`),
         );
-        const paidAt =
-          status === "paid" || status === "refunded"
-            ? new Date(orderDate.getTime() + 15 * 60 * 1000)
-            : null;
-        const expiresAt = new Date(
-          orderDate.getTime() + 30 * 24 * 60 * 60 * 1000,
-        );
+        const existingOrderRows = await tx
+          .selectFrom("orders")
+          .select("id")
+          .where("id", "in", orderIds)
+          .execute();
+        const existingOrderIds = new Set(existingOrderRows.map((r) => r.id));
 
-        orders.push({
-          id: orderId,
-          order_number: orderNumber,
-          user_id: buyerId,
-          status,
-          currency: "INR",
-          subtotal_amount: amountPaise,
-          discount_amount: 0,
-          tax_amount: 0,
-          total_amount: amountPaise,
-          after_commission_amount: null,
-          coupon_id: null,
-          idempotency_key: null,
-          expires_at: expiresAt,
-          paid_at: paidAt,
-          invoice_number: invoiceNumber,
-          invoice_pdf_key: null,
-          created_at: orderDate,
-          updated_at: paidAt ?? orderDate,
-        });
+        const orders: Insertable<Database["orders"]>[] = [];
+        const orderItems: Insertable<Database["order_items"]>[] = [];
+        const orderItemCourses: Insertable<Database["order_item_courses"]>[] =
+          [];
+        const payments: Insertable<Database["payments"]>[] = [];
+        const refunds: Insertable<Database["refunds"]>[] = [];
+        const paidOrderLinks: Array<{
+          userId: string;
+          courseId: string;
+          orderId: string;
+          status: "active" | "revoked";
+        }> = [];
 
-        const orderItemId = id(`order_item:${orderIndex}`);
-        orderItems.push({
-          id: orderItemId,
-          order_id: orderId,
-          item_type: "course",
-          course_id: courseId,
-          bundle_id: null,
-          quiz_pricing_id: null,
-          title_snapshot: courseTitle,
-          unit_price: amountPaise,
-          discount_amount: 0,
-          tax_amount: 0,
-          final_amount: amountPaise,
-          created_at: orderDate,
-        });
-
-        if (status === "paid" || status === "refunded") {
-          orderItemCourses.push({
-            id: id(`order_item_course:${orderIndex}`),
-            order_item_id: orderItemId,
-            order_id: orderId,
-            user_id: buyerId,
-            course_id: courseId,
-            granted_at: paidAt!,
-          });
-
-          const paymentId = id(`payment:${orderIndex}`);
-          payments.push({
-            id: paymentId,
-            order_id: orderId,
-            gateway_provider: "razorpay",
-            gateway_order_id: `order_seed_${orderIndex + 1}`,
-            gateway_payment_id: `pay_seed_${orderIndex + 1}`,
-            gateway_key_id: null,
-            amount: amountPaise,
-            currency: "INR",
-            status: "captured",
-            payment_method: JSON.stringify(
-              orderIndex % 2 === 0
-                ? { method: "upi", vpa: `student${studentNum}@okhdfcbank` }
-                : { method: "card", cardNetwork: "visa", cardLast4: "4242" },
-            ),
-            error_code: null,
-            error_description: null,
-            created_at: paidAt!,
-            updated_at: paidAt!,
-          });
-
-          if (isRefunded) {
-            refunds.push({
-              id: id(`refund:${orderIndex}`),
-              order_id: orderId,
-              order_item_id: orderItemId,
-              payment_id: paymentId,
-              gateway_refund_id: `rfnd_seed_${orderIndex + 1}`,
-              amount: amountPaise,
-              currency: "INR",
-              reason: "Accidental purchase",
-              status: "processed",
-              created_by: adminId,
-              idempotency_key: null,
-              preserve_access: false,
-              created_at: new Date(paidAt!.getTime() + 2 * 24 * 60 * 60 * 1000),
-              updated_at: new Date(paidAt!.getTime() + 2 * 24 * 60 * 60 * 1000),
-            });
+        for (let orderIndex = 0; orderIndex < options.orders; orderIndex++) {
+          const orderId = id(`order:${orderIndex}`);
+          if (existingOrderIds.has(orderId)) {
+            continue;
           }
 
-          paidOrderLinks.push({
-            userId: buyerId,
-            courseId,
-            orderId,
-            status: isRefunded ? "revoked" : "active",
+          const studentNum = (orderIndex % options.students) + 1;
+          const buyerId = studentId(studentNum);
+          const courseIdx =
+            paidCourseIndices[orderIndex % paidCourseIndices.length]!;
+          const courseId = id(`course:${courseIdx}`);
+          const courseTitle =
+            titles[courseIdx] ?? `Developer Learning Course ${courseIdx + 1}`;
+          const pricing = coursePrices[courseIdx % coursePrices.length]!;
+          const priceMajor = pricing.salePrice || pricing.price || 499;
+          const amountPaise = priceMajor * 100;
+
+          const isRefunded = orderIndex === 3;
+          const isPending = orderIndex === 7;
+          const status = isRefunded
+            ? ("refunded" as const)
+            : isPending
+              ? ("pending" as const)
+              : ("paid" as const);
+
+          const orderNumber = `ORD-2026-${String(orderIndex + 1).padStart(4, "0")}`;
+          const invoiceNumber =
+            status === "paid" || status === "refunded"
+              ? `INV/2026/${String(orderIndex + 1).padStart(5, "0")}`
+              : null;
+
+          const orderDate = new Date(
+            date.getTime() + (orderIndex * 2 + 1) * 24 * 60 * 60 * 1000,
+          );
+          const paidAt =
+            status === "paid" || status === "refunded"
+              ? new Date(orderDate.getTime() + 15 * 60 * 1000)
+              : null;
+          const expiresAt = new Date(
+            orderDate.getTime() + 30 * 24 * 60 * 60 * 1000,
+          );
+
+          orders.push({
+            id: orderId,
+            order_number: orderNumber,
+            user_id: buyerId,
+            status,
+            currency: "INR",
+            subtotal_amount: amountPaise,
+            discount_amount: 0,
+            tax_amount: 0,
+            total_amount: amountPaise,
+            after_commission_amount: null,
+            coupon_id: null,
+            idempotency_key: null,
+            expires_at: expiresAt,
+            paid_at: paidAt,
+            invoice_number: invoiceNumber,
+            invoice_pdf_key: null,
+            created_at: orderDate,
+            updated_at: paidAt ?? orderDate,
           });
+
+          const orderItemId = id(`order_item:${orderIndex}`);
+          orderItems.push({
+            id: orderItemId,
+            order_id: orderId,
+            item_type: "course",
+            course_id: courseId,
+            bundle_id: null,
+            quiz_pricing_id: null,
+            title_snapshot: courseTitle,
+            unit_price: amountPaise,
+            discount_amount: 0,
+            tax_amount: 0,
+            final_amount: amountPaise,
+            created_at: orderDate,
+          });
+
+          if (status === "paid" || status === "refunded") {
+            orderItemCourses.push({
+              id: id(`order_item_course:${orderIndex}`),
+              order_item_id: orderItemId,
+              order_id: orderId,
+              user_id: buyerId,
+              course_id: courseId,
+              granted_at: paidAt!,
+            });
+
+            const paymentId = id(`payment:${orderIndex}`);
+            payments.push({
+              id: paymentId,
+              order_id: orderId,
+              gateway_provider: "razorpay",
+              gateway_order_id: `order_seed_${orderIndex + 1}`,
+              gateway_payment_id: `pay_seed_${orderIndex + 1}`,
+              gateway_key_id: null,
+              amount: amountPaise,
+              currency: "INR",
+              status: "captured",
+              payment_method: JSON.stringify(
+                orderIndex % 2 === 0
+                  ? { method: "upi", vpa: `student${studentNum}@okhdfcbank` }
+                  : { method: "card", cardNetwork: "visa", cardLast4: "4242" },
+              ),
+              error_code: null,
+              error_description: null,
+              created_at: paidAt!,
+              updated_at: paidAt!,
+            });
+
+            if (isRefunded) {
+              refunds.push({
+                id: id(`refund:${orderIndex}`),
+                order_id: orderId,
+                order_item_id: orderItemId,
+                payment_id: paymentId,
+                gateway_refund_id: `rfnd_seed_${orderIndex + 1}`,
+                amount: amountPaise,
+                currency: "INR",
+                reason: "Accidental purchase",
+                status: "processed",
+                created_by: adminId,
+                idempotency_key: null,
+                preserve_access: false,
+                created_at: new Date(
+                  paidAt!.getTime() + 2 * 24 * 60 * 60 * 1000,
+                ),
+                updated_at: new Date(
+                  paidAt!.getTime() + 2 * 24 * 60 * 60 * 1000,
+                ),
+              });
+            }
+
+            paidOrderLinks.push({
+              userId: buyerId,
+              courseId,
+              orderId,
+              status: isRefunded ? "revoked" : "active",
+            });
+          }
         }
-      }
 
-      await insertRows(tx, "orders", orders);
-      await insertRows(tx, "order_items", orderItems);
-      await insertRows(tx, "order_item_courses", orderItemCourses);
-      await insertRows(tx, "payments", payments);
-      if (refunds.length > 0) {
-        await insertRows(tx, "refunds", refunds);
-      }
+        await insertRows(tx, "orders", orders);
+        await insertRows(tx, "order_items", orderItems);
+        await insertRows(tx, "order_item_courses", orderItemCourses);
+        await insertRows(tx, "payments", payments);
+        if (refunds.length > 0) {
+          await insertRows(tx, "refunds", refunds);
+        }
 
-      for (const link of paidOrderLinks) {
-        await tx
-          .updateTable("enrollments")
-          .set({
-            order_id: link.orderId,
-            source: "direct_purchase",
-            status: link.status,
-          })
-          .where("user_id", "=", link.userId)
-          .where("course_id", "=", link.courseId)
-          .execute();
+        for (const link of paidOrderLinks) {
+          await tx
+            .updateTable("enrollments")
+            .set({
+              order_id: link.orderId,
+              source: "direct_purchase",
+              status: link.status,
+            })
+            .where("user_id", "=", link.userId)
+            .where("course_id", "=", link.courseId)
+            .execute();
 
-        await tx
-          .updateTable("access_grants")
-          .set({
-            order_id: link.orderId,
-            source: "purchase",
-            status: link.status,
-          })
-          .where("user_id", "=", link.userId)
-          .where("course_id", "=", link.courseId)
-          .execute();
+          await tx
+            .updateTable("access_grants")
+            .set({
+              order_id: link.orderId,
+              source: "purchase",
+              status: link.status,
+            })
+            .where("user_id", "=", link.userId)
+            .where("course_id", "=", link.courseId)
+            .execute();
+        }
       }
     }
   });

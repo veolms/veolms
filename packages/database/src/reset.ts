@@ -18,6 +18,7 @@ try {
   } catch (error) {
     console.warn(
       "Migration down failed or history is stale; rebuilding the public schema before applying current migrations.",
+      error,
     );
     await sql.raw("DROP SCHEMA public CASCADE").execute(database);
     await sql.raw("CREATE SCHEMA public").execute(database);

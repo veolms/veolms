@@ -1,8 +1,9 @@
-current_branch=$(git rev-parse --abbrev-ref HEAD)
-if [ "$current_branch" = "dev" ]; then
-  echo "Direct push to the dev branch is not allowed. Please use a feature/fix/chore branch and open a Pull Request."
-  exit 1
-fi
+while read -r local_ref local_oid remote_ref remote_oid; do
+  if [ "$remote_ref" = "refs/heads/dev" ]; then
+    echo "Direct push to the dev branch is not allowed. Please use a feature/fix/chore branch and open a Pull Request."
+    exit 1
+  fi
+done
 
 pnpm --filter @veolms/api test || {
   echo "API tests failed. Fix them before pushing."

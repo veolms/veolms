@@ -42,7 +42,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-Open <http://localhost:3000>; the API is at <http://localhost:4000> and its documentation is at <http://localhost:4000/docs>. The local seed creates a demo academy and the administrator `admin@veolms.org`. Sign in with the email code shown in the API console. See the [seed guide](seed.md) for the SQL dump, sample data, options, and media configuration.
+Open <http://localhost:3000>; the API is at <http://localhost:4000> and its documentation is at <http://localhost:4000/docs>. The local seed creates a demo academy and the administrator `admin@veolms.org`. Sign in with the email code shown in the API console. See the [seed guide](seed.md) for the sample data, options, and media configuration.
 
 Stop the app with Ctrl+C. To stop the Docker database while preserving its data:
 
