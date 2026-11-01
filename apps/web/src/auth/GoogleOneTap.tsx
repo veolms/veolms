@@ -186,10 +186,6 @@ export function GoogleOneTap({
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     async function initializeWithFreshNonce() {
-      // Cancel any active prompt so the expired nonce is not submitted.
-      window.google?.accounts?.id?.cancel();
-      oneTapPromptStarted = false;
-
       const [, nonceData] = await Promise.all([
         loadGoogleIdentityServices(),
         authService.getGoogleOneTapNonce().catch(() => null),
@@ -232,14 +228,19 @@ export function GoogleOneTap({
       oneTapPromptStarted = true;
       googleIdentity.prompt();
 
-      // Schedule a refresh just before the nonce is rejected by the server.
-      // auth.service caches nonces until (expiresAt - 5 min); we re-fetch
-      // 30 s before that window so the new nonce is ready before expiry.
+      // Schedule a refresh just before the cached nonce evicts (expiresAt - 5 min).
+      // The timer callback clears the cache so the server issues a new nonce.
       const expiresAtMs = new Date(nonceData.expiresAt).getTime();
       const refreshIn = expiresAtMs - Date.now() - 5.5 * 60 * 1000; // 5.5 min
       if (refreshIn > 0) {
         refreshTimer = setTimeout(() => {
-          if (active) void initializeWithFreshNonce();
+          if (!active) return;
+          // Cancel the prompt with the expiring nonce, clear the cache so
+          // getGoogleOneTapNonce() fetches a fresh one from the server.
+          window.google?.accounts?.id?.cancel();
+          oneTapPromptStarted = false;
+          authService.clearGoogleOneTapNonce();
+          void initializeWithFreshNonce().catch(() => {});
         }, refreshIn);
       }
     }
@@ -362,10 +363,6 @@ export function GlobalGoogleOneTap() {
     let refreshTimerGlobal: ReturnType<typeof setTimeout> | undefined;
 
     async function initializeGlobalWithFreshNonce() {
-      // Cancel any active prompt so the expired nonce is not submitted.
-      window.google?.accounts?.id?.cancel();
-      oneTapPromptStarted = false;
-
       const [, nonceData] = await Promise.all([
         loadGoogleIdentityServices(),
         authService.getGoogleOneTapNonce().catch(() => null),
@@ -419,12 +416,18 @@ export function GlobalGoogleOneTap() {
           // Signing in still works, without the card.
         });
 
-      // Schedule a refresh just before the nonce is rejected by the server.
+      // Schedule a refresh just before the cached nonce evicts (expiresAt - 5 min).
       const expiresAtMs = new Date(nonceData.expiresAt).getTime();
       const refreshIn = expiresAtMs - Date.now() - 5.5 * 60 * 1000; // 5.5 min
       if (refreshIn > 0) {
         refreshTimerGlobal = setTimeout(() => {
-          if (active) void initializeGlobalWithFreshNonce();
+          if (!active) return;
+          // Cancel the prompt with the expiring nonce, clear the cache so
+          // getGoogleOneTapNonce() fetches a fresh one from the server.
+          window.google?.accounts?.id?.cancel();
+          oneTapPromptStarted = false;
+          authService.clearGoogleOneTapNonce();
+          void initializeGlobalWithFreshNonce().catch(() => {});
         }, refreshIn);
       }
     }
