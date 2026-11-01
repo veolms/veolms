@@ -16,15 +16,8 @@ try {
   try {
     assertMigrationSuccess(await migrator.migrateTo(NO_MIGRATIONS));
   } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      !error.message.includes("corrupted migrations: previously executed")
-    ) {
-      throw error;
-    }
-
     console.warn(
-      "Migration history is stale; rebuilding the public schema before applying current migrations.",
+      "Migration down failed or history is stale; rebuilding the public schema before applying current migrations.",
     );
     await sql.raw("DROP SCHEMA public CASCADE").execute(database);
     await sql.raw("CREATE SCHEMA public").execute(database);

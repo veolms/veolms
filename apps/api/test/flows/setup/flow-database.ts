@@ -17,7 +17,7 @@ import {
 import {
   SYSTEM_ROLES,
   seedRolesAndPermissions,
-} from "../../../../../packages/database/src/seed-rbac.ts";
+} from "../../../../../packages/database/src/seed/rbac.ts";
 import { assertFlowDatabaseName } from "./flow-env.ts";
 import { FLOW_ACADEMY, FLOW_ADMIN } from "./flow-fixtures.ts";
 
