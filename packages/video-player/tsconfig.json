@@ -4,5 +4,5 @@
     "module": "ESNext",
     "moduleResolution": "Bundler"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

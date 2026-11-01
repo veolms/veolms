@@ -60,6 +60,56 @@
   }
 }
 
+/* Keyframes cannot be written as Tailwind utilities. The light passing over
+   a seek-preview picture not downloaded yet (SpriteFrameCanvas), from just
+   off its left edge to past its right; and the pulse of the marker on the
+   preview bar while the moment under the pointer is still on its way
+   (PreviewLoadBar). */
+@keyframes video-player-preview-pending {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes video-player-preview-marker-wait {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* The whole lesson's previews are here: a glint runs along the bar once
+   (from just before its start to just past its end, a quarter of it wide),
+   and the bar fades out after it (PreviewLoadBar). */
+@keyframes video-player-preview-bar-wave {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(400%);
+  }
+}
+
+@keyframes video-player-preview-bar-done {
+  0%,
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes video-player-buffering-rotate {
   from {
     transform: translateZ(0) rotate(0deg);

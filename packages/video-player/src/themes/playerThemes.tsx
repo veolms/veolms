@@ -92,6 +92,8 @@ export interface PlayerThemeIcons {
   buffering: PlayerThemeIcon;
   warning: PlayerThemeIcon;
   retry: PlayerThemeIcon;
+  /** The play button once the video has ended: play it again. */
+  replay: PlayerThemeIcon;
 }
 
 export interface PlayerThemeTokens {
@@ -191,6 +193,7 @@ const youtubeIcons: PlayerThemeIcons = {
   buffering: themedIcon(SpinnerGap, "bold"),
   warning: themedIcon(WarningCircle, "regular", "fill"),
   retry: themedIcon(ArrowClockwise, "bold"),
+  replay: themedIcon(ArrowCounterClockwise, "bold"),
 };
 
 const auroraIcons: PlayerThemeIcons = {
@@ -223,6 +226,7 @@ const auroraIcons: PlayerThemeIcons = {
   buffering: themedIcon(CircleNotch, "duotone"),
   warning: themedIcon(WarningDiamond, "duotone", "fill"),
   retry: themedIcon(ArrowCounterClockwise, "bold"),
+  replay: themedIcon(ArrowCounterClockwise, "bold"),
 };
 
 const minimalIcons: PlayerThemeIcons = {
@@ -255,6 +259,7 @@ const minimalIcons: PlayerThemeIcons = {
   buffering: themedIcon(Spinner, "regular"),
   warning: themedIcon(Warning, "regular", "fill"),
   retry: themedIcon(ArrowClockwise, "regular"),
+  replay: themedIcon(ArrowCounterClockwise, "regular"),
 };
 
 export const BUILT_IN_PLAYER_THEMES: Record<

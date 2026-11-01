@@ -33,6 +33,12 @@ export interface PlayerUiState {
   settingsView: PlayerSettingsView;
   scrubbing: boolean;
   previewTime: number | null;
+  /**
+   * Set while a drag (or the seek it ended with) is on a part of the video
+   * not downloaded yet: the storyboard frame for this time is drawn over
+   * the whole video in place of the real one.
+   */
+  scrubFrameTime: number | null;
   fullscreen: boolean;
   pictureInPicture: boolean;
   theater: boolean;
@@ -58,6 +64,7 @@ export function createInitialPlayerUiState(): PlayerUiState {
     settingsView: "closed",
     scrubbing: false,
     previewTime: null,
+    scrubFrameTime: null,
     fullscreen: false,
     pictureInPicture: false,
     theater: false,

@@ -72,8 +72,18 @@ export type {
   PlayerSettingsView,
   PlayerZoomState,
 } from "./react/playerState";
+export {
+  BUFFERED_PLAYBACK_GRACE_SECONDS,
+  isCurrentPositionBuffered,
+  isPlaybackStalled,
+} from "./core/playbackStall";
 export { usePlayerMobileInteraction } from "./react/PlayerInteractionMode";
 export type { PlayerInteractionMode } from "./react/PlayerInteractionMode";
+export {
+  getPageFullscreenElement,
+  isPageFullscreenTurned,
+  PAGE_FULLSCREEN_CHANGE_EVENT,
+} from "./react/pageFullscreen";
 export type {
   PlayerPresentationEvent,
   VideoPlayerEvent,
@@ -87,6 +97,8 @@ export type {
 } from "./react/PlayerMetadataBridge";
 
 export { PlayButton } from "./controls/PlayButton";
+export { PlayerGestureSurface } from "./controls/PlayerGestureSurface";
+export type { PlayerGestureSurfaceProps } from "./controls/PlayerGestureSurface";
 export { SeekButton } from "./controls/SeekButton";
 export { MuteButton } from "./controls/MuteButton";
 export { VolumeControl } from "./controls/VolumeControl";
@@ -109,7 +121,18 @@ export type {
   BufferingIndicatorProps,
   VideoLoadingSpinnerProps,
 } from "./controls/BufferingIndicator";
-export { ErrorOverlay, VideoPlayerCloseButton } from "./controls/ErrorOverlay";
+export {
+  ErrorOverlay,
+  PlayerErrorNotice,
+  VideoPlayerCloseButton,
+  VideoPlayerNotice,
+} from "./controls/ErrorOverlay";
+export type {
+  ErrorOverlayProps,
+  PlayerErrorNoticeProps,
+  VideoPlayerNoticeAction,
+  VideoPlayerNoticeProps,
+} from "./controls/ErrorOverlay";
 export * from "./controls/menus";
 
 export { Timeline } from "./timeline/Timeline";
@@ -162,6 +185,11 @@ export {
   parseWebVttTimestamp,
 } from "./storyboard/parseStoryboard";
 export { getThumbnailAtTime } from "./storyboard/getThumbnailAtTime";
+export {
+  parseSpriteStoryboardIndex,
+  type SpriteStoryboardIndex,
+  type SpriteStoryboardLevel,
+} from "./storyboard/spriteStoryboardIndex";
 
 export {
   DEFAULT_PLAYER_SHORTCUTS,

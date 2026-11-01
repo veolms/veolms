@@ -12,6 +12,16 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { createCorsMatcher } from "./cors.ts";
 import { AppError, registerErrorHandler } from "./errors.ts";
 import { registerOpenApi } from "./openapi.ts";
+import {
+  configureCaches,
+  invalidateCache,
+  startCacheBus,
+  type CacheBus,
+} from "./cache/index.ts";
+import {
+  cacheTagsForSiteContentChange,
+  detectSiteContentChange,
+} from "./site-content-changes.ts";
 import type {
   CoreAppServices,
   CreateVeoLMSApiOptions,
@@ -28,26 +38,20 @@ export const API_ROUTE_PREFIX = "/v1";
 const MAX_PARAM_LENGTH = 512;
 
 /**
- * Course-scoped routes whose mutations do NOT change the course's public
- * static page and so must not dispatch a page rebuild. Without this, every
- * learner discussion post, moderation action, quiz interaction or progress
- * write under `/courses/<uuid>/...` triggered a GitHub Actions workflow run
- * (each up to ~13 minutes, serialized per process) — CI traffic driven by
- * ordinary learner activity.
+ * The course a request changed, for the public course page rebuild. Learner
+ * activity under `/courses/<uuid>/...` (discussions, notes, quizzes) and
+ * routes that only name a course further along (access grants, a learner
+ * leaving a course) are not changes to it; see `detectSiteContentChange`.
  */
-const STATIC_REFRESH_EXCLUDED_SEGMENTS =
-  /\/(threads|replies|discussions|notes|notes-overview|moderation|reports|quiz-assignment|quiz-assignments|quiz-pricing|quiz-analytics|attempts)(\/|\?|$)/iu;
-
 function getCourseMutation(
   request: FastifyRequest,
 ): PendingCourseStaticRefresh | null {
-  if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return null;
-  if (request.routeOptions.url?.includes("static-page-refresh")) return null;
-  if (STATIC_REFRESH_EXCLUDED_SEGMENTS.test(request.url)) return null;
-  const courseId = request.url.match(
-    /\/(?:bin\/)?courses\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:\/|\?|$)/iu,
-  )?.[1];
-  return courseId ? { courseId } : null;
+  const change = detectSiteContentChange({
+    method: request.method,
+    url: request.url,
+    routeUrl: request.routeOptions.url,
+  });
+  return change?.scope === "course" ? { courseId: change.courseId } : null;
 }
 
 function getCourseSlugFromResponse(payload: unknown): string | undefined {
@@ -113,6 +117,8 @@ export async function createVeoLMSApi<
     plugins = [],
   } = options;
 
+  configureCaches({ enabled: config.CACHE_ENABLED });
+
   const app: FastifyInstance = Fastify({
     logger,
     trustProxy: config.TRUST_PROXY,
@@ -130,6 +136,39 @@ export async function createVeoLMSApi<
     PendingCourseStaticRefresh
   >();
 
+  // Caches of what the site shows are cleared before the response goes out,
+  // so whoever made the change reads it back fresh.
+  app.addHook("onSend", async (request, reply, payload) => {
+    if (reply.statusCode < 200 || reply.statusCode >= 300) return payload;
+    const change = detectSiteContentChange({
+      method: request.method,
+      url: request.url,
+      routeUrl: request.routeOptions.url,
+      userRoles: (request as { user?: { roles?: readonly string[] } }).user
+        ?.roles,
+    });
+    if (change) invalidateCache(cacheTagsForSiteContentChange(change));
+    return payload;
+  });
+
+  // Other processes are told about changes only while this one serves
+  // requests: an app built for tests (`inject`) never listens, so it opens
+  // no connection of its own.
+  let cacheBus: CacheBus | null = null;
+  if (config.CACHE_ENABLED && config.CACHE_BUS_ENABLED) {
+    app.addHook("onListen", async () => {
+      cacheBus ??= startCacheBus({
+        connectionString: config.DATABASE_URL,
+        database,
+        logger: app.log,
+      });
+    });
+    app.addHook("onClose", async () => {
+      await cacheBus?.stop();
+      cacheBus = null;
+    });
+  }
+
   app.addHook("onSend", async (request, _reply, payload) => {
     const pending = getCourseMutation(request);
     if (pending) {
@@ -144,6 +183,19 @@ export async function createVeoLMSApi<
 
   app.addHook("onResponse", async (request, reply) => {
     if (reply.statusCode < 200 || reply.statusCode >= 300) return;
+    const siteChange = detectSiteContentChange({
+      method: request.method,
+      url: request.url,
+      routeUrl: request.routeOptions.url,
+      userRoles: (request as { user?: { roles?: readonly string[] } }).user
+        ?.roles,
+    });
+    if (siteChange?.scope === "site") {
+      request.log.info(
+        { siteContentChange: siteChange.reason },
+        "Site-wide content changed",
+      );
+    }
     const pending = pendingCourseRefreshes.get(request);
     if (!pending || !appServices?.courseStaticPages) return;
     const status = appServices.courseStaticPages.requestRefresh(pending);
@@ -151,6 +203,45 @@ export async function createVeoLMSApi<
       { courseId: pending.courseId, refreshStatus: status.status },
       "Queued public course page refresh",
     );
+  });
+
+  // Baseline browser protections on every response. A header a route has set
+  // for itself (the download routes do) is left as it is.
+  const isProduction = config.NODE_ENV === "production";
+  app.addHook("onSend", async (_request, reply, payload) => {
+    // The declared content type is the one to use: a response is never
+    // re-interpreted as a page or a script.
+    if (!reply.hasHeader("x-content-type-options")) {
+      reply.header("X-Content-Type-Options", "nosniff");
+    }
+    // API addresses can carry ids and short-lived tokens; they are not
+    // passed on to other sites.
+    if (!reply.hasHeader("referrer-policy")) {
+      reply.header("Referrer-Policy", "no-referrer");
+    }
+    // Nothing the API serves (its documentation page, an invoice) uses
+    // these device features.
+    if (!reply.hasHeader("permissions-policy")) {
+      reply.header(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=()",
+      );
+    }
+    // Most answers depend on who asks: a course overview lists unpublished
+    // lessons to the course's admin and only published ones to a learner,
+    // and lesson numbers are positions in that list. With no Cache-Control,
+    // the CDN in front of the API (Cloudflare, for procodrr.dev) kept the
+    // first answer it saw for up to two hours and gave it to everyone, so
+    // learners got an admin's curriculum and every lesson after an
+    // unpublished one played the next lesson's video. Routes that are the
+    // same for everyone set their own header and keep it.
+    if (!reply.hasHeader("cache-control")) {
+      reply.header("Cache-Control", "private, no-store");
+    }
+    if (isProduction && !reply.hasHeader("strict-transport-security")) {
+      reply.header("Strict-Transport-Security", "max-age=15552000");
+    }
+    return payload;
   });
 
   const responseDelayMs =
@@ -235,6 +326,10 @@ export async function createVeoLMSApi<
       callback(null, corsMatcher.isAllowedOrigin(origin)),
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    // Browsers may keep a preflight answer this long (Chrome caps it at two
+    // hours). Without it every licence and progress POST was preceded by its
+    // own OPTIONS request (55k of 485k API requests in 48 hours).
+    maxAge: 7200,
   });
 
   // Bootstrap background jobs and get the payment event queue reference.
@@ -288,6 +383,14 @@ export async function createVeoLMSApi<
     app.addHook("onClose", async () => {
       await appServices.email.close();
     });
+  }
+
+  // The analytics event bus is also reachable from the app, so a plugin
+  // can listen without knowing the services container's shape.
+  const analyticsEvents = (appServices as { analyticsEvents?: unknown })
+    ?.analyticsEvents;
+  if (analyticsEvents && !app.hasDecorator("analyticsEvents")) {
+    app.decorate("analyticsEvents", analyticsEvents);
   }
 
   // Register cloud plugins after all core setup is complete.

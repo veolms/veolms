@@ -34,6 +34,11 @@ export interface VideoEngineEventMap {
   };
   manifestupdated: undefined;
   error: { error: VideoEngineError };
+  /**
+   * The engine now plays in another media element: the standby one it had
+   * prepared the next video in (see `VideoEngine.setStandbyMedia`).
+   */
+  mediachange: { media: HTMLMediaElement; standby: HTMLMediaElement | null };
 }
 
 export type VideoEngineEventType = keyof VideoEngineEventMap;

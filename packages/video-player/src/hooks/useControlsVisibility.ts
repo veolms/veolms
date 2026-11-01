@@ -11,11 +11,19 @@ type PlayerInputMode = "keyboard" | "pointer";
 export interface UseControlsVisibilityOptions {
   rootRef: RefObject<HTMLElement | null>;
   idleDelay?: number;
+  /**
+   * How long the controls stay after a touch, when that differs from
+   * `idleDelay`. A finger has no hover to keep them: a tap shows them and
+   * the next tap must find them still there, so a phone keeps them longer
+   * than a mouse that can wake them by moving.
+   */
+  touchIdleDelay?: number;
   keepVisibleUntilFirstPlay?: boolean;
 }
 
 export function useControlsVisibility({
   idleDelay = 2_200,
+  touchIdleDelay = idleDelay,
   keepVisibleUntilFirstPlay = false,
   rootRef,
 }: UseControlsVisibilityOptions): void {
@@ -30,6 +38,11 @@ export function useControlsVisibility({
   const previousPausedRef = useRef(true);
   const activeSourceKeyRef = useRef<string | null>(null);
   const hasPlayedActiveSourceRef = useRef(false);
+  // Before a source has played, its controls are held on screen so the
+  // viewer is not left looking at a still frame with nothing to press. A
+  // tap on the empty picture is the viewer asking for them to go, though,
+  // and ends that hold: from then on taps show and hide them as usual.
+  const firstPlayHoldDismissedRef = useRef(false);
   const deferredTouchPointersRef = useRef(new Set<number>());
   const {
     controlsLocked,
@@ -70,10 +83,13 @@ export function useControlsVisibility({
     if (activeSourceKeyRef.current !== sourceKey) {
       activeSourceKeyRef.current = sourceKey;
       hasPlayedActiveSourceRef.current = false;
+      firstPlayHoldDismissedRef.current = false;
     }
     if (playing) hasPlayedActiveSourceRef.current = true;
     const firstPlaybackPending =
-      keepVisibleUntilFirstPlay && !hasPlayedActiveSourceRef.current;
+      keepVisibleUntilFirstPlay &&
+      !hasPlayedActiveSourceRef.current &&
+      !firstPlayHoldDismissedRef.current;
 
     const pointerQuery =
       typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -132,14 +148,17 @@ export function useControlsVisibility({
         return;
       }
 
-      hideTimerRef.current = setTimeout(() => {
-        hideTimerRef.current = null;
-        if (controlsMustRemainVisible()) {
-          controller.setControlsVisible(true);
-          return;
-        }
-        controller.setControlsVisible(false);
-      }, idleDelay);
+      hideTimerRef.current = setTimeout(
+        () => {
+          hideTimerRef.current = null;
+          if (controlsMustRemainVisible()) {
+            controller.setControlsVisible(true);
+            return;
+          }
+          controller.setControlsVisible(false);
+        },
+        pointerModeRef.current === "touch" ? touchIdleDelay : idleDelay,
+      );
     };
 
     const revealFromPointer = (event: PointerEvent) => {
@@ -161,6 +180,13 @@ export function useControlsVisibility({
     };
 
     const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.pointerType === "touch" &&
+        event.target instanceof Element &&
+        event.target.closest("[data-player-zoom-surface]")
+      ) {
+        firstPlayHoldDismissedRef.current = true;
+      }
       if (delaysControlsReveal(event.target)) {
         deferredTouchPointers.delete(event.pointerId);
         inputModeRef.current = "pointer";
@@ -324,6 +350,7 @@ export function useControlsVisibility({
     controlsLocked,
     controlsVisible,
     idleDelay,
+    touchIdleDelay,
     keepVisibleUntilFirstPlay,
     mobileInteraction,
     paused,

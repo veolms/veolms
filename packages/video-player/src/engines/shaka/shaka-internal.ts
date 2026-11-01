@@ -8,6 +8,16 @@ import type {
   VideoSource,
   VideoTextTrack,
 } from "../../core/types";
+import {
+  createHlsPlaylistDataUri,
+  isInlinableHlsPlaylist,
+  manifestIdentity,
+  createDashManifestDataUri,
+  isInlinableDashManifest,
+  resolveInlinedDashManifest,
+  resolveInlinedMasterManifest,
+} from "./hls-inline-manifest";
+import { notifyShakaRuntimeLoaded } from "./shaka-runtime-hooks";
 
 export interface ShakaEventLike {
   detail?: unknown;
@@ -99,6 +109,19 @@ export interface ShakaPreloadManagerLike {
   destroy(): Promise<unknown>;
 }
 
+/** The parts of a Shaka manifest read for segment times. */
+export interface ShakaManifestLike {
+  variants: ReadonlyArray<{
+    id: number | string;
+    video?: {
+      segmentIndex?: {
+        find(time: number): number | null;
+        get(position: number): { startTime: number; endTime: number } | null;
+      } | null;
+    } | null;
+  }>;
+}
+
 export interface ShakaPlayerLike {
   addEventListener(
     type: string,
@@ -127,7 +150,11 @@ export interface ShakaPlayerLike {
   destroy(): Promise<void>;
   configure(configuration: unknown): boolean;
   resetConfiguration?(): void;
+  getConfiguration?(): { drm?: { servers?: Record<string, string> } };
   getNetworkingEngine(): ShakaNetworkingEngineLike | null;
+  getStats?(): { estimatedBandwidth?: number; maxSegmentDuration?: number };
+  /** Deprecated in Shaka 5 but still exported; read only for segment times. */
+  getManifest?(): ShakaManifestLike | null;
   getVariantTracks(): ShakaVariantTrackLike[];
   selectVariantTrack(
     track: ShakaVariantTrackLike,
@@ -181,10 +208,199 @@ export interface ShakaRuntimeLike {
 
 export type ShakaRuntimeLoader = () => Promise<unknown>;
 
-export const SHAKA_SEGMENT_PREFETCH_LIMIT = 2;
+/**
+ * No segment prefetch during playback: segments go through Shaka's plain
+ * fetch-and-retry path. With prefetch on and a deep buffer, a seek that
+ * cancels an init segment mid-download (dragging the scrubber across DASH
+ * periods does this every time) leaves it in Shaka's prefetch map as if it
+ * were on its way; it is never requested again, the new period's media
+ * cannot be appended without it, and playback waits forever. Segments run
+ * 2-6s and download several times faster than they play, so the 60s buffer
+ * fills just the same. A preload sets its own limit (it needs one to fetch
+ * the first segment); see `PRELOAD_SEGMENT_PREFETCH_LIMIT` in the web app.
+ */
+export const SHAKA_SEGMENT_PREFETCH_LIMIT = 0;
+
+/**
+ * Streaming defaults for VOD lessons. Playback starts once 1.5s is buffered
+ * (one 2s segment), then a 60s cushion is built so a phone that loses signal
+ * for half a minute keeps playing; 30s is kept behind the playhead so a
+ * short seek back needs no network. The buffer lives in MSE SourceBuffers,
+ * which a page cannot read back.
+ */
+export const SHAKA_STREAMING_DEFAULTS = {
+  rebufferingGoal: 1.5,
+  bufferingGoal: 60,
+  bufferBehind: 30,
+} as const;
+
+/**
+ * Retries tuned for flaky mobile links: four tries, ~0.4s/0.6s/0.9s apart.
+ * No limit on a request's total time: on 3G (~50KB/s) a 1080p segment
+ * (~1.6MB) needs over 30s, and a retry starts again from its first byte, so
+ * a total limit made it fail forever. A request is given up only when no
+ * byte has arrived for 20s, which also leaves room for an extension that
+ * hands the page the body only once it is complete.
+ */
+export const SHAKA_SEGMENT_RETRY_DEFAULTS = {
+  maxAttempts: 4,
+  baseDelay: 400,
+  backoffFactor: 1.5,
+  fuzzFactor: 0.3,
+  timeout: 0,
+  connectionTimeout: 20_000,
+  stallTimeout: 20_000,
+} as const;
+
+/**
+ * ABR defaults. With nothing measured yet the first segment is fetched from
+ * a low tier (~360p) so the first frame comes quickly. Quality is
+ * reconsidered every 4s rather than Shaka's 8s. Upgrading needs the
+ * stream to use at most 85% of the measured bandwidth, downgrading starts
+ * only above 95%: with one value for both, quality flipped back and forth
+ * every few seconds, each switch fetching another tier's segments.
+ *
+ * The browser's own network guess (navigator.connection) is not used: it
+ * reported 1.35 Mbps on a 0.4 Mbps 3G link, so playback began at 720p and
+ * no segment finished. Only what this page measures moves quality up.
+ */
+export const SHAKA_ABR_DEFAULTS = {
+  defaultBandwidthEstimate: 650_000,
+  useNetworkInformation: false,
+  switchInterval: 4,
+  bandwidthUpgradeTarget: 0.85,
+  bandwidthDowngradeTarget: 0.95,
+} as const;
+
+const MIN_REMEMBERED_BANDWIDTH = 300_000;
+const MAX_REMEMBERED_BANDWIDTH = 10_000_000;
+const MAX_WARM_START_BANDWIDTH = 2_500_000;
+const WARM_START_BANDWIDTH_FRACTION = 0.7;
+
+/**
+ * The last measurement is also kept on the device, for the next page load:
+ * a lesson prepared ahead of time (the home page's, a hovered one) then
+ * starts at the tier the player will choose when it takes the preparation
+ * over. With nothing measured the preparation fetched 360p, and the player,
+ * judging the connection by those fast downloads, fetched the start again
+ * in 1080p. Older than a day it is not trusted (another network).
+ */
+const BANDWIDTH_STORAGE_KEY = "veolms-shaka-bandwidth";
+const BANDWIDTH_STORAGE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function readStoredBandwidth(): number | null {
+  try {
+    const stored = JSON.parse(
+      globalThis.localStorage?.getItem(BANDWIDTH_STORAGE_KEY) ?? "null",
+    ) as { value?: unknown; savedAt?: unknown } | null;
+    if (
+      !stored ||
+      typeof stored.value !== "number" ||
+      typeof stored.savedAt !== "number" ||
+      Date.now() - stored.savedAt > BANDWIDTH_STORAGE_MAX_AGE_MS
+    ) {
+      return null;
+    }
+    return Math.min(
+      MAX_REMEMBERED_BANDWIDTH,
+      Math.max(MIN_REMEMBERED_BANDWIDTH, stored.value),
+    );
+  } catch {
+    return null;
+  }
+}
+
+let lastEstimatedBandwidth: number | null = readStoredBandwidth();
+
+/**
+ * Remembers what Shaka measured, so the next video in this page (and the
+ * next page load, see above) starts at a tier the connection is known to
+ * sustain.
+ */
+export function rememberShakaBandwidthEstimate(
+  player: Pick<ShakaPlayerLike, "getStats"> | null | undefined,
+): void {
+  let estimate: number | undefined;
+  try {
+    estimate = player?.getStats?.().estimatedBandwidth;
+  } catch {
+    return;
+  }
+  if (typeof estimate !== "number" || !Number.isFinite(estimate)) return;
+  if (estimate <= 0) return;
+  // The start value a chosen quality sets (nothing measured yet).
+  if (estimate >= PREFERRED_QUALITY_START_BANDWIDTH) return;
+  lastEstimatedBandwidth = Math.min(
+    MAX_REMEMBERED_BANDWIDTH,
+    Math.max(MIN_REMEMBERED_BANDWIDTH, estimate),
+  );
+  try {
+    globalThis.localStorage?.setItem(
+      BANDWIDTH_STORAGE_KEY,
+      JSON.stringify({ value: lastEstimatedBandwidth, savedAt: Date.now() }),
+    );
+  } catch {
+    // Not kept: the next page load starts from the default estimate.
+  }
+}
+
+/**
+ * The bandwidth to assume before the first segment: a conservative share of
+ * the last measurement, or the cold-start default.
+ */
+export function getShakaStartupBandwidthEstimate(): number {
+  if (lastEstimatedBandwidth === null) {
+    return SHAKA_ABR_DEFAULTS.defaultBandwidthEstimate;
+  }
+  return Math.round(
+    Math.min(
+      lastEstimatedBandwidth * WARM_START_BANDWIDTH_FRACTION,
+      MAX_WARM_START_BANDWIDTH,
+    ),
+  );
+}
+
+export function resetShakaBandwidthEstimateForTests(): void {
+  lastEstimatedBandwidth = null;
+}
+
+/**
+ * Bits per second assumed for the first choice of a source with a chosen
+ * quality: above every variant, so the height restriction alone decides. A
+ * fresh player (every preload) has measured nothing and uses it; one that
+ * has measured is pointed at the chosen variant as its load starts (see
+ * `ShakaVideoEngine.startAtPreferredQuality`).
+ */
+export const PREFERRED_QUALITY_START_BANDWIDTH = 1_000_000_000;
+
+/** The picture height the viewer chose for `source`, or null for auto. */
+export function shakaPreferredVideoHeight(source: VideoSource): number | null {
+  const height = source.streaming?.preferredVideoHeight;
+  return typeof height === "number" && Number.isFinite(height) && height > 0
+    ? height
+    : null;
+}
+
+/** Whether ABR chooses the quality of `source` (no quality was chosen). */
+export function isShakaAutoQuality(source: VideoSource): boolean {
+  return (
+    shakaPreferredVideoHeight(source) === null &&
+    (source.streaming?.abrEnabled ?? true)
+  );
+}
+
+/** `source` as played on auto quality: any chosen quality left out. */
+export function withoutPreferredVideoHeight(source: VideoSource): VideoSource {
+  if (!source.streaming) return source;
+  const { preferredVideoHeight: _preferred, ...streaming } = source.streaming;
+  return { ...source, streaming: { ...streaming, abrEnabled: true } };
+}
 
 export async function defaultShakaRuntimeLoader(): Promise<unknown> {
-  return import("shaka-player");
+  const runtimeModule = await import("shaka-player");
+  // Extensions get the runtime before the caller creates a player from it.
+  notifyShakaRuntimeLoaded(runtimeModule);
+  return runtimeModule;
 }
 
 export function resolveShakaRuntime(module: unknown): ShakaRuntimeLike {
@@ -276,6 +492,7 @@ export function mapRequestKind(
     ["MANIFEST", "manifest"],
     ["SEGMENT", "segment"],
     ["LICENSE", "license"],
+    ["KEY", "key"],
     ["TIMING", "manifest"],
     ["APP", "other"],
   ];
@@ -401,16 +618,17 @@ export function createShakaConfiguration(
   const networking = source.networking;
 
   result.streaming = {
-    segmentPrefetchLimit: SHAKA_SEGMENT_PREFETCH_LIMIT,
-    ...(streaming?.bufferingGoal !== undefined
-      ? { bufferingGoal: streaming.bufferingGoal }
-      : {}),
-    ...(streaming?.rebufferingGoal !== undefined
-      ? { rebufferingGoal: streaming.rebufferingGoal }
-      : {}),
-    ...(streaming?.bufferBehind !== undefined
-      ? { bufferBehind: streaming.bufferBehind }
-      : {}),
+    segmentPrefetchLimit:
+      streaming?.segmentPrefetchLimit ?? SHAKA_SEGMENT_PREFETCH_LIMIT,
+    bufferingGoal:
+      streaming?.bufferingGoal ?? SHAKA_STREAMING_DEFAULTS.bufferingGoal,
+    rebufferingGoal:
+      streaming?.rebufferingGoal ?? SHAKA_STREAMING_DEFAULTS.rebufferingGoal,
+    bufferBehind:
+      streaming?.bufferBehind ?? SHAKA_STREAMING_DEFAULTS.bufferBehind,
+    retryParameters: networking?.segmentRetry
+      ? retryConfiguration(networking.segmentRetry)
+      : { ...SHAKA_SEGMENT_RETRY_DEFAULTS },
     ...(streaming?.lowLatencyMode !== undefined
       ? { lowLatencyMode: streaming.lowLatencyMode }
       : {}),
@@ -420,21 +638,39 @@ export function createShakaConfiguration(
     ...(streaming?.useNativeHlsForFairPlay !== undefined
       ? { useNativeHlsForFairPlay: streaming.useNativeHlsForFairPlay }
       : {}),
-    ...(networking?.segmentRetry
-      ? { retryParameters: retryConfiguration(networking.segmentRetry) }
-      : {}),
   };
 
-  if (streaming?.abrEnabled !== undefined || streaming?.abrRestrictions) {
-    result.abr = {
-      ...(streaming.abrEnabled !== undefined
-        ? { enabled: streaming.abrEnabled }
-        : {}),
-      ...(streaming.abrRestrictions
-        ? { restrictions: { ...streaming.abrRestrictions } }
-        : {}),
-    };
-  }
+  const preferredHeight = shakaPreferredVideoHeight(source);
+  // A chosen quality: the first variant is the highest not above it (every
+  // variant looks affordable at this estimate, so ABR takes the top one the
+  // restriction leaves), and ABR stays off so playback stays there. The
+  // height limit is always given, so going back to auto (a `configure`,
+  // which merges) lifts the one a chosen quality set.
+  const restrictions = {
+    ...streaming?.abrRestrictions,
+    maxHeight: Math.min(
+      streaming?.abrRestrictions?.maxHeight ?? Infinity,
+      preferredHeight ?? Infinity,
+    ),
+  };
+  result.abr = {
+    enabled: isShakaAutoQuality(source),
+    useNetworkInformation: SHAKA_ABR_DEFAULTS.useNetworkInformation,
+    defaultBandwidthEstimate:
+      preferredHeight === null
+        ? (streaming?.abrDefaultBandwidthEstimate ??
+          getShakaStartupBandwidthEstimate())
+        : PREFERRED_QUALITY_START_BANDWIDTH,
+    switchInterval:
+      streaming?.abrSwitchInterval ?? SHAKA_ABR_DEFAULTS.switchInterval,
+    bandwidthUpgradeTarget:
+      streaming?.abrBandwidthUpgradeTarget ??
+      SHAKA_ABR_DEFAULTS.bandwidthUpgradeTarget,
+    bandwidthDowngradeTarget:
+      streaming?.abrBandwidthDowngradeTarget ??
+      SHAKA_ABR_DEFAULTS.bandwidthDowngradeTarget,
+    restrictions,
+  };
 
   if (networking?.manifestRetry) {
     result.manifest = {
@@ -494,12 +730,6 @@ export function createShakaConfiguration(
       drmConfiguration.preferredKeySystems = keySystems;
     }
 
-    if (networking?.licenseRetry) {
-      drmConfiguration.retryParameters = retryConfiguration(
-        networking.licenseRetry,
-      );
-    }
-
     const fairPlay = drm.fairplay;
     if (fairPlay?.transformInitData || fairPlay?.getContentId) {
       drmConfiguration.initDataTransform = (
@@ -531,19 +761,65 @@ export function createShakaConfiguration(
     result.drm = drmConfiguration;
   }
 
+  // A licence rides out a flaky mobile link as a segment does. Shaka's own
+  // default is two tries, and a licence that fails stops the lesson (Shaka
+  // 6007). Shaka never retries a refusal (401/403). Set for every source:
+  // an extension (DRM) may supply the licence server itself.
+  result.drm = {
+    ...(result.drm as Record<string, unknown> | undefined),
+    retryParameters: networking?.licenseRetry
+      ? retryConfiguration(networking.licenseRetry)
+      : { ...SHAKA_SEGMENT_RETRY_DEFAULTS },
+  };
+
   return result;
+}
+
+/**
+ * The licence servers a player is configured with, as a comparable string
+ * (undefined when this Shaka build cannot say). A preload keeps the ones it
+ * was started with, so it is only played by a player configured the same.
+ */
+export function shakaDrmServers(player: ShakaPlayerLike): string | undefined {
+  const servers = player.getConfiguration?.()?.drm?.servers;
+  if (!servers) return undefined;
+  return JSON.stringify(
+    Object.entries(servers).sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+  );
 }
 
 export function configureShakaPlayer(
   player: ShakaPlayerLike,
   source: VideoSource,
   runtime: ShakaRuntimeLike,
-  options: { reset?: boolean } = {},
+  options: {
+    reset?: boolean;
+    /**
+     * Leaves buffering and quality as a preload set them, for a player
+     * about to load that preload: either one given here would drop the
+     * segments it fetched and choose the quality again (see
+     * `ShakaVideoEngine.applyStreamingAfterFirstFrame`).
+     */
+    keepPreloadStreaming?: boolean;
+  } = {},
 ): boolean {
   if (options.reset !== false) {
     player.resetConfiguration?.();
   }
-  return player.configure(createShakaConfiguration(source, runtime));
+  const configuration = createShakaConfiguration(source, runtime);
+  if (options.keepPreloadStreaming) {
+    delete configuration.streaming;
+    // The quality the preload fetched is kept until the first frame has
+    // played: its own fast downloads would otherwise have ABR choose again
+    // as the player takes it over, and the start waited for the same
+    // segments in a higher quality (a browser with no bandwidth kept yet
+    // preloads at 360p). The source's ABR settings apply from the first
+    // frame on (`applyStreamingAfterFirstFrame`).
+    configuration.abr = { enabled: false };
+  }
+  return player.configure(configuration);
 }
 
 export interface ShakaNetworkingFilters {
@@ -558,17 +834,21 @@ export function createShakaNetworkingFilters(
   const userRequestFilter = source.networking?.requestFilter;
   const userResponseFilter = source.networking?.responseFilter;
   const requestTypes = runtime.net?.NetworkingEngine?.RequestType;
+  const answerFromInlinedManifest = createInlinedManifestRequestRewrite(source);
   const filters: ShakaNetworkingFilters = {
     requestFilter: null,
     responseFilter: null,
   };
 
-  if (userRequestFilter) {
+  if (userRequestFilter || answerFromInlinedManifest) {
     filters.requestFilter = async (
       type: number,
       request: ShakaNetworkRequestLike,
     ): Promise<void> => {
       const kind = mapRequestKind(type, requestTypes);
+      // Served from memory: no token, cache query or refresh applies.
+      if (kind === "manifest" && answerFromInlinedManifest?.(request)) return;
+      if (!userRequestFilter) return;
       const normalized = toVideoNetworkRequest(kind, request);
       await userRequestFilter(normalized);
       applyVideoNetworkRequest(normalized, request);
@@ -588,6 +868,41 @@ export function createShakaNetworkingFilters(
   }
 
   return filters;
+}
+
+/**
+ * With an inlined manifest (HLS master playlist or DASH MPD), returns a
+ * rewrite that points the request for `source.src` at a `data:` URI holding
+ * it, with its URIs made absolute. Returns null when there is nothing usable
+ * to inline; playback then fetches the manifest as before.
+ */
+export function createInlinedManifestRequestRewrite(
+  source: VideoSource,
+): ((request: ShakaNetworkRequestLike) => boolean) | null {
+  const inlined = source.inlinedManifest;
+  const isHls = isInlinableHlsPlaylist(inlined);
+  if (!inlined || (!isHls && !isInlinableDashManifest(inlined))) return null;
+  const masterIdentity = manifestIdentity(source.src);
+  if (!masterIdentity) return null;
+
+  let dataUri: string | null = null;
+  return (request) => {
+    const uri = request.uris[0];
+    if (!uri || manifestIdentity(uri) !== masterIdentity) return false;
+    try {
+      dataUri ??= isHls
+        ? createHlsPlaylistDataUri(
+            resolveInlinedMasterManifest(inlined, source.src),
+          )
+        : createDashManifestDataUri(
+            resolveInlinedDashManifest(inlined, source.src),
+          );
+    } catch {
+      return false;
+    }
+    request.uris = [dataUri];
+    return true;
+  };
 }
 
 export function registerShakaNetworkingFilters(

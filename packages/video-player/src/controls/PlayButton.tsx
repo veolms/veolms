@@ -16,9 +16,12 @@ export function PlayButton({
 }: PlayButtonProps) {
   const controller = usePlayerController();
   const paused = usePlayerState(({ media }) => media.paused || media.ended);
+  const ended = usePlayerState(({ media }) => media.ended);
   const { icons } = usePlayerTheme();
-  const Icon = paused ? icons.play : icons.pause;
-  const label = paused ? "Play" : "Pause";
+  // At the end of the video (the next lesson's countdown is up) the button
+  // plays it again from the start, and shows that.
+  const Icon = ended ? icons.replay : paused ? icons.play : icons.pause;
+  const label = ended ? "Replay" : paused ? "Play" : "Pause";
 
   const handleClick = async () => {
     const wasPaused = paused;

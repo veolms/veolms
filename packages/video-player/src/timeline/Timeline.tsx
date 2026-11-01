@@ -1,6 +1,7 @@
 import {
   useCallback,
   useRef,
+  useState,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
@@ -8,6 +9,7 @@ import {
 import { formatMediaTime } from "../accessibility/formatMediaTime";
 import type { Chapter } from "../chapters/chapterTypes";
 import { usePlayerController } from "../react/context";
+import { playerRectOf, toPlayerPoint } from "../react/pageFullscreen";
 import { usePlayerState } from "../react/usePlayerState";
 import {
   clamp,
@@ -16,13 +18,31 @@ import {
   positionTimelineMarkers,
   timeToPositionPercent,
 } from "./timelineMath";
-import { TimelinePreview } from "./TimelinePreview";
+import { TimelinePreview, type TimelinePreviewLayout } from "./TimelinePreview";
 
 const KEYBOARD_SEEK_SECONDS = 5;
+/**
+ * After a drag is let go with the pointer still on the timeline, the hover
+ * preview stays away until the pointer has moved this far: the drag has
+ * just shown that moment over the whole video, and the lesson plays on
+ * from it.
+ */
+const HOVER_AFTER_DRAG_DISTANCE_PX = 6;
 /** Visual gap between two chapter segments of the track, in pixels. */
 const SEGMENT_GAP_PX = 3;
+// The hovered chapter grows by being made taller rather than scaled: a
+// scaled track stretches its rounded ends into flat ovals, a taller one
+// keeps them fully round.
 const TRACK_CLASS =
   "absolute top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/30 transition-[height,scale] duration-150 group-hover/timeline:h-1.5 group-focus-within/timeline:h-1.5 group-data-[scrubbing=true]/timeline:h-1.5";
+
+/**
+ * While the thumb is being dragged, it catches on the start of a chapter
+ * once it is this close to it, and the device gives a short buzz (where the
+ * browser can make it).
+ */
+const CHAPTER_SNAP_DISTANCE_PX = 8;
+const CHAPTER_SNAP_VIBRATION_MS = 35;
 
 interface TimelineSegment {
   id: string;
@@ -64,16 +84,31 @@ export interface TimelineProps {
   className?: string;
   ariaLabel?: string;
   showPreview?: boolean;
+  previewLayout?: TimelinePreviewLayout;
 }
 
 export function Timeline({
   ariaLabel = "Video timeline",
   className = "",
+  previewLayout = "follow",
   showPreview = true,
 }: TimelineProps) {
   const controller = usePlayerController();
   const trackRef = useRef<HTMLDivElement | null>(null);
   const pointerIdRef = useRef<number | null>(null);
+  // The chapter start the dragged thumb is currently caught on, so that it
+  // buzzes once on arriving there and not on every move while it stays.
+  const snappedChapterTimeRef = useRef<number | null>(null);
+  // Where the video was when the drag began. A drag that wanders off and
+  // comes back to this point catches on it too, and letting go there
+  // leaves the video where it was: "release to cancel".
+  const scrubOriginRef = useRef<{ time: number; left: boolean } | null>(null);
+  const [cancelArmed, setCancelArmed] = useState(false);
+  // Where a mouse drag was let go, until the pointer moves away from it.
+  const releaseXRef = useRef<number | null>(null);
+  // What the drag in progress is made with: a finger's time pill rises
+  // clear of the thumb.
+  const [scrubPointerType, setScrubPointerType] = useState<string | null>(null);
   const {
     buffered,
     chapters,
@@ -105,42 +140,119 @@ export function Timeline({
       left.scrubbing === right.scrubbing,
   );
 
+  // Where along the track a pointer is, in the player's own axes (a player
+  // turned a quarter for a page full screen runs its track down the screen).
+  const trackPosition = useCallback(
+    (event: { clientX: number; clientY: number }) => {
+      const track = trackRef.current;
+      if (!track) return null;
+      return {
+        bounds: playerRectOf(track),
+        x: toPlayerPoint(event.clientX, event.clientY, track).x,
+      };
+    },
+    [],
+  );
+
   const previewAtPointer = useCallback(
-    (clientX: number) => {
-      const bounds = trackRef.current?.getBoundingClientRect();
-      if (!bounds) return 0;
-      const time = pointerPositionToTime(clientX, bounds, duration);
+    (event: { clientX: number; clientY: number }) => {
+      const position = trackPosition(event);
+      if (!position) return 0;
+      const time = pointerPositionToTime(position.x, position.bounds, duration);
       controller.setPreviewTime(time);
       return time;
     },
-    [controller, duration],
+    [controller, duration, trackPosition],
+  );
+
+  // Where a drag at the pointer puts the playhead: on the pointer, or on the
+  // start of a chapter when the pointer is close enough to one.
+  const scrubAtPointer = useCallback(
+    (event: { clientX: number; clientY: number }) => {
+      const position = trackPosition(event);
+      if (!position || position.bounds.width <= 0) return 0;
+      const { bounds } = position;
+      const time = pointerPositionToTime(position.x, bounds, duration);
+      const snapSeconds = (CHAPTER_SNAP_DISTANCE_PX / bounds.width) * duration;
+      let snapped: number | null = null;
+      const origin = scrubOriginRef.current;
+      const nearOrigin =
+        origin !== null && Math.abs(origin.time - time) <= snapSeconds;
+      if (origin && !nearOrigin) origin.left = true;
+      const cancelling = Boolean(origin?.left && nearOrigin);
+      setCancelArmed(cancelling);
+      if (cancelling && origin) snapped = origin.time;
+      for (const chapter of cancelling ? [] : chapters) {
+        const start = chapter.startTime;
+        if (start <= 0 || start >= duration) continue;
+        const distance = Math.abs(start - time);
+        if (
+          distance <= snapSeconds &&
+          (snapped === null || distance < Math.abs(snapped - time))
+        ) {
+          snapped = start;
+        }
+      }
+      if (snapped !== null && snappedChapterTimeRef.current !== snapped) {
+        try {
+          navigator.vibrate?.(CHAPTER_SNAP_VIBRATION_MS);
+        } catch {
+          // Haptics are a nicety; the snap itself still happens.
+        }
+      }
+      snappedChapterTimeRef.current = snapped;
+      const target = snapped ?? time;
+      controller.setPreviewTime(target);
+      return target;
+    },
+    [chapters, controller, duration, trackPosition],
   );
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!Number.isFinite(duration) || duration <= 0) return;
     event.preventDefault();
     pointerIdRef.current = event.pointerId;
+    setScrubPointerType(event.pointerType);
+    snappedChapterTimeRef.current = null;
+    scrubOriginRef.current = { time: currentTime, left: false };
     event.currentTarget.setPointerCapture(event.pointerId);
     controller.setScrubbing(true);
     controller.setControlsVisible(true);
-    controller.seekTo(previewAtPointer(event.clientX));
+    controller.scrubTo(scrubAtPointer(event));
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "touch" && pointerIdRef.current === null) return;
-    const time = previewAtPointer(event.clientX);
-    if (pointerIdRef.current === event.pointerId) controller.seekTo(time);
+    if (pointerIdRef.current === event.pointerId) {
+      controller.scrubTo(scrubAtPointer(event));
+      return;
+    }
+    if (releaseXRef.current !== null) {
+      if (
+        Math.abs(event.clientX - releaseXRef.current) <
+        HOVER_AFTER_DRAG_DISTANCE_PX
+      ) {
+        return;
+      }
+      releaseXRef.current = null;
+    }
+    previewAtPointer(event);
   };
 
   const finishPointerInteraction = (event: PointerEvent<HTMLDivElement>) => {
     if (pointerIdRef.current !== event.pointerId) return;
-    controller.seekTo(previewAtPointer(event.clientX));
+    controller.seekTo(scrubAtPointer(event));
     pointerIdRef.current = null;
+    snappedChapterTimeRef.current = null;
+    scrubOriginRef.current = null;
+    setCancelArmed(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     controller.setScrubbing(false);
-    if (event.pointerType !== "mouse") controller.setPreviewTime(null);
+    // No hover preview where the drag ends (see HOVER_AFTER_DRAG_DISTANCE_PX).
+    controller.setPreviewTime(null);
+    releaseXRef.current = event.pointerType === "mouse" ? event.clientX : null;
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -174,7 +286,12 @@ export function Timeline({
     controller.seekTo(clamp(nextTime, 0, duration));
   };
 
-  const progress = timeToPositionPercent(currentTime, duration);
+  // While dragging, the thumb and the played part follow the pointer, even
+  // over parts not downloaded yet, where the video keeps its last frame
+  // until the drag ends.
+  const shownTime =
+    scrubbing && previewTime !== null ? previewTime : currentTime;
+  const progress = timeToPositionPercent(shownTime, duration);
   const bufferedRanges = normalizeBufferedRanges(buffered, duration);
   const positionedMarkers = positionTimelineMarkers(markers, duration);
   const segments = getTimelineSegments(chapters, duration);
@@ -188,7 +305,22 @@ export function Timeline({
       data-scrubbing={scrubbing ? "true" : "false"}
     >
       {showPreview && previewTime !== null ? (
-        <TimelinePreview duration={duration} previewTime={previewTime} />
+        <TimelinePreview
+          duration={duration}
+          layout={previewLayout}
+          previewTime={previewTime}
+          scrubbing={scrubbing}
+          scrubPointerType={scrubPointerType}
+        />
+      ) : null}
+      {cancelArmed ? (
+        <div
+          role="status"
+          data-timeline-release-to-cancel=""
+          className="pointer-events-none absolute bottom-[calc(100%+5.5rem)] left-1/2 z-90 -translate-x-1/2 rounded-full bg-black/75 px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap text-white shadow-[0_6px_18px_rgb(0_0_0/0.35)]"
+        >
+          Release to cancel
+        </div>
       ) : null}
       <div
         ref={trackRef}
@@ -201,6 +333,7 @@ export function Timeline({
         aria-valuenow={Math.round(currentTime)}
         aria-valuetext={`${formatMediaTime(currentTime)} of ${formatMediaTime(duration)}`}
         data-player-control=""
+        data-video-player-timeline=""
         data-scrubbing={scrubbing ? "true" : "false"}
         className="relative flex h-5 cursor-pointer items-center focus-visible:outline-none focus-visible:after:absolute focus-visible:after:inset-x-0 focus-visible:after:top-1/2 focus-visible:after:h-2.5 focus-visible:after:-translate-y-1/2 focus-visible:after:rounded-full focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[var(--video-player-accent,#ff7a1a)] aria-disabled:cursor-not-allowed aria-disabled:opacity-55"
         onKeyDown={handleKeyDown}
@@ -210,11 +343,17 @@ export function Timeline({
         onPointerCancel={(event) => {
           if (pointerIdRef.current !== event.pointerId) return;
           pointerIdRef.current = null;
+          scrubOriginRef.current = null;
+          setCancelArmed(false);
           controller.setScrubbing(false);
           controller.setPreviewTime(null);
         }}
-        onPointerEnter={(event) => previewAtPointer(event.clientX)}
+        onPointerEnter={(event) => {
+          releaseXRef.current = null;
+          previewAtPointer(event);
+        }}
         onPointerLeave={() => {
+          releaseXRef.current = null;
           if (pointerIdRef.current === null) controller.setPreviewTime(null);
         }}
       >
@@ -239,7 +378,7 @@ export function Timeline({
                 data-timeline-track=""
                 data-timeline-segment={segmented ? "" : undefined}
                 data-hovered={hovered ? "true" : undefined}
-                className={`${TRACK_CLASS} data-[hovered=true]:scale-y-[1.7]`}
+                className={`${TRACK_CLASS} sm:data-[hovered=true]:h-2.5!`}
                 style={{
                   left: `calc(${timeToPositionPercent(segment.start, duration)}% + ${leadingGap}px)`,
                   width: segmented
@@ -263,12 +402,12 @@ export function Timeline({
                     />
                   );
                 })}
-                {currentTime > segment.start || !segmented ? (
+                {shownTime > segment.start || !segmented ? (
                   <span
                     data-timeline-progress=""
                     className="absolute inset-y-0 left-0 rounded-full bg-[var(--video-player-accent,#ff7a1a)]"
                     style={{
-                      width: `${timeToPositionPercent(currentTime - segment.start, span)}%`,
+                      width: `${timeToPositionPercent(shownTime - segment.start, span)}%`,
                     }}
                   />
                 ) : null}

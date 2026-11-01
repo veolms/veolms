@@ -5,6 +5,7 @@ import {
   type PointerEvent,
   type TouchEvent,
 } from "react";
+import { playerRectOf, toPlayerPoint } from "../react/pageFullscreen";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerMobileInteraction } from "../react/PlayerInteractionMode";
@@ -13,7 +14,6 @@ import { MOBILE_SEEK_IDLE_DELAY_MS } from "./feedbackTiming";
 
 const DOUBLE_TAP_WINDOW_MS = 300;
 const LONG_PRESS_DELAY_MS = 500;
-const TOUCH_COMPLETION_DEDUPE_MS = 75;
 const TOUCH_MOVE_TOLERANCE_PX = 12;
 
 type SeekDirection = -1 | 1;
@@ -38,22 +38,46 @@ interface PointerPressGesture {
 }
 
 export interface PlayerGestureSurfaceProps {
+  className?: string;
+  /**
+   * When a double tap on one side seeks instead of toggling fullscreen.
+   * "responsive" (the default): in the phone layout, and for any double tap
+   * made with a finger or pen, so a tablet behaves like a phone while a
+   * mouse double click still means fullscreen. "always": for a mouse too.
+   */
+  doubleTapSeek?: "always" | "responsive";
+  /**
+   * What a single tap on the picture does. "responsive": shows or hides the
+   * controls in the phone layout and for any tap made with a finger or pen
+   * (a tablet or a touch screen laptop too), and plays or pauses for a
+   * mouse. A touch never pauses: that is left to the pause button.
+   */
   emptyTapBehavior?: "responsive" | "toggle-controls" | "toggle-playback";
+  /** Replaces what a single tap does; told which kind of pointer made it. */
+  onEmptyTap?: (pointerType: string) => void;
   seekIntervalSeconds?: number;
 }
+
+const isDirectPointer = (pointerType: string) =>
+  pointerType === "touch" || pointerType === "pen";
 
 function shouldToggleControls(
   emptyTapBehavior: PlayerGestureSurfaceProps["emptyTapBehavior"],
   mobileInteraction: boolean,
+  pointerType: string,
 ): boolean {
   return (
     emptyTapBehavior === "toggle-controls" ||
-    (emptyTapBehavior === "responsive" && mobileInteraction)
+    (emptyTapBehavior === "responsive" &&
+      (mobileInteraction || isDirectPointer(pointerType)))
   );
 }
 
 export function PlayerGestureSurface({
+  className,
+  doubleTapSeek = "responsive",
   emptyTapBehavior = "toggle-playback",
+  onEmptyTap,
   seekIntervalSeconds = 10,
 }: PlayerGestureSurfaceProps) {
   const controller = usePlayerController();
@@ -82,8 +106,11 @@ export function PlayerGestureSurface({
   const pointerPressRef = useRef<PointerPressGesture | null>(null);
   const pressGeometryRef = useRef({ startX: 0, width: 0 });
   const controlsVisibleBeforePressRef = useRef(true);
-  const lastTouchCompletionAtRef = useRef(Number.NEGATIVE_INFINITY);
-  const touchPointerDownAtRef = useRef(Number.NEGATIVE_INFINITY);
+  // A finger press reaches the surface twice, as pointer events and as touch
+  // events, and both paths can end it. It ends once: whichever comes first.
+  // (A time window is not enough: on a phone the seek run by pointerup can
+  // take longer than the gap to touchend, which then seeked a second time.)
+  const touchPressRef = useRef({ completed: false, pointerDown: false });
   const touchGestureRef = useRef<{
     direction: SeekDirection;
     identifier: number;
@@ -174,12 +201,13 @@ export function PlayerGestureSurface({
     return true;
   }, [controller]);
 
+  // `x` is in the player's own axes (see `pressX`).
   const updatePausedScrub = useCallback(
-    (clientX: number) => {
+    (x: number) => {
       const gesture = pausedScrubRef.current;
       if (!gesture) return false;
       const deltaTime =
-        ((clientX - gesture.startX) / gesture.width) * gesture.duration;
+        ((x - gesture.startX) / gesture.width) * gesture.duration;
       const nextTime = Math.min(
         gesture.duration,
         Math.max(0, gesture.startTime + deltaTime),
@@ -270,9 +298,16 @@ export function PlayerGestureSurface({
     if (zoomGestureActive) cancelCompetingGestures();
   }, [cancelCompetingGestures, zoomGestureActive]);
 
-  const getSeekDirection = (element: HTMLButtonElement, clientX: number) => {
-    const bounds = element.getBoundingClientRect();
-    return clientX < bounds.left + bounds.width / 2 ? -1 : 1;
+  // Positions are read in the player's own axes: a player turned a quarter
+  // for a page full screen has its left half at the top of the screen.
+  const pressX = (
+    element: HTMLButtonElement,
+    point: { clientX: number; clientY: number },
+  ) => toPlayerPoint(point.clientX, point.clientY, element).x;
+
+  const getSeekDirection = (element: HTMLButtonElement, x: number) => {
+    const bounds = playerRectOf(element);
+    return x < bounds.left + bounds.width / 2 ? -1 : 1;
   };
 
   const scheduleSingleTap = useCallback(
@@ -281,7 +316,13 @@ export function PlayerGestureSurface({
       singleTapTimerRef.current = setTimeout(() => {
         singleTapTimerRef.current = null;
         lastTapRef.current = null;
-        if (shouldToggleControls(emptyTapBehavior, mobileInteraction)) {
+        if (onEmptyTap) {
+          onEmptyTap(pointerType);
+          return;
+        }
+        if (
+          shouldToggleControls(emptyTapBehavior, mobileInteraction, pointerType)
+        ) {
           const shouldShowControls = !controlsVisibleBeforePressRef.current;
           if (!shouldShowControls) controller.setSettingsView("closed");
           controller.setControlsVisible(shouldShowControls);
@@ -290,7 +331,7 @@ export function PlayerGestureSurface({
         void controller.togglePlayback().catch(() => undefined);
       }, DOUBLE_TAP_WINDOW_MS);
     },
-    [controller, emptyTapBehavior, mobileInteraction],
+    [controller, emptyTapBehavior, mobileInteraction, onEmptyTap],
   );
 
   const captureControlsVisibility = () => {
@@ -299,16 +340,11 @@ export function PlayerGestureSurface({
   };
 
   const completePress = (direction: SeekDirection, pointerType: string) => {
-    const timestamp = Date.now();
-    if (
-      pointerType === "touch" &&
-      timestamp - lastTouchCompletionAtRef.current < TOUCH_COMPLETION_DEDUPE_MS
-    ) {
-      return;
-    }
     if (pointerType === "touch") {
-      lastTouchCompletionAtRef.current = timestamp;
+      if (touchPressRef.current.completed) return;
+      touchPressRef.current.completed = true;
     }
+    const timestamp = Date.now();
 
     if (endPausedScrub()) {
       clearSingleTapTimer();
@@ -322,7 +358,12 @@ export function PlayerGestureSurface({
       return;
     }
 
-    if (mobileSeekSequenceRef.current !== null && mobileInteraction) {
+    const seeksOnDoubleTap =
+      doubleTapSeek === "always" ||
+      mobileInteraction ||
+      isDirectPointer(pointerType);
+
+    if (mobileSeekSequenceRef.current !== null && seeksOnDoubleTap) {
       clearSingleTapTimer();
       lastTapRef.current = null;
       applyMobileSeek(direction);
@@ -334,7 +375,7 @@ export function PlayerGestureSurface({
       lastTap !== null &&
       lastTap.pointerType === pointerType &&
       timestamp - lastTap.timestamp <= DOUBLE_TAP_WINDOW_MS;
-    const desktopDoubleTap = isDoubleTapWindow && !mobileInteraction;
+    const desktopDoubleTap = isDoubleTapWindow && !seeksOnDoubleTap;
     const mobileSeekDoubleTap =
       isDoubleTapWindow &&
       !desktopDoubleTap &&
@@ -356,19 +397,21 @@ export function PlayerGestureSurface({
 
     if (lastTap !== null) {
       clearSingleTapTimer();
-      if (!shouldToggleControls(emptyTapBehavior, mobileInteraction)) {
+      if (
+        !onEmptyTap &&
+        !shouldToggleControls(emptyTapBehavior, mobileInteraction, pointerType)
+      ) {
         void controller.togglePlayback().catch(() => undefined);
       }
     }
     scheduleSingleTap(direction, timestamp, pointerType);
   };
 
-  const capturePressGeometry = (
-    element: HTMLButtonElement,
-    clientX: number,
-  ) => {
-    const bounds = element.getBoundingClientRect();
-    pressGeometryRef.current = { startX: clientX, width: bounds.width };
+  const capturePressGeometry = (element: HTMLButtonElement, x: number) => {
+    pressGeometryRef.current = {
+      startX: x,
+      width: playerRectOf(element).width,
+    };
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
@@ -379,13 +422,11 @@ export function PlayerGestureSurface({
       x: event.clientX,
       y: event.clientY,
     };
-    capturePressGeometry(event.currentTarget, event.clientX);
-    pressDirectionRef.current = getSeekDirection(
-      event.currentTarget,
-      event.clientX,
-    );
+    const x = pressX(event.currentTarget, event);
+    capturePressGeometry(event.currentTarget, x);
+    pressDirectionRef.current = getSeekDirection(event.currentTarget, x);
     if (event.pointerType === "touch") {
-      touchPointerDownAtRef.current = Date.now();
+      touchPressRef.current = { completed: false, pointerDown: true };
     }
     clearLongPressTimer();
     longPressTimerRef.current = setTimeout(beginLongPress, LONG_PRESS_DELAY_MS);
@@ -396,7 +437,7 @@ export function PlayerGestureSurface({
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     if (pausedScrubRef.current !== null) {
       gesture.moved = true;
-      updatePausedScrub(event.clientX);
+      updatePausedScrub(pressX(event.currentTarget, event));
       return;
     }
     if (
@@ -412,7 +453,9 @@ export function PlayerGestureSurface({
   const handlePointerUp = (event: PointerEvent<HTMLButtonElement>) => {
     const gesture = pointerPressRef.current;
     const pausedScrubActive = pausedScrubRef.current !== null;
-    if (pausedScrubActive) updatePausedScrub(event.clientX);
+    if (pausedScrubActive) {
+      updatePausedScrub(pressX(event.currentTarget, event));
+    }
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture?.(event.pointerId);
     }
@@ -427,14 +470,14 @@ export function PlayerGestureSurface({
   const handleTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
     const touch = event.changedTouches[0] ?? event.touches[0];
     if (!touch) return;
-    if (
-      Date.now() - touchPointerDownAtRef.current >=
-      TOUCH_COMPLETION_DEDUPE_MS
-    ) {
+    // Without a pointerdown before it, this touch is a press of its own.
+    if (!touchPressRef.current.pointerDown) {
       captureControlsVisibility();
+      touchPressRef.current = { completed: false, pointerDown: false };
     }
-    const direction = getSeekDirection(event.currentTarget, touch.clientX);
-    capturePressGeometry(event.currentTarget, touch.clientX);
+    const x = pressX(event.currentTarget, touch);
+    const direction = getSeekDirection(event.currentTarget, x);
+    capturePressGeometry(event.currentTarget, x);
     pressDirectionRef.current = direction;
     touchGestureRef.current = {
       direction,
@@ -458,7 +501,7 @@ export function PlayerGestureSurface({
       gesture.moved = true;
       if (pointerPressRef.current) pointerPressRef.current.moved = true;
       event.preventDefault();
-      updatePausedScrub(touch.clientX);
+      updatePausedScrub(pressX(event.currentTarget, touch));
       return;
     }
     if (
@@ -475,12 +518,12 @@ export function PlayerGestureSurface({
   const handleTouchEnd = (event: TouchEvent<HTMLButtonElement>) => {
     const gesture = touchGestureRef.current;
     touchGestureRef.current = null;
-    touchPointerDownAtRef.current = Number.NEGATIVE_INFINITY;
+    touchPressRef.current.pointerDown = false;
     if (pausedScrubRef.current !== null) {
       const touch = Array.from(event.changedTouches).find(
         (candidate) => candidate.identifier === gesture?.identifier,
       );
-      if (touch) updatePausedScrub(touch.clientX);
+      if (touch) updatePausedScrub(pressX(event.currentTarget, touch));
       completePress(gesture?.direction ?? pressDirectionRef.current, "touch");
       return;
     }
@@ -509,14 +552,25 @@ export function PlayerGestureSurface({
       className={classNames(
         "absolute inset-0 z-0 cursor-inherit !rounded-none border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white",
         mobileInteraction ? "touch-none" : "touch-pan-y",
+        className,
       )}
       aria-label={surfaceLabel}
       onPointerDownCapture={captureControlsVisibility}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={(event) => {
+      onPointerCancel={() => {
         cancelCompetingGestures();
+      }}
+      // Something else took the pointer over mid-press (a drag of the mini
+      // player does): the press is over, and must not end as a tap or leave
+      // its long-press timer to fire later.
+      onLostPointerCapture={(event) => {
+        const gesture = pointerPressRef.current;
+        if (!gesture || gesture.pointerId !== event.pointerId) return;
+        pointerPressRef.current = null;
+        if (touchGestureRef.current) touchGestureRef.current.moved = true;
+        if (!endPausedScrub()) endBoost();
       }}
       onPointerLeave={(event) => {
         if (event.pointerType === "mouse") return;
@@ -526,7 +580,7 @@ export function PlayerGestureSurface({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={() => {
-        touchPointerDownAtRef.current = Number.NEGATIVE_INFINITY;
+        touchPressRef.current.pointerDown = false;
         cancelCompetingGestures();
       }}
       onContextMenu={(event) => event.preventDefault()}

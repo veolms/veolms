@@ -23,6 +23,7 @@ import type { VideoEngine } from "../core/VideoEngine";
 import type { VideoSource } from "../core/types";
 import { NativeVideoEngine } from "../engines/native/NativeVideoEngine";
 import { ShakaVideoEngine } from "../engines/shaka/ShakaVideoEngine";
+import { isEarlyShakaStandbyReady } from "../engines/shaka/shaka-early-preload";
 import type { PlayerShortcutOverrides } from "../keyboard";
 import type {
   StoryboardLoader,
@@ -47,6 +48,7 @@ import {
   resolvePlayerTheme,
   type PlayerTheme,
 } from "../themes/playerThemes";
+import { getPageFullscreenElement } from "./pageFullscreen";
 import type { PlayerInteractionMode } from "./PlayerInteractionMode";
 
 export interface VideoPlayerProgress {
@@ -76,6 +78,12 @@ export interface VideoPlayerProps extends Omit<
   chapterThumbnails?: Readonly<Record<number, string>>;
   storyboard?: StoryboardSource;
   storyboardLoader?: StoryboardLoader;
+  /**
+   * URL of a sprite storyboard index: seek previews on hover, and the
+   * picture drawn over the video while dragging across parts not
+   * downloaded yet. Ignored when `storyboard` is given.
+   */
+  spriteStoryboardUrl?: string;
   markers?: readonly TimelineMarker[];
   controls?: ReactNode | false;
   /** Replaces the default central play affordance. Pass false to omit it. */
@@ -92,6 +100,8 @@ export interface VideoPlayerProps extends Omit<
   /** Action performed by a single pointer tap on empty video space. */
   emptyTapBehavior?: VideoPlayerEmptyTapBehavior;
   controlsIdleDelay?: number;
+  /** How long the controls stay after a touch (defaults to the idle delay). */
+  controlsTouchIdleDelay?: number;
   /** Keeps controls pinned until the current source begins playback once. */
   keepControlsVisibleUntilFirstPlay?: boolean;
   /** Keeps a player-owned poster visible until the current source plays once. */
@@ -105,6 +115,12 @@ export interface VideoPlayerProps extends Omit<
   onPlayerError?: (error: Error) => void;
   /** Optional action shown in the error state, for example closing a mini-player. */
   onErrorOverlayClose?: () => void;
+  /**
+   * Replaces the default error screen, which covers the controls. Pass false
+   * when the controls draw the error under their own buttons instead (see
+   * `PlayerErrorNotice`).
+   */
+  errorOverlay?: ReactNode | false;
   onEvent?: VideoPlayerEventListener;
   onStoryboardError?: (error: unknown) => void;
   accentColor?: string;
@@ -136,7 +152,7 @@ function currentFullscreenElement(): Element | null {
   return (
     document.fullscreenElement ??
     (document as WebkitFullscreenDocument).webkitFullscreenElement ??
-    null
+    getPageFullscreenElement()
   );
 }
 
@@ -158,10 +174,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       className,
       controls,
       controlsIdleDelay,
+      controlsTouchIdleDelay,
       description,
       engine = "shaka",
       engineFactory,
       emptyTapBehavior = "toggle-playback",
+      errorOverlay,
       keyboardEnabled = true,
       lockLandscapeOnFullscreen = false,
       interactionMode = "responsive",
@@ -187,6 +205,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       seekIntervalSeconds = 10,
       shortcuts,
       source,
+      spriteStoryboardUrl,
       storyboard,
       storyboardLoader,
       style,
@@ -237,11 +256,26 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           typeof window !== "undefined" &&
           window.innerHeight > window.innerWidth;
         if (!portraitViewport || !orientation.lock) return;
+        const lockLandscape = orientation.lock.bind(orientation);
 
         const generation = orientationLockGenerationRef.current + 1;
         orientationLockGenerationRef.current = generation;
-        void orientation
-          .lock("landscape")
+        // Two frames: the screen turns once the video fills it, so the turn
+        // shows the video, not the page it left.
+        const lockOnceDrawn = () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
+        void lockOnceDrawn()
+          .then(() => {
+            if (
+              generation !== orientationLockGenerationRef.current ||
+              currentFullscreenElement() !== presentationContainerRef.current
+            ) {
+              return Promise.reject(new Error("full screen left"));
+            }
+            return lockLandscape("landscape");
+          })
           .then(() => {
             const stillOwnsRequest =
               generation === orientationLockGenerationRef.current;
@@ -309,10 +343,13 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       ? ({ "--video-player-accent": accentColor } as CSSProperties)
       : undefined;
     const resolvedPoster = poster ?? source.metadata?.poster;
+    // A video prepared in the standby element is switched to at once: the
+    // picture goes straight from one video to the other, with no poster.
     const retainedPosterVisible =
       keepPosterVisibleUntilFirstPlay &&
       resolvedPoster !== undefined &&
-      playedSourceIdentity !== sourceIdentity;
+      playedSourceIdentity !== sourceIdentity &&
+      !(mediaProps?.withStandby && isEarlyShakaStandbyReady(source));
 
     return (
       <div
@@ -353,6 +390,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             "youtube-player group relative z-10 aspect-video w-full overflow-hidden rounded-xl bg-black shadow-[0_18px_50px_rgba(0,0,0,.22)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--video-player-accent,#ff7a1a)]",
             theaterMode &&
               "lg:h-[calc(100vh-94px)] lg:min-h-105 lg:aspect-auto",
+            // A page full screen (pageFullscreen.ts) sizes the shell, which
+            // may be turned: the player fills it, edge to edge. The size is
+            // not important, as a browser full screen's is not (player.css),
+            // so a layout of its own (the lessons beside the video) still
+            // sets it.
+            "[[data-player-page-fullscreen]>&]:size-full [[data-player-page-fullscreen]>&]:max-h-none [[data-player-page-fullscreen]>&]:rounded-none! [[data-player-page-fullscreen]>&]:border-0! [[data-player-page-fullscreen]>&]:shadow-none! [[data-player-page-fullscreen]>&]:transition-none!",
             playerClassName,
           )}
         >
@@ -361,6 +404,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             shortcuts={shortcuts}
             keyboardEnabled={keyboardEnabled}
             controlsIdleDelay={controlsIdleDelay}
+            controlsTouchIdleDelay={controlsTouchIdleDelay}
             keepControlsVisibleUntilFirstPlay={
               keepControlsVisibleUntilFirstPlay
             }
@@ -376,6 +420,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             description={description}
             storyboard={storyboard}
             storyboardLoader={storyboardLoader}
+            spriteStoryboardUrl={spriteStoryboardUrl}
             onStoryboardError={onStoryboardError}
           />
           <PlayerZoomMedia
@@ -410,7 +455,11 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             ? null
             : (bufferingIndicator ?? <BufferingIndicator />)}
           <PlayerHud />
-          <ErrorOverlay onClose={onErrorOverlayClose} source={source} />
+          {errorOverlay === false
+            ? null
+            : (errorOverlay ?? (
+                <ErrorOverlay onClose={onErrorOverlayClose} source={source} />
+              ))}
           {controls === false
             ? null
             : (controls ?? (

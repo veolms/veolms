@@ -15,6 +15,21 @@ export interface VideoEngine {
 
   attach(media: HTMLMediaElement): Promise<void>;
   detach(): Promise<void>;
+  /**
+   * A second, hidden media element the engine may prepare a likely next
+   * video in (a hovered or upcoming lesson), decoded to its first frame. A
+   * load of that video then switches to it at once instead of starting over
+   * in the visible element; the two elements trade places, announced with
+   * `mediachange`. Engines without this support leave it out.
+   */
+  setStandbyMedia?(media: HTMLMediaElement | null): void;
+  /**
+   * Limits how far ahead of the playhead the engine fetches; `null` gives
+   * the source its own buffer back. A timeline drag resting on a moment
+   * fetches just the segment there. Engines without control over buffering
+   * leave it out.
+   */
+  setBufferAheadLimit?(seconds: number | null): void;
   load(source: VideoSource, options?: VideoLoadOptions): Promise<void>;
   unload(): Promise<void>;
   destroy(): Promise<void>;

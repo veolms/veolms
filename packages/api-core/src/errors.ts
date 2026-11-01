@@ -67,6 +67,39 @@ export function httpError(
 }
 
 /**
+ * What a database constraint failure that no service handled is answered
+ * with. These used to fall through as 500s, although they are the caller's
+ * doing: a value that must be unique was taken between a service's check and
+ * its insert (two requests at once), or an id in the request names a row
+ * that is not there. The messages are fixed, so no table, column or
+ * constraint name reaches the client; the full error is logged.
+ *
+ * A service that can say something more useful (which field, which code)
+ * should still catch the violation itself; this is the floor.
+ */
+function constraintViolationResponse(error: unknown): AppError | null {
+  if (error instanceof AppError) return null;
+  const code = (error as { code?: unknown } | null)?.code;
+  // unique_violation
+  if (code === "23505") {
+    return httpError(
+      409,
+      "CONFLICT",
+      "This conflicts with a record that already exists.",
+    );
+  }
+  // foreign_key_violation
+  if (code === "23503") {
+    return httpError(
+      400,
+      "INVALID_REFERENCE",
+      "This refers to a record that does not exist or is still in use.",
+    );
+  }
+  return null;
+}
+
+/**
  * Makes every failure share the documented `ErrorResponse` shape, so the error
  * responses routes declare are the ones clients actually receive.
  */
@@ -121,6 +154,17 @@ export function registerErrorHandler(app: FastifyInstance): void {
             "The server produced an invalid response.",
           ).toJSON(),
         );
+    }
+
+    const constraintViolation = constraintViolationResponse(error);
+    if (constraintViolation) {
+      request.log.warn(
+        { err: error },
+        "Database constraint violation answered as a client error",
+      );
+      return reply
+        .code(constraintViolation.statusCode)
+        .send(constraintViolation.toJSON());
     }
 
     const appError =

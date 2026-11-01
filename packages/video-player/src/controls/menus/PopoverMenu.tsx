@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 
 import { classNames } from "../../utils/classNames";
 import { getPlayerThemeStyle } from "../../themes/playerThemes";
+import { playerRectOf, toPlayerPoint } from "../../react/pageFullscreen";
 import { usePlayerTheme } from "../../themes/PlayerThemeContext";
 import { usePlayerMobileInteraction } from "../../react/PlayerInteractionMode";
 
@@ -33,6 +34,12 @@ export interface PopoverMenuProps {
   children: ReactNode | ((context: PopoverMenuRenderContext) => ReactNode);
   menuLabel?: string;
   mobilePresentation?: PopoverMenuMobilePresentation;
+  /**
+   * Uses the sheet outside the phone layout too (only with
+   * `mobilePresentation="sheet"`): for a player too short to hold the
+   * popover.
+   */
+  forceSheet?: boolean;
   /** Optional fullscreen-local host for a mobile sheet. Defaults to document.body. */
   mobileSheetPortalTarget?: HTMLElement | null;
   /** Classes applied only when the mobile sheet presentation is active. */
@@ -84,6 +91,11 @@ type PopoverPanelLayout = {
   right?: number;
 };
 
+/** How far down a sheet drag is, in the player's own axes. */
+function sheetDragY(event: ReactPointerEvent<HTMLElement>): number {
+  return toPlayerPoint(event.clientX, event.clientY, event.currentTarget).y;
+}
+
 function getPopoverOverlayHost(from: HTMLElement | null) {
   if (!from) return null;
   return (
@@ -101,9 +113,10 @@ function measurePopoverPanelLayout(
   if (!host) return null;
   const player =
     trigger.closest<HTMLElement>("[data-video-player-root]") ?? host;
-  const hostRect = host.getBoundingClientRect();
-  const playerRect = player.getBoundingClientRect();
-  const triggerRect = trigger.getBoundingClientRect();
+  // In the player's own axes, which a page full screen can turn a quarter.
+  const hostRect = playerRectOf(host);
+  const playerRect = playerRectOf(player);
+  const triggerRect = playerRectOf(trigger);
   const horizontal =
     align === "start"
       ? { left: triggerRect.left - hostRect.left }
@@ -153,6 +166,7 @@ export function PopoverMenu({
   closeOnItemSelect = true,
   defaultOpen = false,
   disabled = false,
+  forceSheet = false,
   label,
   menuLabel,
   mobilePresentation = "popover",
@@ -191,7 +205,8 @@ export function PopoverMenu({
   );
   const isControlled = controlledOpen !== undefined;
   const isOpen = controlledOpen ?? internalOpen;
-  const isMobileSheet = mobilePresentation === "sheet" && mobileInteraction;
+  const isMobileSheet =
+    mobilePresentation === "sheet" && (mobileInteraction || forceSheet);
   const isContainedMobileSheet =
     isMobileSheet && Boolean(mobileSheetPortalTarget);
 
@@ -241,10 +256,7 @@ export function PopoverMenu({
   }, [getItems, isMobileSheet, isOpen]);
 
   useLayoutEffect(() => {
-    if (!isOpen || isMobileSheet) {
-      setPanelLayout(null);
-      return;
-    }
+    if (!isOpen || isMobileSheet) return;
     const trigger = triggerRef.current;
     if (!trigger) return;
 
@@ -264,6 +276,9 @@ export function PopoverMenu({
     return () => {
       observer?.disconnect();
       window.removeEventListener("resize", update);
+      // The layout is only ever set by `update` above, so clearing it here
+      // covers every way the anchored panel stops being shown.
+      setPanelLayout(null);
     };
   }, [align, isMobileSheet, isOpen, side]);
 
@@ -372,10 +387,10 @@ export function PopoverMenu({
   ) => {
     mobileSheetDragRef.current = {
       pointerId: event.pointerId,
-      startY: event.clientY,
+      startY: sheetDragY(event),
     };
     setMobileSheetDragStartHeight(
-      panelRef.current?.getBoundingClientRect().height ?? null,
+      panelRef.current ? playerRectOf(panelRef.current).height : null,
     );
     setMobileSheetDragging(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -386,7 +401,7 @@ export function PopoverMenu({
   ) => {
     const drag = mobileSheetDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    const dragDelta = event.clientY - drag.startY;
+    const dragDelta = sheetDragY(event) - drag.startY;
     // Dragging up only means something on an expandable sheet that is not
     // already filling the screen.
     setMobileSheetDragOffset(
@@ -407,7 +422,7 @@ export function PopoverMenu({
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture?.(event.pointerId);
     }
-    const dragDelta = event.clientY - drag.startY;
+    const dragDelta = sheetDragY(event) - drag.startY;
     if (!cancelled && expandableSheet) {
       if (!mobileSheetExpanded && dragDelta <= -mobileSheetDismissDistance) {
         setMobileSheetExpanded(true);
@@ -522,9 +537,13 @@ export function PopoverMenu({
       onKeyDown={handleMenuKeyDown}
     >
       {isMobileSheet ? (
+        // The header floats over the top of the list (the list starts
+        // under it, see its top padding): frosted rather than solid, so
+        // rows show faintly as they pass behind, and with a soft edge
+        // below so they fade out instead of being cut off in a line.
         <div
           data-video-player-mobile-sheet-drag-handle=""
-          className="flex min-h-16 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-2 px-4 pb-3 pt-2 active:cursor-grabbing"
+          className="relative z-10 -mb-16 flex h-16 shrink-0 touch-none cursor-grab flex-col items-center justify-center gap-2 bg-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] px-5 pb-3 pt-2 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-5 after:bg-linear-to-b after:from-[color-mix(in_srgb,var(--video-player-menu-solid-surface,rgb(11_11_13))_62%,transparent)] after:to-transparent after:content-[''] active:cursor-grabbing"
           onPointerDown={handleMobileSheetDragStart}
           onPointerMove={handleMobileSheetDragMove}
           onPointerUp={finishMobileSheetDrag}
@@ -536,7 +555,7 @@ export function PopoverMenu({
           />
           <div
             id={`${menuId}-title`}
-            className="w-full text-center text-base font-semibold text-(--video-player-menu-text)"
+            className="w-full text-left text-lg font-semibold tracking-[-0.01em] text-(--video-player-menu-text)"
           >
             {resolvedMenuLabel}
           </div>
@@ -546,7 +565,7 @@ export function PopoverMenu({
         <div
           role="menu"
           aria-label={resolvedMenuLabel}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pt-18 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
         >
           {typeof children === "function"
             ? children({ close: closeMenu })

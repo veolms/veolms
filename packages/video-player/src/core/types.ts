@@ -3,7 +3,14 @@ export type MaybePromise<Value> = Value | Promise<Value>;
 export type VideoSourceKind = "auto" | "dash" | "hls" | "file";
 
 export type VideoRequestKind =
-  "manifest" | "segment" | "license" | "text" | "thumbnail" | "other";
+  | "manifest"
+  | "segment"
+  | "license"
+  /** An HLS AES-128 key (`#EXT-X-KEY`, such as `key.bin`). */
+  | "key"
+  | "text"
+  | "thumbnail"
+  | "other";
 
 export type VideoEngineName = "native" | "shaka" | (string & {});
 
@@ -174,8 +181,27 @@ export interface VideoStreamingConfiguration {
   lowLatencyMode?: boolean;
   preferNativeHls?: boolean;
   useNativeHlsForFairPlay?: boolean;
+  /** How many segments past the one being appended are fetched at once. */
+  segmentPrefetchLimit?: number;
   abrEnabled?: boolean;
+  /**
+   * A quality the viewer chose, by picture height: playback (and a preload
+   * of the source) starts at the highest variant not above it, or the
+   * lowest one when every variant is taller, and stays there (ABR off)
+   * until auto quality is enabled. Like `startTime` it only says where a
+   * load starts: a source differing in it alone is not loaded again.
+   */
+  preferredVideoHeight?: number;
   abrRestrictions?: AbrRestrictions;
+  /**
+   * Bits per second assumed before the first segment is measured. Left out,
+   * the Shaka engine starts from what it measured on the previous video.
+   */
+  abrDefaultBandwidthEstimate?: number;
+  /** Seconds between ABR evaluations. */
+  abrSwitchInterval?: number;
+  abrBandwidthUpgradeTarget?: number;
+  abrBandwidthDowngradeTarget?: number;
   transmuxWorkerUrl?: string;
 }
 
@@ -190,6 +216,12 @@ export interface VideoSource {
   networking?: VideoNetworkingConfiguration;
   streaming?: VideoStreamingConfiguration;
   textTracks?: readonly ExternalTextTrack[];
+  /**
+   * The text of the HLS master playlist at `src`, when the caller already
+   * has it. The Shaka engine answers the request for `src` from it instead
+   * of the network; relative URIs in it are resolved against `src`.
+   */
+  inlinedManifest?: string;
 }
 
 export interface VideoLoadOptions {

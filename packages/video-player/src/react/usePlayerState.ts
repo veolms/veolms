@@ -15,7 +15,13 @@ export function usePlayerState<Selected>(
   const equalityRef = useRef(isEqual);
   const selectedRef = useRef<Selected | undefined>(undefined);
   const hasSelectionRef = useRef(false);
+  // The snapshot getter below runs during this same render and must see this
+  // render's selector. Writing the refs in an effect would hand it the
+  // previous one; listing the selector as a dependency would re-run every
+  // inline selector an extra time per render on the playback path.
+  // eslint-disable-next-line react-hooks/refs -- see above
   selectorRef.current = selector;
+  // eslint-disable-next-line react-hooks/refs -- same reason as the selector
   equalityRef.current = isEqual;
 
   const getSelectedSnapshot = useCallback(() => {

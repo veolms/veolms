@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import type { VideoQuality } from "../core/types";
 import { formatPlaybackRate } from "../playback/playbackRates";
 import { usePlayerController } from "../react/context";
 import { usePlayerState } from "../react/usePlayerState";
@@ -17,22 +18,31 @@ const SETTINGS_OPEN_TURN_DEGREES = 30;
 export interface SettingsMenuProps {
   includePictureInPicture?: boolean;
   mobilePresentation?: PopoverMenuMobilePresentation;
+  /** Opens as the bottom sheet outside the phone layout too. */
+  forceSheet?: boolean;
   mobileSheetPanelClassName?: string;
   mobileSheetPortalTarget?: HTMLElement | null;
+  /** Inline styles for the sheet, such as where a forced one sits. */
+  mobileSheetStyle?: CSSProperties;
   /** Application-specific settings appended to the main settings view. */
   extraMainItems?: ReactNode;
   triggerClassName?: string;
   side?: PopoverMenuSide;
+  /** Called with the quality the viewer picks, or null for Auto. */
+  onQualityChange?: (quality: VideoQuality | null) => void;
 }
 
 export function SettingsMenu({
   extraMainItems,
+  forceSheet = false,
   includePictureInPicture = false,
   mobilePresentation = "popover",
   mobileSheetPanelClassName,
   mobileSheetPortalTarget,
+  mobileSheetStyle,
   triggerClassName,
   side = "top",
+  onQualityChange,
 }: SettingsMenuProps = {}) {
   const controller = usePlayerController();
   const mobileInteraction = usePlayerMobileInteraction();
@@ -97,18 +107,18 @@ export function SettingsMenu({
       label="Settings"
       menuLabel="Video settings"
       mobilePresentation={mobilePresentation}
+      forceSheet={forceSheet}
       mobileSheetPanelClassName={mobileSheetPanelClassName}
       mobileSheetPortalTarget={mobileSheetPortalTarget}
+      mobileSheetStyle={mobileSheetStyle}
       align="end"
       side={side}
       panelClassName={
-        mobileInteraction
-          ? undefined
-          : side === "top"
-            ? "backdrop-blur-sm !mb-8"
-            : "backdrop-blur-sm"
+        mobileInteraction ? undefined : side === "top" ? "!mb-8" : ""
       }
-      closeOnItemSelect={!(mobilePresentation === "sheet" && mobileInteraction)}
+      closeOnItemSelect={
+        !(mobilePresentation === "sheet" && (mobileInteraction || forceSheet))
+      }
       triggerClassName={`player-control !w-auto !min-h-0 !border-0 !py-0 ${triggerAppearanceClass}`}
       open={settingsOpen}
       onOpenChange={(open) => openView(open ? "main" : "closed")}
@@ -235,6 +245,7 @@ export function SettingsMenu({
                 selected={media.autoQuality}
                 onClick={() => {
                   controller.selectQuality(null);
+                  onQualityChange?.(null);
                 }}
               />
               {media.qualities
@@ -256,6 +267,7 @@ export function SettingsMenu({
                     }
                     onClick={() => {
                       controller.selectQuality(quality.id);
+                      onQualityChange?.(quality);
                     }}
                   />
                 ))}

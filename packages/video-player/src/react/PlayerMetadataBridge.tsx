@@ -13,6 +13,7 @@ import type {
 } from "../core/types";
 import { usePlayerController } from "./context";
 import { useDuration, usePlayerState } from "./usePlayerState";
+import { useSpriteStoryboard } from "./useSpriteStoryboard";
 
 export type StoryboardSource =
   string | readonly StoryboardFrame[] | StoryboardTrack;
@@ -38,6 +39,12 @@ export interface PlayerMetadataBridgeProps {
   chapterThumbnails?: Readonly<Record<number, string>>;
   storyboard?: StoryboardSource;
   storyboardLoader?: StoryboardLoader;
+  /**
+   * URL of a sprite storyboard index (`SpriteStoryboardIndex`), used when
+   * `storyboard` is not given. Its sheets are fetched only as the viewer
+   * points at the timeline.
+   */
+  spriteStoryboardUrl?: string;
   onStoryboardError?: (error: unknown) => void;
 }
 
@@ -119,12 +126,15 @@ export function PlayerMetadataBridge({
   description,
   manualChapters,
   onStoryboardError,
+  spriteStoryboardUrl,
   storyboard,
   storyboardLoader = defaultStoryboardLoader,
 }: PlayerMetadataBridgeProps) {
   const controller = usePlayerController();
   const duration = useDuration();
   const source = usePlayerState(({ media }) => media.source);
+  const spriteUrl = storyboard ? undefined : spriteStoryboardUrl;
+  useSpriteStoryboard(spriteUrl, onStoryboardError);
 
   useEffect(() => {
     const resolved = resolveChapters({
@@ -154,7 +164,8 @@ export function PlayerMetadataBridge({
 
   useEffect(() => {
     if (!storyboard) {
-      controller.setStoryboard([]);
+      // A sprite storyboard, when there is one, fills it as it loads.
+      if (!spriteUrl) controller.setStoryboard([]);
       return undefined;
     }
     if (typeof storyboard !== "string") {
@@ -185,7 +196,14 @@ export function PlayerMetadataBridge({
         onStoryboardError?.(error);
       });
     return () => abortController.abort();
-  }, [controller, onStoryboardError, source, storyboard, storyboardLoader]);
+  }, [
+    controller,
+    onStoryboardError,
+    source,
+    spriteUrl,
+    storyboard,
+    storyboardLoader,
+  ]);
 
   return null;
 }

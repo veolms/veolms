@@ -1,5 +1,16 @@
 export type TypedEventListener<Event> = (event: Event) => void;
 
+/** Reported the way an uncaught error is, without stopping the caller. */
+function reportListenerError(error: unknown): void {
+  if (typeof globalThis.reportError === "function") {
+    globalThis.reportError(error);
+    return;
+  }
+  setTimeout(() => {
+    throw error;
+  });
+}
+
 export class TypedEventEmitter<Events extends object> {
   readonly #listeners = new Map<
     keyof Events,
@@ -62,7 +73,14 @@ export class TypedEventEmitter<Events extends object> {
     }
 
     for (const listener of [...listeners]) {
-      listener(event);
+      // A listener's failure is its own: thrown into whatever emitted the
+      // event (a video load, say), it failed that too, and the viewer saw a
+      // playback error for a bug in the code listening.
+      try {
+        listener(event);
+      } catch (error) {
+        reportListenerError(error);
+      }
     }
   }
 

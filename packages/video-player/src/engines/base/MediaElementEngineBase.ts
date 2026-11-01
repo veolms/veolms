@@ -34,6 +34,27 @@ function finiteOrZero(value: number): number {
   return Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
+/** A speed a learner can have chosen: finite and above 0. */
+function isLearnerPlaybackRate(rate: number): boolean {
+  return Number.isFinite(rate) && rate > 0;
+}
+
+/**
+ * The element's playback rate as the learner's speed. Shaka holds playback
+ * during a stall by setting the rate to 0 and puts it back afterwards; read
+ * as the learner's speed, that 0 was saved as their rate and the next lesson
+ * (or the mini player) was started with it, which `setPlaybackRate` refuses,
+ * so the video never began. While it is 0, `fallback` (the last real speed)
+ * stands.
+ */
+function learnerPlaybackRate(
+  media: HTMLMediaElement | null | undefined,
+  fallback: number,
+): number {
+  const rate = media?.playbackRate;
+  return rate !== undefined && isLearnerPlaybackRate(rate) ? rate : fallback;
+}
+
 function isExpectedPlayInterruption(error: unknown): boolean {
   return (
     error instanceof DOMException &&
@@ -393,6 +414,24 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     return this.#media;
   }
 
+  /**
+   * Moves the engine to another media element that is already playing-ready
+   * (a prepared standby), keeping the lifecycle and the current operation:
+   * listeners move over and the state is read from the new element.
+   */
+  protected replaceMediaElement(
+    media: HTMLMediaElement,
+    standby: HTMLMediaElement | null,
+  ): void {
+    const previous = this.#media;
+    if (previous === media) return;
+    if (previous) this.unbindMediaEvents(previous);
+    this.#media = media;
+    this.bindMediaEvents(media);
+    this.syncMediaState();
+    this.#events.emit("mediachange", { media, standby });
+  }
+
   protected requireMedia(): HTMLMediaElement {
     this.assertNotDestroyed();
     if (!this.#media) {
@@ -495,10 +534,25 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       paused: media?.paused ?? true,
       volume: media?.volume ?? 1,
       muted: media?.muted ?? false,
-      playbackRate: media?.playbackRate ?? 1,
+      playbackRate: learnerPlaybackRate(media, 1),
     };
     this.emitSnapshot();
     this.#events.emit("unloaded", undefined);
+  }
+
+  /**
+   * The error state is left behind once the loaded source plays again. A
+   * media error is not always the end: Safari on iPhone reports a decode
+   * error mid-stream, Shaka Player resets its media source and playback
+   * carries on from the same position, with metadata loaded and `playing`
+   * fired again. Staying in "error" then kept the controls that wait for a
+   * ready player hidden for the rest of the lesson.
+   */
+  private recoverFromMediaError(): void {
+    if (this.#snapshot.lifecycle !== "error" || !this.#snapshot.source) {
+      return;
+    }
+    this.updateSnapshot({ lifecycle: "ready", error: null });
   }
 
   protected setBuffering(buffering: boolean): void {
@@ -581,10 +635,19 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     });
     listen("pause", () => {
       this.updateSnapshot({ paused: true, playing: false });
+      // A video paused with data at the playhead is not buffering, whatever
+      // was reported before: Safari on iPhone says `waiting` or `stalled`
+      // when playback is held (a video closed in its system player, a
+      // paused one left idle) and never a `canplay` after, which left the
+      // controls that hide while buffering hidden for good.
+      if (media.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        this.setBuffering(false);
+      }
       this.#events.emit("pause", undefined);
     });
     listen("playing", () => {
       this.setBuffering(false);
+      this.recoverFromMediaError();
       this.updateSnapshot({
         paused: false,
         playing: true,
@@ -625,7 +688,11 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       });
     });
     listen("waiting", () => this.setBuffering(true));
-    listen("stalled", () => this.setBuffering(true));
+    // `stalled` is the network going quiet; while the video is paused that is
+    // not a buffer running dry (see `pause`).
+    listen("stalled", () => {
+      if (!media.paused) this.setBuffering(true);
+    });
     listen("canplay", () => this.setBuffering(false));
     listen("canplaythrough", () => this.setBuffering(false));
     listen("progress", () => this.syncRanges());
@@ -633,6 +700,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     listen("ratechange", () => this.syncPlaybackRate());
     listen("loadedmetadata", () => {
       this.syncMediaState();
+      this.recoverFromMediaError();
       this.refreshNativeTextTracks();
     });
     listen("error", () =>
@@ -662,7 +730,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       duration: finiteOrZero(media.duration),
       volume: media.volume,
       muted: media.muted,
-      playbackRate: media.playbackRate,
+      playbackRate: learnerPlaybackRate(media, this.#snapshot.playbackRate),
       buffered: readTimeRanges(media.buffered),
       seekable: readTimeRanges(media.seekable),
     };
@@ -711,6 +779,10 @@ export abstract class MediaElementEngineBase implements VideoEngine {
   private syncPlaybackRate(): void {
     const media = this.#media;
     if (!media) {
+      return;
+    }
+    // A stall's 0 (see learnerPlaybackRate) is not a change of speed.
+    if (!isLearnerPlaybackRate(media.playbackRate)) {
       return;
     }
     this.updateSnapshot({ playbackRate: media.playbackRate });

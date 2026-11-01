@@ -126,7 +126,7 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
       onTouchStartCapture,
       presentationContainerRef,
       source,
-      storyboard = [],
+      storyboard,
       theaterMode = false,
       theme = "youtube",
       zoomEnabled = true,
@@ -253,7 +253,12 @@ export const PlayerRoot = forwardRef<VideoPlayerHandle, PlayerRootProps>(
       controller.setChapters(chapters);
     }, [chapters, controller]);
 
+    // Only frames given here are set: with none, the storyboard belongs to
+    // `PlayerMetadataBridge` (a VTT or sprite storyboard loading as it is
+    // used). A default `[]` here was a new array on every render and wiped
+    // that storyboard whenever the player re-rendered (a seek, a pause).
     useEffect(() => {
+      if (storyboard === undefined) return;
       controller.setStoryboard(storyboard);
     }, [controller, storyboard]);
 

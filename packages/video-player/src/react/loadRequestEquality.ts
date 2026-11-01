@@ -80,6 +80,14 @@ function areLoadObjectsEqual(left: unknown, right: unknown): boolean {
   return areLoadValuesEqual(left, right, new WeakMap());
 }
 
+function ignoringPreferredVideoHeight<T extends Pick<VideoSource, "streaming">>(
+  source: T,
+): T {
+  if (source.streaming?.preferredVideoHeight === undefined) return source;
+  const { preferredVideoHeight: _preferred, ...streaming } = source.streaming;
+  return { ...source, streaming };
+}
+
 /**
  * Compares every source field that an engine or custom engine may use while
  * loading. This lets React callers recreate equivalent object literals without
@@ -92,9 +100,14 @@ export function areVideoSourcesLoadEquivalent(
 ): boolean {
   if (left === right) return true;
   if (left.id === right.id && left.src === right.src) {
+    // Where playback starts (position, chosen quality) only matters to a
+    // load that is happening anyway.
     const { startTime: _leftStartTime, ...leftRest } = left;
     const { startTime: _rightStartTime, ...rightRest } = right;
-    return areLoadObjectsEqual(leftRest, rightRest);
+    return areLoadObjectsEqual(
+      ignoringPreferredVideoHeight(leftRest),
+      ignoringPreferredVideoHeight(rightRest),
+    );
   }
   return areLoadObjectsEqual(left, right);
 }

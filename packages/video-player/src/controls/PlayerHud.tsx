@@ -25,8 +25,9 @@ export function PlayerHud() {
   }, [controller, hud]);
 
   if (!hud) return null;
+  // Shown wherever a double tap seeks: the phone layout, a finger on a
+  // tablet, and the mini player.
   if (hud.variant === "mobile-seek" && hud.direction) {
-    if (!mobileInteraction) return null;
     const Icon = icons.disclosure;
     const backward = hud.direction < 0;
 
