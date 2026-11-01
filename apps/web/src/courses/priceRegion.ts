@@ -8,13 +8,17 @@ import { useSyncExternalStore } from "react";
  * request comes from (`GET /checkout/pricing-region`), so nothing is
  * guessed:
  *
- * - The document's head (see root.tsx) puts the answer it last had on the
- *   root as `data-price-region` before the first paint, and asks the server
- *   again at once, before the page's scripts have loaded.
- * - Until there is an answer (a first visit), a course with both prices
- *   shows a shimmer where its price goes (`CoursePriceSwitch`). Styles
- *   keyed on the attribute pick what shows, so the price appears as soon as
- *   the answer does, hydrated or not.
+ * - The document's head (see root.tsx) puts the answer this tab already
+ *   had (sessionStorage) on the root as `data-price-region` before the first
+ *   paint, so a reload shows the price at once.
+ * - On every full load it asks the server again in the background, before
+ *   the page's scripts have loaded; the page changes only when the answer
+ *   differs (a VPN switched on or off, a move). Moving between pages inside
+ *   the app asks nothing.
+ * - Until there is an answer (the tab's first page), a course with both
+ *   prices shows a shimmer where its price goes (`CoursePriceSwitch`).
+ *   Styles keyed on the attribute pick what shows, so the price appears as
+ *   soon as the answer does, hydrated or not.
  * - Checkout is charged by the server's own reading of the country, so a
  *   visitor who has moved since sees the right amount before paying.
  */
@@ -34,17 +38,22 @@ function startFromHead(config: {
       value === "domestic" || value === "international";
     let remembered: string | null = null;
     try {
-      remembered = localStorage.getItem(config.storageKey);
+      remembered = sessionStorage.getItem(config.storageKey);
     } catch {
       // Nothing remembered: the price waits for the answer.
     }
     if (isRegion(remembered)) root.dataset.priceRegion = remembered!;
+    // The page changes only when the answer is not what it shows already.
     const settle = (region: string) => {
-      root.dataset.priceRegion = region;
-      try {
-        localStorage.setItem(config.storageKey, region);
-      } catch {
-        // Asked again on the next visit.
+      if (root.dataset.priceRegion !== region) {
+        root.dataset.priceRegion = region;
+      }
+      if (remembered !== region) {
+        try {
+          sessionStorage.setItem(config.storageKey, region);
+        } catch {
+          // Asked again on the next load.
+        }
       }
       return region;
     };
