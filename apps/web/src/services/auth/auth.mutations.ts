@@ -42,6 +42,12 @@ import { forgetAccountBrowserState } from "../../store/accountBrowserState";
 import { authKeys } from "./auth.keys";
 import { updatePublicProfileCacheFromUser } from "./auth.queries";
 import { authService, type TotpSetupResponse } from "./auth.service";
+import {
+  recordSignInFailure,
+  sendPendingSignInFailures,
+  startSignInAttempt,
+  type SignInAttempt,
+} from "./sign-in-failures";
 // Deliberately not the learning-interactions barrel: these two modules are
 // dependency-light, while the barrel drags the optimistic cache coordinators
 // into the startup bundle of every page.
@@ -179,8 +185,21 @@ export function cancelPendingLogin(queryClient: QueryClient): Promise<void> {
 }
 
 export function useSendOtp() {
-  return useMutation<OtpSendResponse, ApiError, OtpSendRequest>({
+  return useMutation<OtpSendResponse, ApiError, OtpSendRequest, SignInAttempt>({
     mutationFn: (payload) => authService.sendOtp(payload),
+    onMutate: startSignInAttempt,
+    onSuccess: () => {
+      // The server answered: failures kept from earlier attempts can go.
+      void sendPendingSignInFailures();
+    },
+    onError: (error, payload, attempt) => {
+      recordSignInFailure(
+        "otp-send",
+        error,
+        attempt,
+        payload.email ?? payload.phoneNo,
+      );
+    },
   });
 }
 
@@ -233,10 +252,19 @@ export function useVerifyEmail() {
 export function useLogin() {
   const queryClient = useQueryClient();
 
-  return useMutation<LoginResponse, ApiError, LoginRequest>({
+  return useMutation<LoginResponse, ApiError, LoginRequest, SignInAttempt>({
     mutationFn: (payload) => authService.login(payload),
+    onMutate: startSignInAttempt,
     onSuccess: (data) => {
       persistAuthenticatedSession(queryClient, data, "otp");
+    },
+    onError: (error, payload, attempt) => {
+      recordSignInFailure(
+        "login",
+        error,
+        attempt,
+        payload.email ?? payload.phoneNo,
+      );
     },
   });
 }
@@ -244,11 +272,20 @@ export function useLogin() {
 export function useRegister() {
   const queryClient = useQueryClient();
 
-  return useMutation<LoginResponse, ApiError, RegisterRequest>({
+  return useMutation<LoginResponse, ApiError, RegisterRequest, SignInAttempt>({
     mutationFn: (payload) => authService.register(payload),
+    onMutate: startSignInAttempt,
     onSuccess: (data) => {
       persistAuthenticatedSession(queryClient, data, "otp");
       trackAnalyticsEvent("signup_completed");
+    },
+    onError: (error, payload, attempt) => {
+      recordSignInFailure(
+        "register",
+        error,
+        attempt,
+        payload.email ?? payload.phoneNo,
+      );
     },
   });
 }
@@ -292,29 +329,53 @@ export function useSelectAvatar() {
 }
 
 export function useOauthUrl() {
-  return useMutation<OauthUrlResponse, ApiError, OauthUrlRequest>({
+  return useMutation<
+    OauthUrlResponse,
+    ApiError,
+    OauthUrlRequest,
+    SignInAttempt
+  >({
     mutationFn: (payload) => authService.getOauthUrl(payload),
+    onMutate: startSignInAttempt,
+    onError: (error, _payload, attempt) => {
+      recordSignInFailure("oauth-url", error, attempt);
+    },
   });
 }
 
 export function useOauthLogin() {
   const queryClient = useQueryClient();
 
-  return useMutation<LoginResponse, ApiError, OauthLoginRequest>({
-    mutationFn: (payload) => authService.oauthLogin(payload),
-    onSuccess: (data) => {
-      persistAuthenticatedSession(queryClient, data, "oauth");
+  return useMutation<LoginResponse, ApiError, OauthLoginRequest, SignInAttempt>(
+    {
+      mutationFn: (payload) => authService.oauthLogin(payload),
+      onMutate: startSignInAttempt,
+      onSuccess: (data) => {
+        persistAuthenticatedSession(queryClient, data, "oauth");
+      },
+      onError: (error, _payload, attempt) => {
+        recordSignInFailure("oauth-login", error, attempt);
+      },
     },
-  });
+  );
 }
 
 export function useGoogleOneTapLogin() {
   const queryClient = useQueryClient();
 
-  return useMutation<LoginResponse, ApiError, GoogleOneTapLoginRequest>({
+  return useMutation<
+    LoginResponse,
+    ApiError,
+    GoogleOneTapLoginRequest,
+    SignInAttempt
+  >({
     mutationFn: (payload) => authService.googleOneTapLogin(payload),
+    onMutate: startSignInAttempt,
     onSuccess: (data) => {
       persistAuthenticatedSession(queryClient, data, "google");
+    },
+    onError: (error, _payload, attempt) => {
+      recordSignInFailure("google-one-tap", error, attempt);
     },
   });
 }

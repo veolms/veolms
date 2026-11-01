@@ -17,6 +17,7 @@ import { readSessionCache, writeSessionCache } from "../../lib/session-cache";
 import { authStore } from "../../store/auth.store";
 import { authKeys } from "./auth.keys";
 import { authService } from "./auth.service";
+import { sendPendingSignInFailures } from "./sign-in-failures";
 import { resetRegisteredInteractionState } from "../learning-interactions/interaction-reset-registry";
 
 export function currentUserQueryOptions(queryClient: QueryClient) {
@@ -26,7 +27,13 @@ export function currentUserQueryOptions(queryClient: QueryClient) {
       const generation = authStore.getWriteGeneration();
       // Offline, a plugin that keeps downloads may know who was signed in.
       const profile = await withOfflineFallback(
-        () => authService.getMe(),
+        async () => {
+          const me = await authService.getMe();
+          // The server answered: sign-in failures this browser kept from
+          // when it could not reach it can be reported now.
+          void sendPendingSignInFailures();
+          return me;
+        },
         (offline) => offline.currentUser(),
       );
 
