@@ -213,6 +213,7 @@ export class PlayerController {
   // last finished seek landed.
   #scrubLessonTime: number | null = null;
   readonly #activeMediaListeners = new Set<ActiveMediaListener>();
+  readonly #controlsRevealListeners = new Set<() => void>();
 
   constructor(engine: VideoEngine) {
     this.engine = engine;
@@ -918,6 +919,21 @@ export class PlayerController {
     });
   }
 
+  /**
+   * Shows the controls, and the pointer with them, as a mouse moving over
+   * the player does, to hide again after the same idle delay: a keyboard
+   * shortcut (a seek, the volume) acted on the player.
+   * `useControlsVisibility` does the showing and the timing.
+   */
+  revealControls(): void {
+    for (const listener of this.#controlsRevealListeners) listener();
+  }
+
+  onControlsReveal(listener: () => void): () => void {
+    this.#controlsRevealListeners.add(listener);
+    return () => this.#controlsRevealListeners.delete(listener);
+  }
+
   setControlsLocked(controlsLocked: boolean): void {
     this.updateUi({ controlsLocked });
   }
@@ -1214,6 +1230,7 @@ export class PlayerController {
     this.deactivate();
     this.#listeners.clear();
     this.#eventListeners.clear();
+    this.#controlsRevealListeners.clear();
     await this.#mediaTransition;
     this.unlistenMedia(this.#media);
     this.#media = null;
