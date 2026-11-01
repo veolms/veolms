@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { LearningProgressBatchRequest } from "@veolms/contracts";
 import { getDeviceTimeZone } from "../lib/device-time-zone";
@@ -38,6 +38,7 @@ import {
 import {
   markNotPlaying,
   notifyPlaybackConflict,
+  restorePlayingReport,
   subscribeToClaimRequests,
   takePlayingReport,
 } from "./playbackClaim";
@@ -328,6 +329,9 @@ export function useLearningProgress({
         retryAtRef.current = 0;
       } catch (error) {
         restoreWatchedSeconds(courseKey, watchedSeconds);
+        // Restore the fresh-claim flag so the next flush still sends
+        // event: "play" rather than silently downgrading to a heartbeat.
+        restorePlayingReport(courseKey, playing);
         // An API from before positions were kept turns the whole batch
         // down: it goes again without them.
         if (

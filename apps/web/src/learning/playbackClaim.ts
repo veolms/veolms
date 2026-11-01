@@ -82,6 +82,22 @@ export function takePlayingReport(
 }
 
 /**
+ * Restores the fresh claim flag if a request carrying `event: "play"` failed.
+ * Ensures the next flush will still send `event: "play"` instead of dropping
+ * down to a heartbeat.
+ */
+export function restorePlayingReport(
+  courseKey: string,
+  playing: LearningProgressPlaying | undefined,
+): void {
+  if (!playing || playing.event !== "play") return;
+  const current = activeClaimsByCourse.get(courseKey);
+  if (current && current.lessonId === playing.lessonId) {
+    current.isFreshClaim = true;
+  }
+}
+
+/**
  * `markPlaying` with a fresh claim asks for an immediate flush so the new
  * device claims at once instead of waiting for the next 15 second tick.
  * `useLearningProgress` and `detachedLearningProgress` subscribe here.

@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { test } from "node:test";
 import { clearAllCaches } from "@veolms/api-core";
 import type { Database } from "@veolms/database";
@@ -319,6 +319,69 @@ await test("heartbeat after another device pressed play: denied, playingOn fille
   );
   assert.ok(clearWrite, "sess-1 must be cleared when denied");
   assert.equal(sessions[0]?.playing_at, null);
+});
+
+await test("own claim stale, another device live, heartbeat => denied", async () => {
+  // Scenario from reviewer comment: laptop A goes offline for > 40 s while
+  // its buffer keeps the video playing. Phone B presses play. When A comes
+  // back online it sends a heartbeat. With the old ?? now fallback, A would
+  // get claimedAt = now and beat B. With ?? new Date(0), A ranks last.
+  const t1 = new Date(Date.now() - 5_000); // phone B pressed play 5 s ago
+
+  const { db, writes } = createFakeDatabase({
+    maxStreams: 1,
+    sessions: [
+      {
+        // sess-laptop-a: its claim went stale (no row in listLivePlaybackClaims)
+        // so mine will be undefined inside the transaction.
+        id: "sess-laptop-a",
+        user_id: "u-1",
+        user_agent: "Chrome on Windows",
+        location_city: null,
+        location_region: null,
+        location_country: null,
+        playing_lesson_id: LESSON_1,
+        // playing_at is old enough to be excluded by listLivePlaybackClaims
+        playing_claimed_at: new Date(Date.now() - 60_000),
+        playing_at: new Date(Date.now() - 60_000),
+        revoked_at: null,
+        expires_at: new Date(Date.now() + 86_400_000),
+      },
+      {
+        // sess-phone-b: has a live, fresh claim from t1
+        id: "sess-phone-b",
+        user_id: "u-1",
+        user_agent: "Safari on iPhone",
+        location_city: "Pune",
+        location_region: "Maharashtra",
+        location_country: "IN",
+        playing_lesson_id: LESSON_2,
+        playing_claimed_at: t1,
+        playing_at: new Date(), // fresh within 40 s
+        revoked_at: null,
+        expires_at: new Date(Date.now() + 86_400_000),
+      },
+    ],
+  });
+  const service = createSessionService({ database: db });
+
+  // laptop-a comes back online and sends a heartbeat
+  const res = await service.reportPlayback(
+    { id: "u-1", roles: [STUDENT_ROLE] },
+    "sess-laptop-a",
+    { lessonId: LESSON_1, event: "heartbeat" },
+  );
+
+  // Must be denied: phone B's live claim (t1) beats epoch-zero
+  assert.equal(res.allowed, false, "stale laptop heartbeat must be denied");
+  if (!res.allowed) {
+    assert.equal(res.playingOn.userAgent, "Safari on iPhone");
+  }
+  // laptop-a claim must have been cleared
+  const clearWrite = writes.find(
+    (w) => w.type === "clear" && w.sessionId === "sess-laptop-a",
+  );
+  assert.ok(clearWrite, "stale laptop claim must be cleared when denied");
 });
 
 await test("a play event always wins against an existing stream", async () => {

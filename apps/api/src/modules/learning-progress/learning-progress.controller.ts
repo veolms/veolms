@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   LearningProgressBatchRequest,
   LearningProgressCourseParams,
   UpdateLearningGoalSettingsRequest,
@@ -58,16 +58,29 @@ export function createLearningProgressController({
       request.params.courseKey,
       request.body,
     );
-    const playback = await sessionService.reportPlayback(
-      {
-        id: request.user!.id,
-        roles: request.user!.roles,
-        email: request.user!.email,
-      },
-      request.session!.id,
-      request.body.playing,
-    );
-    return { ...synced, playback };
+    // reportPlayback is best-effort: a transient database error (lock-wait
+    // timeout, connection blip) must not fail the heartbeat after
+    // syncProgress has already committed progress and watch time. The client
+    // would otherwise restore those seconds and count them again on retry.
+    // The contract treats an absent playback field as allowed.
+    try {
+      const playback = await sessionService.reportPlayback(
+        {
+          id: request.user!.id,
+          roles: request.user!.roles,
+          email: request.user!.email,
+        },
+        request.session!.id,
+        request.body.playing,
+      );
+      return { ...synced, playback };
+    } catch (error) {
+      request.log.error(
+        { err: error },
+        "reportPlayback failed; returning synced progress without playback",
+      );
+      return { ...synced };
+    }
   }
 
   async function getSummary(request: FastifyRequest) {

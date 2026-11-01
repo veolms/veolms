@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+﻿import crypto from "node:crypto";
 import { isIP } from "node:net";
 
 import type { Database } from "@veolms/database";
@@ -572,8 +572,14 @@ export function createSessionService({ database }: SessionServiceOptions) {
       );
 
       const mine = live.find((s) => s.id === sessionId);
+      // play event = user just pressed play => always the newest claim.
+      // heartbeat with no live claim = own claim went stale (network drop,
+      // throttled hidden tab, pagehide beacon closed the previous tab).
+      // Rank it as epoch-zero so any device that actually pressed play wins.
       const claimedAt =
-        playing.event === "play" ? now : (mine?.playing_claimed_at ?? now);
+        playing.event === "play"
+          ? now
+          : (mine?.playing_claimed_at ?? new Date(0));
       const others = live.filter((s) => s.id !== sessionId);
 
       const allClaims: Array<{
