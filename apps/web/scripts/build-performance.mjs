@@ -22,7 +22,7 @@ const reactRouterCli = path.resolve(
   scriptDirectory,
   "../node_modules/@react-router/dev/bin.cjs",
 );
-const workspaceRoot = path.resolve(scriptDirectory, "../..");
+const workspaceRoot = path.resolve(scriptDirectory, "../../..");
 const clientBuildDirectory = path.resolve(scriptDirectory, "../build/client");
 
 for (const environmentFile of [".env.production", ".env"]) {
