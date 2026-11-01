@@ -179,7 +179,7 @@ site on the previous version.
 
 ## Development API deployment
 
-Every push to `development` also runs `.github/workflows/deploy-development-api.yml`. It validates the API and database migrations, connects to the existing Linux server over SSH, updates the server checkout to the exact Git commit that triggered the workflow, installs the frozen lockfile, applies pending migrations, type-checks the API, restarts the systemd service, and checks the API liveness endpoint.
+`.github/workflows/deploy-development-api.yml` runs only when started by hand (Actions → Deploy development API → Run workflow). Since 2026-10-31 dev.veolms.org runs the cloud app, which the cloud repository deploys; this workflow deploys the old core API, which is stopped and kept as a rollback target. It validates the API and database migrations, connects to the existing Linux server over SSH, updates the server checkout to the exact Git commit the run was started on, installs the frozen lockfile, applies pending migrations, builds the API, starts the new build on a free port on 127.0.0.1 to check that it becomes ready, reloads the pm2 service (or restarts the systemd one), and checks `/v1/ready` on the API's own port. To roll dev.veolms.org back to it, run the workflow, then point the nginx map in `/etc/nginx/conf.d/veolms-dev-backend.conf` at `127.0.0.1:4000` and reload nginx.
 
 The server must have Node.js 24, pnpm 11, Git, PostgreSQL access, `curl`, and a systemd unit for the API. Keep the production `.env` on the server in the repository's expected location; the workflow never transfers or replaces it. The deploy user needs read/write access to the application directory and passwordless permission to restart only the API service, for example:
 
@@ -189,7 +189,7 @@ veolms-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart veolms-api.service
 
 Configure these values on the GitHub `development` environment:
 
-- Variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` (optional; defaults to `22`), `DEPLOY_APP_DIR`, `DEPLOY_SERVICE_NAME`, and `API_HEALTHCHECK_URL` (for example, `http://127.0.0.1:4000/v1/health`).
+- Variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` (optional; defaults to `22`), `DEPLOY_APP_DIR`, `DEPLOY_SERVICE_NAME`, and `API_HEALTHCHECK_URL` (only the link shown on the deployment; the health check calls the API on 127.0.0.1).
 - Secrets: `DEPLOY_SSH_PRIVATE_KEY` and `DEPLOY_KNOWN_HOSTS`.
 
 The server checkout's `origin` must point to the repository and the deploy key must be able to fetch the `development` branch. `DEPLOY_KNOWN_HOSTS` should contain the server's verified `known_hosts` entry; do not use `ssh-keyscan` inside the workflow or disable host-key checking.
