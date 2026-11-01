@@ -287,6 +287,19 @@ export async function listOrders(
               AND (
                 oi.title_snapshot ILIKE ${term}
                 OR ${fuzzyMatchesAny(search, [sql.ref("oi.title_snapshot")])}
+                -- Part of a course is shown by the course it opens.
+                OR EXISTS (
+                  SELECT 1 FROM course_links pcl
+                  JOIN courses part ON part.id = pcl.course_id
+                  JOIN courses opened ON opened.id = pcl.linked_course_id
+                  WHERE pcl.course_id = oi.course_id
+                    AND part.unlisted
+                    AND pcl.section_ids IS NOT NULL
+                    AND (
+                      opened.title ILIKE ${term}
+                      OR ${fuzzyMatchesAny(search, [sql.ref("opened.title")])}
+                    )
+                )
               )
           )
         )`,
@@ -777,30 +790,92 @@ export async function listOrderItemSummariesByOrderIds(
   if (orderIds.length === 0) return [];
   return await database
     .selectFrom("order_items")
+    .innerJoin("orders", "orders.id", "order_items.order_id")
     .leftJoin("courses", "courses.id", "order_items.course_id")
+    // An unlisted course has no page of its own: the course it unlocks (its
+    // first link) is the one to open, and the one it is named by. A link
+    // that names sections sells part of that course (a partial access).
+    .leftJoinLateral(
+      (eb) =>
+        eb
+          .selectFrom("course_links")
+          .innerJoin(
+            "courses as linked",
+            "linked.id",
+            "course_links.linked_course_id",
+          )
+          .select([
+            "course_links.linked_course_id",
+            "linked.title as linked_title",
+            sql<number | null>`cardinality(course_links.section_ids)`.as(
+              "open_sections",
+            ),
+            (inner) =>
+              inner
+                .selectFrom("course_sections")
+                .select(sql<number>`count(*)::int`.as("n"))
+                .whereRef(
+                  "course_sections.course_id",
+                  "=",
+                  "course_links.linked_course_id",
+                )
+                .where("course_sections.deleted_at", "is", null)
+                .as("total_sections"),
+          ])
+          .whereRef("course_links.course_id", "=", "order_items.course_id")
+          .where("courses.unlisted", "=", true)
+          .where("linked.deleted_at", "is", null)
+          .orderBy("course_links.position", "asc")
+          .orderBy("course_links.created_at", "asc")
+          .limit(1)
+          .as("opens"),
+      (join) => join.onTrue(),
+    )
     .select([
+      "order_items.id",
       "order_items.order_id",
       "order_items.title_snapshot",
       "order_items.course_id",
+      "courses.title as course_title",
+      "opens.linked_course_id as opens_course_id",
+      "opens.linked_title as opens_course_title",
+      "opens.open_sections",
+      "opens.total_sections",
     ])
-    // An unlisted course has no page of its own: the course it unlocks
-    // (its first link) is the one to open.
+    // A course its buyer had already paid for part of: the rest of it, an
+    // upgrade (priced as one, see pricing's `upgradeCredit`).
     .select((eb) =>
       eb
-        .selectFrom("course_links")
-        .innerJoin(
-          "courses as linked",
-          "linked.id",
-          "course_links.linked_course_id",
+        .exists(
+          eb
+            .selectFrom("order_items as part_items")
+            .innerJoin(
+              "orders as part_orders",
+              "part_orders.id",
+              "part_items.order_id",
+            )
+            .innerJoin(
+              "courses as part_courses",
+              "part_courses.id",
+              "part_items.course_id",
+            )
+            .innerJoin(
+              "course_links as part_links",
+              "part_links.course_id",
+              "part_courses.id",
+            )
+            .select(sql<number>`1`.as("one"))
+            .whereRef(
+              "part_links.linked_course_id",
+              "=",
+              "order_items.course_id",
+            )
+            .whereRef("part_orders.user_id", "=", "orders.user_id")
+            .whereRef("part_orders.paid_at", "<", "orders.created_at")
+            .where("part_courses.unlisted", "=", true)
+            .where("part_links.section_ids", "is not", null),
         )
-        .select("course_links.linked_course_id")
-        .whereRef("course_links.course_id", "=", "order_items.course_id")
-        .where("courses.unlisted", "=", true)
-        .where("linked.deleted_at", "is", null)
-        .orderBy("course_links.position", "asc")
-        .orderBy("course_links.created_at", "asc")
-        .limit(1)
-        .as("opens_course_id"),
+        .as("completes_part"),
     )
     .where("order_items.order_id", "in", orderIds)
     .orderBy("order_items.created_at", "asc")

@@ -9,6 +9,7 @@ import type {
   OrderHistoryItem,
   OrderHistoryStatus,
 } from "../order-history/orderHistoryData";
+import { orderItemLabel } from "./orderHelpers";
 
 /**
  * Adapts an API order to the frontend OrderHistoryItem model consumed by OrderHistoryPage.
@@ -17,8 +18,10 @@ export function adaptOrderToOrderHistoryItem(
   order: LearnerOrder,
 ): OrderHistoryItem {
   const firstItem = order.items[0];
+  // Part of a course is named by the course, with a note saying so.
+  const firstLabel = firstItem ? orderItemLabel(firstItem) : null;
   const courseTitle =
-    firstItem?.titleSnapshot ||
+    firstLabel?.title ||
     (order.items.length > 1
       ? `${order.items[0]?.titleSnapshot} + ${order.items.length - 1} more`
       : "Course Order");
@@ -153,6 +156,17 @@ export function adaptOrderToOrderHistoryItem(
     courseId,
     courseTitle,
     itemCount,
+    ...(firstLabel?.note ? { purchaseNote: firstLabel.note } : {}),
+    ...(firstItem?.thumbnail
+      ? {
+          thumbnail: {
+            url: firstItem.thumbnail.url,
+            srcSet: firstItem.thumbnail.srcSet
+              .map((variant) => `${variant.url} ${variant.width}w`)
+              .join(", "),
+          },
+        }
+      : {}),
     iconColor,
     date,
     time,
