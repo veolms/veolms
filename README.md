@@ -2,9 +2,9 @@
 
 VeoLMS is an open-source, self-hostable learning management system for educators, creators, and organizations. It brings course creation, learning, and academy management together in a platform you can run and adapt for your own needs.
 
-The project is built around the idea that educators should have control over their brand, content, users, and data. VeoLMS is in **active early development**; features and interfaces may change as the platform grows.
+The project is built around the idea that educators should have control over their brand, content, users, and data.
 
-[Website](https://veolms.org/) · [Live demo](https://dev.veolms.org/) · [Development setup](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [License](LICENSE)
+[Website](https://veolms.org/) · [Live demo](https://dev.veolms.org/) · [Development setup](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [License](LICENSE)
 
 ## What you can build
 
@@ -49,7 +49,7 @@ Follow the [development setup guide](docs/development.md) for prerequisites, ins
 
 ## Community and contributing
 
-VeoLMS is built in public. You can help by reporting bugs, proposing ideas, improving design, and contributing code. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch, pull request, and test workflow, or join the [Discord community](https://discord.com/invite/P2qXqXgrzb) to connect with others.
+VeoLMS is built in public. You can help by reporting bugs, proposing ideas, improving design, and contributing code. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch, pull request, and test workflow, review our [Code of Conduct](CODE_OF_CONDUCT.md), or join the [Discord community](https://discord.com/invite/P2qXqXgrzb) to connect with others.
 
 Please report vulnerabilities privately using the [security policy](SECURITY.md).
 

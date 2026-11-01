@@ -13,6 +13,7 @@ Do not submit pull requests solely to fix typos or change the README. Contributo
 - **Report a bug:** Use a [GitHub issue template](https://github.com/veolms/veolms/issues/new/choose). Describe what you expected, what happened, and how to reproduce it. Include relevant versions and logs, with private information removed.
 - **Suggest an improvement:** Open an issue describing the problem, who it affects, and your proposed idea. Discuss larger changes before starting so contributors and maintainers can agree on the direction.
 - **Improve the project:** Pick an issue or make a focused improvement to code, design, accessibility, or tests. Check existing issues and pull requests to avoid duplicating work.
+- **Pick an issue and get assigned:** Check the [Issues tab](https://github.com/veolms/veolms/issues). Before starting development, leave a comment stating you are interested in fixing the problem (e.g., _"I am interested in fixing this issue"_). Please wait until a VeoLMS core team member assigns the task to you before starting development, as someone else may already be working on it.
 - **Help the community:** Review and test changes, answer questions, or join the [Discord community](https://discord.com/invite/P2qXqXgrzb) to share ideas.
 
 For security vulnerabilities, follow the private reporting instructions in [SECURITY.md](SECURITY.md) instead of opening a public issue.
@@ -23,11 +24,11 @@ Follow the [development guide](docs/development.md) for prerequisites, setup, an
 
 ## Contribution workflow
 
-1. **Choose a task.** Find an existing issue or describe your proposed change in a new one. For substantial work, discuss the approach before investing time in implementation.
+1. **Choose a task and get assigned.** Check the [Issues tab](https://github.com/veolms/veolms/issues) for an existing issue or open a new one to propose a change. Leave a comment expressing your interest in fixing the problem (e.g., _"I am interested in fixing this issue"_). **Wait until a VeoLMS team member assigns the task to you before starting development.** Another contributor might already be working on it; waiting for assignment prevents duplicated effort.
 2. **Create a branch.** Fork the repository if needed, start from an up-to-date `dev` branch, and create a branch prefixed with `feat/`, `fix/`, or `chore/`, such as `fix/course-access` or `feat/course-search`. Make changes on your branch and submit a pull request; do not commit directly to a protected branch.
 3. **Make a focused change.** Follow the existing project patterns, update documentation when behavior or configuration changes, and include appropriate validation. Keep unrelated changes in separate pull requests.
-4. **Check your work.** Run the checks relevant to the change. Before pushing to `dev`, run `pnpm test:all`. The [development guide](docs/development.md#checks) explains the test prerequisites and individual commands.
-5. **Open a pull request against `dev`.** Explain the problem and solution, link related issues, and list the checks you ran and their results. Note any limitations, migration or configuration changes, and checks you could not run. Add screenshots or recordings when they help reviewers understand a user-facing change.
+4. **Check and manually test your work.** Run the checks relevant to the change. Before pushing to `dev`, run `pnpm test:all`. The [development guide](docs/development.md#checks) explains the test prerequisites and individual commands. **If you wrote code using an AI agent or assistant, you must manually test the functionality** to verify that everything works properly before submitting.
+5. **Open a pull request against `dev`.** Explain the problem and solution, and **always reference the assigned issue** (e.g., `Fixes #123` or `Closes #123`) in the description so it is easy to track who is working on what and which issue the PR resolves. List the checks you ran, the manual testing you performed, and their results. Note any limitations, migration or configuration changes, and checks you could not run. Add screenshots or recordings when they help reviewers understand a user-facing change.
 6. **Respond to review.** Discuss feedback, make any agreed changes, and keep the pull request up to date until it is ready to merge.
 
 ## Guidelines for contributions
@@ -37,8 +38,9 @@ Follow the [development guide](docs/development.md) for prerequisites, setup, an
 - **Consider the people using the product.** Check affected user journeys, permissions, error states, and accessibility where relevant. Avoid exposing secrets or personal data in code, examples, screenshots, and logs.
 - **Keep documentation current.** Update relevant guides when setup, configuration, commands, or behavior changes. Document any required migration or compatibility considerations.
 - **Test behavior honestly.** Do not change, skip, or delete a test just to make a run pass. Investigate failures and explain what you found. The [repository test rules](AGENTS.md#tests-that-guard-features) include additional instructions for agents and covered features.
+- **Manually test AI-assisted code.** When writing or modifying code with an AI agent, always manually test the functionality end-to-end in your local environment. Do not rely solely on automated test output or agent assertions.
 - **Use the right type of test.** API unit tests cover backend logic, flow tests exercise API journeys, and browser tests cover actions and outcomes a person experiences. Do not add frontend unit tests or browser tests for appearance alone. See the [flow test guide](apps/api/test/flows/README.md) and [browser test guide](apps/web/tests/journeys/README.md).
-- **Be respectful and constructive.** Describe problems and feedback clearly, assume good intent, and give others time to respond.
+- **Be respectful and constructive.** Describe problems and feedback clearly, assume good intent, and uphold the standards described in our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Commit message format
 
