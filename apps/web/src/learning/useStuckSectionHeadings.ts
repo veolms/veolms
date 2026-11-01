@@ -15,6 +15,21 @@ const LESSON_LIST_SELECTOR = ".learning-curriculum__lesson-list";
  * arrival played out (the ripple from the seam).
  */
 const SLOW_ARRIVAL_PX_PER_MS = 0.8;
+/**
+ * How long after the learner's last wheel, finger or key a scroll still
+ * counts as theirs (a finger's glide goes on after it lifts).
+ */
+const USER_SCROLL_WINDOW_MS = 1_000;
+/** Keys that scroll the list. */
+const SCROLL_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+  " ",
+]);
 
 /**
  * Keeps what holds to the top of the curriculum panel in step with the
@@ -76,6 +91,32 @@ export function useStuckSectionHeadings(
     let lastScrollAt = 0;
     let speed = Infinity;
 
+    // Only the learner's own scrolling plays the arrival. The list also
+    // scrolls by itself (to the current lesson as the page opens, a jump),
+    // and such a scroll can end slowly too: on a reload the ripple played
+    // with no hand on the list at all.
+    let lastUserInputAt = -Infinity;
+    let scrollbarHeld = false;
+    const noteUserInput = () => {
+      lastUserInputAt = performance.now();
+    };
+    const noteKey = (event: KeyboardEvent) => {
+      if (SCROLL_KEYS.has(event.key)) noteUserInput();
+    };
+    // A press on the scrollport itself, not on anything in it: its
+    // scrollbar, held for as long as it is dragged.
+    const holdScrollbar = (event: PointerEvent) => {
+      if (event.target === scrollport) scrollbarHeld = true;
+    };
+    const releaseScrollbar = () => {
+      if (!scrollbarHeld) return;
+      scrollbarHeld = false;
+      noteUserInput();
+    };
+    const scrolledByUser = () =>
+      scrollbarHeld ||
+      performance.now() - lastUserInputAt < USER_SCROLL_WINDOW_MS;
+
     // `fromScroll`: called from a scroll event, the only way the bar comes to
     // hold by the learner's hand. The first measure, a resize and a
     // transition's end measure too, and a bar found holding then (the page
@@ -114,7 +155,11 @@ export function useStuckSectionHeadings(
           // to a place where it already holds, nothing is played.)
           if (!("stuck" in bar.dataset)) {
             bar.dataset.stuck = "";
-            if (fromScroll && speed < SLOW_ARRIVAL_PX_PER_MS) {
+            if (
+              fromScroll &&
+              scrolledByUser() &&
+              speed < SLOW_ARRIVAL_PX_PER_MS
+            ) {
               bar.dataset.collision = "";
             }
           }
@@ -195,6 +240,14 @@ export function useStuckSectionHeadings(
     const onScroll = () => update(true);
     scrollport.addEventListener("scroll", onScroll, { passive: true });
     scrollport.addEventListener("transitionend", schedule);
+    scrollport.addEventListener("wheel", noteUserInput, { passive: true });
+    scrollport.addEventListener("touchstart", noteUserInput, { passive: true });
+    scrollport.addEventListener("touchmove", noteUserInput, { passive: true });
+    scrollport.addEventListener("touchend", noteUserInput, { passive: true });
+    scrollport.addEventListener("keydown", noteKey);
+    scrollport.addEventListener("pointerdown", holdScrollbar);
+    window.addEventListener("pointerup", releaseScrollbar);
+    window.addEventListener("pointercancel", releaseScrollbar);
     // A change of size is followed before the frame it shows in is
     // painted: lessons above one that holds a heading growing or
     // shrinking move its frame under the heading, and a cut measured
@@ -213,6 +266,14 @@ export function useStuckSectionHeadings(
       if (frame) window.cancelAnimationFrame(frame);
       scrollport.removeEventListener("scroll", onScroll);
       scrollport.removeEventListener("transitionend", schedule);
+      scrollport.removeEventListener("wheel", noteUserInput);
+      scrollport.removeEventListener("touchstart", noteUserInput);
+      scrollport.removeEventListener("touchmove", noteUserInput);
+      scrollport.removeEventListener("touchend", noteUserInput);
+      scrollport.removeEventListener("keydown", noteKey);
+      scrollport.removeEventListener("pointerdown", holdScrollbar);
+      window.removeEventListener("pointerup", releaseScrollbar);
+      window.removeEventListener("pointercancel", releaseScrollbar);
       resizeObserver.disconnect();
       clearAll();
     };
