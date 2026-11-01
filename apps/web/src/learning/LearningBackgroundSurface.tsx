@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { deepGroundClasses } from "../components/ElevatedCard";
+import { SplitFrameBehindContext } from "../components/splitFrameBehind";
 
 /** How long the surface keeps trying to reach a position its content cannot cover yet. */
 const SCROLL_SETTLE_TIMEOUT_MS = 4000;
@@ -120,7 +121,9 @@ export function LearningBackgroundSurface({
   if (!behindLesson) {
     return (
       <div ref={surfaceRef} className={keepBox ? "min-w-0" : "contents"}>
-        {children}
+        <SplitFrameBehindContext.Provider value={false}>
+          {children}
+        </SplitFrameBehindContext.Provider>
       </div>
     );
   }
@@ -139,7 +142,9 @@ export function LearningBackgroundSurface({
       data-learning-background-surface=""
       inert
     >
-      {children}
+      <SplitFrameBehindContext.Provider value>
+        {children}
+      </SplitFrameBehindContext.Provider>
     </div>
   );
 }

@@ -62,6 +62,24 @@ export function writeSplitFrameDragWidth(
 }
 
 /**
+ * Has the shell and frame take the width they have now at once, without the
+ * slide a change of width starts otherwise: transitions are held, as during
+ * a drag, while the styles are worked out.
+ */
+export function settleSplitFrameBoxes(
+  shell: HTMLElement | null,
+  frame: HTMLElement,
+) {
+  const held = [shell, frame].filter(
+    (element): element is HTMLElement =>
+      !!element && !element.hasAttribute(RESIZING_ATTRIBUTE),
+  );
+  for (const element of held) element.setAttribute(RESIZING_ATTRIBUTE, "");
+  getComputedStyle(frame).getPropertyValue("--split-frame-width");
+  for (const element of held) element.removeAttribute(RESIZING_ATTRIBUTE);
+}
+
+/**
  * For a head bootstrap script: keeps `data-split-frame-prerendered` on the
  * document while `media` matches. Expects the document element as `r`.
  */
