@@ -55,32 +55,6 @@ function runShortcutAction(
   return true;
 }
 
-/**
- * Up and Down change the volume only while the player has the focus (it was
- * clicked, or a control in it is focused) or fills the screen. Anywhere else
- * on the page they scroll it, as they do around a YouTube video: the lesson
- * page is read by scrolling past its video.
- */
-function volumeKeyBelongsToPage(
-  shortcut: ResolvedPlayerShortcut,
-  event: KeyboardEvent,
-  playerRoot: Element | null,
-): boolean {
-  if (shortcut.action !== "volumeUp" && shortcut.action !== "volumeDown") {
-    return false;
-  }
-  if (!playerRoot) return true;
-  const fullscreen =
-    typeof document !== "undefined" ? document.fullscreenElement : null;
-  if (
-    fullscreen &&
-    (fullscreen === playerRoot || fullscreen.contains(playerRoot))
-  )
-    return false;
-  if (playerRoot.closest("[data-player-page-fullscreen]")) return false;
-  return !(event.target instanceof Node && playerRoot.contains(event.target));
-}
-
 function isSpacePlayPause(shortcut: ResolvedPlayerShortcut): boolean {
   return (
     shortcut.action === "playPause" &&
@@ -109,9 +83,6 @@ export function createPlayerKeyboardController(
       if (shouldIgnorePlayerShortcut(event, getPlayerRoot())) return false;
       const shortcut = resolvePlayerShortcut(event, bindings);
       if (!shortcut) return false;
-      if (volumeKeyBelongsToPage(shortcut, event, getPlayerRoot())) {
-        return false;
-      }
 
       if (isSpacePlayPause(shortcut)) {
         event.preventDefault();
