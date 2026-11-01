@@ -17,7 +17,7 @@ import {
   resolveCourseDurationSeconds,
 } from "../../courseAdapter";
 import type { CurriculumSectionItem } from "../curriculumItems";
-import type { PricingControlKey } from "../statusIndicators";
+import type { PricingControlKey, PricingPriceField } from "../statusIndicators";
 import {
   type PricingFormState,
   normalizePricingState,
@@ -25,6 +25,7 @@ import {
   isPricingEqual,
   validatePricing,
   buildPricingPayload,
+  toDollarInput,
 } from "../pricingState";
 import type { ApiError } from "../../../lib/api-error";
 import type { IncludeDraftItem } from "../editorLocalTypes";
@@ -177,7 +178,7 @@ export interface UsePricingHandlersArgs {
   pricingDebounceTimerRef: RefObject<NodeJS.Timeout | null>;
   inFlightPricingPromiseRef: RefObject<Promise<unknown> | null>;
   markPricingControlSaving: (controlKey: string, isSaving: boolean) => void;
-  lastEditedPricingFieldRef: RefObject<"sellingPrice" | "originalPrice" | null>;
+  lastEditedPricingFieldRef: RefObject<PricingPriceField | null>;
   clearPricingControlStatus: (controlKey: PricingControlKey) => void;
   markPricingControlSaved: (controlKey: PricingControlKey) => void;
   markPricingControlFailed: (controlKey: PricingControlKey) => void;
@@ -197,6 +198,11 @@ export interface UsePricingHandlersResult {
   handleShowDiscountBadgeChange: (checked: boolean) => void;
   handleLinkedOnlyChange: (checked: boolean) => void;
   handleOriginalPriceChange: (val: string) => void;
+  handleInternationalPriceChange: (
+    field: "internationalSellingPrice" | "internationalOriginalPrice",
+    val: string,
+  ) => void;
+  handleInternationalAutoChange: (checked: boolean) => void;
   handleCurrencyChange: (val: string) => Promise<void>;
 }
 
@@ -319,6 +325,19 @@ export function usePricingHandlers({
         const newBaseline: PricingFormState = pricingFormFromServer(res);
         setServerPricing(newBaseline);
         serverPricingRef.current = newBaseline;
+        // An automatic international price is the server's: the form shows
+        // what it worked out.
+        if (
+          pricingDraftRef.current.internationalAuto &&
+          newBaseline.internationalAuto
+        ) {
+          const synced = {
+            internationalSellingPrice: newBaseline.internationalSellingPrice,
+            internationalOriginalPrice: newBaseline.internationalOriginalPrice,
+          };
+          pricingDraftRef.current = { ...pricingDraftRef.current, ...synced };
+          setPricingDraft((prev) => ({ ...prev, ...synced }));
+        }
 
         if (controlKey === "pricingDetails") {
           const field = lastEditedPricingFieldRef.current;
@@ -366,6 +385,11 @@ export function usePricingHandlers({
               originalPrice: previousSnapshot.originalPrice,
               showDiscountBadge: previousSnapshot.showDiscountBadge,
               linkedOnly: previousSnapshot.linkedOnly,
+              internationalSellingPrice:
+                previousSnapshot.internationalSellingPrice,
+              internationalOriginalPrice:
+                previousSnapshot.internationalOriginalPrice,
+              internationalAuto: previousSnapshot.internationalAuto,
             };
             setPricingDraft((prev) => ({
               ...prev,
@@ -373,6 +397,11 @@ export function usePricingHandlers({
               originalPrice: previousSnapshot.originalPrice,
               showDiscountBadge: previousSnapshot.showDiscountBadge,
               linkedOnly: previousSnapshot.linkedOnly,
+              internationalSellingPrice:
+                previousSnapshot.internationalSellingPrice,
+              internationalOriginalPrice:
+                previousSnapshot.internationalOriginalPrice,
+              internationalAuto: previousSnapshot.internationalAuto,
             }));
             const field = lastEditedPricingFieldRef.current;
             if (field) {
@@ -523,6 +552,57 @@ export function usePricingHandlers({
     }, 400);
   };
 
+  // The price for buyers outside India, in dollars and cents: saved like
+  // the rupee prices, a moment after typing stops.
+  const handleInternationalPriceChange = (
+    field: "internationalSellingPrice" | "internationalOriginalPrice",
+    val: string,
+  ) => {
+    lastEditedPricingFieldRef.current = field;
+    clearPricingControlStatus(field);
+    clearPricingControlStatus("pricingDetails");
+    const amount = toDollarInput(val);
+    // A typed price is kept as typed: no longer the automatic one.
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      [field]: amount,
+      internationalAuto: false,
+    };
+    setPricingDraft((prev) => ({
+      ...prev,
+      [field]: amount,
+      internationalAuto: false,
+    }));
+    if (pricingValidationError) setPricingValidationError(null);
+
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+    }
+    pricingDebounceTimerRef.current = setTimeout(() => {
+      pricingDebounceTimerRef.current = null;
+      void persistPricingDetails();
+    }, 400);
+  };
+
+  // The automatic international price is one click: on, the server works
+  // it out from today's rate at once; off, the price shown is kept as typed.
+  const handleInternationalAutoChange = (checked: boolean) => {
+    lastEditedPricingFieldRef.current = "internationalSellingPrice";
+    clearPricingControlStatus("internationalSellingPrice");
+    clearPricingControlStatus("pricingDetails");
+    pricingDraftRef.current = {
+      ...pricingDraftRef.current,
+      internationalAuto: checked,
+    };
+    setPricingDraft((prev) => ({ ...prev, internationalAuto: checked }));
+    if (pricingValidationError) setPricingValidationError(null);
+    if (pricingDebounceTimerRef.current) {
+      clearTimeout(pricingDebounceTimerRef.current);
+      pricingDebounceTimerRef.current = null;
+    }
+    void persistPricingDetails();
+  };
+
   const handleCurrencyChange = async (val: string) => {
     if (pricingDraftRef.current.currency === val) return;
 
@@ -571,6 +651,8 @@ export function usePricingHandlers({
     handleShowDiscountBadgeChange,
     handleLinkedOnlyChange,
     handleOriginalPriceChange,
+    handleInternationalPriceChange,
+    handleInternationalAutoChange,
     handleCurrencyChange,
   };
 }

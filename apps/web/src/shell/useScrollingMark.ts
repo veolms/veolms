@@ -4,6 +4,15 @@ import { useEffect, type RefObject } from "react";
 const SCROLL_REST_MS = 120;
 
 /**
+ * The scroller's class that makes the mark take the pointer away. The mark
+ * is only written on a scroller that has it: with this rule anywhere in the
+ * stylesheet, Chrome restyles everything under any element whose
+ * `data-scrolling` changes, class or not (140 ms a time on a lesson page,
+ * which goes without the class; see ShellMainFrame).
+ */
+export const SCROLLING_MARK_CLASS = "data-scrolling:**:pointer-events-none!";
+
+/**
  * Marks the page's scroller (`data-scrolling`) while it is being scrolled
  * without a button held, so that the page can stop answering the pointer for
  * that long (the scroller's class does that, see CoursesPage).
@@ -32,7 +41,9 @@ export function useScrollingMark(scrollportRef: RefObject<HTMLElement | null>) {
       scrollport.removeAttribute("data-scrolling");
     };
     const onScroll = () => {
-      if (buttonHeld) return;
+      if (buttonHeld || !scrollport.classList.contains(SCROLLING_MARK_CLASS)) {
+        return;
+      }
       if (timer) window.clearTimeout(timer);
       else scrollport.setAttribute("data-scrolling", "");
       timer = window.setTimeout(rest, SCROLL_REST_MS);

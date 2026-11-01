@@ -1,0 +1,67 @@
+name: "💡 Feature Request"
+description: "Suggest an idea, enhancement, or new feature for VeoLMS."
+title: "[Feature]: "
+labels: ["enhancement", "feature request", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not report security vulnerabilities in public issues.** Please read the [security policy](https://github.com/veolms/veolms/blob/dev/SECURITY.md) and report suspected vulnerabilities privately as described there.
+
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: This issue does not disclose a security vulnerability or sensitive security details.
+          required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: Is this a brand-new feature or an enhancement to an existing one?
+      options:
+        - "Feature"
+        - "Enhancement / Improvement"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: category
+    attributes:
+      label: Which part of the app is this idea for?
+      description: Select all areas this feature touches.
+      options:
+        - label: Student Learning Experience (Watching lessons, notes, quizzes)
+        - label: Course Discovery & Catalog
+        - label: Teacher / Staff / Admin Management
+        - label: Design / Look & Feel
+        - label: Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: What would you like to see added or improved?
+      description: Describe your idea and how it should work.
+      placeholder: "I would like to suggest..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: examples-mockups
+    attributes:
+      label: Any examples or mockups?
+      description: Attach screenshots, sketches, or link to examples of similar features in other tools.
+      placeholder: "e.g. Link or screenshot..."
+
+  - type: textarea
+    id: why-helpful
+    attributes:
+      label: Why is this helpful?
+      description: Explain why this is important and what benefit it brings to learners or educators.
+      placeholder: "This would help users because..."

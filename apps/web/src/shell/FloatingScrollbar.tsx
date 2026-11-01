@@ -52,6 +52,21 @@ type ScrollbarDrag = {
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
+/**
+ * Writes an attribute only when its value changes. Each scroll frame syncs
+ * the scrollbar, and Chrome treats every `setAttribute`, even one with the
+ * same value, as a change: `aria-hidden` appears inside a `:has()` rule
+ * (`.courses-profile`), so rewriting it restyled the whole lesson page
+ * (40 to 70 ms) on a frame of a scroll.
+ */
+function setChangedAttribute(
+  element: HTMLElement,
+  name: string,
+  value: string,
+) {
+  if (element.getAttribute(name) !== value) element.setAttribute(name, value);
+}
+
 export function FloatingScrollbar({
   scrollportRef,
   ariaControls = "courses-main-scrollport",
@@ -108,11 +123,15 @@ export function FloatingScrollbar({
         scrollport.scrollHeight > scrollport.clientHeight + 1;
 
       scrollbar.classList.toggle("is-visible", canScroll);
-      scrollbar.setAttribute("aria-hidden", canScroll ? "false" : "true");
-      scrollbar.tabIndex = canScroll ? 0 : -1;
+      setChangedAttribute(
+        scrollbar,
+        "aria-hidden",
+        canScroll ? "false" : "true",
+      );
+      setChangedAttribute(scrollbar, "tabindex", canScroll ? "0" : "-1");
       if (!canScroll) {
-        scrollbar.setAttribute("aria-valuemax", "0");
-        scrollbar.setAttribute("aria-valuenow", "0");
+        setChangedAttribute(scrollbar, "aria-valuemax", "0");
+        setChangedAttribute(scrollbar, "aria-valuenow", "0");
         return;
       }
 
@@ -161,11 +180,13 @@ export function FloatingScrollbar({
       const thumbOffset =
         maximumThumbOffset * (scrollport.scrollTop / maximumScrollOffset);
 
-      scrollbar.setAttribute(
+      setChangedAttribute(
+        scrollbar,
         "aria-valuemax",
         String(Math.round(maximumScrollOffset)),
       );
-      scrollbar.setAttribute(
+      setChangedAttribute(
+        scrollbar,
         "aria-valuenow",
         String(Math.round(scrollport.scrollTop)),
       );

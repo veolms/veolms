@@ -45,3 +45,22 @@ export function resolveCoursePricing(
     ? { pricingType: "paid", catalogPrice }
     : { pricingType: "free", catalogPrice: 0 };
 }
+
+/**
+ * What a course costs a buyer outside India: its price for buyers there, in
+ * the currency's minor units (cents), or null when it is sold in rupees
+ * everywhere. Asked only for a paid course: a free course is free for all.
+ */
+export function resolveInternationalCharge(
+  pricing:
+    | {
+        international_currency?: string | null;
+        international_sale_price_minor?: number | null;
+      }
+    | null
+    | undefined,
+): { currency: string; salePriceMinor: number } | null {
+  const salePriceMinor = Number(pricing?.international_sale_price_minor ?? 0);
+  if (!pricing?.international_currency || salePriceMinor <= 0) return null;
+  return { currency: pricing.international_currency, salePriceMinor };
+}

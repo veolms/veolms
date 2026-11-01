@@ -324,7 +324,15 @@ export async function storeAvatarFromUrl(
       return null;
     }
 
-    return storeAvatarBuffer(storage, userId, buffer, detectedType, avatarId);
+    // Awaited here so a storage failure lands in the catch below; returned
+    // as a bare promise it rejected outside it and failed the sign-in.
+    return await storeAvatarBuffer(
+      storage,
+      userId,
+      buffer,
+      detectedType,
+      avatarId,
+    );
   } catch {
     return null;
   }

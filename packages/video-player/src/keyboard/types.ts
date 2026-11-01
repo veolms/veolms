@@ -4,6 +4,8 @@ export const PLAYER_SHORTCUT_ACTIONS = [
   "seekForward",
   "seekBackwardLarge",
   "seekForwardLarge",
+  "volumeUp",
+  "volumeDown",
   "toggleMute",
   "toggleCaptions",
   "toggleFullscreen",
@@ -33,6 +35,8 @@ export interface PlayerKeyboardActions {
   togglePlayPause?: () => void | Promise<void>;
   seekBy?: (seconds: number) => void | Promise<void>;
   seekToPercentage?: (percentage: number) => void | Promise<void>;
+  /** Raises (1) or lowers (-1) the volume by one step. */
+  adjustVolume?: (direction: -1 | 1) => void | Promise<void>;
   toggleMute?: () => void | Promise<void>;
   toggleCaptions?: () => void | Promise<void>;
   toggleFullscreen?: () => void | Promise<void>;

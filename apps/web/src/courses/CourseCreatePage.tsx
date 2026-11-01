@@ -1059,6 +1059,8 @@ export function CourseCreatePage({
     handleShowDiscountBadgeChange,
     handleLinkedOnlyChange,
     handleOriginalPriceChange,
+    handleInternationalPriceChange,
+    handleInternationalAutoChange,
     handleCurrencyChange,
   } = usePricingHandlers({
     currentCourseId,
@@ -1693,6 +1695,10 @@ export function CourseCreatePage({
                   handleSellingPriceChange={handleSellingPriceChange}
                   flushPricingPersistence={flushPricingPersistence}
                   handleOriginalPriceChange={handleOriginalPriceChange}
+                  handleInternationalPriceChange={
+                    handleInternationalPriceChange
+                  }
+                  handleInternationalAutoChange={handleInternationalAutoChange}
                   handleShowDiscountBadgeChange={handleShowDiscountBadgeChange}
                   handleLinkedOnlyChange={handleLinkedOnlyChange}
                   currentCourseId={currentCourseId}

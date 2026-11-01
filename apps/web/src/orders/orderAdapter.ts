@@ -9,6 +9,7 @@ import type {
   OrderHistoryItem,
   OrderHistoryStatus,
 } from "../order-history/orderHistoryData";
+import { orderItemLabel } from "./orderHelpers";
 
 /**
  * Adapts an API order to the frontend OrderHistoryItem model consumed by OrderHistoryPage.
@@ -17,8 +18,10 @@ export function adaptOrderToOrderHistoryItem(
   order: LearnerOrder,
 ): OrderHistoryItem {
   const firstItem = order.items[0];
+  // Part of a course is named by the course, with a note saying so.
+  const firstLabel = firstItem ? orderItemLabel(firstItem) : null;
   const courseTitle =
-    firstItem?.titleSnapshot ||
+    firstLabel?.title ||
     (order.items.length > 1
       ? `${order.items[0]?.titleSnapshot} + ${order.items.length - 1} more`
       : "Course Order");
@@ -153,6 +156,17 @@ export function adaptOrderToOrderHistoryItem(
     courseId,
     courseTitle,
     itemCount,
+    ...(firstLabel?.note ? { purchaseNote: firstLabel.note } : {}),
+    ...(firstItem?.thumbnail
+      ? {
+          thumbnail: {
+            url: firstItem.thumbnail.url,
+            srcSet: firstItem.thumbnail.srcSet
+              .map((variant) => `${variant.url} ${variant.width}w`)
+              .join(", "),
+          },
+        }
+      : {}),
     iconColor,
     date,
     time,
@@ -183,11 +197,19 @@ export function computeOrderSummary(
   let failed = 0;
   let refunded = 0;
   let totalSpentAmount = 0;
+  // Orders in different currencies (rupees, and dollars from a course
+  // bought at its price outside India) are added up apart.
+  const spentByCurrency = new Map<string, number>();
 
   for (const o of orders) {
     if (o.status === "completed") {
       completed += 1;
       totalSpentAmount += o.price;
+      const currency = o.currency || "INR";
+      spentByCurrency.set(
+        currency,
+        (spentByCurrency.get(currency) ?? 0) + o.price,
+      );
     } else if (o.status === "pending") {
       pending += 1;
     } else if (o.status === "failed") {
@@ -198,7 +220,20 @@ export function computeOrderSummary(
   }
 
   // `price` on the view model is already in major units.
-  const formattedTotal = formatMoney(totalSpentAmount, { unit: "major" });
+  const formattedTotal =
+    spentByCurrency.size > 1
+      ? [...spentByCurrency]
+          .map(([currency, amount]) =>
+            formatMoney(Math.round(amount * 100) / 100, {
+              currency,
+              unit: "major",
+            }),
+          )
+          .join(" + ")
+      : formatMoney(totalSpentAmount, {
+          currency: [...spentByCurrency.keys()][0] ?? "INR",
+          unit: "major",
+        });
 
   return {
     totalOrders: orders.length,

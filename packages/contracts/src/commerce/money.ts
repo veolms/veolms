@@ -71,6 +71,24 @@ export function toMinorUnits(amountMajor: number, currency: string): number {
 }
 
 /**
+ * An amount of a price calculation (a checkout preview) in minor units.
+ * Such amounts are whole major units, converted here, except in a
+ * calculation for a course bought at its price for buyers outside India,
+ * which is already in minor units (cents) and is taken as it is.
+ */
+export function pricingAmountToMinorUnits(
+  amount: number,
+  currency: string,
+  unit: MoneyUnit = "major",
+): number {
+  if (unit === "major") return toMinorUnits(amount, currency);
+  if (!Number.isSafeInteger(amount) || amount < 0) {
+    throw new Error(`Invalid order amount: ${amount}`);
+  }
+  return amount;
+}
+
+/**
  * Converts minor units to major units for DISPLAY or for pre-filling an
  * input. The result can be fractional (10050 paise = 100.5), so it must not
  * be stored or used in further money arithmetic.

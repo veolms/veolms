@@ -23,11 +23,19 @@ import {
 } from "../invoices/invoice.service.ts";
 import { createRefundService } from "../refunds/refund.service.ts";
 import { createAuthorizationService } from "../../authorization/authorization.service.ts";
+import { createCourseService } from "../../courses/index.ts";
 import { createOrderController } from "./order.controller.ts";
 
 const orderRoutes: RoutePlugin = async (app, options) => {
   const ctx = createCommerceContext(options);
-  const service = createOrderService({ database: options.database });
+  const courseService = createCourseService({
+    database: options.database,
+    services: options.services,
+  });
+  const service = createOrderService({
+    database: options.database,
+    courseCards: (courseIds) => courseService.listCourseCardsByIds(courseIds),
+  });
   const invoiceService = createInvoiceService({
     database: options.database,
     storage: invoiceStorage(options.services.storage),

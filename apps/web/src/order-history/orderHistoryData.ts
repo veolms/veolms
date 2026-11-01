@@ -27,6 +27,13 @@ export interface OrderHistoryItem {
   courseId: string;
   courseTitle: string;
   itemCount: string; // e.g. "1 Course"
+  /**
+   * What of the course was bought, shown in place of `itemCount`: part of
+   * it ("Partial access · 15 of 24 sections") or the rest of it.
+   */
+  purchaseNote?: string;
+  /** The course's picture, with `srcSet` ready for an `<img>`. */
+  thumbnail?: { url: string; srcSet: string };
   iconColor: string; // e.g. "#3b82f6"
   date: string; // e.g. "May 24, 2025"
   time: string; // e.g. "10:30 AM"

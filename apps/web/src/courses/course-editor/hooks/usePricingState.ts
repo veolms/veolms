@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from "react";
 import type { CourseValidationArea } from "@veolms/contracts";
-import type { PricingControlKey } from "../statusIndicators";
+import type { PricingControlKey, PricingPriceField } from "../statusIndicators";
 import {
   type PricingFormState,
   initialPricingState,
@@ -44,7 +44,7 @@ export interface UsePricingStateResult {
   inFlightPricingPromiseRef: RefObject<Promise<unknown> | null>;
   markPricingControlSaving: (controlKey: string, isSaving: boolean) => void;
   isPricingControlSaving: (controlKey: string) => boolean;
-  lastEditedPricingFieldRef: RefObject<"sellingPrice" | "originalPrice" | null>;
+  lastEditedPricingFieldRef: RefObject<PricingPriceField | null>;
   setPricingSaveFailed: Dispatch<SetStateAction<boolean>>;
   triggerPricingSavedBriefly: () => void;
   clearPricingControlStatus: (controlKey: PricingControlKey) => void;
@@ -145,9 +145,7 @@ export function usePricingState({
     savingPricingControlsRef.current.has(controlKey) ||
     (inFlightPricingControlsRef.current[controlKey] ?? 0) > 0;
 
-  const lastEditedPricingFieldRef = useRef<
-    "sellingPrice" | "originalPrice" | null
-  >(null);
+  const lastEditedPricingFieldRef = useRef<PricingPriceField | null>(null);
 
   const [pricingControlStatus, setPricingControlStatus] = useState<
     Partial<Record<PricingControlKey, "saved" | "failed" | null>>

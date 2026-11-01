@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { courseThumbnailVariantSchema } from "../course/course.ts";
 import { outsideRefundSchema, refundSchema } from "./refund.ts";
 
 export const bundleStatusSchema = z.enum(["draft", "published", "archived"]);
@@ -301,7 +302,18 @@ export const upgradeCreditSchema = z.strictObject({
 });
 export type UpgradeCredit = z.infer<typeof upgradeCreditSchema>;
 
+/**
+ * The unit of a price calculation's amounts. List prices are whole rupees,
+ * so a calculation is in major units, except one for a course bought at its
+ * price for buyers outside India, which is kept in cents (minor units) as
+ * that price is (see `internationalCoursePriceSchema`).
+ */
+export const pricingAmountUnitSchema = z.enum(["major", "minor"]);
+export type PricingAmountUnit = z.infer<typeof pricingAmountUnitSchema>;
+
 export const pricingCalculationSchema = z.strictObject({
+  /** The unit of every amount below. */
+  amountUnit: pricingAmountUnitSchema.default("major"),
   subtotalAmount: z.number().int().nonnegative(),
   discountAmount: z.number().int().nonnegative().default(0),
   taxAmount: z.number().int().nonnegative().default(0),
@@ -539,6 +551,38 @@ export const orderItemSummarySchema = z.strictObject({
    * it unlocks. Absent otherwise.
    */
   opensCourseId: z.uuid().optional(),
+  /**
+   * How the item is named to people when not by `titleSnapshot`, which
+   * stays the record of the sale. Part of a course sold on its own (a
+   * partial access) is named by the course it opens and how much of it;
+   * that course bought whole afterwards, by the course as an upgrade.
+   * Absent for every other item.
+   */
+  display: z
+    .discriminatedUnion("kind", [
+      z.strictObject({
+        kind: z.literal("partial_access"),
+        courseTitle: z.string(),
+        openSections: z.number().int().nonnegative(),
+        totalSections: z.number().int().nonnegative(),
+      }),
+      z.strictObject({
+        kind: z.literal("upgrade"),
+        courseTitle: z.string(),
+      }),
+    ])
+    .optional(),
+  /**
+   * The course's picture, with smaller copies for small places: of the
+   * course it opens, for part of a course. Sent with a learner's own
+   * orders (purchase history); absent where the course has no picture.
+   */
+  thumbnail: z
+    .strictObject({
+      url: z.string(),
+      srcSet: z.array(courseThumbnailVariantSchema),
+    })
+    .optional(),
 });
 export type OrderItemSummary = z.infer<typeof orderItemSummarySchema>;
 
@@ -624,11 +668,15 @@ export type CheckoutPreviewRequest = z.infer<
 >;
 
 /**
- * What the checkout UI needs from a preview, in major units. The full
- * `PricingCalculation` (per-item breakdown, coupon id) stays server-side.
+ * What the checkout UI needs from a preview, in major units unless
+ * `amountUnit` says minor (a course at its price for buyers outside India).
+ * The full `PricingCalculation` (per-item breakdown, coupon id) stays
+ * server-side.
  */
 export const checkoutPreviewResponseSchema = z.strictObject({
   pricing: z.strictObject({
+    /** The unit of the amounts here. Absent from older servers: major. */
+    amountUnit: pricingAmountUnitSchema.optional(),
     /** The items' prices before anything comes off. */
     subtotalAmount: z.number().int().nonnegative().optional(),
     discountAmount: z.number().int().nonnegative(),

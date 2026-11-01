@@ -1,6 +1,7 @@
 import {
   createElement,
   useCallback,
+  useContext,
   useLayoutEffect,
   useRef,
   useState,
@@ -19,6 +20,7 @@ import {
   clampSplitFrameWidth,
   findSplitFrameBoxes,
   moveSplitFrameDrag,
+  settleSplitFrameBoxes,
   settleSplitFrameDrag,
   splitFrameKeyStep,
   splitFrameValueText,
@@ -26,6 +28,7 @@ import {
   writeSplitFrameDragWidth,
   type SplitFrameDrag,
 } from "./splitFrame";
+import { SplitFrameBehindContext } from "./splitFrameBehind";
 import "./split-frame-pane.css";
 
 /** How long the frame takes to widen again once a sliding pane has closed. */
@@ -64,6 +67,30 @@ function writeTargetWidth(element: HTMLElement | null, value: string | null) {
   ) {
     element.style.setProperty(SPLIT_FRAME_TARGET_WIDTH_PROPERTY, value);
   }
+}
+
+// The widths at rest that panes with one of their own (`width`) last wrote
+// on their boxes.
+const paneWidths = new Map<HTMLElement, string>();
+
+/**
+ * Gives the boxes the width at rest of a pane still splitting the frame, or
+ * none, after another pane has gone. Without this, a pane with a width of
+ * its own that goes while another stays (the Discussions page's pane going
+ * after the lesson page's course content has come) leaves its width on the
+ * boxes, and the course content sits over a frame that never narrowed.
+ */
+function writeRemainingWidth(shell: HTMLElement | null, frame: HTMLElement) {
+  let value: string | null = null;
+  for (const pane of activePanes) {
+    const width = paneWidths.get(pane);
+    if (width !== undefined && frame.contains(pane)) {
+      value = width;
+      break;
+    }
+  }
+  writeTargetWidth(shell, value);
+  writeTargetWidth(frame, value);
 }
 
 // A sliding pane that closes leaves the frame widening for a moment. A pane
@@ -133,12 +160,39 @@ export function SplitFramePane({
   // there is one matters here.
   const hasOwnWidth = width !== undefined;
 
+  // A page drawn behind the lesson splits the frame like the route it is
+  // about to become (a minimize landing on it). Once it has been the route
+  // and goes behind the lesson (the player maximized over it), it stays in
+  // the tree for the hand-over but the frame is the lesson page's again:
+  // holding on to it there, it kept the frame at its own width and the
+  // lesson's course content sat over the video.
+  const behind = useContext(SplitFrameBehindContext);
+  const shownAsRouteRef = useRef(false);
+
   // Opening: the shell and frame take the split shape (a sliding pane makes
   // them slide to it). Closing: they let go of it, or a sliding pane's frame
   // slides back to its full width first.
   useLayoutEffect(() => {
     const pane = ownRef.current;
     if (!pane || !split) return undefined;
+    if (!behind) shownAsRouteRef.current = true;
+    else if (shownAsRouteRef.current) {
+      // Gone behind the lesson: nothing of this page is in view to slide
+      // back, so the frame is let go of at once, and takes the lesson's
+      // shape at once too, as it does coming from any other page (sliding
+      // from this pane's width, the course content came in over the video).
+      if (pendingRelease !== null) {
+        window.clearTimeout(pendingRelease);
+        pendingRelease = null;
+      }
+      const { shell, frame } = findSplitFrameBoxes(pane);
+      if (frame) {
+        syncSplitMark(shell, frame);
+        writeRemainingWidth(shell, frame);
+        settleSplitFrameBoxes(shell, frame);
+      }
+      return undefined;
+    }
     const { shell, frame } = findSplitFrameBoxes(pane);
     if (!frame) return undefined;
     const takingOver = pendingRelease !== null;
@@ -177,8 +231,13 @@ export function SplitFramePane({
     return () => {
       query.removeEventListener("change", update);
       activePanes.delete(pane);
+      paneWidths.delete(pane);
       const wasSplit = frame.hasAttribute(SPLIT_FRAME_ATTRIBUTE);
-      if (syncSplitMark(shell, frame) || !slide || !wasSplit) return;
+      if (syncSplitMark(shell, frame)) {
+        writeRemainingWidth(shell, frame);
+        return;
+      }
+      if (!slide || !wasSplit) return;
       // Still split until the frame has slid back.
       shell?.setAttribute(SPLIT_FRAME_ATTRIBUTE, "");
       frame.setAttribute(SPLIT_FRAME_ATTRIBUTE, "");
@@ -191,13 +250,15 @@ export function SplitFramePane({
         writeTargetWidth(frame, null);
       }, CLOSE_DURATION_MS);
     };
-  }, [hasOwnWidth, media, slide, split]);
+  }, [behind, hasOwnWidth, media, slide, split]);
 
   useLayoutEffect(() => {
     const pane = ownRef.current;
     if (!pane || width === undefined) return;
+    if (behind && shownAsRouteRef.current) return;
     const { shell, frame } = findSplitFrameBoxes(pane);
     const value = `${width}px`;
+    paneWidths.set(pane, value);
     for (const element of [shell, frame, pane])
       writeTargetWidth(element, value);
   });

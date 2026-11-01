@@ -106,6 +106,13 @@ export interface OrderTable {
   total_amount: number;
   /** Creator earnings after commission, in smallest currency units (paise). */
   after_commission_amount: number | null;
+  /**
+   * For an order paid in another currency: what the gateway settles it for
+   * in `settlement_currency` (Razorpay: INR), in minor units. Null for an
+   * order paid in the settlement currency itself.
+   */
+  settlement_amount: number | null;
+  settlement_currency: string | null;
   coupon_id: string | null;
   idempotency_key: string | null;
   expires_at: Date;

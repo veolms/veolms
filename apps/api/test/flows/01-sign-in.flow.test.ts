@@ -197,24 +197,37 @@ await test("signing out of every other device keeps this one and ends the rest",
   assert.equal(await laptop.whoAmI(), null);
 });
 
-await test("with a limit of one device, a second device is held until the first signs out", async () => {
+await test("at the device limit, a new device signs in and the one used longest ago is signed out", async () => {
   const admin = await signedInAdmin(flow);
   const limit = await admin.patch("/v1/platform/settings", {
-    security: { maxDevicesPerStudent: 1 },
+    security: { maxDevicesPerStudent: 2 },
   });
   assert.equal(limit.status, 200);
   try {
-    const { client: phone, learner } = await signedUpLearner(flow);
+    const { client: phone, learner, userId } = await signedUpLearner(flow);
     const laptop = flow.visitor();
+    assert.equal((await laptop.signIn(learner.email)).status, 200);
 
-    const held = await laptop.signIn(learner.email);
-    assert.equal(held.status, 409);
-    assert.equal(held.body.error?.code, "DEVICE_LIMIT_REACHED");
+    // The phone signed in first but is still in use; the laptop is the
+    // device used longest ago.
+    const first = await flow.database
+      .selectFrom("sessions")
+      .select("id")
+      .where("user_id", "=", userId)
+      .orderBy("created_at")
+      .executeTakeFirstOrThrow();
+    await flow.database
+      .updateTable("sessions")
+      .set({ last_used_at: new Date(Date.now() + 60_000) })
+      .where("id", "=", first.id)
+      .execute();
+
+    const tablet = flow.visitor();
+    const signIn = await tablet.signIn(learner.email);
+    assert.equal(signIn.status, 200);
+    assert.equal(await tablet.whoAmI(), userId);
+    assert.equal(await phone.whoAmI(), userId);
     assert.equal(await laptop.whoAmI(), null);
-
-    await phone.post("/v1/auth/logout");
-    const retry = await flow.visitor().signIn(learner.email);
-    assert.equal(retry.status, 200);
   } finally {
     const reset = await admin.patch("/v1/platform/settings", {
       security: { maxDevicesPerStudent: null },

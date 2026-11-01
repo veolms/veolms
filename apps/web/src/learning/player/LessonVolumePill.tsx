@@ -217,6 +217,7 @@ export function LessonVolumePill({
         onPointerDown={keepOpen}
         onChange={(event) => {
           controller.setVolume(event.currentTarget.valueAsNumber);
+          controller.showVolume(event.currentTarget.valueAsNumber);
           keepOpen();
         }}
       />

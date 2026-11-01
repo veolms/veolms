@@ -41,7 +41,51 @@ interface AdminOrderRowLike extends OrderRowLike {
 interface OrderItemRowLike {
   title_snapshot: string;
   course_id: string | null;
+  course_title?: string | null;
   opens_course_id?: string | null;
+  opens_course_title?: string | null;
+  open_sections?: number | null;
+  total_sections?: number | null;
+  /** Postgres answers `exists` with a boolean; Kysely types it 0 | 1 too. */
+  completes_part?: boolean | 0 | 1 | null;
+}
+
+/**
+ * How an item is named to people when not by its stored title: part of a
+ * course (a partial access) by the course it opens and how much of it, and
+ * that course bought whole afterwards by the course, as an upgrade. The
+ * stored title stays as the record of the sale.
+ */
+export function toOrderItemDisplay(
+  row: OrderItemRowLike,
+): OrderItemSummary["display"] {
+  if (row.opens_course_title && row.open_sections != null) {
+    return {
+      kind: "partial_access",
+      courseTitle: row.opens_course_title,
+      openSections: row.open_sections,
+      totalSections: Math.max(row.open_sections, row.total_sections ?? 0),
+    };
+  }
+  if (!row.opens_course_id && row.completes_part && row.course_title) {
+    return { kind: "upgrade", courseTitle: row.course_title };
+  }
+  return undefined;
+}
+
+/**
+ * The name an invoice gives an item: the course, with what of it was sold
+ * when that was part of it or the rest of it.
+ */
+export function orderItemInvoiceTitle(row: OrderItemRowLike): string {
+  const display = toOrderItemDisplay(row);
+  if (display?.kind === "partial_access") {
+    return `${display.courseTitle} — Partial access (${display.openSections} of ${display.totalSections} sections)`;
+  }
+  if (display?.kind === "upgrade") {
+    return `${display.courseTitle} — Upgrade to full access`;
+  }
+  return row.title_snapshot;
 }
 
 /** The payment that represents an order — see `listPaymentsForOrders`. */
@@ -52,10 +96,12 @@ interface OrderPaymentRowLike {
 }
 
 function toOrderItemSummary(row: OrderItemRowLike): OrderItemSummary {
+  const display = toOrderItemDisplay(row);
   return {
     titleSnapshot: row.title_snapshot,
     courseId: row.course_id,
     ...(row.opens_course_id ? { opensCourseId: row.opens_course_id } : {}),
+    ...(display ? { display } : {}),
   };
 }
 

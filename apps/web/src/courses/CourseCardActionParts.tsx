@@ -1,9 +1,12 @@
+import { ArrowClockwiseIcon as ArrowClockwise } from "@phosphor-icons/react/ArrowClockwise";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
+import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import type { Course } from "./catalogue";
 import type { CourseCardLearnerAction } from "./courseCardAction";
 import { courseCardShimmerClass } from "./courseCardShimmer";
+import { priceRegionClass } from "./CoursePriceSwitch";
 import { FreeWithCourseNote } from "./FreeWithCourseNote";
 
 /** The card's main button, as every card draws it. */
@@ -18,7 +21,8 @@ export function CourseCardPricing({
   freeWithHref,
   onNavigate,
 }: {
-  pricing: NonNullable<Course["pricing"]>;
+  /** The price in force; a linked-only course (`freeWith`) needs none. */
+  pricing?: NonNullable<Course["pricing"]>;
   studentHome: boolean;
   /**
    * The course a linked-only course comes free with: shown in place of a
@@ -49,31 +53,184 @@ export function CourseCardPricing({
       </div>
     );
   }
+  if (!pricing) return null;
+  if (!pricing.international) {
+    return (
+      <CourseCardPriceLine
+        line={pricing}
+        showDiscountBadge={pricing.showDiscountBadge}
+        studentHome={studentHome}
+        display="flex"
+      />
+    );
+  }
+  // Both prices are in the page; the visitor's region picks one, and a
+  // shimmer of the line's height stands in until it is known.
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        className={`mt-3 mb-4 h-[1.55rem] w-1/2 rounded-md ${courseCardShimmerClass} ${priceRegionClass("pending", "block")}`}
+      />
+      <CourseCardPriceLine
+        line={pricing}
+        showDiscountBadge={pricing.showDiscountBadge}
+        studentHome={studentHome}
+        display={priceRegionClass("domestic")}
+      />
+      <CourseCardPriceLine
+        line={pricing.international}
+        showDiscountBadge={pricing.showDiscountBadge}
+        studentHome={studentHome}
+        display={priceRegionClass("international")}
+      />
+    </>
+  );
+}
+
+function CourseCardPriceLine({
+  line,
+  showDiscountBadge,
+  studentHome,
+  display,
+}: {
+  line: Pick<
+    NonNullable<Course["pricing"]>,
+    "price" | "originalPrice" | "discount"
+  >;
+  showDiscountBadge?: boolean;
+  studentHome: boolean;
+  /** "flex", or the classes that show it for one region only. */
+  display: string;
+}) {
   return (
     <div
-      className={`${studentHome ? "mt-3 mb-4 flex flex-wrap items-center gap-x-2 gap-y-1" : "mt-3 mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"}`}
+      className={`${display} ${priceLineClasses(studentHome)}`}
       data-course-card-pricing
-      aria-label={`Course price ${pricing.price}`}
+      aria-label={`Course price ${line.price}`}
     >
-      {Boolean(pricing.originalPrice) && (
-        <span
-          className={`${studentHome ? "shrink-0 whitespace-nowrap " : ""}text-[0.95rem] font-medium leading-none text-(--muted) line-through`}
-        >
-          {pricing.originalPrice}
+      {Boolean(line.originalPrice) && (
+        <span className={`inline ${originalPriceClasses(studentHome)}`}>
+          {line.originalPrice}
         </span>
       )}
-      <strong
-        className={`${studentHome ? "shrink-0 " : ""}text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)`}
-      >
-        {pricing.price}
-      </strong>
+      <strong className={priceAmountClasses(studentHome)}>{line.price}</strong>
       {/* Paid courses opt in from their pricing settings; a free course
           with an original price always shows "Free". */}
-      {pricing.showDiscountBadge && Boolean(pricing.discount) && (
-        <span className="inline-flex items-center self-center rounded-lg bg-[color-mix(in_srgb,var(--success)_14%,transparent)] px-2.5 py-1.5 text-[0.8rem] leading-none font-bold text-[color-mix(in_srgb,var(--success)_72%,var(--text))]">
-          {pricing.discount}
+      {showDiscountBadge && Boolean(line.discount) && (
+        <span className={`inline-flex ${discountBadgeClasses}`}>
+          {line.discount}
         </span>
       )}
+    </div>
+  );
+}
+
+/** The price line's layout, less its display (see `display` above). */
+const priceLineClasses = (studentHome: boolean) =>
+  studentHome
+    ? "mt-3 mb-4 flex-wrap items-center gap-x-2 gap-y-1"
+    : "mt-3 mb-4 flex-wrap items-baseline gap-x-3 gap-y-1";
+const originalPriceClasses = (studentHome: boolean) =>
+  `${studentHome ? "shrink-0 whitespace-nowrap " : ""}text-[0.95rem] font-medium leading-none text-(--muted) line-through`;
+const priceAmountClasses = (studentHome: boolean) =>
+  `${studentHome ? "shrink-0 " : ""}text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)`;
+/** Less its display: the early line's style sets that (see below). */
+const discountBadgeClasses =
+  "items-center self-center rounded-lg bg-[color-mix(in_srgb,var(--success)_14%,transparent)] px-2.5 py-1.5 text-[0.8rem] leading-none font-bold text-[color-mix(in_srgb,var(--success)_72%,var(--text))]";
+
+/** A price line's shimmer: the line's height, so nothing moves when it comes. */
+function CourseCardPriceShimmer(props: { "data-course-early-price"?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`mt-3 mb-4 h-[1.55rem] w-1/2 rounded-md ${courseCardShimmerClass}`}
+      {...props}
+    />
+  );
+}
+
+/**
+ * The price of a course a built page offers, before its scripts have run:
+ * a shimmer, and beside it, hidden, the line's parts with no words of
+ * their own. The document's head fills in the words from the prices this
+ * tab last had and shows the line in place of the shimmer (see
+ * `getCoursePricesEarlyBootstrapScript`), so a reload draws them at once;
+ * on a first visit the shimmer stays until the page has the prices.
+ * Laid out exactly as `CourseCardPriceLine`, which takes its place.
+ */
+function CourseCardEarlyPrice({ studentHome }: { studentHome: boolean }) {
+  return (
+    <>
+      <CourseCardPriceShimmer data-course-early-price="pending" />
+      <div
+        aria-hidden="true"
+        data-course-early-price="line"
+        className={`hidden ${priceLineClasses(studentHome)}`}
+      >
+        <span
+          data-course-early-price-part="original"
+          className={`hidden ${originalPriceClasses(studentHome)} after:content-(--course-early-original)`}
+        />
+        <strong
+          className={`${priceAmountClasses(studentHome)} after:content-(--course-early-price)`}
+        />
+        <span
+          data-course-early-price-part="discount"
+          className={`hidden ${discountBadgeClasses} after:content-(--course-early-discount)`}
+        />
+      </div>
+    </>
+  );
+}
+
+/**
+ * The price and the button of a course whose price is not known yet: a
+ * shimmer of each, the size of the price line and the button.
+ */
+export function CourseCardOfferShimmer() {
+  return (
+    <div aria-hidden="true" data-course-card-price-pending>
+      <CourseCardPriceShimmer />
+      <div
+        className={`min-h-11 w-full rounded-[10px] ${courseCardShimmerClass}`}
+      />
+    </div>
+  );
+}
+
+/**
+ * In place of the price and the button, when the card cannot know what to
+ * offer: the price did not load, or a signed-in learner's own courses did
+ * not (the course may be theirs, and a price would then be wrong). The
+ * same height as what it stands in for.
+ */
+export function CourseCardLoadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div role="alert" data-course-card-load-error>
+      <p className="mt-3 mb-4 flex h-[1.55rem] min-w-0 items-center gap-2 text-[0.95rem] leading-none font-semibold text-(--text-secondary)">
+        <WarningCircle
+          size={19}
+          weight="fill"
+          className="shrink-0 text-amber-500"
+          aria-hidden="true"
+        />
+        <span className="truncate">Something went wrong</span>
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="relative z-20 flex min-h-11 w-full items-center justify-center gap-2.5 rounded-[10px] border border-[color-mix(in_srgb,var(--text)_18%,transparent)] px-3.25 text-[15px] font-semibold text-(--text) transition-colors duration-150 hover:border-(--accent) hover:text-(--accent-ink,var(--accent)) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+        data-control-radius-action
+      >
+        <ArrowClockwise
+          className="shrink-0"
+          size={17}
+          weight="bold"
+          aria-hidden="true"
+        />
+        <span className="truncate">Try again</span>
+      </button>
     </div>
   );
 }
@@ -201,6 +358,10 @@ function CourseCardActionsShimmer({ className }: { className: string }) {
  *   the copy, the price for any other;
  * - signed in with no copy (a new tab): the shimmer, until the courses come.
  *
+ * The page is never built with a price: where one goes there is a shimmer,
+ * which the head replaces with the price this tab last had, if any (see
+ * `CourseCardEarlyPrice`).
+ *
  * None of it can be pressed: it stands in until the card knows, and then
  * the card draws its own. The selectors are written out in full because
  * Tailwind only generates classes it finds as text.
@@ -223,13 +384,14 @@ export function CourseCardEarlyActions({
         data-course-card-early="offer"
         className="pointer-events-none hidden [:root:not([data-session-hint])_&]:block [:root[data-course-cards-early]_&]:block"
       >
-        {course.pricing ? (
+        {course.includedWith?.[0] ? (
           <CourseCardPricing
-            pricing={course.pricing}
             studentHome={studentHome}
-            freeWith={course.includedWith?.[0]?.title}
+            freeWith={course.includedWith[0].title}
           />
-        ) : null}
+        ) : (
+          <CourseCardEarlyPrice studentHome={studentHome} />
+        )}
         <span
           className={`${COURSE_CARD_BUTTON_CLASSES} flex justify-center gap-3`}
           data-control-radius-action

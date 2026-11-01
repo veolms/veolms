@@ -390,9 +390,15 @@ export function Timeline({
                   const start = Math.max(range.start, segment.start);
                   const end = Math.min(range.end, segment.end);
                   if (end <= start) return null;
+                  // Keyed by its start alone: a range grows at its end as
+                  // the video loads ahead, also while paused, and a key
+                  // with the end in it replaced the element each time.
+                  // On a lesson page every element added or removed
+                  // restyles the page (50 to 70 ms), which dropped frames
+                  // of a scroll through the discussions.
                   return (
                     <span
-                      key={`${range.start}-${range.end}`}
+                      key={range.start}
                       data-timeline-buffered-range=""
                       className="absolute inset-y-0 rounded-full bg-white/45"
                       style={{

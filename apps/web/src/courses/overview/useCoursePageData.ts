@@ -1,8 +1,5 @@
-import { useCallback, useState } from "react";
-import type {
-  CourseAccessResponse,
-  CourseOverviewResponse,
-} from "@veolms/contracts";
+import { useCallback, useEffect, useState } from "react";
+import type { CourseOverviewResponse } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { prefersReducedData } from "../../lib/reduced-data";
 import {
@@ -11,11 +8,15 @@ import {
   useCoursePublicCurriculum,
   useStaticCurriculum,
 } from "../../services/courses";
+import { keepCoursePrice } from "../liveCoursePrices";
 import {
   curriculumToOverview,
   type CourseCurriculumPreview,
 } from "../staticCurriculum";
-import { useProvisionalCourseAccess } from "./useProvisionalCourseAccess";
+import {
+  useProvisionalCourseAccess,
+  type ProvisionalCourseAccess,
+} from "./useProvisionalCourseAccess";
 
 export interface CoursePageData {
   /** The course as the page draws it; undefined until something is in. */
@@ -24,8 +25,22 @@ export interface CoursePageData {
   error: ApiError | null;
   refetch: () => void;
   /** What the viewer may do with the course; undefined until it answers. */
-  access: CourseAccessResponse | undefined;
+  access: ProvisionalCourseAccess | undefined;
   accessPending: boolean;
+  /**
+   * A signed-in learner's access answer failed and nothing else this tab
+   * has says whether the course is theirs: the page offers it neither way.
+   */
+  accessFailed: boolean;
+  /**
+   * The price in force: from the access answer, or the one this tab has
+   * (`liveCoursePrices`) until it comes. When the answer failed and the tab
+   * has none, a guest gets the list's or the built page's price and a
+   * signed-in viewer "failed". A built page draws none at all.
+   */
+  priceStatus: "known" | "pending" | "failed";
+  /** Whether the course is paid, also while its price is not known. */
+  pricingType: "free" | "paid" | null;
   /** How many sections the whole curriculum has. */
   totalSections: number | undefined;
   /** Whether `overview` holds every section, or the first ones only. */
@@ -96,19 +111,28 @@ export function useCoursePageData({
   const provisionalAccess = useProvisionalCourseAccess(
     courseSlug,
     viewerKind,
-    seeded?.pricing
+    seeded
       ? {
           id: seeded.curriculum.course.id,
           slug: seeded.curriculum.course.slug,
-          pricing: {
-            ...seeded.pricing,
-            salePrice: seeded.pricing.salePrice ?? null,
-          },
+          pricing: seeded.pricing
+            ? { ...seeded.pricing, salePrice: seeded.pricing.salePrice ?? null }
+            : undefined,
           canSelfEnroll: seeded.curriculum.canSelfEnroll,
         }
       : null,
   );
-  const access = answeredAccess ?? provisionalAccess;
+  const access: ProvisionalCourseAccess | undefined =
+    answeredAccess ?? provisionalAccess;
+  // The answer's price is the one in force: the cards and the next reload
+  // show it too.
+  const answeredCourseId = answeredAccess?.courseId;
+  const answeredPricing = answeredAccess?.pricing;
+  useEffect(() => {
+    if (answeredCourseId && answeredPricing) {
+      keepCoursePrice(answeredCourseId, answeredPricing);
+    }
+  }, [answeredCourseId, answeredPricing]);
   const isManager = answeredAccess?.viewer === "manager";
   const builtBeforeChange = Boolean(
     seeded &&
@@ -158,7 +182,16 @@ export function useCoursePageData({
   const curriculum =
     fullCurriculum ?? (builtBeforeChange ? undefined : seeded?.curriculum);
   const sectionsComplete = Boolean(fullCurriculum) || Boolean(seeded?.complete);
-  const pricing = access?.pricing ?? seeded?.pricing ?? null;
+  // The price in force could not be loaded: a visitor who is not signed in
+  // holds no course, so the list's (or the built page's) price is shown to
+  // them; a signed-in learner is told it could not be loaded.
+  const priceFailed =
+    !access?.pricing && accessQuery.isError && !accessQuery.isFetching;
+  const pricing =
+    access?.pricing ??
+    (priceFailed && viewerKind === "guest"
+      ? (provisionalAccess?.listedPricing ?? null)
+      : null);
 
   let overview: CourseOverviewResponse | undefined;
   if ((isManager || publicCurriculumMissing) && personal.data) {
@@ -212,6 +245,14 @@ export function useCoursePageData({
     access,
     accessPending:
       awaitsAccess && enabled && accessQuery.isPending && !provisionalAccess,
+    accessFailed:
+      awaitsAccess &&
+      enabled &&
+      accessQuery.isError &&
+      !accessQuery.isFetching &&
+      !provisionalAccess,
+    priceStatus: pricing ? "known" : priceFailed ? "failed" : "pending",
+    pricingType: pricing?.pricingType ?? seeded?.pricing?.pricingType ?? null,
     totalSections,
     sectionsComplete: overviewIsWhole,
     requestAllSections,

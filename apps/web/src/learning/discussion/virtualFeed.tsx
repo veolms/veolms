@@ -42,19 +42,77 @@ type DiscussionVirtualFeedProps = {
   stale?: boolean;
 };
 
+/**
+ * How many entries from the top stay mounted once the browser has had idle
+ * time to mount them (99 in 100 lessons have fewer threads; a page of the
+ * list holds 20). Beyond that the list is virtual as before.
+ */
+const DISCUSSION_MOUNTED_AHEAD_LIMIT = 60;
+/** Entries mounted per idle moment. */
+const DISCUSSION_MOUNTED_AHEAD_STEP = 2;
+
+/**
+ * The first entries of the list, mounted ahead of the reader in idle time
+ * and then kept, so that a scroll through them adds and removes nothing.
+ *
+ * Why: on a lesson page every element added to the page costs 15 ms or more
+ * of style work whatever it is (Chrome checks the page's many `:has()` rules
+ * against each insertion; an empty div measured 15 ms on 2026-11-02), and a
+ * comment card also takes 10 to 25 ms to render. Mounted as it scrolled into
+ * range, each card dropped frames of the scroll.
+ */
+function useEntriesMountedAhead(entries: Comment[]) {
+  const firstKey = entries[0] ? getClientEntityId(entries[0]) : null;
+  const target = Math.min(entries.length, DISCUSSION_MOUNTED_AHEAD_LIMIT);
+  const [mounted, setMounted] = useState({ firstKey, count: 0 });
+  // Another list (a new filter) starts again from the top.
+  const count = mounted.firstKey === firstKey ? mounted.count : 0;
+  // The end of the range the reader sees: entries up to there are mounted
+  // anyway, so mounting ahead starts after it.
+  const rangeEndRef = useRef(0);
+
+  useEffect(() => {
+    if (count >= target) return undefined;
+    const mountMore = () =>
+      setMounted({
+        firstKey,
+        count: Math.min(
+          target,
+          Math.max(count, rangeEndRef.current + 1) +
+            DISCUSSION_MOUNTED_AHEAD_STEP,
+        ),
+      });
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(mountMore);
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(mountMore, 100);
+    return () => window.clearTimeout(timer);
+  }, [count, firstKey, target]);
+
+  return { count, rangeEndRef };
+}
+
 function useDiscussionRangeExtractor(
   entries: Comment[],
   protectedEntryIndices: ReadonlySet<number>,
 ) {
+  const mountedAhead = useEntriesMountedAhead(entries);
+  const mountedAheadCount = mountedAhead.count;
+  const { rangeEndRef } = mountedAhead;
   return useCallback(
     (range: Parameters<typeof defaultRangeExtractor>[0]) => {
+      rangeEndRef.current = range.endIndex;
       const indices = new Set(defaultRangeExtractor(range));
       protectedEntryIndices.forEach((index) => {
         if (index >= 0 && index < entries.length) indices.add(index);
       });
+      for (let index = 0; index < mountedAheadCount; index += 1) {
+        if (index < entries.length) indices.add(index);
+      }
       return Array.from(indices).sort((left, right) => left - right);
     },
-    [entries.length, protectedEntryIndices],
+    [entries.length, mountedAheadCount, protectedEntryIndices, rangeEndRef],
   );
 }
 

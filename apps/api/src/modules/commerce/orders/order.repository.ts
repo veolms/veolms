@@ -1,4 +1,4 @@
-import { sql } from "kysely";
+import { sql, type RawBuilder } from "kysely";
 import type { OrderStatus, OrderItemType } from "@veolms/database";
 import type {
   OrderScope,
@@ -287,6 +287,19 @@ export async function listOrders(
               AND (
                 oi.title_snapshot ILIKE ${term}
                 OR ${fuzzyMatchesAny(search, [sql.ref("oi.title_snapshot")])}
+                -- Part of a course is shown by the course it opens.
+                OR EXISTS (
+                  SELECT 1 FROM course_links pcl
+                  JOIN courses part ON part.id = pcl.course_id
+                  JOIN courses opened ON opened.id = pcl.linked_course_id
+                  WHERE pcl.course_id = oi.course_id
+                    AND part.unlisted
+                    AND pcl.section_ids IS NOT NULL
+                    AND (
+                      opened.title ILIKE ${term}
+                      OR ${fuzzyMatchesAny(search, [sql.ref("opened.title")])}
+                    )
+                )
               )
           )
         )`,
@@ -343,6 +356,25 @@ export async function listOrders(
 }
 
 /**
+ * The currency an order counts in for statistics: the one it settled in
+ * when it was paid in another (a sale at a course's price for buyers
+ * outside India, settled in rupees), its own otherwise.
+ */
+const settledCurrency = sql<string>`coalesce(o.settlement_currency, o.currency)`;
+
+/**
+ * An amount of order `o` in minor units of `settledCurrency`: as it is, or
+ * for an order that settled in another currency, at the rate it settled at
+ * (its settlement amount against its total).
+ */
+function inSettledCurrency(amount: RawBuilder<number>) {
+  return sql<number>`(case
+    when o.settlement_currency is not null and o.total_amount > 0
+      then round(${amount}::numeric * o.settlement_amount / o.total_amount)
+    else ${amount} end)`;
+}
+
+/**
  * Aggregates the cohort of orders matching `filters`, one row per currency
  * (amounts in different currencies can't be summed).
  *
@@ -360,7 +392,7 @@ export async function getOrderStatsByCurrency(
   let query = database
     .selectFrom("orders as o")
     .select([
-      "o.currency",
+      settledCurrency.as("currency"),
       // Successful / completed only (exclude cancelled, failed, fully refunded).
       sql<number>`count(*) filter (where o.status in ('paid', 'partially_refunded'))::int`.as(
         "total_orders",
@@ -368,7 +400,7 @@ export async function getOrderStatsByCurrency(
       sql<number>`count(distinct o.user_id) filter (where o.status in ('paid', 'partially_refunded'))::int`.as(
         "unique_buyers",
       ),
-      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then o.total_amount else 0 end), 0)::bigint`.as(
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then ${inSettledCurrency(sql`o.total_amount`)} else 0 end), 0)::bigint`.as(
         "gross_paid",
       ),
       // Creator earnings: successful only (matches TagMango Total Earnings).
@@ -384,30 +416,30 @@ export async function getOrderStatsByCurrency(
       sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then o.after_commission_amount else 0 end), 0)::bigint`.as(
         "stored_earnings",
       ),
-      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') and o.after_commission_amount is null then o.total_amount else 0 end), 0)::bigint`.as(
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') and o.after_commission_amount is null then ${inSettledCurrency(sql`o.total_amount`)} else 0 end), 0)::bigint`.as(
         "unstored_gross",
       ),
-      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') and o.after_commission_amount is null then (
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') and o.after_commission_amount is null then ${inSettledCurrency(sql`(
         select coalesce(sum(r.amount), 0)
         from refunds r
         where r.order_id = o.id and r.status = 'processed'
           and ${notOfExtraPayment}
-      ) else 0 end), 0)::bigint`.as("unstored_refunded"),
-      sql<number>`coalesce(sum((
+      )`)} else 0 end), 0)::bigint`.as("unstored_refunded"),
+      sql<number>`coalesce(sum(${inSettledCurrency(sql`(
         select coalesce(sum(r.amount), 0)
         from refunds r
         where r.order_id = o.id and r.status = 'processed'
           and ${notOfExtraPayment}
-      )), 0)::bigint`.as("refunded_amount"),
-      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then (
+      )`)}), 0)::bigint`.as("refunded_amount"),
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then ${inSettledCurrency(sql`(
         select coalesce(sum(r.amount), 0)
         from refunds r
         where r.order_id = o.id and r.status = 'processed'
           and ${notOfExtraPayment}
-      ) else 0 end), 0)::bigint`.as("refunded_against_paid"),
+      )`)} else 0 end), 0)::bigint`.as("refunded_against_paid"),
     ])
-    .groupBy("o.currency")
-    .orderBy("o.currency");
+    .groupBy(settledCurrency)
+    .orderBy(settledCurrency);
 
   if (scope.type === "user") {
     query = query.where("o.user_id", "=", scope.id);
@@ -475,17 +507,17 @@ export async function getRevenueTrend(
       sql<string>`to_char(date_trunc('day', o.created_at at time zone 'UTC'), 'YYYY-MM-DD')`.as(
         "date",
       ),
-      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then o.total_amount else 0 end), 0)::bigint`.as(
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then ${inSettledCurrency(sql`o.total_amount`)} else 0 end), 0)::bigint`.as(
         "gross_paid",
       ),
-      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then (
+      sql<number>`coalesce(sum(case when o.status in ('paid', 'partially_refunded') then ${inSettledCurrency(sql`(
         select coalesce(sum(r.amount), 0)
         from refunds r
         where r.order_id = o.id and r.status = 'processed'
           and ${notOfExtraPayment}
-      ) else 0 end), 0)::bigint`.as("refunded_amount"),
+      )`)} else 0 end), 0)::bigint`.as("refunded_amount"),
     ])
-    .where("o.currency", "=", filters.currency)
+    .where(settledCurrency, "=", filters.currency)
     .groupBy(sql`date_trunc('day', o.created_at at time zone 'UTC')`)
     .orderBy(sql`date_trunc('day', o.created_at at time zone 'UTC')`);
 
@@ -777,30 +809,92 @@ export async function listOrderItemSummariesByOrderIds(
   if (orderIds.length === 0) return [];
   return await database
     .selectFrom("order_items")
+    .innerJoin("orders", "orders.id", "order_items.order_id")
     .leftJoin("courses", "courses.id", "order_items.course_id")
+    // An unlisted course has no page of its own: the course it unlocks (its
+    // first link) is the one to open, and the one it is named by. A link
+    // that names sections sells part of that course (a partial access).
+    .leftJoinLateral(
+      (eb) =>
+        eb
+          .selectFrom("course_links")
+          .innerJoin(
+            "courses as linked",
+            "linked.id",
+            "course_links.linked_course_id",
+          )
+          .select([
+            "course_links.linked_course_id",
+            "linked.title as linked_title",
+            sql<number | null>`cardinality(course_links.section_ids)`.as(
+              "open_sections",
+            ),
+            (inner) =>
+              inner
+                .selectFrom("course_sections")
+                .select(sql<number>`count(*)::int`.as("n"))
+                .whereRef(
+                  "course_sections.course_id",
+                  "=",
+                  "course_links.linked_course_id",
+                )
+                .where("course_sections.deleted_at", "is", null)
+                .as("total_sections"),
+          ])
+          .whereRef("course_links.course_id", "=", "order_items.course_id")
+          .where("courses.unlisted", "=", true)
+          .where("linked.deleted_at", "is", null)
+          .orderBy("course_links.position", "asc")
+          .orderBy("course_links.created_at", "asc")
+          .limit(1)
+          .as("opens"),
+      (join) => join.onTrue(),
+    )
     .select([
+      "order_items.id",
       "order_items.order_id",
       "order_items.title_snapshot",
       "order_items.course_id",
+      "courses.title as course_title",
+      "opens.linked_course_id as opens_course_id",
+      "opens.linked_title as opens_course_title",
+      "opens.open_sections",
+      "opens.total_sections",
     ])
-    // An unlisted course has no page of its own: the course it unlocks
-    // (its first link) is the one to open.
+    // A course its buyer had already paid for part of: the rest of it, an
+    // upgrade (priced as one, see pricing's `upgradeCredit`).
     .select((eb) =>
       eb
-        .selectFrom("course_links")
-        .innerJoin(
-          "courses as linked",
-          "linked.id",
-          "course_links.linked_course_id",
+        .exists(
+          eb
+            .selectFrom("order_items as part_items")
+            .innerJoin(
+              "orders as part_orders",
+              "part_orders.id",
+              "part_items.order_id",
+            )
+            .innerJoin(
+              "courses as part_courses",
+              "part_courses.id",
+              "part_items.course_id",
+            )
+            .innerJoin(
+              "course_links as part_links",
+              "part_links.course_id",
+              "part_courses.id",
+            )
+            .select(sql<number>`1`.as("one"))
+            .whereRef(
+              "part_links.linked_course_id",
+              "=",
+              "order_items.course_id",
+            )
+            .whereRef("part_orders.user_id", "=", "orders.user_id")
+            .whereRef("part_orders.paid_at", "<", "orders.created_at")
+            .where("part_courses.unlisted", "=", true)
+            .where("part_links.section_ids", "is not", null),
         )
-        .select("course_links.linked_course_id")
-        .whereRef("course_links.course_id", "=", "order_items.course_id")
-        .where("courses.unlisted", "=", true)
-        .where("linked.deleted_at", "is", null)
-        .orderBy("course_links.position", "asc")
-        .orderBy("course_links.created_at", "asc")
-        .limit(1)
-        .as("opens_course_id"),
+        .as("completes_part"),
     )
     .where("order_items.order_id", "in", orderIds)
     .orderBy("order_items.created_at", "asc")
@@ -984,6 +1078,28 @@ export async function cancelOrderWithoutPayment(
     )
     .returning("id")
     .executeTakeFirst();
+}
+
+/**
+ * Keeps what an order paid in another currency settles for (Razorpay names
+ * it in rupees on a dollar payment), once: revenue reports count the order
+ * through it. Nothing for an amount in the order's own currency.
+ */
+export async function recordOrderSettlement(
+  database: Executor,
+  orderId: string,
+  settlement: { amount: number; currency: string },
+) {
+  await database
+    .updateTable("orders")
+    .set({
+      settlement_amount: settlement.amount,
+      settlement_currency: settlement.currency,
+    })
+    .where("id", "=", orderId)
+    .where("currency", "<>", settlement.currency)
+    .where("settlement_amount", "is", null)
+    .execute();
 }
 
 /**

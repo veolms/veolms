@@ -1,0 +1,66 @@
+name: "🛠️ Developer Tools & Setup"
+description: "Report issues with local development, Docker, pnpm scripts, database migrations, or CLI tools."
+title: "[DevTools]: "
+labels: ["dx", "tooling"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not report security vulnerabilities in public issues.** Please read the [security policy](https://github.com/veolms/veolms/blob/dev/SECURITY.md) and report suspected vulnerabilities privately as described there.
+
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: This issue does not disclose a security vulnerability or sensitive security details.
+          required: true
+
+  - type: dropdown
+    id: affected-tool
+    attributes:
+      label: Which setup / tool is having issues?
+      options:
+        - "Getting started / First-time setup"
+        - "Docker / PostgreSQL database"
+        - "Running dev servers (pnpm dev)"
+        - "Database migrations / seed (pnpm db:migrate, pnpm db:seed)"
+        - "CLI tools (user:cli, import:youtube)"
+        - "Building or testing (pnpm build, pnpm test)"
+        - "Other"
+    validations:
+      required: true
+
+  - type: input
+    id: os-setup
+    attributes:
+      label: Your Operating System & Setup
+      description: OS version, architecture, Node.js version, and pnpm version.
+      placeholder: "e.g. Ubuntu 24.04 x86_64, Node v24.22.1, pnpm 11.18.0"
+    validations:
+      required: true
+
+  - type: input
+    id: command-run
+    attributes:
+      label: What command did you run?
+      placeholder: "e.g. pnpm dev or pnpm db:migrate"
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-trace
+    attributes:
+      label: What happened / Error trace
+      description: Paste the exact terminal output, stack trace, or error message.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-tried
+    attributes:
+      label: What did you try to fix it?
+      description: Any troubleshooting steps you attempted before opening this issue.
