@@ -197,11 +197,19 @@ export function computeOrderSummary(
   let failed = 0;
   let refunded = 0;
   let totalSpentAmount = 0;
+  // Orders in different currencies (rupees, and dollars from a course
+  // bought at its price outside India) are added up apart.
+  const spentByCurrency = new Map<string, number>();
 
   for (const o of orders) {
     if (o.status === "completed") {
       completed += 1;
       totalSpentAmount += o.price;
+      const currency = o.currency || "INR";
+      spentByCurrency.set(
+        currency,
+        (spentByCurrency.get(currency) ?? 0) + o.price,
+      );
     } else if (o.status === "pending") {
       pending += 1;
     } else if (o.status === "failed") {
@@ -212,7 +220,20 @@ export function computeOrderSummary(
   }
 
   // `price` on the view model is already in major units.
-  const formattedTotal = formatMoney(totalSpentAmount, { unit: "major" });
+  const formattedTotal =
+    spentByCurrency.size > 1
+      ? [...spentByCurrency]
+          .map(([currency, amount]) =>
+            formatMoney(Math.round(amount * 100) / 100, {
+              currency,
+              unit: "major",
+            }),
+          )
+          .join(" + ")
+      : formatMoney(totalSpentAmount, {
+          currency: [...spentByCurrency.keys()][0] ?? "INR",
+          unit: "major",
+        });
 
   return {
     totalOrders: orders.length,

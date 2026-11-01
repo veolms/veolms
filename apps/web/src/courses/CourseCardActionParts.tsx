@@ -4,6 +4,7 @@ import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import type { Course } from "./catalogue";
 import type { CourseCardLearnerAction } from "./courseCardAction";
 import { courseCardShimmerClass } from "./courseCardShimmer";
+import { priceRegionClass } from "./CoursePriceSwitch";
 import { FreeWithCourseNote } from "./FreeWithCourseNote";
 
 /** The card's main button, as every card draws it. */
@@ -49,29 +50,78 @@ export function CourseCardPricing({
       </div>
     );
   }
+  if (!pricing.international) {
+    return (
+      <CourseCardPriceLine
+        line={pricing}
+        showDiscountBadge={pricing.showDiscountBadge}
+        studentHome={studentHome}
+        display="flex"
+      />
+    );
+  }
+  // Both prices are in the page; the visitor's region picks one, and a
+  // shimmer of the line's height stands in until it is known.
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        className={`mt-3 mb-4 h-[1.55rem] w-1/2 rounded-md ${courseCardShimmerClass} ${priceRegionClass("pending", "block")}`}
+      />
+      <CourseCardPriceLine
+        line={pricing}
+        showDiscountBadge={pricing.showDiscountBadge}
+        studentHome={studentHome}
+        display={priceRegionClass("domestic")}
+      />
+      <CourseCardPriceLine
+        line={pricing.international}
+        showDiscountBadge={pricing.showDiscountBadge}
+        studentHome={studentHome}
+        display={priceRegionClass("international")}
+      />
+    </>
+  );
+}
+
+function CourseCardPriceLine({
+  line,
+  showDiscountBadge,
+  studentHome,
+  display,
+}: {
+  line: Pick<
+    NonNullable<Course["pricing"]>,
+    "price" | "originalPrice" | "discount"
+  >;
+  showDiscountBadge?: boolean;
+  studentHome: boolean;
+  /** "flex", or the classes that show it for one region only. */
+  display: string;
+}) {
   return (
     <div
-      className={`${studentHome ? "mt-3 mb-4 flex flex-wrap items-center gap-x-2 gap-y-1" : "mt-3 mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"}`}
+      className={`${display} ${studentHome ? "mt-3 mb-4 flex-wrap items-center gap-x-2 gap-y-1" : "mt-3 mb-4 flex-wrap items-baseline gap-x-3 gap-y-1"}`}
       data-course-card-pricing
-      aria-label={`Course price ${pricing.price}`}
+      aria-label={`Course price ${line.price}`}
     >
-      {Boolean(pricing.originalPrice) && (
+      {Boolean(line.originalPrice) && (
         <span
           className={`${studentHome ? "shrink-0 whitespace-nowrap " : ""}text-[0.95rem] font-medium leading-none text-(--muted) line-through`}
         >
-          {pricing.originalPrice}
+          {line.originalPrice}
         </span>
       )}
       <strong
         className={`${studentHome ? "shrink-0 " : ""}text-[1.55rem] font-extrabold leading-none tracking-[-0.035em] text-(--text)`}
       >
-        {pricing.price}
+        {line.price}
       </strong>
       {/* Paid courses opt in from their pricing settings; a free course
           with an original price always shows "Free". */}
-      {pricing.showDiscountBadge && Boolean(pricing.discount) && (
+      {showDiscountBadge && Boolean(line.discount) && (
         <span className="inline-flex items-center self-center rounded-lg bg-[color-mix(in_srgb,var(--success)_14%,transparent)] px-2.5 py-1.5 text-[0.8rem] leading-none font-bold text-[color-mix(in_srgb,var(--success)_72%,var(--text))]">
-          {pricing.discount}
+          {line.discount}
         </span>
       )}
     </div>

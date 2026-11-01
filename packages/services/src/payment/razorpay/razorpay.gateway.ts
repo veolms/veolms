@@ -26,6 +26,40 @@ export interface RazorpayGatewayConfig {
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /**
+ * What a payment in another currency settles for. Razorpay settles in
+ * rupees and names the amount (`base_amount`, in paise) only on a payment
+ * whose currency is not INR.
+ */
+function settlementOf(payment: {
+  currency?: string;
+  base_amount?: number | null;
+  base_currency?: string | null;
+}): { settlementAmount: number | null; settlementCurrency: string | null } {
+  if (
+    typeof payment.base_amount !== "number" ||
+    !payment.base_currency ||
+    payment.base_currency.toUpperCase() === payment.currency?.toUpperCase()
+  ) {
+    return { settlementAmount: null, settlementCurrency: null };
+  }
+  return {
+    settlementAmount: payment.base_amount,
+    settlementCurrency: payment.base_currency.toUpperCase(),
+  };
+}
+
+/** The same, with the keys left out when there is nothing to name. */
+function optionalSettlement(settlement: ReturnType<typeof settlementOf>) {
+  return settlement.settlementAmount === null ||
+    settlement.settlementCurrency === null
+    ? {}
+    : {
+        settlementAmount: settlement.settlementAmount,
+        settlementCurrency: settlement.settlementCurrency,
+      };
+}
+
+/**
  * Lightweight Razorpay Gateway Adapter encapsulating the Razorpay REST API
  * and cryptographic signature verification.
  */
@@ -184,6 +218,8 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       order_id: string;
       amount: number;
       currency: string;
+      base_amount?: number | null;
+      base_currency?: string | null;
       status: string;
       captured?: boolean;
       amount_refunded?: number;
@@ -217,6 +253,7 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       gatewayOrderId: payment.order_id,
       amount: payment.amount,
       currency: payment.currency,
+      ...settlementOf(payment),
       status: mappedStatus,
       captured: payment.captured,
       amountRefunded: payment.amount_refunded,
@@ -410,6 +447,8 @@ export class RazorpayPaymentGateway implements PaymentGateway {
                 order_id?: string;
                 amount?: number;
                 currency?: string;
+                base_amount?: number | null;
+                base_currency?: string | null;
                 method?: string;
                 bank?: string;
                 wallet?: string;
@@ -505,6 +544,9 @@ export class RazorpayPaymentGateway implements PaymentGateway {
       gatewayRefundId: refundEntity?.id,
       amount,
       currency,
+      ...(isRefundEvent || !paymentEntity
+        ? {}
+        : optionalSettlement(settlementOf(paymentEntity))),
       paymentMethod: paymentEntity?.method
         ? {
             method: paymentEntity.method,

@@ -9,6 +9,10 @@ import type {
 } from "@veolms/contracts";
 import { httpError } from "../../../lib/errors.ts";
 import { hasDiscountBadgeColumn } from "../shared/discount-badge-column.ts";
+import {
+  automaticInternationalPrice,
+  exchangeRates,
+} from "../../commerce/pricing/automatic-international-price.ts";
 import * as configRepo from "./configuration.repository.ts";
 import { getCourseAndVerifyOwner as verifyCourseOwner } from "../shared/courses.utils.ts";
 import {
@@ -125,6 +129,47 @@ export function createConfigurationService({
     const salePrice = linkedOnly ? 0 : updates.salePrice;
     const pricingType: "free" | "paid" = salePrice === 0 ? "free" : "paid";
 
+    // The price for buyers outside India. It is the automatic one (the
+    // rupee prices at the day's rate, rounded up to .99) until staff type a
+    // price or remove it, which turns that off; a course priced for the
+    // first time gets it. While automatic it is worked out again when the
+    // rupee prices change, not on every save, so the rate moving does not
+    // change a price nobody touched. Only a course that is sold has one: a
+    // free or linked-only course loses it.
+    const stored = existing?.international_currency
+      ? {
+          currency: existing.international_currency,
+          priceMinor: Number(existing.international_price_minor),
+          salePriceMinor: Number(existing.international_sale_price_minor),
+        }
+      : null;
+    const internationalAuto =
+      updates.internationalAuto ??
+      (updates.international !== undefined
+        ? false
+        : (existing?.international_price_auto ?? true));
+    let international: typeof stored = null;
+    if (pricingType === "paid") {
+      if (!internationalAuto) {
+        international =
+          updates.international === undefined ? stored : updates.international;
+      } else if (
+        !stored ||
+        updates.internationalAuto === true ||
+        existing?.price !== price ||
+        existing?.sale_price !== salePrice
+      ) {
+        const inrPerUsd = await exchangeRates.inrPerUsd();
+        // With no rate to be had, the price it had stands (none for a
+        // course priced for the first time: rupees until the next save).
+        international = inrPerUsd
+          ? automaticInternationalPrice({ salePrice, price, inrPerUsd })
+          : stored;
+      } else {
+        international = stored;
+      }
+    }
+
     // A badge needs a discount to announce.
     const showDiscountBadge =
       price > salePrice && updates.showDiscountBadge === true;
@@ -147,6 +192,10 @@ export function createConfigurationService({
         sale_price: salePrice,
         ...(canStoreBadge ? { show_discount_badge: showDiscountBadge } : {}),
         linked_only: linkedOnly,
+        international_currency: international?.currency ?? null,
+        international_price_minor: international?.priceMinor ?? null,
+        international_sale_price_minor: international?.salePriceMinor ?? null,
+        international_price_auto: internationalAuto,
         created_at: now,
         updated_at: now,
       });
@@ -181,6 +230,10 @@ export function createConfigurationService({
       sale_price: salePrice,
       show_discount_badge: showDiscountBadge,
       linked_only: linkedOnly,
+      international_currency: international?.currency ?? null,
+      international_price_minor: international?.priceMinor ?? null,
+      international_sale_price_minor: international?.salePriceMinor ?? null,
+      international_price_auto: internationalAuto,
     });
   }
 

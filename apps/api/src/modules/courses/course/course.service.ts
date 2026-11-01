@@ -49,6 +49,10 @@ import {
 import { hasAcademyPermission } from "../../authorization/index.ts";
 import * as courseRepo from "./course.repository.ts";
 import {
+  presentInternationalPrice,
+  type StoredInternationalPrice,
+} from "../shared/international-price.ts";
+import {
   createCategoryService,
   type CategoryService,
 } from "../category/category.service.ts";
@@ -194,7 +198,7 @@ export interface CourseAccessFacts {
   canSelfEnroll: boolean;
 }
 
-interface StoredPricingFacts {
+interface StoredPricingFacts extends StoredInternationalPrice {
   pricing_type: string | null;
   price: number | string | null;
   currency: string | null;
@@ -214,6 +218,7 @@ function presentPricingSummary(row: StoredPricingFacts): CoursePricingSummary {
             ? Number(row.sale_price)
             : null,
         showDiscountBadge: row.show_discount_badge === true,
+        international: presentInternationalPrice(row),
       }
     : {
         pricingType: "free",
@@ -221,6 +226,7 @@ function presentPricingSummary(row: StoredPricingFacts): CoursePricingSummary {
         currency: "INR",
         salePrice: null,
         showDiscountBadge: false,
+        international: null,
       };
 }
 
@@ -514,6 +520,12 @@ export function createCourseService({
             ? {
                 amount: summary.pricing.salePrice ?? summary.pricing.price,
                 currency: summary.pricing.currency,
+                international: summary.pricing.international
+                  ? {
+                      amountMinor: summary.pricing.international.salePriceMinor,
+                      currency: summary.pricing.international.currency,
+                    }
+                  : null,
               }
             : null,
       }));
@@ -1596,6 +1608,7 @@ export function createCourseService({
             salePrice: pricing.sale_price,
             // Absent until the migration that adds the column has run.
             showDiscountBadge: pricing.show_discount_badge === true,
+            international: presentInternationalPrice(pricing),
           }
         : null,
       settings: settings
