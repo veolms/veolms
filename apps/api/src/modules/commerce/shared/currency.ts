@@ -11,6 +11,7 @@
 export {
   formatMoney,
   minorUnitsPerMajor,
+  pricingAmountToMinorUnits,
   toMajorUnits,
   toMinorUnits,
 } from "@veolms/contracts";

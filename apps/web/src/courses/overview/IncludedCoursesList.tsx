@@ -1,7 +1,10 @@
 import type { MouseEvent } from "react";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import type { CourseOverviewResponse } from "@veolms/contracts";
+import { formatMoney } from "@veolms/contracts/commerce/money";
 import { formatPriceWithCurrency } from "./coursePriceFormat";
+import { CoursePriceSwitch } from "../CoursePriceSwitch";
+import { courseCardShimmerClass } from "../courseCardShimmer";
 
 export type IncludedCourse = NonNullable<
   CourseOverviewResponse["includedCourses"]
@@ -80,9 +83,30 @@ export function IncludedCoursesList({
                     {course.worth ? (
                       <span className="truncate">
                         Worth{" "}
-                        {formatPriceWithCurrency(
-                          course.worth.amount,
-                          course.worth.currency,
+                        {course.worth.international ? (
+                          // Its price in the visitor's region, or a
+                          // shimmer until that is known.
+                          <CoursePriceSwitch
+                            display="inline"
+                            domestic={formatPriceWithCurrency(
+                              course.worth.amount,
+                              course.worth.currency,
+                            )}
+                            international={formatMoney(
+                              course.worth.international.amountMinor,
+                              { currency: course.worth.international.currency },
+                            )}
+                            pending={
+                              <span
+                                className={`inline-block h-[0.8em] w-12 rounded-sm align-middle ${courseCardShimmerClass}`}
+                              />
+                            }
+                          />
+                        ) : (
+                          formatPriceWithCurrency(
+                            course.worth.amount,
+                            course.worth.currency,
+                          )
                         )}
                       </span>
                     ) : null}

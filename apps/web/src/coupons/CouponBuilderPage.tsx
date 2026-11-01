@@ -532,6 +532,12 @@ export function CouponBuilderPage({
                   {discountType === "percentage" ? "%" : "₹"}
                 </span>
               </div>
+              {discountType === "fixed" ? (
+                <p className="m-0 mt-1.5 text-xs text-(--muted)">
+                  On a course sold in dollars outside India, it takes off the
+                  same share of the price.
+                </p>
+              ) : null}
             </div>
           </div>
 

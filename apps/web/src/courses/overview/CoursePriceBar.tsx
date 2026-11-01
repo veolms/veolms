@@ -19,6 +19,8 @@ import type {
   CoursePurchasePerk,
 } from "./coursePurchasePerks";
 import { overviewCardClasses } from "./overviewStyles";
+import { courseCardShimmerClass } from "../courseCardShimmer";
+import { priceRegionClass } from "../CoursePriceSwitch";
 
 export interface CoursePriceBarProps {
   /** Left out for someone who manages the course: they have nothing to buy. */
@@ -50,6 +52,16 @@ export interface CoursePriceBarProps {
    * with `price` on a phone, and with a coupon in use beside the button.
    */
   priceBreakdown?: CoursePriceBreakdownData;
+  /**
+   * For a course that also has a price for buyers outside India, while the
+   * box shows the course's own price: both prices, of which the visitor's
+   * region shows one, and a shimmer of their size until it is known (see
+   * `priceRegion.ts`). `price` and `priceBreakdown` are then the rupee ones.
+   */
+  regional?: {
+    domestic: RegionalPriceView;
+    international: RegionalPriceView;
+  };
   /** Left out when no coupon can be used on this course. */
   coupon?: CourseCouponControlProps;
   /** A coupon problem to show under the bar. */
@@ -80,11 +92,17 @@ export interface CoursePriceBarProps {
    */
   includedCourses?: ReactNode;
   /** A small line right under the button: how the payment is made. */
-  checkoutNote?: string;
+  checkoutNote?: ReactNode;
   /** The green box at the foot of the card, for a course that is paid for. */
   guarantee?: CoursePurchaseGuarantee;
   /** A further row under the price, above the perks. */
   children?: ReactNode;
+}
+
+/** The price part of the bar for one region (see `CoursePriceBarProps.regional`). */
+export interface RegionalPriceView {
+  price: NonNullable<CoursePriceBarProps["price"]>;
+  priceBreakdown?: CoursePriceBreakdownData;
 }
 
 /** A saving beside the price: the sale's, and a coupon's after it. */
@@ -331,6 +349,7 @@ export function CoursePriceDisplay({
 export function CoursePriceBar({
   price,
   priceBreakdown,
+  regional,
   coupon,
   couponError,
   action,
@@ -365,7 +384,36 @@ export function CoursePriceBar({
               : "flex flex-col gap-x-6 gap-y-3.5 @2xl/price:flex-row @2xl/price:flex-wrap @2xl/price:items-center @2xl/price:justify-between"
           }
         >
-          {receipt && priceBreakdown ? (
+          {regional ? (
+            <>
+              {/* The rupee price laid out unseen under the shimmer, so the
+                  box is the height it will be. */}
+              <div
+                aria-hidden="true"
+                className={`${priceRegionClass("pending", "block")} relative min-w-0`}
+              >
+                <div className="invisible">
+                  <RegionalPrice view={regional.domestic} receipt={receipt} />
+                </div>
+                <div
+                  className={`absolute inset-0 rounded-lg ${courseCardShimmerClass}`}
+                />
+              </div>
+              <div
+                className={`${priceRegionClass("domestic", "block")} min-w-0`}
+              >
+                <RegionalPrice view={regional.domestic} receipt={receipt} />
+              </div>
+              <div
+                className={`${priceRegionClass("international", "block")} min-w-0`}
+              >
+                <RegionalPrice
+                  view={regional.international}
+                  receipt={receipt}
+                />
+              </div>
+            </>
+          ) : receipt && priceBreakdown ? (
             <CoursePriceBreakdown breakdown={priceBreakdown} />
           ) : price ? (
             <CoursePriceDisplay price={price} />
@@ -612,5 +660,20 @@ function PriceBarLinkAction({
         <ArrowRight size={17} weight="bold" aria-hidden="true" />
       </span>
     </a>
+  );
+}
+
+/** One region's price, drawn as the bar draws its only one. */
+function RegionalPrice({
+  view,
+  receipt,
+}: {
+  view: RegionalPriceView;
+  receipt: boolean;
+}) {
+  return receipt && view.priceBreakdown ? (
+    <CoursePriceBreakdown breakdown={view.priceBreakdown} />
+  ) : (
+    <CoursePriceDisplay price={view.price} />
   );
 }

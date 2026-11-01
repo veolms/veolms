@@ -45,6 +45,7 @@ import { getLearnerStartedBootstrapScript } from "./home/learner/learnerCoursesS
 import { getHomeHintBootstrapScript } from "./store/homeHint";
 import { getLearnerHomeSnapshotBootstrapScript } from "./home/learner/learnerHomeSnapshot";
 import { getPlaybackBootstrapHeadStartScript } from "./learning/playbackBootstrapHeadStart";
+import { getPriceRegionBootstrapScript } from "./courses/priceRegion";
 import { getCurriculumEarlyScrollScript } from "./learning/curriculumEarlyScroll";
 import { getLessonPageEarlyStateScript } from "./learning/lessonPageEarlyState";
 import { getApiBaseUrl } from "./lib/api-client";
@@ -284,7 +285,7 @@ export function Layout({ children }: LayoutProps) {
         <Meta />
         <script
           dangerouslySetInnerHTML={{
-            __html: getPlaybackBootstrapHeadStartScript(getApiBaseUrl()),
+            __html: `${getPlaybackBootstrapHeadStartScript(getApiBaseUrl())}${getPriceRegionBootstrapScript(getApiBaseUrl())}`,
           }}
         />
         <script

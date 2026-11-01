@@ -13,9 +13,25 @@ export interface PricingFormState {
    * The price fields are kept out of the save while it is on.
    */
   linkedOnly: boolean;
+  /**
+   * The price for buyers outside India, in dollars as typed ("43.99").
+   * Empty sells the course in rupees everywhere. The original price is
+   * optional, as the rupee one is.
+   */
+  internationalSellingPrice: string;
+  internationalOriginalPrice: string;
+  /**
+   * The international price is worked out by the server from the rupee
+   * prices at the day's rate (rounded up to .99), and again when they
+   * change. Typing a price turns it off. On for a course not priced yet.
+   */
+  internationalAuto: boolean;
 }
 
 export type PricingState = PricingFormState;
+
+/** The currency of a course's price for buyers outside India. */
+export const INTERNATIONAL_PRICE_CURRENCY = "USD";
 
 export const initialPricingState: PricingFormState = {
   pricingType: "paid",
@@ -24,6 +40,9 @@ export const initialPricingState: PricingFormState = {
   currency: "INR",
   showDiscountBadge: false,
   linkedOnly: false,
+  internationalSellingPrice: "",
+  internationalOriginalPrice: "",
+  internationalAuto: true,
 };
 
 /**
@@ -44,7 +63,34 @@ export const normalizePricingState = (
     currency: raw?.currency ? String(raw.currency).trim() : "INR",
     showDiscountBadge: raw?.showDiscountBadge === true,
     linkedOnly: raw?.linkedOnly === true,
+    internationalSellingPrice: raw?.internationalSellingPrice
+      ? String(raw.internationalSellingPrice).trim()
+      : "",
+    internationalOriginalPrice: raw?.internationalOriginalPrice
+      ? String(raw.internationalOriginalPrice).trim()
+      : "",
+    internationalAuto: raw?.internationalAuto !== false,
   };
+};
+
+/** A dollar amount as typed ("43.99", "44"), in cents; null when empty or unreadable. */
+export const dollarsToCents = (value: string): number | null => {
+  const raw = value.replace(/,/g, "").trim();
+  if (!/^\d+(?:\.\d{1,2})?$/u.test(raw)) return null;
+  return Math.round(parseFloat(raw) * 100);
+};
+
+/** Cents as the field shows them: "44" for whole dollars, "43.99" otherwise. */
+export const centsToDollars = (cents: number): string =>
+  cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
+
+/**
+ * What may be typed into a dollar field: digits and one point, with two
+ * decimals at most.
+ */
+export const toDollarInput = (value: string): string => {
+  const [whole = "", ...rest] = value.replace(/[^\d.]/g, "").split(".");
+  return rest.length > 0 ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
 };
 
 /**
@@ -69,7 +115,15 @@ export const isPricingEqual = (
   return (
     normA.sellingPrice === normB.sellingPrice &&
     normA.originalPrice === normB.originalPrice &&
-    hasDiscountBadge(normA) === hasDiscountBadge(normB)
+    hasDiscountBadge(normA) === hasDiscountBadge(normB) &&
+    normA.internationalAuto === normB.internationalAuto &&
+    // An automatic price is the server's to work out: what the form shows
+    // of it is not an edit.
+    (normA.internationalAuto ||
+      (dollarsToCents(normA.internationalSellingPrice) ===
+        dollarsToCents(normB.internationalSellingPrice) &&
+        dollarsToCents(normA.internationalOriginalPrice) ===
+          dollarsToCents(normB.internationalOriginalPrice)))
   );
 };
 
@@ -190,7 +244,59 @@ export function validatePricing(pricing: PricingState): {
     }
   }
 
+  const intlSell = pricing.internationalSellingPrice.trim();
+  const intlOrig = pricing.internationalOriginalPrice.trim();
+  if (!pricing.internationalAuto && (intlSell || intlOrig)) {
+    if (sellNum === 0) {
+      return {
+        isValid: false,
+        error:
+          "A free course is free everywhere: remove the international price, or give the course a price.",
+      };
+    }
+    const intlSellCents = dollarsToCents(intlSell);
+    if (intlSellCents === null || intlSellCents < 100) {
+      return {
+        isValid: false,
+        error:
+          "Enter the international selling price in dollars, at least 1.00, or leave both international prices empty.",
+      };
+    }
+    if (intlOrig) {
+      const intlOrigCents = dollarsToCents(intlOrig);
+      if (intlOrigCents === null) {
+        return {
+          isValid: false,
+          error:
+            "International original price must be an amount such as 64.99.",
+        };
+      }
+      if (intlSellCents > intlOrigCents) {
+        return {
+          isValid: false,
+          error:
+            "International selling price cannot be greater than its original price.",
+        };
+      }
+    }
+  }
+
   return { isValid: true, error: null };
+}
+
+/** The price for buyers outside India the form asks for, or null for none. */
+function internationalPricingPayload(state: PricingFormState) {
+  const salePriceMinor = dollarsToCents(state.internationalSellingPrice);
+  if (salePriceMinor === null) return null;
+  const originalMinor = dollarsToCents(state.internationalOriginalPrice);
+  return {
+    currency: INTERNATIONAL_PRICE_CURRENCY,
+    priceMinor:
+      originalMinor !== null && originalMinor > salePriceMinor
+        ? originalMinor
+        : salePriceMinor,
+    salePriceMinor,
+  } as const;
 }
 
 /**
@@ -208,6 +314,8 @@ export function buildPricingPayload(state: PricingFormState) {
       currency: state.currency || "INR",
       showDiscountBadge: false,
       linkedOnly: true,
+      internationalAuto: state.internationalAuto,
+      international: null,
     };
   }
 
@@ -227,6 +335,14 @@ export function buildPricingPayload(state: PricingFormState) {
     // A badge needs a discount to announce.
     showDiscountBadge: price > salePrice && state.showDiscountBadge,
     linkedOnly: false,
+    internationalAuto: state.internationalAuto,
+    // An automatic price is worked out by the server; a typed one is sent.
+    ...(state.internationalAuto
+      ? {}
+      : {
+          international:
+            salePrice === 0 ? null : internationalPricingPayload(state),
+        }),
   };
 }
 
@@ -241,6 +357,8 @@ export function pricingFormFromServer(pricing: {
   currency?: string | null;
   showDiscountBadge?: boolean | null;
   linkedOnly?: boolean | null;
+  international?: { priceMinor: number; salePriceMinor: number } | null;
+  internationalAuto?: boolean | null;
 }): PricingFormState {
   // A linked-only course's stored zeros are not a price: the fields start
   // empty, so turning it off asks for one before anything is saved.
@@ -248,6 +366,7 @@ export function pricingFormFromServer(pricing: {
     return normalizePricingState({
       currency: pricing.currency || "INR",
       linkedOnly: true,
+      internationalAuto: pricing.internationalAuto !== false,
     });
   }
   const salePrice = pricing.salePrice ?? pricing.price;
@@ -256,5 +375,14 @@ export function pricingFormFromServer(pricing: {
     originalPrice: pricing.price > salePrice ? String(pricing.price) : "",
     currency: pricing.currency || "INR",
     showDiscountBadge: pricing.showDiscountBadge === true,
+    internationalSellingPrice: pricing.international
+      ? centsToDollars(pricing.international.salePriceMinor)
+      : "",
+    internationalOriginalPrice:
+      pricing.international &&
+      pricing.international.priceMinor > pricing.international.salePriceMinor
+        ? centsToDollars(pricing.international.priceMinor)
+        : "",
+    internationalAuto: pricing.internationalAuto !== false,
   });
 }

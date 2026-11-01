@@ -107,6 +107,12 @@ export async function upsertPricing(
     show_discount_badge?: boolean;
     /** Left out to keep what is stored. */
     linked_only?: boolean;
+    /** The three are left out together to keep what is stored. */
+    international_currency?: string | null;
+    international_price_minor?: number | null;
+    international_sale_price_minor?: number | null;
+    /** Left out to keep what is stored. */
+    international_price_auto?: boolean;
     created_at: Date;
     updated_at: Date;
   },
@@ -126,6 +132,17 @@ export async function upsertPricing(
         ...(values.linked_only === undefined
           ? {}
           : { linked_only: values.linked_only }),
+        ...(values.international_currency === undefined
+          ? {}
+          : {
+              international_currency: values.international_currency,
+              international_price_minor: values.international_price_minor,
+              international_sale_price_minor:
+                values.international_sale_price_minor,
+            }),
+        ...(values.international_price_auto === undefined
+          ? {}
+          : { international_price_auto: values.international_price_auto }),
         updated_at: values.updated_at,
       }),
     )

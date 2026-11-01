@@ -92,6 +92,7 @@ export function useProvisionalCourseAccess(
     pricing: {
       ...listed.pricing,
       showDiscountBadge: listed.pricing.showDiscountBadge ?? false,
+      international: listed.pricing.international ?? null,
     },
     progress:
       enrolled && held

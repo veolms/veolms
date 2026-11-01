@@ -11,6 +11,9 @@ import type {
   PaymentGateways,
 } from "@veolms/contracts";
 
+/** The rate the fake gateway settles a payment in another currency at. */
+export const FAKE_RUPEES_PER_UNIT = 88;
+
 interface FakeOrder {
   gatewayOrderId: string;
   amount: number;
@@ -58,9 +61,17 @@ export class FakePaymentGateway implements PaymentGateway {
       gatewayOrderId,
       amount: order.amount,
       currency: order.currency,
+      // Razorpay settles in rupees and says for how much on a payment in
+      // another currency; here at ₹88 to the dollar.
+      ...(order.currency === "INR"
+        ? {}
+        : {
+            settlementAmount: order.amount * FAKE_RUPEES_PER_UNIT,
+            settlementCurrency: "INR",
+          }),
       status: "captured",
       captured: true,
-      method: "upi",
+      method: order.currency === "INR" ? "upi" : "card",
     };
     order.payments.push(payment);
     this.#payments.set(payment.gatewayPaymentId, payment);
@@ -245,6 +256,14 @@ export class FakePaymentGateway implements PaymentGateway {
       gatewayPaymentId: payload.gatewayPaymentId,
       amount: payment?.amount,
       currency: payment?.currency,
+      // As Razorpay's webhook names what a payment in another currency
+      // settles for.
+      ...(payment?.settlementAmount != null && payment.settlementCurrency
+        ? {
+            settlementAmount: payment.settlementAmount,
+            settlementCurrency: payment.settlementCurrency,
+          }
+        : {}),
       rawPayload,
       occurredAt: new Date().toISOString(),
     };

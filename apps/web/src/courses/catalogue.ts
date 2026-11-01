@@ -42,6 +42,12 @@ export interface CoursePricing {
   showDiscountBadge?: boolean;
   /** The course costs nothing to enroll in. */
   free?: boolean;
+  /**
+   * The same line at the course's price for buyers outside India, when it
+   * has one; the page shows whichever the visitor's region calls for (see
+   * `priceRegion.ts`).
+   */
+  international?: Pick<CoursePricing, "price" | "originalPrice" | "discount">;
 }
 
 export interface Course {
