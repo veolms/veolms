@@ -18,6 +18,18 @@ import type { VideoDispatchResult, VideoDispatchService } from "./types.ts";
 /**
  * Strategy 1: AWS MediaConvert (Inbuilt / Direct SDK)
  * Uses @aws-sdk/client-mediaconvert directly to submit and manage transcoding jobs.
+ *
+ * Job-template mode: when MEDIACONVERT_JOB_TEMPLATE is set the dispatcher passes
+ * only the source input and destination override to AWS, delegating all
+ * codec/ladder/packaging decisions to the pre-built template.  The inline ladder
+ * is kept as an automatic fallback for deployments that have not yet created a
+ * template.
+ *
+ * DRM ClearKey: when DRM_MASTER_KEY and DRM_MASTER_KEY_VERSION are also set the
+ * dispatcher injects drmKeySystem / drmMasterKeyVersion into UserMetadata so the
+ * webhook handler and ClearKey license driver can resolve the right key later.
+ * The same job template is used for both plain and DRM jobs — the template itself
+ * must be configured with a StaticKeyProvider when DRM is required.
  */
 export function createMediaConvertDispatcher(options: {
   config: ServerConfig;
@@ -130,6 +142,169 @@ export function createMediaConvertDispatcher(options: {
     );
   }
 
+  /**
+   * Build a CreateJobCommandInput using a pre-created AWS MediaConvert job template.
+   *
+   * Templates store the full ladder/codec/packaging configuration; we only supply
+   * the source input, the output destination override, and userMetadata.
+   */
+  function buildTemplateJobInput(opts: {
+    templateName: string;
+    roleArn: string;
+    inputUri: string;
+    destination: string;
+    userMetadata: Record<string, string>;
+  }): CreateJobCommandInput {
+    return {
+      Role: opts.roleArn,
+      Queue: config.MEDIACONVERT_QUEUE_ARN || undefined,
+      JobTemplate: opts.templateName,
+      UserMetadata: opts.userMetadata,
+      Settings: {
+        Inputs: [
+          {
+            FileInput: opts.inputUri,
+            AudioSelectors: {
+              "Audio Selector 1": {
+                DefaultSelection: "DEFAULT",
+              },
+            },
+          },
+        ],
+        // Provide a destination override so every output group in the template
+        // writes into the correct job-specific S3 prefix.
+        OutputGroups: [
+          {
+            OutputGroupSettings: {
+              Type: "DASH_ISO_GROUP_SETTINGS",
+              DashIsoGroupSettings: {
+                Destination: opts.destination,
+              },
+            },
+          },
+        ],
+      },
+    };
+  }
+
+  /**
+   * Build a CreateJobCommandInput with fully-inlined output settings.
+   * Used as fallback when MEDIACONVERT_JOB_TEMPLATE is not configured.
+   */
+  function buildInlineJobInput(opts: {
+    roleArn: string;
+    inputUri: string;
+    destination: string;
+    bucket: string;
+    qualities: readonly VideoQualityLevel[];
+    thumbnailDestination?: string;
+    userMetadata: Record<string, string>;
+  }): CreateJobCommandInput {
+    const outputs = opts.qualities.map((q) => {
+      const profile: QualityProfile =
+        QUALITY_PROFILES[q] || QUALITY_PROFILES["720p"];
+
+      return {
+        NameModifier: `_${q}`,
+        VideoDescription: {
+          Width: profile.width,
+          Height: profile.height,
+          CodecSettings: {
+            Codec: "H_264" as const,
+            H264Settings: {
+              RateControlMode: "QVBR" as const,
+              MaxBitrate: (profile.maxBitrateKbps || 2800) * 1000,
+              QualityTuningLevel: "SINGLE_PASS" as const,
+              SceneChangeDetect: "TRANSITION_DETECTION" as const,
+            },
+          },
+        },
+        AudioDescriptions: [
+          {
+            CodecSettings: {
+              Codec: "AAC" as const,
+              AacSettings: {
+                Bitrate: 128000,
+                SampleRate: 48000,
+                CodingMode: "CODING_MODE_2_0" as const,
+              },
+            },
+          },
+        ],
+      };
+    });
+
+    const baseDest = opts.destination.replace(/\/+$/, "");
+
+    const outputGroups: NonNullable<
+      CreateJobCommandInput["Settings"]
+    >["OutputGroups"] = [
+      {
+        Name: "HLS_Group",
+        OutputGroupSettings: {
+          Type: "HLS_GROUP_SETTINGS",
+          HlsGroupSettings: {
+            Destination: baseDest,
+            SegmentLength: 2,
+            MinSegmentLength: 0,
+          },
+        },
+        Outputs: outputs,
+      },
+    ];
+
+    if (opts.thumbnailDestination) {
+      const rawDest = opts.thumbnailDestination.startsWith("s3://")
+        ? opts.thumbnailDestination
+        : `s3://${opts.bucket}/${opts.thumbnailDestination}`;
+
+      const thumbDestDir = rawDest.endsWith(".webp")
+        ? rawDest.slice(0, rawDest.lastIndexOf("/") + 1)
+        : rawDest.endsWith("/")
+          ? rawDest
+          : `${rawDest}/`;
+
+      outputGroups.unshift({
+        Name: "Thumbnail_Group",
+        OutputGroupSettings: {
+          Type: "FILE_GROUP_SETTINGS",
+          FileGroupSettings: {
+            Destination: thumbDestDir,
+          },
+        },
+        Outputs: [
+          {
+            ContainerSettings: { Container: "RAW" },
+            VideoDescription: {
+              CodecSettings: { Codec: "FRAME_CAPTURE" },
+            },
+            Extension: "webp",
+            NameModifier: "original",
+          },
+        ],
+      });
+    }
+
+    return {
+      Role: opts.roleArn,
+      Queue: config.MEDIACONVERT_QUEUE_ARN || undefined,
+      UserMetadata: opts.userMetadata,
+      Settings: {
+        Inputs: [
+          {
+            FileInput: opts.inputUri,
+            AudioSelectors: {
+              "Audio Selector 1": {
+                DefaultSelection: "DEFAULT",
+              },
+            },
+          },
+        ],
+        OutputGroups: outputGroups,
+      },
+    };
+  }
+
   async function dispatch(
     payload: VideoJobEvent,
   ): Promise<VideoDispatchResult | void> {
@@ -239,6 +414,16 @@ export function createMediaConvertDispatcher(options: {
       }
     }
 
+    // ── Optional ClearKey DRM metadata ───────────────────────────────────────
+    // When both DRM_MASTER_KEY and DRM_MASTER_KEY_VERSION are configured, tag
+    // the job so the webhook handler and ClearKey license driver can resolve the
+    // right key.  The raw key value is kept server-side only and is never sent
+    // to AWS.  The job template itself must configure the StaticKeyProvider.
+    if (config.DRM_MASTER_KEY && config.DRM_MASTER_KEY_VERSION) {
+      userMetadata.drmKeySystem = "clearkey";
+      userMetadata.drmMasterKeyVersion = config.DRM_MASTER_KEY_VERSION;
+    }
+
     const destination = outputPrefix.startsWith("s3://")
       ? outputPrefix
       : `s3://${bucket}/${outputPrefix}`;
@@ -247,125 +432,56 @@ export function createMediaConvertDispatcher(options: {
       ? videoKey
       : `s3://${bucket}/${videoKey}`;
 
-    const outputs = qualities.map((q) => {
-      const profile: QualityProfile =
-        QUALITY_PROFILES[q] || QUALITY_PROFILES["720p"];
+    // ── Choose job-template vs inline path ────────────────────────────────────
+    const jobTemplate = config.MEDIACONVERT_JOB_TEMPLATE;
+    const isDrm = Boolean(
+      config.DRM_MASTER_KEY && config.DRM_MASTER_KEY_VERSION,
+    );
 
-      return {
-        NameModifier: `_${q}`,
-        VideoDescription: {
-          Width: profile.width,
-          Height: profile.height,
-          CodecSettings: {
-            Codec: "H_264" as const,
-            H264Settings: {
-              RateControlMode: "QVBR" as const,
-              MaxBitrate: (profile.maxBitrateKbps || 2800) * 1000,
-              QualityTuningLevel: "SINGLE_PASS" as const,
-              SceneChangeDetect: "TRANSITION_DETECTION" as const,
-            },
-          },
+    let jobInput: CreateJobCommandInput;
+
+    if (jobTemplate) {
+      logger.info(
+        {
+          jobId: payload.jobId,
+          videoId: payload.videoId,
+          template: jobTemplate,
+          drm: isDrm,
+          inputUri,
+          destination,
         },
-        AudioDescriptions: [
-          {
-            CodecSettings: {
-              Codec: "AAC" as const,
-              AacSettings: {
-                Bitrate: 128000,
-                SampleRate: 48000,
-                CodingMode: "CODING_MODE_2_0" as const,
-              },
-            },
-          },
-        ],
-      };
-    });
+        "[video-dispatch:mediaconvert] Submitting transcoding job using AWS JobTemplate",
+      );
 
-    const baseDest = destination.replace(/\/+$/, "");
-    const hlsDestination = baseDest;
-
-    const outputGroups: NonNullable<
-      CreateJobCommandInput["Settings"]
-    >["OutputGroups"] = [
-      {
-        Name: "HLS_Group",
-        OutputGroupSettings: {
-          Type: "HLS_GROUP_SETTINGS",
-          HlsGroupSettings: {
-            Destination: hlsDestination,
-            SegmentLength: 2,
-            MinSegmentLength: 0,
-          },
-        },
-        Outputs: outputs,
-      },
-    ];
-
-    if (payload.thumbnailDestination) {
-      const rawDest = payload.thumbnailDestination.startsWith("s3://")
-        ? payload.thumbnailDestination
-        : `s3://${bucket}/${payload.thumbnailDestination}`;
-
-      const thumbDestDir = rawDest.endsWith(".webp")
-        ? rawDest.slice(0, rawDest.lastIndexOf("/") + 1)
-        : rawDest.endsWith("/")
-          ? rawDest
-          : `${rawDest}/`;
-
-      outputGroups.unshift({
-        Name: "Thumbnail_Group",
-        OutputGroupSettings: {
-          Type: "FILE_GROUP_SETTINGS",
-          FileGroupSettings: {
-            Destination: thumbDestDir,
-          },
-        },
-        Outputs: [
-          {
-            ContainerSettings: {
-              Container: "RAW",
-            },
-            VideoDescription: {
-              CodecSettings: {
-                Codec: "FRAME_CAPTURE",
-              },
-            },
-            Extension: "webp",
-            NameModifier: "original",
-          },
-        ],
-      });
-    }
-
-    const jobInput: CreateJobCommandInput = {
-      Role: roleArn,
-      Queue: config.MEDIACONVERT_QUEUE_ARN || undefined,
-      UserMetadata: userMetadata,
-      Settings: {
-        Inputs: [
-          {
-            FileInput: inputUri,
-            AudioSelectors: {
-              "Audio Selector 1": {
-                DefaultSelection: "DEFAULT",
-              },
-            },
-          },
-        ],
-        OutputGroups: outputGroups,
-      },
-    };
-
-    logger.info(
-      {
-        jobId: payload.jobId,
-        videoId: payload.videoId,
+      jobInput = buildTemplateJobInput({
+        templateName: jobTemplate,
+        roleArn,
         inputUri,
         destination,
+        userMetadata,
+      });
+    } else {
+      logger.info(
+        {
+          jobId: payload.jobId,
+          videoId: payload.videoId,
+          inputUri,
+          destination,
+          qualities,
+        },
+        "[video-dispatch:mediaconvert] Submitting transcoding job to AWS MediaConvert (inline settings)",
+      );
+
+      jobInput = buildInlineJobInput({
+        roleArn,
+        inputUri,
+        destination,
+        bucket,
         qualities,
-      },
-      "[video-dispatch:mediaconvert] Submitting transcoding job to AWS MediaConvert",
-    );
+        thumbnailDestination: payload.thumbnailDestination,
+        userMetadata,
+      });
+    }
 
     const result = await client.send(new CreateJobCommand(jobInput));
 
@@ -374,6 +490,8 @@ export function createMediaConvertDispatcher(options: {
         jobId: payload.jobId,
         mediaConvertJobId: result.Job?.Id,
         status: result.Job?.Status,
+        template: jobTemplate ?? "(inline)",
+        drm: isDrm,
       },
       "[video-dispatch:mediaconvert] Job successfully submitted to AWS MediaConvert",
     );

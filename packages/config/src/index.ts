@@ -557,6 +557,25 @@ const serverConfigSchema = z.object({
   MEDIACONVERT_SECRET_ACCESS_KEY: z.string().optional(),
   MEDIACONVERT_WEBHOOK_URL: z.string().url().optional(),
   MEDIACONVERT_WEBHOOK_SECRET: z.string().optional(),
+  /**
+   * AWS MediaConvert job template name.
+   * When set, the dispatcher uses this pre-created template instead of building
+   * inline output settings. The template must exist in the same AWS account and
+   * region, e.g. "DASH_ADAPTIVE_LADDER".
+   */
+  MEDIACONVERT_JOB_TEMPLATE: z.string().optional(),
+  /**
+   * ClearKey DRM master key (hex). When set alongside DRM_MASTER_KEY_VERSION
+   * the dispatcher injects drmKeySystem / drmMasterKeyVersion into the job's
+   * UserMetadata so the webhook handler and license server can resolve the key.
+   * The raw key is kept server-side only; it is never sent to AWS.
+   */
+  DRM_MASTER_KEY: z.string().optional(),
+  /**
+   * Monotonic version tag for DRM_MASTER_KEY. Embedded in UserMetadata so the
+   * ClearKey license driver can look up the correct key version.
+   */
+  DRM_MASTER_KEY_VERSION: z.string().optional(),
 
   FLEET_MANAGER_TRIGGER_URL: z.string().url().optional(),
   FLEET_MANAGER_LAMBDA_NAME: z.string().optional(),
