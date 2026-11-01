@@ -41,8 +41,7 @@ export interface DetachedProgressTarget {
   lessonIdsByNumber?: ReadonlyMap<number, string>;
 }
 
-// As often as the lesson page sends it (`useLearningProgress`).
-const SYNC_INTERVAL_MS = 60_000;
+const SYNC_INTERVAL_MS = 15_000;
 const MAX_BATCH_ITEMS = 100;
 
 const lastSyncAtByCourse = new Map<string, number>();

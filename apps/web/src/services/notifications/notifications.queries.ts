@@ -27,12 +27,8 @@ export function useNotificationSummary(options?: { enabled?: boolean }) {
     queryKey: notificationKeys.summary(),
     queryFn: notificationsService.summary,
     enabled: options?.enabled ?? true,
-    staleTime: 60_000,
-    // Every open tab asks on this interval, which made the summary the API's
-    // most-called route. Two minutes is soon enough for a badge; a tab in the
-    // background does not ask (React Query's default), and coming back to it
-    // asks at once.
-    refetchInterval: 120_000,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   });
 }
