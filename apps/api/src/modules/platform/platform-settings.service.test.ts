@@ -63,6 +63,7 @@ await test("before anything is saved, the defaults apply and the phone rule foll
         requireVerifiedPhoneForEnrollment:
           config.REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT,
         maxDevicesPerStudent: 3,
+        maxSimultaneousStreams: 1,
       },
       invoice: DEFAULT_PLATFORM_INVOICE_SETTINGS,
     },
@@ -87,6 +88,7 @@ await test("a saved document fills in what it lacks, setting by setting", async 
     requireVerifiedPhoneForEnrollment:
       config.REQUIRE_VERIFIED_PHONE_FOR_ENROLLMENT,
     maxDevicesPerStudent: 3,
+    maxSimultaneousStreams: 1,
   });
 });
 
@@ -272,4 +274,21 @@ await test("a student device limit: 3 until set, null for no limit, and a stray 
   assert.equal(await read({ security: { maxDevicesPerStudent: null } }), null);
   assert.equal(await read({ security: { maxDevicesPerStudent: 0 } }), 3);
   assert.equal(await read({ security: { maxDevicesPerStudent: "many" } }), 3);
+});
+
+await test("a stream limit: 1 until set, null for no limit, and a stray value falls back to 1", async () => {
+  const read = async (stored: unknown) =>
+    (
+      await createPlatformSettingsService({
+        database: fakeDatabase(stored).database,
+      }).getSettings()
+    ).settings.security.maxSimultaneousStreams;
+  assert.equal(await read(undefined), 1);
+  assert.equal(await read({ security: { maxSimultaneousStreams: 3 } }), 3);
+  assert.equal(
+    await read({ security: { maxSimultaneousStreams: null } }),
+    null,
+  );
+  assert.equal(await read({ security: { maxSimultaneousStreams: 0 } }), 1);
+  assert.equal(await read({ security: { maxSimultaneousStreams: "many" } }), 1);
 });

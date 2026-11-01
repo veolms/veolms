@@ -1,6 +1,7 @@
 import {
   PlayerThemeProvider,
   VideoPlayer,
+  VideoPlayerNotice,
   type VideoPlayerEvent,
   type VideoPlayerHandle,
   type VideoSource,
@@ -31,9 +32,18 @@ import {
 } from "../videoPlaybackBootstrap";
 import {
   recordDetachedLearningProgress,
+  syncDetachedLearningProgress,
   syncDetachedWatchTime,
   useDetachedLessonProgress,
 } from "../detachedLearningProgress";
+import {
+  markPlaying,
+  markNotPlaying,
+  subscribeToClaimRequests,
+  subscribeToPlaybackConflict,
+  type PlaybackDeniedPlayingOn,
+} from "../playbackClaim";
+import { formatSessionDevice } from "../../settings/sessionDisplay";
 import {
   addWatchedSeconds,
   createWatchTimeTracker,
@@ -420,6 +430,31 @@ export function LearningMiniPlayer({
   );
   // Sent on a timer as well as with progress: a lesson replayed after it
   // is complete moves no progress to carry it.
+  const [streamConflict, setStreamConflict] =
+    useState<PlaybackDeniedPlayingOn | null>(null);
+
+  useEffect(() => {
+    if (!progressTarget) return undefined;
+    return subscribeToPlaybackConflict(progressTarget.courseKey, (conflict) => {
+      playerRef.current?.pause();
+      setStreamConflict(conflict);
+    });
+  }, [progressTarget]);
+
+  useEffect(() => {
+    if (!progressTarget) return undefined;
+    return subscribeToClaimRequests(progressTarget.courseKey, () => {
+      void syncDetachedLearningProgress(progressTarget, true);
+    });
+  }, [progressTarget]);
+
+  const claimCourseKey = progressTarget?.courseKey;
+  useEffect(() => {
+    return () => {
+      if (claimCourseKey) markNotPlaying(claimCourseKey);
+    };
+  }, [claimCourseKey]);
+
   useEffect(() => {
     if (!progressTarget) return undefined;
     const interval = window.setInterval(
@@ -449,24 +484,40 @@ export function LearningMiniPlayer({
             (event.detail.currentTime / event.detail.duration) * 100,
           );
         }
-      } else if (event.type === "playing") {
+      } else if (event.type === "playing" || event.type === "play") {
+        setStreamConflict(null);
         lessonEndedRef.current = false;
         completePreparation();
+        if (progressTarget) {
+          const currentLessonId =
+            progressTarget?.lessonIdsByNumber?.get(selectedLesson);
+          if (currentLessonId) {
+            markPlaying(progressTarget.courseKey, currentLessonId);
+          }
+        }
       } else if (event.type === "seeked") {
         lessonEndedRef.current = false;
         completePreparation();
       } else if (event.type === "pause") {
         persistCurrentTime();
+        if (progressTarget) {
+          markNotPlaying(progressTarget.courseKey);
+        }
       } else if (event.type === "ended") {
         lessonEndedRef.current = true;
         clearResumePosition(session.mediaKey);
         recordProgress(100);
+        if (progressTarget) {
+          markNotPlaying(progressTarget.courseKey);
+        }
       }
     },
     [
       completePreparation,
       persistCurrentTime,
+      progressTarget,
       recordProgress,
+      selectedLesson,
       session.mediaKey,
       trackWatchTime,
     ],
@@ -685,6 +736,24 @@ export function LearningMiniPlayer({
           centralControl={false}
           playbackFeedback={false}
           bufferingIndicator={<LearningMiniPlayerBufferingIndicator />}
+          overlays={
+            streamConflict ? (
+              <VideoPlayerNotice
+                className="z-35"
+                title={`Playing on ${formatSessionDevice(streamConflict.userAgent)}`}
+                background={
+                  <div className="size-full bg-black/85 backdrop-blur-xs" />
+                }
+                action={{
+                  label: "Play here",
+                  onSelect: () => {
+                    setStreamConflict(null);
+                    void playerRef.current?.play();
+                  },
+                }}
+              />
+            ) : undefined
+          }
           controls={
             <MiniPlayerControls
               lessonTitle={session.lessonTitle}

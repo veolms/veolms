@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { LearningProgressBatchRequest } from "@veolms/contracts";
 import { getDeviceTimeZone } from "../lib/device-time-zone";
 import { learningGoalKeys } from "../services/learning-goals";
 
@@ -34,6 +35,13 @@ import {
   takeLessonPositions,
   withLessonPositions,
 } from "./lessonPositionOutbox";
+import {
+  markNotPlaying,
+  notifyPlaybackConflict,
+  restorePlayingReport,
+  subscribeToClaimRequests,
+  takePlayingReport,
+} from "./playbackClaim";
 import { getApiError } from "../lib/api-client";
 import { markCourseResumeStale } from "./courseResumeCache";
 import { readEarlyProgressCopy } from "../store/lessonEarlyState";
@@ -242,14 +250,16 @@ export function useLearningProgress({
       if (!keepalive && Date.now() < retryAtRef.current) return;
 
       const pending = getPendingLearningProgress(localStateRef.current);
+      // Keepalive beacons on pagehide must not include playing (the page is going away).
+      const playing = keepalive ? undefined : takePlayingReport(courseKey);
+
       // A batch goes out for progress, for watch time, for where the
-      // learner is in a video, or for any of them: a lesson replayed after
-      // it is complete moves no progress, but the time spent playing it
-      // still counts towards the daily goal, and it is where they are.
+      // learner is in a video, or for a playback claim / heartbeat:
       if (
         pending.length === 0 &&
         peekWatchedSeconds(courseKey) < 1 &&
-        !hasLessonPositions(courseKey)
+        !hasLessonPositions(courseKey) &&
+        !playing
       ) {
         return;
       }
@@ -268,12 +278,13 @@ export function useLearningProgress({
         positions,
         lessonIdsByNumberRef.current,
       );
-      const payload = {
+      const payload: LearningProgressBatchRequest = {
         items,
         watchedSeconds,
         // Sets the learner's zone if they have never chosen one, so their
         // learning days are local days rather than UTC ones.
         timeZone: getDeviceTimeZone(),
+        playing,
       };
       if (
         keepalive &&
@@ -310,10 +321,17 @@ export function useLearningProgress({
             markCourseResumeStale(queryClient, courseKey);
           }
         }
+        if (response.playback && response.playback.allowed === false) {
+          notifyPlaybackConflict(courseKey, response.playback.playingOn);
+          markNotPlaying(courseKey);
+        }
         retryDelayRef.current = 0;
         retryAtRef.current = 0;
       } catch (error) {
         restoreWatchedSeconds(courseKey, watchedSeconds);
+        // Restore the fresh-claim flag so the next flush still sends
+        // event: "play" rather than silently downgrading to a heartbeat.
+        restorePlayingReport(courseKey, playing);
         // An API from before positions were kept turns the whole batch
         // down: it goes again without them.
         if (
@@ -339,7 +357,7 @@ export function useLearningProgress({
   );
 
   useEffect(() => {
-    if (!syncEnabled) return;
+    if (!syncEnabled || !courseKey) return;
 
     const flush = () => void flushProgress();
     const handleVisibilityChange = () => {
@@ -349,17 +367,19 @@ export function useLearningProgress({
       void flushProgress({ keepalive: true });
     };
 
+    const unsubscribeClaimRequests = subscribeToClaimRequests(courseKey, flush);
     const interval = window.setInterval(flush, 15_000);
     window.addEventListener("online", flush);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", handlePageHide);
     return () => {
+      unsubscribeClaimRequests();
       window.clearInterval(interval);
       window.removeEventListener("online", flush);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);
     };
-  }, [flushProgress, syncEnabled]);
+  }, [courseKey, flushProgress, syncEnabled]);
 
   const lessonProgress = useMemo(
     () => getLearningProgressMap(localState),

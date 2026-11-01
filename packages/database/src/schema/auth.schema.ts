@@ -97,6 +97,19 @@ export interface SessionTable {
   last_used_at: Generated<Date>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+  /**
+   * The lesson this session is currently playing (informational: used to
+   * name the lesson in the stream-conflict notice). No foreign key; a
+   * deleted lesson simply shows no title in the notice.
+   */
+  playing_lesson_id: string | null;
+  /** When this session last pressed play — what "newest wins" compares. */
+  playing_claimed_at: Date | null;
+  /**
+   * The last heartbeat timestamp from this session while playing. Claims
+   * with `playing_at` older than PLAYBACK_CLAIM_STALE_MS are not counted.
+   */
+  playing_at: Date | null;
 }
 
 /**

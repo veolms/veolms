@@ -246,6 +246,11 @@ export function useLessonPlayerProps({
       refreshPlaybackToken,
       protectedPlayback,
       lessonTitle: currentLesson[1],
+      lessonId:
+        currentLesson[6] ??
+        selectedLessonRecord?.id ??
+        playbackBootstrap?.lessonId,
+      watchTimeCourseKey: courseSlug,
       courseTitle,
       lessonIndex: currentLessonIndex >= 0 ? currentLessonIndex + 1 : 1,
       totalLessons: lessonSequence.length,
@@ -339,6 +344,7 @@ export function useLessonPlayerProps({
       phoneLessonDrawer,
       previousLessonId,
       selectedLesson,
+      selectedLessonRecord?.id,
       selectedLessonDescription,
       showingQuiz,
       theaterMode,
