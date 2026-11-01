@@ -324,7 +324,13 @@ export async function storeAvatarFromUrl(
       return null;
     }
 
-    return storeAvatarBuffer(storage, userId, buffer, detectedType, avatarId);
+    return await storeAvatarBuffer(
+      storage,
+      userId,
+      buffer,
+      detectedType,
+      avatarId,
+    );
   } catch {
     return null;
   }
