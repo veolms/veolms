@@ -270,27 +270,22 @@ const serverConfigSchema = z.object({
   MEDIACONVERT_WEBHOOK_URL: z.string().url().optional(),
   MEDIACONVERT_WEBHOOK_SECRET: z.string().optional(),
   /**
-   * AWS MediaConvert job template name for plain (non-DRM) DASH/HLS output.
-   * When set, the dispatcher uses this template instead of building inline
-   * output settings. The template must be pre-created in the same AWS account
-   * and region, e.g. "DASH_ADAPTIVE_LADDER".
+   * AWS MediaConvert job template name.
+   * When set, the dispatcher uses this pre-created template instead of building
+   * inline output settings. The template must exist in the same AWS account and
+   * region, e.g. "DASH_ADAPTIVE_LADDER".
    */
   MEDIACONVERT_JOB_TEMPLATE: z.string().optional(),
   /**
-   * AWS MediaConvert job template name for DRM ClearKey DASH output.
-   * When set (alongside MEDIACONVERT_JOB_TEMPLATE or alone), the dispatcher
-   * uses this template when dispatching DRM-protected video jobs.
-   * e.g. "DRM_CLEARKEY_DASH_LADDER"
-   */
-  MEDIACONVERT_DRM_JOB_TEMPLATE: z.string().optional(),
-  /**
-   * Master encryption key (hex) used by MediaConvert's ClearKey DRM template.
-   * Sent as StaticKeyProvider KeyFormat / key value when submitting DRM jobs.
+   * ClearKey DRM master key (hex). When set alongside DRM_MASTER_KEY_VERSION
+   * the dispatcher injects drmKeySystem / drmMasterKeyVersion into the job's
+   * UserMetadata so the webhook handler and license server can resolve the key.
+   * The raw key is kept server-side only; it is never sent to AWS.
    */
   DRM_MASTER_KEY: z.string().optional(),
   /**
-   * Monotonically increasing version tag for DRM_MASTER_KEY, embedded in the
-   * job submission so the webhook and license server can look up the right key.
+   * Monotonic version tag for DRM_MASTER_KEY. Embedded in UserMetadata so the
+   * ClearKey license driver can look up the correct key version.
    */
   DRM_MASTER_KEY_VERSION: z.string().optional(),
 

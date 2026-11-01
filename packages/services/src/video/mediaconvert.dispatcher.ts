@@ -19,16 +19,17 @@ import type { VideoDispatchResult, VideoDispatchService } from "./types.ts";
  * Strategy 1: AWS MediaConvert (Inbuilt / Direct SDK)
  * Uses @aws-sdk/client-mediaconvert directly to submit and manage transcoding jobs.
  *
- * Job-template mode: when MEDIACONVERT_JOB_TEMPLATE (or MEDIACONVERT_DRM_JOB_TEMPLATE
- * for DRM jobs) is set the dispatcher passes only the source input and destination
- * overrides to AWS, delegating all codec/ladder/packaging decisions to the pre-built
- * template.  The inline ladder is kept as an automatic fallback for deployments that
- * have not yet created templates.
+ * Job-template mode: when MEDIACONVERT_JOB_TEMPLATE is set the dispatcher passes
+ * only the source input and destination override to AWS, delegating all
+ * codec/ladder/packaging decisions to the pre-built template.  The inline ladder
+ * is kept as an automatic fallback for deployments that have not yet created a
+ * template.
  *
- * DRM ClearKey mode: when MEDIACONVERT_DRM_JOB_TEMPLATE + DRM_MASTER_KEY are set the
- * dispatcher injects the master key into UserMetadata so the webhook and license server
- * can retrieve it.  The template must configure the StaticKeyProvider itself; this code
- * only supplies the key material via metadata.
+ * DRM ClearKey: when DRM_MASTER_KEY and DRM_MASTER_KEY_VERSION are also set the
+ * dispatcher injects drmKeySystem / drmMasterKeyVersion into UserMetadata so the
+ * webhook handler and ClearKey license driver can resolve the right key later.
+ * The same job template is used for both plain and DRM jobs — the template itself
+ * must be configured with a StaticKeyProvider when DRM is required.
  */
 export function createMediaConvertDispatcher(options: {
   config: ServerConfig;
@@ -144,12 +145,10 @@ export function createMediaConvertDispatcher(options: {
   /**
    * Build a CreateJobCommandInput using a pre-created AWS MediaConvert job template.
    *
-   * Templates store the full ladder/codec/packaging configuration; we only need to
-   * supply the source input, the output destination override, and userMetadata.
-   * The destination override uses InputClippings-style OutputGroupOverride so AWS
-   * resolves each group's destination relative to the template's own settings.
+   * Templates store the full ladder/codec/packaging configuration; we only supply
+   * the source input, the output destination override, and userMetadata.
    */
-  function buildTemplateJobInput(options: {
+  function buildTemplateJobInput(opts: {
     templateName: string;
     roleArn: string;
     inputUri: string;
@@ -157,14 +156,14 @@ export function createMediaConvertDispatcher(options: {
     userMetadata: Record<string, string>;
   }): CreateJobCommandInput {
     return {
-      Role: options.roleArn,
+      Role: opts.roleArn,
       Queue: config.MEDIACONVERT_QUEUE_ARN || undefined,
-      JobTemplate: options.templateName,
-      UserMetadata: options.userMetadata,
+      JobTemplate: opts.templateName,
+      UserMetadata: opts.userMetadata,
       Settings: {
         Inputs: [
           {
-            FileInput: options.inputUri,
+            FileInput: opts.inputUri,
             AudioSelectors: {
               "Audio Selector 1": {
                 DefaultSelection: "DEFAULT",
@@ -179,7 +178,7 @@ export function createMediaConvertDispatcher(options: {
             OutputGroupSettings: {
               Type: "DASH_ISO_GROUP_SETTINGS",
               DashIsoGroupSettings: {
-                Destination: options.destination,
+                Destination: opts.destination,
               },
             },
           },
@@ -189,10 +188,10 @@ export function createMediaConvertDispatcher(options: {
   }
 
   /**
-   * Build a CreateJobCommandInput with fully-inlined output settings (no template).
-   * Used as fallback when no job template name is configured.
+   * Build a CreateJobCommandInput with fully-inlined output settings.
+   * Used as fallback when MEDIACONVERT_JOB_TEMPLATE is not configured.
    */
-  function buildInlineJobInput(options: {
+  function buildInlineJobInput(opts: {
     roleArn: string;
     inputUri: string;
     destination: string;
@@ -201,10 +200,7 @@ export function createMediaConvertDispatcher(options: {
     thumbnailDestination?: string;
     userMetadata: Record<string, string>;
   }): CreateJobCommandInput {
-    const { roleArn, inputUri, destination, bucket, qualities, userMetadata } =
-      options;
-
-    const outputs = qualities.map((q) => {
+    const outputs = opts.qualities.map((q) => {
       const profile: QualityProfile =
         QUALITY_PROFILES[q] || QUALITY_PROFILES["720p"];
 
@@ -238,7 +234,7 @@ export function createMediaConvertDispatcher(options: {
       };
     });
 
-    const baseDest = destination.replace(/\/+$/, "");
+    const baseDest = opts.destination.replace(/\/+$/, "");
 
     const outputGroups: NonNullable<
       CreateJobCommandInput["Settings"]
@@ -257,10 +253,10 @@ export function createMediaConvertDispatcher(options: {
       },
     ];
 
-    if (options.thumbnailDestination) {
-      const rawDest = options.thumbnailDestination.startsWith("s3://")
-        ? options.thumbnailDestination
-        : `s3://${bucket}/${options.thumbnailDestination}`;
+    if (opts.thumbnailDestination) {
+      const rawDest = opts.thumbnailDestination.startsWith("s3://")
+        ? opts.thumbnailDestination
+        : `s3://${opts.bucket}/${opts.thumbnailDestination}`;
 
       const thumbDestDir = rawDest.endsWith(".webp")
         ? rawDest.slice(0, rawDest.lastIndexOf("/") + 1)
@@ -278,13 +274,9 @@ export function createMediaConvertDispatcher(options: {
         },
         Outputs: [
           {
-            ContainerSettings: {
-              Container: "RAW",
-            },
+            ContainerSettings: { Container: "RAW" },
             VideoDescription: {
-              CodecSettings: {
-                Codec: "FRAME_CAPTURE",
-              },
+              CodecSettings: { Codec: "FRAME_CAPTURE" },
             },
             Extension: "webp",
             NameModifier: "original",
@@ -294,13 +286,13 @@ export function createMediaConvertDispatcher(options: {
     }
 
     return {
-      Role: roleArn,
+      Role: opts.roleArn,
       Queue: config.MEDIACONVERT_QUEUE_ARN || undefined,
-      UserMetadata: userMetadata,
+      UserMetadata: opts.userMetadata,
       Settings: {
         Inputs: [
           {
-            FileInput: inputUri,
+            FileInput: opts.inputUri,
             AudioSelectors: {
               "Audio Selector 1": {
                 DefaultSelection: "DEFAULT",
@@ -422,6 +414,16 @@ export function createMediaConvertDispatcher(options: {
       }
     }
 
+    // ── Optional ClearKey DRM metadata ───────────────────────────────────────
+    // When both DRM_MASTER_KEY and DRM_MASTER_KEY_VERSION are configured, tag
+    // the job so the webhook handler and ClearKey license driver can resolve the
+    // right key.  The raw key value is kept server-side only and is never sent
+    // to AWS.  The job template itself must configure the StaticKeyProvider.
+    if (config.DRM_MASTER_KEY && config.DRM_MASTER_KEY_VERSION) {
+      userMetadata.drmKeySystem = "clearkey";
+      userMetadata.drmMasterKeyVersion = config.DRM_MASTER_KEY_VERSION;
+    }
+
     const destination = outputPrefix.startsWith("s3://")
       ? outputPrefix
       : `s3://${bucket}/${outputPrefix}`;
@@ -430,39 +432,21 @@ export function createMediaConvertDispatcher(options: {
       ? videoKey
       : `s3://${bucket}/${videoKey}`;
 
-    // ── DRM key metadata ─────────────────────────────────────────────────────
-    // When a DRM master key is configured, embed it in UserMetadata so the
-    // webhook handler and the ClearKey license driver can resolve it by version.
-    // The template itself configures the StaticKeyProvider; we only supply the
-    // actual key bytes and version tag here.
-    const drmJobTemplate = config.MEDIACONVERT_DRM_JOB_TEMPLATE;
-    const drmMasterKey = config.DRM_MASTER_KEY;
-    const drmMasterKeyVersion = config.DRM_MASTER_KEY_VERSION;
-
-    const isDrmJob = Boolean(drmJobTemplate && drmMasterKey);
-
-    if (isDrmJob) {
-      // These fields let the webhook / license server look the key up later.
-      userMetadata.drmKeySystem = "clearkey";
-      userMetadata.drmMasterKeyVersion = drmMasterKeyVersion || "1";
-      // We do NOT embed the raw key in metadata (it travels over the wire to
-      // AWS and into CloudWatch logs).  The license server reads it from the
-      // server-side environment directly, keyed by version.
-    }
-
     // ── Choose job-template vs inline path ────────────────────────────────────
-    const plainJobTemplate = config.MEDIACONVERT_JOB_TEMPLATE;
-    const chosenTemplate = isDrmJob ? drmJobTemplate : plainJobTemplate;
+    const jobTemplate = config.MEDIACONVERT_JOB_TEMPLATE;
+    const isDrm = Boolean(
+      config.DRM_MASTER_KEY && config.DRM_MASTER_KEY_VERSION,
+    );
 
     let jobInput: CreateJobCommandInput;
 
-    if (chosenTemplate) {
+    if (jobTemplate) {
       logger.info(
         {
           jobId: payload.jobId,
           videoId: payload.videoId,
-          template: chosenTemplate,
-          drm: isDrmJob,
+          template: jobTemplate,
+          drm: isDrm,
           inputUri,
           destination,
         },
@@ -470,7 +454,7 @@ export function createMediaConvertDispatcher(options: {
       );
 
       jobInput = buildTemplateJobInput({
-        templateName: chosenTemplate,
+        templateName: jobTemplate,
         roleArn,
         inputUri,
         destination,
@@ -506,8 +490,8 @@ export function createMediaConvertDispatcher(options: {
         jobId: payload.jobId,
         mediaConvertJobId: result.Job?.Id,
         status: result.Job?.Status,
-        template: chosenTemplate ?? "(inline)",
-        drm: isDrmJob,
+        template: jobTemplate ?? "(inline)",
+        drm: isDrm,
       },
       "[video-dispatch:mediaconvert] Job successfully submitted to AWS MediaConvert",
     );
