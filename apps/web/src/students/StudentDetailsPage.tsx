@@ -85,8 +85,12 @@ export function StudentDetailsPage({
   const [editingContact, setEditingContact] = useState(false);
   const [grantingCourses, setGrantingCourses] = useState(false);
 
+  // The course's own page (its overview and curriculum). `/courses/<slug>`
+  // alone is the old lesson address and opened the lesson player.
   const openCourse = (course: StudentCourseDetail) =>
-    onNavigatePage?.(`/courses/${course.courseSlug}`);
+    onNavigatePage?.(
+      `/courses/${encodeURIComponent(course.courseSlug)}/overview`,
+    );
 
   const startRefund = (course: StudentCourseDetail) => {
     if (!course.orderId) return;

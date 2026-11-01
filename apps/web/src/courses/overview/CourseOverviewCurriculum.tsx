@@ -3,6 +3,7 @@ import { ArrowsOutLineVertical } from "@phosphor-icons/react/ArrowsOutLineVertic
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CalendarCheck } from "@phosphor-icons/react/CalendarCheck";
 import { Check } from "@phosphor-icons/react/Check";
+import { LockIcon as Lock } from "@phosphor-icons/react/Lock";
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { Eye } from "@phosphor-icons/react/Eye";
 import { FileText } from "@phosphor-icons/react/FileText";
@@ -74,6 +75,11 @@ interface CurriculumSectionRowProps {
   lessonIntentFor?: LessonIntentFor;
   isReadOnlyPreview?: boolean;
   isPaidCourse?: boolean;
+  /**
+   * On a page selling part of the course: whether this section is in it.
+   * Undefined on any other page.
+   */
+  included?: boolean;
 }
 
 /**
@@ -102,6 +108,7 @@ function CurriculumSectionRow({
   lessonIntentFor,
   isReadOnlyPreview = false,
   isPaidCourse = false,
+  included,
 }: CurriculumSectionRowProps) {
   const curriculumIntent = useCurriculumIntent();
   const panelId = `cov-section-panel-${section.id}`;
@@ -184,6 +191,22 @@ function CurriculumSectionRow({
             {section.title}
           </span>
           <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.82rem] text-(--muted) tabular-nums">
+            {included !== undefined ? (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.72rem] font-semibold ${
+                  included
+                    ? "bg-emerald-500/14 text-emerald-500"
+                    : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-(--muted)"
+                }`}
+              >
+                {included ? (
+                  <Check size={11} weight="bold" aria-hidden="true" />
+                ) : (
+                  <Lock size={11} weight="bold" aria-hidden="true" />
+                )}
+                {included ? "Included" : "Not included"}
+              </span>
+            ) : null}
             <span>
               {lessonCount} lesson{lessonCount === 1 ? "" : "s"}
             </span>
@@ -420,6 +443,11 @@ interface CourseOverviewCurriculumProps {
   sectionsComplete?: boolean;
   /** Asks for the sections not yet here. */
   onRequestAllSections?: () => void;
+  /**
+   * On a page selling part of the course (a partial access link): the
+   * sections it opens. Each section is marked included or not.
+   */
+  includedSectionIds?: ReadonlySet<string>;
 }
 
 export function CourseOverviewCurriculum({
@@ -437,6 +465,7 @@ export function CourseOverviewCurriculum({
   totalSections,
   sectionsComplete = true,
   onRequestAllSections,
+  includedSectionIds,
 }: CourseOverviewCurriculumProps) {
   const sectionCount = Math.max(courseSections.length, totalSections ?? 0);
   const curriculumIntent = useCurriculumIntent();
@@ -577,6 +606,11 @@ export function CourseOverviewCurriculum({
               lessonIntentFor={lessonIntentFor}
               isReadOnlyPreview={isReadOnlyPreview}
               isPaidCourse={isPaidCourse}
+              included={
+                includedSectionIds && section.sectionId
+                  ? includedSectionIds.has(section.sectionId)
+                  : undefined
+              }
             />
           ))}
         </div>

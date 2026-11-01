@@ -183,6 +183,19 @@ function applyLessonPageEarlyState(keys: LessonEarlyStateKeys) {
     );
     const opensEveryLesson = accessKnown && access!.access === "full";
     const firstLessonOpen = accessKnown && access!.firstLessonOpen === true;
+    // The sections a learner holding part of the course opens, and their
+    // lessons' number ranges once their sections are read.
+    const openSectionIds =
+      accessKnown && Array.isArray(access!.openSectionIds)
+        ? (access!.openSectionIds as unknown[]).filter(
+            (id): id is string => typeof id === "string",
+          )
+        : [];
+    const openRanges: [number, number][] = [];
+    const inOpenSection = (lessonNumber: number) =>
+      openRanges.some(
+        ([from, to]) => lessonNumber >= from && lessonNumber <= to,
+      );
     let firstLessonNumber = Infinity;
 
     const applied: string[] = [];
@@ -198,7 +211,8 @@ function applyLessonPageEarlyState(keys: LessonEarlyStateKeys) {
         const locked =
           !opensEveryLesson &&
           !card.hasAttribute("data-preview") &&
-          !(firstLessonOpen && lessonNumber === firstLessonNumber);
+          !(firstLessonOpen && lessonNumber === firstLessonNumber) &&
+          !inOpenSection(lessonNumber);
         setFlag(card, "data-locked", locked);
       }
       if (!progressHeld) return;
@@ -344,9 +358,14 @@ function applyLessonPageEarlyState(keys: LessonEarlyStateKeys) {
         ".learning-curriculum .learning-curriculum__section[data-lesson-range]",
       );
       // The course's first lesson: the lowest number any section starts at.
+      openRanges.length = 0;
       sections.forEach((section) => {
         const range = rangeOf(section);
         if (range && range[0] < firstLessonNumber) firstLessonNumber = range[0];
+        const sectionId = section.getAttribute("data-section-id");
+        if (range && sectionId && openSectionIds.indexOf(sectionId) !== -1) {
+          openRanges.push(range);
+        }
       });
       if (firstLessonNumber === Infinity) firstLessonNumber = 1;
       // A section's heading is read in parts; it is filled again on each

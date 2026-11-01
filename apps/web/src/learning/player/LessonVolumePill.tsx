@@ -16,6 +16,66 @@ import { cn } from "../../lib/utils";
 /** How long the open pill waits, untouched, before it closes. */
 const VOLUME_PILL_OPEN_MS = 3_000;
 
+/** The player's picture: a tap on it shows or hides the controls. */
+const PLAYER_PICTURE_SELECTOR = "[data-player-zoom-surface]";
+
+/**
+ * The events a tap is made of, in the order a phone sends them. Once the
+ * press that closed the pill is over, the next tap is the picture's again.
+ */
+const TAP_EVENTS = [
+  "pointerdown",
+  "touchstart",
+  "pointerup",
+  "pointercancel",
+  "touchend",
+  "touchcancel",
+  "mousedown",
+  "mouseup",
+  "click",
+] as const;
+/** How long after the press ends its late mouse events may still come. */
+const TAP_TAIL_MS = 400;
+
+/**
+ * Keeps the rest of a tap on the player's picture from reaching it: the
+ * tap closed the pill, and is not also the picture's tap that hides the
+ * controls. Listened for on the window, before anything on the page.
+ */
+function swallowTapOnPicture() {
+  let tailTimer: ReturnType<typeof setTimeout> | null = null;
+  const stop = () => {
+    for (const type of TAP_EVENTS) {
+      window.removeEventListener(type, swallow, true);
+    }
+    if (tailTimer !== null) clearTimeout(tailTimer);
+  };
+  function swallow(event: Event) {
+    if (
+      event.target instanceof Element &&
+      event.target.closest(PLAYER_PICTURE_SELECTOR)
+    ) {
+      event.stopPropagation();
+    }
+    if (event.type === "click") {
+      stop();
+      return;
+    }
+    if (
+      event.type === "pointerup" ||
+      event.type === "pointercancel" ||
+      event.type === "touchend" ||
+      event.type === "touchcancel"
+    ) {
+      if (tailTimer !== null) clearTimeout(tailTimer);
+      tailTimer = setTimeout(stop, TAP_TAIL_MS);
+    }
+  }
+  for (const type of TAP_EVENTS) {
+    window.addEventListener(type, swallow, true);
+  }
+}
+
 /**
  * Whether this browser lets a page set a video's volume. Safari on an
  * iPhone or iPad does not (the volume is the device's, and only muting
@@ -81,6 +141,29 @@ export function LessonVolumePill({
     },
     [],
   );
+  // A tap anywhere outside the open pill closes it, and only it: on the
+  // picture, that tap does not also hide the controls (the next one does).
+  // A tap on another control still does what that control does.
+  const pillRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (!event.isPrimary) return;
+      const target = event.target;
+      if (target instanceof Node && pillRef.current?.contains(target)) return;
+      if (
+        target instanceof Element &&
+        target.closest(PLAYER_PICTURE_SELECTOR)
+      ) {
+        swallowTapOnPicture();
+        event.stopPropagation();
+      }
+      close();
+    };
+    window.addEventListener("pointerdown", closeOnOutsidePress, true);
+    return () =>
+      window.removeEventListener("pointerdown", closeOnOutsidePress, true);
+  }, [close, open]);
 
   if (!canAdjustVolume()) {
     return <MuteButton className={buttonClassName} iconSize={22} />;
@@ -88,6 +171,7 @@ export function LessonVolumePill({
 
   return (
     <div
+      ref={pillRef}
       className={cn(
         "flex h-8 items-center rounded-full transition-[background-color,box-shadow] duration-200 ease-out motion-reduce:transition-none",
         open &&

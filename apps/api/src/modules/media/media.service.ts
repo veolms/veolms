@@ -21,7 +21,11 @@ import type {
 import { AppError } from "../../lib/errors.ts";
 import type { AppServices } from "../../services/index.ts";
 import { ADMIN_ROLE } from "../auth/index.ts";
-import { createAccessService, isOpenFreeCourse } from "../access/index.ts";
+import {
+  createAccessService,
+  isOpenFreeCourse,
+  scopeOpensSection,
+} from "../access/index.ts";
 import type { LessonPositionReader } from "../learning-progress/index.ts";
 import { listLessonChaptersForPlayback } from "../courses/chapters/chapters.playback.service.ts";
 import { createChapterSyncService } from "../courses/chapters/chapters.service.ts";
@@ -1446,6 +1450,8 @@ export function createMediaService({
       is_published?: boolean;
       /** The course's first published lesson. */
       is_first_lesson?: boolean;
+      /** The lesson's section: a learner holding part of a course opens only theirs. */
+      section_id: string;
     },
     user?: PlaybackUser,
   ): Promise<void> {
@@ -1489,16 +1495,23 @@ export function createMediaService({
       );
     }
 
-    const hasAccess = await accessService.hasActiveAccess(
+    const scope = await accessService.getAccessScope(
       database,
       user.id,
       context.course_id,
     );
-    if (!hasAccess) {
+    if (!scope) {
       throw new AppError(
         403,
         "COURSE_ACCESS_DENIED",
         "You do not have access to this course.",
+      );
+    }
+    if (!scopeOpensSection(scope, context.section_id)) {
+      throw new AppError(
+        403,
+        "LESSON_ACCESS_DENIED",
+        "This lesson is not part of your access to the course.",
       );
     }
   }
@@ -1633,6 +1646,7 @@ export function createMediaService({
       course_creator_id: string | null;
       pricing_type: string | null;
       access_type: string | null;
+      section_id: string;
     },
     user?: PlaybackUser,
   ): Promise<void> {
@@ -1651,12 +1665,14 @@ export function createMediaService({
 
     if (isOpenFreeCourse(context)) return;
 
-    const hasAccess = await accessService.hasActiveAccess(
+    // A preview lesson plays for anyone, so the playback check alone would
+    // hand its files to a learner holding a part of the course without it.
+    const scope = await accessService.getAccessScope(
       database,
       user.id,
       context.course_id,
     );
-    if (!hasAccess) {
+    if (!scopeOpensSection(scope, context.section_id)) {
       throw new AppError(
         403,
         "COURSE_ACCESS_DENIED",

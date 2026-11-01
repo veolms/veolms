@@ -9,6 +9,7 @@ import type {
   OrderHistoryItem,
   OrderHistoryStatus,
 } from "../order-history/orderHistoryData";
+import { orderItemLabel } from "./orderHelpers";
 
 /**
  * Adapts an API order to the frontend OrderHistoryItem model consumed by OrderHistoryPage.
@@ -17,12 +18,16 @@ export function adaptOrderToOrderHistoryItem(
   order: LearnerOrder,
 ): OrderHistoryItem {
   const firstItem = order.items[0];
+  // Part of a course is named by the course, with a note saying so.
+  const firstLabel = firstItem ? orderItemLabel(firstItem) : null;
   const courseTitle =
-    firstItem?.titleSnapshot ||
+    firstLabel?.title ||
     (order.items.length > 1
       ? `${order.items[0]?.titleSnapshot} + ${order.items.length - 1} more`
       : "Course Order");
-  const courseId = firstItem?.courseId || "";
+  // An unlisted course (part of another course, sold on its own) has no
+  // page: the course it unlocks is the one to view.
+  const courseId = firstItem?.opensCourseId || firstItem?.courseId || "";
 
   let status: OrderHistoryStatus = "processing";
   let statusLabel = "Processing";
@@ -66,6 +71,12 @@ export function adaptOrderToOrderHistoryItem(
   const amount = toMajorUnits(order.totalAmount, currency);
   const subtotal = toMajorUnits(order.subtotalAmount, currency);
   const tax = toMajorUnits(order.taxAmount, currency);
+  // What a coupon took off: the learner's order carries the subtotal, the
+  // tax and what was paid.
+  const discount = toMajorUnits(
+    Math.max(0, order.subtotalAmount + order.taxAmount - order.totalAmount),
+    currency,
+  );
   const formattedAmount = formatMoney(order.totalAmount, { currency });
 
   const cleanOrderNumber = order.orderNumber.startsWith("#")
@@ -145,6 +156,17 @@ export function adaptOrderToOrderHistoryItem(
     courseId,
     courseTitle,
     itemCount,
+    ...(firstLabel?.note ? { purchaseNote: firstLabel.note } : {}),
+    ...(firstItem?.thumbnail
+      ? {
+          thumbnail: {
+            url: firstItem.thumbnail.url,
+            srcSet: firstItem.thumbnail.srcSet
+              .map((variant) => `${variant.url} ${variant.width}w`)
+              .join(", "),
+          },
+        }
+      : {}),
     iconColor,
     date,
     time,
@@ -158,6 +180,7 @@ export function adaptOrderToOrderHistoryItem(
     status,
     statusLabel,
     subtotal,
+    discount,
     tax,
     transactionId: null,
   };

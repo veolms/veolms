@@ -24,3 +24,7 @@ scratch/
 skills-lock.json
 CLAUDE.md
 tasks/
+
+# Browser tests (apps/web/tests/journeys): what the last run left
+apps/web/test-results/
+apps/web/playwright-report/

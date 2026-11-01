@@ -1,4 +1,8 @@
 import { LearnerPhoneBackdrop } from "../learner/LearnerPhoneBackdrop";
+import {
+  heroQuoteClasses,
+  heroQuoteSizeClasses,
+} from "../learner/learnerHeroLayout";
 import { guestHomeGutter, guestHomeGutterBleed } from "./guestHomeSpacing";
 import {
   homeHeroHeightClasses,
@@ -9,7 +13,7 @@ import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import type { HomePageHero } from "@veolms/contracts/home-page-defaults";
 import type { NavigateTo } from "../../routing/navigation";
 import { GuestHomeLink } from "./GuestHomeLink";
-import type { MouseEvent, ReactNode } from "react";
+import { type MouseEvent, type ReactNode } from "react";
 import { HeroDesk } from "./HeroDesk";
 import { guestHeroCopyWhenComplete, HeroCopyEnd } from "./HeroPicture";
 import { glassActionClasses, primaryActionClasses } from "./heroActionClasses";
@@ -50,8 +54,9 @@ const forReturningLearner =
  * - From 50rem, the copy lies over the empty left side of the desk picture,
  *   with the laptop playing the hero video on the right.
  * - Narrower (phones, and tablets up to about an iPad mini held upright),
- *   there is no picture: the copy stands on the page itself, followed by the
- *   video in a card of its own and the actions. A desk cropped to that width
+ *   there is no picture: the headline stands on the page itself, followed by
+ *   the video in a card of its own and the actions (the quote is left out:
+ *   the video speaks for it there). A desk cropped to that width
  *   showed little more than the laptop, and left the copy cramped above it.
  *
  * Both are in the page from the first paint and the page's width picks one
@@ -102,11 +107,49 @@ const picturePosition = `object-[72%_center] xl:object-center ${homeHeroPictureB
  * The supporting text, set as a quote: Lora italic, a little larger than
  * body text and with room between its lines.
  */
+/**
+ * Beside the picture, the copy is sized to the room it has before the
+ * laptop (written out in the classes below, as Tailwind needs): from the
+ * copy's start (the page's gutter) to 1.5rem short of the laptop's screen,
+ * which begins 1.05 picture heights in from the picture's right edge (drawn
+ * `--picture-shift` past the hero's). Measured against the page's own
+ * width, so it follows the sidebar as it is resized.
+ */
+
+/**
+ * Beside the picture the quote is kept to about 23 of its letters' widths
+ * (in its own size, set on the box too), just room for it in two even
+ * lines, and never past the laptop.
+ */
 const descriptionBoxClasses =
-  "mt-4 w-fit max-w-xl @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(34rem,54cqw)]";
+  "mt-4 w-fit max-w-xl text-[clamp(1.0625rem,2.4cqw,1.25rem)] @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(23em,calc(100cqw_-_var(--picture-h)_*_1.05_+_var(--picture-shift)_-_clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)_-_1.5rem))] @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
+
+/**
+ * The headline's size beside the picture: as before, but small enough for
+ * its longer line (about 10.8 times the size wide) to end before the laptop.
+ */
+const headlineBesideCopySize =
+  "@[50rem]/home:text-[length:min(clamp(2.25rem,4.4cqw,3.5rem),max(1.75rem,calc(calc(100cqw_-_var(--picture-h)_*_1.05_+_var(--picture-shift)_-_clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)_-_1.5rem)_/_10.8)))]";
 const descriptionTextClasses =
-  "font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-pretty text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
+  "font-[Lora,'Lora_Fallback',Georgia,serif] text-[clamp(1.0625rem,2.4cqw,1.25rem)] leading-[1.5] font-normal text-balance text-slate-200 italic [:root[data-theme=light]_&]:text-slate-700 @[50rem]/home:text-[clamp(1.125rem,1.6cqw,1.4rem)]";
 const descriptionClasses = `${descriptionBoxClasses} ${descriptionTextClasses}`;
+
+/**
+ * The quote is set as the signed-in learner's quote of the day is: its
+ * letters, its sizes and its box, as wide as its longest line up to 28 of
+ * its letters and never past the laptop (see `heroQuoteBoxClasses`).
+ */
+const quoteBoxClasses = `mt-4 w-max min-w-0 max-w-[28em] ${heroQuoteSizeClasses} @[50rem]/home:mt-5 @[50rem]/home:max-w-[min(28em,calc(100cqw_-_var(--picture-h)_*_1.05_+_var(--picture-shift)_-_clamp(var(--application-page-inline-gutter,25px),3.6cqw,3rem)_-_1.5rem))]`;
+const quoteTextClasses = `${heroQuoteClasses} text-slate-200 [:root[data-theme=light]_&]:text-slate-700`;
+
+/**
+ * The quote's first sentence and the rest of it, which is set on a line of
+ * its own below.
+ */
+function splitFirstSentence(text: string): [string, string] {
+  const match = /^(.+?[.!?])\s+(\S.*)$/su.exec(text);
+  return match ? [match[1] ?? text, match[2] ?? ""] : [text, ""];
+}
 
 function HeroHeadline({
   hero,
@@ -125,6 +168,14 @@ function HeroHeadline({
       ) : null}
     </span>
   );
+}
+
+/**
+ * The quote's text without quotation marks at its ends, which the hero sets
+ * itself; an admin may have typed them into the copy.
+ */
+function unquoted(text: string): string {
+  return text.trim().replace(/^["“]|["”]$/gu, "");
 }
 
 /**
@@ -161,6 +212,9 @@ export function GuestHomeHero({
   /** The same video for the narrow form, drawn in a card of its own. */
   introVideo?: ReactNode;
 }) {
+  const [firstSentence, restOfQuote] = splitFirstSentence(
+    hero?.description ? unquoted(hero.description) : "",
+  );
   const spacing =
     hero && greeting
       ? greetedSpacing
@@ -221,7 +275,7 @@ export function GuestHomeHero({
           ) : null}
           <h1
             id="guest-home-hero-title"
-            className="text-[clamp(1.875rem,8cqw,2.75rem)] leading-[1.14] font-extrabold tracking-[-0.03em] @[50rem]/home:text-[clamp(2.25rem,4.4vw,3.5rem)] @[50rem]/home:leading-[1.1]"
+            className={`text-[clamp(1.875rem,8cqw,2.75rem)] leading-[1.14] font-extrabold tracking-[-0.03em] @[50rem]/home:leading-[1.1] ${headlineBesideCopySize}`}
           >
             {hero ? (
               <>
@@ -246,14 +300,29 @@ export function GuestHomeHero({
             )}
           </h1>
           {!hero || hero.description ? (
-            // A quote, signed as the signed-in learner's is.
+            // A quote, set, marked and signed as the signed-in learner's is,
+            // its first sentence on a line of its own. Only beside the
+            // picture: narrower, the video card follows the headline.
             <figure
-              className={`${descriptionBoxClasses} ${returningLearnerHero ? forGuest : ""}`}
+              className={`${quoteBoxClasses} @max-[50rem]/home:hidden ${returningLearnerHero ? forGuest : ""}`}
             >
-              <blockquote className={descriptionTextClasses}>
-                {hero?.description}
+              <blockquote className={quoteTextClasses}>
+                {firstSentence ? (
+                  <>
+                    “{firstSentence}
+                    {restOfQuote ? (
+                      <>
+                        <br />
+                        {restOfQuote}
+                      </>
+                    ) : null}
+                    ”
+                  </>
+                ) : null}
               </blockquote>
               {hero ? (
+                // At the right of the quote's box, which is as wide as its
+                // longest line.
                 <figcaption className="mt-1.5 flex items-center justify-end gap-2.5 text-[0.8125rem] leading-4 text-slate-400 [:root[data-theme=light]_&]:text-slate-600">
                   <span aria-hidden="true" className="h-px w-6 bg-current/60" />
                   ProCodrr

@@ -5,6 +5,7 @@ import { config } from "../../../config.ts";
 import { AppError } from "../../../lib/errors.ts";
 import { CommerceErrors } from "../shared/commerce.errors.ts";
 import * as orderRepo from "../orders/order.repository.ts";
+import { orderItemInvoiceTitle } from "../orders/order.mapper.ts";
 import * as paymentRepo from "../payments/payment.repository.ts";
 import { getAcademyRow } from "../../auth/index.ts";
 import {
@@ -144,9 +145,10 @@ export function createInvoiceService({
 
   /** The invoice as it reads today, from the order and current details. */
   async function buildInvoice(order: OrderRow): Promise<Invoice> {
-    const [items, payment, user, academy, settings, invoiceNumber] =
+    const [items, summaries, payment, user, academy, settings, invoiceNumber] =
       await Promise.all([
         orderRepo.listOrderItems(database, order.id),
+        orderRepo.listOrderItemSummariesByOrderIds(database, [order.id]),
         paymentRepo.findPaymentReferenceByOrderId(database, order.id),
         orderRepo.findInvoiceBuyer(database, order.user_id),
         getAcademyRow(database),
@@ -185,16 +187,21 @@ export function createInvoiceService({
       totalAmount,
       totalInWords: amountInWords(totalAmount, order.currency),
       paymentReference: paymentRef,
-      items: items.map((it) => ({
-        title: it.title_snapshot,
-        // An order sells each course, bundle or quiz once.
-        quantity: 1,
-        // A numeric column: the driver returns it as text.
-        taxRatePercent: Number(it.tax_rate_percent) || 0,
-        unitPrice: it.unit_price,
-        discountAmount: it.discount_amount,
-        finalAmount: it.final_amount,
-      })),
+      items: items.map((it) => {
+        // Named as purchase history names it: part of a course, or the
+        // rest of it, by the course.
+        const summary = summaries.find((row) => row.id === it.id);
+        return {
+          title: summary ? orderItemInvoiceTitle(summary) : it.title_snapshot,
+          // An order sells each course, bundle or quiz once.
+          quantity: 1,
+          // A numeric column: the driver returns it as text.
+          taxRatePercent: Number(it.tax_rate_percent) || 0,
+          unitPrice: it.unit_price,
+          discountAmount: it.discount_amount,
+          finalAmount: it.final_amount,
+        };
+      }),
       paidAt: order.paid_at,
       createdAt: order.created_at,
     };

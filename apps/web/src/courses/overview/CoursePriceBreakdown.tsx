@@ -1,7 +1,11 @@
 /** The price of a paid course said in full; see `CoursePriceBreakdown`. */
 export interface CoursePriceBreakdownData {
-  /** On a sale: the marked price, the sale's amount off and its share. */
-  sale?: { marked: string; discount: string; label: string };
+  /**
+   * On a sale: the marked price, the sale's amount off and its share, and
+   * what the discount is called when it is not a sale ("Partial access
+   * discount").
+   */
+  sale?: { marked: string; discount: string; label: string; name?: string };
   /** The price the coupon is taken off (the sale price on a sale). */
   beforeCoupon: string;
   /** The coupon in use: its code and its amount off ("₹500"). */
@@ -43,7 +47,7 @@ export function CoursePriceBreakdown({
           {sale ? (
             <>
               <dt className="min-w-0 truncate text-(--muted)">
-                Sale discount ({sale.label})
+                {sale.name ?? "Sale discount"} ({sale.label})
               </dt>
               <dd className={discountClasses}>−{sale.discount}</dd>
             </>

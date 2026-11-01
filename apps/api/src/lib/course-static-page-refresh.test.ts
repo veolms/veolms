@@ -91,14 +91,14 @@ async function settle(check: () => boolean) {
   assert.fail("timed out");
 }
 
-describe("course static page refresh", () => {
+void describe("course static page refresh", () => {
   let github: ReturnType<typeof fakeGitHub>;
   beforeEach(() => {
     github = fakeGitHub();
   });
   afterEach(() => github.restore());
 
-  it("builds the courses saved in one quiet period in one run", async () => {
+  void it("builds the courses saved in one quiet period in one run", async () => {
     const service = createService();
     service.requestRefresh({ courseId: COURSE_A });
     service.requestRefresh({ courseId: COURSE_A });
@@ -113,7 +113,7 @@ describe("course static page refresh", () => {
     assert.equal(service.getStatus(COURSE_A).status, "succeeded");
   });
 
-  it("starts a cancelled run again", async () => {
+  void it("starts a cancelled run again", async () => {
     github.restore();
     github = fakeGitHub(["cancelled"]);
     const service = createService();
@@ -122,7 +122,7 @@ describe("course static page refresh", () => {
     assert.equal(github.dispatches.length, 2);
   });
 
-  it("reports a failed run", async () => {
+  void it("reports a failed run", async () => {
     github.restore();
     github = fakeGitHub(["failure"]);
     const service = createService();
@@ -135,7 +135,7 @@ describe("course static page refresh", () => {
     );
   });
 
-  it("rebuilds every page with no course ids, at once", async () => {
+  void it("rebuilds every page with no course ids, at once", async () => {
     const service = createService(60_000, 60_000);
     assert.equal(service.requestFullRebuild().status, "queued");
     await settle(() => service.getFullRebuildStatus().status === "succeeded");
@@ -143,7 +143,7 @@ describe("course static page refresh", () => {
     assert.equal(github.dispatches[0]?.courseIds, "");
   });
 
-  it("does nothing when not configured", () => {
+  void it("does nothing when not configured", () => {
     const service = createCourseStaticPageRefreshService({
       logger: silentLogger,
     });

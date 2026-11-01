@@ -140,6 +140,7 @@ export function presentCurriculum({
   resources,
   mediaById,
   omitResourceMedia = false,
+  withheldResourceIds,
   omitLessonDescriptions = false,
   withheldDescriptionLessonIds,
 }: {
@@ -149,6 +150,8 @@ export function presentCurriculum({
   mediaById: ReadonlyMap<string, MediaRow>;
   /** Leaves every resource's file details out, whatever `mediaById` holds. */
   omitResourceMedia?: boolean;
+  /** Leaves these resources' file details out: the viewer may not download them. */
+  withheldResourceIds?: ReadonlySet<string>;
   /**
    * Sends every lesson's description as null. The key stays: a web build
    * that still reads it from here must go on parsing the response.
@@ -182,9 +185,10 @@ export function presentCurriculum({
         resources: resources
           .filter((resource) => resource.lesson_id === lesson.id)
           .map((resource) => {
-            const media = omitResourceMedia
-              ? undefined
-              : mediaById.get(resource.media_asset_id);
+            const media =
+              omitResourceMedia || withheldResourceIds?.has(resource.id)
+                ? undefined
+                : mediaById.get(resource.media_asset_id);
             return {
               id: resource.id,
               mediaAssetId: resource.media_asset_id,
