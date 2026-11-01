@@ -108,7 +108,7 @@ tabs, laid out like the Platform page.
   They cover course, lesson, quiz, assignment, submission, enrollment,
   discussion, analytics, certificate, billing and `role.*`.
 - **Built-in roles.** 9 roles are seeded in
-  `packages/database/src/seed-rbac.ts`: admin, instructor, student,
+  `packages/database/src/seed/rbac.ts`: admin, instructor, student,
   course_manager, content_editor, thumbnail_editor, teaching_assistant,
   reviewer, analytics_viewer. Admin gets every permission.
 
