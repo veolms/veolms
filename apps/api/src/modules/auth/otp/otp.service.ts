@@ -501,6 +501,18 @@ export function createOtpService({
     await sendOtpWithPurpose(email, "email", "email_verification", requester);
   }
 
+  async function sendActiveSessionsVerificationOtp(
+    email: string,
+    requester: OtpRequester = {},
+  ): Promise<void> {
+    await sendOtpWithPurpose(
+      email,
+      "email",
+      "active_sessions_verification",
+      requester,
+    );
+  }
+
   const invalidCode = (statusCode = 401) =>
     new AppError(
       statusCode,
@@ -550,7 +562,9 @@ export function createOtpService({
   }
 
   function failureStatusFor(purpose: OtpPurpose): number {
-    return purpose === "phone_verification" || purpose === "email_verification"
+    return purpose === "phone_verification" ||
+      purpose === "email_verification" ||
+      purpose === "active_sessions_verification"
       ? 400
       : 401;
   }
@@ -701,14 +715,28 @@ export function createOtpService({
     if (!consumed) throw invalidCode(failureStatusFor(purpose));
   }
 
+  async function verifyActiveSessionsVerificationOtp(
+    email: string,
+    code: string,
+  ): Promise<void> {
+    await verifyAndConsumeOtp(
+      email,
+      "email",
+      "active_sessions_verification",
+      code,
+    );
+  }
+
   return {
     resolveOtpPurpose,
     sendOtp,
     sendPhoneVerificationOtp,
     sendEmailVerificationOtp,
+    sendActiveSessionsVerificationOtp,
     recordRefusedSend,
     assertOtpMatches,
     verifyAndConsumeOtp,
+    verifyActiveSessionsVerificationOtp,
     consumeOtpWithin,
   };
 }

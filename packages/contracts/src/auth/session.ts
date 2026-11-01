@@ -145,6 +145,19 @@ export const sessionParamsSchema = z.object({
   id: z.uuid().describe("The UUID of the session to revoke."),
 });
 
+export const activeSessionsVerificationRequestSchema = z.object({
+  code: z
+    .string()
+    .length(6, "Code must be exactly 6 digits")
+    .regex(/^\d+$/, "Code must contain only digits")
+    .meta({ example: "123456" }),
+});
+
+export const activeSessionsVerificationResponseSchema = z.object({
+  message: z.string().max(255),
+  verifiedUntil: z.iso.datetime(),
+});
+
 // Passkeys & MFA
 
 /**
@@ -344,6 +357,12 @@ export type AuthMessageResponse = z.output<typeof authMessageResponseSchema>;
 export type OtpSendResponse = z.output<typeof otpSendResponseSchema>;
 export type SessionParams = z.input<typeof sessionParamsSchema>;
 export type SessionResponse = z.output<typeof sessionResponseSchema>;
+export type ActiveSessionsVerificationRequest = z.input<
+  typeof activeSessionsVerificationRequestSchema
+>;
+export type ActiveSessionsVerificationResponse = z.output<
+  typeof activeSessionsVerificationResponseSchema
+>;
 export type DeviceLimitResponse = z.output<typeof deviceLimitResponseSchema>;
 export type ResolveDeviceLimitRequest = z.input<
   typeof resolveDeviceLimitRequestSchema

@@ -197,6 +197,38 @@ await test("signing out of every other device keeps this one and ends the rest",
   assert.equal(await laptop.whoAmI(), null);
 });
 
+await test("active sessions require their own verified email code", async () => {
+  const { client, learner } = await signedUpLearner(flow);
+
+  const locked = await client.get("/v1/auth/sessions");
+  assert.equal(locked.status, 403);
+  assert.equal(
+    locked.body.error?.code,
+    "ACTIVE_SESSIONS_VERIFICATION_REQUIRED",
+  );
+
+  const loginCode = await client.requestCode(learner.email);
+  const sent = await client.post("/v1/auth/sessions/verification/send");
+  assert.equal(sent.status, 200);
+  const verificationCode = flow.email.lastCodeFor(learner.email);
+
+  const loginCodeRejected = await client.post(
+    "/v1/auth/sessions/verification/verify",
+    { code: loginCode },
+  );
+  assert.equal(loginCodeRejected.status, 400);
+  assert.equal(loginCodeRejected.body.error?.code, "INVALID_CODE");
+
+  const verified = await client.post("/v1/auth/sessions/verification/verify", {
+    code: verificationCode,
+  });
+  assert.equal(verified.status, 200);
+  const sessions = await client.get<{ id: string }[]>("/v1/auth/sessions");
+  assert.equal(sessions.status, 200);
+  const revoked = await client.post("/v1/auth/sessions/revoke-all");
+  assert.equal(revoked.status, 200);
+});
+
 await test("with a limit of one device, a second device is held until the first signs out", async () => {
   const admin = await signedInAdmin(flow);
   const limit = await admin.patch("/v1/platform/settings", {

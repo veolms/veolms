@@ -6,6 +6,8 @@ import {
 import { useCallback, useState } from "react";
 import type {
   AuthMessageResponse,
+  ActiveSessionsVerificationRequest,
+  ActiveSessionsVerificationResponse,
   BackupCodesResponse,
   CurrentUserResponse,
   EmailVerificationSendRequest,
@@ -32,6 +34,7 @@ import type {
 import type { ApiError } from "../../lib/api-error";
 import { autosyncManager } from "../../lib/autosync/manager";
 import { authStore } from "../../store/auth.store";
+import { clearActiveSessionsVerification } from "../../auth/activeSessionsVerification";
 import { askToSignOutADevice } from "../../store/deviceLimitPrompt";
 import { writeSessionPresence } from "../../store/sessionPresence";
 import {
@@ -144,6 +147,7 @@ function persistAuthenticatedSession(
  * tab notices a session the sign-out did not end.
  */
 function clearSignedOutState(queryClient: QueryClient, sessionEnded: boolean) {
+  clearActiveSessionsVerification();
   authStore.clearAuth();
   resetRegisteredInteractionState();
   clearCoursePlayerSessions();
@@ -153,6 +157,7 @@ function clearSignedOutState(queryClient: QueryClient, sessionEnded: boolean) {
   queryClient.setQueryData(authKeys.me(), null);
   if (!sessionEnded) queryClient.removeQueries({ queryKey: authKeys.me() });
   queryClient.removeQueries({ queryKey: authKeys.avatars() });
+  queryClient.removeQueries({ queryKey: authKeys.sessions() });
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   if (!sessionEnded) {
     queryClient.invalidateQueries({ queryKey: authKeys.me() });
@@ -201,6 +206,22 @@ export function cancelPendingLogin(queryClient: QueryClient): Promise<void> {
 export function useSendOtp() {
   return useMutation<OtpSendResponse, ApiError, OtpSendRequest>({
     mutationFn: (payload) => authService.sendOtp(payload),
+  });
+}
+
+export function useSendActiveSessionsVerificationCode() {
+  return useMutation<OtpSendResponse, ApiError, void>({
+    mutationFn: () => authService.sendActiveSessionsVerificationCode(),
+  });
+}
+
+export function useVerifyActiveSessionsCode() {
+  return useMutation<
+    ActiveSessionsVerificationResponse,
+    ApiError,
+    ActiveSessionsVerificationRequest
+  >({
+    mutationFn: (payload) => authService.verifyActiveSessionsCode(payload),
   });
 }
 

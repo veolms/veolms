@@ -45,6 +45,9 @@ export interface OtpFormProps {
   onResend: () => void;
   onIdentifierChange: () => void;
   resending?: boolean;
+  resendAvailable?: boolean;
+  /** Accessible name for the back button when it does not change the identifier. */
+  backLabel?: string;
   /** The button's words, when not "Verify". */
   submitLabel?: string;
 }
@@ -103,6 +106,8 @@ export function OtpForm({
   onResend,
   onSubmit,
   resending = false,
+  resendAvailable = false,
+  backLabel,
   submitLabel = "Verify",
   sendCount,
   sentAt,
@@ -122,7 +127,7 @@ export function OtpForm({
     setRemaining(RESEND_COOLDOWN_SECONDS);
   }
 
-  const cooling = remaining > 0;
+  const cooling = remaining > 0 && !resendAvailable;
 
   useEffect(() => {
     if (!cooling) {
@@ -168,9 +173,10 @@ export function OtpForm({
     <div className="flex w-full flex-col gap-6.5">
       <button
         aria-label={
-          byEmail
+          backLabel ??
+          (byEmail
             ? "Back, use a different email"
-            : "Back, use a different number"
+            : "Back, use a different number")
         }
         className={cn(loginCardCornerButtonClasses, "left-3.5")}
         disabled={resending || verifying}
