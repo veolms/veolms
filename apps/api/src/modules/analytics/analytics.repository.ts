@@ -35,12 +35,13 @@ const refundsOfOrder = sql<number>`(
 )`;
 
 /**
- * Orders a report in `currency` counts: those in that currency, and those
- * paid in another one (a sale at a course's price for buyers outside
- * India) that settled in it.
+ * Orders a report in `currency` counts: each order once, in the currency
+ * it settled in when it was paid in another (a sale at a course's price for
+ * buyers outside India, settled in rupees), in its own otherwise. The same
+ * rule as the order statistics' `settledCurrency`.
  */
 function inReportCurrency(currency: string) {
-  return sql<boolean>`(o.currency = ${currency} or o.settlement_currency = ${currency})`;
+  return sql<boolean>`coalesce(o.settlement_currency, o.currency) = ${currency}`;
 }
 
 /**

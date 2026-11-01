@@ -47,6 +47,8 @@ try {
     .where("cp.pricing_type", "=", "paid")
     .where("cp.sale_price", ">", 0)
     .where("cp.linked_only", "=", false)
+    // The automatic price is worked out from rupees.
+    .where("cp.currency", "=", "INR")
     .where("cp.international_price_auto", "=", true)
     .orderBy("c.slug")
     .execute();

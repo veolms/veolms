@@ -375,4 +375,74 @@ await test("a dollar price can be removed, and a free course has none", async ()
   assert.equal(free.body.data?.international, null);
 });
 
+await test("an order mixing a dollar-priced course with a rupee-only one is charged in rupees abroad", async () => {
+  const dollars = await dualPricedCourse();
+  const rupeesOnly = await createCourse(flow, { price: 799 });
+  const { client: learner } = await signedUpLearner(flow);
+  const shown = await learner.request<Preview>(
+    "POST",
+    "/v1/checkout/preview",
+    {
+      items: [
+        { itemType: "course", courseId: dollars.id },
+        { itemType: "course", courseId: rupeesOnly.id },
+      ],
+    },
+    FROM_JAPAN,
+  );
+  assert.equal(shown.status, 200, JSON.stringify(shown.body));
+  assert.equal(shown.body.data?.pricing.currency, "INR");
+  assert.equal(shown.body.data?.pricing.amountUnit, "major");
+  assert.equal(shown.body.data?.pricing.totalAmount, 3499 + 799);
+});
+
+await test("a course priced in another currency gets no automatic dollar price", async () => {
+  const course = await createCourse(flow, { price: 999 });
+  const saved = await savePricing(course, {
+    currency: "USD",
+    price: 49,
+    salePrice: 49,
+  });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.equal(saved.body.data?.international, null);
+});
+
+await test("a dollar payment confirmed by the webhook alone records its settlement", async () => {
+  const course = await dualPricedCourse();
+  const { client: learner } = await signedUpLearner(flow);
+  const started = await checkout(learner, course, FROM_JAPAN);
+  assert.equal(started.status, 200, JSON.stringify(started.body));
+  const order = started.body.data!;
+  const paid = flow.gateway.pay(order.gateway!.gatewayOrderId);
+
+  // The browser closed before confirming: only the gateway's webhook comes.
+  const body = JSON.stringify({
+    event: "payment.captured",
+    gatewayPaymentId: paid.gatewayPaymentId,
+  });
+  const delivered = await flow
+    .visitor()
+    .request("POST", "/v1/webhooks/razorpay", body, {
+      "x-razorpay-signature": flow.gateway.webhookSignatureFor(body),
+      "x-razorpay-event-id": `evt_${paid.gatewayPaymentId}_captured`,
+    });
+  assert.ok(delivered.status < 300, JSON.stringify(delivered.body));
+
+  const deadline = Date.now() + 10_000;
+  let stored: { status: string; settlement_amount: number | null } | undefined;
+  while (Date.now() < deadline) {
+    stored = await flow.database
+      .selectFrom("orders")
+      .select(["status", "settlement_amount"])
+      .where("id", "=", order.order.id)
+      .executeTakeFirstOrThrow();
+    if (stored.status === "paid" && stored.settlement_amount !== null) break;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  assert.deepEqual(stored, {
+    status: "paid",
+    settlement_amount: 4399 * FAKE_RUPEES_PER_UNIT,
+  });
+});
+
 await flow.close();

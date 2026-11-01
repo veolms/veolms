@@ -256,6 +256,14 @@ export class FakePaymentGateway implements PaymentGateway {
       gatewayPaymentId: payload.gatewayPaymentId,
       amount: payment?.amount,
       currency: payment?.currency,
+      // As Razorpay's webhook names what a payment in another currency
+      // settles for.
+      ...(payment?.settlementAmount != null && payment.settlementCurrency
+        ? {
+            settlementAmount: payment.settlementAmount,
+            settlementCurrency: payment.settlementCurrency,
+          }
+        : {}),
       rawPayload,
       occurredAt: new Date().toISOString(),
     };

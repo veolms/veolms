@@ -273,6 +273,22 @@ export function createPricingService({
     }
     const quizzesByPricingId = new Map(quizRows.map((q) => [q.pricing_id, q]));
 
+    // One currency for the whole order. Outside India it is the price for
+    // buyers there when every paid item has one; an order with anything
+    // sold in rupees only (a bundle, a quiz pass, a course without that
+    // price, a voluntary amount) is charged in rupees throughout, as before.
+    const chargeInternationally =
+      pricingRegion === "international" &&
+      items.every((it) => {
+        if (it.itemType !== "course") return false;
+        const pricing = pricingByCourseId.get(it.courseId!);
+        if (resolveCoursePricing(pricing).pricingType !== "paid") return true;
+        return (
+          (it.customAmount === undefined || it.customAmount === null) &&
+          resolveInternationalCharge(pricing) !== null
+        );
+      });
+
     for (const item of items) {
       if (item.itemType === "course") {
         const courseId = item.courseId!;
@@ -330,12 +346,10 @@ export function createPricingService({
         }
         const isPaidCourse = pricingType === "paid";
         // Outside India, a course that has a price for buyers there is sold
-        // at it, in cents. A voluntary amount is typed in rupees, so a buyer
-        // who sends one pays in rupees, as before.
+        // at it, in cents, when the whole order can be (see
+        // `chargeInternationally`).
         const international =
-          pricingRegion === "international" &&
-          isPaidCourse &&
-          (item.customAmount === undefined || item.customAmount === null)
+          chargeInternationally && isPaidCourse
             ? resolveInternationalCharge(pricing)
             : null;
         const domesticCurrency = pricing?.currency ?? "INR";

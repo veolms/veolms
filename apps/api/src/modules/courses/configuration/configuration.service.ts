@@ -153,9 +153,14 @@ export function createConfigurationService({
       if (!internationalAuto) {
         international =
           updates.international === undefined ? stored : updates.international;
+      } else if (currency !== "INR") {
+        // The automatic price is worked out from rupees: a course priced in
+        // another currency has none.
+        international = null;
       } else if (
         !stored ||
         updates.internationalAuto === true ||
+        existing?.currency !== currency ||
         existing?.price !== price ||
         existing?.sale_price !== salePrice
       ) {

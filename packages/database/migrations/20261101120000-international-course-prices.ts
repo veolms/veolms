@@ -45,6 +45,8 @@ export async function up(database: Kysely<unknown>): Promise<void> {
         or (
           international_currency is not null
           and char_length(international_currency) = 3
+          and international_price_minor is not null
+          and international_sale_price_minor is not null
           and international_sale_price_minor > 0
           and international_price_minor >= international_sale_price_minor
           and not linked_only
