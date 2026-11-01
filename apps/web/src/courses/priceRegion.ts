@@ -48,9 +48,14 @@ function startFromHead(config: {
       }
       return region;
     };
+    // Cookies go only to the site's own address (the fetch default): an API
+    // on another origin gets none, as it needs none, but one served under
+    // the site (dev.veolms.org's /api, behind Cloudflare Access) is reached
+    // only with the visitor's sign-in cookie. Without it the request never
+    // reached the API there, and every visitor got the rupee price.
     (window as unknown as Record<string, unknown>)[config.global] = fetch(
       config.apiBase.replace(/\/+$/, "") + "/checkout/pricing-region",
-      { credentials: "omit", headers: { Accept: "application/json" } },
+      { credentials: "same-origin", headers: { Accept: "application/json" } },
     )
       .then((response) => (response.ok ? response.json() : null))
       .then(
