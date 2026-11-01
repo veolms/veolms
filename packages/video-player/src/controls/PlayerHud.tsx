@@ -4,7 +4,6 @@ import { usePlayerState } from "../react/usePlayerState";
 import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import {
   MOBILE_SEEK_IDLE_DELAY_MS,
-  PLAYBACK_BEZEL_DURATION_MS,
   PLAYER_FEEDBACK_DURATION_MS,
 } from "./feedbackTiming";
 import { VolumeLevelIcon, getVolumeLevel } from "./VolumeLevelIcon";
@@ -21,9 +20,7 @@ export function PlayerHud() {
     const durationMs =
       hud.variant === "mobile-seek"
         ? MOBILE_SEEK_IDLE_DELAY_MS
-        : hud.variant === "volume"
-          ? PLAYBACK_BEZEL_DURATION_MS
-          : PLAYER_FEEDBACK_DURATION_MS;
+        : PLAYER_FEEDBACK_DURATION_MS;
     const timer = setTimeout(() => controller.clearHud(hud.id), durationMs);
     return () => clearTimeout(timer);
   }, [controller, hud]);
@@ -136,9 +133,6 @@ export function PlayerHud() {
   }
   if (hud.variant === "volume") {
     const level = getVolumeLevel(hud.level ?? 0);
-    const bezelStyle = {
-      "--video-player-playback-feedback-duration": `${PLAYBACK_BEZEL_DURATION_MS}ms`,
-    } as CSSProperties;
 
     return (
       <div
@@ -168,29 +162,6 @@ export function PlayerHud() {
               size={20}
             />
             {hud.text}
-          </span>
-        </div>
-        {/* The speaker in the middle, as play and pause are shown there
-            (PlaybackFeedback): same circle, same size, same motion. */}
-        <div
-          className="absolute inset-0 grid place-items-center"
-          aria-hidden="true"
-        >
-          <span
-            className="grid size-12 place-items-center rounded-full border-0 bg-black/40 text-white shadow-none lg:size-15"
-            data-playback-feedback-bezel=""
-            data-playback-feedback-duration={PLAYBACK_BEZEL_DURATION_MS}
-            data-playback-feedback-surface=""
-            style={bezelStyle}
-          >
-            <VolumeLevelIcon
-              active
-              aria-hidden="true"
-              className="size-6 lg:size-7.5"
-              data-player-volume-icon={level}
-              level={level}
-              size={26}
-            />
           </span>
         </div>
       </div>

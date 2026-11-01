@@ -136,11 +136,7 @@ export function usePlayerKeyboard({
           );
           if (next !== volume) controller.setVolume(next);
           else if (muted && next > 0) controller.setMuted(false);
-          controller.showHud(`${Math.round(next * 100)}%`, {
-            direction,
-            level: next,
-            variant: "volume",
-          });
+          controller.showVolume(next, direction);
           controller.revealControls();
         },
         seekToPercentage: (percentage) => {

@@ -1027,6 +1027,19 @@ export class PlayerController {
     this.updateUi({ hud: { ...options, id: this.#hudId, text } });
   }
 
+  /**
+   * Says the volume at the top of the player, with the speaker: a slider,
+   * the wheel over it or the Up and Down keys changed it.
+   */
+  showVolume(volume: number, direction?: -1 | 1): void {
+    const level = Math.min(1, Math.max(0, volume));
+    this.showHud(`${Math.round(level * 100)}%`, {
+      direction,
+      level,
+      variant: "volume",
+    });
+  }
+
   clearHud(id?: number): void {
     if (id !== undefined && this.#snapshot.ui.hud?.id !== id) return;
     this.updateUi({ hud: null });
