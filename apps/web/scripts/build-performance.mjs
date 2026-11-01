@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { inlineCriticalCss } from "./inline-critical-css.mjs";
+import { writeLegacyStylesheets } from "./legacy-stylesheets.mjs";
 import { writeStaticCurricula } from "./write-static-curricula.mjs";
 
 export const FIRST_SECTION_FLAG = "--first-section";
@@ -103,6 +104,8 @@ export const runPerformanceBuild = async (
       // for the app's large stylesheets. A page that cannot be processed
       // fails the build rather than shipping half-rewritten.
       inlineCriticalCss(clientBuildDirectory)
+        // A copy of each stylesheet for browsers without CSS layers.
+        .then(() => writeLegacyStylesheets(clientBuildDirectory))
         // Each course page's whole curriculum, beside the page.
         .then(() =>
           writeStaticCurricula(

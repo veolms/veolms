@@ -38,6 +38,8 @@ import { QueryProvider } from "./providers/query-provider";
 import { ReadingModeEffects } from "./reading-mode/ReadingModeEffects";
 import { getSessionPresenceBootstrapScript } from "./store/sessionPresence";
 import { getProfileHintBootstrapScript } from "./shell/profileHintEarlyState";
+import { getOutdatedBrowserScript } from "./shell/outdatedBrowser";
+import { getLegacyBrowserSupportScript } from "./shell/legacyBrowserSupport";
 import { getNavigationOriginBootstrapScript } from "./routing/navigationOriginEarlyState";
 import { getLessonMenuSectionBootstrapScript } from "./shell/lessonMenuEarlyState";
 import { getCourseCardsEarlyStateBootstrapScript } from "./courses/courseCardEarlyState";
@@ -252,6 +254,15 @@ export function Layout({ children }: LayoutProps) {
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+        />
+        {/* First, before any stylesheet or script: a browser the app cannot
+            run in is shown an update page instead (outdatedBrowser.ts), and
+            older browsers get their fallbacks (legacyBrowserSupport.ts). */}
+        <script
+          dangerouslySetInnerHTML={{ __html: getOutdatedBrowserScript() }}
+        />
+        <script
+          dangerouslySetInnerHTML={{ __html: getLegacyBrowserSupportScript() }}
         />
         <meta name="theme-color" content="#151718" />
         {/* Lets the app be installed and opened with no browser bars, with
