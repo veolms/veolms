@@ -26,9 +26,12 @@ export interface CourseCurriculumPreview {
   totalSections: number;
   complete: boolean;
   /**
-   * The price when the page was built. The same for every viewer, so the
-   * page shows it at once; the viewer's access answer then brings the price
-   * in force now, which is the one acted on.
+   * The price when the page was built. The page is built with a shimmer
+   * where the price goes and draws the price in force from the API (see
+   * `liveCoursePrices.ts`); this one is shown only to a visitor who is not
+   * signed in, when that could not be loaded. It also says whether the
+   * course is paid: the curriculum marks a paid course's free lessons, and
+   * the hero offers the first of them, from the first paint.
    */
   pricing: CourseOverviewResponse["pricing"];
 }

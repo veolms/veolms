@@ -10,8 +10,9 @@ import {
 } from "../../courses/catalogue";
 import { adaptCourseSummaryToCatalogueCourse } from "../../courses/courseAdapter";
 import {
-  useLiveCoursePrices,
-  withLivePricing,
+  cardPriceStatus,
+  coursePriceState,
+  useCoursePrices,
 } from "../../courses/liveCoursePrices";
 import type { ViewerCourseState } from "../../courses/viewerCourseState";
 import type { NavigateTo } from "../../routing/navigation";
@@ -87,9 +88,11 @@ export function GuestHomeCourseSection({
   viewerState?: ViewerCourseState;
 }) {
   const headingId = `${id}-title`;
-  // Prices in force, which can be newer than the list the page was built
-  // with (see liveCoursePrices.ts).
-  const livePrices = useLiveCoursePrices();
+  // The prices in force: never the ones the list was built with (see
+  // liveCoursePrices.ts).
+  const coursePrices = useCoursePrices();
+  // A row without the viewer's state is the learner home's: signed in.
+  const signedIn = viewerState ? viewerState.signedIn : true;
 
   return (
     <section
@@ -136,13 +139,19 @@ export function GuestHomeCourseSection({
                 (_, index) => <CourseCardSkeleton key={index} />,
               )
             : courses.map((summary) => {
+                const price = coursePriceState(coursePrices, summary.id);
+                const priceStatus = cardPriceStatus(price, signedIn);
                 const course = {
                   ...adaptCourseSummaryToCatalogueCourse(
-                    withLivePricing(summary, livePrices),
+                    price.status === "known"
+                      ? { ...summary, pricing: price.pricing }
+                      : summary,
                     viewerState?.enrolled,
                     viewerState?.progress,
                   ),
                   viewerStatePending: viewerState?.pending ?? false,
+                  viewerStateFailed: viewerState?.failed ?? false,
+                  ...(priceStatus ? { priceStatus } : {}),
                 };
                 // The same card, wired the same way, as the Courses page
                 // shows a visitor: the thumbnail plays the free preview.
